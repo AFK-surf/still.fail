@@ -328,7 +328,7 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
     if (view.offline || view.archived) return;
     // A chat made here is sent to by its key until its thread is known.
     const to = view.thread?.id ?? (here.key.startsWith(PENDING) ? here.key : null);
-    void sendDraft(draft, to, async () => ({ thread: (await call.request<{ id: number }>("POST", "/threads", { session: here.key })).id }));
+    void sendDraft(draft, to, async () => ({ thread: (await stationApi(call).chatFor(here.key)).id }));
   };
   useLayoutEffect(() => use({
     station: here.station, session: keeper, placeholder: view.archived ? "还原对话后才能发送" : "发消息", offline: view.offline, archived: !!view.archived, send,

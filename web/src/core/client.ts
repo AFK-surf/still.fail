@@ -20,6 +20,8 @@ export type Topic =
   | { topic: "host"; station: string }
   | { topic: "threads"; station: string }
   | { topic: "slackApp"; station: string; connect: string }
+  // A station's background jobs still up, each with the chat it is in.
+  | { topic: "jobs"; station: string }
   | { topic: "loginSessions"; account: string }
   | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" }
   // Views: put together by the core from the topics above.

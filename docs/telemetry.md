@@ -62,7 +62,7 @@ user-facing operation:
 | Trace (root span) | When |
 | --- | --- |
 | `chat.open`, `chats.open`, `stations.open`, `connects.open` | a view's first subscriber, until its first value goes out (the requests that make it are read inside it; a chat's agents too, when the value that names them is computed while it is still opening) |
-| the call's name: `chat.send`, `chat.older`, `chat.read`, `station.request`, `cloud.request`, … | every call, until it answers |
+| the call's name: `chat.send`, `chat.older`, `chat.read`, `job.stop`, `workspace.rename`, … | every call, until it answers |
 | `station.connect`, `station.reconnect` | a station's events stream opening (when a view asked for it, `station.connect` is part of that view's trace), and opening again after it was down, until everything it may have missed is read again |
 
 Inside a trace:

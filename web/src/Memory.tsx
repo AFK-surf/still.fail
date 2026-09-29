@@ -3,7 +3,7 @@
 // 项目记忆： and says when it applies (its whole text is read when a task matches). The station's other skills are
 // listed too.
 import { useEffect, useState } from "react";
-import { useStationCall } from "./api.ts";
+import { stationApi, useStationCall } from "./api.ts";
 import { Prose } from "./Prose.tsx";
 import { About, MobileBack, Section } from "./ui.tsx";
 import { ChevronDown, ChevronRight } from "./icons.tsx";
@@ -44,7 +44,7 @@ export function MemoryView({ station }: { station: string }) {
   const call = useStationCall(station);
   const [memory, setMemory] = useState<Memory | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { call.request<Memory>("GET", "/memory").then(setMemory, (e: Error) => setError(e.message)); }, [call]);
+  useEffect(() => { stationApi(call).memory<Memory>().then(setMemory, (e: Error) => setError(e.message)); }, [call]);
   if (error) return <p className={shellCss.muted}>读不到这台 station 的记忆：{error}。更早的 station 还没有这一页，更新后就有。</p>;
   if (!memory) return <p className={shellCss.muted}>正在读取…</p>;
   const projects = memory.skills.filter((s) => s.project);

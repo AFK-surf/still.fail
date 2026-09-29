@@ -30,7 +30,7 @@ export function PreviewScreen() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (file) return;
-    call("station.request", { station: station.address, method: "GET", path: `/jobs/${encodeURIComponent(service)}` })
+    call("job.get", { station: station.address, id: service })
       .then((j) => setRead(j as Job), (e: Error) => setError(e.message));
   }, [call, station.address, service]);
   const job = live ?? read;

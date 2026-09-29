@@ -466,6 +466,8 @@ pub enum StoreChange {
     Identities(String),
     /// The recorded runtime processes changed.
     Processes,
+    /// A background job started, started again, ended or said something (its session changes as well).
+    Job(String),
 }
 
 // ── schema ─────────────────────────────────────────────────────────────────
@@ -1696,6 +1698,7 @@ impl Store {
                 params![job.id, job.session_key, job.name, job.command, job.cwd, job.port, job.token, job.state, job.pgid, job.exit_code, job.started_at, job.ended_at, job.restarts, job.log],
             )?;
             changes.push(StoreChange::Session(job.session_key.clone()));
+            changes.push(StoreChange::Job(job.id.clone()));
             Ok(())
         })
     }
@@ -1715,6 +1718,7 @@ impl Store {
             i.db.execute(sql, args)?;
             if let Some(session) = i.db.query_row("SELECT session_key FROM jobs WHERE id = ?", [id], |r| r.get::<_, String>(0)).optional()? {
                 changes.push(StoreChange::Session(session));
+                changes.push(StoreChange::Job(id.to_string()));
             }
             Ok(())
         })
@@ -1748,6 +1752,7 @@ impl Store {
             )?;
             if let Some(session) = i.db.query_row("SELECT session_key FROM jobs WHERE id = ?", [id], |r| r.get::<_, String>(0)).optional()? {
                 changes.push(StoreChange::Session(session));
+                changes.push(StoreChange::Job(id.to_string()));
             }
             Ok(())
         })

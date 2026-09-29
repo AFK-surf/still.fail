@@ -244,9 +244,7 @@ async function joinHere(account: string, workspace: string): Promise<void> {
   if (joining || !station.carried || station.enrolled || existsSync(joinedOnce)) return;
   joining = true;
   try {
-    const made = await coreCall("cloud.request", {
-      account, method: "POST", path: `/v1/workspaces/${encodeURIComponent(workspace)}/enrollments`, body: { name: machineName() },
-    }) as { token: string };
+    const made = await coreCall("workspace.enroll", { account, workspace, name: machineName() }) as { token: string };
     await station.enroll(CLOUD_ORIGIN, made.token);
     writeFileSync(joinedOnce, workspace);
     console.info("this machine joined the workspace as a station", workspace);

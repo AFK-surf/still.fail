@@ -11,8 +11,8 @@
 //! `workspaces` reads that account's `/v1/me` again, `workspace` that
 //! workspace, and `station` sets the station's `online` in place. Every time a
 //! socket opens, the live account topics are read once (nothing is replayed).
-//! They are also read when the accounts change and after a write through
-//! `cloud.request`; never on a timer.
+//! They are also read when the accounts change and after a write to ember
+//! cloud (ops.rs); never on a timer.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -442,17 +442,24 @@ impl Inner {
                 self.accounts.sign_out(&account).await?;
                 Ok(Value::Null)
             }
-            Call::CloudRequest { account, method, path, body } => {
-                let result = self.cloud.request(&account, &method, &path, body).await?;
-                // A write may rename, join or leave a workspace: what the account topics show changed too.
-                if !method.eq_ignore_ascii_case("GET") {
-                    self.refresh_all().await;
+            Call::Op(op) => match op.target {
+                crate::ops::Target::Cloud(account) => {
+                    let result = self.cloud.request(&account, op.method, &op.path, op.body).await?;
+                    // A write may rename, join or leave a workspace: what the account topics show changed too.
+                    if op.method != "GET" {
+                        self.refresh_all().await;
+                    }
+                    Ok(result)
                 }
-                Ok(result)
-            }
-            Call::StationRequest { station, method, path, body } => {
-                self.stations.request(&StationAddr::parse(&station)?, &method, &path, body).await
-            }
+                crate::ops::Target::Station(station) => {
+                    let addr = StationAddr::parse(&station)?;
+                    match (self.stations.request(&addr, op.method, &op.path, op.body.clone()).await, op.fallback) {
+                        // A station from before the request knew another way.
+                        (Err(e), Some((method, path))) if e.status == Some(404) => self.stations.request(&addr, method, &path, op.body).await,
+                        (result, _) => result,
+                    }
+                }
+            },
             Call::ChatSend { station, thread, text, attachments, quotes } => {
                 let message = json!({ "text": text, "attachments": attachments, "quotes": quotes });
                 let id = self.views.outbox_add(&station, thread, message.clone());
@@ -887,7 +894,7 @@ impl Inner {
                 Ok(self.workspaces_value())
             }
             Topic::Workspace { workspace } => self.workspace_value(workspace).await,
-            // Read as they are now; a write through cloud.request reads them again (refresh_all).
+            // Read as they are now; a write to ember cloud (ops.rs) reads them again (refresh_all).
             Topic::LoginSessions { account } => self.cloud.request(account, "GET", "/v1/auth/sessions", None).await.map(|v| v.get("sessions").cloned().unwrap_or(json!([]))),
             Topic::Admin { account, list } => match list.as_str() {
                 "users" | "workspaces" | "invite-codes" => self.cloud.request(account, "GET", &format!("/v1/admin/{list}"), None).await,
@@ -1104,8 +1111,8 @@ enum Call {
     AuthBegin { redirect_uri: String, return_to: String, device_name: String },
     AuthComplete { query: String },
     SignOut { account: String },
-    CloudRequest { account: String, method: String, path: String, body: Option<Value> },
-    StationRequest { station: String, method: String, path: String, body: Option<Value> },
+    /// Something to have done on a station or ember cloud, by its name (ops.rs): the UI never makes a request itself.
+    Op(crate::ops::Request),
     ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value },
     /// A new chat on a station (`POST /sessions` with `ask`): answered at once with the key it goes by here; the
     /// station makes it meanwhile (views.rs, `Pending`).
@@ -1129,11 +1136,15 @@ impl Call {
     /// The station a call is about, if any.
     fn station(&self) -> Option<&str> {
         match self {
-            Call::StationRequest { station, .. } | Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
+            Call::Op(op) => match &op.target {
+                crate::ops::Target::Station(station) => Some(station),
+                crate::ops::Target::Cloud(_) => None,
+            },
+            Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } => Some(station),
-            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } => None,
+            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } => None,
         }
     }
 }
@@ -1157,20 +1168,6 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     struct ClientErrorParams {
         source: String,
         message: String,
-    }
-    #[derive(Deserialize)]
-    struct CloudRequest {
-        account: String,
-        method: String,
-        path: String,
-        body: Option<Value>,
-    }
-    #[derive(Deserialize)]
-    struct StationRequest {
-        station: String,
-        method: String,
-        path: String,
-        body: Option<Value>,
     }
     #[derive(Deserialize)]
     struct Send {
@@ -1295,14 +1292,6 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             Call::ClientError { source: p.source, message: p.message }
         }
         "client.wake" => Call::Wake { away: read::<WakeParams>(params)?.away },
-        "cloud.request" => {
-            let p: CloudRequest = read(params)?;
-            Call::CloudRequest { account: p.account, method: p.method, path: p.path, body: p.body }
-        }
-        "station.request" => {
-            let p: StationRequest = read(params)?;
-            Call::StationRequest { station: p.station, method: p.method, path: p.path, body: p.body }
-        }
         "chat.create" => {
             let p: Create = read(params)?;
             let mut ask = json!({ "runtime": p.runtime });
@@ -1376,7 +1365,10 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             };
             Call::Migrate { accounts: p.accounts.filter(|a| !a.is_null()), device }
         }
-        _ => return Err(CoreError::new("unknown_call", format!("没有这个调用：{name}"))),
+        _ => match crate::ops::request(name, &params_or_empty(params)) {
+            Some(op) => Call::Op(op?),
+            None => return Err(CoreError::new("unknown_call", format!("没有这个调用：{name}"))),
+        },
     })
 }
 
@@ -1395,8 +1387,8 @@ mod tests {
 
     #[test]
     fn parses_the_client_messages_of_the_protocol() {
-        let call: ClientMessage = serde_json::from_value(json!({"id": 7, "call": "station.request", "params": {"station": "ws1/st1", "method": "GET", "path": "/overview"}})).unwrap();
-        assert_eq!(call, ClientMessage::Call { id: 7, call: "station.request".into(), params: json!({"station": "ws1/st1", "method": "GET", "path": "/overview"}) });
+        let call: ClientMessage = serde_json::from_value(json!({"id": 7, "call": "job.stop", "params": {"station": "ws1/st1", "id": "j1"}})).unwrap();
+        assert_eq!(call, ClientMessage::Call { id: 7, call: "job.stop".into(), params: json!({"station": "ws1/st1", "id": "j1"}) });
         let bare: ClientMessage = serde_json::from_value(json!({"id": 1, "call": "auth.signOut"})).unwrap();
         assert_eq!(bare, ClientMessage::Call { id: 1, call: "auth.signOut".into(), params: Value::Null });
         let subscribe: ClientMessage = serde_json::from_value(json!({"id": 8, "subscribe": {"topic": "session", "station": "ws1/st1", "key": "k"}})).unwrap();
@@ -1448,13 +1440,16 @@ mod tests {
             Call::ClientError { source: "android.decode".into(), message: "chat: 读不懂".into() }
         );
         assert_eq!(
-            parse_call("cloud.request", json!({"account": "a", "method": "PATCH", "path": "/v1/workspaces/w", "body": {"name": "n"}})).unwrap(),
-            Call::CloudRequest { account: "a".into(), method: "PATCH".into(), path: "/v1/workspaces/w".into(), body: Some(json!({"name": "n"})) }
+            parse_call("workspace.rename", json!({"account": "a", "workspace": "w", "name": "n"})).unwrap(),
+            Call::Op(crate::ops::Request { target: crate::ops::Target::Cloud("a".into()), method: "PATCH", path: "/v1/workspaces/w".into(), body: Some(json!({"name": "n"})), fallback: None })
         );
         assert_eq!(
-            parse_call("station.request", json!({"station": "local", "method": "GET", "path": "/sessions"})).unwrap(),
-            Call::StationRequest { station: "local".into(), method: "GET".into(), path: "/sessions".into(), body: None }
+            parse_call("job.stop", json!({"station": "local", "id": "j1"})).unwrap(),
+            Call::Op(crate::ops::Request { target: crate::ops::Target::Station("local".into()), method: "POST", path: "/jobs/j1/stop".into(), body: None, fallback: None })
         );
+        // Requests by method and path are not the UIs' to make.
+        assert_eq!(code(parse_call("station.request", json!({"station": "local", "method": "GET", "path": "/sessions"}))), "unknown_call");
+        assert_eq!(code(parse_call("cloud.request", json!({"account": "a", "method": "GET", "path": "/v1/me"}))), "unknown_call");
         assert_eq!(
             parse_call("station.upload", json!({"station": "w/s", "name": "a.png", "bytes": "aGVsbG8="})).unwrap(),
             Call::StationUpload { station: "w/s".into(), name: "a.png".into(), bytes: b"hello".to_vec() }
@@ -1506,7 +1501,7 @@ mod tests {
         assert_eq!(missing.code, "invalid_params");
         assert!(missing.message.contains("device_name"), "{}", missing.message);
         assert_eq!(code(parse_call("auth.signOut", Value::Null)), "invalid_params");
-        assert_eq!(code(parse_call("cloud.request", json!({"account": "a", "method": 1, "path": "/"}))), "invalid_params");
+        assert_eq!(code(parse_call("workspace.rename", json!({"account": "a", "name": "n"}))), "invalid_params");
         assert_eq!(code(parse_call("station.upload", json!({"station": "w/s", "name": "n", "bytes": "not base64!"}))), "invalid_params");
     }
 
@@ -1653,7 +1648,7 @@ mod tests {
             assert_eq!(values[&1], json!([{"id": "d1", "current": true}]));
             let before = count(&host, "/v1/auth/sessions");
             // Signing a device out, through the core: the list is read again, nobody asks for it.
-            core.receive(ui, ClientMessage::Call { id: 2, call: "cloud.request".into(), params: json!({"account": "s1", "method": "DELETE", "path": "/v1/auth/sessions/d2"}) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "loginSession.revoke".into(), params: json!({"account": "s1", "id": "d2"}) });
             host.settle().await;
             assert_eq!(count(&host, "/v1/auth/sessions"), before + 1);
         });
@@ -1791,6 +1786,7 @@ mod tests {
                     "viewer": { "via": "local" }, "connects": [], "profiles": [], "processes": [], "counts": { "sessions": 1, "running": 0, "warm": 0 },
                     "mesh": null, "slackUsers": [], "slackTeams": [], "slackApps": [], "disk": null, "logins": [],
                 })),
+                "/admin/api/memory" => json_response(200, json!({ "global": "" })),
                 "/v1/telemetry/traces" => json_response(202, json!({})),
                 _ => json_response(404, json!({})),
             }
@@ -1860,17 +1856,17 @@ mod tests {
         run(async {
             let (host, core) = local_core(1.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Call { id: 1, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
+            core.receive(ui, ClientMessage::Call { id: 1, call: "memory.get".into(), params: json!({ "station": "local" }) });
             host.settle().await;
             pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
             let body: Value = serde_json::from_slice(exports(&host)[0].body.as_deref().unwrap()).unwrap();
             let names: Vec<String> = body["resourceSpans"][0]["scopeSpans"][0]["spans"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect();
-            assert_eq!(names, ["GET /admin/api/overview", "station.request"]);
+            assert_eq!(names, ["GET /admin/api/memory", "memory.get"]);
 
             let (host, core) = local_core(0.0).await;
             let ui = core.connect();
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
-            core.receive(ui, ClientMessage::Call { id: 2, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "memory.get".into(), params: json!({ "station": "local" }) });
             host.settle().await;
             pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
             assert!(exports(&host).is_empty());

@@ -1,7 +1,7 @@
 // A station's software and whether newer versions are out (the station's updates.rs): the station itself, Claude Code
 // and Codex, each updated (or a runtime installed) from here by whoever may. Grey but for what wants doing.
 import type { SoftwareVersion } from "./core/shapes.ts";
-import { useAction, useStationCall } from "./api.ts";
+import { stationApi, useAction, useStationCall } from "./api.ts";
 import { Tip } from "./ui.tsx";
 import * as css from "./Versions.css.ts";
 
@@ -10,9 +10,9 @@ import * as css from "./Versions.css.ts";
  * `rows`: one to a line.
  */
 export function Versions({ station, updates, manager, rows = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; rows?: boolean }) {
-  const call = useStationCall(station);
-  const update = useAction((id: string) => call.request<SoftwareVersion[]>("POST", "/updates", { id }));
-  const check = useAction(() => call.request<SoftwareVersion[]>("POST", "/updates/check"));
+  const api = stationApi(useStationCall(station));
+  const update = useAction((id: string) => api.updateSoftware<SoftwareVersion[]>(id));
+  const check = useAction(() => api.checkSoftware<SoftwareVersion[]>());
   if (!updates?.length) return null;
   const checked = updates[0]?.checkedAt;
   return (

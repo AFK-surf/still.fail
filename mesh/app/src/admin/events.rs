@@ -392,6 +392,13 @@ impl Events {
                 self.rows_changed(Some(&viewer));
             }
             StoreChange::Processes => self.overview_changed(),
+            // A job as `GET /jobs/:id` answers it, so a client holding it (a chat's jobs, the open ones) puts it in
+            // place without reading anything again.
+            StoreChange::Job(id) => {
+                if let Ok(Some(job)) = api.deps.store.get_job(&id) {
+                    self.emit("job", &crate::jobs::shown(&api.deps.store, &job), |_| true);
+                }
+            }
         }
     }
 

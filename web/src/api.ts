@@ -1,6 +1,7 @@
 // A station's data, through the client core (docs/client-core.md): screens
-// subscribe to the views the core puts together, writes go through
-// `station.request` and the core refreshes whatever they touch. Types come
+// subscribe to the views the core puts together; what they have done is a
+// call by its name (client/core/src/ops.rs), never a request made here, and the
+// core brings whatever it touches up to date before it answers. Types come
 // from client/shapes (core/shapes.ts); what is only sent to a station is
 // declared here.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -8,7 +9,8 @@ import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { Attachment, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
-import type { AccessKind, ConnectMode, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
+import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
+import type { SlackPerson } from "./cloud/adding.ts";
 
 export type { TopicState };
 export { CoreError };
@@ -149,7 +151,8 @@ export function useHost(station: string): TopicState<Host> {
 // ── calls ───────────────────────────────────────────────────────────────
 
 export interface StationCall {
-  request<T>(method: string, path: string, body?: unknown): Promise<T>;
+  /** Has the core do `name` (client/core/src/ops.rs) on this station, with `params`. */
+  op<T>(name: string, params?: Record<string, unknown>): Promise<T>;
   /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
   upload(file: File): Promise<Attachment>;
   /** A file sent to the session, as a blob for previews; `thumb`: an image as a chat shows it (its thumbnail, where the station keeps one). */
@@ -179,8 +182,7 @@ function toBase64(file: Blob): Promise<string> {
 export function useStationCall(station: string): StationCall {
   const call = useCall();
   return useMemo(() => ({
-    request: <T,>(method: string, path: string, body?: unknown) =>
-      call("station.request", { station, method, path, ...(body === undefined ? {} : { body }) }) as Promise<T>,
+    op: <T,>(name: string, params: Record<string, unknown> = {}) => call(name, { ...params, station }) as Promise<T>,
     upload: async (file) => {
       const saved = await call("station.upload", { station, name: file.name, bytes: await toBase64(file) }) as Attachment;
       // An image's size travels with it, so every page can hold its place before it loads.
@@ -227,86 +229,87 @@ export interface MachineSaid { person: boolean; text: string; at: number | null 
 /** The admin API of one station, by what each call does. */
 
 export function stationApi(t: StationCall) {
-  const { request } = t;
-  const at = (id: string) => encodeURIComponent(id);
+  const { op } = t;
   return {
-    stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/stop`),
+    stop: (key: string) => op<{ ok: true }>("session.stop", { key }),
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
-    archive: async (of: { thread?: number | null; session: string }, archived: boolean) => {
-      const method = archived ? "POST" : "DELETE";
-      const bySession = () => request<unknown>(method, `/sessions/${at(of.session)}/archive`);
-      if (of.thread == null) return bySession();
-      try {
-        return await request<unknown>(method, `/threads/${of.thread}/archive`);
-      } catch (error) {
-        // A station from before chats were archived by themselves: its session instead, as it always was.
-        if (error instanceof CoreError && error.status === 404) return bySession();
-        throw error;
-      }
-    },
+    archive: (of: { thread?: number | null; session: string }, archived: boolean) =>
+      op<unknown>("chat.archive", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), archived }),
     /** The archive's items; a station from before it answers its shown ones (none say `archived`), so none. */
-    archivedChats: async () => (await request<ArchivedChat[]>("GET", "/chats?archived=1")).filter((row) => row.archived),
-    deleteSession: (key: string) => request<{ ok: true }>("DELETE", `/sessions/${at(key)}`),
-    evict: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/evict`),
-    putConnect: (id: string, input: ConnectInput) => request<Overview>("PUT", `/connects/${at(id)}`, input),
-    deleteConnect: (id: string) => request<Overview>("DELETE", `/connects/${at(id)}`),
-    reconnect: (id: string) => request<{ ok: true }>("POST", `/connects/${at(id)}/reconnect`),
-    putProfile: (id: string, input: ProfileInput) => request<Overview>("PUT", `/profiles/${at(id)}`, input),
-    refreshQuota: (id: string) => request<Quota | null>("POST", `/profiles/${at(id)}/quota`),
-    checkProfile: (id: string) => request<ProfileCheck>("POST", `/profiles/${at(id)}/check`),
+    archivedChats: async () => (await op<ArchivedChat[]>("chats.archived")).filter((row) => row.archived),
+    deleteSession: (key: string) => op<{ ok: true }>("session.delete", { key }),
+    evict: (key: string) => op<{ ok: true }>("session.evict", { key }),
+    putConnect: (id: string, input: ConnectInput) => op<Overview>("connect.put", { id, input }),
+    deleteConnect: (id: string) => op<Overview>("connect.delete", { id }),
+    reconnect: (id: string) => op<{ ok: true }>("connect.reconnect", { id }),
+    putProfile: (id: string, input: ProfileInput) => op<Overview>("profile.put", { id, input }),
+    refreshQuota: (id: string) => op<Quota | null>("profile.quota", { id }),
+    checkProfile: (id: string) => op<ProfileCheck>("profile.check", { id }),
     verifySlack: (input: { connect?: string; install?: string; appToken?: string; botToken?: string }) =>
-      request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
+      op<{ identity: SlackIdentity | null; errors: string[] }>("slack.verify", input),
     bindSession: (connect: string, session: string | null, title?: string) =>
-      request<{ session: string }>("POST", `/connects/${at(connect)}/session`, { session, ...(title ? { title } : {}) }),
+      op<{ session: string }>("connect.bindSession", { connect, session, ...(title ? { title } : {}) }),
     /** Starts the session's runtime ahead of a message. */
-    warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/warm`),
+    warm: (key: string) => op<{ ok: true }>("session.warm", { key }),
     /** What an inline visualization (Viz.tsx) kept: by the session that sent its file and the file's path. */
-    widgetState: (key: string, path: string) => request<{ state: unknown }>("GET", `/sessions/${at(key)}/widget-state?path=${encodeURIComponent(path)}`),
-    setWidgetState: (key: string, path: string, state: unknown) => request<{ ok: true }>("PUT", `/sessions/${at(key)}/widget-state`, { path, state }),
-    /** A new chat: its session and its thread, made with its first message. */
-    newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: ChatThread }>("POST", "/sessions", input),
+    widgetState: (key: string, path: string) => op<{ state: unknown }>("widget.state", { key, path }),
+    setWidgetState: (key: string, path: string, state: unknown) => op<{ ok: true }>("widget.setState", { key, path, state }),
+    /** The chat of an agent that has none yet, bound to its session. */
+    chatFor: (session: string) => op<{ id: number }>("chat.forSession", { session }),
     /** Sessions the machine's own Claude Code and Codex kept (in a terminal); a station from before them answers 404. */
-    machineSessions: () => request<{ sessions: MachineSession[] }>("GET", "/machine-sessions"),
+    machineSessions: () => op<{ sessions: MachineSession[] }>("machineSessions.list"),
     /** One of them to look at first: what was said in it, the latest `limit` of `total`. */
     machineSession: (runtime: RuntimeKind, id: string, limit = 200) =>
-      request<{ session: MachineSession; total: number; said: MachineSaid[] }>("GET", `/machine-sessions/${at(runtime)}/${at(id)}?limit=${limit}`),
+      op<{ session: MachineSession; total: number; said: MachineSaid[] }>("machineSessions.read", { runtime, id, limit }),
     /** A chat going on with one of them (the one already going on with it, if any). */
-    continueMachineSession: (runtime: RuntimeKind, id: string) => request<{ key: string; thread: ChatThread }>("POST", "/machine-sessions", { runtime, id }),
+    continueMachineSession: (runtime: RuntimeKind, id: string) => op<{ key: string; thread: ChatThread }>("machineSessions.continue", { runtime, id }),
     file: t.file,
     uploadFile: t.upload,
-    startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${at(profile)}/login`),
-    cancelLogin: (profile: string) => request<{ job: LoginJob | null }>("DELETE", `/profiles/${at(profile)}/login`),
-    loginCode: (profile: string, code: string) => request<{ job: LoginJob }>("POST", `/profiles/${at(profile)}/login-code`, { code }),
+    startLogin: (profile: string) => op<{ job: LoginJob }>("profile.login", { id: profile }),
+    cancelLogin: (profile: string) => op<{ job: LoginJob | null }>("profile.cancelLogin", { id: profile }),
+    loginCode: (profile: string, code: string) => op<{ job: LoginJob }>("profile.loginCode", { id: profile, code }),
     /** A subscription signed in before its profile exists; the station makes the profile when it succeeds. */
-    newLogin: (runtime: RuntimeKind) => request<{ id: string; job: LoginJob }>("POST", "/logins", { runtime }),
-    newLoginCode: (id: string, code: string) => request<{ job: LoginJob }>("POST", `/logins/${at(id)}/code`, { code }),
-    dropLogin: (id: string) => request<{ ok: true }>("DELETE", `/logins/${at(id)}`),
+    newLogin: (runtime: RuntimeKind) => op<{ id: string; job: LoginJob }>("login.new", { runtime }),
+    newLoginCode: (id: string, code: string) => op<{ job: LoginJob }>("login.code", { id, code }),
+    dropLogin: (id: string) => op<{ ok: true }>("login.drop", { id }),
     /** A profile on the machine's own login of `runtime` (one kept in a file). */
-    useMachineLogin: (runtime: RuntimeKind) => request<{ id: string; overview: Overview }>("POST", "/profiles/machine", { runtime }),
+    useMachineLogin: (runtime: RuntimeKind) => op<{ id: string; overview: Overview }>("profile.useMachineLogin", { runtime }),
     /** A keyed profile, made only once its key is checked. */
-    addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => request<{ id: string; overview: Overview }>("POST", "/profiles", input),
-    slackApp: (connect: string) => request<SlackAppView>("GET", `/connects/${at(connect)}/slack-app`),
+    addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => op<{ id: string; overview: Overview }>("profile.add", input),
     putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
-      request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),
+      op<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("connect.putSlackApp", { connect, input }),
     /** Makes a Slack app with the workspace's configuration token (ember's manifest, Socket Mode on), for a connect to come. */
     /** `install`: Slack's install link, when the app is installed through OAuth (a station in ember cloud); `state` names it. */
     /** The app is kept on the station, waiting for its connect (the overview's `slackApps`); this says which it is. */
-    makeSlackApp: (input: { team: string; settings: SlackAppSettings; icon?: string }) => request<{ appId: string; iconError: string | null }>("POST", "/slack/apps", input),
+    makeSlackApp: (input: { team: string; settings: SlackAppSettings; icon?: string }) => op<{ appId: string; iconError: string | null }>("slack.makeApp", input),
     /** Drops an app made here from the waiting ones; it stays in Slack. */
-    dropSlackApp: (appId: string) => request<Overview>("DELETE", `/slack/apps/${at(appId)}`),
+    dropSlackApp: (appId: string) => op<Overview>("slack.dropApp", { appId }),
     /** Hands Slack's install code to the station that made the app. */
-    slackInstalled: (code: string, state: string) => request<{ team: string | null }>("POST", "/slack/installs", { code, state }),
+    slackInstalled: (code: string, state: string) => op<{ team: string | null }>("slack.installed", { code, state }),
+    /** The people of the Slack workspaces this station's connects are in, and what could not be read. */
+    slackPeople: () => op<{ people: SlackPerson[]; errors: string[] }>("slack.people"),
     /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */
-    createConnect: (input: ConnectInput) => request<{ id: string; overview: Overview }>("POST", "/connects", input),
+    createConnect: (input: ConnectInput) => op<{ id: string; overview: Overview }>("connect.create", { input }),
     /** How a session runs from its next turn on: its profile, model, effort (null: the runtime's default). */
-    sessionSettings: (key: string, input: { profile?: string | null; model?: string | null; effort?: string | null }) => request<{ ok: true }>("POST", `/sessions/${at(key)}/settings`, input),
+    sessionSettings: (key: string, input: { profile?: string | null; model?: string | null; effort?: string | null }) => op<{ ok: true }>("session.settings", { key, ...input }),
     /** Adds a Slack workspace's app configuration token; answers which workspace it is. */
-    addConfigToken: (refreshToken: string) => request<{ teamId: string; overview: Overview }>("POST", "/slack/config-tokens", { refreshToken }),
-    removeConfigToken: (team: string) => request<Overview>("DELETE", `/slack/config-tokens/${at(team)}`),
-    deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${at(id)}`),
+    addConfigToken: (refreshToken: string) => op<{ teamId: string; overview: Overview }>("slack.addConfigToken", { refreshToken }),
+    removeConfigToken: (team: string) => op<Overview>("slack.removeConfigToken", { team }),
+    deleteProfile: (id: string) => op<Overview>("profile.delete", { id }),
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
-    slackIdentity: (user: string, bound: boolean) => request<Overview>(bound ? "PUT" : "DELETE", `/me/slack/${at(user)}`),
-    createAppUrl: (name: string) => request<{ url: string }>("GET", `/slack/create-app-url?name=${encodeURIComponent(name)}`),
+    slackIdentity: (user: string, bound: boolean) => op<Overview>("slack.identity", { user, bound }),
+    createAppUrl: (name: string) => op<{ url: string }>("slack.createAppUrl", { name }),
+    /** A background job (a web service's page finds its port by it). */
+    job: (id: string) => op<Job>("job.get", { id }),
+    /** A job's last `lines` lines of output, and when it last grew. */
+    jobLog: (id: string, lines: number) => op<{ text: string; outputAt?: number }>("job.log", { id, lines }),
+    /** Stops a job from the page (its agent is told who did); the core puts it in place as it is now. */
+    stopJob: (id: string) => op<Job>("job.stop", { id }),
+    /** What the station's agents remember (their memory and skills). */
+    memory: <T,>() => op<T>("memory.get"),
+    /** Brings a piece of the station's software up to date, or checks what is new. */
+    updateSoftware: <T,>(id: string) => op<T>("software.update", { id }),
+    checkSoftware: <T,>() => op<T>("software.check"),
   };
 }
 

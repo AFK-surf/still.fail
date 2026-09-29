@@ -53,7 +53,7 @@ protocol is the same on every host.
 UI → core:
 
 ```jsonc
-{ "id": 7, "call": "station.request", "params": { … } }   // one answer
+{ "id": 7, "call": "job.stop", "params": { … } }          // one answer
 { "id": 8, "subscribe": { "topic": "station.session", "station": "ws1/st1", "key": "…" } }
 { "id": 8, "unsubscribe": true }
 ```
@@ -106,7 +106,8 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
-| `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns }` (no messages, no transcript) |
+| `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
+| `jobs` | `station` | `/jobs`: its background jobs still up (running, or a service being started again), newest first, each with the `chat` it is in as the viewer's sidebar has it |
 | `thread` | `station`, `thread` (id) | `{ first, last, entries, thread }`: the thread's entries `first ..= last` (`EntryView`s, never changed once read): its latest page, older pages in front as `chat.older` loads them; `thread` is its summary as kept on the device (null when read from the station) |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
@@ -160,7 +161,11 @@ that only notifications change it:
   the last entry (else the thread is read again), and turns off `unread` of
   that thread's `chatRows` row when it covers the row's last message; `chat`
   puts a row into `chatRows` (replacing the one with its `id`), `chat-removed`
-  takes one out; `overview` and `host` are the whole values. After the stream
+  takes one out; `job` (a job as `GET /jobs/:id` answers it, whenever it
+  starts, starts again, ends or says something) replaces it in its session's
+  `jobs` (or goes in front), and in `jobs` while it is up (one not listed there
+  yet reads `jobs` again, for its chat; one no longer up leaves); `overview`
+  and `host` are the whole values. After the stream
   was down, every live topic of the station is read once when it reopens
   (`thread` topics only what came after them: `?after=<last>`); `link` says
   how the stream is.
@@ -311,8 +316,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `auth.begin` | `redirect_uri`, `return_to`, `device_name` | `{ url }` to open (web: navigate; native: system browser) |
 | `auth.complete` | `query` (the callback's query string) | `{ account, return_to }` |
 | `auth.signOut` | `account` | — |
-| `cloud.request` | `account`, `method`, `path`, `body?` | the JSON answer (the core adds the token and refreshes it) |
-| `station.request` | `station`, `method`, `path`, `body?` | the JSON answer; the core then refreshes the topics this write can change |
+| *an operation* | `station` or `account`, and its own | what the station or ember cloud answers; see below |
 | `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?` | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on ember's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
 | `chat.older` | `station`, `thread` | `{ more }`: loads the page (50 entries) before the chat's oldest loaded entry into its `thread` topic — from what is kept, else from the station — so `messages` grows in front |
@@ -322,18 +326,41 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
 
-Writes go through `station.request`, which answers only after the live topics
-the write touches are current, so the UI never invalidates caches itself and a
-page that navigates right after a write finds what it wrote: an answer that is
-an overview (profile and connect edits) becomes the `overview`; a thread
-(`POST /threads`, `POST /threads/:id/sessions`) goes into `threads` and the
-`session` topics; a read position into the threads; otherwise the touched
-topics are read again (`/sessions…` → `session`, `sessions` and `chatRows`;
-a thread answered by `/threads…` → `chatRows` as well; `/connects…` →
-`overview` and `sessions`; `/profiles…`, `/slack…` → `overview`;
-`/me/slack/:user` → `overview` (its answer) and `chatRows`;
-`/threads/:id/messages` → that `thread`). The station's events
-bring the same a moment later.
+A UI never makes a request of a station or ember cloud itself (no method, no
+path): it names what it wants done, and the core knows the request that does it
+and what that changes (`ops.rs`; `scripts/check.sh` fails on a UI that asks
+for a request). Station operations take `station`: `session.stop`,
+`session.warm`, `session.evict`, `session.delete`, `session.settings`,
+`session.new`, `chat.archive` (by its thread, else its session; a station from
+before archiving threads archives the session), `chats.archived`,
+`chat.forSession`, `widget.state`, `widget.setState`, `machineSessions.list`,
+`machineSessions.read`, `machineSessions.continue`, `connect.create`,
+`connect.put`, `connect.delete`, `connect.reconnect`, `connect.bindSession`,
+`connect.putSlackApp`, `slack.verify`, `slack.makeApp`, `slack.dropApp`,
+`slack.installed`, `slack.addConfigToken`, `slack.removeConfigToken`,
+`slack.people`, `slack.createAppUrl`, `slack.identity`, `profile.add`,
+`profile.useMachineLogin`, `profile.put`, `profile.delete`, `profile.quota`,
+`profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
+`login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
+`memory.get`, `software.update`, `software.check`. ember cloud's take
+`account`: `workspace.create`, `workspace.rename`, `workspace.delete`,
+`workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
+`workspace.revokeInvitation`, `workspace.setRole`, `workspace.removeMember`,
+`workspace.enroll`, `workspace.renameStation`, `workspace.removeStation`,
+`invitation.preview`, `invitation.accept`, `invitation.decline`,
+`loginSession.revoke`, `admin.me`, `admin.createCode`, `admin.revokeCode`.
+
+An operation answers only after the live topics it touches are current, so
+the UI never invalidates caches itself and a page that navigates right after a
+write finds what it wrote: an answer that is an overview (profile and connect
+edits) becomes the `overview`; a thread (`chat.forSession`, a new chat) goes
+into `threads` and the `session` topics; a read position into the threads; a
+job stopped into its session's `jobs` and into `jobs` (as its `job` event
+would); otherwise the touched topics are read again (sessions → `session`,
+`sessions` and `chatRows`; a thread answered → `chatRows` as well; connects →
+`overview` and `sessions`; profiles, Slack → `overview`; `slack.identity` →
+`overview` (its answer) and `chatRows`). A write to ember cloud reads the
+account topics again. The station's events bring the same a moment later.
 
 ## Crates
 

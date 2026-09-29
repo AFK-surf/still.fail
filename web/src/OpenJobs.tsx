@@ -1,10 +1,11 @@
 // At the sidebar's foot: the services and background jobs left up a long while, across the chats of the scope's
 // stations, so none is forgotten running: web services and background jobs, each under its heading. Only those up for more than LONG; nothing at all while there are none. Each
-// leads to its chat (a service opens there, beside it) and stops from here.
-import { useEffect, useState } from "react";
+// leads to its chat (a service opens there, beside it) and stops from here. The core keeps the lists (the `jobs` topic
+// of each station, current with its events).
+import { useState } from "react";
 import { NavLink } from "react-router";
 import type { Job } from "./core/shapes.ts";
-import { useCall } from "./core/react.ts";
+import { useCall, useTopics } from "./core/react.ts";
 import { useToast } from "./toast.tsx";
 import { stationBase } from "./station.tsx";
 import { isService, JobDot, span, toneOf, useNow } from "./Jobs.tsx";
@@ -14,48 +15,34 @@ import * as css from "./OpenJobs.css.ts";
 
 /** Up this long, a service or job is worth a reminder. */
 const LONG = 3600_000;
-/** How often the stations are asked again. */
+/** How often the ages are worked out again. */
 const EVERY = 60_000;
 /** Rows shown before the rest folds under「还有 N 个」. */
 const SHOWN = 3;
 
-/** A job still up, as a station's `GET /jobs` has it: with the chat it is in, when the viewer sees one. */
+/** A job still up, as a station's `jobs` topic has it: with the chat it is in, when the viewer sees one. */
 type OpenJob = Job & { chat?: { id: string; title: string; archived: boolean } };
 type Held = OpenJob & { station: string; stationName?: string };
 
-/** Those of `stations` (addresses, with names when there are several to tell apart), read again every minute and on coming back to the page. */
-function useOpenJobs(stations: { address: string; name?: string }[]): { jobs: Held[]; reload: () => void } {
-  const call = useCall();
-  const [jobs, setJobs] = useState<Held[]>([]);
-  const [tick, setTick] = useState(0);
-  const key = stations.map((s) => s.address).join("\n");
-  useEffect(() => {
-    let live = true;
-    const read = () => void Promise.all(stations.map((s) =>
-      (call("station.request", { station: s.address, method: "GET", path: "/jobs" }) as Promise<OpenJob[]>)
-        // A station that does not answer, or too old to know the list, has none to show.
-        .then((list) => (Array.isArray(list) ? list : []).map((j) => ({ ...j, station: s.address, ...(s.name ? { stationName: s.name } : {}) })), () => [] as Held[]),
-    )).then((all) => { if (live) setJobs(all.flat()); });
-    read();
-    const timer = setInterval(read, EVERY);
-    const onVisible = () => { if (document.visibilityState === "visible") read(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { live = false; clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [call, key, tick]);
-  return { jobs, reload: () => setTick((t) => t + 1) };
+/** Those of `stations` (addresses, with names when there are several to tell apart), as the core keeps them. */
+function useOpenJobs(stations: { address: string; name?: string }[]): Held[] {
+  const states = useTopics<OpenJob[]>(stations.map((s) => ({ topic: "jobs", station: s.address })));
+  // A station that does not answer, or too old to know the list, has none to show.
+  return stations.flatMap((s, i) => (Array.isArray(states[i]?.value) ? states[i]!.value! : [])
+    .map((j) => ({ ...j, station: s.address, ...(s.name ? { stationName: s.name } : {}) })));
 }
 
 export function OpenJobs({ stations }: { stations: { address: string; name?: string }[] }) {
   const now = useNow(EVERY);
-  const { jobs, reload } = useOpenJobs(stations);
+  const jobs = useOpenJobs(stations);
   const [all, setAll] = useState<Record<string, boolean>>({});
   const call = useCall();
   const toast = useToast();
   const long = jobs.filter((j) => now - j.startedAt >= LONG).sort((a, b) => a.startedAt - b.startedAt);
   if (long.length === 0) return null;
-  const stop = (job: Held) => void (call("station.request", { station: job.station, method: "POST", path: `/jobs/${encodeURIComponent(job.id)}/stop` }) as Promise<unknown>)
-    .then(reload, (e: Error) => toast(`没能停下「${job.name}」：${e.message}`));
+  // The core puts the job in place as it is now: gone from here, stopped in its chat.
+  const stop = (job: Held) => void (call("job.stop", { station: job.station, id: job.id }) as Promise<unknown>)
+    .catch((e: Error) => toast(`没能停下「${job.name}」：${e.message}`));
   const row = (job: Held) => {
     const chat = job.chat ? `${stationBase(job.station)}/chats/${encodeURIComponent(job.chat.id)}${isService(job) ? `?service=${encodeURIComponent(job.id)}` : ""}` : null;
     const where = [job.stationName, job.chat?.title ?? "不在任何对话里", job.chat?.archived && "已归档"].filter(Boolean).join(" · ");

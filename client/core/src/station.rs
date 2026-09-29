@@ -765,6 +765,8 @@ impl Stations {
                 touched.push(Topic::Overview { station: name.clone() });
                 touched.extend(self.live_topics(&name, |t| matches!(t, Topic::SlackApp { .. })));
             }
+            // A job stopped: it answers the job as it is now.
+            Some("jobs") if answer.get("id").is_some() && answer.get("state").is_some() => self.on_job(&name, answer),
             // Who the viewer is on Slack: it answers the overview, and changes which rows are theirs.
             Some("me") => {
                 touched.push(Topic::Overview { station: name.clone() });
@@ -838,6 +840,7 @@ impl Stations {
             Topic::Threads { .. } => "/threads".to_string(),
             Topic::ChatRows { .. } => "/chats".to_string(),
             Topic::SlackApp { connect, .. } => format!("/connects/{}/slack-app", encode(connect)),
+            Topic::Jobs { .. } => "/jobs".to_string(),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
             // A thread already read only asks for what came after it.
             Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("last")?.as_u64()) {
@@ -1232,6 +1235,7 @@ impl Stations {
                     }
                 });
             }
+            "job" => self.on_job(station, &data),
             "overview" => self.set_live(Topic::Overview { station: station.into() }, data),
             "host" => self.set_live(Topic::Host { station: station.into() }, data),
             _ => {}
@@ -1262,6 +1266,46 @@ impl Stations {
             detail["session"] = summary.clone();
         });
         if turns_changed {
+            self.refetch(&topic);
+        }
+    }
+
+    /// A job as it is now (its event, or the answer to stopping it): in place in its session's jobs, and among the
+    /// station's open ones while it is open (running, or a service being started again).
+    fn on_job(&self, station: &str, job: &Value) {
+        let (Some(id), Some(key)) = (job.get("id").and_then(Value::as_str), job.get("session").and_then(Value::as_str)) else { return };
+        self.sink.update(&Topic::Session { station: station.into(), key: key.into() }, &mut |detail| {
+            // A station yet to list jobs with a session has none to put it in.
+            let Some(jobs) = detail.get_mut("jobs").and_then(Value::as_array_mut) else { return };
+            match jobs.iter().position(|j| j.get("id").and_then(Value::as_str) == Some(id)) {
+                Some(i) => jobs[i] = job.clone(),
+                None => jobs.insert(0, job.clone()),
+            }
+        });
+        let open = job.get("state").and_then(Value::as_str) == Some("running")
+            || (job.get("state").and_then(Value::as_str) == Some("exited") && job.get("port").is_some_and(|p| !p.is_null()));
+        let topic = Topic::Jobs { station: station.into() };
+        let mut unknown = false;
+        self.sink.update(&topic, &mut |list| {
+            let Some(list) = list.as_array_mut() else { return };
+            match (list.iter().position(|j| j.get("id").and_then(Value::as_str) == Some(id)), open) {
+                // What chat it is in stays as the station said.
+                (Some(i), true) => {
+                    let chat = list[i].get("chat").cloned();
+                    list[i] = job.clone();
+                    if let Some(chat) = chat {
+                        list[i]["chat"] = chat;
+                    }
+                }
+                (Some(i), false) => {
+                    list.remove(i);
+                }
+                // A new one: which chat it is in is the station's to say.
+                (None, true) => unknown = true,
+                (None, false) => {}
+            }
+        });
+        if unknown {
             self.refetch(&topic);
         }
     }
@@ -1836,7 +1880,7 @@ impl Source for Stations {
                     this.set_link(&station, link);
                 });
             }
-            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } => self.refetch(topic),
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Jobs { .. } => self.refetch(topic),
             Topic::Thread { thread, .. } => {
                 let (this, station, thread) = (self.rc(), station.clone(), *thread);
                 self.spawn(async move { this.open_thread(&station, thread).await });
@@ -2218,6 +2262,46 @@ mod tests {
             wire.answer("GET /admin/api/connects/ds/slack-app", 200, json!({"state": "ok"}));
             stations.request(&remote(), "PUT", "/slack/config-token", Some(json!({"refreshToken": "x"}))).await.unwrap();
             assert_eq!(sink.get(&app).unwrap()["state"], "ok");
+        });
+    }
+
+    #[test]
+    fn jobs_are_put_in_place_from_their_events_and_from_stopping_them() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            let job = |id: &str, state: &str| json!({"id": id, "session": "a", "name": id, "state": state, "port": 4817, "startedAt": 1});
+            let open = Topic::Jobs { station: ST.into() };
+            wire.answer("GET /admin/api/sessions/a", 200, json!({"session": summary("a", 0), "threads": [], "turns": [], "jobs": [job("j1", "running")]}));
+            wire.answer("GET /admin/api/jobs", 200, json!([{"id": "j1", "session": "a", "name": "j1", "state": "running", "port": 4817, "startedAt": 1, "chat": {"id": "7", "title": "t", "archived": false}}]));
+            stations.start(&session("a"));
+            stations.start(&open);
+            host.settle().await;
+            let reads = wire.calls.borrow().len();
+            // Stopped from a page: the answer is the job as it is now, in its chat and gone from the open ones, with
+            // nothing read again.
+            wire.answer("POST /admin/api/jobs/j1/stop", 200, job("j1", "stopped"));
+            stations.request(&remote(), "POST", "/jobs/j1/stop", None).await.unwrap();
+            assert_eq!(sink.get(&session("a")).unwrap()["jobs"][0]["state"], "stopped");
+            assert_eq!(sink.get(&open).unwrap(), json!([]));
+            assert_eq!(wire.calls.borrow().len(), reads + 1);
+            // Started again elsewhere (an agent, another device): its event puts it back; which chat it is in, the list
+            // read again says.
+            wire.event("job", job("j1", "running"));
+            host.settle().await;
+            assert_eq!(sink.get(&session("a")).unwrap()["jobs"][0]["state"], "running");
+            assert_eq!(sink.get(&open).unwrap()[0]["chat"]["id"], "7");
+            assert_eq!(wire.count("GET", "/admin/api/jobs"), 2);
+            // A new one goes in front of its session's; one listed keeps its chat as it changes.
+            wire.event("job", job("j2", "failed"));
+            let mut restarting = job("j1", "exited");
+            restarting["restarts"] = json!(1);
+            wire.event("job", restarting);
+            host.settle().await;
+            let jobs = sink.get(&session("a")).unwrap()["jobs"].clone();
+            assert_eq!((jobs[0]["id"].as_str(), jobs[1]["state"].as_str()), (Some("j2"), Some("exited")));
+            assert_eq!(sink.get(&open).unwrap()[0]["restarts"], 1);
+            assert_eq!(sink.get(&open).unwrap()[0]["chat"]["id"], "7");
+            assert_eq!(wire.count("GET", "/admin/api/jobs"), 2);
         });
     }
 

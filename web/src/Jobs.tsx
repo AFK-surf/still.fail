@@ -4,7 +4,7 @@
 // the title bar's popover shows what matters now, the 任务 tab beside the chat shows everything.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Job } from "./core/shapes.ts";
-import { useStationCall } from "./api.ts";
+import { stationApi, useStationCall } from "./api.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "./icons.tsx";
 import { Empty, Segmented, Tip } from "./ui.tsx";
 import { useToast } from "./toast.tsx";
@@ -147,7 +147,7 @@ export function useJobLog(station: string, id: string | null, lines: number, eve
   useEffect(() => {
     if (!id) return;
     let live = true;
-    const read = () => void call.request<{ text: string; outputAt?: number }>("GET", `/jobs/${encodeURIComponent(id)}/log?lines=${lines}`)
+    const read = () => void stationApi(call).jobLog(id, lines)
       .then((r) => { if (live) setLog({ id, text: r.text, ...(r.outputAt ? { outputAt: r.outputAt } : {}) }); }, () => {});
     read();
     const timer = setInterval(read, every);
@@ -160,7 +160,7 @@ export function useJobLog(station: string, id: string | null, lines: number, eve
 export function useStopJob(station: string): (job: Job) => void {
   const call = useStationCall(station);
   const toast = useToast();
-  return (job) => void call.request("POST", `/jobs/${encodeURIComponent(job.id)}/stop`)
+  return (job) => void stationApi(call).stopJob(job.id)
     .catch((e: Error) => toast(`没能停下「${job.name}」：${e.message}`));
 }
 

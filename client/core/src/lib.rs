@@ -16,6 +16,7 @@ pub mod history;
 pub mod host;
 pub mod kept;
 pub mod mesh;
+pub mod ops;
 pub mod present;
 pub mod protocol;
 pub mod station;

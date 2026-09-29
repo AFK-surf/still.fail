@@ -55,6 +55,9 @@ pub enum Topic {
     ChatRows { station: String },
     /// A connect's Slack app as the station sees it (`/connects/:id/slack-app`): its settings and links.
     SlackApp { station: String, connect: String },
+    /// The station's background jobs still up (running, or a service being started again), newest first, each with
+    /// the chat it is in as the viewer's sidebar has it (`/jobs`).
+    Jobs { station: String },
     /// An account's signed-in devices (`/v1/auth/sessions`).
     LoginSessions { account: String },
     /// ember cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
@@ -76,7 +79,7 @@ impl Topic {
     /// The station a station topic belongs to; `None` for the account topics and the views.
     pub fn station(&self) -> Option<&str> {
         match self {
-            Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } => Some(station),
+            Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } => None,

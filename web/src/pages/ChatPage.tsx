@@ -285,7 +285,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // chat at the same address once it is there).
   const session = "session" in of && !chat.thread && !made ? of.session : null;
   const firstMessage = session === null ? {} : {
-    ensureChat: async () => ({ key: session, thread: (await call.request<{ id: number }>("POST", "/threads", { session })).id }),
+    ensureChat: async () => ({ key: session, thread: (await stationApi(call).chatFor(session)).id }),
   };
   return (
     <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>

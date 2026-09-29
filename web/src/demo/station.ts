@@ -76,19 +76,18 @@ export class NeedsReal extends Error {
 }
 
 /** What the demo's station does itself, changing nothing: a chat's agent woken, stopped or moved to another model. */
-const OWN = /^\/sessions\/[^/]+\/(warm|stop|evict|settings)$/;
+const OWN = new Set(["session.warm", "session.stop", "session.evict", "session.settings"]);
 
-/** The station's admin API, as `station.request` reaches it: what is read answers; what would reach out needs a real
+/** The station's operations (client/core/src/ops.rs), by name: what is read answers; what would reach out needs a real
  *  ember; what stays in the station answers the overview (what most writes answer with) and changes nothing. */
-export function request(method: string, path: string): unknown {
-  if (method === "GET") {
-    if (path === "/memory") return data.memory;
-    if (path.startsWith("/chats?archived")) return now(data.archived);
-    if (path === "/machine-sessions") return now(data.machineSessions);
-    if (path.startsWith("/slack/")) throw new NeedsReal();
-    return overview();
-  }
-  if (OWN.test(path)) return overview();
+export function op(name: string): unknown {
+  if (name === "memory.get") return data.memory;
+  if (name === "chats.archived") return now(data.archived);
+  if (name === "machineSessions.list") return now(data.machineSessions);
+  // An inline visualization keeps nothing here.
+  if (name === "widget.state") return { state: null };
+  if (name === "widget.setState") return { ok: true };
+  if (OWN.has(name)) return overview();
   throw new NeedsReal();
 }
 

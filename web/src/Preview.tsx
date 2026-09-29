@@ -294,7 +294,7 @@ export function ServicePage({ station, service }: { station: string; service: st
   const [job, setJob] = useState<{ name: string; port: number | null; state: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    call("station.request", { station, method: "GET", path: `/jobs/${encodeURIComponent(service)}` })
+    call("job.get", { station, id: service })
       .then((j) => { const found = j as { name: string; port: number | null; state: string }; setJob(found); document.title = found.name; }, (e: Error) => setError(e.message));
   }, [call, station, service]);
   if (error) return <div className={`${css.previewPage} ${css.previewMissing}`}>找不到这个服务：{error}</div>;

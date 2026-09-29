@@ -107,12 +107,10 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   }
   // What reaches past the demo is offered in a real ember instead, and fails here as not done.
   try {
-    if (name === "station.request") return station.request(String(params.method), String(params.path));
-    if (name === "cloud.request") {
-      if (params.method !== "GET") throw new station.NeedsReal();
-      return station.workspace();
-    }
     if (name === "station.upload" || name.startsWith("auth.")) throw new station.NeedsReal();
+    // ember cloud's operations (ops.rs: by the account they go as): every one would reach out.
+    if ("account" in params) throw new station.NeedsReal();
+    if (typeof params.station === "string") return station.op(name);
   } catch (e) {
     if (e instanceof station.NeedsReal) askForReal();
     throw e;

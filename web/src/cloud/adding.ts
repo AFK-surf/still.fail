@@ -35,7 +35,7 @@ export function useSlackPeople(workspace: string) {
     const problems: string[] = [];
     for (const station of addresses.split(" ").filter(Boolean)) {
       try {
-        const read = await call("station.request", { station, method: "GET", path: "/slack/people" }) as { people: SlackPerson[]; errors: string[] };
+        const read = await call("slack.people", { station }) as { people: SlackPerson[]; errors: string[] };
         for (const p of read.people) if (!seen.has(p.email)) seen.set(p.email, p);
         problems.push(...read.errors);
       } catch (error) {

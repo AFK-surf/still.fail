@@ -1,4 +1,4 @@
-// ember cloud's account API, called through the core as one of the signed-in
+// ember cloud's account API: what the pages have done there, by name, done by the core as one of the signed-in
 // accounts. Reads are the core's `workspaces` and `workspace` topics; after a
 // write the core refetches them, so nothing here keeps a cache.
 import { useCallback, useRef, useState } from "react";
@@ -30,46 +30,44 @@ export function useWorkspace(id: string): TopicState<WorkspaceView> {
   return useTopic<WorkspaceView>({ topic: "workspace", workspace: id });
 }
 
-function call<T>(sub: string, method: string, path: string, body?: unknown): Promise<T> {
-  return core().call("cloud.request", body === undefined ? { account: sub, method, path } : { account: sub, method, path, body }) as Promise<T>;
+/** Has the core do `name` (client/core/src/ops.rs) on ember cloud as the account `sub`, with `params`. */
+function op<T>(sub: string, name: string, params: Record<string, unknown> = {}): Promise<T> {
+  return core().call(name, { ...params, account: sub }) as Promise<T>;
 }
 
 export interface LoginSession { id: string; name: string; created_at: number; expires_at: number; current: boolean }
 
-const ws = (id: string) => `/v1/workspaces/${encodeURIComponent(id)}`;
-
 export const cloud = {
   /** `code`: an invite code, for an account not let in yet (ember is invite-only). */
-  createWorkspace: (sub: string, name: string, code?: string) =>
-    call<WorkspaceView>(sub, "POST", "/v1/workspaces", code ? { name, invite_code: code } : { name }),
-  renameWorkspace: (sub: string, id: string, name: string) => call<WorkspaceView>(sub, "PATCH", ws(id), { name }),
-  deleteWorkspace: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", ws(id)),
+  createWorkspace: (sub: string, name: string, code?: string) => op<WorkspaceView>(sub, "workspace.create", code ? { name, invite_code: code } : { name }),
+  renameWorkspace: (sub: string, id: string, name: string) => op<WorkspaceView>(sub, "workspace.rename", { workspace: id, name }),
+  deleteWorkspace: (sub: string, id: string) => op<{ ok: true }>(sub, "workspace.delete", { workspace: id }),
   invite: (sub: string, id: string, role: Role, email: string) =>
-    call<{ token: string; url: string; expires_at: number }>(sub, "POST", `${ws(id)}/invitations`, { role, email }),
+    op<{ token: string; url: string; expires_at: number }>(sub, "workspace.invite", { workspace: id, role, email }),
   /** Adds people by email: members at once, or from their first sign-in; no invitation to accept. */
   addMembers: (sub: string, id: string, role: Role, emails: string[]) =>
-    call<{ joined: string[]; added: string[]; already: string[]; view: WorkspaceView }>(sub, "POST", `${ws(id)}/members`, { role, emails }),
-  removeAdded: (sub: string, id: string, email: string) => call<WorkspaceView>(sub, "DELETE", `${ws(id)}/added/${encodeURIComponent(email)}`),
-  revokeInvitation: (sub: string, id: string, invitation: string) => call<{ ok: true }>(sub, "DELETE", `${ws(id)}/invitations/${invitation}`),
+    op<{ joined: string[]; added: string[]; already: string[]; view: WorkspaceView }>(sub, "workspace.addMembers", { workspace: id, role, emails }),
+  removeAdded: (sub: string, id: string, email: string) => op<WorkspaceView>(sub, "workspace.removeAdded", { workspace: id, email }),
+  revokeInvitation: (sub: string, id: string, invitation: string) => op<{ ok: true }>(sub, "workspace.revokeInvitation", { workspace: id, invitation }),
   previewInvitation: (sub: string, token: string) =>
-    call<{ workspace: string; name: string; role: Role; inviter: string; email: string | null }>(sub, "POST", "/v1/invitations/preview", { token }),
-  acceptInvitationById: (sub: string, id: string) => call<WorkspaceView>(sub, "POST", `/v1/invitations/${id}/accept`),
-  declineInvitation: (sub: string, id: string) => call<{ ok: true }>(sub, "POST", `/v1/invitations/${id}/decline`),
-  acceptInvitation: (sub: string, token: string) => call<WorkspaceView>(sub, "POST", "/v1/invitations/accept", { token }),
-  setRole: (sub: string, id: string, member: string, role: Role) => call<WorkspaceView>(sub, "PATCH", `${ws(id)}/members/${encodeURIComponent(member)}`, { role }),
-  removeMember: (sub: string, id: string, member: string) => call<{ ok: true }>(sub, "DELETE", `${ws(id)}/members/${encodeURIComponent(member)}`),
-  enroll: (sub: string, id: string, name: string) => call<{ token: string; expires_at: number; install: string; command: string }>(sub, "POST", `${ws(id)}/enrollments`, { name }),
-  renameStation: (sub: string, id: string, station: string, name: string) => call<WorkspaceView>(sub, "PATCH", `${ws(id)}/stations/${station}`, { name }),
-  removeStation: (sub: string, id: string, station: string) => call<{ ok: true }>(sub, "DELETE", `${ws(id)}/stations/${station}`),
-  revokeLoginSession: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", `/v1/auth/sessions/${id}`),
+    op<{ workspace: string; name: string; role: Role; inviter: string; email: string | null }>(sub, "invitation.preview", { token }),
+  acceptInvitationById: (sub: string, id: string) => op<WorkspaceView>(sub, "invitation.accept", { id }),
+  declineInvitation: (sub: string, id: string) => op<{ ok: true }>(sub, "invitation.decline", { id }),
+  acceptInvitation: (sub: string, token: string) => op<WorkspaceView>(sub, "invitation.accept", { token }),
+  setRole: (sub: string, id: string, member: string, role: Role) => op<WorkspaceView>(sub, "workspace.setRole", { workspace: id, member, role }),
+  removeMember: (sub: string, id: string, member: string) => op<{ ok: true }>(sub, "workspace.removeMember", { workspace: id, member }),
+  enroll: (sub: string, id: string, name: string) => op<{ token: string; expires_at: number; install: string; command: string }>(sub, "workspace.enroll", { workspace: id, name }),
+  renameStation: (sub: string, id: string, station: string, name: string) => op<WorkspaceView>(sub, "workspace.renameStation", { workspace: id, station, name }),
+  removeStation: (sub: string, id: string, station: string) => op<{ ok: true }>(sub, "workspace.removeStation", { workspace: id, station }),
+  revokeLoginSession: (sub: string, id: string) => op<{ ok: true }>(sub, "loginSession.revoke", { id }),
 };
 
 /** The admin's console (on its own host, src/admin/); every call is a 404 for other accounts. */
 export const admin = {
-  me: (sub: string) => call<{ email: string }>(sub, "GET", "/v1/admin/me"),
+  me: (sub: string) => op<{ email: string }>(sub, "admin.me"),
   /** Each with its sign-up link on the web app. */
-  createCode: (sub: string, note: string, days: number) => call<InviteCodeView & { url: string }>(sub, "POST", "/v1/admin/invite-codes", { note, days }),
-  revokeCode: (sub: string, code: string) => call<{ ok: true }>(sub, "POST", `/v1/admin/invite-codes/${encodeURIComponent(code)}/revoke`),
+  createCode: (sub: string, note: string, days: number) => op<InviteCodeView & { url: string }>(sub, "admin.createCode", { note, days }),
+  revokeCode: (sub: string, code: string) => op<{ ok: true }>(sub, "admin.revokeCode", { code }),
 };
 
 // ember cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).

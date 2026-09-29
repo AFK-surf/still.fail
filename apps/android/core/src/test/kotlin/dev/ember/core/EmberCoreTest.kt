@@ -72,13 +72,13 @@ class EmberCoreTest {
     fun aCallIsAnsweredByTheMessageWithItsId() = runTest {
         val engines = FakeEngines()
         val core = core(engines)
-        val first = async { core.call("station.request", obj("""{"station":"local","method":"GET","path":"/overview"}""")) }
+        val first = async { core.call("memory.get", obj("""{"station":"local"}""")) }
         // Not a child of the test: its failure is for await() to report.
         val second = async(SupervisorJob()) { core.call("auth.signOut", obj("""{"account":"a"}""")) }
         runCurrent()
         assertEquals(
             listOf(
-                json("""{"id":1,"call":"station.request","params":{"station":"local","method":"GET","path":"/overview"}}"""),
+                json("""{"id":1,"call":"memory.get","params":{"station":"local"}}"""),
                 json("""{"id":2,"call":"auth.signOut","params":{"account":"a"}}"""),
             ),
             engines.last.sent,
@@ -206,7 +206,7 @@ class EmberCoreTest {
         val values = mutableListOf<JsonElement?>()
         val job = launch { core.topic(obj("""{"topic":"accounts"}""")).collect { values += it.value } }
         runCurrent()
-        val pending = async(SupervisorJob()) { core.call("cloud.request") }
+        val pending = async(SupervisorJob()) { core.call("admin.me") }
         runCurrent()
         val old = engines.last
         old.reply("""{"fatal":"panic"}""")

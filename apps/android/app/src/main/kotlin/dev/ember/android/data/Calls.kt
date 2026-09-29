@@ -1,12 +1,11 @@
-// Writes, through the core's calls (docs/client-core.md → Calls), with the
-// paths and bodies the web pages use (web/src/api.ts → stationApi). After a
-// write the core refreshes the topics it touches; nothing here keeps a cache.
+// What the app has done, through the core's calls by name (docs/client-core.md → Calls; client/core/src/ops.rs), as
+// the web pages do (web/src/api.ts → stationApi). The app never makes a request itself: the core knows the request
+// and brings the topics it touches up to date before it answers; nothing here keeps a cache.
 package dev.ember.android.data
 
 import android.util.Base64
 import dev.ember.core.CoreException
 import dev.ember.core.EmberCore
-import java.net.URLEncoder
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -20,15 +19,11 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
-private fun at(id: String) = URLEncoder.encode(id, "UTF-8").replace("+", "%20")
 
 /** The admin API of one station, by what each call does. */
 class StationApi(private val core: EmberCore, val station: String) {
-    private suspend fun request(method: String, path: String, body: JsonObject? = null): JsonElement =
-        core.call("station.request", buildJsonObject {
-            put("station", station); put("method", method); put("path", path)
-            if (body != null) put("body", body)
-        })
+    private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
+        core.call(name, buildJsonObject { fill(); put("station", station) })
 
     private suspend fun chat(call: String, thread: Long, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}) =
         core.call(call, buildJsonObject { put("station", station); put("thread", thread); fill() })
@@ -58,108 +53,108 @@ class StationApi(private val core: EmberCore, val station: String) {
     // ── connects (web/src/api.ts → stationApi) ──
 
     /** Changes a connect: any of `bind`, `mode`, `requireMention`, `enabled`, `slack`, `owner`. */
-    suspend fun putConnect(id: String, body: JsonObject) { request("PUT", "/connects/${at(id)}", body) }
-    suspend fun deleteConnect(id: String) { request("DELETE", "/connects/${at(id)}") }
-    suspend fun reconnect(id: String) { request("POST", "/connects/${at(id)}/reconnect") }
+    suspend fun putConnect(id: String, body: JsonObject) { op("connect.put") { put("id", id); put("input", body) } }
+    suspend fun deleteConnect(id: String) { op("connect.delete") { put("id", id) } }
+    suspend fun reconnect(id: String) { op("connect.reconnect") { put("id", id) } }
     /** A single-session connect's session: `session` null makes a new one (named `title`). */
     suspend fun bindSession(connect: String, session: String?, title: String) {
-        request("POST", "/connects/${at(connect)}/session", buildJsonObject { put("session", session); if (title.isNotBlank()) put("title", title) })
+        op("connect.bindSession") { put("connect", connect); put("session", session); if (title.isNotBlank()) put("title", title) }
     }
     /** Who the Slack tokens are (null with the errors when they do not work). */
     suspend fun verifySlack(connect: String?, install: String?, appToken: String, botToken: String): Pair<SlackIdentity?, List<String>> {
-        val r = request("POST", "/slack/verify", buildJsonObject {
+        val r = op("slack.verify") {
             if (connect != null) put("connect", connect); if (install != null) put("install", install); put("appToken", appToken); put("botToken", botToken)
-        }).jsonObject
+        }.jsonObject
         val identity = r["identity"]?.takeIf { it !is JsonNull }?.let { decode(SlackIdentity.serializer(), it) }
         return identity to (r["errors"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList())
     }
     /** A Slack workspace's app configuration token (its refresh token); answers which workspace. */
     suspend fun addConfigToken(refreshToken: String): String =
-        request("POST", "/slack/config-tokens", buildJsonObject { put("refreshToken", refreshToken) }).jsonObject["teamId"]!!.jsonPrimitive.content
+        op("slack.addConfigToken") { put("refreshToken", refreshToken) }.jsonObject["teamId"]!!.jsonPrimitive.content
     /**
      * Makes a Slack app with ember's manifest in the workspace of `team`: its name and description, the rest as a new
      * app's. The station keeps it, waiting for its connect (the overview's `slackApps`); answers its app id.
      */
     suspend fun makeSlackApp(team: String, name: String, description: String): String =
-        request("POST", "/slack/apps", buildJsonObject {
+        op("slack.makeApp") {
             put("team", team)
             put("settings", buildJsonObject {
                 put("name", name); put("displayName", name); put("description", description); put("longDescription", ""); put("backgroundColor", "#F3E3D3")
                 put("groups", buildJsonObject { SLACK_GROUPS.forEach { put(it, true) } })
             })
-        }).jsonObject["appId"]!!.jsonPrimitive.content
+        }.jsonObject["appId"]!!.jsonPrimitive.content
     /** Drops an app made here from the waiting ones; it stays in Slack. */
-    suspend fun dropSlackApp(appId: String) { request("DELETE", "/slack/apps/${at(appId)}") }
+    suspend fun dropSlackApp(appId: String) { op("slack.dropApp") { put("appId", appId) } }
     /** The people of the Slack workspaces this station's connects are in, once each by email, and what could not be read. */
     suspend fun slackPeople(): Pair<List<SlackPerson>, List<String>> {
-        val r = request("GET", "/slack/people").jsonObject
+        val r = op("slack.people").jsonObject
         val people = r["people"]?.takeIf { it !is JsonNull }?.let { decode(ListSerializer(SlackPerson.serializer()), it) } ?: emptyList()
         return people to (r["errors"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList())
     }
     /** Where to make a Slack app by hand from ember's manifest. */
     suspend fun createAppUrl(name: String): String =
-        request("GET", "/slack/create-app-url?name=${at(name)}").jsonObject["url"]!!.jsonPrimitive.content
+        op("slack.createAppUrl") { put("name", name) }.jsonObject["url"]!!.jsonPrimitive.content
     /** A new connect; answers its id. */
-    suspend fun createConnect(body: JsonObject): String = request("POST", "/connects", body).jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun createConnect(body: JsonObject): String = op("connect.create") { put("input", body) }.jsonObject["id"]!!.jsonPrimitive.content
 
     // ── profiles ──
 
     /** Changes a profile: any of `name`, `access`, `env`, `models`. */
-    suspend fun putProfile(id: String, body: JsonObject) { request("PUT", "/profiles/${at(id)}", body) }
-    suspend fun deleteProfile(id: String) { request("DELETE", "/profiles/${at(id)}") }
-    suspend fun refreshQuota(id: String) { request("POST", "/profiles/${at(id)}/quota") }
-    suspend fun startLogin(profile: String) { request("POST", "/profiles/${at(profile)}/login") }
-    suspend fun cancelLogin(profile: String) { request("DELETE", "/profiles/${at(profile)}/login") }
-    suspend fun loginCode(profile: String, code: String) { request("POST", "/profiles/${at(profile)}/login-code", buildJsonObject { put("code", code) }) }
+    suspend fun putProfile(id: String, body: JsonObject) { op("profile.put") { put("id", id); put("input", body) } }
+    suspend fun deleteProfile(id: String) { op("profile.delete") { put("id", id) } }
+    suspend fun refreshQuota(id: String) { op("profile.quota") { put("id", id) } }
+    suspend fun startLogin(profile: String) { op("profile.login") { put("id", profile) } }
+    suspend fun cancelLogin(profile: String) { op("profile.cancelLogin") { put("id", profile) } }
+    suspend fun loginCode(profile: String, code: String) { op("profile.loginCode") { put("id", profile); put("code", code) } }
     /** A subscription signed in before its profile exists: the station makes the profile when it succeeds. Answers the login's id. */
-    suspend fun newLogin(runtime: String): String = request("POST", "/logins", buildJsonObject { put("runtime", runtime) }).jsonObject["id"]!!.jsonPrimitive.content
-    suspend fun newLoginCode(id: String, code: String) { request("POST", "/logins/${at(id)}/code", buildJsonObject { put("code", code) }) }
-    suspend fun dropLogin(id: String) { request("DELETE", "/logins/${at(id)}") }
+    suspend fun newLogin(runtime: String): String = op("login.new") { put("runtime", runtime) }.jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun newLoginCode(id: String, code: String) { op("login.code") { put("id", id); put("code", code) } }
+    suspend fun dropLogin(id: String) { op("login.drop") { put("id", id) } }
     /** A keyed (or variables) profile, made only once its key is checked; answers its id. */
-    suspend fun addProfile(runtime: String?, kind: String, key: String?): String = request("POST", "/profiles", buildJsonObject {
+    suspend fun addProfile(runtime: String?, kind: String, key: String?): String = op("profile.add") {
         if (runtime != null) put("runtime", runtime)
         put("access", buildJsonObject { put("kind", kind); if (key != null) put("key", key) })
-    }).jsonObject["id"]!!.jsonPrimitive.content
+    }.jsonObject["id"]!!.jsonPrimitive.content
     /** A profile on the machine's own login of `runtime` (one kept in a file); answers its id. */
     suspend fun useMachineLogin(runtime: String): String =
-        request("POST", "/profiles/machine", buildJsonObject { put("runtime", runtime) }).jsonObject["id"]!!.jsonPrimitive.content
+        op("profile.useMachineLogin") { put("runtime", runtime) }.jsonObject["id"]!!.jsonPrimitive.content
 
     /** Starts the session's runtime ahead of a message. */
-    suspend fun warm(key: String) { request("POST", "/sessions/${at(key)}/warm") }
+    suspend fun warm(key: String) { op("session.warm") { put("key", key) } }
 
-    suspend fun stop(key: String) { request("POST", "/sessions/${at(key)}/stop") }
+    suspend fun stop(key: String) { op("session.stop") { put("key", key) } }
 
     /**
      * How it runs from its next turn on: a model, how hard it thinks, and who runs it (a profile kept to by hand, or
      * null: the station's pick).
      */
     suspend fun sessionSettings(key: String, model: String, effort: String?, profile: String?) {
-        request("POST", "/sessions/${at(key)}/settings", buildJsonObject { put("model", model); put("effort", effort); put("profile", profile) })
+        op("session.settings") { put("key", key); put("model", model); put("effort", effort); put("profile", profile) }
     }
 
     /** Releases an idle agent's process. */
-    suspend fun evict(key: String) { request("POST", "/sessions/${at(key)}/evict") }
+    suspend fun evict(key: String) { op("session.evict") { put("key", key) } }
 
     /** A new chat: its session and its thread, made before its first message so files can go into it. */
     suspend fun newChat(runtime: String, model: String, effort: String?): Pair<String, Long> =
-        request("POST", "/sessions", buildJsonObject {
+        op("session.new") {
             put("runtime", runtime); put("model", model)
             if (effort != null) put("effort", effort)
-        }).jsonObject.let { it["key"]!!.jsonPrimitive.content to it["thread"]!!.jsonObject["id"]!!.jsonPrimitive.long }
+        }.jsonObject.let { it["key"]!!.jsonPrimitive.content to it["thread"]!!.jsonObject["id"]!!.jsonPrimitive.long }
 
     /** The chat of an agent that has none yet, bound to its session; answers the thread. */
     suspend fun chatFor(session: String): Long =
-        request("POST", "/threads", buildJsonObject { put("session", session) }).jsonObject["id"]!!.jsonPrimitive.long
+        op("chat.forSession") { put("session", session) }.jsonObject["id"]!!.jsonPrimitive.long
 
     /** Checks a profile, which lists the models it can use. */
-    suspend fun checkProfile(id: String) { request("POST", "/profiles/${at(id)}/check") }
+    suspend fun checkProfile(id: String) { op("profile.check") { put("id", id) } }
 
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
-    suspend fun slackIdentity(user: String, bound: Boolean) { request(if (bound) "PUT" else "DELETE", "/me/slack/${at(user)}") }
+    suspend fun slackIdentity(user: String, bound: Boolean) { op("slack.identity") { put("user", user); put("bound", bound) } }
 
     /** Replaces a profile's enabled models. */
     suspend fun setModels(profile: String, models: List<String>) {
-        request("PUT", "/profiles/${at(profile)}", buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } })
+        op("profile.put") { put("id", profile); put("input", buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } }) }
     }
 
     /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
@@ -180,14 +175,14 @@ class StationApi(private val core: EmberCore, val station: String) {
     // ── background jobs and web services (web/src/Jobs.tsx) ──
 
     /** A background job (a web service's page finds its port by it). */
-    suspend fun job(id: String): Job = decode(Job.serializer(), request("GET", "/jobs/${at(id)}"))
+    suspend fun job(id: String): Job = decode(Job.serializer(), op("job.get") { put("id", id) })
     /** A job's last `lines` lines of output, and when it last grew. */
     suspend fun jobLog(id: String, lines: Int): JobLog {
-        val r = request("GET", "/jobs/${at(id)}/log?lines=$lines").jsonObject
+        val r = op("job.log") { put("id", id); put("lines", lines) }.jsonObject
         return JobLog(id, r["text"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: "", r["outputAt"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong())
     }
     /** Stops a job from the app (its agent is told who did). */
-    suspend fun stopJob(id: String) { request("POST", "/jobs/${at(id)}/stop") }
+    suspend fun stopJob(id: String) { op("job.stop") { put("id", id) } }
 }
 
 /** A job's output as last read: whose, its last lines, when it last grew. */
@@ -211,47 +206,42 @@ object Auth {
     }
 }
 
-/** ember cloud's account API, called as one of the signed-in accounts (web/src/cloud/api.ts). */
+/** ember cloud's account API: what the app has done there, by name, done by the core as one of the signed-in accounts (web/src/cloud/api.ts). */
 class Cloud(private val core: EmberCore, private val account: String) {
-    private suspend fun call(method: String, path: String, body: JsonObject? = null): JsonElement =
-        core.call("cloud.request", buildJsonObject {
-            put("account", account); put("method", method); put("path", path)
-            if (body != null) put("body", body)
-        })
+    private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
+        core.call(name, buildJsonObject { fill(); put("account", account) })
 
     /** `code`: an invite code, for an account not let in yet (ember is invite-only). Answers the new workspace's id. */
     suspend fun createWorkspace(name: String, code: String): String =
-        call("POST", "/v1/workspaces", buildJsonObject { put("name", name); if (code.isNotEmpty()) put("invite_code", code) }).jsonObject["id"]!!.jsonPrimitive.content
+        op("workspace.create") { put("name", name); if (code.isNotEmpty()) put("invite_code", code) }.jsonObject["id"]!!.jsonPrimitive.content
 
     /** Answers the workspace joined. */
-    suspend fun acceptInvitation(id: String): String = call("POST", "/v1/invitations/${at(id)}/accept").jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun acceptInvitation(id: String): String = op("invitation.accept") { put("id", id) }.jsonObject["id"]!!.jsonPrimitive.content
 
-    suspend fun declineInvitation(id: String) { call("POST", "/v1/invitations/${at(id)}/decline") }
+    suspend fun declineInvitation(id: String) { op("invitation.decline") { put("id", id) } }
 
-    suspend fun renameWorkspace(workspace: String, name: String) { call("PATCH", ws(workspace), buildJsonObject { put("name", name) }) }
-    suspend fun deleteWorkspace(workspace: String) { call("DELETE", ws(workspace)) }
+    suspend fun renameWorkspace(workspace: String, name: String) { op("workspace.rename") { put("workspace", workspace); put("name", name) } }
+    suspend fun deleteWorkspace(workspace: String) { op("workspace.delete") { put("workspace", workspace) } }
     /** Leaving a workspace is removing oneself. */
-    suspend fun removeMember(workspace: String, member: String) { call("DELETE", "${ws(workspace)}/members/${at(member)}") }
-    suspend fun setRole(workspace: String, member: String, role: String) { call("PATCH", "${ws(workspace)}/members/${at(member)}", buildJsonObject { put("role", role) }) }
+    suspend fun removeMember(workspace: String, member: String) { op("workspace.removeMember") { put("workspace", workspace); put("member", member) } }
+    suspend fun setRole(workspace: String, member: String, role: String) { op("workspace.setRole") { put("workspace", workspace); put("member", member); put("role", role) } }
     /** Adds people by email: members at once, or from their first sign-in; no invitation to accept. */
     suspend fun addMembers(workspace: String, role: String, emails: List<String>): AddedMembers {
-        val r = call("POST", "${ws(workspace)}/members", buildJsonObject { put("role", role); putJsonArray("emails") { emails.forEach { add(JsonPrimitive(it)) } } }).jsonObject
+        val r = op("workspace.addMembers") { put("workspace", workspace); put("role", role); putJsonArray("emails") { emails.forEach { add(JsonPrimitive(it)) } } }.jsonObject
         val list = { key: String -> r[key]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList() }
         return AddedMembers(list("joined"), list("added"), list("already"))
     }
     /** An email added and not signed in yet, taken off. */
-    suspend fun removeAdded(workspace: String, email: String) { call("DELETE", "${ws(workspace)}/added/${at(email)}") }
-    suspend fun revokeInvitation(workspace: String, invitation: String) { call("DELETE", "${ws(workspace)}/invitations/${at(invitation)}") }
+    suspend fun removeAdded(workspace: String, email: String) { op("workspace.removeAdded") { put("workspace", workspace); put("email", email) } }
+    suspend fun revokeInvitation(workspace: String, invitation: String) { op("workspace.revokeInvitation") { put("workspace", workspace); put("invitation", invitation) } }
     /** A one-time token for a machine to join as a station: the installer's command, and the command for a machine that has ember. */
     suspend fun enroll(workspace: String, name: String): Enrollment =
-        call("POST", "${ws(workspace)}/enrollments", buildJsonObject { put("name", name) }).jsonObject.let {
+        op("workspace.enroll") { put("workspace", workspace); put("name", name) }.jsonObject.let {
             Enrollment(it["install"]!!.jsonPrimitive.content, it["command"]!!.jsonPrimitive.content)
         }
-    suspend fun renameStation(workspace: String, station: String, name: String) { call("PATCH", "${ws(workspace)}/stations/${at(station)}", buildJsonObject { put("name", name) }) }
-    suspend fun removeStation(workspace: String, station: String) { call("DELETE", "${ws(workspace)}/stations/${at(station)}") }
-    suspend fun revokeLoginSession(id: String) { call("DELETE", "/v1/auth/sessions/${at(id)}") }
-
-    private fun ws(id: String) = "/v1/workspaces/${at(id)}"
+    suspend fun renameStation(workspace: String, station: String, name: String) { op("workspace.renameStation") { put("workspace", workspace); put("station", station); put("name", name) } }
+    suspend fun removeStation(workspace: String, station: String) { op("workspace.removeStation") { put("workspace", workspace); put("station", station) } }
+    suspend fun revokeLoginSession(id: String) { op("loginSession.revoke") { put("id", id) } }
 }
 
 class Enrollment(val install: String, val command: String)
