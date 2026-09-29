@@ -15,6 +15,14 @@
 - **部署时 `fetch failed`**：studio 出外网经过局域网的 Surge 旁路由（192.168.20.11），偶尔断。`ember-deploy` 的 cloud 部署遇到它会自己重试三次；拉 GitHub 断了就重跑部署。重复部署 Worker 没有副作用。
 - **完整检查不过**：`/tmp/ember-check.log`。什么都没部署出去，线上还是上一版。
 
+## 2026-09-30
+
+### 05:00 部署 98aad7f，发安卓 0.1.1138
+
+- 部署：`ember-deploy` 从 d9b03e1 到 98aad7f（15 个提交：安卓补齐到 web 手机版，chat 列表动效、系统消息胶囊、整页 HTML 16:9、预览流式请求头改回旧名、Slack app 默认名、cloud 提供 `android/stillfail-<n>.apk` 等）。完整检查 10 项通过；部署了 api、web、admin，重启 studio 的 station，station 发布包在后台上传。
+- 安卓：必须先部署 cloud 再传包。改名后的包叫 `android/stillfail-<n>.apk`（b9226f9），之前线上 cloud 的白名单只认 `android/ember-<n>.apk`，先传的话旧 app 更新会拿到 404。
+- 在新开的 worktree 里跑 `scripts/release.sh android` 时，包打好了，上传却以 254 退出。原因是 `cloud/` 没装依赖，找不到 wrangler，而 `put` 把 wrangler 的输出吞掉了，看不到报错。处理：在 `cloud/` 里 `pnpm install`，再手动 `wrangler r2 object put` 传 apk 和 `latest.json`（格式同 release.sh）。两个域名上的 `latest.json` 都已是 1138，apk 返回 200。
+
 ## 2026-09-29
 
 ### 21:50 agent 自己跑 `ember update`，卡住 + 消息送不到
