@@ -52,7 +52,7 @@ export const mPlus = style({
 export const mComposerField = style({
   flex: "1", minWidth: "0", minHeight: "36px", boxSizing: "border-box", margin: "0", padding: "7px 14px 7px 0",
   border: "0", background: "transparent", color: "var(--m-ink)", font: "inherit", fontSize: "16px", lineHeight: "21px",
-  resize: "none", outline: "none",
+  resize: "none", outline: "none", textWrap: "wrap",
   selectors: {
     "&::placeholder": { color: "var(--m-subtle)" },
   },

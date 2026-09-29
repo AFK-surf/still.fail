@@ -58,11 +58,15 @@ export const msgSystemBox = style({
   borderRadius: "12px", background: `color-mix(in oklch, ${vars.amber} 10%, ${vars.canvas})`,
   border: `1px solid color-mix(in srgb, ${vars.amber} 22%, transparent)`, fontSize: vars.textSm, color: vars.text,
 });
-/** A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge. */
+/**
+ * A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge.
+ * It wraps plainly, not `pretty` as the page does: that weighs the whole draft again at every letter typed, and the
+ * words of lines already written hopped between them.
+ */
 export const composerText = style({
   flex: "1", minHeight: "20px", maxHeight: "160px", padding: "6px 8px 4px", border: "0", outline: "none",
   resize: "none", background: "transparent", font: "inherit", fontSize: vars.textBody, lineHeight: "1.5",
-  color: vars.text,
+  color: vars.text, textWrap: "wrap",
   vars: { "--more-above": "0px", "--more-below": "0px" },
   selectors: {
     // In a column, flex: 1 would size it by its one row, not the height it is given: it would not grow.
