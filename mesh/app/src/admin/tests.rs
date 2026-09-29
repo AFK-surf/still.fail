@@ -1514,3 +1514,40 @@ async fn the_agents_memory_is_shown_on_the_pages_global_and_projects() {
     let (status, _) = r.call("PUT", "/memory/global", Some(json!({ "text": "x" }))).await;
     assert_ne!(status, 200, "the pages only read it");
 }
+
+#[tokio::test]
+async fn a_widgets_state_is_kept_for_its_session_and_its_model_rides_along_with_the_next_messages_once() {
+    let t = setup().await;
+    let route = |key: &str| format!("/sessions/{}/widget-state", enc(key));
+    assert_eq!(t.call("PUT", &route("nobody"), Some(json!({ "path": "/x.html", "state": {} }))).await.0, 404);
+    assert_eq!(t.call("GET", &format!("{}?path=%2Fx.html", route("nobody")), None).await.0, 404);
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let chat_id = made["thread"]["id"].as_i64().unwrap();
+    let thread_ts = made["thread"]["threadTs"].as_str().unwrap().to_string();
+    let path = "/w/uploads/pick.html";
+    let mut posted = NewMessage::new(chat_id, "9.1", AuthorKind::Agent, &key, "![](pick.html)");
+    posted.attachments = vec![Attachment { name: "pick.html".into(), path: path.into(), size: 9, width: None, height: None }];
+    t.store.insert_message(posted).unwrap();
+    let get = format!("{}?path={}", route(&key), enc(path));
+    assert_eq!(t.get(&get).await, json!({ "state": null }));
+    let big = "x".repeat(16384);
+    assert_eq!(t.call("PUT", &route(&key), Some(json!({ "path": path, "state": { "privateContent": big } }))).await.0, 400);
+    let state = json!({ "modelContent": "chose red", "privateContent": { "tab": 2 } });
+    assert_eq!(t.call("PUT", &route(&key), Some(json!({ "path": path, "state": state }))).await, (200, json!({ "ok": true })));
+    assert_eq!(t.get(&get).await, json!({ "state": state }));
+    settle().await;
+    assert!(t.claude.sessions.lock().unwrap().is_empty(), "a widget's state starts no turn");
+    let say = |text: &'static str| {
+        let t = &t;
+        async move { t.call("POST", &format!("/threads/{chat_id}/messages"), Some(json!({ "text": text }))).await }
+    };
+    say("好了").await;
+    settle().await;
+    let section = format!("A widget you posted has state for you (the person's choices in it; not a message to answer by itself):\n- pick.html in EMBER/{thread_ts}: chose red");
+    assert!(t.claude.last().told().contains(&format!("好了\n</message>\n\n{section}")), "{}", t.claude.last().told());
+    say("还有").await;
+    settle().await;
+    assert!(t.claude.last().told().contains("还有"));
+    assert_eq!(t.claude.last().told().matches("A widget you posted").count(), 1, "told once");
+}

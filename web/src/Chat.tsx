@@ -618,11 +618,25 @@ function PlacedFile({ sessionKey, file }: { sessionKey: string | null; file: Att
 }
 
 function VizFile({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
-  const station = useStation();
+  const api = useApi();
   const loaded = useFileText(sessionKey, file);
-  if (loaded.state === "ready") return <Viz html={loaded.text} name={file.name} stateKey={`${station.address}\n${sessionKey}\n${file.path}`} />;
+  // What the widget kept, from the station (null when it kept nothing, or the station cannot say): it starts with it.
+  const [state, setState] = useState<{ value: unknown } | null>(null);
+  useEffect(() => {
+    let current = true;
+    void api.widgetState(sessionKey, file.path).then((r) => r.state, () => null).then((value) => { if (current) setState({ value }); });
+    return () => { current = false; };
+  }, [api, sessionKey, file.path]);
+  const [open, setOpen] = useState(false);
   if (loaded.state === "error") return <FileItem sessionKey={sessionKey} file={file} />;
-  return <div className={css.msgVizWait} aria-busy="true" />;
+  if (loaded.state !== "ready" || !state) return <div className={css.msgVizWait} aria-busy="true" />;
+  return (
+    <>
+      <Viz html={loaded.text} name={file.name} state={state.value} onOpen={() => setOpen(true)}
+        onState={(value) => void api.setWidgetState(sessionKey, file.path, value).catch(() => {})} />
+      <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
+    </>
+  );
 }
 
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */

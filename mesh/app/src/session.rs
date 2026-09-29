@@ -18,7 +18,7 @@ use tracing::{error, info, warn};
 use crate::chat::status::tool_status;
 use crate::chat::{ChatSurface, ThreadRef};
 use crate::config::Profile;
-use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, session_instructions, wait_over};
+use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
 use crate::live::LiveHub;
 use crate::runtime::{AgentDriver, AgentSession, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
 use crate::store::{AuthorKind, EMBER_SURFACE, NewMessage, PendingMessage, Store, now_ms};
@@ -225,10 +225,10 @@ impl SessionActor {
             let store = deps.store();
             store.set_running(&a.key, false)?;
             let pending = store.pending_messages(&a.key)?;
-            let said = a.format(&deps, &pending).await?;
+            let (said, widgets) = a.format(&deps, &pending).await?;
             let text = if said.is_empty() { RESUME_AFTER_RESTART.to_string() } else { format!("{RESUME_AFTER_RESTART}\n\n{said}") };
             a.start_turn(&deps, "resume", &text).await?;
-            a.delivered(&store, &pending)
+            a.delivered(&store, &pending, &widgets)
         })
     }
 
@@ -310,7 +310,7 @@ impl SessionActor {
         if pending.is_empty() {
             return Ok(());
         }
-        let text = self.format(&deps, &pending).await?;
+        let (text, widgets) = self.format(&deps, &pending).await?;
         if let Some(agent) = self.agent().filter(|a| a.busy()) {
             // So it is read now, not when a long command ends; what it waited on goes on.
             if deps.background_on_message(&self.key) {
@@ -318,14 +318,14 @@ impl SessionActor {
             }
             if agent.steer(&text).await {
                 self.work_for(&deps, &pending);
-                self.delivered(&store, &pending)?;
+                self.delivered(&store, &pending, &widgets)?;
             }
             return Ok(()); // otherwise delivered when the turn ends
         }
         self.st().nudges = 0;
         self.work_for(&deps, &pending);
         self.start_turn(&deps, "input", &text).await?;
-        self.delivered(&store, &pending)
+        self.delivered(&store, &pending, &widgets)
     }
 
     fn work_for(&self, deps: &Arc<dyn SessionDeps>, messages: &[PendingMessage]) {
@@ -383,14 +383,17 @@ impl SessionActor {
         st.tools.clear();
     }
 
-    fn delivered(&self, store: &Store, messages: &[PendingMessage]) -> Result<()> {
-        store.mark_delivered(&self.key, &messages.iter().map(|m| (m.message.thread, m.message.n)).collect::<Vec<_>>())
+    /// `widgets`: the widget models told with them (path, model), told once.
+    fn delivered(&self, store: &Store, messages: &[PendingMessage], widgets: &[(String, String)]) -> Result<()> {
+        store.mark_delivered(&self.key, &messages.iter().map(|m| (m.message.thread, m.message.n)).collect::<Vec<_>>())?;
+        store.mark_widget_models_told(&self.key, widgets)
     }
 
     /// The messages as the agent reads them, made now so edits count: each with its source and sender's name, plus a
     /// hint when a thread appears in this session for the first time mid-conversation (its earlier messages are only a
-    /// chat_history away).
-    async fn format(&self, deps: &Arc<dyn SessionDeps>, said: &[PendingMessage]) -> Result<String> {
+    /// chat_history away); then what people chose in its widgets since it was last told, with the widgets told (path,
+    /// model) for `delivered`.
+    async fn format(&self, deps: &Arc<dyn SessionDeps>, said: &[PendingMessage]) -> Result<(String, Vec<(String, String)>)> {
         let heard = deps.store().heard_threads(&self.key)?;
         let new_threads: HashSet<i64> = said.iter().map(|m| m.message.thread).filter(|t| !heard.contains(t)).collect();
         let mut names = HashMap::new();
@@ -422,7 +425,15 @@ impl SessionActor {
                 selves.insert(m.connect.clone(), if user.is_empty() { name } else { format!("{name} (<@{user}>)") });
             }
         }
-        Ok(format_inbound(said, &new_threads, &names, &selves))
+        let text = format_inbound(said, &new_threads, &names, &selves);
+        let models = deps.store().untold_widget_models(&self.key)?;
+        let widgets = models.iter().map(|w| (w.path.clone(), w.model.clone())).collect();
+        let text = match format_widget_models(&models) {
+            told if told.is_empty() => text,
+            told if text.is_empty() => told,
+            told => format!("{text}\n\n{told}"),
+        };
+        Ok((text, widgets))
     }
 
     /// What another agent goes by in a thread: the bot of the connect it posts there through, with its mention (in

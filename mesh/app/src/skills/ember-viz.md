@@ -6,8 +6,11 @@ description: Inline visualizations in ember chats (EMBER/…) — an HTML file a
 # Inline visualizations
 
 In an ember chat (EMBER/…) an HTML file you attach and place in your message is drawn there as a page of its own,
-sized to its content, with a switch to see its source. Nothing else is drawn: an ```html code block shows as code,
-and an HTML file you attach without placing it shows as a file to open.
+sized to its content, with a link to open the file itself. Nothing else is drawn as a page: an ```html code block
+shows as code, and an HTML file you attach without placing it shows as a file to open.
+
+For a plain diagram (a flow, a sequence, a state machine, a timeline) a ```mermaid block in the text is enough: it is
+drawn as a chart in ember's colours, no file needed. Use a file when you need layout, data or interaction.
 
 ## Posting one
 
@@ -34,7 +37,9 @@ and an HTML file you attach without placing it shows as a file to open.
 `window.ember` (also named `window.openai`, as Codex's Visualize has it):
 
 - `ember.widgetState` — what the widget kept last time it was shown (or null); `ember.setWidgetState(value)` keeps a
-  JSON value of up to 16 KiB, restored when the message is shown again (on the same device). It does not reach you.
+  JSON value of up to 16 KiB on the station, restored whenever and wherever the message is shown again. Put what you
+  should know in `value.modelContent` (the person's choices, say) and the rest in `value.privateContent`:
+  `modelContent` reaches you with the next message they send, as a note beside it; keeping state never starts a turn.
 - `ember.sendFollowUpMessage({ prompt })` — puts `prompt` in the chat's composer for the person to send, as if they
   wrote it. Only from their click or key press (a button's handler); it never sends by itself. Use it for "ask about
   this", "go with option B", a filled-in form.

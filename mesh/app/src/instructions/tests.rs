@@ -94,3 +94,16 @@ fn a_mark_on_a_previewed_page_is_said_to_be_one_with_its_screenshot() {
         "[Quote] From a web page shown in the chat's preview (网页 demo 标注 1), marked with its number in the attached screenshot:\n> button.btn「升级」\n> 选择器 main > button\nTheir comment on it: 换个颜色"
     ));
 }
+
+#[test]
+fn widget_models_are_one_section_each_with_where_it_was_posted() {
+    assert_eq!(format_widget_models(&[]), "");
+    let models = [
+        WidgetModel { path: "/w/u/pick.html".into(), name: "pick.html".into(), thread: Some(("EMBER".into(), "1.0".into())), model: "chose red".into() },
+        WidgetModel { path: "/x/y.html".into(), name: "y.html".into(), thread: None, model: "{\"n\":2}".into() },
+    ];
+    assert_eq!(
+        format_widget_models(&models),
+        "A widget you posted has state for you (the person's choices in it; not a message to answer by itself):\n- pick.html in EMBER/1.0: chose red\n- y.html: {\"n\":2}"
+    );
+}

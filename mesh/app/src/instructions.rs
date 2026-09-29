@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::store::{AuthorKind, EMBER_SURFACE, MessageRow, PendingMessage};
+use crate::store::{AuthorKind, EMBER_SURFACE, MessageRow, PendingMessage, WidgetModel};
 
 /// `project`: the directory the runtime runs in, for a session begun outside ember (in a terminal) and continued here.
 pub fn session_instructions(workspace: &str, project: Option<&str>, repos_dir: &str, memory_path: &str) -> String {
@@ -143,6 +143,22 @@ pub fn format_inbound(messages: &[PendingMessage], new_threads: &HashSet<i64>, n
         ));
     }
     lines.join("\n")
+}
+
+/// What people chose in widgets the agent posted, riding along with messages it is handed anyway (never a turn of
+/// its own); empty when there is none.
+pub fn format_widget_models(models: &[WidgetModel]) -> String {
+    if models.is_empty() {
+        return String::new();
+    }
+    let lines: Vec<String> = models
+        .iter()
+        .map(|w| match &w.thread {
+            Some((channel, ts)) => format!("- {} in {}: {}", w.name, thread_address(channel, ts), w.model),
+            None => format!("- {}: {}", w.name, w.model),
+        })
+        .collect();
+    format!("A widget you posted has state for you (the person's choices in it; not a message to answer by itself):\n{}", lines.join("\n"))
 }
 
 /// A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and the

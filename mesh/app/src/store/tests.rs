@@ -386,3 +386,37 @@ fn a_database_made_before_archiving_gains_its_columns_and_each_sessions_first_ch
     // Opened again: nothing more to add.
     Store::open(path.to_str().unwrap(), None).unwrap();
 }
+
+#[test]
+fn a_widgets_state_is_kept_by_session_and_path_its_model_told_once_until_it_changes() {
+    let store = memory();
+    session(&store, "a");
+    session(&store, "b");
+    let thread = store.open_thread("ember", "EMBER", "3.1", None, None).unwrap();
+    store.join_thread(thread.id, "a", "ember").unwrap();
+    let path = "/w/a/uploads/pick.html";
+    let mut posted = NewMessage::new(thread.id, "3.2", AuthorKind::Agent, "a", "![](pick.html)");
+    posted.attachments = vec![Attachment { name: "pick.html".into(), path: path.into(), size: 9, width: None, height: None }];
+    store.insert_message(posted).unwrap();
+    assert_eq!(store.widget_state("a", path).unwrap(), None);
+    store.put_widget_state("a", path, r#"{"modelContent":"red"}"#, Some("red")).unwrap();
+    store.put_widget_state("a", "/w/a/uploads/quiet.html", r#"{"privateContent":1}"#, None).unwrap();
+    assert_eq!(store.widget_state("a", path).unwrap().as_deref(), Some(r#"{"modelContent":"red"}"#));
+    assert_eq!(store.widget_state("b", path).unwrap(), None, "kept per session");
+    let untold = store.untold_widget_models("a").unwrap();
+    assert_eq!(untold, vec![WidgetModel { path: path.into(), name: "pick.html".into(), thread: Some(("EMBER".into(), "3.1".into())), model: "red".into() }]);
+    store.mark_widget_models_told("a", &[(path.into(), "red".into())]).unwrap();
+    assert!(store.untold_widget_models("a").unwrap().is_empty());
+    // The same model again is not news; another is, and one changed after it was read is not marked told.
+    store.put_widget_state("a", path, r#"{"modelContent":"red","privateContent":2}"#, Some("red")).unwrap();
+    assert!(store.untold_widget_models("a").unwrap().is_empty());
+    store.put_widget_state("a", path, r#"{"modelContent":"blue"}"#, Some("blue")).unwrap();
+    store.mark_widget_models_told("a", &[(path.into(), "red".into())]).unwrap();
+    assert_eq!(store.untold_widget_models("a").unwrap().into_iter().map(|w| w.model).collect::<Vec<_>>(), vec!["blue".to_string()]);
+    // A file no message of the session's threads carries: its path's name, no thread.
+    store.put_widget_state("a", "/elsewhere/x.html", "{}", Some("x")).unwrap();
+    let elsewhere = store.untold_widget_models("a").unwrap().into_iter().find(|w| w.path == "/elsewhere/x.html").unwrap();
+    assert_eq!((elsewhere.name.as_str(), elsewhere.thread), ("x.html", None));
+    store.delete_session("a").unwrap();
+    assert_eq!(store.widget_state("a", path).unwrap(), None);
+}

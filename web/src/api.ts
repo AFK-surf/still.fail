@@ -260,6 +260,9 @@ export function stationApi(t: StationCall) {
       request<{ session: string }>("POST", `/connects/${at(connect)}/session`, { session, ...(title ? { title } : {}) }),
     /** Starts the session's runtime ahead of a message. */
     warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/warm`),
+    /** What an inline visualization (Viz.tsx) kept: by the session that sent its file and the file's path. */
+    widgetState: (key: string, path: string) => request<{ state: unknown }>("GET", `/sessions/${at(key)}/widget-state?path=${encodeURIComponent(path)}`),
+    setWidgetState: (key: string, path: string, state: unknown) => request<{ ok: true }>("PUT", `/sessions/${at(key)}/widget-state`, { path, state }),
     /** A new chat: its session and its thread, made with its first message. */
     newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: ChatThread }>("POST", "/sessions", input),
     /** Sessions the machine's own Claude Code and Codex kept (in a terminal); a station from before them answers 404. */
