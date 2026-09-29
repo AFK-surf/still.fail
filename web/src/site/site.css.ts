@@ -129,16 +129,16 @@ export const title = style({
 });
 /**
  * A line of the title that is a domain. The one the page was opened on (data-host on the root; still.fail otherwise) is
- * lit, ember orange and glowing; the other is only its outline. Padded, so what hangs out of a letter (y, f) is not cut
+ * lit, ember orange and glowing; the other sits dim behind it. Padded, so what hangs out of a letter (y, f) is not cut
  * off by the text clip, and pulled back by as much.
  */
 const lit = {
   backgroundImage: `linear-gradient(180deg, #FFC2A3, ${EMBER} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-  WebkitTextStroke: "0", filter: `drop-shadow(0 0 48px color-mix(in srgb, ${EMBER} 45%, transparent))`,
+  filter: `drop-shadow(0 0 48px color-mix(in srgb, ${EMBER} 45%, transparent))`,
 };
 export const titleDomain = style({
   display: "inline-block", padding: ".04em .1em .16em", margin: "-.04em -.1em -.16em",
-  color: "transparent", WebkitTextStroke: `1.5px color-mix(in srgb, var(--s-title) 30%, transparent)`,
+  color: "color-mix(in srgb, var(--s-title) 16%, transparent)",
   selectors: {
     [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"]`]: lit,
     [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: lit,
