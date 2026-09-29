@@ -159,7 +159,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "received":
       return (
         <div className={css.mHReceived}>
-          {body.content.note && <Message icon={Received} label={<>收到来自 <b>ember</b> 的提醒</>} text={body.content.note} full={<p className={chatCss.mPlain}>{body.content.note}</p>} />}
+          {body.content.note && <Message icon={Received} label={<>收到来自 <b>still.fail</b> 的提醒</>} text={body.content.note} full={<p className={chatCss.mPlain}>{body.content.note}</p>} />}
           {body.content.messages.map((m) => (
             <Message key={m.key} icon={Received}
               label={<>收到来自 <b>{m.from.name}</b> 的消息{m.place && <> · <PlaceMark station={station} chat={chat} place={m.place} /></>}</>}

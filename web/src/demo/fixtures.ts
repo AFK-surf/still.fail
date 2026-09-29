@@ -78,7 +78,7 @@ export function message(chat: DemoChat, by: Who, text: string, at = Date.now()):
   const base = { seq, thread: chat.thread, ts: `${at / 1000}`, text, attachments: [], quotes: [], createdAt: at, system: false, waiting: false, time: { createdAt: stamp(at) } };
   const m = chat.model;
   if (by === "agent") return { ...base, authorKind: "agent", author: chat.key, mine: false, declared: "final", by: { name: m.name, agent: chat.key, maker: m.maker, runtime: m.runtime } };
-  if (by === "ember") return { ...base, authorKind: "ember", author: "ember", mine: false, system: true, by: { name: "ember" } };
+  if (by === "ember") return { ...base, authorKind: "ember", author: "ember", mine: false, system: true, by: { name: "still.fail" } };
   if (by === "me") return { ...base, authorKind: "person", author: "local", authorName: "你", mine: true, by: { name: "你" } };
   return { ...base, authorKind: "person", author: by.id, authorName: by.name, mine: false, by: { name: by.name, ...(by.shown.picture ? { picture: by.shown.picture } : {}) } };
 }

@@ -76,7 +76,7 @@ export function MachineSessions({ models, onContinued }: { models: ModelOption[]
                     <span className={css.title}>{s.title ?? s.first}</span>
                     <span className={css.meta}>{meta(s)}</span>
                   </span>
-                  {s.session ? <span className={css.already}>已在 ember 里</span> : null}
+                  {s.session ? <span className={css.already}>已在 still.fail 里</span> : null}
                 </button></Tip>
               </li>
             ))}

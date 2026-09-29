@@ -14,7 +14,7 @@ export function CreateAppSteps({ name }: { name: string }) {
   return (
     <ol className={controlsCss.steps}>
       <li>
-        <span>用 ember 的配置在 Slack 新建一个 app，名字是「{name.trim() || "ember"}」。</span>
+        <span>用 still.fail 的配置在 Slack 新建一个 app，名字是「{name.trim() || "ember"}」。</span>
         <Button icon={External} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
       </li>
       <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>

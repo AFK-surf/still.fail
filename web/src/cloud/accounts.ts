@@ -20,9 +20,9 @@ export function useAccounts(): Account[] | undefined {
 function deviceName(): string {
   const ua = navigator.userAgent;
   const os = /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
-  if (window.emberDesktop) return `ember 桌面版${os ? ` · ${os}` : ""}`;
+  if (window.emberDesktop) return `still.fail 桌面版${os ? ` · ${os}` : ""}`;
   const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "浏览器";
-  return `ember 网页版 · ${browser}${os ? ` · ${os}` : ""}`;
+  return `still.fail 网页版 · ${browser}${os ? ` · ${os}` : ""}`;
 }
 
 /**

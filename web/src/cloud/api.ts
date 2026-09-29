@@ -72,7 +72,7 @@ export const admin = {
 
 // ember cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).
 const INVITE_ERRORS: Record<string, string> = {
-  invite_code_required: "ember 目前只对受邀的人开放，需要邀请码才能新建 workspace",
+  invite_code_required: "still.fail 目前只对受邀的人开放，需要邀请码才能新建 workspace",
   invite_code_invalid: "这个邀请码不对，检查一下有没有输错",
   invite_code_used: "这个邀请码已经被用过了",
   invite_code_expired: "这个邀请码已经过期了",

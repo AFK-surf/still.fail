@@ -44,7 +44,7 @@ export function NewChatScreen() {
             <div className={newChatCss.mNewNone}>
               <Illustration name="station-offline" width={240} />
               <b>没有在线的 station</b>
-              <p>在一台机器上打开 ember，它就会连上这个 workspace。</p>
+              <p>在一台机器上打开 still.fail，它就会连上这个 workspace。</p>
             </div>
           )
         )

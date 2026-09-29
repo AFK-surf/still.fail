@@ -146,10 +146,10 @@ function ProfileMenu({ p }: { p: Profile }) {
         <PickRow label="重新检查" onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed); }} />
         <PickRow label="刷新额度" onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed); }} />
         <PickRow label={`${p.machine ? "停用" : "删除 Profile"}${p.usedBy.length ? "（还有连接在用）" : ""}`} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
-          title: `停用「${p.name}」？`, text: "ember 不再用这台机器上的这份登录；机器上的登录不受影响，之后可以再用。", action: "停用", danger: true,
+          title: `停用「${p.name}」？`, text: "still.fail 不再用这台机器上的这份登录；机器上的登录不受影响，之后可以再用。", action: "停用", danger: true,
           run: () => api.deleteProfile(p.id).then(() => { app.toast("已停用"); app.pop(); }),
         } : {
-          title: `删除「${p.name}」？`, text: "只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。", action: "删除 Profile", danger: true,
+          title: `删除「${p.name}」？`, text: "只从 still.fail 的配置里移除；配置目录和里面的登录状态不会删除。", action: "删除 Profile", danger: true,
           run: () => api.deleteProfile(p.id).then(() => { app.toast("已删除 Profile"); app.pop(); }),
         })} />
       </div>
@@ -251,7 +251,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
           </>
         ) : (
           <>
-            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : "登录在运行 ember 的机器上完成，你只需要在浏览器里授权。"}</p>
+            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : "登录在运行 still.fail 的机器上完成，你只需要在浏览器里授权。"}</p>
             <Button label={job?.state === "done" || !needed ? "重新登录" : "登录"} primary={needed} busy={busy}
               onClick={() => { setBusy(true); api.startLogin(p.id).catch((e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
             <details className={css.mDetails}><summary>也可以在那台机器上手动登录</summary><CommandBox text={p.loginCommand} /></details>
@@ -277,14 +277,14 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
         <span className={css.mDeviceCode}>{job.userCode}</span>
         <Button label={copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"} primary
           onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => {}).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>在打开的 OpenAI 页面用要给 ember 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>在打开的 OpenAI 页面用要给 still.fail 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
       </>
     );
   }
   if (job.state === "needs_code" && job.url) {
     return (
       <>
-        <p className={partsCss.mSmall}>1. <a href={job.url} target="_blank" rel="noopener">打开授权页面</a>，用要给 ember 使用的 Claude 账号登录并同意。</p>
+        <p className={partsCss.mSmall}>1. <a href={job.url} target="_blank" rel="noopener">打开授权页面</a>，用要给 still.fail 使用的 Claude 账号登录并同意。</p>
         <p className={partsCss.mSmall}>2. 同意后页面上会显示一段授权码，复制过来：</p>
         <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder="粘贴授权码" onChange={(e) => setCode(e.target.value)} />
         {error && <p className={partsCss.mError}>{error}</p>}
@@ -400,7 +400,7 @@ export function NewProfileScreen() {
                 <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={key} placeholder="先验证能用，再添加" onChange={(e) => setKey(e.target.value.trim())} />
               </>
             )}
-            {kind === "subscription" && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>登录在运行 ember 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
+            {kind === "subscription" && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>登录在运行 still.fail 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
             {error && <p className={partsCss.mError}>{error}</p>}
             {kind === "subscription"
               ? <Button label={`登录 ${provider}`} primary busy={busy} onClick={() => { setBusy(true); setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
@@ -466,7 +466,7 @@ export function MachineLoginOffers({ logins, profiles, onSignIn, inForm = false 
           );
         })}
       </ListCard>
-      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；station 读不到的登录（Codex 存在钥匙串里的，或者钥匙串没解锁）不能直接用，要为 ember 单独登录一次，原来的登录不受影响。</p>
+      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；station 读不到的登录（Codex 存在钥匙串里的，或者钥匙串没解锁）不能直接用，要为 still.fail 单独登录一次，原来的登录不受影响。</p>
     </>
   );
 }

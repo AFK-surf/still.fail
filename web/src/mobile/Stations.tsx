@@ -61,7 +61,7 @@ export function StationsScreen() {
           {s.online && s.host ? (
             <span className={css.mStationRings}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} size={40} />)}</span>
           ) : !s.online ? (
-            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 ember 了</span></span>
+            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 still.fail 了</span></span>
           ) : null}
         </Card>
       ))}
@@ -97,7 +97,7 @@ function AddStationSheet({ known }: { known: string[] }) {
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         {!made ? (
           <>
-            <p className={partsCss.mMuted}>station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。</p>
+            <p className={partsCss.mMuted}>station 是一台运行 still.fail 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 still.fail 并加入。</p>
             <b className={sheetsCss.mFormLabel}>名字</b>
             <Field value={name} onChange={setName} placeholder="比如机器名：studio、mac-mini" />
             {error && <p className={partsCss.mError}>{error}</p>}
@@ -139,7 +139,7 @@ export function StationScreen() {
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (
-            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 ember 就会重新连上</span></span></Card>
+            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 still.fail 就会重新连上</span></span></Card>
           ) : null}
           {s.overview && (
             <>
@@ -155,7 +155,7 @@ export function StationScreen() {
               <SectionHeader title="连接" start={24} />
               <ListCard>
                 {s.overview.connects.map((c) => <ConnectRow key={c.id} connect={c} onClick={() => app.push(app.at(`/s/${s.id}/connects/${encodeURIComponent(c.id)}`))} />)}
-                <ListRow><Mark size={14} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>ember 对话</span><span className={listsCss.mRowNote}>内置</span></ListRow>
+                <ListRow><Mark size={14} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>still.fail 对话</span><span className={listsCss.mRowNote}>内置</span></ListRow>
                 {s.online && (
                   <ListRow onClick={() => app.push(app.at(`/s/${s.id}/connects/new`))}>
                     <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
@@ -187,7 +187,7 @@ function EnrollSteps({ install }: { install: string }) {
     <>
       <p>在那台机器的终端里执行：</p>
       <CommandBox text={install} />
-      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。它会装好 ember、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>macOS（Apple 芯片）和 Linux 都行；装过 still.fail 的机器也用这条命令。它会装好 still.fail、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
       <p className={`${partsCss.mMuted} ${partsCss.mSmall} ${chatCss.mWaiting}`}><Spinner size={10} />等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效</p>
     </>
   );
@@ -254,7 +254,7 @@ function StationMenu({ s }: { s: StationView }) {
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast("已改名")) })} />
         <PickRow label="从 workspace 移除" accent onClick={() => confirm(app, {
           title: `移除「${s.name}」？`, action: "移除 station", danger: true,
-          text: "它会断开与 ember cloud 的连接，成员不能再从这里访问它。那台机器上的 ember 和数据不受影响，之后可以重新添加。",
+          text: "它会断开与 still.fail cloud 的连接，成员不能再从这里访问它。那台机器上的 still.fail 和数据不受影响，之后可以重新添加。",
           run: () => cloud.removeStation(me.sub, app.entry.id, s.id).then(() => { app.toast("已移除 station"); app.pop(); }),
         })} />
       </div>

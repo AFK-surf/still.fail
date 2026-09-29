@@ -173,7 +173,7 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
 function Received({ from, text, place }: { from: ReactNode; text: string; place?: ReactNode }) {
   return (
     <div className={css.hReceived}>
-      <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
+      <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "still.fail" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
       <Fold className={css.hQuote}>{text}</Fold>
     </div>
   );

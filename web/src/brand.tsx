@@ -26,7 +26,7 @@ export function Mark({ size, className }: { size: number; className?: string }) 
 }
 
 /** Buddy and name; 132 × 30 at the smallest. */
-export function Lockup({ height = 30, alt = "ember" }: { height?: number; alt?: string }) {
+export function Lockup({ height = 30, alt = "still.fail" }: { height?: number; alt?: string }) {
   return <Themed name="lockup" width={Math.round((height * 264) / 60)} height={height} alt={alt} className={css.brandLockup} />;
 }
 
@@ -38,7 +38,7 @@ export function Lockup({ height = 30, alt = "ember" }: { height?: number; alt?: 
 export function SidebarBrand() {
   return (
     <>
-      {!window.emberDesktop && <Themed name="wordmark" width={81} height={22} alt="ember" className={css.brandWordmark} />}
+      {!window.emberDesktop && <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />}
       {!window.emberDesktop && <span className={css.brandPhone}><Lockup /></span>}
       <SidebarBuddy />
       <UpdateButton />
@@ -48,7 +48,7 @@ export function SidebarBrand() {
 
 /** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
 export function PageBrand() {
-  return window.emberDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="ember" className={css.brandWordmark} />;
+  return window.emberDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />;
 }
 
 type Pose = "push" | "hop" | "rest";
@@ -125,7 +125,7 @@ function UpdateButton() {
   if (!updates || !state) return null;
   const label = state.phase === "downloading" ? `下载中 ${state.percent}%` : state.phase === "installing" ? "正在重启…" : state.phase === "failed" ? "更新失败，重试" : "更新";
   const busy = state.phase === "downloading" || state.phase === "installing";
-  const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 ember 会重启`;
+  const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 still.fail 会重启`;
   return onPage(
     <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
       {label}

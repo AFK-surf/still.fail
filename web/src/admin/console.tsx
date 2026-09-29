@@ -98,7 +98,7 @@ function Failed({ error }: { error: Error | null }) {
 // ── users ───────────────────────────────────────────────────────────────
 
 const ADMISSION: Record<Admission | "none", { label: string; tone: Tone }> = {
-  admin: { label: "ember 管理员", tone: "accent" },
+  admin: { label: "still.fail 管理员", tone: "accent" },
   code: { label: "用邀请码加入", tone: "blue" },
   invitation: { label: "被邀请加入", tone: "green" },
   early: { label: "邀请码之前加入", tone: "neutral" },
@@ -109,7 +109,7 @@ function UsersPage({ account }: { account: Account }) {
   const users = useList(account.sub, "users", (v) => v.users as AdminUser[]);
   const list = users.data;
   return (
-    <Page title="用户" lead={list && `${list.length} 人登录过 ember。「还没进来」的人登录了，但没有 workspace，也没有用过邀请码或接受过邀请。`}>
+    <Page title="用户" lead={list && `${list.length} 人登录过 still.fail。「还没进来」的人登录了，但没有 workspace，也没有用过邀请码或接受过邀请。`}>
       <Failed error={users.error} />
       {!list ? !users.error && <Loading label="正在读取…" fill={false} /> : (
         <ul className={css.adminList}>{list.map((u) => <UserItem key={u.sub} user={u} />)}</ul>
@@ -183,7 +183,7 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
           // came to it (or left).
           <div key={s.id} className={css.adminLine}>
             <span className={css.adminLineText}>{s.name}<span className={shellCss.muted}>{s.version ? `ember-mesh ${s.version}` : ""}</span></span>
-            <span className={shellCss.muted}>{s.last_seen ? <>上次连 ember cloud：<Time stamp={stamp(s, "last_seen")} /></> : "还没连过 ember cloud"}</span>
+            <span className={shellCss.muted}>{s.last_seen ? <>上次连 still.fail cloud：<Time stamp={stamp(s, "last_seen")} /></> : "还没连过 still.fail cloud"}</span>
           </div>
         ))}
       </div>
@@ -221,7 +221,7 @@ function CodesPage({ account }: { account: Account }) {
   const usable = list?.filter((c) => codeState(c).label === "可用").length ?? 0;
   const copy = (url: string) => void navigator.clipboard.writeText(url).then(() => toast("已复制注册链接"));
   return (
-    <Page title="邀请码" lead="ember 只对受邀的人开放。没被邀请进任何 workspace 的人，要有邀请码才能新建 workspace；一个邀请码只能用一次，用过的人之后可以再建。">
+    <Page title="邀请码" lead="still.fail 只对受邀的人开放。没被邀请进任何 workspace 的人，要有邀请码才能新建 workspace；一个邀请码只能用一次，用过的人之后可以再建。">
       <Section title={list ? `${list.length} 个，${usable} 个可用` : "邀请码"} actions={<Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>生成邀请码</Button>}>
         <Failed error={codes.error} />
         {!list ? !codes.error && <Loading label="正在读取…" fill={false} /> : list.length === 0 ? (
@@ -270,7 +270,7 @@ function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(
   const made = make.result;
   return (
     <Dialog open onClose={onClose} wide title={made ? "邀请码已生成" : "生成邀请码"}
-      description={made ? `把邀请码或注册链接发给对方。只能用一次，${days} 天后过期。` : "对方登录 ember 后，用它建一个自己的 workspace。一个邀请码只能用一次。"}
+      description={made ? `把邀请码或注册链接发给对方。只能用一次，${days} 天后过期。` : "对方登录 still.fail 后，用它建一个自己的 workspace。一个邀请码只能用一次。"}
       footer={made ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
         <Button variant="primary" busy={make.busy} onClick={() => make.run()}>生成</Button>

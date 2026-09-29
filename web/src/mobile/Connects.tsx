@@ -89,7 +89,7 @@ function WaitingAppSheet({ made, online }: { made: MadeSlackApp; online: boolean
           onClick={() => { app.sheet(null); app.push(`${stationBase(station.address)}/connects/new?resume=${encodeURIComponent(made.appId)}`); }} />
         <PickRow label="从这里移除" accent onClick={() => confirm(app, {
           title: `移除「${made.name}」？`, action: "移除", danger: true,
-          text: "只从 ember 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。",
+          text: "只从 still.fail 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。",
           run: () => api.dropSlackApp(made.appId).then(() => app.toast("已移除")),
         })} />
       </div>
@@ -481,7 +481,7 @@ export function NewConnectScreen() {
           </div>
         ) : step === "team" && (teams.length === 0 ? (
           <>
-            <p className={partsCss.mMuted}>有了 Slack 的配置 token，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
+            <p className={partsCss.mMuted}>有了 Slack 的配置 token，still.fail 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
             <Button label="添加配置 token" primary onClick={() => setStep("token")} />
             <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</button>
           </>
@@ -499,7 +499,7 @@ export function NewConnectScreen() {
             <ol className={css.mStepsList}>
               <li>打开 <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a>，用要放 bot 的那个 Slack 工作区的账号登录。</li>
               <li>拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</li>
-              <li>把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。ember 会自己续期，以后不用再管。</li>
+              <li>把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。still.fail 会自己续期，以后不用再管。</li>
             </ol>
             <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={config} placeholder="xoxe-1-…" onChange={(e) => setConfig(e.target.value.trim())} />
             {config.startsWith("xoxe.xoxp-") && <p className={partsCss.mError}>这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。</p>}
@@ -540,7 +540,7 @@ export function NewConnectScreen() {
         {step === "manual" && (
           <>
             <ol className={css.mStepsList}>
-              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl("ember").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 ember 的配置在 Slack 新建一个 app</button>。</li>
+              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl("ember").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 still.fail 的配置在 Slack 新建一个 app</button>。</li>
               <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
               <li>把两个 token 填在下面。</li>

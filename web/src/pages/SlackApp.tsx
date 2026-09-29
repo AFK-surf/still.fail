@@ -97,7 +97,7 @@ export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; o
       </li>
       <li>
         <strong>把 Refresh Token 粘贴到这里</strong>
-        <span className={shellCss.muted}>Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。ember 会自己续期，以后不用再管。</span>
+        <span className={shellCss.muted}>Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。still.fail 会自己续期，以后不用再管。</span>
         <div className={additionsCss.inputRow}>
           <input className={`${controlsCss.input} ${shellCss.mono}`} type="password" autoComplete="off" spellCheck={false} value={token} aria-label="Refresh Token"
             onChange={(e) => setToken(e.target.value.trim())}

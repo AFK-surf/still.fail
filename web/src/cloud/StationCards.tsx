@@ -25,9 +25,9 @@ function state(s: StationView): ReactNode {
 
 /** What may be wrong with it, each in words, worst first. */
 function problems(s: StationView, silent: boolean): { key: string; level: Level; text: string }[] {
-  if (s.online && silent) return [{ key: "silent", level: "amber", text: "没有回应：ember cloud 说它在线，但一直读不到它的状态，那台机器可能断网或睡眠了" }];
+  if (s.online && silent) return [{ key: "silent", level: "amber", text: "没有回应：still.fail cloud 说它在线，但一直读不到它的状态，那台机器可能断网或睡眠了" }];
   if (!s.online) {
-    return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? "离线：在那台机器上打开 ember，它就会重新连上" : "还没连上过：在那台机器上打开 ember" }];
+    return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? "离线：在那台机器上打开 still.fail，它就会重新连上" : "还没连上过：在那台机器上打开 still.fail" }];
   }
   const said: Record<string, (m: Meter) => string> = {
     CPU: (m) => `CPU 负载 ${m.percent}%`,

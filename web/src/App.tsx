@@ -45,12 +45,12 @@ export function App() {
     return (
       <div className={shellCss.gate}>
         <Mark size={40} />
-        <h1>{denied ? "没有访问权限" : "连不上 ember"}</h1>
+        <h1>{denied ? "没有访问权限" : "连不上 still.fail"}</h1>
         <p>{overview.error.message}</p>
       </div>
     );
   }
-  if (!overview.value) return <div className={shellCss.gate}><Loading label="正在连接 ember…" detail={<StatusLine />} /></div>;
+  if (!overview.value) return <div className={shellCss.gate}><Loading label="正在连接 still.fail…" detail={<StatusLine />} /></div>;
 
   return (
     <ToastProvider>

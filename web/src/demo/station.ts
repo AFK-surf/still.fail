@@ -51,10 +51,10 @@ export const slackApp = () => ({ state: "no_config_token" });
 /** The Slack app the team talks to its agents through, shaped as the core presents a connect. */
 function slack(): Connect {
   return {
-    id: "acme-slack", name: "ember", team: "Acme", enabled: true, kind: "slack", mode: "multi-session", requireMention: true,
+    id: "acme-slack", name: "still.fail", team: "Acme", enabled: true, kind: "slack", mode: "multi-session", requireMention: true,
     bind: { runtime: "claude", model: "claude-opus-5-5", effort: "medium", profile: "machine-claude" },
     slack: { appToken: "", botToken: "" },
-    connection: { state: "connected", botUserId: "U07EMBER", workspace: { team: "Acme", teamId: "T0ACME", url: "https://acme.slack.com/", botUserId: "U07EMBER", botName: "ember" } },
+    connection: { state: "connected", botUserId: "U07EMBER", workspace: { team: "Acme", teamId: "T0ACME", url: "https://acme.slack.com/", botUserId: "U07EMBER", botName: "still.fail" } },
     createdBy: { id: LIN.id, name: LIN.name, shown: LIN.shown }, sessions: 14,
     statusText: "在线", presence: "online", modeText: "多会话", modeShort: "多会话", runtimeText: "Claude Code", runText: "Claude Code · Opus 5.5 · medium", modelName: "Opus 5.5",
   };
@@ -71,7 +71,7 @@ export const connects = (): ConnectsView => ({
  */
 export class NeedsReal extends Error {
   constructor() {
-    super("这是演示：这一步要连到真实的服务，请在真实的 Ember 里做。");
+    super("这是演示：这一步要连到真实的服务，请在真实的 still.fail 里做。");
   }
 }
 
@@ -125,5 +125,5 @@ export function loginSessions() {
     const expires = created + 30 * 86_400_000;
     return { id, name, created_at: created, expires_at: expires, current, time: { created_at: stamp(created), expires_at: stamp(expires) } };
   };
-  return [session("s1", "这台浏览器", 3, true), session("s2", "ember（Android）", 12, false)];
+  return [session("s1", "这台浏览器", 3, true), session("s2", "still.fail（Android）", 12, false)];
 }

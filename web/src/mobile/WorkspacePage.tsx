@@ -30,7 +30,7 @@ export function WorkspaceScreen() {
   });
   const remove = () => confirm(app, {
     title: `删除「${view.name}」？`, action: "删除 workspace", danger: true,
-    text: `所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ember cloud 的连接（station 本机上的数据不受影响）。`,
+    text: `所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 still.fail cloud 的连接（station 本机上的数据不受影响）。`,
     run: () => cloud.deleteWorkspace(me.sub, view.id).then(() => { app.toast("已删除 workspace"); app.replace("/"); }),
   });
   return (
@@ -162,7 +162,7 @@ function AddSheet({ view }: { view: WorkspaceView }) {
           </>
         ) : (
           <>
-            <p className={partsCss.mMuted}>直接加进「{view.name}」，不用对方接受：登录过 ember 的人马上加入，其他人第一次用这个邮箱登录时自动加入。</p>
+            <p className={partsCss.mMuted}>直接加进「{view.name}」，不用对方接受：登录过 still.fail 的人马上加入，其他人第一次用这个邮箱登录时自动加入。</p>
             <b className={sheetsCss.mFormLabel}>邮箱</b>
             <Field value={text} onChange={setText} placeholder="name@example.com，可以粘贴多个" />
             {slack.available && (slack.people === null ? (
@@ -200,7 +200,7 @@ function AddSheet({ view }: { view: WorkspaceView }) {
                 setBusy(true); setError(null);
                 cloud.addMembers(me.sub, view.id, role, emails).then((r) => setDone([
                   r.joined.length ? `${r.joined.length} 人已经加入` : "",
-                  r.added.length ? `${r.added.length} 人第一次登录 ember 时自动加入` : "",
+                  r.added.length ? `${r.added.length} 人第一次登录 still.fail 时自动加入` : "",
                   r.already.length ? `${r.already.length} 人本来就在` : "",
                 ].filter(Boolean).join("，") + "。"), (e: Error) => setError(e.message)).finally(() => setBusy(false));
               }} />

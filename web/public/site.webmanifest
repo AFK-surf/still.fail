@@ -1,6 +1,6 @@
 {
-  "name": "ember",
-  "short_name": "ember",
+  "name": "still.fail",
+  "short_name": "still.fail",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

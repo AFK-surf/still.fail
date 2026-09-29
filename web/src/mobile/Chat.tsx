@@ -535,7 +535,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           </InfoList>
         )}
         <InfoList>
-          <InfoDetail label="来自" value={view.place ? `Slack · ${view.place}` : "ember 对话"} />
+          <InfoDetail label="来自" value={view.place ? `Slack · ${view.place}` : "still.fail 对话"} />
           <InfoDetail label="发起" value={thread.creator?.shown?.display ?? "未记录"} />
           <InfoDetail label="参与" value={`${view.people.length} 人`} extra={<PeopleStack people={view.people} max={8} />} />
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />

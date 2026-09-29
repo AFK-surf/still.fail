@@ -110,7 +110,7 @@ function NewWorkspaceSheet() {
             <Field value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" mono />
             {create.error && code.trim()
               ? <p className={partsCss.mError}>{errorText(create.error)}</p>
-              : <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>ember 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。</p>}
+              : <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>still.fail 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。</p>}
           </>
         )}
         {create.error && !asked && <p className={partsCss.mError}>{create.error.message}</p>}

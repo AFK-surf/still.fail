@@ -494,7 +494,7 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
           <dl className={css.details}>
             {row("来自", where
               ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
-              : "ember 对话")}
+              : "still.fail 对话")}
             {row("发起", thread.creator ? <CreatorText creator={thread.creator} verb="发起" /> : <span className={shellCss.muted}>未记录</span>)}
             {row("参与", <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{chat.people.length} 人</span>)}
             {row("创建", <Time stamp={thread.time?.createdAt} />)}
