@@ -3,7 +3,7 @@
 # bucket, where install.sh (cloud/src/install.ts) gets them: this Mac's (darwin-arm64), and Linux's (linux-x64,
 # linux-arm64, built from here: scripts/linux-station.sh).
 # The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip and stillfail-mac.yml, in desktop/) and
-# `android` (apps/android/build.py --release: ember-<n>.apk and latest.json, in android/). Their version is the
+# `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
 #   release.sh [PLATFORM…]   (default: the station's three; desktop and android only when named)
 # RELEASE_DIR=dir: into that directory instead of the bucket (the dev cloud serves them from dist/releases: cloud/test/dev.ts).
@@ -39,8 +39,8 @@ for platform in $platforms; do
     android)
       ORG_GRADLE_PROJECT_stillfailBuild=$build python3 "$root/apps/android/build.py" --release --tasks :app:assembleRelease
       apk="$root/apps/android/app/build/outputs/apk/release/app-release.apk"
-      put "$apk" "android/ember-$build.apk" application/vnd.android.package-archive
-      printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/ember-%s.apk","sha256":"%s","size":%s}\n' \
+      put "$apk" "android/stillfail-$build.apk" application/vnd.android.package-archive
+      printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/stillfail-%s.apk","sha256":"%s","size":%s}\n' \
         "$build" "$build" "$build" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"
       put "$out/latest.json" android/latest.json application/json
       ;;

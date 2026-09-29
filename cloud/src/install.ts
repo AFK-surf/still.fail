@@ -41,7 +41,8 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail-mac\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/stillfail-[0-9.]+-arm64-mac\.zip$/, "application/zip"],
   [/^android\/latest\.json$/, "application/json"],
-  [/^android\/ember-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
+  [/^android\/(stillfail|ember)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
 ];
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */

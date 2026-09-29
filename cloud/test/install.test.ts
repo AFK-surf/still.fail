@@ -52,7 +52,10 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("desktop/other-mac.yml"), null);
   assert.equal(releaseType("android/latest.json"), "application/json");
   assert.equal(releaseType("station.json"), "application/json");
+  assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");
+  // Builds from before the rename keep being served: the latest.json of then names them.
   assert.equal(releaseType("android/ember-890.apk"), "application/vnd.android.package-archive");
+  assert.equal(releaseType("android/other-890.apk"), null);
   assert.equal(releaseType("android/../secret"), null);
   assert.equal(releaseType("desktop/other.zip"), null);
 });

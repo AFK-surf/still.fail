@@ -24,7 +24,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-/** A build of the app on still.fail cloud: `file` is under /releases/ (still named android/ember-<n>.apk there). */
+/** A build of the app on still.fail cloud: `file` is under /releases/ (android/stillfail-<n>.apk; android/ember-<n>.apk before the rename). */
 @Serializable
 data class Release(val versionCode: Long, val versionName: String, val file: String, val sha256: String, val size: Long)
 
