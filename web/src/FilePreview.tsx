@@ -315,7 +315,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
-        body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} />; break;
+        body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} onMove={wake} />; break;
       default: body = <div className={css2.fpNote}>这种文件没法在这里预览<a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />下载</a></div>;
     }
   }
@@ -679,12 +679,27 @@ function PdfPage({ doc, number, width }: { doc: PDFDocumentProxy; number: number
 
 // ── text ───────────────────────────────────────────────────────────────
 
+/** Put at the end of a previewed HTML file: its frame tells the preview when a mouse moves over it (at most a few times a second). */
+const TELL_MOVES = `<script>{let t=0;addEventListener("pointermove",(e)=>{if(e.pointerType!=="mouse"||e.timeStamp-t<200)return;t=e.timeStamp;parent.postMessage({stillfailPreview:"move"},"*")},{capture:true,passive:true})}</script>`;
+
 /** Above this a file shows as plain text, unhighlighted; above the next, only its start. */
 const HIGHLIGHT_LIMIT = 256 * 1024;
 const SHOW_LIMIT = 2 * 1024 * 1024;
 const TABLE_ROWS = 2000;
 
-function TextViewer({ blob, kind, language, name, setControls }: { blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void }) {
+function TextViewer({ blob, kind, language, name, setControls, onMove }: {
+  blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void; onMove(): void;
+}) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const moved = useRef(onMove);
+  moved.current = onMove;
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.source === frame.current?.contentWindow && (e.data as { stillfailPreview?: string } | null)?.stillfailPreview === "move") moved.current();
+    };
+    addEventListener("message", onMessage);
+    return () => removeEventListener("message", onMessage);
+  }, []);
   const [text, setText] = useState<string | null>(null);
   const cut = blob.size > SHOW_LIMIT;
   const rendered = kind === "markdown" || kind === "csv" || kind === "html";
@@ -707,7 +722,8 @@ function TextViewer({ blob, kind, language, name, setControls }: { blob: Blob; k
   if (kind === "html" && !source) {
     // Its scripts run, but in an origin of its own: nothing of ember's is reachable from it.
     // A fragment an agent wrote to be drawn in a message (Viz.tsx) is shown the same way, in ember's stylesheet.
-    content = <iframe className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={isFragment(text) ? vizDocument(text) : text} title={name} />;
+    // A mouse moving over it is the frame's, not the preview's: the frame tells, so the bars wake as they do over an image.
+    content = <iframe ref={frame} className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={(isFragment(text) ? vizDocument(text) : text) + TELL_MOVES} title={name} />;
     return <div className={`${css2.fpPage} ${css2.fpPageFrame}`}>{content}</div>;
   }
   if (kind === "markdown" && !source) content = <div className={`${conversationCss.markdown} ${css2.fpMarkdown}`}><Prose>{text}</Prose></div>;
