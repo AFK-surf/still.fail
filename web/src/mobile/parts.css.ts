@@ -82,15 +82,16 @@ export const mNavBack = style({
   cursor: "pointer",
 });
 export const mNavbar = style({
-  display: "grid", gridTemplateColumns: "84px minmax(0, 1fr) 84px", alignItems: "center", flex: "none",
+  display: "grid", gridTemplateColumns: "84px minmax(0, 1fr) 84px", alignItems: "start", flex: "none",
   padding: "calc(var(--m-top) + 6px) 16px 10px 10px", background: "var(--m-bg)",
 });
-export const mNavbarBack = style({ gridColumn: "1", justifySelf: "start", whiteSpace: "nowrap" });
+/** The buttons and the title's first line share one 32px line, the title set 1px higher in it so it stands on the back word's baseline (17px to its 16px); a title's second line (sub) hangs below it. */
+export const mNavbarBack = style({ gridColumn: "1", justifySelf: "start", display: "flex", alignItems: "center", height: "32px", whiteSpace: "nowrap" });
 export const mNavbarTitle = style({
   gridColumn: "2", display: "flex", flexDirection: "column", alignItems: "center", minWidth: "0", textAlign: "center",
 });
-export const mNavbarSub = style({ display: "flex", alignItems: "center", gap: "5px", maxWidth: "100%" });
-export const mNavbarTrailing = style({ gridColumn: "3", justifySelf: "end" });
+export const mNavbarSub = style({ display: "flex", alignItems: "center", gap: "5px", maxWidth: "100%", marginTop: "-4px" });
+export const mNavbarTrailing = style({ gridColumn: "3", justifySelf: "end", display: "flex", alignItems: "center", height: "32px" });
 export const mTopBack = style({ padding: "calc(var(--m-top) + 6px) 0 4px 10px" });
 export const mLargeTitle = style({ padding: "0 16px 6px" });
 export const mSection = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px" });
@@ -142,7 +143,7 @@ globalStyle(`${mAvatar} img`, { width: "100%", height: "100%", objectFit: "cover
 globalStyle(`${mRingDisc} svg`, { position: "absolute", inset: "0" });
 globalStyle(`${mRingDisc} b`, { position: "relative", fontWeight: "600", color: "var(--m-ink)" });
 globalStyle(`${mNavbarTitle} b`, {
-  maxWidth: "100%", fontSize: "16px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
+  maxWidth: "100%", fontSize: "16px", fontWeight: "600", lineHeight: "30px", marginBottom: "2px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 globalStyle(`${mLargeTitle} span`, { fontSize: "13px", color: "var(--m-muted)" });
