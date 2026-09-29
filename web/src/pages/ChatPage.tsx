@@ -4,7 +4,7 @@
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Boxes, Close, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { alarmOf, JobDot, JobsPopover, JobsTab, toneOf, useNow } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -16,6 +16,8 @@ import { stationApi, useAction, useApi, useChat, useChats, useHistory, useHost, 
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { ChatPanel } from "../Chat.tsx";
+import { OpenFile } from "../Viz.tsx";
+import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
@@ -101,7 +103,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   useEffect(() => {
     for (const job of jobs) if (job.state !== "running" && job.state !== "exited") closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
-  const open = agents.length ? tabs.filter((key) => key === JOBS || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  const open = agents.length ? tabs.filter((key) => key === JOBS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
   const shown = active && open.includes(active) ? active : open[0] ?? null;
@@ -120,7 +122,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     commit(open.includes(key) ? open : [...open, key], key);
   };
   const closeTab = (key: string) => {
-    const service = serviceOf(key);
+    const file = fileOf(key);
+    const service = file ? fileService(file) : serviceOf(key);
     if (service) closePreview(previewKey(station.address, service));
     const next = open.filter((t) => t !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
@@ -258,7 +261,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
-      <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} {...(made ? { made } : {})} />
+      {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
+      <OpenFile.Provider value={(session, file) => openTab(fileTab(session, file.path, file.name))}>
+        <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} {...(made ? { made } : {})} />
+      </OpenFile.Provider>
       </div>
         {panel && shown && (
           <Tabs.Root className={css.sidePanel} data-over-composer value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>
@@ -273,6 +279,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                           <span className={css.sideTabAgent}><Boxes size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text="任务">任务</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label="关闭任务" onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      </span>
+                    );
+                  }
+                  const file = fileOf(key);
+                  if (file) {
+                    return (
+                      <span key={key} className={css.sideTabWrap}>
+                        <Tip label={file.name}><Tabs.Trigger className={css.sideTab} value={key}>
+                          <span className={css.sideTabAgent}><File size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={file.name}>{file.name}</span></span>
+                        </Tabs.Trigger></Tip>
+                        <button type="button" className={css.sideTabClose} aria-label={`关闭 ${file.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
@@ -312,6 +329,15 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   </Tabs.Content>
                 );
               }
+              const file = fileOf(key);
+              if (file) {
+                // Kept as a web service is (Previews.tsx): small in the corner while another chat or page shows.
+                return (
+                  <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
+                    <PreviewSlot station={station.address} file={file} name={file.name} restarting={null} draftKey={chatKey} />
+                  </Tabs.Content>
+                );
+              }
               const service = jobs.find((j) => j.id === serviceOf(key));
               // Kept loaded while another tab, chat or page shows (Previews.tsx): only closing its tab ends it.
               if (service) {
@@ -342,6 +368,13 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
 
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
+
+/** A visualization's tab: its place among the previews (Preview.tsx's fileService), opened from its message. */
+function fileTab(session: string, path: string, name: string): string {
+  return fileService({ session, path, name });
+}
+
+const fileOf = (key: string) => fileSourceOf(key);
 
 /** A web service's tab: its job, from its key (`service:<job>`); null for an agent's history tab. */
 function serviceOf(key: string): string | null {

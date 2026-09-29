@@ -7,9 +7,11 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
+import { OpenFile } from "../Viz.tsx";
+import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
-import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { PENDING } from "../lastChat.ts";
@@ -152,6 +154,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
   // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
   const quoting = useSelectionQuote(list, stable.quote);
   const hold = useHold(list, rows.messages, stable.quote);
+  const askedFile = useAskedFile(list, rows.messages, (f) => ownerIn(view, f));
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
   // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
@@ -174,8 +177,9 @@ function Messages({ view, lives, list, floor, draft, here }: {
     }
   };
   return (
-    <>
+    <OpenFile.Provider value={(session, file) => app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })))}>
       {quoting.pop}
+      {askedFile}
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
@@ -187,7 +191,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
       <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} aria-label="跳到最新"
         onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}><ArrowDown size={18} /></button>
-    </>
+    </OpenFile.Provider>
   );
 }
 

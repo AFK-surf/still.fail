@@ -656,6 +656,28 @@ impl AdminApi {
                 self.deps.store.set_title(key, title.as_deref())?;
                 return ok(json!({ "ok": true }));
             }
+            // What a widget in one of the session's messages holds (web/src/Viz.tsx), by its file's path; its
+            // modelContent reaches the agent with its next messages (Session::format).
+            (Some("sessions"), Some(key), Some("widget-state"), "GET") => {
+                self.session_row(key)?;
+                let state = self.deps.store.widget_state(key, asked.param("path").unwrap_or(""))?;
+                return ok(json!({ "state": state.and_then(|s| serde_json::from_str::<Value>(&s).ok()) }));
+            }
+            (Some("sessions"), Some(key), Some("widget-state"), "PUT") => {
+                let input = read_json(body).await?;
+                self.session_row(key)?;
+                let path = input.text("path");
+                if path.is_empty() {
+                    return Err(http_error(400, "path is required"));
+                }
+                let state = input.get("state").cloned().unwrap_or(Value::Null);
+                let json = state.to_string();
+                if json.len() > WIDGET_STATE_MAX {
+                    return Err(http_error(400, format!("widget state is over {WIDGET_STATE_MAX} bytes")));
+                }
+                self.deps.store.put_widget_state(key, &path, &json, widget_model(&state).as_deref())?;
+                return ok(json!({ "ok": true }));
+            }
             // "这是我" / "不是我" on a Slack user's name: taken at the viewer's word.
             (Some("me"), Some("slack"), Some(user), "PUT" | "DELETE") if parts.len() == 3 => {
                 self.deps.store.set_slack_identity(&viewer.id(), user, method == "PUT")?;
@@ -792,6 +814,22 @@ impl AdminApi {
     fn session_row(&self, key: &str) -> Result<crate::store::SessionRow> {
         self.deps.store.get_session(key)?.ok_or_else(|| http_error(404, format!("unknown session {key}")))
     }
+}
+
+/// The most a widget's state takes, as JSON (web/src/Viz.tsx keeps no more).
+const WIDGET_STATE_MAX: usize = 16384;
+/// The most of a widget's modelContent the agent is told, in characters.
+const WIDGET_MODEL_MAX: usize = 4000;
+
+/// What of a widget's state is for the agent (Codex's shape: `{modelContent, privateContent}`): its modelContent, a
+/// string as it is and anything else as JSON, cut to WIDGET_MODEL_MAX.
+fn widget_model(state: &Value) -> Option<String> {
+    let model = match state.get("modelContent")? {
+        Value::Null => return None,
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    };
+    Some(model.chars().take(WIDGET_MODEL_MAX).collect())
 }
 
 /// A request's JSON object, up to a megabyte; an empty body is `{}`.

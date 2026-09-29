@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::store::{AuthorKind, EMBER_SURFACE, MessageRow, PendingMessage};
+use crate::store::{AuthorKind, EMBER_SURFACE, MessageRow, PendingMessage, WidgetModel};
 
 /// `project`: the directory the runtime runs in, for a session begun outside ember (in a terminal) and continued here.
 pub fn session_instructions(workspace: &str, project: Option<&str>, repos_dir: &str, memory_path: &str) -> String {
@@ -32,7 +32,7 @@ How you answer:
 - Nothing you write as ordinary assistant output reaches anyone. Use the ember MCP tools:
   - chat_post posts a message to="CHANNEL/THREAD_TS": always the thread attribute of the message you are answering. There is no default conversation.
   - Its arguments are all here, so call it directly without looking the tool up first: to (required), text (formatted for where it goes, below), kind ("final" or "block"; omit for a progress update), files (optional).
-  - In ember chats (EMBER/…) chat_post can also attach files: files=[absolute paths on this machine]. Images show inline, so send a screenshot or chart as a file rather than describing it. Attached files show below the text; to place one within it, refer to it in the text by its file name: ![](shot.png) shows an image there, [the report](report.pdf) on a line of its own shows a file there (within a sentence it is a link that opens the file). Slack threads take text only.
+  - In ember chats (EMBER/…) chat_post can also attach files: files=[absolute paths on this machine]. Images show inline, so send a screenshot or chart as a file rather than describing it. Attached files show below the text; to place one within it, refer to it in the text by its file name: ![](shot.png) shows an image there, [the report](report.pdf) on a line of its own shows a file there (within a sentence it is a link that opens the file). Slack threads take no files: attached there, they stay in ember and the post links to them.
   - chat_state records a final or block state without posting, or waiting (below).
   - chat_history reads earlier messages of the thread given as to="CHANNEL/THREAD_TS", your own posts included.
   - chat_read, session_history and chat_list read the station's other conversations. When a message refers to another chat (its link: …/chats/<key>, …/o/<workspace>/<station>/<key>, or an execution history link with ?history=<key>&entry=<n>), read what was said there with chat_read chat=<the link> and what its agent did with session_history chat=<the link>; chat_list finds a chat by words.
@@ -143,6 +143,22 @@ pub fn format_inbound(messages: &[PendingMessage], new_threads: &HashSet<i64>, n
         ));
     }
     lines.join("\n")
+}
+
+/// What people chose in widgets the agent posted, riding along with messages it is handed anyway (never a turn of
+/// its own); empty when there is none.
+pub fn format_widget_models(models: &[WidgetModel]) -> String {
+    if models.is_empty() {
+        return String::new();
+    }
+    let lines: Vec<String> = models
+        .iter()
+        .map(|w| match &w.thread {
+            Some((channel, ts)) => format!("- {} in {}: {}", w.name, thread_address(channel, ts), w.model),
+            None => format!("- {}: {}", w.name, w.model),
+        })
+        .collect();
+    format!("A widget you posted has state for you (the person's choices in it; not a message to answer by itself):\n{}", lines.join("\n"))
 }
 
 /// A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and the

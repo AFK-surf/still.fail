@@ -1,13 +1,16 @@
 ---
 name: ember-viz
-description: Inline visualizations in ember chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in ember's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. Not for Slack threads (they take no files).
+description: Inline visualizations in ember chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in ember's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. In Slack threads the file stays in ember and the post links there.
 ---
 
 # Inline visualizations
 
 In an ember chat (EMBER/…) an HTML file you attach and place in your message is drawn there as a page of its own,
-sized to its content, with a switch to see its source. Nothing else is drawn: an ```html code block shows as code,
-and an HTML file you attach without placing it shows as a file to open.
+sized to its content, with a link to open the file itself. Nothing else is drawn as a page: an ```html code block
+shows as code, and an HTML file you attach without placing it shows as a file to open.
+
+For a plain diagram (a flow, a sequence, a state machine, a timeline) a ```mermaid block in the text is enough: it is
+drawn as a chart in ember's colours, no file needed. Use a file when you need layout, data or interaction.
 
 ## Posting one
 
@@ -15,6 +18,10 @@ and an HTML file you attach without placing it shows as a file to open.
 2. Attach it: `chat_post(to=…, text=…, files=["/abs/path/session-lifecycle.html"])`.
 3. Place it: in the text, a line of its own that links to it by its file name: `[Session lifecycle](session-lifecycle.html)`.
    Put the words that explain it around that line; the figure is not read aloud, and a phone app may show only the file.
+
+In a Slack thread, attach the file the same way but do not place it (Slack would show the link as typed): Slack
+takes no files, so ember keeps it with the message, adds a link to see it in ember at the end of the post, and draws
+it there. Say in the text what the figure shows, for those who stay in Slack.
 
 ## Writing one
 
@@ -34,7 +41,9 @@ and an HTML file you attach without placing it shows as a file to open.
 `window.ember` (also named `window.openai`, as Codex's Visualize has it):
 
 - `ember.widgetState` — what the widget kept last time it was shown (or null); `ember.setWidgetState(value)` keeps a
-  JSON value of up to 16 KiB, restored when the message is shown again (on the same device). It does not reach you.
+  JSON value of up to 16 KiB on the station, restored whenever and wherever the message is shown again. Put what you
+  should know in `value.modelContent` (the person's choices, say) and the rest in `value.privateContent`:
+  `modelContent` reaches you with the next message they send, as a note beside it; keeping state never starts a turn.
 - `ember.sendFollowUpMessage({ prompt })` — puts `prompt` in the chat's composer for the person to send, as if they
   wrote it. Only from their click or key press (a button's handler); it never sends by itself. Use it for "ask about
   this", "go with option B", a filled-in form.

@@ -413,6 +413,20 @@ pub struct JobNotice {
     pub text: String,
 }
 
+/// What a person chose in a widget an agent posted (an HTML file placed in its message), for the agent to hear of
+/// with its next messages.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WidgetModel {
+    /// The file's path, as attached.
+    pub path: String,
+    /// Its name as attached, else the path's last part.
+    pub name: String,
+    /// The thread it was posted in (channel, thread ts), when its message is still in the database.
+    pub thread: Option<(String, String)>,
+    /// What the widget said is for the agent (its state's modelContent).
+    pub model: String,
+}
+
 fn job_row(r: &rusqlite::Row) -> rusqlite::Result<JobRow> {
     Ok(JobRow {
         id: r.get("id")?,
@@ -597,6 +611,16 @@ CREATE TABLE IF NOT EXISTS identities (
   slack_user TEXT NOT NULL,
   at INTEGER NOT NULL,
   PRIMARY KEY (viewer, slack_user)
+);
+-- Came after schema version 12 without changing it: made in place on open, like add_archive_columns' columns.
+CREATE TABLE IF NOT EXISTS widget_states (
+  session TEXT NOT NULL,
+  path TEXT NOT NULL,
+  state TEXT NOT NULL,
+  model TEXT,
+  updated_at INTEGER NOT NULL,
+  told_at INTEGER,
+  PRIMARY KEY (session, path)
 );
 "#;
 
@@ -1001,6 +1025,7 @@ impl Store {
             tx.execute("DELETE FROM bindings WHERE session_key = ?", [key])?;
             tx.execute("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", [key])?;
             tx.execute("DELETE FROM jobs WHERE session_key = ?", [key])?;
+            tx.execute("DELETE FROM widget_states WHERE session = ?", [key])?;
             tx.execute("DELETE FROM sessions WHERE key = ?", [key])?;
             let mut kept = Vec::new();
             let mut removed = Vec::new();
@@ -1739,6 +1764,61 @@ impl Store {
             let mut stmt = i.db.prepare("SELECT * FROM processes")?;
             let rows = stmt.query_map([], |r| Ok(ProcessRow { pgid: r.get("pgid")?, started_at: r.get("started_at")?, runtime: r.get("runtime")?, label: r.get("label")? }))?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+    // ── widget states ─────────────────────────────────────────────────────
+
+    /// Keeps what a widget in one of the session's messages holds (`state`, JSON) and what of it is for the agent
+    /// (`model`). A model other than the one last told is told again.
+    pub fn put_widget_state(&self, session: &str, path: &str, state: &str, model: Option<&str>) -> Result<()> {
+        self.with(|i, _| {
+            i.db.execute(
+                "INSERT INTO widget_states (session, path, state, model, updated_at) VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT (session, path) DO UPDATE SET state = excluded.state, model = excluded.model, updated_at = excluded.updated_at,
+                   told_at = CASE WHEN widget_states.model IS excluded.model THEN widget_states.told_at END",
+                params![session, path, state, model, now_ms()],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn widget_state(&self, session: &str, path: &str) -> Result<Option<String>> {
+        self.with(|i, _| Ok(i.db.query_row("SELECT state FROM widget_states WHERE session = ? AND path = ?", [session, path], |r| r.get(0)).optional()?))
+    }
+
+    /// The session's widget models it has not been told, with where each widget was posted (the latest of its
+    /// threads' messages that carry the file).
+    pub fn untold_widget_models(&self, session: &str) -> Result<Vec<WidgetModel>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid")?;
+            let untold: Vec<(String, String)> = stmt.query_map([session], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+            let mut place = i.db.prepare(
+                "SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name') FROM merged m
+                 JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = ?1, json_each(m.attachments) a
+                 WHERE m.attachments IS NOT NULL AND json_extract(a.value, '$.path') = ?2 ORDER BY m.created_at DESC LIMIT 1",
+            )?;
+            let mut out = Vec::new();
+            for (path, model) in untold {
+                let found: Option<(String, String, Option<String>)> = place.query_row([session, path.as_str()], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).optional()?;
+                let base = path.rsplit(['/', '\\']).next().unwrap_or(&path).to_string();
+                let (thread, name) = match found {
+                    Some((channel, ts, name)) => (Some((channel, ts)), name.filter(|n| !n.is_empty()).unwrap_or(base)),
+                    None => (None, base),
+                };
+                out.push(WidgetModel { path, name, thread, model });
+            }
+            Ok(out)
+        })
+    }
+
+    /// The agent was told these (path, model): each is marked told unless its model changed since.
+    pub fn mark_widget_models_told(&self, session: &str, told: &[(String, String)]) -> Result<()> {
+        self.with(|i, _| {
+            let now = now_ms();
+            for (path, model) in told {
+                i.db.execute("UPDATE widget_states SET told_at = ? WHERE session = ? AND path = ? AND model = ?", params![now, session, path, model])?;
+            }
+            Ok(())
         })
     }
 }

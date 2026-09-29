@@ -7,7 +7,10 @@
 // sendFollowUpMessage puts words in the chat's composer for the person to send — only on their click or key.
 (() => {
   const root = document.documentElement;
-  const post = (message) => parent.postMessage({ emberViz: true, ...message }, "*");
+  // The page is the parent in a message; opened beside the chat it is the top, over the preview's own frame
+  // (Preview.tsx), which takes no notice.
+  const pages = parent === top ? [parent] : [parent, top];
+  const post = (message) => { for (const page of pages) page.postMessage({ emberViz: true, ...message }, "*"); };
 
   const given = document.getElementById("ember-viz-state");
   let state = JSON.parse(given?.textContent || "{}").widgetState ?? null;
@@ -41,7 +44,7 @@
     }
   };
   addEventListener("message", (event) => {
-    if (event.source !== parent || !event.data?.emberViz) return;
+    if (!pages.includes(event.source) || !event.data?.emberViz) return;
     if (event.data.type === "theme") {
       for (const [name, value] of Object.entries(event.data.tokens ?? {})) root.style.setProperty(name, value);
       root.dataset.theme = event.data.scheme;
