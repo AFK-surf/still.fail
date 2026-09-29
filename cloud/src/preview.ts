@@ -23,7 +23,7 @@
 // Its limits: cookies the service sets are not sent back (the service
 // worker's requests carry none).
 
-import { socketScript, socketTagAt } from "./previewSocket.ts";
+import { SOCKET_TAG_JS, socketScript } from "./previewSocket.ts";
 
 const FRAME = `<!doctype html>
 <meta charset="utf-8">
@@ -56,11 +56,23 @@ const FRAME = `<!doctype html>
       else if (data.type === "socket-close") { sockets.delete(data.sid); socket.close(data.code, data.reason || "", data.failed === true); }
       return;
     }
-    const reply = waiting.get(data.id);
-    if (!reply) return;
+    const asked = waiting.get(data.id);
+    if (!asked) return;
     // Whole (an older client), or its end: nothing more comes for it.
     if (data.end || data.error || !streams) waiting.delete(data.id);
-    reply.postMessage(data, data.body ? [data.body.buffer] : data.chunk ? [data.chunk.buffer] : []);
+    if (asked.streams || !streams || data.error) {
+      asked.reply.postMessage(data, data.body ? [data.body.buffer] : data.chunk ? [data.chunk.buffer] : []);
+      return;
+    }
+    // A service worker from before answers as they come (one that has not been replaced yet): given it whole.
+    if (data.head) asked.head = data.head;
+    else if (data.chunk) asked.chunks.push(data.chunk);
+    else if (data.end) {
+      const body = new Uint8Array(asked.chunks.reduce((n, c) => n + c.length, 0));
+      let at = 0;
+      for (const c of asked.chunks) { body.set(c, at); at += c.length; }
+      asked.reply.postMessage({ id: data.id, status: asked.head.status, headers: asked.head.headers, body }, [body.buffer]);
+    }
   };
   // A request of the service's frame, from the service worker: on to the client. Given up (its page left, its reader
   // cancelled), the client is told to stop it.
@@ -68,7 +80,8 @@ const FRAME = `<!doctype html>
     if (event.data?.type !== "ember-preview-fetch" || !port) return;
     const id = ++next;
     const reply = event.ports[0];
-    waiting.set(id, reply);
+    // Whether this service worker takes an answer as it comes (one from before takes it whole).
+    waiting.set(id, { reply, streams: event.data.streams === true, head: null, chunks: [] });
     reply.onmessage = (m) => {
       if (m.data?.cancel && streams && waiting.delete(id)) port.postMessage({ type: "cancel", id });
     };
@@ -184,23 +197,8 @@ async function frameOf(nonce) {
 function plain(status, text) {
   return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
-// What goes into a page of the service, first in its <head>: its WebSockets through ember (/_ember/socket.js).
-// Where it goes: previewSocket.ts's, as its source (types already stripped by whatever loaded this module).
-const SOCKETS = new TextEncoder().encode('<script src="/_ember/socket.js"></script>');
-${socketTagAt.toString()}
-function withSockets(body) {
-  let placed = false;
-  return body.pipeThrough(new TransformStream({
-    transform(chunk, out) {
-      if (placed) return out.enqueue(chunk);
-      placed = true;
-      const at = socketTagAt(chunk);
-      out.enqueue(chunk.subarray(0, at));
-      out.enqueue(SOCKETS);
-      out.enqueue(chunk.subarray(at));
-    },
-  }));
-}
+// What puts the service's pages' WebSockets through ember (/_ember/socket.js) into them: previewSocket.ts's.
+${SOCKET_TAG_JS}
 async function relay(event, url) {
   const frame = await frameOf(nonceOf(event));
   if (!frame) return plain(502, "预览已经断开：在 ember 里重新打开它。");
@@ -233,7 +231,7 @@ async function relay(event, url) {
       resolve({ status: reply.status, headers: reply.headers, whole: reply.body });
     };
   });
-  frame.postMessage({ type: "ember-preview-fetch", method: request.method, path: url.pathname + url.search, headers: [...request.headers], body }, [channel.port2, ...(body ? [body.buffer] : [])]);
+  frame.postMessage({ type: "ember-preview-fetch", streams: true, method: request.method, path: url.pathname + url.search, headers: [...request.headers], body }, [channel.port2, ...(body ? [body.buffer] : [])]);
   const reply = await head;
   if (reply.error) return plain(502, reply.error);
   const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(reply.status);
@@ -243,7 +241,7 @@ async function relay(event, url) {
   }
   let out = reply.whole ? new Blob([reply.whole]).stream() : stream;
   const type = new Headers(reply.headers).get("content-type") || "";
-  if (request.mode === "navigate" && type.startsWith("text/html")) out = withSockets(out);
+  if (request.mode === "navigate" && type.startsWith("text/html")) out = withSocketTag(out);
   return new Response(out, { status: reply.status, headers: reply.headers });
 }
 `;

@@ -116,8 +116,11 @@ export function bridge(port: MessagePort, { call, station, service, serve, strea
         : Array.isArray(data.close) ? { close: [Number(data.close[0]) || 1000, String(data.close[1] ?? "")] }
         : null;
       if (!message) return;
-      // A socket whose station is gone: its close follows from the socket's own call.
-      call("preview.socket.send", { socket: sid, ...message }).catch(() => undefined);
+      // A socket whose station is gone: its close follows from the socket's own call. A close that did not get there
+      // stops the socket's call instead, so nothing is left open for a page that let it go.
+      call("preview.socket.send", { socket: sid, ...message }).catch(() => {
+        if ("close" in message) running.get(`s${sid}`)?.abort();
+      });
       return;
     }
     const asked = data as Asked;

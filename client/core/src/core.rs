@@ -258,13 +258,23 @@ impl Core {
                         let inner = self.inner.clone();
                         Rc::new(move |value| inner.host.emit(client, CoreMessage::Value { id, value }))
                     };
-                    let (abort, registration) = AbortHandle::new_pair();
-                    self.inner.calls.borrow_mut().insert((client, id), abort);
+                    // Only a call that holds something open for its page can be stopped (and is, with the page):
+                    // one that changes something (a message sent, a file uploaded) runs to its end whoever waits.
+                    let registration = call.cancellable().then(|| {
+                        let (abort, registration) = AbortHandle::new_pair();
+                        self.inner.calls.borrow_mut().insert((client, id), abort);
+                        registration
+                    });
                     self.inner.host.spawn(tracer.instrument(Some(span.context()), async move {
-                        let result = Abortable::new(inner.execute(call, progress, (client, id)), registration)
-                            .await
-                            .unwrap_or_else(|_| Err(CoreError::new("cancelled", "已取消")));
-                        inner.calls.borrow_mut().remove(&(client, id));
+                        let run = inner.execute(call, progress, (client, id));
+                        let result = match registration {
+                            Some(registration) => {
+                                let result = Abortable::new(run, registration).await.unwrap_or_else(|_| Err(CoreError::new("cancelled", "已取消")));
+                                inner.calls.borrow_mut().remove(&(client, id));
+                                result
+                            }
+                            None => run.await,
+                        };
                         if let Err(error) = &result {
                             span.fail();
                             span.set("error.type", error.code.clone());
@@ -579,10 +589,11 @@ impl Inner {
             // (base64) for each message; the answer is its close, `{code, reason}`. What the page sends goes by
             // `preview.socket.send` under the socket's name; cancelling the call drops the socket.
             Call::PreviewSocket { station, port, path, headers, socket: name } => {
+                // Named before it opens: what the page sends meanwhile (a close right away) waits, and goes once it is open.
+                let (tx, mut from_page) = futures::channel::mpsc::unbounded();
+                let _open = Registered::new(self.preview_sockets.clone(), (at.0, name), tx).ok_or_else(|| CoreError::invalid("这个名字的 WebSocket 已经开着"))?;
                 let socket = self.stations.preview_socket(&StationAddr::parse(&station)?, port, &path, headers).await?;
                 let protocol = socket.reply.header("sec-websocket-protocol").unwrap_or("").to_string();
-                let (tx, mut from_page) = futures::channel::mpsc::unbounded();
-                let _open = Registered::new(self.preview_sockets.clone(), (at.0, name), tx);
                 progress(json!({ "open": { "protocol": protocol } }));
                 let (mut from_station, mut to_station) = (socket.reply.body.fuse(), socket.send);
                 let mut buf = Vec::new();
@@ -1181,9 +1192,13 @@ struct Registered<K: std::hash::Hash + Eq, V> {
 }
 
 impl<K: std::hash::Hash + Eq + Clone, V> Registered<K, V> {
-    fn new(map: Rc<RefCell<HashMap<K, V>>>, key: K, value: V) -> Self {
+    /// None when the key is taken already (it stays whose it was).
+    fn new(map: Rc<RefCell<HashMap<K, V>>>, key: K, value: V) -> Option<Self> {
+        if map.borrow().contains_key(&key) {
+            return None;
+        }
         map.borrow_mut().insert(key.clone(), value);
-        Registered { map, key: Some(key) }
+        Some(Registered { map, key: Some(key) })
     }
 }
 
@@ -1243,6 +1258,11 @@ enum Call {
 }
 
 impl Call {
+    /// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page.
+    fn cancellable(&self) -> bool {
+        matches!(self, Call::StationPreview { stream: true, .. } | Call::PreviewSocket { .. })
+    }
+
     /// The station a call is about, if any.
     fn station(&self) -> Option<&str> {
         match self {
@@ -1987,6 +2007,13 @@ mod tests {
             host.settle().await;
             assert!(bodies.borrow()[1].is_closed());
             assert!(core.inner.calls.borrow().is_empty());
+            // Any other call runs to its end, cancelled or not: a write is not dropped halfway.
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Call { id: 3, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
+            core.receive(ui, ClientMessage::Cancel { id: 3, cancel: true });
+            core.disconnect(ui);
+            host.settle().await;
+            assert!(values(&host).iter().any(|v| v["id"] == 3 && v.get("ok").is_some()), "answered, not cancelled");
         });
     }
 

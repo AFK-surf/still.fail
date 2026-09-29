@@ -56,12 +56,12 @@ UI → core:
 { "id": 7, "call": "job.stop", "params": { … } }          // one answer
 { "id": 8, "subscribe": { "topic": "station.session", "station": "ws1/st1", "key": "…" } }
 { "id": 8, "unsubscribe": true }
-{ "id": 7, "cancel": true }                                 // stops a call under way: it answers { code: "cancelled" }
+{ "id": 7, "cancel": true }                                 // stops a streamed preview or a preview socket: it answers { code: "cancelled" }
 ```
 
 A call may tell its UI how far it has got before it answers: values under its
-id (`{ "id": 7, "value": … }`), then its answer. A UI that goes away cancels
-its calls under way.
+id (`{ "id": 7, "value": … }`), then its answer. A UI that goes away cancels its
+streamed previews and preview sockets; any other call runs to its end.
 
 core → UI:
 
