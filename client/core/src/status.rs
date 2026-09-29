@@ -112,6 +112,12 @@ impl Status {
         *self.name_of.borrow_mut() = Some(name_of);
     }
 
+    /// Moves this clock on (tests).
+    #[cfg(test)]
+    pub(crate) fn skip(&self, ms: f64) {
+        self.skew.set(self.skew.get() + ms);
+    }
+
     fn now(&self) -> f64 {
         self.host.now_ms() + self.skew.get()
     }

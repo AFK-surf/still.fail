@@ -914,6 +914,10 @@ async fn answer(
         send.finish()?;
         return Ok(());
     }
+    // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
+    if head["socket"].as_bool() == Some(true) {
+        return socket(station, head, carry, send, recv, outcome, traced).await;
+    }
     let mut body = carry;
     let mut buf = [0u8; 16 * 1024];
     while let Some(n) = recv.read(&mut buf).await? {
@@ -989,6 +993,46 @@ async fn answer(
         }
     }
     send.finish()?;
+    Ok(())
+}
+
+/// A WebSocket of a web service on this machine, for a preview's page (ember_app::preview::open_socket): answered
+/// 101 once the service took it, then its messages framed both ways (ember_app::preview::FRAME_TEXT) until either
+/// side closes. Only a preview's path is opened; its span is the opening, as an event stream's.
+async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut SendStream, recv: &mut RecvStream, outcome: &mut Outcome, traced: &mut Traced<'_>) -> Result<()> {
+    let target = traced.path.strip_prefix("/admin/api").and_then(ember_app::preview::preview_target);
+    let refuse = async |send: &mut SendStream, status: u16, error: String| -> Result<()> {
+        write_line(send, &json!({ "status": status, "headers": { "content-type": "application/json" } })).await?;
+        send.write_all(json!({ "error": error }).to_string().as_bytes()).await?;
+        send.finish()?;
+        Ok(())
+    };
+    let Some((port, path)) = target.filter(|_| !traced.path.contains("..")) else {
+        outcome.status = 404;
+        return refuse(send, 404, "only a preview's WebSocket is opened over the mesh".into()).await;
+    };
+    if !*station.ready.borrow() {
+        outcome.status = 502;
+        return refuse(send, 502, "station unreachable: not started".into()).await;
+    }
+    let headers: Vec<(String, String)> = head["headers"].as_object().into_iter().flatten().filter_map(|(k, v)| Some((k.to_ascii_lowercase(), v.as_str()?.to_string()))).collect();
+    let (service, protocol) = match ember_app::preview::open_socket(&headers, port, &path).await {
+        Ok(opened) => opened,
+        Err((status, error)) => {
+            outcome.status = status;
+            return refuse(send, status, error).await;
+        }
+    };
+    outcome.status = 101;
+    let mut answer = serde_json::Map::new();
+    if let Some(protocol) = protocol {
+        answer.insert("sec-websocket-protocol".into(), json!(protocol));
+    }
+    write_line(send, &json!({ "status": 101, "headers": answer })).await?;
+    traced.end(outcome, true, None);
+    // What came with the head line is the first of the client's frames.
+    let from_client = tokio::io::AsyncReadExt::chain(std::io::Cursor::new(carry), recv);
+    ember_app::preview::pump_socket(service, from_client, send).await;
     Ok(())
 }
 

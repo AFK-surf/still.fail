@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
+import { bridge, type Answer, type Asked } from "./previewBridge.ts";
 import * as css from "./Preview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
@@ -28,15 +29,6 @@ import { useVizFile, useVizMessages, vizDocument } from "./Viz.tsx";
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
 
-function toBase64(bytes: Uint8Array): string {
-  let text = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(text);
-}
-
-const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
-
-interface Asked { id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
 
 /** A visualization's file: the session that sent it, its path there and its name. */
 export interface FileSource { session: string; path: string; name: string }
@@ -88,8 +80,6 @@ export function ServiceFrame(shown: Shown) {
   return window.emberDesktop ? <DesktopPreview {...shown} port={port} /> : <WebPreview {...shown} port={port} />;
 }
 
-/** One request of the frame's, answered. */
-interface Answer { status: number; headers: [string, string][]; body: Uint8Array }
 
 /**
  * A visualization in the web frame (the desktop app's too: its own frames go to a station's port): the frame asks for
@@ -253,36 +243,22 @@ function WebPreview({ station, port, file: _, serve, frame: given, fixed = false
   const frame = given ?? own;
   const served = useRef(serve);
   served.current = serve;
-  // The frame's requests of the service, handed here once it is ready: on to the station.
+  // The frame's requests (and WebSockets) of the service, handed here once it is ready: on to the station
+  // (previewBridge.ts). A frame that takes answers as they come says so, and is told this page gives them.
   useEffect(() => {
-    const bridges: MessagePort[] = [];
+    const bridges: (() => void)[] = [];
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== ORIGIN || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
       if (event.data?.type !== "ember-preview-ready") return;
       const { port1, port2 } = new MessageChannel();
-      bridges.push(port1);
-      port1.onmessage = async ({ data }: MessageEvent<Asked>) => {
-        try {
-          if (served.current) {
-            const answer = await served.current(data);
-            port1.postMessage({ id: data.id, status: answer.status, headers: answer.headers, body: answer.body }, [answer.body.buffer]);
-            return;
-          }
-          const answer = await call("station.preview", {
-            station, port, method: data.method, path: data.path, headers: data.headers, body: data.body ? toBase64(data.body) : "",
-          }) as { status: number; headers: [string, string][]; body: string };
-          const body = fromBase64(answer.body);
-          port1.postMessage({ id: data.id, status: answer.status, headers: answer.headers, body }, [body.buffer]);
-        } catch (error) {
-          port1.postMessage({ id: data.id, error: `没能从 station 取到：${error instanceof Error ? error.message : String(error)}` });
-        }
-      };
-      frame.current?.contentWindow?.postMessage({ type: "ember-preview-port" }, ORIGIN, [port2]);
+      const streams = event.data.streams === true;
+      bridges.push(bridge(port1, { call, station, service: port, serve: () => served.current, streams }));
+      frame.current?.contentWindow?.postMessage({ type: "ember-preview-port", streams }, ORIGIN, [port2]);
     };
     window.addEventListener("message", onMessage);
     return () => {
       window.removeEventListener("message", onMessage);
-      for (const bridge of bridges) bridge.close();
+      for (const stop of bridges) stop();
     };
   }, [nonce, station, port, call]);
   return <Framed {...shown} viewKey={shown.service && previewKey(station, shown.service)} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} fixed={fixed} />;

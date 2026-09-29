@@ -161,12 +161,25 @@ export class CoreClient {
     this.#connect();
   }
 
-  call(name: string, params: unknown = {}, onProgress?: (value: unknown) => void): Promise<unknown> {
+  /** `signal` stops the call while it is under way; it then fails with `cancelled`. */
+  call(name: string, params: unknown = {}, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
     if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: "连接已关闭" }));
+    if (signal?.aborted) return Promise.reject(new CoreError({ code: "cancelled", message: "已取消" }));
     const id = this.#nextId++;
     return new Promise((resolve, reject) => {
       this.#calls.set(id, { resolve, reject, onProgress });
       this.#send({ id, call: name, params });
+      signal?.addEventListener("abort", () => {
+        if (!this.#calls.has(id)) return;
+        // The core answers `cancelled`; with no worker to tell, it is so here and now.
+        if (this.#channel) {
+          this.#post({ id, cancel: true });
+        } else {
+          this.#calls.delete(id);
+          this.#queue = this.#queue.filter((m) => (m as { id?: number }).id !== id);
+          reject(new CoreError({ code: "cancelled", message: "已取消" }));
+        }
+      }, { once: true });
     });
   }
 

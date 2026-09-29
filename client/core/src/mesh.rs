@@ -400,6 +400,26 @@ impl Link {
         Ok(Reply { status, headers, recv, carry, done: false })
     }
 
+    /// A preview page's WebSocket on its own stream (mesh/station's `socket`): the head line says `"socket": true` and
+    /// the stream stays open both ways. Answers the station's reply (101 once the service took it; its body then the
+    /// service's frames) and the half the client's frames go out on.
+    pub async fn socket(&self, head: RequestHead) -> Result<(Reply, SocketSend)> {
+        let sent = |e: &dyn std::fmt::Display| mesh_error(format!("请求没送到 station：{e}"));
+        let (mut send, mut recv) = self.conn.open_bi().await.map_err(|e| sent(&e))?;
+        let headers: serde_json::Map<String, Value> = head.headers.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+        let line = format!("{}\n", json!({ "method": head.method, "path": head.path, "headers": headers, "socket": true }));
+        send.write_all(line.as_bytes()).await.map_err(|e| sent(&e))?;
+        let mut carry = Vec::new();
+        let line = read_line(&mut recv, &mut carry).await?.ok_or_else(|| mesh_error("station 没有回应".into()))?;
+        let reply: Value = serde_json::from_str(&line).map_err(|e| mesh_error(format!("station 的回复看不懂：{e}")))?;
+        let status = reply["status"].as_u64().and_then(|s| u16::try_from(s).ok()).ok_or_else(|| mesh_error("station 的回复没有状态码".into()))?;
+        let headers = match &reply["headers"] {
+            Value::Object(map) => map.iter().map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))).collect(),
+            _ => Vec::new(),
+        };
+        Ok((Reply { status, headers, recv, carry, done: false }, SocketSend(send)))
+    }
+
     /// Why the link closed, if it did.
     pub fn closed(&self) -> Option<String> {
         self.conn.close_reason().map(|reason| close_message(&reason))
@@ -434,6 +454,20 @@ fn close_message(reason: &ConnectionError) -> String {
         ConnectionError::LocallyClosed => "连接已关闭".into(),
         ConnectionError::TimedOut => "连接超时".into(),
         other => format!("连接断开：{other}"),
+    }
+}
+
+/// The client's half of a socket stream: its frames go out on it; dropped, the stream is reset.
+pub struct SocketSend(SendStream);
+
+impl SocketSend {
+    pub async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.0.write_all(bytes).await.map_err(|e| mesh_error(format!("没送到 station：{e}")))
+    }
+
+    /// No more frames: the stream ends on this side.
+    pub fn finish(&mut self) {
+        let _ = self.0.finish();
     }
 }
 

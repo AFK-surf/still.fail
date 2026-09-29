@@ -95,6 +95,11 @@ struct Inner {
     status: Rc<Status>,
     /// Told when a UI is back after being away (wake.rs).
     wakes: Rc<Wakes>,
+    /// The calls under way, by client and id: a UI cancels one, a UI gone cancels its own.
+    calls: RefCell<HashMap<(ClientId, RequestId), AbortHandle>>,
+    /// Preview sockets open (`preview.socket`), by client and the name its UI gave each: where `preview.socket.send`
+    /// puts the page's messages.
+    preview_sockets: Rc<RefCell<HashMap<(ClientId, String), SocketInbox>>>,
 }
 
 struct Socket {
@@ -190,6 +195,8 @@ impl Core {
                 sockets: RefCell::default(),
                 status: status.clone(),
                 wakes,
+                calls: RefCell::default(),
+                preview_sockets: Rc::default(),
             }
         });
         // Whom each account reaches, as the data center has it from the last run: views put together before the
@@ -227,6 +234,10 @@ impl Core {
     /// A UI went away (tab closed, port gone): its subscriptions end.
     pub fn disconnect(&self, client: ClientId) {
         self.inner.store.drop_client(client);
+        let calls: Vec<AbortHandle> = self.inner.calls.borrow_mut().extract_if(|(c, _), _| *c == client).map(|(_, abort)| abort).collect();
+        for call in calls {
+            call.abort();
+        }
     }
 
     /// A message from a UI. Answers and values go out through `Host::emit`.
@@ -247,8 +258,13 @@ impl Core {
                         let inner = self.inner.clone();
                         Rc::new(move |value| inner.host.emit(client, CoreMessage::Value { id, value }))
                     };
+                    let (abort, registration) = AbortHandle::new_pair();
+                    self.inner.calls.borrow_mut().insert((client, id), abort);
                     self.inner.host.spawn(tracer.instrument(Some(span.context()), async move {
-                        let result = inner.execute(call, progress).await;
+                        let result = Abortable::new(inner.execute(call, progress, (client, id)), registration)
+                            .await
+                            .unwrap_or_else(|_| Err(CoreError::new("cancelled", "已取消")));
+                        inner.calls.borrow_mut().remove(&(client, id));
                         if let Err(error) = &result {
                             span.fail();
                             span.set("error.type", error.code.clone());
@@ -260,6 +276,12 @@ impl Core {
             },
             ClientMessage::Subscribe { id, subscribe } => self.inner.store.subscribe(client, id, subscribe),
             ClientMessage::Unsubscribe { id, .. } => self.inner.store.unsubscribe(client, id),
+            ClientMessage::Cancel { id, .. } => {
+                let call = self.inner.calls.borrow_mut().remove(&(client, id));
+                if let Some(call) = call {
+                    call.abort();
+                }
+            }
         }
     }
 }
@@ -403,7 +425,8 @@ fn gone() -> CoreError {
 }
 
 impl Inner {
-    async fn execute(&self, call: Call, progress: Progress) -> Result<Value> {
+    /// Runs a call; `at` is the client and id it came with.
+    async fn execute(&self, call: Call, progress: Progress, at: (ClientId, RequestId)) -> Result<Value> {
         match call {
             Call::AuthBegin { redirect_uri, return_to, device_name } => {
                 let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name).await?;
@@ -491,7 +514,7 @@ impl Inner {
                 }
             }
             Call::ChatRetryIn { station, session, id } => match self.views.pending_thread(&station, &session) {
-                Some(Some(thread)) => Box::pin(self.execute(Call::ChatRetry { station, thread, id }, progress)).await,
+                Some(Some(thread)) => Box::pin(self.execute(Call::ChatRetry { station, thread, id }, progress, at)).await,
                 Some(None) => {
                     self.make_chat(&session);
                     Ok(Value::Null)
@@ -538,9 +561,68 @@ impl Inner {
                 let (kind, bytes) = self.stations.file(&StationAddr::parse(&station)?, &key, &name, thumb, report).await?;
                 Ok(json!({ "type": kind, "bytes": BASE64.encode(bytes) }))
             }
-            Call::StationPreview { station, port, method, path, headers, body } => {
+            Call::StationPreview { station, port, method, path, headers, body, stream: false } => {
                 let (status, headers, bytes) = self.stations.preview(&StationAddr::parse(&station)?, port, &method, &path, headers, body).await?;
                 Ok(json!({ "status": status, "headers": headers, "body": BASE64.encode(bytes) }))
+            }
+            // As it comes: `{head: {status, headers}}`, then `{chunk}` (base64) for each piece of the body; the answer
+            // (null) once it ended. Cancelling the call stops it.
+            Call::StationPreview { station, port, method, path, headers, body, stream: true } => {
+                let (status, headers, mut chunks) = self.stations.preview_stream(&StationAddr::parse(&station)?, port, &method, &path, headers, body).await?;
+                progress(json!({ "head": { "status": status, "headers": headers } }));
+                while let Some(chunk) = chunks.next().await {
+                    progress(json!({ "chunk": BASE64.encode(chunk?) }));
+                }
+                Ok(Value::Null)
+            }
+            // A preview page's WebSocket: `{open: {protocol}}` once the service took it, then `{text}` or `{binary}`
+            // (base64) for each message; the answer is its close, `{code, reason}`. What the page sends goes by
+            // `preview.socket.send` under the socket's name; cancelling the call drops the socket.
+            Call::PreviewSocket { station, port, path, headers, socket: name } => {
+                let socket = self.stations.preview_socket(&StationAddr::parse(&station)?, port, &path, headers).await?;
+                let protocol = socket.reply.header("sec-websocket-protocol").unwrap_or("").to_string();
+                let (tx, mut from_page) = futures::channel::mpsc::unbounded();
+                let _open = Registered::new(self.preview_sockets.clone(), (at.0, name), tx);
+                progress(json!({ "open": { "protocol": protocol } }));
+                let (mut from_station, mut to_station) = (socket.reply.body.fuse(), socket.send);
+                let mut buf = Vec::new();
+                // The page's own close, once sent: what the socket closed with if the station says nothing after.
+                let mut closing: Option<(u16, String)> = None;
+                loop {
+                    futures::select! {
+                        chunk = from_station.next() => {
+                            let Some(Ok(chunk)) = chunk else {
+                                let (code, reason) = closing.unwrap_or((1006, String::new()));
+                                return Ok(json!({ "code": code, "reason": reason }));
+                            };
+                            buf.extend(chunk);
+                            for frame in station::SocketFrame::take(&mut buf) {
+                                match frame {
+                                    station::SocketFrame::Text(text) => progress(json!({ "text": text })),
+                                    station::SocketFrame::Binary(bytes) => progress(json!({ "binary": BASE64.encode(bytes) })),
+                                    station::SocketFrame::Close(code, reason) => return Ok(json!({ "code": code, "reason": reason })),
+                                }
+                            }
+                        }
+                        frame = from_page.next() => {
+                            let Some(frame) = frame else { continue };
+                            if let station::SocketFrame::Close(code, reason) = &frame {
+                                closing = Some((*code, reason.clone()));
+                            }
+                            if to_station.write(frame.encode()).await.is_err() {
+                                let (code, reason) = closing.unwrap_or((1006, String::new()));
+                                return Ok(json!({ "code": code, "reason": reason }));
+                            }
+                        }
+                    }
+                }
+            }
+            Call::PreviewSocketSend { socket, frame } => {
+                let sent = self.preview_sockets.borrow().get(&(at.0, socket)).map(|tx| tx.unbounded_send(frame).is_ok());
+                match sent {
+                    Some(true) => Ok(Value::Null),
+                    _ => Err(CoreError::new("not_found", "这个 WebSocket 已经关了")),
+                }
             }
             Call::Migrate { accounts, device } => {
                 if let Some(accounts) = accounts {
@@ -1089,6 +1171,30 @@ fn encode(segment: &str) -> String {
     out
 }
 
+/// Where a preview socket's messages from its page go (`preview.socket.send`).
+type SocketInbox = futures::channel::mpsc::UnboundedSender<station::SocketFrame>;
+
+/// An entry of a map for as long as this is held: gone with it, however the call holding it ends (cancelled too).
+struct Registered<K: std::hash::Hash + Eq, V> {
+    map: Rc<RefCell<HashMap<K, V>>>,
+    key: Option<K>,
+}
+
+impl<K: std::hash::Hash + Eq + Clone, V> Registered<K, V> {
+    fn new(map: Rc<RefCell<HashMap<K, V>>>, key: K, value: V) -> Self {
+        map.borrow_mut().insert(key.clone(), value);
+        Registered { map, key: Some(key) }
+    }
+}
+
+impl<K: std::hash::Hash + Eq, V> Drop for Registered<K, V> {
+    fn drop(&mut self) {
+        if let Some(key) = self.key.take() {
+            self.map.borrow_mut().remove(&key);
+        }
+    }
+}
+
 fn answer(id: RequestId, result: Result<Value>) -> CoreMessage {
     match result {
         Ok(ok) => CoreMessage::Ok { id, ok },
@@ -1128,7 +1234,11 @@ enum Call {
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String, thumb: bool, progress: bool },
-    StationPreview { station: String, port: u16, method: String, path: String, headers: Vec<(String, String)>, body: Vec<u8> },
+    StationPreview { station: String, port: u16, method: String, path: String, headers: Vec<(String, String)>, body: Vec<u8>, stream: bool },
+    /// `socket`: the name the UI gives it, for what it sends.
+    PreviewSocket { station: String, port: u16, path: String, headers: Vec<(String, String)>, socket: String },
+    /// A message (or the close) for the socket this client named `socket`.
+    PreviewSocketSend { socket: String, frame: station::SocketFrame },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
 }
 
@@ -1143,8 +1253,8 @@ impl Call {
             Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
-            Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } => Some(station),
-            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } => None,
+            Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } => Some(station),
+            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
         }
     }
 }
@@ -1261,6 +1371,25 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         headers: Vec<(String, String)>,
         #[serde(default)]
         body: String,
+        /// Hand the answer on as it comes (see `Inner::execute`).
+        #[serde(default)]
+        stream: bool,
+    }
+    #[derive(Deserialize)]
+    struct Socket {
+        station: String,
+        port: u16,
+        path: String,
+        #[serde(default)]
+        headers: Vec<(String, String)>,
+        socket: String,
+    }
+    #[derive(Deserialize)]
+    struct SocketSend {
+        socket: String,
+        text: Option<String>,
+        binary: Option<String>,
+        close: Option<(u16, String)>,
     }
     #[derive(Deserialize)]
     struct WakeParams {
@@ -1349,7 +1478,21 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "station.preview" => {
             let p: Preview = read(params)?;
-            Call::StationPreview { body: base64(&p.body, "请求内容")?, station: p.station, port: p.port, method: p.method, path: p.path, headers: p.headers }
+            Call::StationPreview { body: base64(&p.body, "请求内容")?, station: p.station, port: p.port, method: p.method, path: p.path, headers: p.headers, stream: p.stream }
+        }
+        "preview.socket" => {
+            let p: Socket = read(params)?;
+            Call::PreviewSocket { station: p.station, port: p.port, path: p.path, headers: p.headers, socket: p.socket }
+        }
+        "preview.socket.send" => {
+            let p: SocketSend = read(params)?;
+            let frame = match (p.text, p.binary, p.close) {
+                (Some(text), None, None) => station::SocketFrame::Text(text),
+                (None, Some(bytes), None) => station::SocketFrame::Binary(base64(&bytes, "消息")?),
+                (None, None, Some((code, reason))) => station::SocketFrame::Close(code, reason),
+                _ => return Err(CoreError::invalid("text、binary、close 要给且只给一个")),
+            };
+            Call::PreviewSocketSend { socket: p.socket, frame }
         }
         "migrate" => {
             let p: Migrate = read(params)?;
@@ -1802,6 +1945,66 @@ mod tests {
 
     fn exports(host: &FakeHost) -> Vec<crate::host::HttpRequest> {
         host.requests.borrow().iter().filter(|r| r.url.ends_with("/v1/telemetry/traces")).cloned().collect()
+    }
+
+    #[test]
+    fn a_streamed_preview_hands_its_answer_on_as_it_comes_until_cancelled_or_its_page_goes() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            // The service's answer: open, its body coming as it is sent here.
+            type Body = futures::channel::mpsc::UnboundedSender<std::result::Result<Vec<u8>, crate::host::HostError>>;
+            let bodies: Rc<RefCell<Vec<Body>>> = Rc::default();
+            let opened = bodies.clone();
+            host.on_fetch_stream(move |_| {
+                let (tx, rx) = futures::channel::mpsc::unbounded();
+                opened.borrow_mut().push(tx);
+                Ok(crate::host::StreamResponse { status: 200, headers: vec![("content-type".into(), "text/event-stream".into())], body: rx.boxed_local() })
+            });
+            let ui = core.connect();
+            let preview = |id| ClientMessage::Call { id, call: "station.preview".into(), params: json!({ "station": "local", "port": 5180, "method": "GET", "path": "/events", "stream": true }) };
+            core.receive(ui, preview(1));
+            host.settle().await;
+            let asked = host.requests.borrow().last().cloned().unwrap();
+            assert_eq!(asked.url, "https://ember.test/admin/api/preview/5180/events");
+            assert_eq!(header(&asked, "x-ember-stream").as_deref(), Some("1"), "asked for as it comes");
+            let values = |host: &FakeHost| host.take_emitted().into_iter().map(|(_, m)| serde_json::to_value(m).unwrap()).collect::<Vec<_>>();
+            assert_eq!(values(&host), vec![json!({ "id": 1, "value": { "head": { "status": 200, "headers": [["content-type", "text/event-stream"]] } } })]);
+            // Nothing is said to be waited on once its head came, however long its body goes on.
+            core.inner.status.skip(3_000.0);
+            assert_eq!(core.inner.status.value()["state"], Value::Null);
+            bodies.borrow()[0].unbounded_send(Ok(b"data: 1\n\n".to_vec())).unwrap();
+            host.settle().await;
+            assert_eq!(values(&host), vec![json!({ "id": 1, "value": { "chunk": BASE64.encode(b"data: 1\n\n") } })]);
+            // Cancelled: it answers so, and the body is let go (the station stops asking the service).
+            core.receive(ui, ClientMessage::Cancel { id: 1, cancel: true });
+            host.settle().await;
+            assert_eq!(values(&host), vec![json!({ "id": 1, "error": { "code": "cancelled", "message": "已取消" } })]);
+            assert!(bodies.borrow()[0].is_closed());
+            // A page gone takes its calls with it.
+            core.receive(ui, preview(2));
+            host.settle().await;
+            core.disconnect(ui);
+            host.settle().await;
+            assert!(bodies.borrow()[1].is_closed());
+            assert!(core.inner.calls.borrow().is_empty());
+        });
+    }
+
+    #[test]
+    fn a_preview_socket_is_only_carried_by_the_mesh_and_its_messages_are_checked() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Call { id: 1, call: "preview.socket".into(), params: json!({ "station": "local", "port": 5180, "path": "/", "socket": "s1" }) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "preview.socket.send".into(), params: json!({ "socket": "s1", "text": "hi" }) });
+            host.settle().await;
+            let answers: HashMap<u64, Value> = host.take_emitted().into_iter().map(|(_, m)| serde_json::to_value(m).unwrap()).map(|v| (v["id"].as_u64().unwrap(), v)).collect();
+            assert_eq!(answers[&1]["error"]["code"], "unsupported");
+            assert_eq!(answers[&2]["error"]["code"], "not_found", "no socket open by that name");
+            assert!(parse_call("preview.socket.send", json!({ "socket": "s1", "text": "a", "close": [1000, ""] })).is_err());
+            assert_eq!(parse_call("preview.socket.send", json!({ "socket": "s1", "close": [4001, "done"] })).unwrap(), Call::PreviewSocketSend { socket: "s1".into(), frame: station::SocketFrame::Close(4001, "done".into()) });
+            assert_eq!(parse_call("preview.socket.send", json!({ "socket": "s1", "binary": BASE64.encode([0, 1]) })).unwrap(), Call::PreviewSocketSend { socket: "s1".into(), frame: station::SocketFrame::Binary(vec![0, 1]) });
+        });
     }
 
     #[test]

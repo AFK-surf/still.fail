@@ -131,10 +131,90 @@ pub trait StationWire {
     fn request(&self, station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply>>;
     /// The way to the station is taken for gone (wake.rs): what is open to it closes, and the next request opens it anew.
     fn reset(&self, _station: &StationAddr) {}
+    /// A preview page's WebSocket (`head.path` a preview's): the station's reply, then its frames both ways
+    /// ([`SocketFrame`]). Only the mesh carries one.
+    fn socket(&self, _station: &StationAddr, _head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
+        async { Err(CoreError::new("unsupported", "这里的预览还不支持 WebSocket")) }.boxed_local()
+    }
 }
 
+/// A socket stream as it opened: the station's reply (101 once the service took the socket, else why not in its
+/// body), the frames that come in the body, and where the client's frames go.
+pub struct WireSocket {
+    pub reply: WireReply,
+    pub send: Box<dyn SocketOut>,
+}
+
+/// The client's half of a socket stream. Dropping it resets the stream.
+pub trait SocketOut {
+    fn write<'a>(&'a mut self, bytes: Vec<u8>) -> LocalBoxFuture<'a, Result<()>>;
+    fn finish(&mut self);
+}
+
+impl SocketOut for crate::mesh::SocketSend {
+    fn write<'a>(&'a mut self, bytes: Vec<u8>) -> LocalBoxFuture<'a, Result<()>> {
+        async move { crate::mesh::SocketSend::write(self, &bytes).await }.boxed_local()
+    }
+    fn finish(&mut self) {
+        crate::mesh::SocketSend::finish(self);
+    }
+}
+
+/// A WebSocket message on a socket stream, framed as mesh/app/src/preview.rs frames it: a kind byte (1 text, 2 binary,
+/// 8 close), the payload's length (4 bytes, big-endian), the payload; a close's is its code (2 bytes) and reason.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SocketFrame {
+    Text(String),
+    Binary(Vec<u8>),
+    Close(u16, String),
+}
+
+impl SocketFrame {
+    pub fn encode(&self) -> Vec<u8> {
+        let (kind, payload) = match self {
+            SocketFrame::Text(text) => (1u8, text.as_bytes().to_vec()),
+            SocketFrame::Binary(bytes) => (2, bytes.clone()),
+            SocketFrame::Close(code, reason) => (8, [&code.to_be_bytes()[..], reason.as_bytes()].concat()),
+        };
+        let mut out = Vec::with_capacity(5 + payload.len());
+        out.push(kind);
+        out.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        out.extend(payload);
+        out
+    }
+
+    /// The frames whole in `buf`, taken from it; what is left is the start of the next.
+    pub fn take(buf: &mut Vec<u8>) -> Vec<SocketFrame> {
+        let mut frames = Vec::new();
+        let mut at = 0;
+        while buf.len() - at >= 5 {
+            let len = u32::from_be_bytes([buf[at + 1], buf[at + 2], buf[at + 3], buf[at + 4]]) as usize;
+            if buf.len() - at - 5 < len {
+                break;
+            }
+            let payload = &buf[at + 5..at + 5 + len];
+            match buf[at] {
+                1 => frames.push(SocketFrame::Text(String::from_utf8_lossy(payload).into_owned())),
+                2 => frames.push(SocketFrame::Binary(payload.to_vec())),
+                8 => {
+                    let code = if payload.len() >= 2 { u16::from_be_bytes([payload[0], payload[1]]) } else { 1005 };
+                    frames.push(SocketFrame::Close(code, String::from_utf8_lossy(payload.get(2..).unwrap_or_default()).into_owned()));
+                }
+                _ => {}
+            }
+            at += 5 + len;
+        }
+        buf.drain(..at);
+        frames
+    }
+}
+
+/// Asks the page's HTTP wire for the body as it comes, not whole (a preview's answer, which may never end); the
+/// station's HTTP passes on no `x-ember-` header.
+const STREAM_HEADER: &str = "x-ember-stream";
+
 fn wants_stream(head: &RequestHead) -> bool {
-    head.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("accept") && v.contains(EVENT_STREAM))
+    head.headers.iter().any(|(k, v)| (k.eq_ignore_ascii_case("accept") && v.contains(EVENT_STREAM)) || k.eq_ignore_ascii_case(STREAM_HEADER))
 }
 
 /// The page's own station, over the host's HTTP (the origin is the station's).
@@ -239,6 +319,30 @@ impl StationWire for MeshWire {
             mesh.drop_link(station);
         }
     }
+
+    fn socket(&self, station: &StationAddr, head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
+        let StationAddr::Remote { workspace, station } = station.clone() else {
+            return async { Err(CoreError::invalid("本地站点不走 mesh")) }.boxed_local();
+        };
+        let mesh = (self.mesh)();
+        let credentials = (self.credentials)(&workspace);
+        let (status, address) = (self.status.clone(), Place::Station(format!("{workspace}/{station}")));
+        async move {
+            let mesh = {
+                let _waiting = status.begin(Place::Relay, "连接", true);
+                mesh.await?
+            };
+            let link = {
+                let _waiting = status.begin(address, "连接", true);
+                mesh.link(&station, credentials).await?
+            };
+            let (reply, send) = link.socket(head).await?;
+            let (status, headers) = (reply.status, reply.headers.clone());
+            let body = futures::stream::unfold(reply, |mut reply| async move { reply.next().await.map(|chunk| (chunk, reply)) });
+            Ok(WireSocket { reply: WireReply { status, headers, body: body.boxed_local(), via: link.path() }, send: Box::new(send) })
+        }
+        .boxed_local()
+    }
 }
 
 /// `local` over one wire, every other station over another.
@@ -265,6 +369,13 @@ impl StationWire for RoutedWire {
         match station {
             StationAddr::Local => self.local.reset(station),
             StationAddr::Remote { .. } => self.remote.reset(station),
+        }
+    }
+
+    fn socket(&self, station: &StationAddr, head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
+        match station {
+            StationAddr::Local => self.local.socket(station, head),
+            StationAddr::Remote { .. } => self.remote.socket(station, head),
         }
     }
 }
@@ -617,6 +728,64 @@ impl Stations {
     pub async fn preview(&self, station: &StationAddr, port: u16, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>) -> Result<(u16, Vec<(String, String)>, Vec<u8>)> {
         let path = format!("/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
         self.exchange(station, method, &path, headers, body, false, |reply| reply.headers.clone()).await
+    }
+
+    /// A preview request whose answer is handed on as it comes (an event stream, a long poll, a page still loading):
+    /// its status and headers once they are there, then its body. It is waited on (status.rs) only until then; its
+    /// body is dropped to stop it, and the station then stops asking the service.
+    pub async fn preview_stream(&self, station: &StationAddr, port: u16, method: &str, path: &str, mut headers: Vec<(String, String)>, body: Vec<u8>) -> Result<(u16, Vec<(String, String)>, LocalBoxStream<'static, Result<Vec<u8>>>)> {
+        let path = format!("/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
+        headers.push((STREAM_HEADER.into(), "1".into()));
+        let (mut span, waiting, reply) = self.send(station, method, &path, headers, body, false);
+        span.set("ember.stream", true);
+        let reply = match reply.await {
+            Ok(reply) => reply,
+            Err(error) => {
+                failed(&mut span, &error);
+                span.end();
+                return Err(error);
+            }
+        };
+        drop(waiting);
+        answered(&mut span, &reply);
+        span.end();
+        let status = Rc::downgrade(&self.status);
+        let body = reply.body.inspect(move |chunk| {
+            if let (Ok(chunk), Some(status)) = (chunk, status.upgrade()) {
+                status.received(None, chunk.len());
+            }
+        });
+        Ok((reply.status, reply.headers, body.boxed_local()))
+    }
+
+    /// A preview page's WebSocket to `path` of the service at `port`: open once the station answers 101 (else the
+    /// station's reason, as an error with its status).
+    pub async fn preview_socket(&self, station: &StationAddr, port: u16, path: &str, headers: Vec<(String, String)>) -> Result<WireSocket> {
+        let path = format!("/admin/api/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
+        let _waiting = self.status.begin(Place::Station(station.to_string()), "打开网页服务的 WebSocket", false);
+        let mut span = self.tracer.span(format!("SOCKET {}", route(&path)), Kind::Client);
+        span.set("url.path", route(&path));
+        span.set("ember.stream", true);
+        let mut headers = headers;
+        headers.push(("traceparent".into(), span.context().traceparent()));
+        let opened = self.tracer.instrument(Some(span.context()), self.wire.socket(station, RequestHead { method: "GET".into(), path, headers })).await;
+        let socket = match opened {
+            Ok(socket) => socket,
+            Err(error) => {
+                failed(&mut span, &error);
+                span.end();
+                return Err(error);
+            }
+        };
+        answered(&mut span, &socket.reply);
+        span.end();
+        if socket.reply.status != 101 {
+            let status = socket.reply.status;
+            let bytes = socket.reply.bytes().await.unwrap_or_default();
+            let data: Value = serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({}));
+            return Err(http_error(status, &data));
+        }
+        Ok(socket)
     }
 
     /// Starts a request: its span (under the current trace, or a trace of its own), whose `traceparent` the
@@ -2935,5 +3104,26 @@ mod tests {
             let head = RequestHead { method: "GET".into(), path: "/admin/api/host".into(), headers: vec![] };
             assert_eq!(wire.request(&StationAddr::Local, head, vec![]).await.err().unwrap().code, "host");
         });
+    }
+
+    #[test]
+    fn socket_frames_are_taken_whole_however_they_come_apart() {
+        let frames = [SocketFrame::Text("héllo".into()), SocketFrame::Binary(vec![0, 255]), SocketFrame::Close(4001, "done".into())];
+        let bytes: Vec<u8> = frames.iter().flat_map(SocketFrame::encode).collect();
+        assert_eq!(&bytes[..5], &[1, 0, 0, 0, 6], "kind, then the length big-endian");
+        // One byte at a time: each frame once it is all there, nothing before.
+        let (mut buf, mut got) = (Vec::new(), Vec::new());
+        for b in &bytes {
+            buf.push(*b);
+            got.extend(SocketFrame::take(&mut buf));
+        }
+        assert_eq!(got, frames);
+        assert!(buf.is_empty());
+        // All at once, with the start of another after them.
+        let mut buf = [&bytes[..], &[2, 0, 0]].concat();
+        assert_eq!(SocketFrame::take(&mut buf), frames);
+        assert_eq!(buf, vec![2, 0, 0]);
+        // A close with no code says 1005, as a WebSocket does.
+        assert_eq!(SocketFrame::take(&mut vec![8, 0, 0, 0, 0]), vec![SocketFrame::Close(1005, String::new())]);
     }
 }
