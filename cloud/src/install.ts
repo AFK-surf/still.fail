@@ -1,11 +1,12 @@
-// ember station's installer, served at /install.sh: `curl -fsSL <origin>/install.sh | sh -s -- <token>` on the machine
-// that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases bucket,
-// served at /releases/<file>), puts it in ~/.ember/app (the data around it stays), links `ember` into ~/.local/bin,
-// joins the workspace the token is for, and runs the station as a service of the user (launchd), started at login and
-// again if it stops. Claude Code and Codex are the machine's own: it says how to get them when they are missing.
+// The still.fail station's installer, served at /install.sh: `curl -fsSL <origin>/install.sh | sh -s -- <token>` on the
+// machine that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases
+// bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` (and
+// `ember`, its name before the rename) into ~/.local/bin, joins the workspace the token is for, and runs the station as
+// a service of the user (launchd), started at login and again if it stops. Claude Code and Codex are the machine's own:
+// it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
 // (a container, another init) the station is started in the background, and said not to come back after a reboot.
-// Without a token, on a station already in a workspace, it updates the station (`ember update` runs it so). An update
+// Without a token, on a station already in a workspace, it updates the station (`stillfail update` runs it so). An update
 // does not stop the agents when it can help it: with the service's definition unchanged, the running station hands
 // over to the new release in its own process (SIGUSR2, mesh/station/src/main.rs), turns, runtimes and jobs going on;
 // else, or if that fails, the station is first drained (SIGUSR1: no new turns, and it says once none runs), then
@@ -14,14 +15,21 @@
 // update from another shell (an agent's, the station's own) would never hand over. Started from inside the station (an
 // agent's turn, a job), a restart goes on in the background, apart from the caller: the drain waits for the caller's
 // own turn to end, which does not end while it waits. A station already on this release is left as it is.
+// A station installed before the rename (docs/rename-still-fail.md: ~/.ember, the service org.3720.ember.station or
+// ember-station.service, `ember` in ~/.local/bin) is moved, not installed beside: its service is drained and stopped
+// (its definition differs, so it is never handed over), ~/.ember moved to ~/.stillfail with a link left at the old
+// place, the old service's definition removed and the new one started; `ember` is linked to the new command.
 
-/** The installer for an ember cloud at `origin`. */
+/** The installer for a still.fail cloud at `origin`. */
 export function installScript(origin: string): string {
   return SCRIPT.replaceAll("__ORIGIN__", origin);
 }
 
-/** A release's file, as the bucket keeps it: ember-station-<platform>.tar.gz. */
-export const RELEASE_FILE = /^ember-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+/**
+ * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz; ember-station-<platform>.tar.gz is the
+ * last release from before the rename, which installers from before it still get.
+ */
+export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
 
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
@@ -47,15 +55,30 @@ export function releaseType(file: string): string | null {
 const SCRIPT = `#!/bin/sh
 # Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
 #   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token>
-# The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.ember).
+# The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail;
+# a station from before the rename has it in ~/.ember, which is moved there).
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
-data="\${EMBER_DATA:-$HOME/.ember}"
+# The data: $STILLFAIL_DATA, else $EMBER_DATA (a shell or service from before the rename), else ~/.stillfail. ~/.ember,
+# the default before the rename, is the default now too: it is moved to ~/.stillfail.
+old_data="$HOME/.ember"
+data="\${STILLFAIL_DATA:-\${EMBER_DATA:-$HOME/.stillfail}}"
+[ "$data" = "$old_data" ] && data="$HOME/.stillfail"
+# Moved from ~/.ember: only there (or ~/.stillfail an empty directory), not already moved (a link to ~/.stillfail).
+# Until then what runs now is found there.
+migrate=""
+if [ "$data" = "$HOME/.stillfail" ] && { [ -e "$old_data" ] || [ -L "$old_data" ]; } && [ "$(readlink "$old_data" 2>/dev/null)" != "$data" ]; then
+  if { [ ! -e "$data" ] && [ ! -L "$data" ]; } || { [ -d "$data" ] && [ ! -L "$data" ] && [ -z "$(ls -A "$data")" ]; }; then
+    migrate=yes
+  fi
+fi
+cur="$data"
+[ -n "$migrate" ] && cur="$old_data"
 # A station already in a workspace is only updated: no token, and it stays the same station.
-if [ -z "$token" ] && [ ! -f "$data/mesh/cloud.json" ]; then
+if [ -z "$token" ] && [ ! -f "$cur/mesh/cloud.json" ]; then
   echo "用法：curl -fsSL $origin/install.sh | sh -s -- <token>（token 在 still.fail 的「添加 station」里生成）" >&2
-  echo "已经加入 workspace 的 station 更新时不需要 token：ember update" >&2
+  echo "已经加入 workspace 的 station 更新时不需要 token：stillfail update" >&2
   exit 2
 fi
 os=$(uname -s)
@@ -66,18 +89,22 @@ case "$os-$(uname -m)" in
   *) echo "暂时只支持 macOS（Apple 芯片）和 Linux（x64、arm64）的机器，这台是 $(uname -s) $(uname -m)。" >&2; exit 1 ;;
 esac
 app="$data/app"
-label="org.3720.ember.station"
+label="fail.still.station"
 plist="$HOME/Library/LaunchAgents/$label.plist"
 unit_dir="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-unit="ember-station.service"
+unit="stillfail-station.service"
+# The service as it was named before the rename: stopped and removed, the new one in its place.
+old_label="org.3720.ember.station"
+old_plist="$HOME/Library/LaunchAgents/$old_label.plist"
+old_unit="ember-station.service"
 # Whether this Linux has a systemd for the user to run services in (not a container's, not another init).
 user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 echo "下载 still.fail station…"
-curl -fL --progress-bar "$origin/releases/ember-station-$platform.tar.gz" -o "$tmp/ember.tar.gz"
-tar -xzf "$tmp/ember.tar.gz" -C "$tmp"
+curl -fL --progress-bar "$origin/releases/stillfail-station-$platform.tar.gz" -o "$tmp/stillfail.tar.gz"
+tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run). Each directory once: run from
 # the station (whose PATH is this), it would otherwise grow with every update.
@@ -91,12 +118,12 @@ if [ "$os" = Darwin ]; then
 <plist version="1.0">
 <dict>
     <key>Label</key><string>$label</string>
-    <key>ProgramArguments</key><array><string>$app/bin/ember</string><string>start</string></array>
-    <key>EnvironmentVariables</key><dict><key>PATH</key><string>$agent_path</string><key>EMBER_DATA</key><string>$data</string></dict>
+    <key>ProgramArguments</key><array><string>$app/bin/stillfail</string><string>start</string></array>
+    <key>EnvironmentVariables</key><dict><key>PATH</key><string>$agent_path</string><key>STILLFAIL_DATA</key><string>$data</string></dict>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
-    <key>StandardOutPath</key><string>$data/ember.log</string>
-    <key>StandardErrorPath</key><string>$data/ember.log</string>
+    <key>StandardOutPath</key><string>$data/stillfail.log</string>
+    <key>StandardErrorPath</key><string>$data/stillfail.log</string>
 </dict>
 </plist>
 PLIST
@@ -105,18 +132,18 @@ elif user_systemd; then
   # KillMode=process: stopping the service stops the station, not the jobs it runs (the next one takes them up).
   cat > "$tmp/service" <<UNIT
 [Unit]
-Description=ember station
+Description=still.fail station
 After=network-online.target
 
 [Service]
-ExecStart=$app/bin/ember start
+ExecStart=$app/bin/stillfail start
 Environment=PATH=$agent_path
-Environment=EMBER_DATA=$data
+Environment=STILLFAIL_DATA=$data
 Restart=always
 RestartSec=5
 KillMode=process
-StandardOutput=append:$data/ember.log
-StandardError=append:$data/ember.log
+StandardOutput=append:$data/stillfail.log
+StandardError=append:$data/stillfail.log
 
 [Install]
 WantedBy=default.target
@@ -126,14 +153,14 @@ else
 fi
 
 # What the running station says of itself (run/station.json): its pid, when it started, what it can do.
-station_json="$data/run/station.json"
+station_json="$cur/run/station.json"
 said() { sed -n "s/.*\\"$1\\": *\\([0-9]*\\).*/\\1/p" "$station_json" 2>/dev/null | head -1; }
 pid=""
 if [ -z "$token" ] && [ -f "$station_json" ]; then
   pid=$(said pid)
   # Still that station (a pid is reused once its process is gone): signals go to nothing else.
   case "$(ps -p "\${pid:-0}" -o command= 2>/dev/null)" in
-    *ember-station*) ;;
+    *stillfail-station*|*ember-station*) ;;
     *) pid="" ;;
   esac
 fi
@@ -151,7 +178,7 @@ inside_station() {
 }
 
 # Already on this release, and running as its service would: nothing to do.
-if [ -n "$pid" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/ember/VERSION" "$app/VERSION" && same_service; then
+if [ -n "$pid" ] && [ -z "$migrate" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/stillfail/VERSION" "$app/VERSION" && same_service; then
   echo "still.fail station 已经是最新版（$(cut -c1-7 "$app/VERSION")），不用更新。"
   exit 0
 fi
@@ -161,13 +188,28 @@ swap_app() {
   mkdir -p "$data"
   rm -rf "$app.old"
   [ -d "$app" ] && mv "$app" "$app.old"
-  mv "$tmp/ember" "$app"
+  mv "$tmp/stillfail" "$app"
   swapped=yes
+}
+
+# ~/.ember to ~/.stillfail, once the station from before the rename is stopped, with a link left at the old place (the
+# paths written down under it lead there still). Should the move fail, ~/.stillfail is made a link to ~/.ember instead.
+move_data() {
+  [ -n "$migrate" ] || return 0
+  if [ -d "$data" ] && [ ! -L "$data" ]; then rmdir "$data" 2>/dev/null || true; fi
+  if mv "$old_data" "$data" 2>/dev/null; then
+    ln -s "$data" "$old_data" || echo "数据已经搬到 $data，但没能在 $old_data 留下链接。" >&2
+    echo "数据目录从 $old_data 搬到了 $data（旧位置留了一个指向它的链接）。"
+  else
+    ln -s "$old_data" "$data"
+    echo "没能把 $old_data 搬到 $data，改为让 $data 指向它。" >&2
+  fi
+  migrate=""
 }
 
 # Handed over without stopping: the new release goes where the old one was, and the running station execs it.
 handed=""
-if [ -n "$pid" ] && [ -n "$(said handoff)" ] && same_service; then
+if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_service; then
   started=$(said startedAt)
   swap_app
   rm -f "$data/run/handoff-failed"
@@ -196,37 +238,52 @@ fi
 
 # Stopped and started again (when not handed over), and said how it went.
 restart_and_finish() {
-if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${EMBER_NO_DRAIN:-}" ]; then
+if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${STILLFAIL_NO_DRAIN:-\${EMBER_NO_DRAIN:-}}" ]; then
   # Restarted: once no turn runs, so none is cut off (at most 10 minutes; it takes no new ones meanwhile).
-  rm -f "$data/run/drained"
+  rm -f "$cur/run/drained"
   kill -USR1 "$pid"
   echo "等 agent 正在跑的这一轮结束再重启（最多 10 分钟；新消息会排队，重启后处理）…"
   for _ in $(seq 1 630); do
-    { [ -f "$data/run/drained" ] || ! kill -0 "$pid" 2>/dev/null; } && break
+    { [ -f "$cur/run/drained" ] || ! kill -0 "$pid" 2>/dev/null; } && break
     sleep 1
   done
 fi
 
 if [ -z "$handed" ]; then
-# One running at a time: the old one stops before the new one takes its place.
+# One running at a time: the old one stops before the new one takes its place (under either name).
 if [ "$os" = Darwin ]; then
-  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
-  # bootout returns before the service is gone; bootstrapping it again before then fails.
-  for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break; sleep 1; done
+  for l in "$label" "$old_label"; do
+    launchctl bootout "gui/$(id -u)/$l" 2>/dev/null || true
+    # bootout returns before the service is gone; bootstrapping it again before then fails.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$l" >/dev/null 2>&1 || break; sleep 1; done
+  done
+  rm -f "$old_plist"
 else
-  user_systemd && systemctl --user stop "$unit" 2>/dev/null || true
-  [ -f "$data/ember.pid" ] && kill "$(cat "$data/ember.pid")" 2>/dev/null || true
-  rm -f "$data/ember.pid"
+  if user_systemd; then
+    systemctl --user stop "$unit" 2>/dev/null || true
+    if [ -f "$unit_dir/$old_unit" ]; then
+      systemctl --user stop "$old_unit" 2>/dev/null || true
+      systemctl --user disable "$old_unit" >/dev/null 2>&1 || true
+      rm -f "$unit_dir/$old_unit"
+      systemctl --user daemon-reload 2>/dev/null || true
+    fi
+  fi
+  for f in "$cur/stillfail.pid" "$cur/ember.pid"; do
+    [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+    rm -f "$f"
+  done
 fi
+move_data
 [ -n "$swapped" ] || swap_app
 rm -rf "$app.old"
 fi
 mkdir -p "$HOME/.local/bin"
-ln -sf "$app/bin/ember" "$HOME/.local/bin/ember"
+ln -sf "$app/bin/stillfail" "$HOME/.local/bin/stillfail"
+ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
 
 if [ -n "$token" ]; then
   echo "加入 workspace…"
-  "$app/bin/ember" station enroll "$origin" "$token"
+  "$app/bin/stillfail" station enroll "$origin" "$token"
 fi
 
 if [ -n "$handed" ]; then
@@ -250,8 +307,8 @@ else
     # Also with no one logged in (a server): the user's services start with the machine.
     loginctl enable-linger "$(id -un)" 2>/dev/null || lingering="no"
   else
-    nohup env PATH="$agent_path" EMBER_DATA="$data" "$app/bin/ember" start >> "$data/ember.log" 2>&1 &
-    echo $! > "$data/ember.pid"
+    nohup env PATH="$agent_path" STILLFAIL_DATA="$data" "$app/bin/stillfail" start >> "$data/stillfail.log" 2>&1 &
+    echo $! > "$data/stillfail.pid"
     no_service="yes"
   fi
 fi
@@ -262,11 +319,11 @@ if [ "$handed" = yes ]; then
 else
   echo "still.fail station 已安装并在后台运行，几秒后会出现在 workspace 里。"
 fi
-echo "  程序：\${app}（命令 ember 在 ~/.local/bin）"
+echo "  程序：\${app}（命令 stillfail 在 ~/.local/bin，旧名字 ember 也还能用）"
 echo "  数据和日志：$data"
 [ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  服务：systemctl --user status $unit"
 [ -n "\${lingering:-}" ] && echo "  没人登录时也要运行的话，执行：sudo loginctl enable-linger $(id -un)"
-[ -n "\${no_service:-}" ] && echo "  这台机器没有 systemd 用户服务，station 现在在后台运行，但重启后不会自动启动：到时执行 ember start。"
+[ -n "\${no_service:-}" ] && echo "  这台机器没有 systemd 用户服务，station 现在在后台运行，但重启后不会自动启动：到时执行 stillfail start。"
 missing=""
 command -v claude >/dev/null 2>&1 || missing="$missing Claude Code"
 command -v codex >/dev/null 2>&1 || missing="$missing Codex"
@@ -281,12 +338,12 @@ fi
 
 if [ -z "$handed" ] && [ -n "$pid" ] && inside_station; then
   # Apart from the caller (a process group of its own, output to a file): it restarts once the caller's turn is over.
-  mkdir -p "$data/run"
+  mkdir -p "$cur/run"
   echo "这次更新是在 station 里面发起的（agent 的轮次或 job），在后台等正在跑的轮次（包括这一轮）结束后重启 station。"
   echo "  进度看 $data/run/update.log"
   trap - EXIT
   set -m
-  ( trap '' HUP; restart_and_finish; rm -rf "$tmp" ) > "$data/run/update.log" 2>&1 < /dev/null &
+  ( trap '' HUP; restart_and_finish; rm -rf "$tmp" ) > "$cur/run/update.log" 2>&1 < /dev/null &
   exit 0
 fi
 restart_and_finish
