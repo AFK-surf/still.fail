@@ -50,6 +50,8 @@ const enter = keyframes({
   to: { opacity: 1, transform: "none" },
 });
 const fadeUp = keyframes({ from: { opacity: 0, transform: "translateY(16px)" }, to: { opacity: 1, transform: "none" } });
+const fadeIn = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
+const grow = keyframes({ from: { transform: "scaleY(0)" }, to: { transform: "none" } });
 const sway = keyframes({ "0%,100%": { transform: "translateX(-50%) rotate(-4deg)" }, "50%": { transform: "translateX(-50%) rotate(4deg)" } });
 
 /** The grid over a section, fading out from where its light comes. */
@@ -144,34 +146,29 @@ export const titleDomain = style({
     [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: lit,
   },
 });
-// ---- Exploring how Chinese goes with the title: ?zh=a|b|c picks one (data-zh on the root); none shows without it. ----
-const LIT_HOST = (d: string) => d === "still.fail" ? `:root:not([data-host="youdid.wtf"])` : `:root[data-host="youdid.wtf"]`;
-export const titleLine = style({ display: "inline-flex", alignItems: "flex-start" });
-/** a: each line's Chinese standing upright beside it, lit or dim with it. */
-export const zhSide = style({
-  display: "none", writingMode: "vertical-rl", fontSize: ".13em", letterSpacing: ".12em", fontWeight: "700", lineHeight: "1",
-  margin: ".18em 0 0 .12em", color: "color-mix(in srgb, var(--s-title) 22%, var(--s-bg))",
+/**
+ * A domain's dot and what the domain says in Chinese, led off it by a line: up from the first line's dot, down from the
+ * second's. Lit with its line. Its own colour, not the line's text clip, which ends at the line's box.
+ */
+export const dot = style({ position: "relative" });
+export const dotNote = style({
+  position: "absolute", left: "50%", top: ".78em", display: "flex", flexDirection: "column", alignItems: "center",
+  transform: "translateX(-50%)", color: "color-mix(in srgb, var(--s-title) 30%, var(--s-bg))", WebkitTextFillColor: "currentColor",
+  pointerEvents: "none", animation: `${fadeIn} .6s .7s ${vars.easeOut} both`,
   selectors: {
-    [`:root[data-zh="a"] &`]: { display: "block" },
-    [`${LIT_HOST("still.fail")} &[data-for="still.fail"], ${LIT_HOST("youdid.wtf")} &[data-for="youdid.wtf"]`]: { color: EMBER },
+    "&[data-up]": { top: "auto", bottom: ".3em", flexDirection: "column-reverse" },
+    [`:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"] &, :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"] &`]: { color: EMBER },
   },
 });
-/** b: one line under the title, what the lit domain says in Chinese. */
-export const zhSub = style({
-  display: "none", margin: "36px 0 0", fontSize: "clamp(22px, 2.6vw, 36px)", fontWeight: "600", letterSpacing: ".04em", color: "var(--s-fg)",
-  animation: `${fadeUp} .9s .16s ${vars.easeOut} both`,
-  selectors: { [`:root[data-zh="b"] &`]: { display: "block" } },
+export const dotLine = style({
+  width: "2px", height: ".62em", background: "currentColor", opacity: ".8", transformOrigin: "50% 0",
+  animation: `${grow} .6s .7s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
+  selectors: { [`${dotNote}[data-up] &`]: { transformOrigin: "50% 100%" } },
 });
-/** c: a chat bubble above the title, the user saying it. */
-export const zhBubble = style({
-  display: "none", width: "fit-content", margin: "0 auto 28px", padding: "12px 22px", borderRadius: "22px 22px 22px 6px",
-  fontSize: "clamp(18px, 2vw, 26px)", fontWeight: "600", color: "#fff", background: EMBER,
-  boxShadow: `0 10px 40px color-mix(in srgb, ${EMBER} 35%, transparent)`, animation: `${fadeUp} .9s ${vars.easeOut} both`,
-  selectors: { [`:root[data-zh="c"] &`]: { display: "block" } },
+export const dotSay = style({
+  marginTop: "12px", fontSize: "max(.11em, 14px)", fontWeight: "700", letterSpacing: ".08em", lineHeight: "1", whiteSpace: "nowrap",
+  selectors: { [`${dotNote}[data-up] &`]: { marginTop: "0", marginBottom: "12px" } },
 });
-globalStyle(`${zhSub} > span, ${zhBubble} > span`, { display: "none" });
-globalStyle(`${LIT_HOST("still.fail")} ${zhSub} > [data-for="still.fail"], ${LIT_HOST("youdid.wtf")} ${zhSub} > [data-for="youdid.wtf"]`, { display: "inline" });
-globalStyle(`${LIT_HOST("still.fail")} ${zhBubble} > [data-for="still.fail"], ${LIT_HOST("youdid.wtf")} ${zhBubble} > [data-for="youdid.wtf"]`, { display: "inline" });
 
 export const heroActions = style({ marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
 

@@ -16,7 +16,7 @@
 <script>try{var t=localStorage.getItem("ember.site.theme");if(t!=="system")document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <!-- Which of the site's domains the page was opened on: the title lights that one (web/src/site/Site.tsx). A preview
      elsewhere can ask for one with ?host=youdid.wtf. -->
-<script>if(/(^|\.)youdid\.wtf$/.test(location.hostname)||new URLSearchParams(location.search).get("host")==="youdid.wtf")document.documentElement.dataset.host="youdid.wtf";var z=new URLSearchParams(location.search).get("zh");if(z)document.documentElement.dataset.zh=z</script>
+<script>if(/(^|\.)youdid\.wtf$/.test(location.hostname)||new URLSearchParams(location.search).get("host")==="youdid.wtf")document.documentElement.dataset.host="youdid.wtf"</script>
 <meta name="color-scheme" content="light dark">
 </head>
 <body>
