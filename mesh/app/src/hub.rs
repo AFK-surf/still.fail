@@ -1420,17 +1420,24 @@ fn state_arg(value: Option<&Value>) -> Result<Option<DeclaredState>> {
 }
 
 /// A post with files to a Slack thread (which takes none from here): what Slack is sent, the text with a link to the
-/// session in ember where they show; and what ember keeps, the text with each HTML file not yet placed in it placed on
-/// a line of its own (drawn there as a visualization, as the agent would place it in an ember chat).
+/// session in ember that opens its first figure (else its first file) on its own; and what ember keeps, the text with
+/// each HTML file not yet placed in it placed on a line of its own (drawn there as a visualization, as the agent would
+/// place it in an ember chat).
 fn slack_with_files(text: &str, files: &[Attachment], link: &str) -> (String, String) {
-    let what = if files.iter().any(|f| f.name.to_lowercase().ends_with(".html") || f.name.to_lowercase().ends_with(".htm")) {
-        "在 ember 里查看图表和附件"
-    } else {
-        "在 ember 里查看附件"
+    let html = |f: &&Attachment| f.name.to_lowercase().ends_with(".html") || f.name.to_lowercase().ends_with(".htm");
+    let figure = files.iter().find(html);
+    let what = match (figure, files.len()) {
+        (Some(_), 1) => "在 ember 里查看图表",
+        (Some(_), _) => "在 ember 里查看图表和附件",
+        (None, _) => "在 ember 里查看附件",
+    };
+    let link = match figure.or(files.first()) {
+        Some(f) => format!("{link}?file={}", crate::server::encode(&f.name)),
+        None => link.to_string(),
     };
     let posted = if text.is_empty() { format!("<{link}|{what}>") } else { format!("{text}\n\n<{link}|{what}>") };
     let mut kept = text.to_string();
-    for f in files.iter().filter(|f| f.name.to_lowercase().ends_with(".html") || f.name.to_lowercase().ends_with(".htm")) {
+    for f in files.iter().filter(html) {
         if !kept.contains(&format!("]({})", f.name)) {
             kept = if kept.is_empty() { format!("[{0}]({0})", f.name) } else { format!("{kept}\n\n[{0}]({0})", f.name) };
         }

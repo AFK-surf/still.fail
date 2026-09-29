@@ -7,6 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { ChevronLeft, ChevronRight, Close, Download, Minus, Plus } from "./icons.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
+import { isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
@@ -681,7 +682,8 @@ function TextViewer({ blob, kind, language, name, setControls }: { blob: Blob; k
   let content: ReactNode;
   if (kind === "html" && !source) {
     // Its scripts run, but in an origin of its own: nothing of ember's is reachable from it.
-    content = <iframe className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={text} title={name} />;
+    // A fragment an agent wrote to be drawn in a message (Viz.tsx) is shown the same way, in ember's stylesheet.
+    content = <iframe className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={isFragment(text) ? vizDocument(text) : text} title={name} />;
     return <div className={`${css2.fpPage} ${css2.fpPageFrame}`}>{content}</div>;
   }
   if (kind === "markdown" && !source) content = <div className={`${conversationCss.markdown} ${css2.fpMarkdown}`}><Prose>{text}</Prose></div>;

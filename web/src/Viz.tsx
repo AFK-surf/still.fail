@@ -64,6 +64,16 @@ function documentOf(html: string, state: unknown): string {
     + `<script>${bridge}</script></head><body>${html}</body></html>`;
 }
 
+/** Whether an HTML file is a fragment (as the ember-viz skill has agents write them), to be drawn in the stylesheet. */
+export function isFragment(html: string): boolean {
+  return !/<!doctype|<html[\s>]/i.test(html.slice(0, 2048));
+}
+
+/** A fragment's document as a frame on its own shows it (a preview of the file): the stylesheet, the theme now, no state. */
+export function vizDocument(html: string): string {
+  return documentOf(html, null);
+}
+
 /** Calls back when the page's theme changes: its own choice (data-theme) or the system's. */
 function useThemeChange(onChange: () => void) {
   const latest = useRef(onChange);

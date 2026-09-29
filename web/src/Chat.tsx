@@ -5,6 +5,7 @@
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
@@ -71,6 +72,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   latest.current = { ownerOf, onOpenHistory, images };
   const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images() }));
   useShortcut("chat.latest", () => { list.current?.dispatchEvent(new Event("to-bottom")); });
+  const askedFile = useAskedFile(rows.messages, ownerOf);
   // Selecting text inside one message offers to quote it.
   const quoting = useSelectionQuote(list, (q) => {
     const quote = { ...q, comment: "", id: `${Date.now()}` };
@@ -106,6 +108,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       </Gallery.Provider>
       </div>
       {quoting.pop}
+      {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
@@ -637,6 +640,26 @@ function VizFile({ sessionKey, file }: { sessionKey: string; file: Attachment })
       <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
     </>
   );
+}
+
+/**
+ * A link that names one of the chat's files (`?file=<name>`: what a post to Slack attached, which stays here) opens it
+ * on its own, over the chat; the latest one of that name. Closing it leaves the chat.
+ */
+export function useAskedFile(messages: ChatMessage[], owner: (file: Attachment) => string | null): ReactNode {
+  const [search, setSearch] = useSearchParams();
+  const asked = search.get("file");
+  const found = useMemo(() => {
+    if (!asked) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const file = messages[i]!.attachments?.find((f) => f.name === asked);
+      if (file) return file;
+    }
+    return null;
+  }, [asked, messages]);
+  const key = found ? owner(found) : null;
+  if (!found || key === null) return null;
+  return <FilePreview open onClose={() => setSearch((now) => { now.delete("file"); return now; }, { replace: true })} sessionKey={key} file={found} />;
 }
 
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */

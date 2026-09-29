@@ -9,7 +9,7 @@ import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
-import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { PENDING } from "../lastChat.ts";
@@ -152,6 +152,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
   // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
   const quoting = useSelectionQuote(list, stable.quote);
   const hold = useHold(list, rows.messages, stable.quote);
+  const askedFile = useAskedFile(rows.messages, (f) => ownerIn(view, f));
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
   // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
@@ -176,6 +177,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
   return (
     <>
       {quoting.pop}
+      {askedFile}
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
