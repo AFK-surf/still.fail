@@ -13,6 +13,7 @@ import { readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
+import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { LocalStation } from "./station";
 
 const CLOUD_ORIGIN = (process.env.EMBER_CLOUD_ORIGIN ?? "https://ember.3720.org").replace(/\/+$/, "");
@@ -76,7 +77,7 @@ ipcMain.on("core:open", (event, id: unknown) => {
 ipcMain.on("app:cloud-origin", (event) => { event.returnValue = CLOUD_ORIGIN; });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
-interface OwnLink { port: MessagePortMain; next: number; waiting: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }> }
+interface OwnLink { port: MessagePortMain; next: number; waiting: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; onProgress?: ((value: unknown) => void) | undefined }> }
 let own: OwnLink | null = null;
 
 function dropOwnLink(reason: string): void {
@@ -86,15 +87,20 @@ function dropOwnLink(reason: string): void {
   own = null;
 }
 
-function coreCall(name: string, params: unknown): Promise<unknown> {
+/** A call of the core's; `onProgress` hears the values it sends before its answer, `signal` cancels it. */
+function coreCall(name: string, params: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
   if (!own) {
     const { port1, port2 } = new MessageChannelMain();
     coreProcess().postMessage(null, [port1]);
     const link: OwnLink = { port: port2, next: 1, waiting: new Map() };
     port2.on("message", ({ data }) => {
-      const message = JSON.parse(String(data)) as { id?: number; ok?: unknown; error?: { message?: string } };
+      const message = JSON.parse(String(data)) as { id?: number; ok?: unknown; value?: unknown; error?: { message?: string } };
       const waiting = message.id === undefined ? undefined : link.waiting.get(message.id);
       if (!waiting) return;
+      if ("value" in message && !message.error) {
+        waiting.onProgress?.(message.value);
+        return;
+      }
       link.waiting.delete(message.id!);
       if (message.error) waiting.reject(new Error(message.error.message ?? "调用失败"));
       else waiting.resolve(message.ok);
@@ -105,8 +111,9 @@ function coreCall(name: string, params: unknown): Promise<unknown> {
   const link = own;
   const id = link.next++;
   return new Promise((resolve, reject) => {
-    link.waiting.set(id, { resolve, reject });
+    link.waiting.set(id, { resolve, reject, onProgress });
     link.port.postMessage({ id, call: name, params });
+    signal?.addEventListener("abort", () => { if (link.waiting.has(id)) link.port.postMessage({ id, cancel: true }); }, { once: true });
   });
 }
 
@@ -188,8 +195,99 @@ const FRAME = `<!doctype html>
 <body></body>
 `;
 
+/** The service's pages' script for their WebSockets (previewSocket.ts), over their requests here. */
+const SOCKET = socketScript(FETCH_LINK);
+
 function plain(status: number, text: string): Response {
   return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
+}
+
+/**
+ * A request to the service as its answer comes (station.preview with `stream`): its status and headers, then its body,
+ * which stops the request at the station when it is cancelled (its page gave it up) or `signal` aborts.
+ */
+function previewStream(params: Record<string, unknown>, signal: AbortSignal): Promise<{ status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> }> {
+  const stop = new AbortController();
+  signal.addEventListener("abort", () => stop.abort(), { once: true });
+  return new Promise((resolve, reject) => {
+    let body!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({ start(c) { body = c; }, cancel() { stop.abort(); } });
+    let headed = false;
+    coreCall("station.preview", { ...params, stream: true }, (value) => {
+      const v = value as { head?: { status: number; headers: [string, string][] }; chunk?: string };
+      if (v.head && !headed) {
+        headed = true;
+        resolve({ status: v.head.status, headers: v.head.headers, body: stream });
+      } else if (typeof v.chunk === "string") {
+        try { body.enqueue(new Uint8Array(Buffer.from(v.chunk, "base64"))); } catch { /* cancelled */ }
+      }
+    }, stop.signal).then(
+      () => { try { body.close(); } catch { /* cancelled */ } },
+      (error: unknown) => {
+        if (!headed) return reject(error instanceof Error ? error : new Error(String(error)));
+        try { body.error(error); } catch { /* cancelled */ }
+      },
+    );
+  });
+}
+
+/** A frame of a socket's stream to its page (previewSocket.ts, FETCH_LINK): kind, length, payload. */
+function socketFrame(kind: number, payload: Uint8Array): Uint8Array {
+  const out = new Uint8Array(5 + payload.length);
+  out[0] = kind;
+  new DataView(out.buffer).setUint32(1, payload.length);
+  out.set(payload, 5);
+  return out;
+}
+
+/**
+ * A WebSocket of the service's page, over its requests here (previewSocket.ts, FETCH_LINK): GET opens it
+ * (preview.socket) and streams what happens on it, POST sends a message (preview.socket.send).
+ */
+async function previewSocket(request: Request, url: URL, station: string, port: number, sid: string): Promise<Response> {
+  if (request.method === "POST") {
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    const kind = bytes[0];
+    const payload = Buffer.from(bytes.subarray(5));
+    const message = kind === 1 ? { text: payload.toString("utf8") }
+      : kind === 2 ? { binary: payload.toString("base64") }
+      : kind === 8 ? { close: [payload.length >= 2 ? payload.readUInt16BE(0) : 1000, payload.subarray(2).toString("utf8")] }
+      : null;
+    if (!message) return plain(400, "看不懂这条消息");
+    try {
+      await coreCall("preview.socket.send", { socket: sid, ...message });
+      return new Response(null, { status: 204 });
+    } catch (error) {
+      return plain(410, error instanceof Error ? error.message : String(error));
+    }
+  }
+  const stop = new AbortController();
+  request.signal?.addEventListener("abort", () => stop.abort(), { once: true });
+  const protocols = (url.searchParams.get("protocols") ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+  const utf8 = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(out) {
+      const put = (frame: Uint8Array) => { try { out.enqueue(frame); } catch { /* cancelled */ } };
+      const close = (code: number, reason: string) => {
+        put(socketFrame(8, new Uint8Array([code >> 8, code & 255, ...utf8.encode(reason)])));
+        try { out.close(); } catch { /* cancelled */ }
+      };
+      coreCall("preview.socket", {
+        station, port, path: url.searchParams.get("path") ?? "/", socket: sid,
+        headers: protocols.length ? [["sec-websocket-protocol", protocols.join(", ")]] : [],
+      }, (value) => {
+        const v = value as { open?: { protocol: string }; text?: string; binary?: string };
+        if (v.open) put(socketFrame(0, utf8.encode(v.open.protocol)));
+        else if (typeof v.text === "string") put(socketFrame(1, utf8.encode(v.text)));
+        else if (typeof v.binary === "string") put(socketFrame(2, new Uint8Array(Buffer.from(v.binary, "base64"))));
+      }, stop.signal).then(
+        (closed) => { const { code, reason } = closed as { code: number; reason: string }; close(code, reason); },
+        () => close(1006, ""),
+      );
+    },
+    cancel() { stop.abort(); },
+  });
+  return new Response(body, { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } });
 }
 
 async function preview(request: Request): Promise<Response> {
@@ -199,6 +297,9 @@ async function preview(request: Request): Promise<Response> {
   if (!host || !station) return plain(404, "预览已经失效：在 ember 里重新打开它。");
   if (url.pathname === "/_ember/frame") return new Response(FRAME, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   if (url.pathname === "/_ember/annotate.js") return new Response(await readFile(join(__dirname, "annotate.js")).catch(() => ""), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
+  if (url.pathname === "/_ember/socket.js") return new Response(SOCKET, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
+  const socket = /^\/_ember\/socket\/([0-9a-f-]{36})$/.exec(url.pathname);
+  if (socket) return previewSocket(request, url, station, Number(host[1]), socket[1]!);
   const body = request.method === "GET" || request.method === "HEAD" ? "" : Buffer.from(await request.arrayBuffer()).toString("base64");
   const headers: [string, string][] = [];
   request.headers.forEach((value, name) => headers.push([name, value]));
@@ -209,12 +310,15 @@ async function preview(request: Request): Promise<Response> {
     // A custom scheme's requests may come without Sec-Fetch-Dest: a page is then what asks for HTML.
     const dest = request.headers.get("sec-fetch-dest");
     const page = dest ? ["document", "iframe"].includes(dest) : (request.headers.get("accept") ?? "").includes("text/html");
+    // The answer as it comes (an event stream, a long poll), stopped at the station when the page gives it up.
+    const signal = request.signal ?? new AbortController().signal;
     let path = url.pathname + url.search;
-    let answer: { status: number; headers: [string, string][]; body: string } | null = null;
+    let answer: { status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> } | null = null;
     for (let hops = 0; hops < 5 && !answer; hops++) {
-      const got = await coreCall("station.preview", { station, port: Number(host[1]), method: request.method, path, headers, body }) as { status: number; headers: [string, string][]; body: string };
+      const got = await previewStream({ station, port: Number(host[1]), method: request.method, path, headers, body }, signal);
       const location = got.status >= 300 && got.status < 400 ? got.headers.find(([k]) => k.toLowerCase() === "location")?.[1] : undefined;
       if (!location) { answer = got; break; }
+      void got.body.cancel();
       const next = new URL(location, `http://localhost:${host[1]}${path}`);
       if (next.hostname !== "localhost" && next.hostname !== "127.0.0.1") return plain(502, `这个网页跳到了别的地址：${location}`);
       path = next.pathname + next.search;
@@ -222,7 +326,13 @@ async function preview(request: Request): Promise<Response> {
     }
     if (!answer) return plain(508, "跳转太多次了");
     const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(answer.status);
-    return new Response(empty ? null : Buffer.from(answer.body, "base64"), { status: answer.status, headers: answer.headers });
+    if (empty) {
+      void answer.body.cancel();
+      return new Response(null, { status: answer.status, headers: answer.headers });
+    }
+    // A page of the service gets its WebSockets through here (previewSocket.ts).
+    const html = (answer.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1] ?? "").startsWith("text/html");
+    return new Response(page && html ? withSocketTag(answer.body) : answer.body, { status: answer.status, headers: answer.headers });
   } catch (error) {
     return plain(502, `没能从 station 取到：${error instanceof Error ? error.message : String(error)}`);
   }

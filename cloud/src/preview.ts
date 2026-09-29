@@ -23,6 +23,8 @@
 // Its limits: cookies the service sets are not sent back (the service
 // worker's requests carry none).
 
+import { socketScript, socketTagAt } from "./previewSocket.ts";
+
 const FRAME = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -183,27 +185,16 @@ function plain(status, text) {
   return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
 // What goes into a page of the service, first in its <head>: its WebSockets through ember (/_ember/socket.js).
+// Where it goes: previewSocket.ts's, as its source (types already stripped by whatever loaded this module).
 const SOCKETS = new TextEncoder().encode('<script src="/_ember/socket.js"></script>');
-// Where in a page's first bytes the script goes: after the <head> tag, else after <html>, else after the doctype, else
-// first. Tags are ASCII, so the bytes are searched as they are, whatever the page's encoding.
-function placeIn(bytes) {
-  const text = String.fromCharCode(...bytes.subarray(0, 4096)).toLowerCase();
-  for (const tag of [/<head[\\s>]/, /<html[\\s>]/, /<!doctype[\\s>]/]) {
-    const at = text.search(tag);
-    if (at >= 0) {
-      const end = text.indexOf(">", at);
-      if (end >= 0) return end + 1;
-    }
-  }
-  return 0;
-}
+${socketTagAt.toString()}
 function withSockets(body) {
   let placed = false;
   return body.pipeThrough(new TransformStream({
     transform(chunk, out) {
       if (placed) return out.enqueue(chunk);
       placed = true;
-      const at = placeIn(chunk);
+      const at = socketTagAt(chunk);
       out.enqueue(chunk.subarray(0, at));
       out.enqueue(SOCKETS);
       out.enqueue(chunk.subarray(at));
@@ -257,226 +248,17 @@ async function relay(event, url) {
 }
 `;
 
-// First in the code of a worker a service's page makes (see SOCKET): its WebSockets to the preview's own host go
-// through the page, over the port the page hands it first (a message it never sees).
-const WORKER_SOCKET = `(() => {
-  const Native = self.WebSocket;
-  let relay = null;
-  const queued = [];
-  const sockets = new Map();
-  let next = 0;
-  const post = (message) => (relay ? relay.postMessage(message) : queued.push(message));
-  const take = (event) => {
-    if (!(event.data && event.data.emberSockets instanceof MessagePort)) return;
-    event.stopImmediatePropagation();
-    relay = event.data.emberSockets;
-    relay.onmessage = ({ data }) => sockets.get(data.id)?._on(data);
-    for (const message of queued.splice(0)) relay.postMessage(message);
-  };
-  if (typeof SharedWorkerGlobalScope !== "undefined" && self instanceof SharedWorkerGlobalScope) {
-    self.addEventListener("connect", (event) => {
-      const port = event.ports[0];
-      port.addEventListener("message", take);
-      port.start();
-    });
-  } else {
-    self.addEventListener("message", take);
-  }
-  class WorkerSocket extends EventTarget {
-    static CONNECTING = 0;
-    static OPEN = 1;
-    static CLOSING = 2;
-    static CLOSED = 3;
-    constructor(url, protocols) {
-      super();
-      // A blob: worker's own location has no host: the page's origin is its.
-      const here = new URL(location.origin);
-      const to = new URL(url, location.protocol === "blob:" ? here : location.href);
-      if (to.host !== here.host) return new Native(url, protocols);
-      this.url = to.href;
-      this.readyState = 0;
-      this.protocol = "";
-      this.extensions = "";
-      this.bufferedAmount = 0;
-      this.binaryType = "blob";
-      this.onopen = this.onmessage = this.onerror = this.onclose = null;
-      this._id = ++next;
-      sockets.set(this._id, this);
-      post({ open: this._id, url: to.href, protocols: protocols === undefined ? [] : [].concat(protocols).map(String) });
-    }
-    _on(data) {
-      if (data.opened && this.readyState === 0) {
-        this.readyState = 1;
-        this.protocol = data.protocol || "";
-        this._fire(new Event("open"));
-      } else if (data.message !== undefined && this.readyState === 1) {
-        const got = typeof data.message === "string" || this.binaryType === "arraybuffer" ? data.message : new Blob([data.message]);
-        this._fire(new MessageEvent("message", { data: got }));
-      } else if (data.close && this.readyState !== 3) {
-        this.readyState = 3;
-        sockets.delete(this._id);
-        if (data.failed) this._fire(new Event("error"));
-        this._fire(new CloseEvent("close", { code: data.code, reason: data.reason, wasClean: !data.failed }));
-      }
-    }
-    _fire(event) {
-      const handler = this["on" + event.type];
-      if (typeof handler === "function") handler.call(this, event);
-      this.dispatchEvent(event);
-    }
-    send(data) {
-      if (this.readyState === 0) throw new DOMException("WebSocket 还没连上", "InvalidStateError");
-      if (this.readyState === 1) post({ id: this._id, send: data });
-    }
-    close(code, reason) {
-      if (this.readyState >= 2) return;
-      this.readyState = 2;
-      post({ id: this._id, close: [code ?? 1000, reason ?? ""] });
-    }
-  }
-  self.WebSocket = WorkerSocket;
-})();
-`;
-
-// A service's page, before any of its own scripts (the service worker puts it first in the page): its WebSockets to
-// the preview's own host (a dev server's live reload) go through the frame, the client and the station to the
-// service's port, like its requests; any other stays the browser's own. Without the frame (the page opened alone) it
-// changes nothing.
-const SOCKET = `(() => {
-  let frame = null;
+// A service's page, before any of its own scripts (the service worker puts it first in the page): its WebSockets go
+// through the frame (previewSocket.ts). Without the frame (the page opened alone) it changes nothing.
+const SOCKET = socketScript(`(() => {
   try {
     for (let w = window; w !== w.parent; ) {
       w = w.parent;
-      if (w.location.pathname === "/_ember/frame" && typeof w.emberPreviewSocket === "function") { frame = w; break; }
+      if (w.location.pathname === "/_ember/frame" && typeof w.emberPreviewSocket === "function") return w.emberPreviewSocket;
     }
   } catch {}
-  if (!frame) return;
-  const Native = window.WebSocket;
-  class PreviewSocket extends EventTarget {
-    static CONNECTING = 0;
-    static OPEN = 1;
-    static CLOSING = 2;
-    static CLOSED = 3;
-    constructor(url, protocols) {
-      super();
-      const to = new URL(url, location.href);
-      if (to.protocol === "http:" || to.protocol === "https:") to.protocol = to.protocol === "http:" ? "ws:" : "wss:";
-      if (to.protocol !== "ws:" && to.protocol !== "wss:") throw new DOMException("不是 WebSocket 地址：" + url, "SyntaxError");
-      if (to.host !== location.host) return new Native(url, protocols);
-      this.url = to.href;
-      this.readyState = 0;
-      this.protocol = "";
-      this.extensions = "";
-      this.bufferedAmount = 0;
-      this.binaryType = "blob";
-      this.onopen = this.onmessage = this.onerror = this.onclose = null;
-      this._sending = Promise.resolve();
-      const asked = protocols === undefined ? [] : [].concat(protocols).map(String);
-      this._link = frame.emberPreviewSocket(to.pathname + to.search, asked, {
-        open: (protocol) => {
-          if (this.readyState !== 0) return;
-          this.readyState = 1;
-          this.protocol = protocol;
-          this._fire(new Event("open"));
-        },
-        message: (data) => {
-          if (this.readyState !== 1) return;
-          let got = data;
-          if (typeof got !== "string") {
-            const bytes = new Uint8Array(got.length);
-            bytes.set(got);
-            got = this.binaryType === "arraybuffer" ? bytes.buffer : new Blob([bytes]);
-          }
-          this._fire(new MessageEvent("message", { data: got, origin: location.origin }));
-        },
-        close: (code, reason, failed) => {
-          if (this.readyState === 3) return;
-          this.readyState = 3;
-          if (failed) this._fire(new Event("error"));
-          this._fire(new CloseEvent("close", { code, reason, wasClean: !failed }));
-        },
-      });
-    }
-    _fire(event) {
-      const handler = this["on" + event.type];
-      if (typeof handler === "function") handler.call(this, event);
-      this.dispatchEvent(event);
-    }
-    send(data) {
-      if (this.readyState === 0) throw new DOMException("WebSocket 还没连上", "InvalidStateError");
-      if (this.readyState !== 1) return;
-      // In the order sent, a Blob read first.
-      this._sending = this._sending.then(async () => {
-        if (this.readyState !== 1) return;
-        if (typeof data === "string") return this._link.send(data);
-        const buffer = data instanceof Blob ? await data.arrayBuffer() : ArrayBuffer.isView(data) ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) : data.slice(0);
-        this._link.send(new Uint8Array(buffer));
-      });
-    }
-    close(code, reason) {
-      if (this.readyState >= 2) return;
-      this.readyState = 2;
-      this._link.close(code ?? 1000, reason ?? "");
-    }
-  }
-  window.WebSocket = PreviewSocket;
-
-  // Workers the page makes from its own code (a blob: URL: a dev server's check that it is back up, in a shared
-  // worker) get the same WebSocket: WORKER_SOCKET goes first in their code, and each is given a port to open its
-  // sockets here through. A worker from a script of the service's (not blob:) keeps the browser's own.
-  const shim = ${JSON.stringify(WORKER_SOCKET)};
-  const relay = (port) => {
-    const open = new Map();
-    port.onmessage = ({ data }) => {
-      if (data.open !== undefined) {
-        let socket;
-        try { socket = new PreviewSocket(data.url, data.protocols); } catch { return port.postMessage({ id: data.open, close: true, code: 1006, reason: "", failed: true }); }
-        socket.binaryType = "arraybuffer";
-        open.set(data.open, socket);
-        socket.onopen = () => port.postMessage({ id: data.open, opened: true, protocol: socket.protocol });
-        socket.onmessage = (event) => port.postMessage({ id: data.open, message: event.data });
-        socket.onclose = (event) => {
-          open.delete(data.open);
-          port.postMessage({ id: data.open, close: true, code: event.code, reason: event.reason, failed: !event.wasClean });
-        };
-      } else if (data.send !== undefined) {
-        open.get(data.id)?.send(data.send);
-      } else if (data.close) {
-        open.get(data.id)?.close(data.close[0], data.close[1]);
-      }
-    };
-  };
-  const withShim = (code) => {
-    // A "use strict" directive only counts first: it stays first.
-    const strict = /^\\s*(["'])use strict\\1;?/.exec(code);
-    return strict ? strict[0] + "\\n" + shim + code.slice(strict[0].length) : shim + code;
-  };
-  const wrap = (Native, shared) => {
-    const Wrapped = function (url, options) {
-      const href = String(url);
-      if (!new.target || !href.startsWith("blob:")) return new Native(url, options);
-      let code;
-      try {
-        const read = new XMLHttpRequest();
-        read.open("GET", href, false);
-        read.send();
-        code = read.responseText;
-      } catch {
-        return new Native(url, options);
-      }
-      const worker = new Native(URL.createObjectURL(new Blob([withShim(code)], { type: "text/javascript" })), options);
-      const { port1, port2 } = new MessageChannel();
-      relay(port1);
-      (shared ? worker.port : worker).postMessage({ emberSockets: port2 }, [port2]);
-      return worker;
-    };
-    Wrapped.prototype = Native.prototype;
-    return Wrapped;
-  };
-  if (window.Worker) window.Worker = wrap(window.Worker, false);
-  if (window.SharedWorker) window.SharedWorker = wrap(window.SharedWorker, true);
-})();
-`;
+  return null;
+})()`);
 
 /** The preview host's files, by path under its assets directory. */
 export function previewFiles(annotate = ""): Record<string, string> {
