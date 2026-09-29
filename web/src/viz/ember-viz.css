@@ -1,5 +1,5 @@
 /*
- * The stylesheet of an inline visualization (Viz.tsx): an ```html block of a message, drawn in a sandboxed frame.
+ * The stylesheet of an inline visualization (Viz.tsx): an HTML file placed in a message, drawn in a sandboxed frame.
  * Two layers, after Codex's Visualize: the page hands in ember's own tokens as --e-* (its palette, type, corners, for
  * the theme it shows), and what an agent writes against is the contract below — the variable and class names of
  * Codex's visualize.css, so an agent that knows one knows the other. Keep it in step with skills/ember-viz.md.
@@ -50,8 +50,8 @@
   --chart-5: var(--yellow);
   --chart-6: var(--red);
 
-  --font-sans: var(--e-font-body, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif);
-  --font-mono: var(--e-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-size-base: 14px;
   --font-size-small: 12px;
   --font-size-h1: 22px;

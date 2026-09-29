@@ -1,9 +1,36 @@
 // Runs first inside an inline visualization's frame (Viz.tsx). The frame is sandboxed without its page's origin, so
 // the two only talk by messages: the frame says how tall its content is, the page says when its theme changes (the
 // --e-* tokens ember-viz.css maps), and the frame draws the tooltip of any element with data-tooltip.
+//
+// The widget's API is window.ember, named as Codex's Visualize names window.openai (which it also answers to, for a
+// widget written for that): widgetState and setWidgetState keep what the widget wants back when it is shown again,
+// sendFollowUpMessage puts words in the chat's composer for the person to send — only on their click or key.
 (() => {
   const root = document.documentElement;
   const post = (message) => parent.postMessage({ emberViz: true, ...message }, "*");
+
+  const given = document.getElementById("ember-viz-state");
+  let state = JSON.parse(given?.textContent || "{}").widgetState ?? null;
+  given?.remove();
+  const api = {
+    get widgetState() { return state; },
+    setWidgetState(next) {
+      const json = JSON.stringify(next ?? null);
+      if (json.length > 16 * 1024) return Promise.reject(new Error("widgetState is over 16 KiB"));
+      state = JSON.parse(json);
+      post({ type: "state", state });
+      return Promise.resolve();
+    },
+    sendFollowUpMessage({ prompt } = {}) {
+      if (typeof prompt !== "string" || !prompt.trim()) return Promise.reject(new Error("sendFollowUpMessage needs a prompt"));
+      // Only as the person acts: a widget cannot write to the chat by itself.
+      if (navigator.userActivation && !navigator.userActivation.isActive) return Promise.reject(new Error("sendFollowUpMessage needs a click or key press"));
+      post({ type: "followup", prompt });
+      return Promise.resolve();
+    },
+  };
+  Object.defineProperty(window, "ember", { value: api });
+  Object.defineProperty(window, "openai", { value: api });
 
   let last = 0;
   const sendHeight = () => {

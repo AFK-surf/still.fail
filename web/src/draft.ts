@@ -2,7 +2,7 @@
 // its text, the passages it quotes, and files on their way to the station. Each chat has its own (a `key`): moving to
 // another chat, or leaving the page, puts it away, and coming back brings it back. Sending empties it at once (the
 // message waits in the chat's outbox until the station has it); if the chat it goes to cannot be made, it comes back.
-import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
+import { createContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { track } from "./telemetry.ts";
 import { expandRefs } from "./chatRefs.ts";
@@ -45,8 +45,14 @@ export interface Draft {
   send(open: () => Promise<ChatTo>, options?: { first?: boolean; onSending?: (text: string | null) => void }): Promise<ChatTo | null>;
 }
 
-/** What another part of the page puts into a chat's draft (a preview's marks: its screenshot and a quote each). */
-export interface Offer { files: File[]; quotes: DraftQuote[] }
+/**
+ * What another part of the page puts into a chat's draft: a preview's marks (its screenshot and a quote each), or the
+ * words an inline visualization asks to send (Viz.tsx), there for the person to send or not.
+ */
+export interface Offer { files: File[]; quotes: DraftQuote[]; text?: string }
+
+/** The key of the draft of the chat a part of the page sits in, for what offers to it from within a message. */
+export const DraftKey = createContext<string | undefined>(undefined);
 
 /** The composer showing each chat's draft, by its key: what takes an offer for it. */
 const inboxes = new Map<string, (offer: Offer) => void>();

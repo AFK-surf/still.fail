@@ -12,9 +12,10 @@ import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { useShortcut } from "./keymap.ts";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileUrl, useNear } from "./FilePreview.tsx";
+import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileText, useFileUrl, useNear } from "./FilePreview.tsx";
+import { Viz } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
-import { useDraft, useDraftInbox, type Draft, type DraftQuote } from "./draft.ts";
+import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
@@ -97,7 +98,9 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           // At the entry it names (else its start); opened, not toggled.
           if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
         }}>
-        <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} />
+        <DraftKey.Provider value={draftKey}>
+          <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} />
+        </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>
@@ -598,11 +601,28 @@ function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => s
   return (
     <>
       <div className={conversationCss.markdown}>
-        <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} />}>{text}</Prose>
+        <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose>
       </div>
       <Files owner={owner} files={rest} />
     </>
   );
+}
+
+/**
+ * A file the text places on a line of its own: an HTML one is a visualization, drawn there (Viz.tsx; how agents make
+ * one is the ember-viz skill), any other shows as below the text.
+ */
+function PlacedFile({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
+  if (sessionKey !== null && kindOf(file.name).kind === "html") return <VizFile sessionKey={sessionKey} file={file} />;
+  return <FileItem sessionKey={sessionKey} file={file} />;
+}
+
+function VizFile({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
+  const station = useStation();
+  const loaded = useFileText(sessionKey, file);
+  if (loaded.state === "ready") return <Viz html={loaded.text} name={file.name} stateKey={`${station.address}\n${sessionKey}\n${file.path}`} />;
+  if (loaded.state === "error") return <FileItem sessionKey={sessionKey} file={file} />;
+  return <div className={css.msgVizWait} aria-busy="true" />;
 }
 
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
@@ -880,7 +900,8 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.setSelectionRange(at, at);
   }, [text]);
   // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
-  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added }) => {
+  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words }) => {
+    if (words) setText(text.trim() ? `${text.trimEnd()}\n${words}` : words);
     if (offered.length) add(offered);
     if (added.length) draft.setQuotes((all) => [...all, ...added]);
     input.current?.focus();

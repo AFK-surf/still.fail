@@ -2,7 +2,7 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 
 /** An inline visualization: the frame on the message's own ground, a small switch to its source below it. */
-export const viz = style({ margin: "0 0 4px", selectors: { "&:last-child": { marginBottom: 0 } } });
+export const viz = style({ width: "100%", minWidth: 0, margin: "0 0 4px", selectors: { "&:last-child": { marginBottom: 0 } } });
 /** Under the frame, out of its way (the figure's own controls sit in its corners): the switch, shown on hover. */
 export const vizBar = style({
   display: "flex", justifyContent: "flex-end", height: "22px", marginTop: "2px",
