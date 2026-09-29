@@ -239,7 +239,10 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
                 Some(token) => {
                     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.clone());
                 }
-                None => crate::no_keychain::file_credentials(&mut env),
+                None => {
+                    crate::no_keychain::take_back(o.home).await;
+                    crate::no_keychain::file_credentials(&mut env);
+                }
             }
             let output = status_of("claude", &["auth", "status"], &env).await?;
             // Signed out, it says so and exits 1: its answer is still the JSON on stdout.

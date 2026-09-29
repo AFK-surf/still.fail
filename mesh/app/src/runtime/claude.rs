@@ -129,8 +129,15 @@ impl AgentDriver for ClaudeDriver {
         env.insert("EMBER_RUNTIME_SESSION_ID".into(), session_id.clone());
         // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
         let machine = if options.profile.machine { Some(machine_claude_token(&process_env()).await?) } else { None };
-        if let Some((token, _)) = &machine {
-            env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.clone());
+        match &machine {
+            Some((token, _)) => {
+                env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.clone());
+            }
+            // Its own login stays in its home's file when it refreshes it (src/no_keychain.rs).
+            None => {
+                crate::no_keychain::take_back(&home).await;
+                crate::no_keychain::file_credentials(&mut env);
+            }
         }
         // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
         // session, they took up to 36 s before a new session could start. One the user chose wins.
