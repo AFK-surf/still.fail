@@ -67,8 +67,7 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
     const big = large[i]!, from = big.getBoundingClientRect(), box = el.getBoundingClientRect(), look = getComputedStyle(big), rest = getComputedStyle(el);
     const x = from.left + from.width / 2 - (box.left + box.width / 2), y = from.top + from.height / 2 - (box.top + box.height / 2);
     // Drawn large where the intro has it: its own box stays put, the glyph (centred in it) is moved and sized.
-    Object.assign(el.style, { fontSize: look.fontSize, fontWeight: look.fontWeight, color: look.color, textShadow: look.textShadow });
-    void animate(el, { x, y }, { duration: 0 });
+    Object.assign(el.style, { fontSize: look.fontSize, fontWeight: look.fontWeight, color: look.color, textShadow: look.textShadow, translate: `${x}px ${y}px` });
     return { el, line: big.closest<HTMLElement>(`.${css.introLine}`)!, x, y, rest: { fontSize: rest.fontSize, fontWeight: rest.fontWeight, color: rest.color } };
   });
 
@@ -91,8 +90,10 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   }
   // Still fuming while it holds.
   const fuming = glyphs.filter((g) => g.line.dataset.line === "youdid.wtf").map((g) => g.el);
-  void play(animate(fuming, { rotate: [0, -3, 3, -2, 2, 0] }, { duration: 0.4, repeat: 1 }));
-  await wait(0.35);
+  const fume = animate(fuming, { rotate: [0, -3, 3, -2, 2, 0] }, { duration: 0.35 });
+  void play(fume);
+  await wait(0.4);
+  fume.stop();
   if (stopped()) return;
 
   // 2. The English grows out of each dot, and each character goes to its place on it, taking its size and colour.
@@ -107,13 +108,29 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
         .then(() => { el.style.removeProperty("clip-path"); });
     });
   });
-  const fly = glyphs.map((g, i) => play(animate(g.el, { x: 0, y: 0, fontSize: g.rest.fontSize, fontWeight: g.rest.fontWeight, color: g.rest.color, textShadow: "0 0 0 rgba(0,0,0,0)", rotate: [0, (i % 2 ? 1 : -1) * 360] },
-    { duration: 0.9, ease: [0.7, 0, 0.2, 1], delay: (glyphs.length - 1 - i) * 0.035 })));
+  // Driven by hand from one number, so that every property arrives together, exactly at its resting value.
+  const fly = glyphs.map((g, i) => {
+    const from = { size: parseFloat(g.el.style.fontSize), weight: parseFloat(g.el.style.fontWeight), color: rgba(g.el.style.color) };
+    const to = { size: parseFloat(g.rest.fontSize), weight: parseFloat(g.rest.fontWeight), color: rgba(g.rest.color) };
+    const shadow = g.el.style.textShadow, turn = i % 2 ? 360 : -360;
+    return play(animate(0, 1, {
+      duration: 0.9, ease: [0.7, 0, 0.2, 1], delay: (glyphs.length - 1 - i) * 0.035,
+      onUpdate: (t) => {
+        const at = (a: number, b: number) => a + (b - a) * t;
+        Object.assign(g.el.style, {
+          fontSize: `${at(from.size, to.size)}px`, fontWeight: `${Math.round(at(from.weight, to.weight))}`,
+          color: `rgba(${from.color.map((c, k) => (k < 3 ? Math.round(at(c, to.color[k]!)) : at(c, to.color[k]!))).join(", ")})`,
+          textShadow: t < 1 && shadow && shadow !== "none" ? shadow.replace(/rgba?\([^)]*\)/, (c) => { const v = rgba(c); return `rgba(${v[0]}, ${v[1]}, ${v[2]}, ${v[3]! * (1 - t)})`; }) : "none",
+          translate: `${at(g.x, 0)}px ${at(g.y, 0)}px`, transform: `rotate(${turn * t}deg)`,
+        });
+      },
+    }));
+  });
   await Promise.all(fly);
   if (stopped()) return;
   // Where they rest they are drawn as the page draws them: what the motion held, let go of (it held just those values).
   for (const g of glyphs) {
-    for (const p of ["font-size", "font-weight", "color", "text-shadow", "transform", "filter"]) g.el.style.removeProperty(p);
+    for (const p of ["font-size", "font-weight", "color", "text-shadow", "translate", "transform", "filter"]) g.el.style.removeProperty(p);
     g.el.style.opacity = "1";
   }
   overlay.style.display = "none";
@@ -121,4 +138,10 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   // The demo under it waits for this to start playing (demo/mount.tsx), and for the stage it rises on (site.css.ts).
   await wait(1.4);
   window.dispatchEvent(new Event("ember-site-opened"));
+}
+
+/** A computed colour as [r, g, b, a]. */
+function rgba(color: string): number[] {
+  const v = color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
+  return [v[0] ?? 0, v[1] ?? 0, v[2] ?? 0, v[3] ?? 1];
 }
