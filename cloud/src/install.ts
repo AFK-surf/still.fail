@@ -45,16 +45,16 @@ export function releaseType(file: string): string | null {
 // A variable is always braced where words follow it ("\${app}（…）"): sh may take the first byte of a non-ASCII
 // character for part of its name, and set -u stops the script there.
 const SCRIPT = `#!/bin/sh
-# Installs ember's station on this machine and joins it to a workspace in ember cloud:
+# Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
 #   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token>
-# The token comes from 「添加 station」 in ember. Running it again updates ember and keeps its data (~/.ember).
+# The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.ember).
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
 data="\${EMBER_DATA:-$HOME/.ember}"
 # A station already in a workspace is only updated: no token, and it stays the same station.
 if [ -z "$token" ] && [ ! -f "$data/mesh/cloud.json" ]; then
-  echo "用法：curl -fsSL $origin/install.sh | sh -s -- <token>（token 在 ember 的「添加 station」里生成）" >&2
+  echo "用法：curl -fsSL $origin/install.sh | sh -s -- <token>（token 在 still.fail 的「添加 station」里生成）" >&2
   echo "已经加入 workspace 的 station 更新时不需要 token：ember update" >&2
   exit 2
 fi
@@ -75,7 +75,7 @@ user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-e
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-echo "下载 ember station…"
+echo "下载 still.fail station…"
 curl -fL --progress-bar "$origin/releases/ember-station-$platform.tar.gz" -o "$tmp/ember.tar.gz"
 tar -xzf "$tmp/ember.tar.gz" -C "$tmp"
 
@@ -152,7 +152,7 @@ inside_station() {
 
 # Already on this release, and running as its service would: nothing to do.
 if [ -n "$pid" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/ember/VERSION" "$app/VERSION" && same_service; then
-  echo "ember station 已经是最新版（$(cut -c1-7 "$app/VERSION")），不用更新。"
+  echo "still.fail station 已经是最新版（$(cut -c1-7 "$app/VERSION")），不用更新。"
   exit 0
 fi
 
@@ -239,7 +239,7 @@ elif [ "$os" = Darwin ]; then
     launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null && { started=yes; break; }
     sleep 2
   done
-  [ -n "$started" ] || { echo "launchd 没能启动 ember station（launchctl bootstrap gui/$(id -u) \${plist}）" >&2; exit 1; }
+  [ -n "$started" ] || { echo "launchd 没能启动 still.fail station（launchctl bootstrap gui/$(id -u) \${plist}）" >&2; exit 1; }
 else
   if user_systemd; then
     mkdir -p "$unit_dir"
@@ -258,9 +258,9 @@ fi
 
 echo
 if [ "$handed" = yes ]; then
-  echo "ember station 已更新，正在跑的 agent 没有中断。"
+  echo "still.fail station 已更新，正在跑的 agent 没有中断。"
 else
-  echo "ember station 已安装并在后台运行，几秒后会出现在 workspace 里。"
+  echo "still.fail station 已安装并在后台运行，几秒后会出现在 workspace 里。"
 fi
 echo "  程序：\${app}（命令 ember 在 ~/.local/bin）"
 echo "  数据和日志：$data"
@@ -275,7 +275,7 @@ if [ -n "$missing" ]; then
   echo "这台机器上还没有：\${missing}。station 用它们来跑 agent，装一个就能用："
   echo "  Claude Code：curl -fsSL https://claude.ai/install.sh | bash"
   echo "  Codex：      npm install -g @openai/codex（需要 Node）"
-  echo "装好之后，在 ember 的「设置 → Profile」里登录账号。"
+  echo "装好之后，在 still.fail 的「设置 → Profile」里登录账号。"
 fi
 }
 

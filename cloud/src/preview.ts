@@ -28,7 +28,7 @@ import { SOCKET_TAG_JS, socketScript } from "./previewSocket.ts";
 const FRAME = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ember preview</title>
+<title>still.fail preview</title>
 <style>
   html, body { margin: 0; height: 100%; background: #fff; }
   iframe { display: block; width: 100%; height: 100%; border: 0; }
@@ -201,7 +201,7 @@ function plain(status, text) {
 ${SOCKET_TAG_JS}
 async function relay(event, url) {
   const frame = await frameOf(nonceOf(event));
-  if (!frame) return plain(502, "预览已经断开：在 ember 里重新打开它。");
+  if (!frame) return plain(502, "预览已经断开：在 still.fail 里重新打开它。");
   const request = event.request;
   const body = request.method === "GET" || request.method === "HEAD" ? null : new Uint8Array(await request.arrayBuffer());
   const channel = new MessageChannel();
@@ -267,7 +267,7 @@ export function previewFiles(annotate = ""): Record<string, string> {
     "_ember/annotate.js": annotate,
     "_ember/socket.js": SOCKET,
     // Only reached before the service worker runs, or when a frame opens this host by itself.
-    "404.html": `<!doctype html><meta charset="utf-8"><title>ember preview</title><p>这是 ember 的预览地址：在 ember 里打开一个预览。</p>`,
+    "404.html": `<!doctype html><meta charset="utf-8"><title>still.fail preview</title><p>这是 still.fail 的预览地址：在 still.fail 里打开一个预览。</p>`,
     // The service worker is the whole host's, from under /_ember/.
     "_headers": "/_ember/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/_ember/frame\n  Cache-Control: no-cache\n/_ember/annotate.js\n  Cache-Control: no-cache\n/_ember/socket.js\n  Cache-Control: no-cache\n",
   };

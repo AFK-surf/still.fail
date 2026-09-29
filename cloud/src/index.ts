@@ -67,7 +67,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return googleStart(env, request);
   }
   if (path === "/v1/auth/device/complete" && request.method === "GET") {
-    return devicePage("请返回 ember", "<p>登录结果会在发起登录的地方显示，现在可以关闭此页。</p>");
+    return devicePage("请返回 still.fail", "<p>登录结果会在发起登录的地方显示，现在可以关闭此页。</p>");
   }
   const device = /^\/v1\/auth\/device\/([A-Za-z0-9_-]{43})$/.exec(path);
   if (device && (request.method === "GET" || request.method === "POST")) {

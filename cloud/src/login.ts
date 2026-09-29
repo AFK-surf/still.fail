@@ -87,14 +87,14 @@ export class LoginAttempt extends DurableObject<Env> {
   async authorizeDevice(id: string, request: Request): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
-      if (!attempt?.device || attempt.expires <= nowSeconds() || attempt.phase !== "waiting") return devicePage("登录请求已结束", "<p>请回到 ember 重新发起登录。</p>");
+      if (!attempt?.device || attempt.expires <= nowSeconds() || attempt.phase !== "waiting") return devicePage("登录请求已结束", "<p>请回到 still.fail 重新发起登录。</p>");
       if (request.method === "GET") {
         const browser = randomSecret();
         attempt.browserHash = await digest(browser);
         this.ctx.storage.kv.put("attempt", attempt);
         return devicePage(
           "允许设备使用公网连接",
-          `<p>正在为 <strong>${escape(attempt.name)}</strong> 登录 ember。</p><p>登录后可以访问你所在 workspace 里的 station。</p><form method="post"><input type="hidden" name="csrf" value="${browser}"><button>使用 Google 账号继续</button></form>`,
+          `<p>正在为 <strong>${escape(attempt.name)}</strong> 登录 still.fail。</p><p>登录后可以访问你所在 workspace 里的 station。</p><form method="post"><input type="hidden" name="csrf" value="${browser}"><button>使用 Google 账号继续</button></form>`,
           cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
         );
       }
@@ -285,7 +285,7 @@ export async function googleStart(env: Env, request: Request): Promise<Response>
   if (!validRedirect(env, callback) || !validSecret(state) || !validSecret(challenge) || url.searchParams.get("code_challenge_method") !== "S256") return reply({ error: "invalid_login" }, 400);
   if (!(await consumeLoginRate(env, request))) return limited();
   const id = randomSecret();
-  const name = (url.searchParams.get("name") ?? "ember").slice(0, 80);
+  const name = (url.searchParams.get("name") ?? "still.fail").slice(0, 80);
   return env.LOGINS.getByName(id).start(id, { redirect: callback, state, challenge, name });
 }
 
