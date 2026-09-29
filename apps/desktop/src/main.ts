@@ -15,7 +15,6 @@ import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { LocalStation } from "./station";
-import { Bridge, CHANNEL, FORMER_APP_ID, bundleIdOf, ownBundle } from "./bridge";
 import { moveUserData } from "./moves.mts";
 
 const CLOUD_ORIGIN = (process.env.STILLFAIL_CLOUD_ORIGIN ?? process.env.EMBER_CLOUD_ORIGIN ?? "https://app.still.fail").replace(/\/+$/, "");
@@ -395,9 +394,9 @@ function machineName(): string {
 }
 
 // Keeping the app current: the cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/,
-// stillfail-mac.yml; latest-mac.yml is the old feed, for apps from before the rename: see bridge.ts), looked for at
-// start and every few hours. A newer one is said to the pages, which show 更新 beside the buddy (web/src/brand.tsx);
-// clicked, it is downloaded, and once it is the app quits (the station stopped first) and opens as the new one.
+// stillfail-mac.yml), looked for at start and every few hours. A newer one is said to the pages, which show 更新
+// beside the buddy (web/src/brand.tsx); clicked, it is downloaded, and once it is the app quits (the station stopped
+// first) and opens as the new one.
 const UPDATE_EVERY = 4 * 60 * 60 * 1000;
 
 /** What the pages are told of an update (web/src/core/client.ts, AppUpdate). */
@@ -428,13 +427,8 @@ ipcMain.on("update:start", (event) => {
 
 function keepUpdated(): void {
   if (!app.isPackaged) return;
-  const feed = `${CLOUD_ORIGIN}/releases/desktop`;
-  if (bundleIdOf(ownBundle()) === FORMER_APP_ID) {
-    moveToRenamedApp(new Bridge(feed));
-    return;
-  }
   download = () => void autoUpdater.downloadUpdate().catch(() => {});
-  autoUpdater.setFeedURL({ provider: "generic", url: feed, channel: CHANNEL });
+  autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop`, channel: "stillfail" });
   autoUpdater.logger = null;
   autoUpdater.autoDownload = false;
   autoUpdater.on("update-available", ({ version }) => {
@@ -455,32 +449,6 @@ function keepUpdated(): void {
   const check = () => {
     if (update?.phase === "downloading" || update?.phase === "installing") return;
     void autoUpdater.checkForUpdates().catch((error: Error) => console.warn("looking for an update failed", error.message));
-  };
-  check();
-  setInterval(check, UPDATE_EVERY);
-}
-
-/**
- * This build under the bundle id from before the rename (bridge.ts): its update is the app under the new id, whatever
- * its version (the same build under the other id is the move).
- */
-function moveToRenamedApp(bridge: Bridge): void {
-  download = () => {
-    void bridge.prepare((percent) => {
-      if (update?.phase === "downloading") sayUpdate({ ...update, percent });
-    }).then(() => {
-      if (update) sayUpdate({ phase: "installing", version: update.version });
-      void stopStation().then(() => app.quit());
-    }, (error: Error) => {
-      console.warn("moving to the renamed app failed", error.message);
-      if (update) sayUpdate({ phase: "failed", version: update.version, message: error.message });
-    });
-  };
-  const check = () => {
-    if (update?.phase === "downloading" || update?.phase === "installing") return;
-    bridge.check().then((version) => {
-      if (version && update?.version !== version) sayUpdate({ phase: "available", version });
-    }, (error: Error) => console.warn("looking for the renamed app failed", error.message));
   };
   check();
   setInterval(check, UPDATE_EVERY);

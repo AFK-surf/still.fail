@@ -3,7 +3,7 @@ import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { moveUserData, parseFeed } from "../apps/desktop/src/moves.mts";
+import { moveUserData } from "../apps/desktop/src/moves.mts";
 
 /** An Application Support of its own: `ember` (the old app's data) with a sign-in and a page's storage. */
 function support(): { dir: string; now: string; former: string } {
@@ -54,10 +54,4 @@ test("a machine that never ran the old app starts in the new place", () => {
   const dir = mkdtempSync(join(tmpdir(), "stillfail-moves-"));
   assert.deepEqual(moveUserData(join(dir, "still.fail"), join(dir, "ember"), nobody), { dir: join(dir, "still.fail"), moved: false });
   rmSync(dir, { recursive: true });
-});
-
-test("the bridge reads electron-builder's feed", () => {
-  const yml = "version: 0.1.1092\nfiles:\n  - url: stillfail-0.1.1092-arm64-mac.zip\n    sha512: AAA==\n    size: 1\npath: stillfail-0.1.1092-arm64-mac.zip\nsha512: JEun+b/9==\nreleaseDate: '2026-09-29T15:05:41.319Z'\n";
-  assert.deepEqual(parseFeed(yml), { version: "0.1.1092", path: "stillfail-0.1.1092-arm64-mac.zip", sha512: "JEun+b/9==" });
-  assert.equal(parseFeed("version: 1\n"), null);
 });

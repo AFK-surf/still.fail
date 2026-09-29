@@ -10,9 +10,6 @@
 # Packed, the app is also zipped (stillfail-<version>-arm64-mac.zip) with stillfail-mac.yml beside it in out/: what
 # scripts/release.sh desktop publishes for the apps' updater (main.ts, keepUpdated). Its version is 0.1.<the commits
 # in the history>, each release's higher than the one before it.
-# BRIDGE=1 packs the same app under the bundle id from before the rename (dev.ember.desktop), as
-# ember-<version>-arm64-mac.zip with latest-mac.yml: what installed apps from before the rename update to, and which
-# then moves itself to the app under the new id (src/bridge.ts).
 set -eu
 # A non-login shell (ssh studio …) has none of these on its PATH.
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$PATH"
@@ -40,11 +37,5 @@ pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=nod
 pnpm exec esbuild "$root/web/src/annotate/frame.ts" --bundle --format=iife --minify --outfile=build/app/annotate.js --log-level=warning
 [ -z "${DEV:-}" ] || { echo "$here/build"; exit 0; }
 version="0.1.$(git -C "$root" rev-list --count HEAD)"
-if [ -n "${BRIDGE:-}" ]; then
-  # shellcheck disable=SC2016 # electron-builder expands these itself
-  pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version" \
-    -c.appId=dev.ember.desktop -c.publish.channel=latest -c.mac.artifactName='ember-${version}-${arch}-mac.${ext}'
-else
-  pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version"
-fi
+pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version"
 ls -d "$here/out/mac-arm64/still.fail.app"

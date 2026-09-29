@@ -1,5 +1,5 @@
-// The desktop app's moves from its name before the rename, with nothing of Electron in them (main.ts and bridge.ts use
-// them; test/desktop-moves.test.ts runs them on a temporary directory). An .mts: an ES module to the tests, whose
+// The desktop app's move from its name before the rename, with nothing of Electron in it (main.ts uses it;
+// test/desktop-moves.test.ts runs it on a temporary directory). An .mts: an ES module to the tests, whose
 // TypeScript takes this package's .ts files for CommonJS.
 import { lstatSync, readdirSync, readlinkSync, renameSync, rmdirSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -38,13 +38,4 @@ export function moveUserData(now: string, former: string, alive: (pid: number) =
     const message = error instanceof Error ? error.message : String(error);
     return { dir: !there(join(now, "core")) && there(join(former, "core")) ? former : now, moved: false, error: message };
   }
-}
-
-/** The fields of an electron-builder feed (latest-mac.yml) the bridge needs: they are at its top level. */
-export function parseFeed(yml: string): { version: string; path: string; sha512: string } | null {
-  const field = (name: string) => new RegExp(`^${name}:\\s*['"]?([^'"\\n]+?)['"]?\\s*$`, "m").exec(yml)?.[1];
-  const version = field("version");
-  const path = field("path");
-  const sha512 = field("sha512");
-  return version && path && sha512 ? { version, path, sha512 } : null;
 }
