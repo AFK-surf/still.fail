@@ -254,8 +254,9 @@ function useArchive(item: ChatItem, to: string) {
   return async () => {
     const key = archiveKey(item);
     if (!pending.begin(key)) return;
-    // Move away now; a slow response must not navigate over a chat opened meanwhile.
-    if (decodeURIComponent(path) === decodeURIComponent(to)) navigate(`${stationBase(item.station)}/chats`);
+    // Move away now, to the chat beside it in the list (the list page if none); a slow response must not navigate over
+    // a chat opened meanwhile.
+    if (decodeURIComponent(path) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
     try {
       await api.archive(item, true);
       pending.finish(key);

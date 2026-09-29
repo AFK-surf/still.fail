@@ -15,7 +15,7 @@ import type { Job } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
-import { ChatPanel } from "../Chat.tsx";
+import { ChatPanel, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
@@ -255,7 +255,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
   useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper ? async () => {
-    navigate(link("/chats"));
+    // On to the chat below it in the list (or above, at the end), so the keys go on working; the list page if none.
+    if (!goToNeighbour(1) && !goToNeighbour(-1)) navigate(link("/chats"));
     try {
       await api.archive({ thread, session: keeper }, true);
       toast("已归档");
