@@ -91,7 +91,7 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   const reveal = domains.map((el) => {
     const dot = el.querySelector<HTMLElement>(`.${css.dot}`)!.getBoundingClientRect(), box = el.getBoundingClientRect();
     const at = `${dot.left - box.left}px ${dot.top - box.top - box.height * 0.08}px`;
-    return play(animate(el, { clipPath: [`circle(0px at ${at})`, `circle(${box.width * 1.2}px at ${at})`] }, { duration: 0.9, ease: [0.5, 0, 0.2, 1], delay: 0.15 }))
+    return play(animate(el, { clipPath: [`circle(0px at ${at})`, `circle(${box.width * 1.2}px at ${at})`] }, { duration: 1.1, ease: [0.5, 0, 0.2, 1], delay: 0.35 }))
       .then(() => { el.style.removeProperty("clip-path"); });
   });
   const fly = big.map((b, i) => {
