@@ -2,7 +2,7 @@
 // something else. The page opens with the Chinese, large, which then flies onto the domains' dots as the English grows
 // out of them; the two domains lean after the pointer at their own depths, and the buttons are drawn to it. Nothing
 // here when the system asks for less motion; the page built to HTML shows everything where it rests.
-import { animate, stagger } from "motion";
+import { animate } from "motion";
 import { follower, reducedMotion } from "../motion.ts";
 import * as css from "./site.css.ts";
 
@@ -80,9 +80,27 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   const small = [...title.querySelectorAll<HTMLElement>(`.${css.dotChar}`)];
   const domains = [...title.querySelectorAll<HTMLElement>("[data-domain]")];
 
-  // 1. The Chinese slams in, a character at a time, the second line after the first.
-  await play(animate(big, { opacity: [0, 1], scale: [1.8, 1] }, { type: "spring", visualDuration: 0.32, bounce: 0.3, delay: stagger(0.13) }));
-  await wait(0.6);
+  // 1. The Chinese slams in, a character at a time, each spun and blurred in from far too big and shaking the page as
+  //    it lands; a beat between the two lines. The second line (the angrier one) keeps trembling, and its JB hits
+  //    hardest.
+  const stage = title.parentElement!;
+  const shake = (hard: number) => play(animate(stage, { x: [0, -hard, hard * 0.8, -hard * 0.5, hard * 0.25, 0], y: [0, hard * 0.4, -hard * 0.3, 0, 0, 0] }, { duration: 0.28, ease: "easeOut" }));
+  for (const line of overlay.querySelectorAll<HTMLElement>(`.${css.introLine}`)) {
+    const chars = [...line.querySelectorAll<HTMLElement>(`.${css.introChar}`)];
+    for (const [i, c] of chars.entries()) {
+      if (stopped()) return;
+      const last = i === chars.length - 1, hard = line.dataset.line === "youdid.wtf" && i >= chars.length - 2;
+      void play(animate(c, { opacity: [0, 1], scale: [hard ? 4.5 : 3, 1], rotate: [(Math.random() - 0.5) * (hard ? 70 : 40), 0], filter: ["blur(14px)", "blur(0px)"] },
+        { type: "spring", visualDuration: 0.26, bounce: 0.45 }));
+      setTimeout(() => void shake(hard ? 14 : 5), 170);
+      await wait(last ? 0.2 : hard ? 0.24 : 0.14);
+    }
+    await wait(0.55);
+  }
+  // Still fuming while it holds.
+  const fume = overlay.querySelector<HTMLElement>(`.${css.introLine}[data-line="youdid.wtf"]`)!;
+  void play(animate(fume, { x: [0, -2, 2, -1.5, 1.5, 0], rotate: [0, -0.6, 0.6, -0.4, 0.4, 0] }, { duration: 0.4, repeat: 1 }));
+  await wait(0.35);
   if (stopped()) return;
 
   // 2. The English grows out of each dot, and each character flies to its place on it, taking its size and colour.
@@ -98,8 +116,8 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
     if (!to) return Promise.resolve();
     const from = b.getBoundingClientRect(), there = to.getBoundingClientRect();
     const x = there.left + there.width / 2 - (from.left + from.width / 2), y = there.top + there.height / 2 - (from.top + from.height / 2);
-    return play(animate(b, { x, y, scale: there.height / from.height, color: getComputedStyle(to).color, textShadow: "0 0 0 transparent" },
-      { duration: 0.85, ease: [0.6, 0, 0.2, 1], delay: i * 0.03 }));
+    return play(animate(b, { x, y, scale: there.height / from.height, rotate: [0, (i % 2 ? 1 : -1) * 360], color: getComputedStyle(to).color, textShadow: "0 0 0 transparent" },
+      { duration: 0.9, ease: [0.7, 0, 0.2, 1], delay: (big.length - 1 - i) * 0.035 }));
   });
   await Promise.all(fly);
   if (stopped()) return;

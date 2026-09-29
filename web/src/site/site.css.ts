@@ -187,14 +187,14 @@ export const dotChar = style({ display: "inline-block", selectors: { ":root[data
 
 export const heroActions = style({
   marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both`,
-  selectors: { ":root[data-motion] &": { animationDelay: "2.9s" } },
+  selectors: { ":root[data-motion] &": { animationDelay: "4.4s" } },
 });
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
 export const stage = style({
   position: "relative", margin: "80px auto 0", maxWidth: "1200px", animation: `${enter} 1.4s .3s cubic-bezier(.2,.8,.2,1) both`,
   "@media": { [NARROW]: { marginTop: "52px" }, [STILL]: { animation: "none" } },
-  selectors: { ":root[data-motion] &": { animationDelay: "3s" } },
+  selectors: { ":root[data-motion] &": { animationDelay: "4.5s" } },
 });
 /** Its glow on the page under it. */
 export const stageGlow = style({
