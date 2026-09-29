@@ -2032,7 +2032,7 @@ mod tests {
             assert!(core.inner.calls.borrow().is_empty());
             // Any other call runs to its end, cancelled or not: a write is not dropped halfway.
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Call { id: 3, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "memory.get".into(), params: json!({ "station": "local" }) });
             core.receive(ui, ClientMessage::Cancel { id: 3, cancel: true });
             core.disconnect(ui);
             host.settle().await;
