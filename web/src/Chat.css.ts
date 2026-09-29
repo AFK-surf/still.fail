@@ -208,6 +208,8 @@ export const fileCardRemove = style({
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
   },
+  // No hover on a touch screen: it shows as it would under the pointer.
+  "@media": { "(hover: none)": { background: vars.hover } },
 });
 export const msgImage = style({
   selectors: {
@@ -423,6 +425,8 @@ export const quoteCardRemove = style({
     "&:hover": { background: vars.hover, color: vars.text },
     [`${composerQuote} &`]: { top: "8px", right: "10px" },
   },
+  // No hover on a touch screen: it shows as it would under the pointer.
+  "@media": { "(hover: none)": { background: vars.hover } },
 });
 export const composerThumb = style({
   selectors: {
