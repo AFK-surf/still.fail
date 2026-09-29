@@ -8,7 +8,7 @@ import { app, BrowserWindow, ipcMain, MessageChannelMain, net, protocol, shell, 
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readdirSync, readlinkSync, renameSync, rmdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join, normalize } from "node:path";
@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { LocalStation } from "./station";
 import { Bridge, CHANNEL, FORMER_APP_ID, bundleIdOf, ownBundle } from "./bridge";
+import { moveUserData } from "./moves.mts";
 
 const CLOUD_ORIGIN = (process.env.STILLFAIL_CLOUD_ORIGIN ?? process.env.EMBER_CLOUD_ORIGIN ?? "https://app.still.fail").replace(/\/+$/, "");
 /**
@@ -42,33 +43,12 @@ const station = new LocalStation(join(resources, app.isPackaged ? "station" : "s
  * then this start uses the old place, and a later one moves it.
  */
 function carryOverUserData(): void {
-  const now = app.getPath("userData");
   const former = join(app.getPath("appData"), "ember");
-  const there = (path: string) => { try { lstatSync(path); return true; } catch { return false; } };
-  if (now === former || !there(former) || lstatSync(former).isSymbolicLink()) return;
-  // The core's data (the sign-ins) already in the new place: it is in use, and the old one is left as it is.
-  if (there(join(now, "core"))) return;
-  try {
-    const pid = Number(/-(\d+)$/.exec(readlinkSync(join(former, "SingletonLock")))?.[1]);
-    if (pid && pid !== process.pid) {
-      process.kill(pid, 0);
-      app.setPath("userData", former);
-      return;
-    }
-  } catch { /* no lock, or its process is gone */ }
-  try {
-    if (!there(now)) renameSync(former, now);
-    else {
-      // Made already (by Electron, before this ran): what it lacks comes over, entry by entry.
-      for (const name of readdirSync(former)) if (!there(join(now, name))) renameSync(join(former, name), join(now, name));
-      rmdirSync(former);
-    }
-    symlinkSync(now, former);
-    console.info("moved the app's data from", former, "to", now);
-  } catch (error) {
-    console.warn("the app's data could not be moved from", former, error instanceof Error ? error.message : error);
-    if (!there(join(now, "core")) && there(join(former, "core"))) app.setPath("userData", former);
-  }
+  const alive = (pid: number) => { try { return pid !== process.pid && process.kill(pid, 0); } catch { return false; } };
+  const { dir, moved, error } = moveUserData(app.getPath("userData"), former, alive);
+  if (moved) console.info("moved the app's data from", former, "to", dir);
+  if (error) console.warn("the app's data could not be moved from", former, error);
+  if (dir !== app.getPath("userData")) app.setPath("userData", dir);
 }
 
 carryOverUserData();

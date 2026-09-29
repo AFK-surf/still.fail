@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { net } from "electron";
+import { parseFeed } from "./moves.mts";
 
 /** The app's bundle id, and the one it had before the rename. */
 export const APP_ID = "fail.still.desktop";
@@ -47,16 +48,7 @@ async function teamOf(app: string): Promise<string | null> {
   }
 }
 
-interface Latest { version: string; path: string; sha512: string }
-
-/** The fields of a latest-mac.yml this needs (electron-builder writes them at the top level). */
-export function parseFeed(yml: string): Latest | null {
-  const field = (name: string) => new RegExp(`^${name}:\\s*['"]?([^'"\\n]+?)['"]?\\s*$`, "m").exec(yml)?.[1];
-  const version = field("version");
-  const path = field("path");
-  const sha512 = field("sha512");
-  return version && path && sha512 ? { version, path, sha512 } : null;
-}
+type Latest = NonNullable<ReturnType<typeof parseFeed>>;
 
 export class Bridge {
   #latest: Latest | null = null;
