@@ -1,6 +1,6 @@
 // The first screen's motion, from script (the `motion` library, as the app's ../motion.ts): what moves because of
 // something else. The page opens with the Chinese, large, which then flies onto the domains' dots as the English grows
-// out of them; the two domains lean after the pointer at their own depths, and the buttons are drawn to it. Nothing
+// out of them; the two domains lean after the pointer at their own depths, and a light in the buttons follows it. Nothing
 // here when the system asks for less motion; the page built to HTML shows everything where it rests.
 import { animate } from "motion";
 import { follower, reducedMotion } from "../motion.ts";
@@ -10,8 +10,6 @@ import * as css from "./site.css.ts";
 const SETTLE = { type: "spring", visualDuration: 0.5, bounce: 0.35 } as const;
 /** How far (px) each domain leans after the pointer, the second nearer and so further. */
 const DEPTH: Record<string, number> = { "still.fail": 14, "youdid.wtf": 26 };
-/** How far out of a button the pointer still draws it, and how much of the way it comes. */
-const REACH = 60, PULL = 0.3;
 
 /** Starts the first screen's motion in `hero`; gives back what stops it. */
 export function heroMotion(hero: HTMLElement): (() => void) | undefined {
@@ -40,31 +38,30 @@ export function heroMotion(hero: HTMLElement): (() => void) | undefined {
   };
   const rest = () => { for (const l of lines) { l.fx.to(0, SETTLE); l.fy.to(0, SETTLE); } };
 
-  // The buttons come part of the way to a pointer near them.
+  // A light in each button follows the pointer over it, coming up as it enters and fading as it leaves.
   const buttons = [...hero.querySelectorAll<HTMLElement>("a[data-kind]")].map((el) => {
-    let x = 0, y = 0;
-    const draw = () => { el.style.translate = `${x}px ${y}px`; };
-    return { el, fx: follower(0, (v) => { x = v; draw(); }), fy: follower(0, (v) => { y = v; draw(); }) };
+    const set = (name: string, unit: string) => (v: number) => el.style.setProperty(name, `${v}${unit}`);
+    return { el, fx: follower(0, set("--mx", "px")), fy: follower(0, set("--my", "px")), glow: follower(0, set("--glow", "")) };
   });
   const draw = (e: PointerEvent) => {
     for (const b of buttons) {
       const r = b.el.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
-      const near = Math.abs(dx) < r.width / 2 + REACH && Math.abs(dy) < r.height / 2 + REACH;
-      b.fx.to(near ? dx * PULL : 0, SETTLE);
-      b.fy.to(near ? dy * PULL : 0, SETTLE);
+      const x = e.clientX - r.left, y = e.clientY - r.top, over = x >= 0 && y >= 0 && x <= r.width && y <= r.height;
+      if (over && !b.glow.value) { b.fx.jump(x); b.fy.jump(y); }
+      if (over) { b.fx.to(x); b.fy.to(y); }
+      b.glow.to(over ? 1 : 0, { duration: 0.25 });
     }
   };
 
   // Only a pointer that hovers (a mouse, a pen): on a touch screen nothing leans after a finger.
   if (matchMedia("(hover: hover)").matches) {
     const move = (e: PointerEvent) => { lean(e); draw(e); };
-    const leave = () => { rest(); for (const b of buttons) { b.fx.to(0, SETTLE); b.fy.to(0, SETTLE); } };
+    const leave = () => { rest(); for (const b of buttons) b.glow.to(0, { duration: 0.25 }); };
     hero.addEventListener("pointermove", move);
     hero.addEventListener("pointerleave", leave);
     stops.push(() => { hero.removeEventListener("pointermove", move); hero.removeEventListener("pointerleave", leave); });
   }
-  stops.push(() => { for (const f of [...lines, ...buttons]) { f.fx.stop(); f.fy.stop(); } });
+  stops.push(() => { for (const f of [...lines, ...buttons]) { f.fx.stop(); f.fy.stop(); } for (const b of buttons) b.glow.stop(); });
   return () => { for (const stop of stops) stop(); };
 }
 
