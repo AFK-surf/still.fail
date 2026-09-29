@@ -118,7 +118,12 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   });
   await Promise.all(fly);
   if (stopped()) return;
-  for (const s of small) s.style.opacity = "1";
+  // Where they land, the flown characters give way to the ones on the dots over a moment, not at once: they are drawn
+  // a little differently (weight, size, the line's glow), and a swap would flash.
+  await Promise.all([
+    play(animate(small, { opacity: [0, 1] }, { duration: 0.35, ease: "easeOut" })),
+    play(animate(big, { opacity: 0 }, { duration: 0.35, ease: "easeIn" })),
+  ]);
   overlay.style.display = "none";
   await Promise.all(reveal);
 }
