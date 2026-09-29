@@ -194,7 +194,10 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   (`POST /sessions/:key/files`). `POST /threads {session, title?}` opens
   another chat on a session; `POST /threads/:id/sessions {session}` brings
   another session into an ember chat. `POST /sessions` (a new chat) makes the
-  session and its chat and answers `{ key, thread }`.
+  session and its chat and answers `{ key, thread }`. A `clientKey` given
+  (the key the asking client shows the chat by until it is made) is said by
+  the chat's sidebar item for ten minutes (in memory only): its `chat` event
+  can reach the client before the answer does.
 - A session's transcript comes only from `/sessions/:key/live?from=N` (entries
   from index N — and the usage so far, even when N is all of them — then as
   they are written; a watcher asking past the end is told where it ends); the

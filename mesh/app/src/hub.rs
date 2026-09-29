@@ -119,7 +119,12 @@ pub struct NewChat {
     pub effort: Option<String>,
     pub title: Option<String>,
     pub created_by: String,
+    /// The key the asking client knows it by until it is made (`clientKey`): the sidebar's rows say it for a while.
+    pub client_key: Option<String>,
 }
+
+/// How long a new chat's rows say the key its client gave it: long past its answer.
+const CLIENT_KEY_KEPT_MS: i64 = 10 * 60 * 1000;
 
 pub type ConfigFn = Arc<dyn Fn() -> Arc<Config> + Send + Sync>;
 pub type ChatsFn = Arc<dyn Fn(&str) -> Option<Arc<dyn ChatSurface>> + Send + Sync>;
@@ -160,6 +165,8 @@ pub struct Hub {
     held: AtomicBool,
     /// Sessions taken up from the previous binary: their turns run on, not cut off.
     adopted: Mutex<HashSet<String>>,
+    /// Chats made lately by session key: the key their client gave them, and when (NewChat::client_key).
+    client_keys: Mutex<HashMap<String, (String, i64)>>,
     me: Weak<Hub>,
 }
 
@@ -199,6 +206,7 @@ impl Hub {
             live: LiveHub::new(locate, posts),
             held: AtomicBool::new(false),
             adopted: Mutex::default(),
+            client_keys: Mutex::default(),
             me: me.clone(),
         })
     }
@@ -917,6 +925,12 @@ impl Hub {
         std::fs::create_dir_all(&workspace)?;
         std::fs::create_dir_all(config.data_dir.join("repos"))?;
         let now = now_ms();
+        // Known before its rows are (their events can reach the client before this answers), and for a while after.
+        if let Some(client) = options.client_key.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
+            let mut keys = self.client_keys.lock().unwrap();
+            keys.retain(|_, (_, at)| now - *at < CLIENT_KEY_KEPT_MS);
+            keys.insert(key.clone(), (client.chars().take(120).collect(), now));
+        }
         let title = options.title.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(String::from);
         self.store.insert_session(&NewSession {
             key: key.clone(),
@@ -939,6 +953,12 @@ impl Hub {
         info!(session = key, connect = INTERNAL_CONNECT, runtime, profile = profile.id, model = ?model, "session created");
         let thread = self.open_chat(&key, &options.created_by, title.as_deref())?;
         Ok((key, thread))
+    }
+
+    /// The key the client that asked for a session gave it (NewChat::client_key), while it is kept.
+    pub fn client_key(&self, key: &str) -> Option<String> {
+        let keys = self.client_keys.lock().unwrap();
+        keys.get(key).filter(|(_, at)| now_ms() - *at < CLIENT_KEY_KEPT_MS).map(|(client, _)| client.clone())
     }
 
     /// Goes on in a chat with a session the machine's own Claude Code or Codex kept (run in a terminal). Its transcript

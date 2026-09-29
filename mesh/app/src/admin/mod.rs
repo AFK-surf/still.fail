@@ -451,6 +451,7 @@ impl AdminApi {
                     effort: given("effort"),
                     title: input.str("title").map(|t| t.chars().take(120).collect()),
                     created_by: viewer.id(),
+                    client_key: given("clientKey"),
                 };
                 let (key, thread) = self.deps.hub.new_session(chat).map_err(|e| http_error(400, e.to_string()))?;
                 return ok(json!({ "key": key, "thread": self.thread(thread.id, viewer)? }));

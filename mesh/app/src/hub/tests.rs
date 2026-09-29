@@ -965,7 +965,7 @@ async fn a_chat_opened_on_the_admin_page_reaches_the_session_like_slack_and_the_
 }
 
 fn new_chat(runtime: RuntimeKind) -> NewChat {
-    NewChat { runtime, profile: None, model: None, effort: None, title: None, created_by: "local".into() }
+    NewChat { runtime, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }
 }
 
 #[tokio::test]
@@ -1073,7 +1073,7 @@ async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unrea
     r.call(&blocked, "chat_state", json!({ "kind": "block" })).await.unwrap();
     r.claude.last().complete();
     settle().await;
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into() }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "local", "hi", vec![], vec![]).unwrap();
     settle().await;
     // The agent's answer is unread: the chat stays.

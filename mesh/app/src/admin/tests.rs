@@ -1013,9 +1013,13 @@ async fn a_new_chat_makes_a_session_of_its_own_with_the_chosen_runtime_model_and
     t.call("PUT", "/profiles/cc", Some(json!({ "models": ["deepseek-flash", "deepseek-flash", " glm-5 "] }))).await;
     let ov = t.get("/overview").await;
     assert_eq!(ov["profiles"].as_array().unwrap().iter().find(|p| p["id"] == "cc").unwrap()["models"], json!(["deepseek-flash", "glm-5"]));
-    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude", "model": "deepseek-flash", "effort": "high", "title": "新对话" }))).await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude", "model": "deepseek-flash", "effort": "high", "title": "新对话", "clientKey": "new:1-1" }))).await;
     assert_eq!(made.0, 200);
     let made = made.1;
+    // Its row says the key the client gave it, so the client knows it for its own before this answer comes.
+    let rows = t.get("/chats").await;
+    let row = rows.as_array().unwrap().iter().find(|r| r["id"] == made["key"]).unwrap();
+    assert_eq!(row["clientKey"], "new:1-1");
     assert_eq!((made["thread"]["surface"].clone(), made["thread"]["title"].clone(), made["thread"]["sessions"][0]["session"].clone()), (json!("ember"), json!("新对话"), made["key"].clone()));
     let key = made["key"].as_str().unwrap().to_string();
     assert_eq!(t.call("POST", &format!("/threads/{}/messages", made["thread"]["id"]), Some(json!({ "text": "开始吧" }))).await.0, 200);
@@ -1032,7 +1036,7 @@ async fn a_new_chat_makes_a_session_of_its_own_with_the_chosen_runtime_model_and
 #[tokio::test]
 async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_from_a_to_b() {
     let t = setup().await;
-    let (_, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into() }).unwrap();
+    let (_, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     for i in 1..=5 {
         t.hub.say(thread.id, "local", &format!("m{i}"), vec![], vec![]).unwrap();
     }
@@ -1067,7 +1071,7 @@ async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_f
 #[tokio::test]
 async fn read_positions_and_unread_counts_are_per_viewer_and_only_move_forward() {
     let t = setup().await;
-    let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into() }).unwrap();
+    let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     let first = t.hub.say(thread.id, "local", "mine", vec![], vec![]).unwrap();
     t.hub.say(thread.id, "dev@example.com", "theirs", vec![], vec![]).unwrap();
     t.store.insert_message(NewMessage::new(thread.id, "9.000001", AuthorKind::Agent, &key, "answer")).unwrap();

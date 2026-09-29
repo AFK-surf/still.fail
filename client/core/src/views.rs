@@ -116,6 +116,8 @@ impl Views {
     }
 
     /// What to ask its station for, the chat set to be tried (again): its queue is `sending` once more.
+    /// The ask carries its key here (`clientKey`): the station's rows say it of the chat made from it, so its row is
+    /// known for this chat's even before the station's answer comes (its events can come first).
     pub fn pending_try(&self, key: &str) -> Option<(String, Value)> {
         let mut pending = self.pending.borrow_mut();
         let chat = pending.get_mut(key).filter(|c| c.made.is_none())?;
@@ -124,7 +126,11 @@ impl Views {
             m["state"] = json!("sending");
             m["error"] = Value::Null;
         }
-        let asked = (chat.station.clone(), chat.ask.clone());
+        let mut ask = chat.ask.clone();
+        if let Some(ask) = ask.as_object_mut() {
+            ask.insert("clientKey".into(), json!(key));
+        }
+        let asked = (chat.station.clone(), ask);
         drop(pending);
         self.pending_changed(key);
         Some(asked)
@@ -252,36 +258,52 @@ impl Views {
     }
 
     /// The rows of the chats asked for here on a station that its rows do not have yet: each as the station would
-    /// list it, under the key its station gave it once made.
-    fn pending_rows(&self, station: &str, rows: &[Value]) -> Vec<Value> {
+    /// list it, under the key its station gave it once made. The station's row, once there, is the chat's: it covers
+    /// the one from here (made, or not answered yet: its `clientKey` says so), with the title from here while it has
+    /// no messages of its own.
+    fn pending_rows(&self, station: &str, rows: &mut [Value]) -> Vec<Value> {
         let pending = self.pending.borrow();
         let mut out = Vec::new();
         for (key, chat) in pending.iter().filter(|(_, c)| c.station == station) {
-            let (id, thread) = match &chat.made {
-                Some((session, thread)) => (session.clone(), json!(thread)),
-                None => (key.clone(), Value::Null),
-            };
-            if chat.listed.get() {
-                continue;
-            }
-            if chat.made.is_some() && rows.iter().any(|r| r.get("id").and_then(Value::as_str) == Some(&id)) {
-                chat.listed.set(true);
-                continue;
-            }
             // Made, it has no queue: its first message is in the outbox until the station's rows come.
             let first = chat.queue.first().cloned().or_else(|| {
                 let (_, thread) = chat.made.as_ref()?;
                 self.outbox.borrow().get(&(station.to_string(), *thread))?.first().cloned()
             });
             let text = first.as_ref().and_then(|m| m.get("text")).and_then(Value::as_str).unwrap_or("").trim().to_string();
+            let title = text.lines().map(str::trim).find(|l| !l.is_empty()).map(str::to_string);
+            let id = |r: &Value| r.get("id").and_then(Value::as_str).map(str::to_string);
+            // Its row at its station: by the key the station gave it, or, not answered yet, by the key given here.
+            let theirs = rows.iter().position(|r| match &chat.made {
+                Some((session, _)) => id(r).as_deref() == Some(session.as_str()),
+                None => r.get("clientKey").and_then(Value::as_str) == Some(key.as_str()),
+            });
+            if let Some(i) = theirs {
+                if chat.made.is_some() {
+                    chat.listed.set(true);
+                }
+                if let Some(title) = &title
+                    && rows[i].get("last").is_none_or(Value::is_null)
+                {
+                    rows[i]["title"] = json!(title);
+                }
+                continue;
+            }
+            // Listed once and gone from its station's rows (archived or removed there): not shown again from here.
+            if chat.listed.get() {
+                continue;
+            }
             // Nothing sent to it yet, and not made: not a chat to list.
             if first.is_none() && chat.made.is_none() {
                 continue;
             }
-            let title = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("新对话").to_string();
+            let (id, thread) = match &chat.made {
+                Some((session, thread)) => (session.clone(), json!(thread)),
+                None => (key.clone(), Value::Null),
+            };
             let mut row = json!({
-                "id": id, "session": id, "thread": thread, "title": title, "agents": [], "last": null, "unread": false,
-                "mine": true, "lastActiveAt": chat.created_at.round() as i64, "connect": null, "origin": null,
+                "id": id, "session": id, "thread": thread, "title": title.unwrap_or_else(|| "新对话".to_string()), "agents": [], "last": null,
+                "unread": false, "mine": true, "lastActiveAt": chat.created_at.round() as i64, "connect": null, "origin": null,
             });
             if chat.made.is_none() {
                 row["pending"] = json!(true);
@@ -613,8 +635,8 @@ impl Views {
                 let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
                     .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
                     .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
-                let listed = list.as_array().cloned().unwrap_or_default();
-                let asked = self.pending_rows(&s.address, &listed);
+                let mut listed = list.as_array().cloned().unwrap_or_default();
+                let asked = self.pending_rows(&s.address, &mut listed);
                 for row in asked.iter().chain(listed.iter()) {
                     if mine && row.get("mine").and_then(Value::as_bool) != Some(true) {
                         continue;
@@ -2475,6 +2497,66 @@ mod tests {
             t.set(rows("local"), json!([]));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             assert_eq!(list.value.clone().unwrap()["days"].as_array().map(Vec::len), Some(0));
+        });
+    }
+
+    #[test]
+    fn the_stations_row_covers_a_chat_made_here_before_its_answer_comes() {
+        run(async {
+            let t = setup();
+            let views = t.router.views();
+            let mut list = Ui::default();
+            t.subscribe(2, Topic::Chats { scope: "local".into(), mine: true });
+            let mut old = row("ember:c-0", t.host.now_ms() - 5000.0);
+            old["mine"] = json!(true);
+            old["thread"] = json!(3);
+            t.set(rows("local"), json!([old.clone()]));
+            t.read(&mut list, 2).await;
+            let key = views.pending_new("local", json!({"runtime": "claude"}));
+            views.pending_queue(&key, json!({"text": "修一下登录", "attachments": [], "quotes": []})).unwrap();
+            views.pending_try(&key);
+            let ids = |list: &Ui| -> Vec<(String, String)> {
+                let days = list.value.clone().unwrap()["days"].clone();
+                days.as_array().into_iter().flatten().flat_map(|d| d["items"].as_array().cloned().unwrap_or_default())
+                    .map(|i| (i["id"].as_str().unwrap_or("").to_string(), i["title"].as_str().unwrap_or("").to_string())).collect()
+            };
+            t.read(&mut list, 2).await;
+            assert!(ids(&list).contains(&(key.clone(), "修一下登录".into())));
+            // The viewer makes another chat elsewhere (another client) meanwhile: it is not this one.
+            let mut theirs = row("ember:c-2", t.host.now_ms());
+            theirs["mine"] = json!(true);
+            theirs["thread"] = json!(8);
+            theirs["title"] = json!("（还没有消息）");
+            t.set(rows("local"), json!([old.clone(), theirs.clone()]));
+            t.read(&mut list, 2).await;
+            let mut got = ids(&list);
+            got.sort();
+            assert_eq!(got, vec![("ember:c-0".into(), "ember:c-0 的标题".into()), ("ember:c-2".into(), "（还没有消息）".into()), (key.clone(), "修一下登录".into())]);
+            // The station's event brings its row, with the key given here, before its answer: that row is the chat,
+            // with the title from here while it has no messages.
+            assert_eq!(views.pending_try(&key).map(|(_, ask)| ask["clientKey"].clone()), Some(json!(key)));
+            let mut made = row("ember:c-1", t.host.now_ms());
+            made["mine"] = json!(true);
+            made["thread"] = json!(9);
+            made["title"] = json!("（还没有消息）");
+            made["clientKey"] = json!(key);
+            t.set(rows("local"), json!([old.clone(), theirs.clone(), made.clone()]));
+            t.read(&mut list, 2).await;
+            let mut got = ids(&list);
+            got.sort();
+            assert_eq!(got, vec![("ember:c-0".into(), "ember:c-0 的标题".into()), ("ember:c-1".into(), "修一下登录".into()), ("ember:c-2".into(), "（还没有消息）".into())]);
+            // Answered: the same rows.
+            views.pending_made(&key, "ember:c-1", 9);
+            t.read(&mut list, 2).await;
+            let mut got = ids(&list);
+            got.sort();
+            assert_eq!(got, vec![("ember:c-0".into(), "ember:c-0 的标题".into()), ("ember:c-1".into(), "修一下登录".into()), ("ember:c-2".into(), "（还没有消息）".into())]);
+            // Its message in, the row is the station's as it is.
+            made["last"] = json!({"seq": 1, "text": "修一下登录", "authorKind": "person", "author": "local", "createdAt": t.host.now_ms() as i64});
+            made["title"] = json!("修一下登录（站上的）");
+            t.set(rows("local"), json!([old, theirs, made]));
+            t.read(&mut list, 2).await;
+            assert!(ids(&list).contains(&("ember:c-1".into(), "修一下登录（站上的）".into())));
         });
     }
 

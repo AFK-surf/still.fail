@@ -429,6 +429,9 @@ impl AdminApi {
                 "connect": from.and_then(slack_connect_of),
                 "origin": origin,
             });
+            if let Some(client) = key.as_str().and_then(|k| self.deps.hub.client_key(k)) {
+                row["clientKey"] = json!(client);
+            }
             if archived {
                 row["archived"] = match t.thread.home.as_ref().and_then(|home| all.get(home)) {
                     Some(home) => archived_of(home),
@@ -462,6 +465,9 @@ impl AdminApi {
                 "connect": if s.connect == INTERNAL_CONNECT { None } else { Some(s.connect.clone()) },
                 "origin": origin,
             });
+            if let Some(client) = self.deps.hub.client_key(key) {
+                row["clientKey"] = json!(client);
+            }
             if archived {
                 row["archived"] = archived_of(s);
             }

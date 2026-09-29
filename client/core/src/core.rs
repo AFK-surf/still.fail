@@ -1917,7 +1917,8 @@ mod tests {
             let asked: Vec<(String, String)> = host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.contains("/admin/api/"))
                 .map(|r| (r.url.trim_start_matches("https://ember.test/admin/api").to_string(), String::from_utf8(r.body.clone().unwrap_or_default()).unwrap())).collect();
             assert_eq!(asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["/sessions", "/sessions", "/threads/9/messages"]);
-            assert_eq!(serde_json::from_str::<Value>(&asked[0].1).unwrap(), json!({"runtime": "claude", "model": "opus"}));
+            // It carries the key given here: the station's rows say it of the chat made.
+            assert_eq!(serde_json::from_str::<Value>(&asked[0].1).unwrap(), json!({"runtime": "claude", "model": "opus", "clientKey": key}));
             assert_eq!(serde_json::from_str::<Value>(&asked[2].1).unwrap()["text"], "修一下登录");
             // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
             apply(&host, &mut values);
