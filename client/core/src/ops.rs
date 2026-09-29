@@ -1,6 +1,6 @@
-//! What the UIs can have done on a station or on ember cloud, each by its name (`session.stop`, `profile.put`,
+//! What the UIs can have done on a station or on still.fail cloud, each by its name (`session.stop`, `profile.put`,
 //! `workspace.rename`…). A UI never makes a request itself: it names what it wants done and with what, and the core
-//! knows the request that does it and what it changes (station.rs `after_write`, core.rs for ember cloud), so every
+//! knows the request that does it and what it changes (station.rs `after_write`, core.rs for still.fail cloud), so every
 //! topic that shows it is current when the call answers. See docs/client-core.md, Calls.
 
 use serde_json::{Map, Value, json};
@@ -8,7 +8,7 @@ use serde_json::{Map, Value, json};
 use crate::error::{CoreError, Result};
 use crate::station::encode;
 
-/// Where an operation goes: a station (its address), or ember cloud as a signed-in account.
+/// Where an operation goes: a station (its address), or still.fail cloud as a signed-in account.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Target {
     Station(String),
@@ -163,7 +163,7 @@ fn cloud_op(name: &str, params: &Value) -> Option<Result<Request>> {
         Ok(Request { target: Target::Cloud(p.str("account")?), method, path: path?, body, fallback: None })
     };
     let r = match name {
-        // `invite_code`: for an account not let in yet (ember is invite-only).
+        // `invite_code`: for an account not let in yet (still.fail is invite-only).
         "workspace.create" => op("POST", Ok("/v1/workspaces".into()), Some(p.pick(&["name", "invite_code"]))),
         "workspace.rename" => op("PATCH", ws(), Some(p.pick(&["name"]))),
         "workspace.delete" => op("DELETE", ws(), None),

@@ -326,7 +326,7 @@ mod tests {
                     let mut seen = String::new();
                     let socket = tokio_tungstenite::accept_hdr_async(tcp, |request: &Request, mut response: Response| {
                         let h = |n: &str| request.headers().get(n).and_then(|v| v.to_str().ok()).unwrap_or("-").to_string();
-                        seen = format!("{} {} {} {}", request.uri(), h("origin"), h("sec-websocket-protocol"), h("x-ember-mesh"));
+                        seen = format!("{} {} {} {} {}", request.uri(), h("origin"), h("sec-websocket-protocol"), h("x-stillfail-mesh"), h("x-ember-mesh"));
                         if let Some(asked) = request.headers().get("sec-websocket-protocol") {
                             response.headers_mut().insert("sec-websocket-protocol", asked.clone());
                         }
@@ -358,7 +358,11 @@ mod tests {
     async fn a_services_websocket_passes_messages_both_ways_framed_until_it_closes() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let port = socket_service().await;
-        let asked = vec![("sec-websocket-protocol".to_string(), "vite-hmr".to_string()), ("x-ember-mesh".to_string(), "secret".to_string())];
+        let asked = vec![
+            ("sec-websocket-protocol".to_string(), "vite-hmr".to_string()),
+            ("x-stillfail-mesh".to_string(), "secret".to_string()),
+            ("x-ember-mesh".to_string(), "secret".to_string()),
+        ];
         let (socket, protocol) = open_socket(&asked, port, "/hmr?token=1").await.unwrap();
         assert_eq!(protocol.as_deref(), Some("vite-hmr"));
         // The client's side of the stream: frames written to `client`, read from it.
@@ -369,7 +373,7 @@ mod tests {
         writing.write_all(&frame(FRAME_TEXT, b"hi")).await.unwrap();
         writing.write_all(&frame(FRAME_BINARY, &[0, 1, 2])).await.unwrap();
         let got = read_frame(&mut reading).await.unwrap().unwrap();
-        assert_eq!((got.0, String::from_utf8(got.1).unwrap()), (FRAME_TEXT, format!("/hmr?token=1 http://localhost:{port} vite-hmr - | hi")), "the path, the service's own origin, the sub-protocol; none of ember's headers");
+        assert_eq!((got.0, String::from_utf8(got.1).unwrap()), (FRAME_TEXT, format!("/hmr?token=1 http://localhost:{port} vite-hmr - - | hi")), "the path, the service's own origin, the sub-protocol; none of still.fail's headers (either name)");
         assert_eq!(read_frame(&mut reading).await.unwrap().unwrap(), (FRAME_BINARY, vec![0, 1, 2]));
         writing.write_all(&frame(FRAME_TEXT, b"bye")).await.unwrap();
         let (kind, payload) = read_frame(&mut reading).await.unwrap().unwrap();

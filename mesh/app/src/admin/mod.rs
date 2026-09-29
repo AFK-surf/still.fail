@@ -758,7 +758,7 @@ impl AdminApi {
                     // A chat named by hand; no name (or an empty one) names it by its first message again.
                     (Some("title"), "PUT") => {
                         if thread.surface != crate::store::STILLFAIL_SURFACE {
-                            return Err(http_error(400, "只能给 ember 自己的对话改名"));
+                            return Err(http_error(400, "只能给 still.fail 自己的对话改名"));
                         }
                         let input = read_json(body).await?;
                         let title = input.str("title").map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(80).collect::<String>());

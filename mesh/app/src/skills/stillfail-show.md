@@ -1,5 +1,5 @@
 ---
-name: ember-show
+name: stillfail-show
 description: Showing work whose result is seen — a UI change, a page, a design, an animation, a chart, a generated image or video — so people can judge it in the chat: which way to show it (images, video, an inline HTML page, a web service) and how to make the evidence. Use whenever a task has a visible result to be looked at or signed off, instead of describing it in words.
 ---
 
@@ -15,11 +15,11 @@ what to look at.
 |---|---|---|
 | How something looks (layout, spacing, colour, a state) | images | quickest to look at, works on a phone and in any client, compared at a glance |
 | How it moves or behaves over time (animation, transition, a flow of steps) | a video | a still cannot show motion; a strip of frames if they must study it frame by frame |
-| Something to try: click, type, resize, go through pages | a web service (ember-jobs skill) | they use the real thing, at the sizes they choose, and can mark it up |
-| Data, a comparison, a choice between options, a diagram | an inline HTML page (ember-viz skill) | drawn in the message in ember's look, interactive, can hand their choice back |
+| Something to try: click, type, resize, go through pages | a web service (stillfail-jobs skill) | they use the real thing, at the sizes they choose, and can mark it up |
+| Data, a comparison, a choice between options, a diagram | an inline HTML page (stillfail-viz skill) | drawn in the message in still.fail's look, interactive, can hand their choice back |
 
 Often two together: images in the message for the verdict at a glance, and the web service for those who want to try
-it. In a Slack thread only words reach Slack (files stay in ember, linked at the end of the post), so say there in
+it. In a Slack thread only words reach Slack (files stay in still.fail, linked at the end of the post), so say there in
 words what the evidence shows.
 
 ## Images
@@ -35,7 +35,7 @@ words what the evidence shows.
 
 ## Video
 
-- Placed like an image (`![](demo.webm)` on a line of its own), it shows as a still with ▶ and plays in ember's viewer.
+- Placed like an image (`![](demo.webm)` on a line of its own), it shows as a still with ▶ and plays in still.fail's viewer.
   Use mp4 (H.264) or webm (VP8/VP9); other codecs may not play in every browser.
 - Keep it short (a few seconds to show one thing) and cropped to the part that moves. Say what to watch for.
 - Screen recording of a browser (Playwright `recordVideo`, CDP screencast) drops frames on a slow or virtual machine
@@ -47,7 +47,7 @@ words what the evidence shows.
 
 ## Web service
 
-- Start it with `job_start` and a port (the ember-jobs skill), check it answers, then post its link with what to try.
+- Start it with `job_start` and a port (the stillfail-jobs skill), check it answers, then post its link with what to try.
 - The preview beside the chat can lay the page out at a phone, tablet, laptop or desktop size, zoomed and turned, so
   one link serves every size. People can also mark places on the page and comment on each; the marks reach you as
   quotes with a screenshot, numbered. Tell them they can.
@@ -57,9 +57,9 @@ words what the evidence shows.
 
 ## Inline HTML
 
-- For charts, tables, comparisons and choices: the ember-viz skill says how. A widget with option buttons that hand
+- For charts, tables, comparisons and choices: the stillfail-viz skill says how. A widget with option buttons that hand
   the choice back (`ember.sendFollowUpMessage`) makes picking between designs one click.
-- It is not the way to show a real UI: it runs in a sandbox in ember's stylesheet, not your app's. Screenshot or serve
+- It is not the way to show a real UI: it runs in a sandbox in still.fail's stylesheet, not your app's. Screenshot or serve
   the app itself.
 
 ## Making the evidence

@@ -3,7 +3,7 @@ import { vars } from "../styles/tokens.css.ts";
 import { iconBtn } from "../styles/pages.css.ts";
 import { glass } from "../FilePreview.css.ts";
 
-/** What is drawn on an image: ember's accent, as a preview's marks are (literal: the image viewer redefines the theme's). */
+/** What is drawn on an image: still.fail's accent, as a preview's marks are (literal: the image viewer redefines the theme's). */
 export const INK = "oklch(68% .175 39)";
 
 /** Over the image, as big as it and moved with it: the marks, taking the pointer to draw and pick them. */

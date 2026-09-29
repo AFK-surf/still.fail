@@ -45,7 +45,7 @@ function valueOf(topic: Topic): unknown {
     case "host": return station.host();
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
-    // ember cloud's, for the phone's workspace pages (mobile/).
+    // still.fail cloud's, for the phone's workspace pages (mobile/).
     case "accounts": return [station.ACCOUNT];
     case "workspaces": return station.workspaces();
     case "workspace": return station.workspace();
@@ -108,7 +108,7 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   // What reaches past the demo is offered in a real ember instead, and fails here as not done.
   try {
     if (name === "station.upload" || name.startsWith("auth.")) throw new station.NeedsReal();
-    // ember cloud's operations (ops.rs: by the account they go as): every one would reach out.
+    // still.fail cloud's operations (ops.rs: by the account they go as): every one would reach out.
     if ("account" in params) throw new station.NeedsReal();
     if (typeof params.station === "string") return station.op(name);
   } catch (e) {
@@ -199,7 +199,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
   const key = encodeURIComponent(navigateTarget());
   return phone
     ? (
-      // As ember cloud's app has the phone's pages (cloud/CloudApp.tsx).
+      // As still.fail cloud's app has the phone's pages (cloud/CloudApp.tsx).
       <ToastProvider>
         <Tooltip.Provider delayDuration={400}>
           <MemoryRouter key="phone" initialEntries={[`/w/${ENTRY.id}`, `/w/${ENTRY.id}/s/local/chats/${key}`]} initialIndex={1}>

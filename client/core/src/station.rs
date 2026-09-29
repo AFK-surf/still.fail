@@ -213,8 +213,8 @@ impl SocketFrame {
 }
 
 /// Asks the page's HTTP wire for the body as it comes, not whole (a preview's answer, which may never end); the
-/// station's HTTP passes on no `x-ember-` header.
-const STREAM_HEADER: &str = "x-ember-stream";
+/// station's HTTP passes on no `x-stillfail-` (or `x-ember-`) header.
+const STREAM_HEADER: &str = "x-stillfail-stream";
 
 fn wants_stream(head: &RequestHead) -> bool {
     head.headers.iter().any(|(k, v)| (k.eq_ignore_ascii_case("accept") && v.contains(EVENT_STREAM)) || k.eq_ignore_ascii_case(STREAM_HEADER))
@@ -740,7 +740,7 @@ impl Stations {
         let path = format!("/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
         headers.push((STREAM_HEADER.into(), "1".into()));
         let (mut span, waiting, reply) = self.send(station, method, &path, headers, body, false);
-        span.set("ember.stream", true);
+        span.set("stillfail.stream", true);
         let reply = match reply.await {
             Ok(reply) => reply,
             Err(error) => {
@@ -768,7 +768,7 @@ impl Stations {
         let _waiting = self.status.begin(Place::Station(station.to_string()), "打开网页服务的 WebSocket", false);
         let mut span = self.tracer.span(format!("SOCKET {}", route(&path)), Kind::Client);
         span.set("url.path", route(&path));
-        span.set("ember.stream", true);
+        span.set("stillfail.stream", true);
         let mut headers = headers;
         headers.push(("traceparent".into(), span.context().traceparent()));
         let opening = self.tracer.instrument(Some(span.context()), self.wire.socket(station, RequestHead { method: "GET".into(), path, headers }));

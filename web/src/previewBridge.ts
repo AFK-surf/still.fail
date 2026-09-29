@@ -1,4 +1,4 @@
-// The ember page's end of a preview frame's port (cloud/src/preview.ts): the service's requests and WebSockets, on to
+// The still.fail page's end of a preview frame's port (cloud/src/preview.ts): the service's requests and WebSockets, on to
 // the station through the core, and their answers back.
 //
 // Frame → here: a request `{id, method, path, headers, body}`; `{type: "cancel", id}` when its page gave it up;

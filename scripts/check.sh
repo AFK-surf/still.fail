@@ -76,7 +76,7 @@ ts_desktop='^apps/desktop/'
 if touches '^design/icons/|^scripts/icons\.py$|^web/src/icons\.tsx$|/ui/Icons\.kt$'; then
   step icons python3 scripts/icons.py --check
 fi
-# The UIs never make a request of a station or ember cloud themselves: they name what they want done (client/core/src/
+# The UIs never make a request of a station or still.fail cloud themselves: they name what they want done (client/core/src/
 # ops.rs), and the core, which knows what it changes, brings every topic that shows it up to date.
 if touches '^(web/src|apps/desktop/src|apps/android)/'; then
   step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'

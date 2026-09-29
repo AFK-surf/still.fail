@@ -41,7 +41,7 @@ export interface Picked {
   component: string | null;
 }
 
-/** ember's accent (--accent, light). */
+/** still.fail's accent (--accent, light). */
 const MARK = "#ef6a3c";
 const MAX_HEIGHT = 12000;
 const MAX_PIXELS = 36e6;
@@ -309,7 +309,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
    */
   async function windowAt(d: Document, x: number, y: number, scale: number, now: boolean): Promise<HTMLCanvasElement> {
     const win = d.defaultView!;
-    const tag = "data-ember-shot";
+    const tag = "data-stillfail-shot";
     const held = new Map<string, { x: number; y: number } | null>();
     let i = 0;
     for (const el of d.body?.querySelectorAll<HTMLElement>("*") ?? []) {

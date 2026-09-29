@@ -6,12 +6,12 @@
 //!
 //! The account topics live here: `accounts` is the list itself, `workspaces`
 //! every account's `/v1/me`, `workspace` one `GET /v1/workspaces/:id`. While
-//! `workspaces` or a `workspace` is live, each signed-in account holds ember
+//! `workspaces` or a `workspace` is live, each signed-in account holds still.fail
 //! cloud's `/v1/events` socket, and the topics change when it says so:
 //! `workspaces` reads that account's `/v1/me` again, `workspace` that
 //! workspace, and `station` sets the station's `online` in place. Every time a
 //! socket opens, the live account topics are read once (nothing is replayed).
-//! They are also read when the accounts change and after a write to ember
+//! They are also read when the accounts change and after a write to still.fail
 //! cloud (ops.rs); never on a timer.
 
 use std::cell::{Cell, RefCell};
@@ -994,7 +994,7 @@ impl Inner {
                 Ok(self.workspaces_value())
             }
             Topic::Workspace { workspace } => self.workspace_value(workspace).await,
-            // Read as they are now; a write to ember cloud (ops.rs) reads them again (refresh_all).
+            // Read as they are now; a write to still.fail cloud (ops.rs) reads them again (refresh_all).
             Topic::LoginSessions { account } => self.cloud.request(account, "GET", "/v1/auth/sessions", None).await.map(|v| v.get("sessions").cloned().unwrap_or(json!([]))),
             Topic::Admin { account, list } => match list.as_str() {
                 "users" | "workspaces" | "invite-codes" => self.cloud.request(account, "GET", &format!("/v1/admin/{list}"), None).await,
@@ -1255,7 +1255,7 @@ enum Call {
     AuthBegin { redirect_uri: String, return_to: String, device_name: String },
     AuthComplete { query: String },
     SignOut { account: String },
-    /// Something to have done on a station or ember cloud, by its name (ops.rs): the UI never makes a request itself.
+    /// Something to have done on a station or still.fail cloud, by its name (ops.rs): the UI never makes a request itself.
     Op(crate::ops::Request),
     ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value },
     /// A new chat on a station (`POST /sessions` with `ask`): answered at once with the key it goes by here; the
@@ -2008,8 +2008,8 @@ mod tests {
             core.receive(ui, preview(1));
             host.settle().await;
             let asked = host.requests.borrow().last().cloned().unwrap();
-            assert_eq!(asked.url, "https://ember.test/admin/api/preview/5180/events");
-            assert_eq!(header(&asked, "x-ember-stream").as_deref(), Some("1"), "asked for as it comes");
+            assert_eq!(asked.url, "https://stillfail.test/admin/api/preview/5180/events");
+            assert_eq!(header(&asked, "x-stillfail-stream").as_deref(), Some("1"), "asked for as it comes");
             let values = |host: &FakeHost| host.take_emitted().into_iter().map(|(_, m)| serde_json::to_value(m).unwrap()).collect::<Vec<_>>();
             assert_eq!(values(&host), vec![json!({ "id": 1, "value": { "head": { "status": 200, "headers": [["content-type", "text/event-stream"]] } } })]);
             // Nothing is said to be waited on once its head came, however long its body goes on.

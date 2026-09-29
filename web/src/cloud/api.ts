@@ -1,4 +1,4 @@
-// ember cloud's account API: what the pages have done there, by name, done by the core as one of the signed-in
+// still.fail cloud's account API: what the pages have done there, by name, done by the core as one of the signed-in
 // accounts. Reads are the core's `workspaces` and `workspace` topics; after a
 // write the core refetches them, so nothing here keeps a cache.
 import { useCallback, useRef, useState } from "react";
@@ -30,7 +30,7 @@ export function useWorkspace(id: string): TopicState<WorkspaceView> {
   return useTopic<WorkspaceView>({ topic: "workspace", workspace: id });
 }
 
-/** Has the core do `name` (client/core/src/ops.rs) on ember cloud as the account `sub`, with `params`. */
+/** Has the core do `name` (client/core/src/ops.rs) on still.fail cloud as the account `sub`, with `params`. */
 function op<T>(sub: string, name: string, params: Record<string, unknown> = {}): Promise<T> {
   return core().call(name, { ...params, account: sub }) as Promise<T>;
 }
@@ -38,7 +38,7 @@ function op<T>(sub: string, name: string, params: Record<string, unknown> = {}):
 export interface LoginSession { id: string; name: string; created_at: number; expires_at: number; current: boolean }
 
 export const cloud = {
-  /** `code`: an invite code, for an account not let in yet (ember is invite-only). */
+  /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). */
   createWorkspace: (sub: string, name: string, code?: string) => op<WorkspaceView>(sub, "workspace.create", code ? { name, invite_code: code } : { name }),
   renameWorkspace: (sub: string, id: string, name: string) => op<WorkspaceView>(sub, "workspace.rename", { workspace: id, name }),
   deleteWorkspace: (sub: string, id: string) => op<{ ok: true }>(sub, "workspace.delete", { workspace: id }),
@@ -70,7 +70,7 @@ export const admin = {
   revokeCode: (sub: string, code: string) => op<{ ok: true }>(sub, "admin.revokeCode", { code }),
 };
 
-// ember cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).
+// still.fail cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).
 const INVITE_ERRORS: Record<string, string> = {
   invite_code_required: "still.fail 目前只对受邀的人开放，需要邀请码才能新建 workspace",
   invite_code_invalid: "这个邀请码不对，检查一下有没有输错",

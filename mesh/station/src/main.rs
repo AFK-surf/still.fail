@@ -1010,11 +1010,11 @@ async fn answer(
     Ok(())
 }
 
-/// A WebSocket of a web service on this machine, for a preview's page (ember_app::preview::open_socket): answered
-/// 101 once the service took it, then its messages framed both ways (ember_app::preview::FRAME_TEXT) until either
+/// A WebSocket of a web service on this machine, for a preview's page (stillfail_app::preview::open_socket): answered
+/// 101 once the service took it, then its messages framed both ways (stillfail_app::preview::FRAME_TEXT) until either
 /// side closes. Only a preview's path is opened; its span is the opening, as an event stream's.
 async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut SendStream, recv: &mut RecvStream, outcome: &mut Outcome, traced: &mut Traced<'_>) -> Result<()> {
-    let target = traced.path.strip_prefix("/admin/api").and_then(ember_app::preview::preview_target);
+    let target = traced.path.strip_prefix("/admin/api").and_then(stillfail_app::preview::preview_target);
     let refuse = async |send: &mut SendStream, status: u16, error: String| -> Result<()> {
         write_line(send, &json!({ "status": status, "headers": { "content-type": "application/json" } })).await?;
         send.write_all(json!({ "error": error }).to_string().as_bytes()).await?;
@@ -1030,7 +1030,7 @@ async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut Send
         return refuse(send, 502, "station unreachable: not started".into()).await;
     }
     let headers: Vec<(String, String)> = head["headers"].as_object().into_iter().flatten().filter_map(|(k, v)| Some((k.to_ascii_lowercase(), v.as_str()?.to_string()))).collect();
-    let (service, protocol) = match ember_app::preview::open_socket(&headers, port, &path).await {
+    let (service, protocol) = match stillfail_app::preview::open_socket(&headers, port, &path).await {
         Ok(opened) => opened,
         Err((status, error)) => {
             outcome.status = status;
@@ -1046,7 +1046,7 @@ async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut Send
     traced.end(outcome, true, None);
     // What came with the head line is the first of the client's frames.
     let from_client = tokio::io::AsyncReadExt::chain(std::io::Cursor::new(carry), recv);
-    ember_app::preview::pump_socket(service, from_client, send).await;
+    stillfail_app::preview::pump_socket(service, from_client, send).await;
     Ok(())
 }
 

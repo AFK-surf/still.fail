@@ -239,7 +239,7 @@ while `chat` changes with messages.
 {
   "me": { "id": "a@b.c", "email": "a@b.c" },     // { "id": "local", "email": null } on a station's own page
   "stations": [{ "station": "ws/st", "id": "st", "name": "studio", "state": "online", "message": null }],
-  //   state: "online" | "connecting" | "offline" (not connected to ember cloud) | "error" (message says why)
+  //   state: "online" | "connecting" | "offline" (not connected to still.fail cloud) | "error" (message says why)
   //   error: its rows could not be read, or its link failed; connecting: rows not read yet, or the link
   //   is reconnecting (rows already read stay listed). The local station is named "".
   "loading": false,                                // an online station has not answered its rows yet
@@ -321,7 +321,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `auth.begin` | `redirect_uri`, `return_to`, `device_name` | `{ url }` to open (web: navigate; native: system browser) |
 | `auth.complete` | `query` (the callback's query string) | `{ account, return_to }` |
 | `auth.signOut` | `account` | — |
-| *an operation* | `station` or `account`, and its own | what the station or ember cloud answers; see below |
+| *an operation* | `station` or `account`, and its own | what the station or still.fail cloud answers; see below |
 | `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?` | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on ember's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
 | `chat.older` | `station`, `thread` | `{ more }`: loads the page (50 entries) before the chat's oldest loaded entry into its `thread` topic — from what is kept, else from the station — so `messages` grows in front |
@@ -334,7 +334,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `preview.socket.send` | `socket`, one of `text`, `binary`, `close: [code, reason]` | — ; what the page sends on the socket it named so |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
 
-A UI never makes a request of a station or ember cloud itself (no method, no
+A UI never makes a request of a station or still.fail cloud itself (no method, no
 path): it names what it wants done, and the core knows the request that does it
 and what that changes (`ops.rs`; `scripts/check.sh` fails on a UI that asks
 for a request). Station operations take `station`: `session.stop`,
@@ -351,7 +351,7 @@ else its session), `chats.archived`,
 `profile.useMachineLogin`, `profile.put`, `profile.delete`, `profile.quota`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
 `login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
-`memory.get`, `software.update`, `software.check`. ember cloud's take
+`memory.get`, `software.update`, `software.check`. still.fail cloud's take
 `account`: `workspace.create`, `workspace.rename`, `workspace.delete`,
 `workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
 `workspace.revokeInvitation`, `workspace.setRole`, `workspace.removeMember`,
@@ -368,7 +368,7 @@ job stopped into its session's `jobs` and into `jobs` (as its `job` event
 would); otherwise the touched topics are read again (sessions → `session`,
 `sessions` and `chatRows`; a thread answered → `chatRows` as well; connects →
 `overview` and `sessions`; profiles, Slack → `overview`; `slack.identity` →
-`overview` (its answer) and `chatRows`). A write to ember cloud reads the
+`overview` (its answer) and `chatRows`). A write to still.fail cloud reads the
 account topics again. The station's events bring the same a moment later.
 
 ## Crates

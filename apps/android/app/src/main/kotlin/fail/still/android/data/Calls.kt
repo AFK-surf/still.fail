@@ -207,7 +207,7 @@ object Auth {
     }
 }
 
-/** ember cloud's account API: what the app has done there, by name, done by the core as one of the signed-in accounts (web/src/cloud/api.ts). */
+/** still.fail cloud's account API: what the app has done there, by name, done by the core as one of the signed-in accounts (web/src/cloud/api.ts). */
 class Cloud(private val core: StillFailCore, private val account: String) {
     private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
         core.call(name, buildJsonObject { fill(); put("account", account) })
