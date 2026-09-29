@@ -35,20 +35,17 @@ export const refMirror = style({
   pointerEvents: "none", color: vars.text, maxHeight: "none",
 });
 /** A mark in the composer: colour only, no padding or border, so it takes the room its letters take. */
-export const refMark = style({
-  borderRadius: "6px", background: vars.accentBg, color: vars.accent, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone",
-});
+export const refMark = style({ color: vars.accent });
 export const refMarkHidden = style({ color: "transparent" });
 /** The composer's text while it holds a mark: see-through, the mirror under it drawn instead. */
 export const refTextSeeThrough = style({ color: "transparent !important", caretColor: vars.text });
 /** A reference in a message. */
 export const refChip = style({
-  display: "inline", padding: "1px 6px", borderRadius: "6px", background: vars.accentBg, color: vars.accent,
-  textDecoration: "none", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone", cursor: "pointer",
+  display: "inline", color: vars.accent, textDecoration: "none", cursor: "pointer",
   selectors: {
     // Over a message's own link colours (styles/conversation.css.ts).
     "&&": { color: vars.accent, textDecoration: "none" },
     "&&:hover": { textDecoration: "underline", textUnderlineOffset: "3px" },
   },
 });
-export const refChipHash = style({ marginRight: "3px", opacity: ".7" });
+export const refChipHash = style({ marginRight: "1px", opacity: ".7" });

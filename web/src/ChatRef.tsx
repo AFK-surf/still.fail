@@ -38,13 +38,14 @@ export function WithRefs({ text }: { text: string }) {
 
 /**
  * The composer's text drawn under its (then see-through) text, each mark as a chip: the same letters in the same
- * places, so the caret and the selection keep to them. Its `[` and `]` are there but unseen, the chip's padding.
+ * places, so the caret and the selection keep to them. Its `[` and `]` are there but unseen, the chip's padding; the
+ * `[` drawn before the `@` (the same width, so what follows keeps its place) to keep the `@` against the title.
  */
 export function RefMirror({ text, className, mirror }: { text: string; className: string; mirror: RefObject<HTMLDivElement | null> }) {
   return (
     <div ref={mirror} className={`${className} ${css.refMirror}`} aria-hidden="true">
       {splitBy(text, REF_MARK).map((part, i) => (typeof part === "string" ? part : (
-        <span key={i} className={css.refMark}>@<span className={css.refMarkHidden}>[</span>{part[1]}<span className={css.refMarkHidden}>]</span></span>
+        <span key={i} className={css.refMark}><span className={css.refMarkHidden}>[</span>@{part[1]}<span className={css.refMarkHidden}>]</span></span>
       )))}
       {"\u200b"}
     </div>
