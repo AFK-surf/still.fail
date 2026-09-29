@@ -56,6 +56,9 @@ pub const RETRY_MS: u64 = 3_000;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone though nothing
 /// said so, and is read again (from where it was).
 pub const STREAM_IDLE_MS: u64 = 40_000;
+/// How long a preview's WebSocket may take to open: longer than the station gives the service (20 s), so this only
+/// ends one nothing answers (an older station takes the socket for a request and waits for its body).
+pub const SOCKET_OPEN_MS: u64 = 30_000;
 /// A burst of `thread` events becomes one read of each thread's summary.
 pub const EVENTS_COALESCE_MS: u64 = 400;
 /// Entries per page of a thread.
@@ -768,7 +771,12 @@ impl Stations {
         span.set("ember.stream", true);
         let mut headers = headers;
         headers.push(("traceparent".into(), span.context().traceparent()));
-        let opened = self.tracer.instrument(Some(span.context()), self.wire.socket(station, RequestHead { method: "GET".into(), path, headers })).await;
+        let opening = self.tracer.instrument(Some(span.context()), self.wire.socket(station, RequestHead { method: "GET".into(), path, headers }));
+        let opened = match futures::future::select(opening, self.host.sleep(SOCKET_OPEN_MS)).await {
+            Either::Left((opened, _)) => opened,
+            // Let go, its stream is reset.
+            Either::Right(_) => Err(CoreError::new("timeout", "网页服务的 WebSocket 没有打开：station 没有回应")),
+        };
         let socket = match opened {
             Ok(socket) => socket,
             Err(error) => {
@@ -2221,6 +2229,10 @@ mod tests {
             };
             async move { reply }.boxed_local()
         }
+        /// A socket nothing answers (an older station waiting for a request's body).
+        fn socket(&self, _station: &StationAddr, _head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
+            futures::future::pending().boxed_local()
+        }
     }
 
     fn setup() -> (Rc<FakeHost>, Rc<FakeSink>, Rc<FakeWire>, Rc<Stations>) {
@@ -3006,6 +3018,17 @@ mod tests {
             // Nothing at all for longer: the link is taken for gone, and it is asked for again.
             wait(STREAM_IDLE_MS + RECONNECT_MS + 5_000).await;
             assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0&last=200"), 2);
+        });
+    }
+
+    #[test]
+    fn a_preview_socket_nothing_answers_fails_in_time() {
+        run(async {
+            let (host, _sink, _wire, stations) = setup();
+            host.speed_up(100);
+            let opened = stations.preview_socket(&remote(), 5180, "/", vec![]).await;
+            assert_eq!(opened.err().map(|e| e.code).as_deref(), Some("timeout"));
+            assert!(host.sleeps.borrow().contains(&SOCKET_OPEN_MS));
         });
     }
 
