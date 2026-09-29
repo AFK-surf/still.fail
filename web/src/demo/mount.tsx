@@ -270,12 +270,17 @@ export function mountDemo(element: HTMLElement): void {
     story.stop();
   }, true);
 
-  // Played once the demo is in view, from the start.
-  new IntersectionObserver((entries, observer) => {
+  // Played once the demo is seen: most of it in view, and not before the site's opening (its title's motion, which
+  // tells when it is done; a page without it has none) has handed over to it.
+  const opened = document.documentElement.dataset.motion === undefined ? Promise.resolve() : new Promise<void>((done) => {
+    window.addEventListener("ember-site-opened", () => done(), { once: true });
+    setTimeout(done, 8000);
+  });
+  void opened.then(() => new IntersectionObserver((entries, observer) => {
     if (!entries.some((e) => e.isIntersecting)) return;
     observer.disconnect();
     void story.play();
-  }, { threshold: 0.3 }).observe(root);
+  }, { threshold: 0.6 }).observe(root));
 
   createRoot(app).render(
     <StrictMode>
