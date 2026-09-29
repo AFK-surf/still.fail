@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -14,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.lifecycleScope
 import fail.still.android.data.Auth
 import fail.still.android.ui.StillFailTheme
@@ -21,6 +23,8 @@ import fail.still.android.ui.Loading
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class MainActivity : ComponentActivity() {
     private var app by mutableStateOf<AppState?>(null)
@@ -34,18 +38,45 @@ class MainActivity : ComponentActivity() {
             ?.createMulticastLock("stillfail-mdns")?.apply { setReferenceCounted(false) }
     }
 
+    /** Since when the app has been off screen (elapsedRealtime: it counts deep sleep too); null while on it. */
+    private var hidden: Long? = null
+
     override fun onStart() {
         super.onStart()
         multicast?.acquire()
         app?.let { lifecycleScope.launch { it.checkUpdates() } }
+        wake()
     }
 
     override fun onStop() {
         multicast?.release()
+        if (hidden == null) hidden = SystemClock.elapsedRealtime()
         super.onStop()
     }
 
+    /**
+     * Back on screen after a while in the background, as the web page does on visibilitychange (web/src/core/client.ts
+     * connectCore): the core gives up requests that went out before and reconnects links gone quiet
+     * (client/core/src/wake.rs), so nothing hangs on a socket the system dropped while away.
+     */
+    private fun wake() {
+        val since = hidden ?: return
+        hidden = null
+        val app = app ?: return
+        val away = (SystemClock.elapsedRealtime() - since).coerceAtLeast(0)
+        lifecycleScope.launch {
+            try {
+                app.core.call("client.wake", buildJsonObject { put("away", away) })
+            } catch (_: CoreException) {
+                // An older core without it: nothing to wake.
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge to edge from the first frame (the theme's bars are set once it is known, below): else the first
+        // composition is laid out inside the system bars and moves when they are taken away.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN)
@@ -60,6 +91,9 @@ class MainActivity : ComponentActivity() {
                 val bars = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                 else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
                 enableEdgeToEdge(bars, bars)
+                // The system's theme changes without the activity made again (configChanges uiMode): the window's own
+                // ground follows it here, as the theme's resources would not.
+                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable((if (dark) fail.still.android.ui.Dark else fail.still.android.ui.Light).bg.toArgb()))
             }
             StillFailTheme(dark) {
                 if (current == null) Loading("正在启动…")
@@ -76,7 +110,8 @@ class MainActivity : ComponentActivity() {
     /**
      * still.fail cloud's sign-in comes back as stillfail://auth/callback?… (ember://, from before the rename, still
      * accepted), which the core finishes; an item's link (https://app.still.fail/o/<workspace>/<station>/<session>, or the
-     * old host ember.3720.org) opens that item; a service's link (`?service=<job>`, from Slack) has the service over it.
+     * old host ember.3720.org) opens that item; a service's link (`?service=<job>`, from Slack) has the service over it;
+     * an invitation's link and a chat's reference link go as links tapped in the app (AppState.openLink).
      */
     private fun handle(intent: Intent?) {
         val uri = intent?.data ?: return
@@ -85,6 +120,12 @@ class MainActivity : ComponentActivity() {
         if (uri.scheme == "https" && parts.size == 4 && parts[0] == "o") {
             setIntent(Intent())
             app.openItem(parts[1], parts[2], parts[3], uri.getQueryParameter("service")?.takeIf { it.isNotEmpty() })
+            return
+        }
+        // An invitation's link, or a link to a chat as chats refer to each other: as a link tapped in the app.
+        if (uri.scheme == "https" && (parts == listOf("invite") || parts.firstOrNull() == "w")) {
+            setIntent(Intent())
+            app.openLink(uri.toString())
             return
         }
         if (uri.scheme !in AUTH_SCHEMES || uri.host != "auth") return

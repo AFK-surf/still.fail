@@ -72,7 +72,7 @@ import fail.still.android.ui.Loading
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.ProviderMark
-import fail.still.android.ui.QuotaRing
+import fail.still.android.ui.QuotaDials
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SheetGrab
@@ -126,16 +126,10 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             trailing = { NavButton(Icons.More, { openProfileMenu(app, address, p) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             Card {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProviderMark(p.runtime, kind, 26.dp)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        val tone = toneColor(p.checkTone)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            StateDot(tone)
-                            Text(p.checkText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tone)
-                        }
-                        // An account its provider refuses (or whose allowance cannot be read): why, as the provider said it.
-                        quotaTrouble(p.quota)?.let { Text(it, fontSize = 13.sp, color = if (p.quota?.state == "blocked") C.red else C.muted) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TonePill(p.checkText, p.checkTone)
                         Text(
                             (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: "还没检查过") + (p.check?.time?.get("checkedAt")?.let { " · ${it.ago}检查" } ?: ""),
                             fontSize = 13.sp, color = C.muted,
@@ -146,6 +140,20 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             QuotaSection(p)
             ModelsSection(p) { models -> save(buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } }, "已保存") }
+            // A station older than the setting says nothing of it.
+            val background = p.backgroundOnMessage
+            if ("claude" in p.runtimes && background != null) {
+                SectionHeader("运行", start = 24.dp)
+                ListCard {
+                    ListRow(onClick = { save(buildJsonObject { put("backgroundOnMessage", !background) }, if (background) "已关闭" else "已打开") }) {
+                        Column(Modifier.weight(1f)) {
+                            Text("新消息到来时，把正在执行的命令转到后台", fontSize = 15.sp, color = C.ink)
+                            Text(if (background) "命令和 subagent 转到后台继续跑，agent 马上读到消息。" else "新消息要等正在执行的命令或 subagent 结束后才会读到。", fontSize = 13.sp, color = C.muted)
+                        }
+                        Switch(background)
+                    }
+                }
+            }
             SectionHeader("使用它的连接", start = 24.dp)
             ListCard {
                 if (users.isEmpty()) ListRow { Text("还没有连接使用这个 Profile。", fontSize = 15.sp, color = C.muted) }
@@ -227,24 +235,39 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
     }
 }
 
-/** Its allowance, window by window: what is left and when it refills. */
+/** Its allowance, window by window: what is left and when it refills; why it cannot be read, when the provider says. */
 @Composable
 private fun QuotaSection(p: Profile) {
     val windows = p.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
-    if (windows.isEmpty()) return
-    SectionHeader("额度", p.quota?.time?.get("checkedAt")?.let { "${it.ago}查询" }, start = 24.dp)
-    ListCard {
-        windows.forEach { w ->
+    val trouble = quotaTrouble(p.quota)
+    val checked = p.quota?.time?.get("checkedAt")?.let { "${it.ago}查询" }
+    if (trouble != null) {
+        val blocked = p.quota?.state == "blocked"
+        SectionHeader("额度", checked, start = 24.dp)
+        ListCard {
             ListRow {
-                QuotaRing(w.left, w.level, 26.dp)
                 Column(Modifier.weight(1f)) {
-                    Text(w.label, fontSize = 15.sp, color = C.ink)
-                    w.refills?.let { Text(it, fontSize = 13.sp, color = C.muted) }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PresenceDot(if (blocked) "error" else "offline")
+                        Text(if (blocked) "被停用" else "查不到额度", fontSize = 15.sp, color = C.ink)
+                    }
+                    Text(trouble, fontSize = 13.sp, color = C.muted)
                 }
-                Text("剩 ${w.left}%", fontSize = 13.sp, color = C.muted)
             }
         }
+        return
     }
+    if (windows.isEmpty()) return
+    SectionHeader("额度", checked, start = 24.dp)
+    ListCard { QuotaDials(p.quota, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 14.dp)) }
+}
+
+/** A check's state in its words on a soft pill of its tone (the core's: accent | green | blue | red | amber | neutral). */
+@Composable
+internal fun TonePill(text: String, tone: String, size: androidx.compose.ui.unit.TextUnit = 12.sp) {
+    val color = when (tone) { "green" -> C.green; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accentInk; "amber" -> C.warn; else -> C.muted }
+    val bg = if (tone == "neutral") C.chip else color.copy(alpha = if (tone == "amber") 0.14f else 0.12f)
+    Text(text, fontSize = size, color = color, maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp))
 }
 
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
@@ -315,7 +338,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
                     busy = true
                     scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = e.message } finally { busy = false } }
                 }
-                Text("也可以在那台机器上手动登录", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { manual = !manual })
+                Text("也可以在那台机器上手动登录", fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
                 if (manual) CommandBox(p.loginCommand)
             }
         }

@@ -1,4 +1,5 @@
-// You: who is signed in, which accounts and workspaces, how it looks.
+// You, as the narrow web has it (web/src/mobile/Me.tsx): who is signed in, which accounts, how it looks, where it is
+// signed in, and this build (workspaces are switched from their name on Home).
 package fail.still.android.screens
 
 import androidx.compose.foundation.layout.Column
@@ -56,7 +57,6 @@ fun MeScreen(current: WorkspaceEntry) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
-    val workspaces by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     val me = current.account
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack("会话", app::pop)
@@ -70,20 +70,8 @@ fun MeScreen(current: WorkspaceEntry) {
                 }
             }
         }
-        // One line per workspace: the name gives way with an ellipsis; which account it is under shows only when there are several.
+        // Workspaces are switched from their name on Home (Workspaces.kt), as on the web.
         val list = accounts.value.orEmpty()
-        SectionHeader("Workspace", start = 24.dp)
-        ListCard {
-            workspaces.value?.entries().orEmpty().forEach { e ->
-                ListRow(onClick = { app.pickWorkspace(e.workspace.id); app.home() }) {
-                    Column(Modifier.weight(1f)) {
-                        Text(e.workspace.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (list.size > 1) Text(e.account.email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (e.workspace.id == current.workspace.id) IconIn(Icons.Check, 14.dp, C.accent)
-                }
-            }
-        }
         SectionHeader("外观", start = 24.dp)
         val themes = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },

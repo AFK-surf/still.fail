@@ -139,8 +139,12 @@ fun SheetHost(app: AppState) {
                 .offset { IntOffset(0, offset.value.toInt()) }
                 .shadow(24.dp, RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
-                // Frosted glass over the page, as the bars and capsules are.
-                .hazeEffect(app.haze) { backgroundColor = paper; tints = listOf(HazeTint(glass)); blurRadius = 28.dp; noiseFactor = 0f }
+                // Frosted glass over the page, as the bars and capsules are. The web's backdrop has the scrim in it (it
+                // frosts all that is behind it); here the pages alone are the source, so the scrim goes under the glass.
+                .hazeEffect(app.haze) {
+                    backgroundColor = paper; blurRadius = cssBlur(28f); noiseFactor = 0f
+                    tints = listOf(HazeTint(Color.Black.copy(alpha = 0.28f * scrim)), HazeTint(glass))
+                }
                 .pointerInput(Unit) { detectTapGestures { } }
                 // A field of the sheet's own brings the keyboard up under the sheet, not over it.
                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),

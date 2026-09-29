@@ -82,6 +82,8 @@ class StillFailCore internal constructor(
     private var client = 0L
     private var nextId = 1L
     private val calls = HashMap<Long, CompletableDeferred<JsonElement>>()
+    /** What calls that say how they go (`{id, value}` before their answer: a streamed preview, a preview socket) hear. */
+    private val progress = HashMap<Long, (JsonElement) -> Unit>()
     private val subs = HashMap<Long, Subscription>()
     /** Calls made while the core is being restarted, sent once it is up. */
     private val queue = ArrayList<String>()
@@ -107,6 +109,31 @@ class StillFailCore internal constructor(
             return answer.await()
         } catch (e: CancellationException) {
             scope.launch(confined) { calls.remove(id) }
+            throw e
+        }
+    }
+
+    /**
+     * A call that says how it goes before it answers (docs/client-core.md: a streamed `station.preview`, a
+     * `preview.socket`, `station.file` with `progress`): each value to `onProgress` (on the core's own thread, in
+     * order), then its answer. Cancelling the coroutine cancels the call (`{id, cancel}`), which the core stops.
+     */
+    suspend fun call(name: String, params: JsonObject, onProgress: (JsonElement) -> Unit): JsonElement {
+        val answer = CompletableDeferred<JsonElement>()
+        val id = withContext(confined) {
+            val id = nextId++
+            calls[id] = answer
+            progress[id] = onProgress
+            send(buildJsonObject { put("id", id); put("call", name); put("params", params) }.toString())
+            id
+        }
+        try {
+            return answer.await()
+        } catch (e: CancellationException) {
+            scope.launch(confined) {
+                progress.remove(id)
+                if (calls.remove(id) != null) send(buildJsonObject { put("id", id); put("cancel", true) }.toString())
+            }
             throw e
         }
     }
@@ -172,6 +199,7 @@ class StillFailCore internal constructor(
         // Whether they ran is unknown: the caller decides whether to try again.
         val failed = calls.values.toList()
         calls.clear()
+        progress.clear()
         queue.clear()
         failed.forEach { it.completeExceptionally(CoreException("core_restarted", "核心已重启，请重试", null)) }
         for (sub in subs.values) sub.value = null
@@ -210,6 +238,10 @@ class StillFailCore internal constructor(
         failures = 0
         val id = (message["id"] as? JsonPrimitive)?.longOrNull ?: return
         val error = message["error"]?.let(::coreException)
+        // How a call goes, before its answer.
+        val going = message["value"]
+        if (going != null && error == null && message["ok"] == null) progress[id]?.let { it(going); return }
+        progress.remove(id)
         calls.remove(id)?.let { call ->
             if (error != null) call.completeExceptionally(error) else call.complete(message["ok"] ?: JsonNull)
             return

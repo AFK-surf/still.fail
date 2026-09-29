@@ -93,6 +93,13 @@ sealed interface Screen {
     data class ConnectRun(val station: String, val connect: String) : Screen { override val id = "connect-run/$station/$connect" }
     data class NewConnect(val station: String) : Screen { override val id = "new-connect/$station" }
     data class NewProfile(val station: String) : Screen { override val id = "new-profile/$station" }
+    /** Chats archived, of every station online: put back in the list, or deleted for good. */
+    data object Archive : Screen { override val id = "archive" }
+
+    /** The agents' memory on a station. */
+    data class Memory(val station: String) : Screen { override val id = "memory/$station" }
+    /** A connect's Slack app: its name, icon, colour and permissions. */
+    data class SlackApp(val station: String, val connect: String) : Screen { override val id = "slack-app/$station/$connect" }
 }
 
 class AppState(val core: StillFailCore, private val prefs: SharedPreferences, val cloudOrigin: String, val updates: Updates) {
@@ -155,6 +162,20 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
         val same = uri.scheme == origin.scheme && uri.host == origin.host && uri.port == origin.port
         // The production cloud answers on its new host and its old one alike: a link with either opens here.
         val sameCloud = origin.host in CLOUD_HOSTS && uri.scheme == "https" && uri.host in CLOUD_HOSTS && uri.port == -1
+        // An invitation's link (<cloud>/invite#<token>): what it leads to, in a sheet, before it is accepted.
+        if ((same || sameCloud) && parts == listOf("invite") && !uri.fragment.isNullOrEmpty()) {
+            fail.still.android.screens.openInvite(this, uri.fragment!!)
+            return true
+        }
+        // A reference to another chat (web/src/chatRefs.ts): its page, /w/<workspace>/s/<station>/chats/<key>, opened over this one.
+        if ((same || sameCloud) && parts.size == 6 && parts[0] == "w" && parts[2] == "s" && parts[4] == "chats") {
+            val (ws, station, chat) = Triple(parts[1], parts[3], parts[5])
+            val top = stack.last()
+            if (top is Screen.Chat && top.station == "$ws/$station" && (top.of as? ChatOf.Session)?.key == chat) return true
+            if (ws != workspace) openItem(ws, station, chat)
+            else { sheet = null; menu = null; forward = true; stack = stack + Screen.Chat("$ws/$station", ChatOf.Session(chat)) }
+            return true
+        }
         if (!(same || sameCloud) || parts.size != 4 || parts[0] != "o") return false
         val (ws, station, session) = Triple(parts[1], parts[2], parts[3])
         val service = uri.getQueryParameter("service")?.takeIf { it.isNotEmpty() }
@@ -210,7 +231,9 @@ fun StillFailApp(app: AppState) {
                 if (current == null) {
                     if (entries == null || all == null || !all.all { it.loaded }) {
                         val failed = workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { "没能读取你的 workspace" }
-                        Splash(failed ?: "正在读取你的 workspace…", now = failed != null)
+                        // What the core has been waiting on for a while, under it (the core's `status`), as the web's splash says.
+                        val status by rememberTopic<fail.still.android.data.StatusView>(app.core, Topics.status)
+                        Splash(failed ?: listOfNotNull("正在读取你的 workspace…", status.value?.text).joinToString("\n"), now = failed != null)
                     }
                     else Landing(signedIn, all)
                 } else {
@@ -243,7 +266,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
                     is Screen.Chat -> ChatScreen(screen.station, screen.of)
-                    Screen.NewChat -> NewChatScreen(current.workspace.id)
+                    Screen.NewChat -> NewChatScreen(current)
                     Screen.Stations -> StationsScreen(current)
                     is Screen.Station -> StationScreen(current, screen.address)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
@@ -255,6 +278,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.ConnectRun -> fail.still.android.screens.ConnectRunScreen(screen.station, screen.connect)
                     is Screen.NewConnect -> fail.still.android.screens.NewConnectScreen(screen.station)
                     is Screen.NewProfile -> fail.still.android.screens.NewProfileScreen(current, screen.station)
+                    Screen.Archive -> fail.still.android.screens.ArchiveScreen(current)
+                    is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
+                    is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
                 }
             }
         }

@@ -421,9 +421,9 @@ private fun Group(g: HistoryGroup) {
 
 @Composable
 private fun StepRow(step: HistoryStep) {
+    // Opened: the call drawn by what it is (a command, a diff, code, a plan, its fields), then what came back (ui/ToolStep.kt).
     Folding(step.said ?: step.name, if (step.said == null) step.hint else null, step.meta, step.failed) {
-        Code(step.call)
-        step.result?.let { Code(it, failed = step.failed) }
+        fail.still.android.ui.ToolStepBody(step.name, step.call, step.said != null, step.result, step.failed)
     }
 }
 
@@ -438,13 +438,6 @@ private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean,
             if (!meta.isNullOrEmpty()) Text(meta, fontSize = 11.sp, color = if (failed) C.red else C.subtle)
         }
         if (open) body()
-    }
-}
-
-@Composable
-private fun Code(text: String, failed: Boolean = false) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (failed) C.red.copy(alpha = 0.08f) else C.surface2).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp)) {
-        Text(text.take(4000), style = Mono, color = C.ink, softWrap = false, maxLines = 40)
     }
 }
 

@@ -187,6 +187,18 @@ fun ConnectScreen(station: String, id: String) {
                 }
             }
             Text("跑在 ${connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            // Its Slack app, changed now and then: name, picture, colour, permissions (the desktop's SlackAppSection).
+            SectionHeader("Slack app", start = 24.dp)
+            ListCard {
+                ListRow(onClick = { app.push(Screen.SlackApp(station, connect.id)) }) {
+                    SlackMark(16.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text("名字、头像和权限", fontSize = 15.sp, color = C.ink)
+                        Text("改好后直接写进 Slack 里的这个 app", fontSize = 13.sp, color = C.muted)
+                    }
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                }
+            }
             SectionHeader("最近的会话", start = 24.dp)
             ListCard {
                 if (item.sessions.isEmpty()) ListRow { Text("还没有会话。在 Slack 里 @${connect.name} 就会开始。", fontSize = 15.sp, color = C.muted) }
@@ -303,7 +315,7 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
 }
 
 @Composable
-private fun Switch(on: Boolean) {
+internal fun Switch(on: Boolean) {
     Box(Modifier.size(44.dp, 26.dp).clip(RoundedCornerShape(13.dp)).background(if (on) C.green else C.line), contentAlignment = Alignment.CenterStart) {
         Box(Modifier.offset(x = if (on) 21.dp else 3.dp).size(20.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color.White))
     }
@@ -537,14 +549,14 @@ fun NewConnectScreen(station: String) {
     val resume = remember { app.strings(RESUME + station).firstOrNull().also { app.setStrings(RESUME + station, emptyList()) } }
     var step by remember { mutableStateOf(if (resume != null) "install" else "team") }
     var team by remember { mutableStateOf<String?>(null) }
-    // The Slack app's default name, across the product (a bot user's display name takes a-z 0-9 - _ and .).
-    var name by remember { mutableStateOf("still.fail") }
-    var description by remember { mutableStateOf("Coding agent in your threads (still.fail)") }
+    // The Slack app's default name, across the product (a bot user's display name takes a-z 0-9 - _ and .); its look starts as the general helper.
+    val draft = remember { AppDraft(NEW_APP) }
+    var icon by remember { mutableStateOf<IconPick?>(null) }
+    var iconError by remember { mutableStateOf<String?>(null) }
     // The app made, as the station keeps it (it outlives this page until a connect takes it; a station yet to update has none).
     var madeId by remember { mutableStateOf(resume) }
     val made = madeId?.let { id -> overview.value?.slackApps?.firstOrNull { it.appId == id } }
     val tokens = remember { Tokens() }
-    var config by remember { mutableStateOf("") }
     var model by remember { mutableStateOf<ModelOption?>(null) }
     var runtime by remember { mutableStateOf<String?>(null) }
     var mode by remember { mutableStateOf("multi-session") }
@@ -564,13 +576,16 @@ fun NewConnectScreen(station: String) {
         NavBar(if (step == "team") "取消" else "上一步", back, "添加连接", sub = { Text("${titles[step]} · ${(order.indexOf(step) + 1).coerceAtLeast(1)} / ${order.size}", fontSize = 11.sp, color = C.muted) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // A connect runs a profile's model: with none on this station, that comes first.
-            if (step == "team" && overview.value?.profiles?.isEmpty() == true) {
-                Text("连接要用 Profile 来跑模型。先添加一个 Profile，再来加连接。", fontSize = 14.sp, color = C.warn)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("去添加 Profile", primary = false) { app.replace(Screen.NewProfile(station)) } }
+            val noProfile = resume == null && overview.value?.profiles?.isEmpty() == true
+            if (step == "team" && noProfile) Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                fail.still.android.ui.Illustration(fail.still.android.R.drawable.illus_no_profile, fail.still.android.R.drawable.illus_no_profile_dark, 240.dp)
+                Text("先添加一个 Profile", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text("连接要用 Profile 来跑模型。先添加一个，再来加连接。", fontSize = 14.sp, color = C.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Button("去添加 Profile", primary = true) { app.replace(Screen.NewProfile(station)) }
             }
-            when (step) {
+            else when (step) {
                 "team" -> if (teams.isEmpty()) {
-                    Text("有了 Slack 的配置 token，still.fail 替你在 Slack 建好 app：名字、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
+                    Text("有了 Slack 的配置 token，still.fail 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("添加配置 token", primary = true) { step = "token" } }
                     Text("不用配置 token，自己在 Slack 建 app", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { step = "manual" })
                 } else {
@@ -579,38 +594,38 @@ fun NewConnectScreen(station: String) {
                         teams.forEach { t -> PickRow(t.name, t.owner?.let { o -> o.user + (o.teamDomain?.let { " · $it.slack.com" } ?: "") }, checked = chosen?.teamId == t.teamId) { team = t.teamId } }
                     }
                     Text("＋ 添加工作区的配置 token", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { step = "token" })
+                    chosen?.let { t ->
+                        Text("移除「${t.name}」的配置 token", fontSize = 14.sp, color = C.muted, modifier = Modifier.clickable {
+                            confirm(app, "移除「${t.name}」的配置 token？", "still.fail 不再用它在这个 Slack 工作区建和改 app；已经建好的 app 和连接不受影响，之后可以再加上。", "移除", danger = true) {
+                                api.removeConfigToken(t.teamId); if (team == t.teamId) team = null; app.toast = "已移除配置 token"
+                            }
+                        })
+                    }
                     Text("不用配置 token，自己建 app", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { step = "manual" })
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("下一步", primary = true, enabled = chosen != null) { step = "app" } }
                 }
-                "token" -> {
-                    Steps(listOf(
-                        "打开 api.slack.com/apps，用要放 bot 的那个 Slack 工作区的账号登录。" to { open("https://api.slack.com/apps") },
-                        "拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。" to null,
-                        "把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。still.fail 会自己续期，以后不用再管。" to null,
-                    ))
-                    SecretField(config, { config = it }, "xoxe-1-…")
-                    if (config.startsWith("xoxe.xoxp-")) Text("这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("加上", primary = true, busy = busy, enabled = config.startsWith("xoxe-1-") && config.length > 20) {
-                            run { team = api.addConfigToken(config); config = ""; step = "app" }
-                        }
-                    }
-                }
+                "token" -> ConfigTokenSteps(station) { team = it; step = "app" }
                 "app" -> {
-                    Text("名字", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Field(name, { name = it }, "still.fail")
-                    Text("描述", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Field(description, { description = it }, "Coding agent in your threads")
-                    Text("头像、颜色和权限用默认的；建好以后可以在电脑上改。", fontSize = 12.sp, color = C.muted)
+                    FormLabel("名字")
+                    Field(draft.name, { draft.name = it }, "still.fail")
+                    FormLabel("描述")
+                    Field(draft.description, { draft.description = it }, "Coding agent in your threads")
+                    AppLook(draft, icon, { i, e -> icon = i; iconError = e }, fresh = true)
+                    iconError?.let { Text(it, fontSize = 13.sp, color = C.red) }
+                    Text("权限用默认的（全部打开）；建好以后可以在连接的「Slack app」里改。", fontSize = 13.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("创建 app", primary = true, busy = busy, enabled = name.isNotBlank() && chosen != null) {
-                            run { madeId = api.makeSlackApp(chosen!!.teamId, name.trim(), description.trim()); tokens.verified = null; step = "install" }
+                        Button("创建 app", primary = true, busy = busy, enabled = draft.name.isNotBlank() && chosen != null) {
+                            run {
+                                val (id, failed) = api.makeSlackApp(chosen!!.teamId, draft.settings(), icon?.data)
+                                madeId = id; iconError = failed; tokens.verified = null; step = "install"
+                            }
                         }
                     }
                 }
                 "install" -> if (made == null) Text(if (overview.value == null) "正在读取…" else "正在读取 app…", fontSize = 13.sp, color = C.muted) else {
                     val m = made
                     val install = m.install
+                    iconError?.let { Text("图标没传上：$it", fontSize = 13.sp, color = C.red) }
                     Steps(listOf(
                         (if (install != null) (if (m.installed) "已装进「${m.installedTeam ?: m.team ?: "工作区"}」。" else "app 已经建好。安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。")
                         else "app 已经建好。安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。") to (if (m.installed) null else ({ open(install ?: m.links.install) })),
@@ -727,7 +742,7 @@ private fun openWaitingMenu(app: AppState, station: String, a: MadeSlackApp) {
 
 /** Numbered steps, each a line; one with a link opens it. */
 @Composable
-private fun Steps(steps: List<Pair<String, (() -> Unit)?>>) {
+internal fun Steps(steps: List<Pair<String, (() -> Unit)?>>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         steps.forEachIndexed { i, (text, open) ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

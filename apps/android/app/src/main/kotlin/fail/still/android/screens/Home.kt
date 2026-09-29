@@ -5,6 +5,13 @@
 package fail.still.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.graphics.drawscope.Stroke
+import fail.still.android.ui.reducedMotion
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -76,6 +83,7 @@ import fail.still.android.data.ChatItem
 import fail.still.android.data.ChatState
 import fail.still.android.data.badgeState
 import fail.still.android.data.ChatsView
+import fail.still.android.data.StatusView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.page
@@ -142,6 +150,8 @@ fun HomeScreen(current: WorkspaceEntry) {
                     Box(Modifier.align(Alignment.TopEnd).offset((-3).dp, 3.dp).size(13.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(C.accent))
                 }
             }
+            // The archive: chats put away by hand or by the station once idle (the wide screen has it in the list's filter menu).
+            if (all.value?.stations?.isNotEmpty() == true) Box(Modifier.semantics { contentDescription = "已归档" }) { NavButton(Icons.Archive, { app.push(Screen.Archive) }, 20.dp) }
             // A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which.
             Box {
                 NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
@@ -159,17 +169,23 @@ fun HomeScreen(current: WorkspaceEntry) {
 @Composable
 private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
     val view = chats.value
+    val app = LocalApp.current
+    val status by rememberTopic<StatusView>(app.core, Topics.status)
+    // "Reading", and what the core has been waiting on for a while if anything (the core's `status`).
+    val reading = status.value?.text?.let { "正在读取会话… $it" } ?: "正在读取会话…"
     LazyColumn(modifier.fillMaxHeight(), state = list, contentPadding = padding) {
         if (view == null) {
-            item(key = "wait") { Note(chats.error?.message ?: "正在读取会话…", error = chats.error != null) }
+            item(key = "wait") { Note(chats.error?.message ?: reading, error = chats.error != null) }
         } else {
             val stations = view.stations
             val connecting = stations.filter { it.state == "connecting" }
             val failed = stations.filter { it.state == "error" }
             // A station's link coming back is said on its rows; only with no rows to show does the list say it.
-            if (view.days.isEmpty() && (view.loading || connecting.isNotEmpty())) item(key = "loading") { Note("正在读取会话…") }
+            if (view.days.isEmpty() && (view.loading || connecting.isNotEmpty())) item(key = "loading") { Note(reading) }
             if (view.days.isEmpty() && !view.loading) failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
             if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(current, view, onlyMine) }
+            // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
+            item(key = "open-jobs") { OpenJobs(stations) }
             for (day in view.days) {
                 item(key = "h/${day.daysAgo}") { SectionHeader(day.label) }
                 items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
@@ -198,10 +214,9 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
 }
 
 /**
- * A row: its title (bold while something in it is unread, a blue dot in the
- * margin) and, for an agent that came from Slack, the connect's mark; under
- * it the last thing said, the agent's state on its picture when it said it. Two lines, always
- * the same height. The time shows only while the row is held.
+ * A row: its title (bold while something in it is unread) and, for an agent that came from Slack, the connect's mark;
+ * under it the last thing said; the chat's state on its picture (ChatMark). Two lines, always the same height. The
+ * time shows only while the row is held.
  */
 @Composable
 private fun ChatRow(item: ChatItem, view: ChatsView) {
@@ -217,7 +232,6 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
                 )
             },
     ) {
-        if (item.unread) Box(Modifier.padding(start = 8.dp, top = 19.dp).size(7.dp).clip(CircleShape).background(C.blue).semantics { contentDescription = "有未读消息" })
         // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
         val offline = item.offline
         val dim = if (offline != null) 0.45f else 1f
@@ -259,10 +273,54 @@ private fun AgentsPicture(item: ChatItem, modifier: Modifier) {
             agents.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Mark(26.dp) }
             agents.size == 1 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { MakerIcon(agents[0].maker, agents[0].runtime, 28.dp) }
             else -> agents.forEachIndexed { i, a ->
-                Box(Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(21.dp), contentAlignment = Alignment.Center) { MakerIcon(a.maker, a.runtime, 18.dp) }
+                Box(Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(22.dp), contentAlignment = Alignment.Center) { MakerIcon(a.maker, a.runtime, 18.dp) }
             }
         }
-        badgeState(item.state)?.let { state -> Box(Modifier.align(Alignment.BottomEnd).offset(2.dp, 2.dp)) { Badge(state, 10.dp, 2.dp, C.bg) } }
+        ChatMark(item, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
+    }
+}
+
+/** What a chat's row says of it (web/src/ChatMark.tsx): red when it wants someone now, yellow at work, blue ended well and unread. */
+private enum class RowTone { Busy, Done, Alert }
+
+private fun rowTone(item: ChatItem): RowTone? = when (item.state) {
+    "block", "failed" -> RowTone.Alert
+    "run" -> RowTone.Busy
+    else -> if (item.unread) RowTone.Done else null
+}
+
+private val MarkBlue = Color(0xFF3B82F6)
+private val MarkRed = Color(0xFFE5484D)
+private val MarkYellow = Color(0xFFF2B01E)
+
+/**
+ * A chat's state at its picture's corner, over the picture with a gap of the row's ground round it: a blue dot done
+ * and unread, a red one with a soft halo to be seen now, a turning yellow ring with a gap at work. Nothing otherwise.
+ */
+@Composable
+private fun ChatMark(item: ChatItem, modifier: Modifier) {
+    val tone = rowTone(item) ?: return
+    val label = when (tone) { RowTone.Busy -> "工作中"; RowTone.Done -> "做完了，有新消息"; RowTone.Alert -> "需要处理" }
+    val ground = C.bg
+    val turn = if (tone == RowTone.Busy && !reducedMotion()) rememberInfiniteTransition(label = "mark")
+        .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "turn").value else 0f
+    Canvas(modifier.size(14.dp).semantics { contentDescription = label }) {
+        val r = size.minDimension / 2
+        val ring = 2.dp.toPx()
+        if (tone == RowTone.Alert) drawCircle(MarkRed.copy(alpha = 0.25f), r + 5.dp.toPx())
+        drawCircle(ground, r)
+        when (tone) {
+            RowTone.Done -> drawCircle(MarkBlue, r - ring)
+            RowTone.Alert -> drawCircle(MarkRed, r - ring)
+            RowTone.Busy -> {
+                val inset = ring / 2
+                val box = androidx.compose.ui.geometry.Size(size.width - ring, size.height - ring)
+                val at = androidx.compose.ui.geometry.Offset(inset, inset)
+                // A quarter faint (the web's border-right), the rest solid; turning.
+                drawArc(MarkYellow.copy(alpha = 0.25f), turn - 45f, 90f, false, at, box, style = Stroke(ring))
+                drawArc(MarkYellow, turn + 45f, 270f, false, at, box, style = Stroke(ring))
+            }
+        }
     }
 }
 

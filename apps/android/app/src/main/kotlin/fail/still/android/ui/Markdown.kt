@@ -1,19 +1,26 @@
-// Agents write Markdown; the phone reads it as the web does (GFM, web/src/app.css
-// `.markdown`): paragraphs with emphasis, inline code, links and strikethrough;
-// headings; lists (bulleted, numbered, tasks, nested) with hanging indents;
-// quotes beside a bar; code blocks that scroll sideways and copy; tables that
-// scroll sideways; rules. Parsed by commonmark, drawn here.
+// Agents write Markdown; the phone reads it as the web phone does (web/src/Prose.tsx, Prose.css.ts and the message's
+// `.markdown` in styles/conversation.css.ts, at the phone's sizes: 15 with a 1.65 line). GFM: paragraphs with
+// emphasis, inline code, links and strikethrough; headings; lists (bulleted, numbered, tasks, nested) with hanging
+// indents; quotes beside a bar; code blocks with their language and a copy button on a row of their own (a finger
+// has no hover), scrolling sideways; tables that wrap between words and scroll sideways when they still do not fit;
+// rules. A link to another chat is a reference to it (chatRefs.ts), `@its title` in the accent; a ```mermaid block is
+// drawn as its chart (Viz.kt). With `placing`, the message's files its text names are drawn where it names them.
+//
+// Spacing is the web's: each block keeps the margins the browser gives it, and two blocks next to each other are as
+// far apart as the larger of the two margins between them (CSS margins collapse, through a list item or a quote too).
 package fail.still.android.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -21,38 +28,47 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.draw.alpha
-import kotlinx.coroutines.delay
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fail.still.android.data.Attachment
+import kotlinx.coroutines.delay
 import org.commonmark.ext.autolink.AutolinkExtension
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
@@ -76,6 +92,7 @@ import org.commonmark.node.HtmlInline
 import org.commonmark.node.Image
 import org.commonmark.node.IndentedCodeBlock
 import org.commonmark.node.Link
+import org.commonmark.node.ListBlock as MdList
 import org.commonmark.node.ListItem
 import org.commonmark.node.Node
 import org.commonmark.node.OrderedList
@@ -85,6 +102,8 @@ import org.commonmark.node.StrongEmphasis
 import org.commonmark.node.Text as TextNode
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 private val parser: Parser = Parser.builder()
     .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), AutolinkExtension.create(), TaskListItemsExtension.create()))
@@ -92,104 +111,237 @@ private val parser: Parser = Parser.builder()
 
 private fun Node.children(): List<Node> = generateSequence(firstChild) { it.next }.toList()
 
-@Composable
-fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15) {
-    val doc = remember(text) { parser.parse(text) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) { doc.children().forEach { Block(it, size) } }
+/**
+ * A message's files its text places (placeFiles), and how they are drawn: `shown` draws one on a line of its own
+ * (an HTML file as its visualization, an image whole, any other as its card) or several images in a row (`row`, each
+ * given the modifier that sizes it); `open` opens one a link within a sentence names.
+ */
+class Placing(
+    val files: Map<String, Attachment>,
+    val shown: @Composable (Attachment) -> Unit,
+    val row: @Composable (Attachment, Modifier) -> Unit,
+    val open: (Attachment) -> Unit,
+)
+
+/** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
+fun fileNameOf(url: String): String {
+    var u = url.trim().replace(Regex("^(ember-)?file://"), "")
+    u = try { java.net.URLDecoder.decode(u.replace("+", "%2B"), "UTF-8") } catch (_: Exception) { u }
+    return u.substringAfterLast('/')
 }
 
-@Composable
-private fun Blocks(nodes: List<Node>, size: Int, gap: Int = 8) {
-    Column(verticalArrangement = Arrangement.spacedBy(gap.dp)) { nodes.forEach { Block(it, size) } }
+private val FENCE = Regex("(?ms)^ {0,3}(`{3,}|~{3,}).*?(^ {0,3}\\1|\\z)")
+private val TICKS = Regex("(`+)[\\s\\S]*?\\1")
+private val TARGET = Regex("\\]\\(\\s*<?([^)\\s>]+)>?(?:\\s+(?:\"[^\"]*\"|'[^']*'))?\\s*\\)")
+
+/**
+ * Which of a message's files its text places, by the name its links and images give (`![](shot.png)`,
+ * `[the report](report.pdf)`), and the rest, shown below the text. Code is passed over: a name in it places nothing.
+ */
+fun placeFiles(text: String, files: List<Attachment>): Pair<Map<String, Attachment>, List<Attachment>> {
+    if (files.isEmpty() || text.isEmpty()) return emptyMap<String, Attachment>() to files
+    val prose = text.replace(FENCE, "").replace(TICKS, "")
+    val placed = LinkedHashMap<String, Attachment>()
+    for (m in TARGET.findAll(prose)) {
+        val name = fileNameOf(m.groupValues[1])
+        files.firstOrNull { it.name == name }?.let { placed[name] = it }
+    }
+    val used = placed.values.toSet()
+    return placed to files.filter { it !in used }
 }
 
-@Composable
-private fun Block(node: Node, size: Int) {
-    when (node) {
-        is Paragraph -> MdText(inline(node), size.sp, (size * 1.6).sp)
-        // Headings are the body's size, bolder, with room above (as the web draws h1–h4).
-        is Heading -> MdText(inline(node), (size + 1).sp, (size * 1.5).sp, FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-        is BulletList -> ListBlock(node, size) { _, item -> taskMark(item) ?: "•" }
-        is OrderedList -> ListBlock(node, size) { i, item -> taskMark(item) ?: "${(node.markerStartNumber ?: 1) + i}." }
-        is BlockQuote -> Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(Modifier.width(2.dp).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(C.line))
-            Box(Modifier.padding(start = 10.dp)) { Blocks(node.children(), size) }
-        }
-        is FencedCodeBlock -> CodeBlock(node.literal.trimEnd('\n'), node.info?.trim()?.substringBefore(' ')?.lowercase()?.ifEmpty { null })
-        is IndentedCodeBlock -> CodeBlock(node.literal.trimEnd('\n'), null)
-        is TableBlock -> Table(node)
-        is ThematicBreak -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(C.line))
-        is HtmlBlock -> Text(node.literal.trimEnd(), color = C.muted, fontSize = size.sp, lineHeight = (size * 1.6).sp)
-        else -> Blocks(node.children(), size)
+// ── references to chats (chatRefs.ts) ─────────────────────────────────
+
+/** A link to a chat's page (…/chats/<key>, or still.fail cloud's /o/<workspace>/<station>/<key>). */
+fun isChatLink(href: String?): Boolean =
+    href != null && (Regex("/chats/[^/?#\\s]+/?(?:[?#]|$)").containsMatchIn(href) || Regex("^https?://[^/]+/o/[^/]+/[^/]+/[^/?#]+/?(?:#|$)").containsMatchIn(href))
+
+/** A reference as sent: `[its title](its page)`. */
+private val REF_LINK = Regex("\\[([^\\]\\n]{1,120})\\]\\((\\S*?/chats/[^\\s)]+)\\)")
+
+/** A reference in a message: `@` (a little lighter) and the chat's title, in the accent; a tap opens the chat (AppState.openLink). */
+fun AnnotatedString.Builder.appendRef(title: AnnotatedString, href: String, accent: Color) {
+    withLink(LinkAnnotation.Url(href, TextLinkStyles(SpanStyle(color = accent, textDecoration = TextDecoration.None)))) {
+        withStyle(SpanStyle(color = accent.copy(alpha = accent.alpha * 0.7f))) { append("@") }
+        append(title)
     }
 }
 
-/** A task item's box ("☐" / "☑"), in place of its bullet or number. */
-private fun taskMark(item: Node): String? =
-    (item.firstChild?.firstChild as? TaskListItemMarker)?.let { if (it.isChecked) "☑" else "☐" }
-
-/** Items with their markers in a column of their own, so wrapped lines hang under the words. */
+/** Plain text (what a person wrote) with its references to chats drawn as the chips a message draws. */
 @Composable
-private fun ListBlock(list: Node, size: Int, marker: (Int, Node) -> String) {
-    val tight = (list as? BulletList)?.isTight ?: (list as? OrderedList)?.isTight ?: true
-    Column(verticalArrangement = Arrangement.spacedBy(if (tight) 3.dp else 8.dp)) {
-        list.children().filterIsInstance<ListItem>().forEachIndexed { i, item ->
-            Row {
-                Text(marker(i, item), color = C.muted, fontSize = size.sp, lineHeight = (size * 1.6).sp, modifier = Modifier.widthIn(min = 18.dp).padding(end = 6.dp))
-                Box(Modifier.weight(1f)) { Blocks(item.children(), size, gap = if (tight) 3 else 8) }
+fun withRefs(text: String): AnnotatedString {
+    val accent = C.accent
+    return remember(text, accent) {
+        buildAnnotatedString {
+            var at = 0
+            for (m in REF_LINK.findAll(text)) {
+                append(text, at, m.range.first)
+                appendRef(AnnotatedString(m.groupValues[1]), m.groupValues[2], accent)
+                at = m.range.last + 1
             }
+            append(text, at, text.length)
         }
     }
+}
+
+// ── the web's own tones (styles/global.css.ts), where the message's parts use them ──
+
+/** The web's --line-strong (a quote's bar). */
+private val lineStrong @Composable get() = if (C.dark) Color(0xFF3D3F44) else Color(0xFFC1C4C9)
+/** The web's --muted (a quote's words). */
+internal val webMuted @Composable get() = if (C.dark) Color(0xFFA3A5A9) else Color(0xFF646970)
+/** The web's --subtle. */
+internal val webSubtle @Composable get() = if (C.dark) Color(0xFF8C8F94) else Color(0xFF73787D)
+/** The web's --line (a table's rules). */
+internal val webLine @Composable get() = if (C.dark) Color(0xFF2D2E32) else Color(0xFFE3E1DE)
+/** A code block's ground: the text at 4% in the canvas. */
+internal val codeGround @Composable get() = if (C.dark) Color(0xFF26272A) else Color(0xFFF5F5F5)
+private val codeInline @Composable get() = if (C.dark) Color(0xFFC9A2E6) else Color(0xFF7C3FA0)
+
+// ── blocks ──────────────────────────────────────────────────────────────
+
+/** A block with the margins the web gives it, above and below. */
+private class Piece(val top: Float, val bottom: Float, val draw: @Composable () -> Unit)
+
+private class Ctx(val size: Int, val placing: Placing?)
+
+@Composable
+fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null) {
+    val doc = remember(text) { parser.parse(text) }
+    val ctx = Ctx(size, placing)
+    Box(modifier) { Stack(pieces(doc.children(), ctx, tight = false)) }
+}
+
+/** Pieces one under another, as far apart as the larger margin between each two; the outer margins are the parent's. */
+@Composable
+private fun Stack(pieces: List<Piece>) {
+    Column {
+        pieces.forEachIndexed { i, p ->
+            if (i > 0) {
+                val gap = max(pieces[i - 1].bottom, p.top)
+                if (gap > 0f) Box(Modifier.height(gap.dp))
+            }
+            p.draw()
+        }
+    }
+}
+
+private fun pieces(nodes: List<Node>, ctx: Ctx, tight: Boolean, task: Boolean? = null): List<Piece> =
+    nodes.flatMapIndexed { i, n -> if (n is TaskListItemMarker) emptyList() else piecesOf(n, ctx, tight, if (i == nodes.indexOfFirst { it is Paragraph }) task else null) }
+
+private fun piecesOf(node: Node, ctx: Ctx, tight: Boolean, task: Boolean?): List<Piece> {
+    val s = ctx.size.toFloat()
+    return when (node) {
+        is Paragraph -> paragraph(node, ctx, if (tight) 0f else s, task)
+        is Heading -> {
+            val (em, margin) = when (node.level) {
+                5 -> 0.83f to 1.67f * 0.83f * s
+                6 -> 0.67f to 2.33f * 0.67f * s
+                else -> 1f to -1f
+            }
+            val fs = s * em
+            val top = if (margin < 0) 14f else margin
+            val bottom = if (margin < 0) 6f else margin
+            listOf(Piece(top, bottom) { Words(node, ctx, fs, FontWeight.Bold) })
+        }
+        is BulletList, is OrderedList -> listOf(list(node as MdList, ctx, 1 + generateSequence(node.parent) { it.parent }.count { it is MdList }))
+        is BlockQuote -> {
+            val inner = pieces(node.children(), ctx, tight = false)
+            listOf(Piece(max(0f, inner.firstOrNull()?.top ?: 0f), max(8f, inner.lastOrNull()?.bottom ?: 0f)) {
+                Row(Modifier.height(IntrinsicSize.Min)) {
+                    Box(Modifier.width(2.dp).fillMaxHeight().background(lineStrong))
+                    Box(Modifier.padding(start = 10.dp)) { androidx.compose.runtime.CompositionLocalProvider(LocalMdInk provides webMuted) { Stack(inner) } }
+                }
+            })
+        }
+        is FencedCodeBlock -> {
+            val language = node.info?.trim()?.substringBefore(' ')?.ifEmpty { null }
+            val code = node.literal.removeSuffix("\n")
+            if (language?.lowercase() == "mermaid" && code.isNotBlank()) listOf(Piece(0f, 4f) { Mermaid(code) })
+            else listOf(Piece(0f, 8f) { CodeBlock(code, language) })
+        }
+        is IndentedCodeBlock -> listOf(Piece(0f, 8f) { CodeBlock(node.literal.removeSuffix("\n"), null) })
+        is TableBlock -> listOf(Piece(0f, 8f) { Table(node, ctx) })
+        is ThematicBreak -> listOf(Piece(s / 2, s / 2) { Box(Modifier.fillMaxWidth().height(1.dp).background(webLine)) })
+        // Raw HTML is shown as written (react-markdown does not draw it).
+        is HtmlBlock -> listOf(Piece(s, s) { MdText(AnnotatedString(node.literal.trimEnd()), ctx.size.sp, lh(ctx.size.toFloat())) })
+        else -> pieces(node.children(), ctx, tight)
+    }
+}
+
+private fun lh(size: Float): TextUnit = (size * 1.65f).sp
+
+/** The ink of the words here: a quote's words are the web's muted. */
+internal val LocalMdInk = androidx.compose.runtime.compositionLocalOf<Color?> { null }
+
+/**
+ * A paragraph; with files placed, one that is only a link to one of them is that file shown (a line of its own), and
+ * one of only their images is them in a row. An image of theirs among words is shown between the words around it.
+ */
+private fun paragraph(node: Paragraph, ctx: Ctx, margin: Float, task: Boolean?): List<Piece> {
+    val placing = ctx.placing
+    if (placing != null && placing.files.isNotEmpty()) {
+        val parts = node.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak && it !is TaskListItemMarker }
+        fun fileOf(n: Node): Attachment? = when (n) {
+            is Link -> placing.files[fileNameOf(n.destination)]
+            is Image -> placing.files[fileNameOf(n.destination)]
+            else -> null
+        }
+        val only = parts.singleOrNull()
+        if (only is Link && task == null) fileOf(only)?.let { f -> return listOf(Piece(8f, 8f) { placing.shown(f) }) }
+        val images = parts.map { if (it is Image) fileOf(it) else null }
+        if (images.size > 1 && images.all { it != null } && task == null) return listOf(Piece(8f, 8f) { ImageRow(images.filterNotNull(), placing) })
+        // Images of the message's among words: the words before, the image on a line of its own, the words after.
+        if (parts.any { it is Image && fileOf(it) != null }) {
+            val out = mutableListOf<Piece>()
+            var run = mutableListOf<Node>()
+            fun flush() {
+                val nodes = run
+                val box = task.takeIf { out.isEmpty() }
+                if (nodes.any { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak }) out += Piece(margin, margin) { Words(nodes, ctx, ctx.size.toFloat(), null, box) }
+                run = mutableListOf()
+            }
+            for (n in node.children()) {
+                val f = if (n is Image) fileOf(n) else null
+                if (f != null) { flush(); out += Piece(margin, margin) { Box(Modifier.padding(vertical = 8.dp)) { placing.shown(f) } } } else run += n
+            }
+            flush()
+            return out
+        }
+    }
+    return listOf(Piece(margin, margin) { Words(node, ctx, ctx.size.toFloat(), null, task) })
 }
 
 /**
- * A code block as the web draws it (web/src/Prose.tsx): a quiet tinted block with no frame; its language and a
- * copy button in the corner; highlighted when its language is named. It scrolls sideways rather than wrapping.
+ * Images written in one paragraph: side by side, wrapping onto the next line when a line is full. Each is as wide as
+ * its shape asks (a line's images share one height, 120 or a little more, 200 at most), as the web's flex row has it.
  */
 @Composable
-private fun CodeBlock(code: String, language: String?) {
-    val context = LocalContext.current
-    var copied by remember { mutableStateOf(false) }
-    LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
-    val dark = C.dark
-    val colored = remember(code, language, dark) { highlight(code, language, dark) }
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink.copy(alpha = 0.04f))) {
-        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(colored, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink, softWrap = false)
+private fun ImageRow(files: List<Attachment>, placing: Placing) {
+    val ratios = files.map { f -> if (f.width != null && f.height != null && f.height > 0) (f.width.toFloat() / f.height).coerceIn(0.25f, 4f) else 1.5f }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val full = maxWidth.value
+        val gap = 8f
+        // Lines as flex-wrap fills them: by each image's basis (120 × its ratio).
+        val lines = mutableListOf<MutableList<Int>>()
+        var used = 0f
+        ratios.forEachIndexed { i, r ->
+            val basis = r * 120f
+            if (lines.isEmpty() || (used + gap + basis > full && lines.last().isNotEmpty())) { lines += mutableListOf(i); used = basis }
+            else { lines.last() += i; used += gap + basis }
         }
-        Row(Modifier.align(Alignment.TopEnd).padding(4.dp).alpha(0.75f), verticalAlignment = Alignment.CenterVertically) {
-            Text(language ?: "text", fontSize = 10.sp, color = C.subtle, modifier = Modifier.padding(horizontal = 6.dp))
-            Row(
-                Modifier.height(26.dp).clip(RoundedCornerShape(6.dp)).background(C.bg.copy(alpha = 0.8f)).clickable {
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", code))
-                    copied = true
-                }.padding(horizontal = 7.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                IconIn(if (copied) Icons.Check else Icons.Copy, 12.dp, C.muted)
-                Text(if (copied) "已复制" else "复制", fontSize = 11.sp, color = C.muted)
-            }
-        }
-    }
-}
-
-/** A table as the web draws it: small type, ruled cells; it scrolls sideways when wider than the screen. */
-@Composable
-private fun Table(table: TableBlock) {
-    val rows = table.children().flatMap { part -> if (part is TableHead || part is TableBody) part.children() else emptyList() }.filterIsInstance<TableRow>()
-    val cells = rows.map { r -> r.children().filterIsInstance<TableCell>() }
-    val columns = cells.maxOfOrNull { it.size } ?: 0
-    Box(Modifier.horizontalScroll(rememberScrollState())) {
-        Row(Modifier.border(1.dp, C.line)) {
-            // Column by column, each cell one line, so the rows line up.
-            for (c in 0 until columns) {
-                Column(Modifier.width(IntrinsicSize.Max)) {
-                    cells.forEachIndexed { r, row ->
-                        val cell = row.getOrNull(c)
-                        MdText(
-                            cell?.let { inline(it) } ?: AnnotatedString(""), 13.sp, 20.sp, if (cell?.isHeader == true) FontWeight.SemiBold else null, softWrap = false,
-                            modifier = Modifier.fillMaxWidth().border(0.5.dp, C.line).padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
+        Column(verticalArrangement = Arrangement.spacedBy(gap.dp)) {
+            lines.forEach { line ->
+                // Grown in proportion to their ratios, each kept to 200 × its ratio at most.
+                val free = full - gap * (line.size - 1)
+                val basis = line.sumOf { (ratios[it] * 120f).toDouble() }.toFloat()
+                val grow = line.sumOf { ratios[it].toDouble() }.toFloat()
+                val extra = ((free - basis) / grow).coerceAtLeast(0f)
+                Row(horizontalArrangement = Arrangement.spacedBy(gap.dp)) {
+                    line.forEach { i ->
+                        val r = ratios[i]
+                        val w = minOf(r * 120f + r * extra, r * 200f, free)
+                        placing.row(files[i], Modifier.width(w.dp).height((w / r).dp))
                     }
                 }
             }
@@ -197,22 +349,207 @@ private fun Table(table: TableBlock) {
     }
 }
 
+/** Items with their markers in the list's 20 of indent, so wrapped lines hang under the words. */
+private fun list(node: MdList, ctx: Ctx, depth: Int): Piece {
+    val tight = node.isTight
+    val items = node.children().filterIsInstance<ListItem>().mapIndexed { i, item ->
+        val task = taskOf(item)
+        val inner = pieces(item.children(), ctx, tight, task)
+        Piece(inner.firstOrNull()?.top ?: 0f, inner.lastOrNull()?.bottom ?: 0f) {
+            Row {
+                val ink = LocalMdInk.current ?: C.ink
+                if (node is OrderedList) Text(
+                    "${(node.markerStartNumber ?: 1) + i}.", color = ink, fontSize = ctx.size.sp, lineHeight = lh(ctx.size.toFloat()), textAlign = TextAlign.End, maxLines = 1, softWrap = false,
+                    modifier = Modifier.width(20.dp).padding(end = 5.dp),
+                ) else Bullet(depth, ctx.size.toFloat(), ink)
+                Box(Modifier.weight(1f)) { Stack(inner) }
+            }
+        }
+    }
+    return Piece(max(0f, items.firstOrNull()?.top ?: 0f), max(8f, items.lastOrNull()?.bottom ?: 0f)) { Stack(items) }
+}
+
+/**
+ * A bulleted item's marker as the browser draws it outside the item (`disc`, then `circle`, then `square`): a third
+ * of the text's size across, its middle 15 of the indent's 20 before the words, on the first line's middle.
+ */
 @Composable
-private fun inline(node: Node): AnnotatedString {
-    // Inline code as Zork has it: no box, the code face in its own colour.
-    val code = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = CODE_EM.em(), color = if (C.dark) Color(0xFFC9A2E6) else Color(0xFF7C3FA0))
+private fun Bullet(depth: Int, textSize: Float, ink: Color) {
+    Box(Modifier.width(20.dp).height(with(androidx.compose.ui.platform.LocalDensity.current) { lh(textSize).toDp() }), contentAlignment = Alignment.CenterStart) {
+        val side = (textSize / 3f).dp
+        Canvas(Modifier.padding(start = 5.dp - side / 2).size(side)) {
+            when (depth) {
+                1 -> drawCircle(ink)
+                2 -> drawCircle(ink, radius = size.minDimension / 2 - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
+                else -> drawRect(ink)
+            }
+        }
+    }
+}
+
+/** A task item's box: checked or not, or null when the item is no task. */
+private fun taskOf(item: ListItem): Boolean? {
+    val direct = item.firstChild as? TaskListItemMarker
+    val inPara = (item.firstChild as? Paragraph)?.firstChild as? TaskListItemMarker
+    return (direct ?: inPara)?.isChecked
+}
+
+/**
+ * A code block as the web phone draws it: a quiet tinted block with no frame; above the code, on a row of its own
+ * (there is no hover to bring the corner forward), its language and a copy button; highlighted when its language is
+ * named. It scrolls sideways rather than wrapping.
+ */
+@Composable
+fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
+    val dark = C.dark
+    val colored = remember(code, language, dark) { highlight(code, language?.lowercase(), dark) }
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(codeGround)) {
+        if (bar) Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp).height(24.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Text(language ?: "text", fontSize = 10.sp, letterSpacing = 0.2.sp, color = webSubtle, modifier = Modifier.padding(horizontal = 6.dp))
+            Row(
+                Modifier.height(24.dp).clip(RoundedCornerShape(6.dp)).background(C.surface.copy(alpha = 0.8f)).clickable {
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", code))
+                    copied = true
+                }.padding(horizontal = 7.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                IconIn(if (copied) Icons.Check else Icons.Copy, 12.dp, webMuted)
+                Text(if (copied) "已复制" else "复制", fontSize = 11.sp, color = webMuted)
+            }
+        }
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {
+            // The system's mono face is thin next to the web's (SF Mono, Menlo): drawn a little bolder to have its colour.
+            Text(colored, fontFamily = FontFamily.Monospace, fontWeight = CodeWeight, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink, softWrap = false)
+        }
+    }
+}
+
+/** Android's mono face has one weight; asking for more draws it emboldened (the system's fake bold). */
+val CodeWeight = FontWeight.SemiBold
+
+/**
+ * A table as the web draws it: small type (13), cells ruled, their words kept whole (a cell wraps between words), at
+ * least 4em wide. Columns are as wide as their content until the message is full (the browser's automatic layout);
+ * past what its words allow, it scrolls sideways within the message.
+ */
+@Composable
+private fun Table(table: TableBlock, ctx: Ctx) {
+    val rows = table.children().flatMap { part -> if (part is TableHead || part is TableBody) part.children() else emptyList() }.filterIsInstance<TableRow>()
+    val cells = rows.map { r -> r.children().filterIsInstance<TableCell>() }
+    val columns = cells.maxOfOrNull { it.size } ?: 0
+    if (columns == 0) return
+    val line = webLine
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val avail = constraints.maxWidth
+        Box(Modifier.horizontalScroll(rememberScrollState())) {
+            Layout(
+                content = {
+                    cells.forEach { row ->
+                        for (c in 0 until columns) {
+                            val cell = row.getOrNull(c)
+                            // Middle-aligned, as the browser's cells are.
+                            Box(Modifier.border(0.5.dp, line).padding(horizontal = 8.dp, vertical = 4.dp), contentAlignment = Alignment.CenterStart) {
+                                if (cell != null) Words(cell, ctx, 13f, if (cell.isHeader) FontWeight.Bold else null)
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.border(0.5.dp, line),
+            ) { measurables, _ ->
+                val least = (4 * 13).dp.roundToPx() + 16.dp.roundToPx()
+                val mins = IntArray(columns); val maxs = IntArray(columns)
+                measurables.forEachIndexed { i, m ->
+                    val c = i % columns
+                    mins[c] = max(mins[c], max(least, m.minIntrinsicWidth(Int.MAX_VALUE)))
+                    maxs[c] = max(maxs[c], max(least, m.maxIntrinsicWidth(Int.MAX_VALUE)))
+                }
+                val sumMin = mins.sum(); val sumMax = maxs.sum()
+                val widths = when {
+                    sumMax <= avail -> maxs
+                    sumMin >= avail -> mins
+                    else -> IntArray(columns) { c -> mins[c] + ((maxs[c] - mins[c]).toFloat() * (avail - sumMin) / (sumMax - sumMin)).roundToInt() }
+                }
+                val heights = measurables.chunked(columns).map { row -> row.withIndex().maxOf { (c, m) -> m.minIntrinsicHeight(widths[c]) } }
+                // Each cell as tall as its row, so the rules line up.
+                val cellsPlaced = measurables.mapIndexed { i, m -> m.measure(Constraints.fixed(widths[i % columns], heights[i / columns])) }
+                layout(widths.sum(), heights.sum()) {
+                    var y = 0
+                    cellsPlaced.chunked(columns).forEachIndexed { r, row ->
+                        var x = 0
+                        row.forEachIndexed { c, p -> p.place(x, y); x += widths[c] }
+                        y += heights[r]
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── words ───────────────────────────────────────────────────────────────
+
+private const val TASK = "task"
+
+/** A block's words: its inline parts drawn (and, for a task item's first paragraph, its box ahead of them). */
+@Composable
+private fun Words(node: Node, ctx: Ctx, size: Float, weight: FontWeight?, task: Boolean? = null) = Words(node.children(), ctx, size, weight, task)
+
+@Composable
+private fun Words(nodes: List<Node>, ctx: Ctx, size: Float, weight: FontWeight?, task: Boolean? = null) {
+    val text = inline(nodes, ctx, task)
+    val inline = if (task == null) emptyMap() else mapOf(TASK to InlineTextContent(Placeholder(25.sp, 13.sp, PlaceholderVerticalAlign.TextCenter)) { TaskBox(task) })
+    MdText(text, size.sp, lh(size), weight, inline = inline)
+}
+
+/**
+ * A task's box, as the browser draws a disabled checkbox (13 across, 4 before it and 3 after, then the space before
+ * the words): faint grey, filled and ticked when done.
+ */
+@Composable
+private fun TaskBox(checked: Boolean) {
+    Box(Modifier.fillMaxHeight().padding(start = 4.dp, end = 8.dp), contentAlignment = Alignment.Center) {
+        val faint = if (C.dark) Color(0x66A0A0A0) else Color(0x4D767676)
+        Box(
+            Modifier.size(13.dp).clip(RoundedCornerShape(2.dp))
+                .let { if (checked) it.background(faint) else it.background(C.surface.copy(alpha = 0.6f)).border(1.dp, faint, RoundedCornerShape(2.dp)) },
+            contentAlignment = Alignment.Center,
+        ) { if (checked) IconIn(Icons.Check, 11.dp, if (C.dark) C.ink.copy(alpha = 0.7f) else Color.White) }
+    }
+}
+
+@Composable
+private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString {
+    // Inline code as the web has it: no box, the code face in its own colour, a little smaller.
+    val code = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = TextUnit(0.9f, TextUnitType.Em), color = codeInline)
     val link = TextLinkStyles(SpanStyle(color = C.blue))
+    val accent = C.accent
+    val placing = ctx.placing
     return buildAnnotatedString {
+        if (task != null) appendInlineContent(TASK, if (task) "[x]" else "[ ]")
         fun walk(n: Node) {
             when (n) {
                 is TextNode -> append(n.literal)
                 is Code -> withStyle(code) { append(n.literal) }
                 is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach(::walk) }
-                is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { n.children().forEach(::walk) }
+                is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { n.children().forEach(::walk) }
                 is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach(::walk) }
-                // Opened through LocalUriHandler: still.fail's own links in the app (App.kt → AppState.openLink), the rest by the system.
-                is Link -> withLink(LinkAnnotation.Url(n.destination, link)) { n.children().forEach(::walk) }
-                is Image -> n.children().forEach(::walk)
+                is Link -> {
+                    val file = placing?.files?.get(fileNameOf(n.destination))
+                    when {
+                        // A link within a sentence to one of the message's files: looks like any link, opens the file.
+                        file != null -> withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { n.children().forEach(::walk) }
+                        isChatLink(n.destination) -> appendRef(buildAnnotatedString { n.children().forEach { c -> append(inlineText(c)) } }, n.destination, accent)
+                        // Opened through LocalUriHandler: still.fail's own links in the app (App.kt → AppState.openLink), the rest by the system.
+                        else -> withLink(LinkAnnotation.Url(n.destination, link)) { n.children().forEach(::walk) }
+                    }
+                }
+                // An image the app cannot fetch (only the message's own files are fetched, through the station): its words, leading to it.
+                is Image -> {
+                    val words = buildAnnotatedString { n.children().forEach { c -> append(inlineText(c)) } }.ifEmpty { AnnotatedString(fileNameOf(n.destination)) }
+                    withLink(LinkAnnotation.Url(n.destination, link)) { append(words) }
+                }
                 is SoftLineBreak -> append(' ')
                 is HardLineBreak -> append('\n')
                 is HtmlInline -> append(n.literal)
@@ -220,15 +557,21 @@ private fun inline(node: Node): AnnotatedString {
                 else -> n.children().forEach(::walk)
             }
         }
-        node.children().forEach(::walk)
+        nodes.forEach(::walk)
     }
 }
 
-private const val CODE_EM = 0.9
+private fun AnnotatedString.ifEmpty(other: () -> AnnotatedString) = if (isEmpty()) other() else this
 
-@Composable
-private fun MdText(text: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, softWrap: Boolean = true, modifier: Modifier = Modifier) {
-    Text(text, color = C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, softWrap = softWrap, modifier = modifier)
+/** A node's words, plain. */
+private fun inlineText(n: Node): String = when (n) {
+    is TextNode -> n.literal
+    is Code -> n.literal
+    is SoftLineBreak, is HardLineBreak -> " "
+    else -> n.children().joinToString("") { inlineText(it) }
 }
 
-private fun Double.em() = androidx.compose.ui.unit.TextUnit(this.toFloat(), androidx.compose.ui.unit.TextUnitType.Em)
+@Composable
+private fun MdText(text: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
+    Text(text, color = LocalMdInk.current ?: C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, inlineContent = inline)
+}

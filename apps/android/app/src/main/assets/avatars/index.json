@@ -1,0 +1,87 @@
+[
+  {
+    "id": "backend",
+    "label": "后端接口",
+    "bg": "#B582EB"
+  },
+  {
+    "id": "mobile",
+    "label": "移动应用",
+    "bg": "#B9D84A"
+  },
+  {
+    "id": "documentation",
+    "label": "写文档",
+    "bg": "#F3CA43"
+  },
+  {
+    "id": "support",
+    "label": "客户支持",
+    "bg": "#EF83B3"
+  },
+  {
+    "id": "code-review",
+    "label": "代码审查",
+    "bg": "#DDEFEA"
+  },
+  {
+    "id": "bug-fixing",
+    "label": "修 Bug",
+    "bg": "#DDEFEA"
+  },
+  {
+    "id": "refactoring",
+    "label": "代码重构",
+    "bg": "#DDEFEA"
+  },
+  {
+    "id": "writing-tests",
+    "label": "写测试",
+    "bg": "#DDEFEA"
+  },
+  {
+    "id": "ci-builds",
+    "label": "持续构建",
+    "bg": "#E1EAF7"
+  },
+  {
+    "id": "deploy-release",
+    "label": "部署发布",
+    "bg": "#E1EAF7"
+  },
+  {
+    "id": "on-call",
+    "label": "故障值守",
+    "bg": "#F9E3DE"
+  },
+  {
+    "id": "monitoring",
+    "label": "监控告警",
+    "bg": "#F9E3DE"
+  },
+  {
+    "id": "security",
+    "label": "安全审计",
+    "bg": "#E2E8F5"
+  },
+  {
+    "id": "performance",
+    "label": "性能优化",
+    "bg": "#F9ECD1"
+  },
+  {
+    "id": "database",
+    "label": "数据库",
+    "bg": "#E2E8F5"
+  },
+  {
+    "id": "data-analysis",
+    "label": "数据分析",
+    "bg": "#E2E8F5"
+  },
+  {
+    "id": "frontend",
+    "label": "前端界面",
+    "bg": "#E6E6F8"
+  }
+]

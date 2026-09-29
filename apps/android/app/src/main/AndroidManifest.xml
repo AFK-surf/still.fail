@@ -15,11 +15,16 @@
         android:allowBackup="false">
         <!-- Frame stats and profiles from the shell, on an optimized build too. -->
         <profileable android:shell="true" />
+        <!-- Turning the phone (or the video viewer's landscape button) keeps the activity: recreating it would rebuild
+             AppState and drop the screens back to Home; Compose lays out again on its own. So does switching the
+             system's dark mode (uiMode): Compose reads it from the configuration, and MainActivity sets the system bars
+             and the window's background again as it changes. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -41,6 +46,16 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="app.still.fail" android:pathPrefix="/o/" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
+            </intent-filter>
+            <!-- An invitation's link (/invite#<token>) and a chat's link as chats refer to each other (/w/<ws>/s/<station>/chats/<key>). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.still.fail" android:path="/invite" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/chats/.*" />
+                <data android:scheme="https" android:host="ember.3720.org" android:path="/invite" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/chats/.*" />
             </intent-filter>
         </activity>
         <!-- What the installer says of an update (Updates.kt). -->

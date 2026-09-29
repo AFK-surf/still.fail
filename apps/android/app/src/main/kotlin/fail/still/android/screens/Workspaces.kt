@@ -45,6 +45,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.AppState
@@ -61,6 +62,8 @@ import fail.still.android.data.needsInviteCode
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
+import fail.still.android.ui.IconIn
+import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
@@ -144,6 +147,7 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 Lead("可以请已经在用 still.fail 的人把 ${first.email} 邀请进他们的 workspace，也可以自己建一个。")
                 Button("建一个 workspace", primary = true, busy = create.busy) { make("") }
                 create.error?.let { Error(errorText(it)) }
+                Button("用邀请链接加入", primary = false) { openInviteLink(app) }
                 Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
             }
         }
@@ -207,15 +211,39 @@ fun openWorkspaces(app: AppState) {
     app.sheet = SheetSpec(0.7f, draggable = true) { WorkspacesSheet(app) }
 }
 
+/**
+ * The workspace sheet, opened from its name on Home (web/src/mobile/Workspaces.tsx): the one in use on top as a card (its
+ * settings open from it), the invitations waiting, the others to switch to (with more than one account signed in, whose
+ * each is under its name; what it holds at the row's end), a new one, and joining by an invitation's link.
+ */
 @Composable
 private fun ColumnScope.WorkspacesSheet(app: AppState) {
     val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     val byAccount = all.value.orEmpty()
     val respond = remember { Write() }
     val pending = byAccount.flatMap { a -> a.invitations.map { a.account to it } }
+    val currentOf = byAccount.firstOrNull { a -> a.workspaces.any { it.id == app.workspace } }
+    val current = currentOf?.workspaces?.firstOrNull { it.id == app.workspace }
+    val others = byAccount.flatMap { a -> a.workspaces.filter { it.id != app.workspace }.map { a.account to it } }
     SheetGrab()
-    SheetHead("切换 workspace")
+    SheetHead("Workspace")
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        // The workspace in use first, as what the sheet is about: its settings open from it, not from a row among the others.
+        if (current != null) Row(
+            Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.ink.copy(alpha = 0.05f))
+                .clickable { openWorkspacePage(app) }.padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(current.name, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("你是${ROLE_LABEL[current.role] ?: current.role} · ${current.stations} 台 station · ${current.members} 人", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (byAccount.size > 1) Text(currentOf.account.email, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("设置", fontSize = 14.sp, color = C.muted)
+                IconIn(Icons.ChevronRight, 14.dp, C.muted)
+            }
+        }
         if (pending.isNotEmpty()) {
             Label("邀请")
             pending.forEach { (account, invite) ->
@@ -234,19 +262,27 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
             }
             respond.error?.let { Box(Modifier.padding(horizontal = 20.dp)) { Error(it.message) } }
         }
-        byAccount.forEach { (account, items) ->
-            Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Avatar(account.email, account.name.ifEmpty { account.email }, 16.dp, picture = account.picture)
-                Text(account.email, fontSize = 13.sp, color = C.muted)
-            }
-            if (items.isEmpty()) Text("没有 workspace", fontSize = 14.sp, color = C.subtle, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-            items.forEach { w ->
-                PickRow(w.name, "${w.stations} 台 station · ${w.members} 人", checked = w.id == app.workspace) { app.pickWorkspace(w.id); app.sheet = null }
-            }
+        if (others.isNotEmpty()) Label("切换到")
+        others.forEach { (account, w) ->
+            AsideRow(w.name, if (byAccount.size > 1) account.email else null, "${w.stations} 台 station", "${w.members} 人") { app.pickWorkspace(w.id); app.home() }
         }
-        val current = byAccount.flatMap { it.workspaces }.firstOrNull { it.id == app.workspace }
-        if (current != null) PickRow("「${current.name}」的设置", "名字、成员、退出") { openWorkspacePage(app) }
         PickRow("＋ 新建 workspace", color = C.accent) { openNewWorkspace(app) }
+        PickRow("＋ 用邀请链接加入", color = C.accent) { openInviteLink(app) }
+    }
+}
+
+/** A row of the sheet with two short notes at its end, each by one of its lines (the name, and whose it is). */
+@Composable
+private fun AsideRow(label: String, sub: String?, first: String, second: String, onClick: () -> Unit) {
+    Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
+            Text(first, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(sub ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
+            Text(second, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
+        }
     }
 }
 
@@ -311,4 +347,99 @@ private fun Label0(text: String) = Text(text, fontSize = 13.sp, fontWeight = Fon
 fun invitationsWaiting(app: AppState): Boolean {
     val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     return all.value.orEmpty().any { it.invitations.isNotEmpty() }
+}
+
+// ── an invitation's link ───────────────────────────────────────────────
+
+/** The token of an invitation's link (`<cloud>/invite#<token>`), or what was pasted when it is a token by itself. */
+fun invitationToken(text: String): String? {
+    val t = text.trim()
+    if (t.isEmpty()) return null
+    val hash = t.substringAfter("/invite#", "")
+    return (hash.ifEmpty { if (t.contains('/') || t.contains(' ')) "" else t }).trim().ifEmpty { null }
+}
+
+/** Joining by an invitation's link: pasted here, then what it leads to is shown before it is accepted (as the web's /invite). */
+fun openInviteLink(app: AppState) {
+    app.sheet = SheetSpec(0.5f) { InviteLinkSheet(app, null) }
+}
+
+/** An invitation's link opened in the app: what it leads to, before it is accepted. */
+fun openInvite(app: AppState, token: String) {
+    app.sheet = SheetSpec(0.5f) { InviteLinkSheet(app, token) }
+}
+
+@Composable
+private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
+    val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
+    val list = accounts.value.orEmpty()
+    var text by remember { mutableStateOf("") }
+    var token by remember { mutableStateOf(given) }
+    var chosen by remember { mutableStateOf<String?>(null) }
+    val sub = chosen?.takeIf { c -> list.any { it.sub == c } } ?: list.firstOrNull()?.sub
+    // Read once per account: what the link leads to depends on who looks.
+    var preview by remember { mutableStateOf<fail.still.android.data.InvitationPreview?>(null) }
+    var failed by remember { mutableStateOf<String?>(null) }
+    val accept = remember { Write() }
+    androidx.compose.runtime.LaunchedEffect(token, sub) {
+        preview = null; failed = null
+        val t = token ?: return@LaunchedEffect
+        if (sub == null) return@LaunchedEffect
+        try { preview = Cloud(app.core, sub).previewInvitation(t) } catch (e: CoreException) { failed = e.message }
+    }
+    SheetGrab()
+    // Signed out: nothing reads the invitation yet (as the web's /invite: sign in first, then decide).
+    if (accounts.value != null && list.isEmpty()) {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        SheetHead("登录 still.fail")
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("你收到了一个 still.fail workspace 的邀请。先用 Google 账号登录，再决定是否加入。", fontSize = 14.sp, color = C.muted)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                Button("取消", primary = false) { app.sheet = null }
+                Button("使用 Google 账号登录", primary = true) { scope.launch { signIn(app, context) } }
+            }
+        }
+        return
+    }
+    val p = preview
+    SheetHead(if (token == null) "用邀请链接加入" else if (p != null) "加入「${p.name}」" else if (failed != null) "邀请不能用" else "正在读取邀请…")
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val t = token
+        when {
+            t == null -> {
+                Text("把收到的 still.fail 邀请链接粘贴在下面，先看看是哪个 workspace，再决定是否加入。", fontSize = 14.sp, color = C.muted)
+                Field(text, { text = it }, "https://app.still.fail/invite#…", lines = 2)
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    Button("取消", primary = false) { app.sheet = null }
+                    Button("查看邀请", primary = true, enabled = invitationToken(text) != null) { token = invitationToken(text) }
+                }
+            }
+            failed != null -> {
+                Text(failed ?: "", fontSize = 14.sp, color = C.muted)
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    if (given == null) Button("换一个链接", primary = false) { token = null }
+                    Button("关闭", primary = true) { app.sheet = null }
+                }
+            }
+            p == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Text("正在读取…", fontSize = 14.sp, color = C.muted) }
+            else -> {
+                Text("${p.inviter.ifEmpty { "有人" }}邀请你以${ROLE_LABEL[p.role] ?: p.role}身份加入。" + (p.email?.let { "这个邀请只能由 $it 接受。" } ?: ""), fontSize = 14.sp, color = C.muted)
+                if (list.size > 1) {
+                    Label0("用哪个账号加入")
+                    Column { list.forEach { a -> PickRow(a.email, checked = a.sub == sub) { chosen = a.sub } } }
+                }
+                accept.error?.let { Error(it.message) }
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    Button("取消", primary = false) { app.sheet = null }
+                    Button("以 ${list.firstOrNull { it.sub == sub }?.email ?: ""} 加入", primary = true, busy = accept.busy, enabled = sub != null) {
+                        app.run(accept) {
+                            val id = Cloud(app.core, sub!!).acceptInvitationToken(t)
+                            app.pickWorkspace(id); app.home(); app.toast = "已加入「${p.name}」"
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

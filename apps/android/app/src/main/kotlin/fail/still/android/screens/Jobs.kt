@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -217,6 +218,17 @@ fun AppState.stopJob(station: String, job: Job) {
     }
 }
 
+/** Whether clearing takes it away: over (stopped, failed, ended by itself), not a service being started again. */
+val Job.isEnded: Boolean get() = state == "stopped" || state == "failed" || (state == "exited" && !isService)
+
+/** Clears the ended ones among `jobs` off the chat (each session's, as the station keeps them); a failure in a toast. */
+fun AppState.clearEnded(station: String, jobs: List<Job>) {
+    val sessions = jobs.filter { it.isEnded }.mapNotNull { it.session }.distinct()
+    scope.launch {
+        try { sessions.forEach { api(station).clearEndedJobs(it) } } catch (e: CoreException) { toast = "没能清掉已结束的任务：${e.message}" }
+    }
+}
+
 /** A job's row: its dot on its name's line, what it is up to under it; over ones faded. */
 @Composable
 fun JobInfoRow(job: Job, now: Long, onClick: (() -> Unit)?) {
@@ -232,40 +244,75 @@ fun JobInfoRow(job: Job, now: Long, onClick: (() -> Unit)?) {
     }
 }
 
-/** The chat's services (each opens its page while up) and background jobs (each opens its sheet), as two groups. */
+/**
+ * Services, then background jobs. A service up or restarting opens its page; one that did not start (or is over), and
+ * any job, opens what it said and its output. With `notes` each group's head says how many are up or alive.
+ */
 @Composable
-fun JobGroups(app: AppState, station: String, of: ChatOf, jobs: List<Job>) {
+fun JobGroups(app: AppState, station: String, of: ChatOf, jobs: List<Job>, notes: Boolean = false) {
     val now = rememberNow()
     val services = jobs.filter { it.isService }
     val plain = jobs.filter { !it.isService }
+    fun count(list: List<Job>, tone: Tone) = list.count { it.tone == tone }
     if (services.isNotEmpty()) {
-        GroupLabel("服务")
+        val note = listOfNotNull(
+            count(services, Tone.Up).takeIf { it > 0 }?.let { "$it 个在线" },
+            count(services, Tone.Restart).takeIf { it > 0 }?.let { "$it 个在重启" },
+        ).joinToString("，")
+        GroupLabel("服务" + if (notes && note.isNotEmpty()) " · $note" else "")
         InfoList {
             services.forEach { j ->
                 val up = j.tone == Tone.Up || j.tone == Tone.Restart
-                JobInfoRow(j, now, if (up) ({ app.push(Screen.Preview(station, j.id)) }) else null)
+                JobInfoRow(j, now) { if (up) app.push(Screen.Preview(station, j.id)) else openJob(app, station, of, j.id) }
             }
         }
     }
     if (plain.isNotEmpty()) {
-        GroupLabel("后台任务")
+        val live = count(plain, Tone.Live)
+        GroupLabel("后台任务" + if (notes && live > 0) " · $live 个在盯着" else "")
         InfoList { plain.forEach { j -> JobInfoRow(j, now) { openJob(app, station, of, j.id) } } }
     }
 }
 
-/** The chat's services and jobs alone, from the bar's button. */
+/** What matters now of the chat's services and jobs, from the bar's button; the rest a tap away, the ended cleared. */
 fun openJobs(app: AppState, station: String, of: ChatOf) {
-    app.sheet = SheetSpec(0.72f, draggable = true) {
+    app.sheet = SheetSpec(0.62f, draggable = true) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val jobs = chat.value?.let(::jobsOf) ?: emptyList()
+        val now = rememberNow()
+        var all by remember { mutableStateOf(false) }
+        val current = jobs.filter { it.isCurrent(now) }
+        val shown = if (all) jobs else current
+        val hidden = jobs.size - current.size
+        val ended = jobs.count { it.isEnded }
         SheetGrab()
         SheetHead("服务和后台任务")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
-            if (jobs.isEmpty()) Text("还没有服务或后台任务。agent 开网页、或挂上长期盯着的任务时，会列在这里。", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
-            else JobGroups(app, station, of, jobs)
+            if (chat.value != null && jobs.isEmpty()) Column(Modifier.padding(horizontal = 2.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("还没有服务或后台任务", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text("agent 开网页、或挂上长期盯着的任务时，会列在这里。", fontSize = 13.sp, color = C.muted)
+            }
+            if (jobs.isNotEmpty() && shown.isEmpty()) Text("眼下没有在跑的服务或任务。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            JobGroups(app, station, of, shown, notes = true)
+            if (hidden > 0) SheetLink({ all = !all }) {
+                if (all) Text("只看眼下的", fontSize = 14.sp, color = C.accent)
+                else {
+                    Text("全部 ${jobs.size} 个", fontSize = 14.sp, color = C.accent)
+                    Text("另有 $hidden 个已停止或结束", fontSize = 12.sp, color = C.muted)
+                }
+            }
+            if (ended > 0) SheetLink({ app.clearEnded(station, jobs) }) { Text("清掉 $ended 个已结束的", fontSize = 14.sp, color = C.accent) }
         }
     }
 }
+
+/** A quiet text button under the groups (web mobile's mJobsAll). */
+@Composable
+private fun SheetLink(onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit) =
+    Column(
+        Modifier.padding(top = 14.dp).clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 2.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp), content = content,
+    )
 
 /** A job, from the chat's sheet: what it said, or its output as it grows; stopped from here. */
 fun openJob(app: AppState, station: String, of: ChatOf, id: String) {
@@ -273,7 +320,8 @@ fun openJob(app: AppState, station: String, of: ChatOf, id: String) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val job = chat.value?.agents?.flatMap { it.jobs }?.firstOrNull { it.id == id }
         val now = rememberNow()
-        var tab by remember { mutableIntStateOf(0) }
+        var picked by remember { mutableIntStateOf(0) }
+        val tab = if (job?.isService == true) 1 else picked
         val running = job?.state == "running"
         val log = rememberJobLog(station, if (job != null && tab == 1) id else null, 300, if (running) 2000 else 60_000)
         // The last line it wrote: again and again while it runs, once when it is over.
@@ -282,7 +330,7 @@ fun openJob(app: AppState, station: String, of: ChatOf, id: String) {
         if (job == null) {
             SheetHead("任务")
             if (chat.value != null) Text("这个任务已经不在了。", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 18.dp))
-        } else JobBody(app, station, job, now, tab, { tab = it }, log, last)
+        } else JobBody(app, station, job, now, tab, { picked = it }, log, last)
     }
 }
 
@@ -298,11 +346,13 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, now: L
         }
     }
     Column(Modifier.weight(1f).padding(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Seg(listOf("通知", "输出"), tab, onTab, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
+        job.command?.takeIf { it.isNotBlank() }?.let { Text(it, style = Mono, fontSize = 11.5.sp, lineHeight = 17.sp, color = C.muted) }
+        // A service has only its output to show.
+        if (!job.isService) Seg(listOf("通知", "输出"), tab, onTab, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
         if (tab == 0) {
             val notices = job.notices ?: emptyList()
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (notices.isEmpty()) Text("还没有通知。它用 stillfail-job notify 说的话会列在这里。", fontSize = 14.sp, color = C.muted)
+                if (notices.isEmpty()) Text("还没有通知。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                 notices.forEach { n ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(clock(n.at, now), fontSize = 14.sp, color = C.subtle, modifier = Modifier.width(48.dp))

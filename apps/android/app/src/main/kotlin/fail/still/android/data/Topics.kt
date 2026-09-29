@@ -93,6 +93,13 @@ object Topics {
     fun live(station: String, key: String) = buildJsonObject { put("topic", "live"); put("station", station); put("key", key) }
     /** An agent's execution history, read for people (the core's). */
     fun history(station: String, key: String) = buildJsonObject { put("topic", "history"); put("station", station); put("key", key) }
+    /** A station's background jobs still up, newest first, each with the chat it is in (`/jobs`). */
+    fun jobs(station: String) = buildJsonObject { put("topic", "jobs"); put("station", station) }
+    /** What the core has been waiting on for a while (a slow request, a link down), said under a page's "loading…". */
+    val status = buildJsonObject { put("topic", "status") }
+
+    /** A connect's Slack app as Slack has it (read through the station; again after a write to the connect). */
+    fun slackApp(station: String, connect: String) = buildJsonObject { put("topic", "slackApp"); put("station", station); put("connect", connect) }
 }
 
 /** What an item's page is of: its chat's thread, or its agent's session while it has no chat. */

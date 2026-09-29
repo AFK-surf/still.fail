@@ -4,6 +4,7 @@
 package fail.still.android.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -13,6 +14,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 @Immutable
@@ -50,6 +52,21 @@ val LocalColors = staticCompositionLocalOf { Light }
 /** The palette in use. */
 val C: StillFailColors @Composable get() = LocalColors.current
 
+/**
+ * Text as the web phone sets it (mobile/styles/root.css.ts: `line-height: 1.4`, no letter spacing): Material's own
+ * type (24sp lines for every size, 0.5sp between letters) made rows taller and words wider than the web's.
+ */
+private val WebType = Typography().let { t ->
+    fun TextStyle.web() = copy(lineHeight = 1.4.em, letterSpacing = 0.sp)
+    Typography(
+        displayLarge = t.displayLarge.web(), displayMedium = t.displayMedium.web(), displaySmall = t.displaySmall.web(),
+        headlineLarge = t.headlineLarge.web(), headlineMedium = t.headlineMedium.web(), headlineSmall = t.headlineSmall.web(),
+        titleLarge = t.titleLarge.web(), titleMedium = t.titleMedium.web(), titleSmall = t.titleSmall.web(),
+        bodyLarge = t.bodyLarge.web(), bodyMedium = t.bodyMedium.web(), bodySmall = t.bodySmall.web(),
+        labelLarge = t.labelLarge.web(), labelMedium = t.labelMedium.web(), labelSmall = t.labelSmall.web(),
+    )
+}
+
 val Mono = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 18.sp)
 
 @Composable
@@ -61,6 +78,6 @@ fun StillFailTheme(dark: Boolean, content: @Composable () -> Unit) {
         lightColorScheme(primary = colors.accent, background = colors.bg, surface = colors.surface, onSurface = colors.ink, onBackground = colors.ink, outline = colors.line)
     }
     CompositionLocalProvider(LocalColors provides colors) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = scheme, typography = WebType, content = content)
     }
 }

@@ -417,9 +417,10 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>) 
 /**
  * A station's name, then the one command that installs still.fail on that machine and joins it (one with still.fail already
  * too), copied from here, and the wait for it; `onJoined` once it has. `onCancel`: a way out beside the first step.
+ * `label`: what the name's line is called.
  */
 @Composable
-private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, onCancel: (() -> Unit)? = null, onJoined: () -> Unit) {
+private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label: String = "名字", placeholder: String = "比如机器名：studio、mac-mini", onCancel: (() -> Unit)? = null, onJoined: () -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
@@ -432,8 +433,8 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, onCanc
         val enrollment = made
         when {
             enrollment == null -> {
-                Text("给这台机器起个名字", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Field(name, { name = it }, "比如机器名：studio、mac-mini")
+                Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Field(name, { name = it }, placeholder)
                 error?.let { Text(it, fontSize = 13.sp, color = C.red) }
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                     if (onCancel != null) Button("取消", primary = false) { onCancel() }
@@ -448,15 +449,12 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, onCanc
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("完成", primary = true) { onJoined() } }
             }
             else -> {
-                Text("在那台机器上打开「终端」，执行：", fontSize = 14.sp, color = C.ink)
+                Text("在那台机器的终端里执行：", fontSize = 14.sp, color = C.ink)
                 CommandBox(enrollment.install)
-                Text("macOS（Apple 芯片）和 Linux 都行；装过 still.fail 的机器也用这条命令。它会装好 still.fail、加入这个 workspace，并在后台一直运行（开机自动启动）。", fontSize = 12.sp, color = C.muted)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("macOS（Apple 芯片）和 Linux 都行；装过 still.fail 的机器也用这条命令。它会装好 still.fail、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。", fontSize = 13.sp, color = C.muted)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Spinner(10.dp)
-                    Column {
-                        Text("等待这台机器加入", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                        Text("执行命令后会自动继续 · 命令 1 小时内有效", fontSize = 12.sp, color = C.muted)
-                    }
+                    Text("等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效", fontSize = 13.sp, color = C.muted)
                 }
             }
         }
@@ -464,34 +462,29 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, onCanc
 }
 
 /**
- * A workspace with no station: what a station is and adding the first one, in the page (web/src/cloud/workspace.tsx →
- * Onboarding, settings.tsx → FirstStation); its people and settings stay at hand. Its pages come once a station has joined.
+ * A workspace with no station: its first one added in the page (as the desktop's Onboarding, web/src/cloud/workspace.tsx,
+ * and the narrow web's FirstStation, web/src/mobile/Stations.tsx): what a station is, its name, then the command to copy
+ * and the wait. The workspace's pages take over once it has joined. Only its owner and admins add one; anyone else is
+ * told to wait for them.
  */
 @Composable
 fun FirstStation(current: WorkspaceEntry) {
     val app = LocalApp.current
     val topic by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
     val view = topic.value
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-            Text("添加第一台 station", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
-            Text(
-                "station 是一台运行 still.fail 的机器：agent 在那里干活，连接、会话和模型账号也都在那台机器上。在要用的机器上执行一条命令，它就会加入「${current.workspace.name}」。",
-                fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center,
-            )
-        }
-        when {
-            view == null -> Text(topic.error?.message ?: "正在读取 workspace…", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            !view.manager -> Text("这个 workspace 还没有 station，等管理员添加。", fontSize = 14.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            else -> AddStationSteps(current, emptyList()) {}
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
-            if (view?.manager == true) {
-                Text("邀请成员", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.Workspace) })
-                Text("·", fontSize = 13.sp, color = C.subtle)
+    Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Illustration(R.drawable.illus_no_station, R.drawable.illus_no_station_dark, 240.dp)
+        Text("添加第一台 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center)
+        Text("agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            when {
+                view == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Spinner(13.dp); Text(topic.error?.message ?: "正在读取 workspace…", fontSize = 14.sp, color = C.muted)
+                }
+                !view.manager -> Text("这个 workspace 还没有 station，等管理员添加。", fontSize = 13.sp, lineHeight = 19.5.sp, color = C.ink,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp))
+                else -> AddStationSteps(current, emptyList(), label = "给这台机器起个名字", placeholder = "比如 studio、mac-mini") {}
             }
-            Text("workspace 设置", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.Workspace) })
         }
     }
 }

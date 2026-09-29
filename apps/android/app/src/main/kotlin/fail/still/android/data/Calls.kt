@@ -10,6 +10,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -172,6 +173,34 @@ class StationApi(private val core: StillFailCore, val station: String) {
         return Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
     }
 
+    /**
+     * A file sent to the session, and its type as the station says (web/src/api.ts → file). `thumb`: an image as a chat
+     * shows it (its thumbnail, where the station keeps one; an older station answers the image itself). `onProgress`:
+     * the bytes so far and the whole size (null when the station does not say) as a whole file comes.
+     */
+    suspend fun file(key: String, name: String, thumb: Boolean, onProgress: ((Long, Long?) -> Unit)? = null): Pair<String, ByteArray> {
+        val params = buildJsonObject {
+            put("station", station); put("key", key); put("name", name)
+            if (thumb) put("thumb", true)
+            if (onProgress != null) put("progress", true)
+        }
+        val answer = (if (onProgress == null) core.call("station.file", params) else core.call("station.file", params) { got ->
+            val o = got as? JsonObject
+            val loaded = (o?.get("loaded") as? JsonPrimitive)?.content?.toLongOrNull()
+            if (loaded != null) onProgress(loaded, (o["total"] as? JsonPrimitive)?.content?.toLongOrNull())
+        }).jsonObject
+        val type = (answer["type"] as? JsonPrimitive)?.content ?: ""
+        return type to Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
+    }
+
+    /** What a visualization's widget kept (widget.state; null when nothing, or an older station that keeps nothing). */
+    suspend fun widgetState(key: String, path: String): JsonElement? =
+        op("widget.state") { put("key", key); put("path", path) }.jsonObject["state"]?.takeIf { it !is JsonNull }
+    /** Keeps what a visualization's widget asks to keep (widget.setState), for the next time it is shown. */
+    suspend fun setWidgetState(key: String, path: String, state: JsonElement) {
+        op("widget.setState") { put("key", key); put("path", path); put("state", state) }
+    }
+
     // ── background jobs and web services (web/src/Jobs.tsx) ──
 
     /** A background job (a web service's page finds its port by it). */
@@ -183,7 +212,129 @@ class StationApi(private val core: StillFailCore, val station: String) {
     }
     /** Stops a job from the app (its agent is told who did). */
     suspend fun stopJob(id: String) { op("job.stop") { put("id", id) } }
+    /** Clears a session's ended jobs (stopped, failed, ended by itself) off its pages, as the station keeps them. */
+    suspend fun clearEndedJobs(session: String) { op("job.clearEnded") { put("session", session) } }
+
+    // ── the archive (web/src/pages/Archive.tsx) ──
+
+    /** The archive's items; a station from before it answers its shown ones (none say `archived`), so none. */
+    suspend fun archivedChats(): List<ArchivedChat> =
+        decode(ListSerializer(ArchivedChat.serializer()), op("chats.archived")).filter { it.archived != null }
+    /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
+    suspend fun setArchived(thread: Long?, session: String, archived: Boolean) {
+        op("chat.archive") { put("session", session); if (thread != null) put("thread", thread); put("archived", archived) }
+    }
+    /** Deletes a session for good: its chat, its history and its workspace directory. */
+    suspend fun deleteSession(key: String) { op("session.delete") { put("key", key) } }
+
+    // ── a new chat (web/src/NewChat.tsx → useEnsureChat) ──
+
+    /**
+     * A new chat, there at once: the core has its page, its row and what is sent to it under the key it answers (the
+     * station makes it behind it, told that key as `clientKey`, so its row is known for this one's, never guessed).
+     * `profile`: the one kept to, or null for the station's pick.
+     */
+    suspend fun createChat(runtime: String, model: String, effort: String?, profile: String?): String =
+        core.call("chat.create", buildJsonObject {
+            put("station", station); put("runtime", runtime); put("model", model)
+            if (effort != null) put("effort", effort)
+            if (profile != null) put("profile", profile)
+        }).jsonObject["key"]!!.jsonPrimitive.content
+
+    // ── the machine's own sessions (web/src/MachineSessions.tsx) ──
+
+    /** Sessions the machine's own Claude Code and Codex kept (in a terminal); a station from before them fails it. */
+    suspend fun machineSessions(): List<MachineSession> =
+        decode(ListSerializer(MachineSession.serializer()), op("machineSessions.list").jsonObject["sessions"] ?: JsonArray(emptyList()))
+    /** One of them to look at first: what was said in it (the latest `limit`), and how many there are in all. */
+    suspend fun machineSession(runtime: String, id: String, limit: Int = 200): Pair<List<MachineSaid>, Long> {
+        val r = op("machineSessions.read") { put("runtime", runtime); put("id", id); put("limit", limit) }.jsonObject
+        val said = decode(ListSerializer(MachineSaid.serializer()), r["said"] ?: JsonArray(emptyList()))
+        return said to (r["total"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: said.size.toLong())
+    }
+    /** A chat going on with one of them (the one already going on with it, if any); answers its key. */
+    suspend fun continueMachineSession(runtime: String, id: String): String =
+        op("machineSessions.continue") { put("runtime", runtime); put("id", id) }.jsonObject["key"]!!.jsonPrimitive.content
+
+    // ── the station's software, its memory, Slack apps (web/src/api.ts → stationApi) ──
+
+    /** Updates the station or a runtime (`id`: station | claude | codex), or installs a runtime not there; the overview says how it goes. */
+    suspend fun updateSoftware(id: String) { op("software.update") { put("id", id) } }
+    /** Reads again what versions are out. */
+    suspend fun checkSoftware() { op("software.check") }
+    /** The agents' memory on the station: the global one and the skills (projects' memories among them), as they are. */
+    suspend fun memory(): JsonElement = op("memory.get")
+    /**
+     * Writes what changed of a connect's Slack app (any of name, displayName, description, longDescription,
+     * backgroundColor, groups; `icon`: a data URL) into its manifest; answers whether Slack wants its new permissions
+     * approved, and why the icon did not go up.
+     */
+    suspend fun putSlackApp(connect: String, input: JsonObject): JsonObject = op("connect.putSlackApp") { put("connect", connect); put("input", input) }.jsonObject
+    /** A Slack app made with its settings as a whole (and its icon, a data URL); answers its app id and why the icon did not go up. */
+    suspend fun makeSlackApp(team: String, settings: JsonObject, icon: String?): Pair<String, String?> {
+        val r = op("slack.makeApp") { put("team", team); put("settings", settings); if (icon != null) put("icon", icon) }.jsonObject
+        return r["appId"]!!.jsonPrimitive.content to r["iconError"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+    }
+    /** Forgets the viewer's configuration token of a Slack workspace. */
+    suspend fun removeConfigToken(team: String) { op("slack.removeConfigToken") { put("team", team) } }
+    /** Hands Slack's install code to the station that made the app; answers the workspace it went into. */
+    suspend fun slackInstalled(code: String, state: String): String? =
+        op("slack.installed") { put("code", code); put("state", state) }.jsonObject["team"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+
+    // ── a chat itself (web/src/api.ts → rename; chats made here, by their key) ──
+
+    /** Sends to a chat by its key (one made here, made by its station or not): it waits in the chat until it can go. */
+    suspend fun sendIn(session: String, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList()) {
+        op("chat.send") {
+            put("session", session); put("text", text)
+            put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
+            put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
+        }
+    }
+    /** A failed message of such a chat, by its key: sent again, or dropped. */
+    suspend fun retryIn(session: String, id: String) { op("chat.retry") { put("session", session); put("id", id) } }
+    suspend fun discardIn(session: String, id: String) { op("chat.discard") { put("session", session); put("id", id) } }
+    /** A chat named by hand; an empty name: named by its first message again. */
+    suspend fun rename(thread: Long?, session: String, title: String) {
+        op("chat.rename") { put("session", session); if (thread != null) put("thread", thread); put("title", title) }
+    }
 }
+
+/** A session the station's machine kept (its own Claude Code or Codex, in a terminal); `session`: the chat going on with it. */
+@kotlinx.serialization.Serializable
+data class MachineSession(
+    val runtime: String,
+    val id: String,
+    val cwd: String,
+    val title: String? = null,
+    val first: String? = null,
+    val model: String? = null,
+    val updatedAt: Long,
+    val session: String? = null,
+)
+
+/** Something said in one of them: by the person, else by its agent; when, in ms. */
+@kotlinx.serialization.Serializable
+data class MachineSaid(val person: Boolean, val text: String, val at: Long? = null)
+
+/** An item of a station's archive (`chats.archived`), as the station sends it (not in client/shapes yet). */
+@kotlinx.serialization.Serializable
+data class ArchivedChat(
+    val id: String,
+    val session: String,
+    val thread: Long? = null,
+    val title: String,
+    val last: ArchivedLast? = null,
+    val lastActiveAt: Long,
+    val archived: ArchivedMark? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class ArchivedLast(val text: String? = null)
+
+/** When it was archived, by a person (`manual`) or the station for idling (`auto`); `alone`: its agents still at work elsewhere. */
+@kotlinx.serialization.Serializable
+data class ArchivedMark(val at: Long, val by: String, val alone: Boolean = false)
 
 /** A job's output as last read: whose, its last lines, when it last grew. */
 class JobLog(val job: String, val text: String, val outputAt: Long?)
@@ -243,7 +394,15 @@ class Cloud(private val core: StillFailCore, private val account: String) {
     suspend fun renameStation(workspace: String, station: String, name: String) { op("workspace.renameStation") { put("workspace", workspace); put("station", station); put("name", name) } }
     suspend fun removeStation(workspace: String, station: String) { op("workspace.removeStation") { put("workspace", workspace); put("station", station) } }
     suspend fun revokeLoginSession(id: String) { op("loginSession.revoke") { put("id", id) } }
+    /** What an invitation link leads to, for the account looking: the workspace, the role, who invited, whose email it is for. */
+    suspend fun previewInvitation(token: String): InvitationPreview =
+        decode(InvitationPreview.serializer(), op("invitation.preview") { put("token", token) })
+    /** Accepts an invitation by its link's token; answers the workspace joined. */
+    suspend fun acceptInvitationToken(token: String): String = op("invitation.accept") { put("token", token) }.jsonObject["id"]!!.jsonPrimitive.content
 }
+
+@kotlinx.serialization.Serializable
+data class InvitationPreview(val workspace: String, val name: String, val role: String = "member", val inviter: String = "", val email: String? = null)
 
 class Enrollment(val install: String, val command: String)
 

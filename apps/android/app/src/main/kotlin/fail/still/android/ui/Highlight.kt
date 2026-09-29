@@ -56,7 +56,7 @@ fun highlight(code: String, language: String?, dark: Boolean): AnnotatedString {
                     val m = NUMBER.matchAt(code, i)
                     if (m != null) colored(p.number, m.range.last + 1) else { append(c); i++ }
                 }
-                c.isLetter() || c == '_' -> {
+                (c in 'A'..'Z' || c in 'a'..'z' || c == '_') -> {
                     val m = WORD.matchAt(code, i)!!
                     val end = m.range.last + 1
                     when {

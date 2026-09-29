@@ -99,11 +99,11 @@ fun StationsScreen(current: WorkspaceEntry) {
     val list = stations.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack("会话", app::pop)
+        // No station yet: adding the first one is the page.
+        if (list != null && list.isEmpty()) { FirstStation(current); return@Column }
         LargeTitle(if (list != null) "${ws.name} · ${list.count { it.online }}/${list.size} 在线" else ws.name, "Station")
         if (list == null) {
             Text(stations.error?.message ?: "正在读取 station…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
-        } else if (list.isEmpty()) {
-            FirstStation(current)
         } else {
             list.forEach { s ->
                 Card(onClick = { app.push(Screen.Station(s.station)) }) {
@@ -176,8 +176,6 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 // The machine's own logins not used yet: each one offered as the first ones were.
                 if (s.online) MachineLoginOffers(address, overview)
                 SectionHeader("连接", start = 24.dp)
-                // A connect runs a profile's model: with none, the first step is a profile.
-                if (overview.connects.isEmpty() && overview.profiles.isEmpty()) Text("连接要用 Profile 来跑模型。先添加一个 Profile，再来加连接。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp))
                 ListCard {
                     overview.connects.forEach { c -> ConnectRow(address, c) }
                     ListRow {
@@ -185,11 +183,29 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                         Text("still.fail 对话", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                         Text("内置", fontSize = 13.sp, color = C.muted)
                     }
-                    if (s.online && overview.profiles.isNotEmpty()) ListRow(onClick = { openNewConnect(app, address) }) { Text("＋ 添加连接", fontSize = 15.sp, color = C.accent) }
-                    else if (s.online) ListRow(onClick = { app.push(Screen.NewProfile(address)) }) { Text("去添加 Profile", fontSize = 15.sp, color = C.accent) }
+                    // A connect runs a profile's model: with none, its page says to add one first.
+                    if (s.online) ListRow(onClick = { openNewConnect(app, address) }) {
+                        Column(Modifier.weight(1f)) {
+                            Text("＋ 添加连接", fontSize = 15.sp, color = C.accent)
+                            if (overview.profiles.isEmpty()) Text("连接要用 Profile 来跑模型，先添加一个 Profile", fontSize = 13.sp, color = C.muted)
+                        }
+                    }
                 }
                 // Slack apps made here and not connected yet: to be finished any time.
                 WaitingApps(address, overview, s.online)
+                // The agents' memory on this machine, and its software's versions (none from a station older than them).
+                SectionHeader("记忆", start = 24.dp)
+                ListCard {
+                    ListRow(onClick = { app.push(Screen.Memory(address)) }) {
+                        IconIn(Icons.Brain, 18.dp, C.muted)
+                        Column(Modifier.weight(1f)) {
+                            Text("agent 的记忆", fontSize = 15.sp, color = C.ink)
+                            Text("全局记忆和每个项目的记忆，由 agent 自己维护", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                    }
+                }
+                if (s.online) Versions(address, overview.updates, manager)
             }
             Spacer(Modifier.height(30.dp))
         }
@@ -199,23 +215,27 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
 
 
 /**
- * A profile on its station's page: a dot for its state before its name, then its state in words, what it is and how
- * many of its models are enabled; its allowance. Its page picks the models.
+ * A profile on its station's page: whether it works (a dot before its name, its state in words, why when its provider
+ * refuses it), what it is, how many of its models are enabled, and its allowance; its page picks them.
  */
 @Composable
 private fun ProfileRow(station: String, p: Profile) {
     val app = LocalApp.current
+    val trouble = quotaTrouble(p.quota)
     ListRow(onClick = { app.push(Screen.Profile(station, p.id)) }) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                StateDot(toneColor(p.checkTone))
+                PresenceDot(toneDot(p.checkTone))
                 Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(listOf(p.checkText, if (p.machine == true) "本机登录" else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
         QuotaRings(p.quota)
         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
     }
 }
 
+/** A check's tone as a presence dot: green up, red failing, the rest on its way or unknown. */
+internal fun toneDot(tone: String): String = when (tone) { "green" -> "online"; "red" -> "error"; "neutral" -> "offline"; else -> "busy" }

@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -119,9 +120,37 @@ internal fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier
     }
 }
 
+/**
+ * An agent's state at its mark's corner in the chat list's colours (web ui.css.ts agentMark, ChatMark.css.ts): a 12dp
+ * disc of the ground, red in it when it wants someone (blocked, failed), at work a turning yellow 8dp ring with a faint
+ * quarter; nothing when done. No halo: the mark is small.
+ */
+@Composable
+internal fun AgentStateMark(state: ChatState, around: Color, modifier: Modifier = Modifier) {
+    if (state == ChatState.Done) return
+    val turn = if (state == ChatState.Running && !reducedMotion()) rememberInfiniteTransition(label = "agent-mark")
+        .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = androidx.compose.animation.core.LinearEasing)), label = "turn").value else 0f
+    Canvas(modifier.size(12.dp)) {
+        val r = size.minDimension / 2
+        val ring = 2.dp.toPx()
+        drawCircle(around, r)
+        if (state == ChatState.Running) {
+            // The web's 8px box with a 2px border: the stroke's middle 3px from the centre.
+            val rr = r - ring - ring / 2
+            val at = androidx.compose.ui.geometry.Offset(center.x - rr, center.y - rr)
+            val box = androidx.compose.ui.geometry.Size(rr * 2, rr * 2)
+            drawArc(AGENT_YELLOW.copy(alpha = 0.25f), turn - 45f, 90f, false, at, box, style = Stroke(ring))
+            drawArc(AGENT_YELLOW, turn + 45f, 270f, false, at, box, style = Stroke(ring))
+        } else drawCircle(AGENT_RED, r - ring)
+    }
+}
+
+private val AGENT_RED = Color(0xFFE5484D)
+private val AGENT_YELLOW = Color(0xFFF2B01E)
+
 /** An agent: its model maker's mark on a soft tile, with its state as a badge. */
 @Composable
-fun ModelMark(maker: Maker?, runtime: String, size: Dp = 36.dp, state: ChatState? = null, around: Color = C.bg) {
+fun ModelMark(maker: Maker?, runtime: String, size: Dp = 36.dp, state: ChatState? = null, around: Color = C.bg, listMark: Boolean = false) {
     val xs = size < 30.dp
     Box(Modifier.size(size)) {
         Box(
@@ -129,7 +158,8 @@ fun ModelMark(maker: Maker?, runtime: String, size: Dp = 36.dp, state: ChatState
                 .border(1.dp, C.line, RoundedCornerShape(if (xs) 6.dp else 11.dp)),
             contentAlignment = Alignment.Center,
         ) { MakerIcon(maker, runtime, if (xs) size * 0.6f else size * 0.56f) }
-        if (state != null && state != ChatState.Done) {
+        if (listMark) { if (state != null) AgentStateMark(state, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) }
+        else if (state != null && state != ChatState.Done) {
             val badge = if (xs) 11.dp else 15.dp
             Badge(state, badge, if (xs) 1.5.dp else 2.dp, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
         }
@@ -230,16 +260,89 @@ fun QuotaRing(left: Long, level: String, size: Dp = 20.dp) {
     }
 }
 
-/** A profile's allowance in a line: every window (shortest first, as the core puts them), a ring with its mark beside it. */
+/** A profile's allowance in a line: the web's chips (QuotaChips), one per window. */
 @Composable
-fun QuotaRings(quota: fail.still.android.data.Quota?) {
+fun QuotaRings(quota: fail.still.android.data.Quota?) = QuotaChips(quota)
+
+/** The grey of a chip's edge where the allowance is used (the web's --line-strong). */
+private fun lineStrong(c: StillFailColors): Color = if (c.dark) Color(0xFF3D3F44) else Color(0xFFCBCED3)
+
+/**
+ * A profile's allowance, compact, as the web's QuotaBars draws it: a rounded box per window (shortest first) with what
+ * is left written in it (its mark too when there is more than one), its edge drawn as far as is left, clockwise from
+ * the top left. Its number grey while there is plenty, in its colour once it runs low. `small`: a lower line.
+ */
+@Composable
+fun QuotaChips(quota: fail.still.android.data.Quota?, small: Boolean = false) {
     val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     if (windows.isEmpty()) return
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    val c = C
+    val lone = windows.size == 1
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         windows.forEach { w ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                QuotaRing(w.left, w.level)
-                Text(w.mark, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
+            val tone = levelColor(c, w.level)
+            val low = w.level == "amber" || w.level == "red"
+            Box(Modifier.height(if (small) 16.dp else 20.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.matchParentSize()) {
+                    val sw = 1.5.dp.toPx()
+                    val inset = sw / 2
+                    val r = 6.dp.toPx() - inset
+                    val x0 = inset; val y0 = inset; val x1 = size.width - inset; val y1 = size.height - inset
+                    // As an SVG <rect> is stroked: from the top edge's start, clockwise.
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(x0 + r, y0); lineTo(x1 - r, y0)
+                        arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y0, x1, y0 + 2 * r), -90f, 90f, false)
+                        lineTo(x1, y1 - r)
+                        arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y1 - 2 * r, x1, y1), 0f, 90f, false)
+                        lineTo(x0 + r, y1)
+                        arcTo(androidx.compose.ui.geometry.Rect(x0, y1 - 2 * r, x0 + 2 * r, y1), 90f, 90f, false)
+                        lineTo(x0, y0 + r)
+                        arcTo(androidx.compose.ui.geometry.Rect(x0, y0, x0 + 2 * r, y0 + 2 * r), 180f, 90f, false)
+                        close()
+                    }
+                    drawPath(path, lineStrong(c), style = Stroke(sw))
+                    if (w.left > 0) {
+                        val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+                        val part = androidx.compose.ui.graphics.Path()
+                        measure.getSegment(0f, measure.length * w.left.coerceAtMost(100) / 100f, part, true)
+                        drawPath(part, tone, style = Stroke(sw, cap = StrokeCap.Round))
+                    }
+                }
+                Row(Modifier.padding(horizontal = if (small) 5.dp else 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val fs = if (small) 10.sp else 11.sp
+                    if (!lone) Text(w.mark, fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
+                    Text("${w.left}%", fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A profile's allowance on its own page, as the web's QuotaBars draws it there: each window's number large, ten cells
+ * lit as far as is left, its name and when it refills. The number is the ink's colour while there is plenty.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun QuotaDials(quota: fail.still.android.data.Quota?, modifier: Modifier = Modifier) {
+    val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
+    if (windows.isEmpty()) return
+    val c = C
+    androidx.compose.foundation.layout.FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(36.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        windows.forEach { w ->
+            val tone = levelColor(c, w.level)
+            val low = w.level == "amber" || w.level == "red"
+            Column(Modifier.widthIn(min = 96.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("${w.left}", fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.56).sp, color = if (low) tone else C.ink)
+                    Text("%", fontSize = 15.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium, color = C.muted, modifier = Modifier.padding(start = 1.dp))
+                }
+                Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    val lit = Math.round(w.left / 10.0).toInt()
+                    repeat(10) { i -> Box(Modifier.size(8.dp, 14.dp).clip(RoundedCornerShape(2.dp)).background(if (i < lit) tone else C.chip)) }
+                }
+                Text(w.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink)
+                Text(w.refills ?: "\u00a0", fontSize = 12.sp, color = C.muted)
             }
         }
     }
@@ -340,12 +443,17 @@ fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp) {
 fun NavBar(back: String, onBack: () -> Unit, title: String, sub: (@Composable RowScope.() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars)) {
         Box(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) {
-            Box(Modifier.align(Alignment.CenterStart)) { NavBack(back, onBack) }
-            Column(Modifier.align(Alignment.Center).padding(horizontal = 84.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-                if (sub != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = sub)
+            // As the web's (mobile/parts.css.ts mNavbar): the buttons and the title's first line share one 32dp line at the
+            // top; a title's second line (sub) hangs below it rather than pushing the title up off the back button's line.
+            Box(Modifier.align(Alignment.TopStart).height(32.dp), contentAlignment = Alignment.CenterStart) { NavBack(back, onBack) }
+            Column(Modifier.align(Alignment.TopCenter).padding(horizontal = 84.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.height(30.dp), contentAlignment = Alignment.Center) {
+                    Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                }
+                Spacer(Modifier.height(2.dp))
+                if (sub != null) Row(Modifier.offset(y = (-4).dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = sub)
             }
-            if (trailing != null) Box(Modifier.align(Alignment.CenterEnd)) { trailing() }
+            if (trailing != null) Box(Modifier.align(Alignment.TopEnd).height(32.dp), contentAlignment = Alignment.CenterEnd) { trailing() }
         }
     }
 }
