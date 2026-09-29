@@ -109,16 +109,22 @@ export const action = style({
     "&:hover": { background: vars.raised },
   },
 });
-/** Tucked away: all of them in a glass capsule in the corner; pointed at, they are laid out over it. */
+/** Tucked away: all of them in a small glass tab flush with the window's right edge (only its left corners round);
+ * pointed at, it comes out a little and they are laid out over it. */
 export const capsule = style({
   ...glass,
-  position: "fixed", right: "16px", bottom: "16px", zIndex: "30", display: "flex", alignItems: "center", gap: "7px",
-  height: "34px", padding: "0 15px 0 13px", border: "0", borderRadius: "999px", color: vars.text, font: "inherit",
-  fontSize: vars.textSm, fontWeight: "500", cursor: "pointer", pointerEvents: "auto",
+  position: "fixed", right: "0", bottom: "16px", zIndex: "30", display: "flex", flexDirection: "column",
+  alignItems: "center", justifyContent: "center", gap: "3px", width: "22px", minHeight: "36px", padding: "8px 0",
+  border: "0", borderRadius: `${vars.rCard} 0 0 ${vars.rCard}`, color: vars.muted, font: "inherit",
+  fontSize: vars.textXs, fontWeight: "500", lineHeight: "1", cursor: "pointer", pointerEvents: "auto",
   boxShadow: "var(--pv-shadow)",
+  transition: `width ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}`,
   animation: `${fadeInKeyframes} 160ms ${vars.easeOut}`,
+  selectors: {
+    "&:hover, &:focus-visible": { width: "28px", color: vars.text },
+  },
 });
-globalStyle(`${capsule} svg`, { flex: "none", color: vars.muted });
+globalStyle(`${capsule} svg`, { flex: "none" });
 /** A small one's bar is put away: its page alone shows. */
 globalStyle(`${frame}[data-mode=small] ${previewBar}`, { display: "none" });
 /** A small one's page of its own size fills its card (the card is in its shape): no ground round it, nothing to drag. */

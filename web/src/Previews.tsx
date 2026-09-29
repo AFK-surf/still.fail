@@ -368,8 +368,8 @@ export function Previews() {
             const k = 1 - SMALL.shrink * d;
             shell = { x: right - width * (1 + k) / 2, y: bottom - height - SMALL.peek * d, w: width * k, h: height * k };
             seen = !tucked && i <= SMALL.behind;
-            // Tucked away: into the capsule.
-            if (tucked) shell = { x: right - width * 0.3, y: innerHeight - SMALL.margin - height * 0.3, w: width * 0.3, h: height * 0.3 };
+            // Tucked away: into the tab at the window's edge.
+            if (tucked) shell = { x: innerWidth - width * 0.1, y: innerHeight - SMALL.margin - height * 0.2, w: width * 0.2, h: height * 0.2 };
           }
           layout = `small ${spread} ${tucked} ${i}`;
           // Laid out as a window of the card's shape (its bar put away): its page reflows to it, and all of it shows.
@@ -407,10 +407,10 @@ export function Previews() {
         }
         placed.current.set(entry.key, { mode, box, seen: at, to, layout, style });
       }
-      // What the chat keeps free: the small ones at rest (not as they are laid out while pointed at), or the capsule.
-      const pill = tucked ? capsule.current?.getBoundingClientRect() : undefined;
+      // What the chat keeps free: the small ones at rest (not as they are laid out while pointed at); the tab at the
+      // edge needs nothing.
       const front = small.length ? cardOf.get(small[small.length - 1]!)! : null;
-      avoid(!front ? null : pill ? pill.left - SMALL.margin : tucked ? null : right - front.width - SMALL.margin);
+      avoid(!front || tucked ? null : right - front.width - SMALL.margin);
       raf = requestAnimationFrame(place);
     };
     place();
@@ -457,9 +457,10 @@ export function Previews() {
         </div>
       ))}
       {tucked && shown.length > 0 && (
-        <button ref={capsule} type="button" className={css.capsule} onPointerEnter={enter} onPointerLeave={leave} onClick={() => tuck(false)}>
-          <Web size={14} strokeWidth={1.75} />
-          {shown.length === 1 ? shown[0]!.name : `${shown.length} 个服务`}
+        <button ref={capsule} type="button" className={css.capsule} aria-label={`展开${shown.length === 1 ? `「${shown[0]!.name}」` : ` ${shown.length} 个服务`}`}
+          onPointerEnter={enter} onPointerLeave={leave} onClick={() => tuck(false)}>
+          <Web size={13} strokeWidth={1.75} />
+          {shown.length > 1 && <span>{shown.length}</span>}
         </button>
       )}
     </div>
