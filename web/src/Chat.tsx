@@ -17,7 +17,7 @@ import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, 
 import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
-import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote } from "./draft.ts";
+import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
@@ -181,9 +181,9 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
   const sending = useChatSend();
   return (
     <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
-      <Quotes quotes={o.quotes} />
+      <Quotes quotes={o.quotes} files={o.attachments} owner={owner} />
       {o.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{o.text}</div></div>}
-      <Files owner={owner} files={o.attachments} />
+      <Files owner={owner} files={besideQuotes(o.quotes, o.attachments)} />
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -471,9 +471,9 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
   if (m.mine) {
     return (
       <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
-        <Quotes quotes={m.quotes} />
+        <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
         <MineBubble text={m.text} />
-        <Files owner={owner} files={m.attachments} />
+        <Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
@@ -502,10 +502,10 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
       name={agent
         ? <Tip label="打开或关闭执行历史"><button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button></Tip>
         : <span className={css.msgName}>{who}</span>}>
-      <Quotes quotes={m.quotes} />
+      <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
       {m.authorKind === "person"
-        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} />}
+        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
+        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && sameMessage(a.message, b.message));
@@ -567,7 +567,7 @@ function MessageAvatar({ message, name }: { message: ChatMessage; name: string }
  * part on a warm ground (whose message, the passage) leading back to it, then
  * what was said about it.
  */
-function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
+function Quotes({ quotes, files, owner }: { quotes: Quote[] | undefined; files: Attachment[] | undefined; owner: (file: Attachment) => string | null }) {
   if (!quotes?.length) return null;
   // In the list the card is in: each screen's (and the phone's pages under the one on top) has its own.
   const jump = (from: Element, ts: string, text: string) => {
@@ -590,13 +590,31 @@ function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   };
   return (
     <div className={css.quoteCards}>
-      {quotes.map((q, i) => <QuoteCard key={i} quote={q} onJump={q.ts ? (from) => jump(from, q.ts!, q.text) : undefined} />)}
+      {quotes.map((q, i) => {
+        const own = fileOf(q, files);
+        return <QuoteCard key={i} quote={q} onJump={q.ts ? (from) => jump(from, q.ts!, q.text) : undefined}
+          picture={own && <FileItem sessionKey={owner(own)} file={own} />} />;
+      })}
     </div>
   );
 }
 
-/** One quote: the passage with whose it is, and the comment. Also the composer's pending quote, with an editable comment. */
-function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?: ((from: Element) => void) | undefined; comment?: ReactNode; onRemove?: () => void }) {
+/** The file among `files` that is a quote's own (a preview mark's screenshot, annotate/Marks.tsx), shown in its card. */
+function fileOf<F extends { name: string }>(quote: Quote, files: F[] | undefined): F | undefined {
+  return quote.file ? files?.find((f) => f.name === quote.file) : undefined;
+}
+
+/** A message's files but those shown in its quotes' cards. */
+function besideQuotes<F extends { name: string }>(quotes: Quote[] | undefined, files: F[] | undefined): F[] | undefined {
+  const own = new Set(quotes?.flatMap((q) => (q.file ? [q.file] : [])));
+  return own.size && files ? files.filter((f) => !own.has(f.name)) : files;
+}
+
+/**
+ * One quote: the passage with whose it is, its own picture (`picture`: a preview mark's screenshot), and the comment.
+ * Also the composer's pending quote, with an editable comment.
+ */
+function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote; onJump?: ((from: Element) => void) | undefined; comment?: ReactNode; onRemove?: () => void; picture?: ReactNode }) {
   // A mark on a previewed page (annotate/Marks.tsx): its pin's number and what it is; where it is is for the agent.
   const pin = quote.role === "page" ? /(\d+)$/.exec(quote.author)?.[1] : undefined;
   return (
@@ -606,6 +624,7 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
           ? <span className={css.quoteCardText}><span className={css.quoteCardPin}>{pin}</span>{quote.text.split("\n")[0]}</span>
           : <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{quote.author}：</span>{quote.text}</span>}
       </button></Tip>
+      {picture && <div className={css.quoteCardPicture}>{picture}</div>}
       {comment ?? (quote.comment ? <div className={css.quoteCardComment}>{quote.comment}</div> : null)}
       {onRemove && <button type="button" className={css.quoteCardRemove} aria-label="移除引用" onClick={onRemove}><Close size={12} /></button>}
     </div>
@@ -1044,6 +1063,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
  */
 export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void }) {
   const { quotes, setQuotes, files } = draft;
+  const rest = besideQuotes(quotes, files) ?? [];
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => {
     if (!focusQuote) return;
@@ -1054,34 +1074,40 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
     <>
       {quotes.length > 0 && (
         <div className={css.composerQuotes}>
-          {quotes.map((q) => (
+          {quotes.map((q) => {
+            const own = fileOf(q, files);
+            return (
             <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
-              <QuoteCard quote={q} onRemove={() => setQuotes((all) => all.filter((x) => x.id !== q.id))} comment={
+              <QuoteCard quote={q} picture={own && <PendingFile file={own} />}
+                onRemove={() => { setQuotes((all) => all.filter((x) => x.id !== q.id)); if (own) draft.remove(own.id); }} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
                   className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
                   onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); onDone(); } }} />
               } />
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
-      {files.length > 0 && (
+      {rest.length > 0 && (
         <div className={css.composerFiles}>
-          {files.map((f) => {
-            const remove = () => draft.remove(f.id);
-            return f.preview ? (
-              <Tip key={f.id} label={f.error ?? f.name}><span className={css.composerThumb} data-error={f.error ? true : undefined}>
-                <img src={f.preview} alt={f.name} />
-                {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
-                <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={12} /></button>
-              </span></Tip>
-            ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
-          })}
+          {rest.map((f) => <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)} />)}
         </div>
       )}
     </>
   );
+}
+
+/** A file waiting to go with the message: an image as its picture, anything else a card. */
+function PendingFile({ file: f, onRemove }: { file: Pending; onRemove?: () => void }) {
+  return f.preview ? (
+    <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-error={f.error ? true : undefined}>
+      <img src={f.preview} alt={f.name} />
+      {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
+      {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+    </span></Tip>
+  ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} error={f.error} {...(onRemove ? { onRemove } : {})} />;
 }
 
 /** An agent in this chat that is at work: who it is, and what it does now. */

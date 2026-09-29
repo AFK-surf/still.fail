@@ -446,7 +446,9 @@ data class Quote (
 	val comment: String,
 	val ts: String? = null,
 	/// agent | person
-	val role: String? = null
+	val role: String? = null,
+	/// The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot).
+	val file: String? = null
 )
 
 /// A message as merged from its thread's entries. In a chat, the core says whose it is and who said it.

@@ -192,7 +192,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     const back = { text, files, quotes };
     const { text: value } = take();
     const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
-    const sent = quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) }));
+    const sent = quotes.map(({ author, text: t, comment, ts, role, file }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) }));
     if (first) onSending?.(value);
     let to: ChatTo;
     try {

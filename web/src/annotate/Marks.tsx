@@ -1,7 +1,7 @@
 // Marking a web service's page in a preview beside a chat, for its agent: picking what on the page is meant (the
 // preview's frame does the picking and the picture, frame.ts), saying something about each right where it is, then
-// putting it all into the chat's draft: the whole page's screenshot with the marks numbered, and a quote per mark
-// saying where it is. Each mark is a numbered pin on its element's corner, what is said about it in a frosted bubble
+// putting it all into the chat's draft: a quote per mark saying where it is, each with a screenshot of its own (what
+// the window shows, only that mark drawn on it). Each mark is a numbered pin on its element's corner, what is said about it in a frosted bubble
 // beside the pin; they follow the page as it scrolls (the frame says where the marks are).
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Close, Edit, Send, Trash } from "../icons.tsx";
@@ -19,7 +19,10 @@ type Said =
   | { event: "focus"; n: number }
   | { event: "at"; at: (Box & { n: number })[] }
   | { event: "off" | "reset" }
-  | { event: "shot"; id: number; png?: ArrayBuffer; error?: string };
+  | ({ event: "shot"; id: number } & Shot);
+
+/** The pictures: one per mark (`shots`), or, from a frame before those, the whole page with them all (`png`). */
+interface Shot { shots?: { n: number; png: ArrayBuffer }[]; png?: ArrayBuffer; error?: string }
 
 /**
  * The marks of the preview in `frame` (at `origin`, told apart by `nonce`), for the chat whose draft is `draftKey`.
@@ -35,7 +38,7 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
   const [editing, setEditing] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const shots = useRef(new Map<number, (said: { png?: ArrayBuffer; error?: string }) => void>());
+  const shots = useRef(new Map<number, (said: Shot) => void>());
   const shot = useRef(0);
   const on = able && draftKey !== undefined;
   // How wide the page is, for which side of a pin its bubble goes.
@@ -102,17 +105,30 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
     setEditing(null);
     try {
       const id = ++shot.current;
-      const got = await new Promise<{ png?: ArrayBuffer; error?: string }>((done) => {
+      const got = await new Promise<Shot>((done) => {
         shots.current.set(id, done);
-        tell({ capture: id });
+        tell({ capture: id, each: true });
       });
-      if (!got.png) throw new Error(got.error ?? "没有截到图");
       const stamp = new Date().toTimeString().slice(0, 8).replaceAll(":", "");
-      const file = new File([got.png], `${name}-标注-${stamp}.png`, { type: "image/png" });
-      const quotes: DraftQuote[] = marks.map((m) => ({
-        id: `mark-${nonce}-${stamp}-${m.picked.n}`, author: `网页 ${name} 标注 ${m.picked.n}`, role: "page", text: where(m.picked), comment: m.comment,
-      }));
-      if (!offerToDraft(draftKey, { files: [file], quotes })) throw new Error("这个对话现在不能发消息");
+      const quote = (m: Mark, text: string): DraftQuote => ({
+        id: `mark-${nonce}-${stamp}-${m.picked.n}`, author: `网页 ${name} 标注 ${m.picked.n}`, role: "page", text, comment: m.comment,
+      });
+      let offer: { files: File[]; quotes: DraftQuote[] };
+      if (got.shots) {
+        // Each mark with its own picture, its file named after it and named in its quote.
+        const files: File[] = [], quotes: DraftQuote[] = [];
+        for (const m of marks) {
+          const png = got.shots.find((s) => s.n === m.picked.n)?.png;
+          if (!png) throw new Error(`标注 ${m.picked.n} 没有截到图`);
+          const file = new File([png], `${name}-标注${m.picked.n}-${stamp}.png`, { type: "image/png" });
+          files.push(file);
+          quotes.push({ ...quote(m, where(m.picked, file.name)), file: file.name });
+        }
+        offer = { files, quotes };
+      } else if (got.png) {
+        offer = { files: [new File([got.png], `${name}-标注-${stamp}.png`, { type: "image/png" })], quotes: marks.map((m) => quote(m, where(m.picked, null))) };
+      } else throw new Error(got.error ?? "没有截到图");
+      if (!offerToDraft(draftKey, offer)) throw new Error("这个对话现在不能发消息");
       leave();
     } catch (e) {
       setError(`没能放进对话：${e instanceof Error ? e.message : String(e)}`);
@@ -195,12 +211,17 @@ function Note({ mark, x, y, onComment, onDone, onRemove }:
   );
 }
 
-/** Where a mark is, as the agent reads it with the screenshot (the first line is also what the composer shows). */
-function where(p: Picked): string {
+/**
+ * Where a mark is, as the agent reads it with its screenshot `shot` (the file's name; none: the whole page's, from a
+ * frame before those). The first line is also what the composer shows.
+ */
+function where(p: Picked, shot: string | null): string {
   const lines = [
     `${p.kind ?? p.label}${p.text ? `「${p.text}」` : ""}`,
     `元素：${p.label} · 选择器：${p.selector}`,
-    `页面：${p.path}（视口 ${p.viewport.width}×${p.viewport.height}），在整页截图的 (${p.page.x}, ${p.page.y}) 处，${p.page.width}×${p.page.height}`,
+    shot
+      ? `页面：${p.path}（视口 ${p.viewport.width}×${p.viewport.height}），截图 ${shot} 是窗口里看到的样子，只画了这一处`
+      : `页面：${p.path}（视口 ${p.viewport.width}×${p.viewport.height}），在整页截图的 (${p.page.x}, ${p.page.y}) 处，${p.page.width}×${p.page.height}`,
   ];
   if (p.component) lines.push(`组件：${p.component}`);
   return lines.join("\n");

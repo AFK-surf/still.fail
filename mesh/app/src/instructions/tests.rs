@@ -14,7 +14,7 @@ fn message(n: i64, ts: &str, author: &str, rich: bool, kind: AuthorKind) -> Mess
         author: author.into(),
         text: "hi \"there\" & you".into(),
         attachments: if rich { vec![Attachment { name: "a.png".into(), path: "/w/uploads/a.png".into(), size: 3, width: None, height: None, thumbhash: None }] } else { vec![] },
-        quotes: if rich { vec![Quote { author: "U2".into(), text: "line1\nline2".into(), comment: "see".into(), ts: Some("99.0".into()), role: Some("person".into()) }] } else { vec![] },
+        quotes: if rich { vec![Quote { author: "U2".into(), text: "line1\nline2".into(), comment: "see".into(), ts: Some("99.0".into()), role: Some("person".into()), file: None }] } else { vec![] },
         declared: None,
         created_at: 1,
         edited_at: None,
@@ -89,9 +89,20 @@ fn addresses_are_channel_slash_ts() {
 #[test]
 fn a_mark_on_a_previewed_page_is_said_to_be_one_with_its_screenshot() {
     let mut m = message(2, "101.0", "U1", true, AuthorKind::Person);
-    m.quotes = vec![Quote { author: "网页 demo 标注 1".into(), text: "button.btn「升级」\n选择器 main > button".into(), comment: "换个颜色".into(), ts: None, role: Some("page".into()) }];
+    m.quotes = vec![Quote { author: "网页 demo 标注 1".into(), text: "button.btn「升级」\n选择器 main > button".into(), comment: "换个颜色".into(), ts: None, role: Some("page".into()), file: None }];
     assert!(message_for_agent(&m).starts_with(
         "[Quote] From a web page shown in the chat's preview (网页 demo 标注 1), marked with its number in the attached screenshot:\n> button.btn「升级」\n> 选择器 main > button\nTheir comment on it: 换个颜色"
+    ));
+}
+
+#[test]
+fn a_mark_with_a_screenshot_of_its_own_is_said_to_be_in_that_one() {
+    let mut m = message(2, "101.0", "U1", false, AuthorKind::Person);
+    let shot = |name: &str| Attachment { name: name.into(), path: format!("/files/x-{name}"), size: 3, width: None, height: None, thumbhash: None };
+    m.attachments = vec![shot("demo-标注1.png"), shot("demo-标注2.png")];
+    m.quotes = vec![Quote { author: "网页 demo 标注 2".into(), text: "按钮「升级」".into(), comment: String::new(), ts: None, role: Some("page".into()), file: Some("demo-标注2.png".into()) }];
+    assert!(message_for_agent(&m).starts_with(
+        "[Quote] From a web page shown in the chat's preview (网页 demo 标注 2), marked with its number in its own screenshot /files/x-demo-标注2.png:\n> 按钮「升级」"
     ));
 }
 

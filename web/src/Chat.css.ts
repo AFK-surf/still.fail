@@ -421,6 +421,13 @@ export const quoteCardText = style({
     [`${quoteCardSource}:not(:disabled):hover &`]: { color: vars.text },
   },
 });
+/** A quote's own picture (a preview mark's screenshot), under what it quotes. */
+export const quoteCardPicture = style({
+  display: "flex", padding: "6px 11px 0",
+  selectors: {
+    [`${composerQuote} &`]: { padding: "6px 16px 0" },
+  },
+});
 export const quoteCardComment = style({
   selectors: {
     [`${composerQuote} &`]: { padding: "3px 16px 10px" },
@@ -534,6 +541,7 @@ globalStyle(`${quoteCardText} svg`, { display: "inline", verticalAlign: "-1px", 
 /** Here rather than with its class: it comes after .quote-card-input, and wins over it. */
 globalStyle(quoteCardComment, { padding: "3px 11px 8px", fontSize: vars.textSm, lineHeight: "1.5" });
 globalStyle(`${quoteCard}:not(:has(${quoteCardComment})) ${quoteCardSource}`, { paddingBottom: "7px" });
+globalStyle(`${quoteCard}:not(:has(${quoteCardComment})) ${quoteCardPicture}`, { paddingBottom: "8px" });
 /** Here rather than with its class: it comes after .chat-empty p, and wins over it. */
 globalStyle(`${tokenStart} > p`, { margin: "0 0 8px", fontSize: vars.textSm });
 /** Here rather than with its class: it comes after .token-start > p, and wins over it. */

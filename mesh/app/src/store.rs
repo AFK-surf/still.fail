@@ -210,6 +210,9 @@ pub struct Quote {
     pub ts: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub role: Option<String>,
+    /// The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub file: Option<String>,
 }
 
 /// A file someone sent to a session; `path` is where the agent finds it on the station.

@@ -4,11 +4,13 @@
 // document can be read and its clicks held here without anything put into the service.
 //
 // Told by the client (ember-preview-annotate): `on` (true/false) starts or ends picking, `remove` drops a mark,
-// `clear` drops them all, `capture` asks for the whole page as a PNG with the marks drawn on it; `canvas` (true/false)
+// `clear` drops them all, `capture` asks for the pictures: with `each`, one PNG per mark, of what the window shows
+// with only that mark drawn on it (a mark scrolled out of sight gets the window's worth of page around it); without
+// (clients before that), the whole page with all the marks on it. `canvas` (true/false)
 // that the page is on a canvas (PreviewStage.tsx), whose zooming and two fingers it then hands on (ember-preview-gesture). It says
 // (ember-preview-annotated): `picked` with where a mark is, `focus` when a marked element is picked again, `at` with
 // where the marks are in the frame's viewport as the page scrolls or moves (the client draws them), `off` when Esc
-// ended picking, `reset` when the page went elsewhere (its marks gone), `shot` with the picture. The frame says it can
+// ended picking, `reset` when the page went elsewhere (its marks gone), `shot` with the pictures (`shots`, or `png`). The frame says it can
 // do this (its ember-preview-at) once attach() has its page frame. Only the box under the pointer is drawn here.
 import { domToCanvas } from "modern-screenshot";
 
@@ -229,7 +231,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
 
   addEventListener("message", (event) => {
     if (event.source !== parent || event.data?.type !== "ember-preview-annotate") return;
-    const data = event.data as { on?: boolean; remove?: number; clear?: boolean; capture?: number; canvas?: boolean };
+    const data = event.data as { on?: boolean; remove?: number; clear?: boolean; capture?: number; each?: boolean; canvas?: boolean };
     hook();
     if (typeof data.canvas === "boolean") canvas = data.canvas;
     if (typeof data.on === "boolean") setOn(data.on);
@@ -237,12 +239,112 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
     if (data.clear) { marks = []; next = 1; wake(); }
     if (typeof data.capture === "number") {
       const id = data.capture;
-      shoot(marks).then(
-        (png) => say({ event: "shot", id, png }, [png]),
-        (error: unknown) => say({ event: "shot", id, error: error instanceof Error ? error.message : String(error) }),
-      );
+      const failed = (error: unknown) => say({ event: "shot", id, error: error instanceof Error ? error.message : String(error) });
+      if (data.each) shootEach(marks).then((shots) => say({ event: "shot", id, shots }, shots.map((s) => s.png)), failed);
+      else shoot(marks).then((png) => say({ event: "shot", id, png }, [png]), failed);
     }
   });
+
+  /** Picking's box is not in the pictures. */
+  async function unseen<T>(take: () => Promise<T>): Promise<T> {
+    const wasOn = on;
+    if (wasOn) setOn(false);
+    try { return await take(); } finally { if (wasOn) setOn(true); }
+  }
+
+  const ground = (d: Document) => {
+    const body = getComputedStyle(d.body ?? d.documentElement).backgroundColor;
+    const root = getComputedStyle(d.documentElement).backgroundColor;
+    return body && body !== "rgba(0, 0, 0, 0)" ? body : root === "rgba(0, 0, 0, 0)" ? "#ffffff" : root;
+  };
+
+  /**
+   * One picture per mark, each of a window's worth of the page with only its mark drawn: what the window shows now,
+   * or, for a mark out of sight, the page scrolled to it (as it would show there).
+   */
+  async function shootEach(shown: typeof marks): Promise<{ n: number; png: ArrayBuffer }[]> {
+    if (!doc) throw new Error("页面还没打开");
+    const win = doc.defaultView!;
+    const root = doc.documentElement;
+    const w = win.innerWidth, h = win.innerHeight;
+    const scale = Math.min(win.devicePixelRatio || 1, 2);
+    const left = win.scrollX, top = win.scrollY;
+    const most = Math.max(0, Math.max(root.scrollHeight, h) - h);
+    // Where each is on the page, and which window's worth shows it.
+    const places = shown.map((mark) => {
+      const r = mark.el.isConnected ? mark.el.getBoundingClientRect() : mark.rect;
+      const page = new DOMRect(r.left + left, r.top + top, r.width, r.height);
+      const seen = r.bottom > 0 && r.top < h;
+      const y = seen ? top : Math.round(Math.min(most, Math.max(0, page.top + page.height / 2 - h / 2)));
+      return { n: mark.n, page, y };
+    });
+    const pictures = new Map<number, HTMLCanvasElement>();
+    await unseen(async () => {
+      for (const y of new Set(places.map((p) => p.y))) pictures.set(y, await windowAt(doc!, left, y, scale, y === top));
+    });
+    const out: { n: number; png: ArrayBuffer }[] = [];
+    for (const place of places) {
+      const shot = pictures.get(place.y)!;
+      const canvas = document.createElement("canvas");
+      canvas.width = shot.width;
+      canvas.height = shot.height;
+      const g = canvas.getContext("2d")!;
+      g.drawImage(shot, 0, 0);
+      g.scale(scale, scale);
+      drawMark(g, place.n, place.page.x - left, place.page.y - place.y, place.page.width, place.page.height);
+      const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/png"));
+      if (!blob) throw new Error("截图没能生成");
+      out.push({ n: place.n, png: await blob.arrayBuffer() });
+    }
+    return out;
+  }
+
+  /**
+   * The window's worth of the page at (`x`, `y`), as it shows scrolled there: what is fixed stays where it is in the
+   * window, and, for where it is now (`now`), what is sticky where it is stuck.
+   */
+  async function windowAt(d: Document, x: number, y: number, scale: number, now: boolean): Promise<HTMLCanvasElement> {
+    const win = d.defaultView!;
+    const tag = "data-ember-shot";
+    const held = new Map<string, { x: number; y: number } | null>();
+    let i = 0;
+    for (const el of d.body?.querySelectorAll<HTMLElement>("*") ?? []) {
+      const position = win.getComputedStyle(el).position;
+      if (position === "fixed") held.set(String(i), null);
+      else if (position === "sticky" && now) {
+        // How far it is stuck from where it would be: its place now, against its place in the flow.
+        const at = el.getBoundingClientRect();
+        const inline = el.style.getPropertyValue("position"), priority = el.style.getPropertyPriority("position");
+        el.style.setProperty("position", "static", "important");
+        const flow = el.getBoundingClientRect();
+        if (inline) el.style.setProperty("position", inline, priority);
+        else el.style.removeProperty("position");
+        held.set(String(i), { x: at.left - flow.left, y: at.top - flow.top });
+      } else continue;
+      el.setAttribute(tag, String(i++));
+    }
+    try {
+      return await domToCanvas(d.documentElement, {
+        width: win.innerWidth, height: win.innerHeight, scale, timeout: 15000, backgroundColor: ground(d),
+        // The picture is drawn from the page's top: moved up by where it is scrolled to.
+        style: { margin: "0", transform: `translate(${-x}px, ${-y}px)` },
+        onCloneEachNode: (node) => {
+          // The copy is another window's: its nodes are not this one's Element.
+          if (node.nodeType !== Node.ELEMENT_NODE) return;
+          const at = (node as Element).getAttribute(tag);
+          if (at === null) return;
+          (node as Element).removeAttribute(tag);
+          const style = (node as HTMLElement).style;
+          const stuck = held.get(at);
+          // What is fixed goes with the page's top in the copy (the moved page holds it): back into the window.
+          if (stuck === null) style.translate = `${x}px ${y}px`;
+          else if (stuck) Object.assign(style, { position: "relative", top: `${stuck.y}px`, left: `${stuck.x}px`, bottom: "auto", right: "auto" });
+        },
+      });
+    } finally {
+      for (const el of d.querySelectorAll(`[${tag}]`)) el.removeAttribute(tag);
+    }
+  }
 
   /** The whole page (as tall as MAX_HEIGHT), with each mark boxed and numbered. */
   async function shoot(shown: typeof marks): Promise<ArrayBuffer> {
@@ -252,56 +354,51 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
     const width = Math.max(root.scrollWidth, win.innerWidth);
     const height = Math.min(Math.max(root.scrollHeight, win.innerHeight), MAX_HEIGHT);
     const scale = Math.min(win.devicePixelRatio || 1, 2, Math.sqrt(MAX_PIXELS / (width * height)));
-    const wasOn = on;
-    if (wasOn) setOn(false);
-    let canvas: HTMLCanvasElement;
-    try {
-      const ground = getComputedStyle(doc.body ?? root).backgroundColor;
-      canvas = await domToCanvas(root, {
-        width, height, scale, timeout: 15000,
-        backgroundColor: ground && ground !== "rgba(0, 0, 0, 0)" ? ground : getComputedStyle(root).backgroundColor === "rgba(0, 0, 0, 0)" ? "#ffffff" : getComputedStyle(root).backgroundColor,
-        // The page is shown from its top: where it is scrolled to is not the picture's.
-        style: { margin: "0" },
-      });
-    } finally {
-      if (wasOn) setOn(true);
-    }
+    const canvas = await unseen(() => domToCanvas(root, {
+      width, height, scale, timeout: 15000, backgroundColor: ground(doc!),
+      // The page is shown from its top: where it is scrolled to is not the picture's.
+      style: { margin: "0" },
+    }));
     const g = canvas.getContext("2d")!;
     g.scale(scale, scale);
-    g.font = "600 12px system-ui, -apple-system, sans-serif";
-    g.textBaseline = "middle";
-    g.textAlign = "center";
-    // As the page shows them: the element's outline, its number in a pin on its top-left corner.
     for (const mark of shown) {
       const r = mark.el.isConnected ? mark.el.getBoundingClientRect() : mark.rect;
-      const x = r.left + win.scrollX, y = r.top + win.scrollY;
-      g.strokeStyle = MARK;
-      g.lineWidth = 2;
-      g.beginPath();
-      g.roundRect(x, y, r.width, r.height, 3);
-      g.stroke();
-      // The pin: its point on the corner, as the client draws it (Marks.css.ts).
-      const px = Math.max(2, x) - 2, py = Math.max(24, y) - 22;
-      g.shadowColor = "rgba(0,0,0,.25)";
-      g.shadowBlur = 6;
-      g.shadowOffsetY = 1;
-      g.fillStyle = "#fff";
-      g.beginPath();
-      g.roundRect(px, py, 24, 24, [12, 12, 12, 3]);
-      g.fill();
-      g.shadowColor = "transparent";
-      g.fillStyle = MARK;
-      g.beginPath();
-      g.roundRect(px + 2, py + 2, 20, 20, [10, 10, 10, 2]);
-      g.fill();
-      g.fillStyle = "#fff";
-      const cx = px + 12, cy = py + 12;
-      g.fillText(String(mark.n), cx, cy + 0.5);
+      drawMark(g, mark.n, r.left + win.scrollX, r.top + win.scrollY, r.width, r.height);
     }
     const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/png"));
     if (!blob) throw new Error("截图没能生成");
     return blob.arrayBuffer();
   }
+}
+
+/** A mark as the page shows it: the element's outline, its number in a pin on its top-left corner. */
+function drawMark(g: CanvasRenderingContext2D, n: number, x: number, y: number, width: number, height: number) {
+  g.save();
+  g.font = "600 12px system-ui, -apple-system, sans-serif";
+  g.textBaseline = "middle";
+  g.textAlign = "center";
+  g.strokeStyle = MARK;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.roundRect(x, y, width, height, 3);
+  g.stroke();
+  // The pin: its point on the corner, as the client draws it (Marks.css.ts).
+  const px = Math.max(2, x) - 2, py = Math.max(24, y) - 22;
+  g.shadowColor = "rgba(0,0,0,.25)";
+  g.shadowBlur = 6;
+  g.shadowOffsetY = 1;
+  g.fillStyle = "#fff";
+  g.beginPath();
+  g.roundRect(px, py, 24, 24, [12, 12, 12, 3]);
+  g.fill();
+  g.shadowColor = "transparent";
+  g.fillStyle = MARK;
+  g.beginPath();
+  g.roundRect(px + 2, py + 2, 20, 20, [10, 10, 10, 2]);
+  g.fill();
+  g.fillStyle = "#fff";
+  g.fillText(String(n), px + 12, py + 12.5);
+  g.restore();
 }
 
 const box = (r: DOMRect) => ({ x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) });

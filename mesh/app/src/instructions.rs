@@ -85,8 +85,12 @@ pub fn message_for_agent(m: &MessageRow) -> String {
             let whose = match q.role.as_deref() {
                 Some("agent") => "your own earlier message".to_string(),
                 // A mark on a web service's page in a preview: where it is on the page, its number boxed in the
-                // screenshot attached (web/src/annotate).
-                Some("page") => format!("a web page shown in the chat's preview ({}), marked with its number in the attached screenshot", q.author),
+                // screenshot attached (web/src/annotate): its own (`file`), or, from clients before those, the one of
+                // the whole page with them all.
+                Some("page") => match q.file.as_deref().and_then(|name| m.attachments.iter().find(|a| a.name == name)) {
+                    Some(shot) => format!("a web page shown in the chat's preview ({}), marked with its number in its own screenshot {}", q.author, shot.path),
+                    None => format!("a web page shown in the chat's preview ({}), marked with its number in the attached screenshot", q.author),
+                },
                 _ => format!("a message from {}", q.author),
             };
             let which = match &q.ts {

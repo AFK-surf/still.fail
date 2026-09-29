@@ -297,6 +297,8 @@ pub struct Quote {
     pub ts: Option<String>,
     /// agent | person
     pub role: Option<String>,
+    /// The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot).
+    pub file: Option<String>,
 }
 
 /// Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture.

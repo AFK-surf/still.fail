@@ -976,7 +976,7 @@ async fn a_persons_message_in_a_chat_with_several_agents_reaches_each_of_them_on
     let one = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
     let two = r.hub.new_session(new_chat(RuntimeKind::Codex)).unwrap();
     r.hub.add_to_thread(one.1.id, &two.0).unwrap();
-    let quote = Quote { author: "Claude".into(), role: Some("agent".into()), ts: Some("1.000001".into()), text: "上一条".into(), comment: "这里".into() };
+    let quote = Quote { author: "Claude".into(), role: Some("agent".into()), ts: Some("1.000001".into()), text: "上一条".into(), comment: "这里".into(), file: None };
     r.hub.say(one.1.id, "a@example.com", "你们俩分一下工", vec![], vec![quote]).unwrap();
     settle().await;
     for driver in [&r.claude, &r.codex] {

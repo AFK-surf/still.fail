@@ -423,6 +423,8 @@ export interface Quote {
 	ts?: string;
 	/** agent | person */
 	role?: string;
+	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot). */
+	file?: string;
 }
 
 /** A message as merged from its thread's entries. In a chat, the core says whose it is and who said it. */
