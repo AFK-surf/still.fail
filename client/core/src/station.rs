@@ -212,12 +212,17 @@ impl SocketFrame {
     }
 }
 
-/// Asks the page's HTTP wire for the body as it comes, not whole (a preview's answer, which may never end); the
-/// station's HTTP passes on no `x-stillfail-` (or `x-ember-`) header.
-const STREAM_HEADER: &str = "x-stillfail-stream";
+/// Asks the page's HTTP wire for the body as it comes, not whole (a preview's answer, which may never end). It goes on
+/// to the station, whose HTTP passes on no `x-stillfail-` or `x-ember-` header to the service; stations from before
+/// the rename strip only `x-ember-` ones, so it is sent under the old name (docs/rename-still-fail.md).
+const STREAM_HEADER: &str = "x-ember-stream";
+/// The name it had between the rename and this: read too.
+const STREAM_HEADER_RENAMED: &str = "x-stillfail-stream";
 
 fn wants_stream(head: &RequestHead) -> bool {
-    head.headers.iter().any(|(k, v)| (k.eq_ignore_ascii_case("accept") && v.contains(EVENT_STREAM)) || k.eq_ignore_ascii_case(STREAM_HEADER))
+    head.headers.iter().any(|(k, v)| {
+        (k.eq_ignore_ascii_case("accept") && v.contains(EVENT_STREAM)) || k.eq_ignore_ascii_case(STREAM_HEADER) || k.eq_ignore_ascii_case(STREAM_HEADER_RENAMED)
+    })
 }
 
 /// The page's own station, over the host's HTTP (the origin is the station's).
@@ -2136,6 +2141,15 @@ mod tests {
     use crate::host::{HostError, StreamResponse};
     use futures::channel::mpsc;
     use std::time::Duration;
+
+    #[test]
+    fn a_body_is_asked_for_as_it_comes_by_either_name_of_the_stream_header() {
+        let head = |headers: &[(&str, &str)]| RequestHead { method: "GET".into(), path: "/admin/api/preview/5180/".into(), headers: headers.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect() };
+        assert!(wants_stream(&head(&[("x-ember-stream", "1")])));
+        assert!(wants_stream(&head(&[("X-Stillfail-Stream", "1")])));
+        assert!(wants_stream(&head(&[("accept", "text/event-stream")])));
+        assert!(!wants_stream(&head(&[("accept", "text/html")])));
+    }
 
     // ── fakes ──
 

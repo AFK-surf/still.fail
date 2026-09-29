@@ -2009,7 +2009,9 @@ mod tests {
             host.settle().await;
             let asked = host.requests.borrow().last().cloned().unwrap();
             assert_eq!(asked.url, "https://stillfail.test/admin/api/preview/5180/events");
-            assert_eq!(header(&asked, "x-stillfail-stream").as_deref(), Some("1"), "asked for as it comes");
+            // Under the old name: a station from before the rename strips x-ember-* only, so the service never sees it.
+            assert_eq!(header(&asked, "x-ember-stream").as_deref(), Some("1"), "asked for as it comes");
+            assert_eq!(header(&asked, "x-stillfail-stream"), None);
             let values = |host: &FakeHost| host.take_emitted().into_iter().map(|(_, m)| serde_json::to_value(m).unwrap()).collect::<Vec<_>>();
             assert_eq!(values(&host), vec![json!({ "id": 1, "value": { "head": { "status": 200, "headers": [["content-type", "text/event-stream"]] } } })]);
             // Nothing is said to be waited on once its head came, however long its body goes on.
