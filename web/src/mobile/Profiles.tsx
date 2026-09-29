@@ -8,10 +8,11 @@ import type { MachineLogin } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, More } from "../icons.tsx";
 import { CHOICES } from "../pages/Accounts.tsx";
+import { QuotaBars } from "../components.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, Field, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRing, QuotaRings, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
+import { Button, Field, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
@@ -179,15 +180,7 @@ function Quota({ p }: { p: Profile }) {
   return (
     <>
       <SectionHeader title="额度" trailing={p.quota?.time?.checkedAt ? `${p.quota.time.checkedAt.ago}查询` : undefined} start={24} />
-      <ListCard>
-        {windows.map((w) => (
-          <ListRow key={w.mark}>
-            <QuotaRing left={w.left} level={w.level} size={26} />
-            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{w.label}</span>{w.refills && <span className={listsCss.mRowNote}>{w.refills}</span>}</span>
-            <span className={listsCss.mRowNote}>剩 {w.left}%</span>
-          </ListRow>
-        ))}
-      </ListCard>
+      <ListCard><div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div></ListCard>
     </>
   );
 }

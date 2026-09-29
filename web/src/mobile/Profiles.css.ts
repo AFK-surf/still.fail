@@ -15,3 +15,6 @@ export const mEnvRow = style({
 });
 export const mDetails = style({});
 globalStyle(`${mDetails} summary`, { fontSize: "13px", color: "var(--m-muted)", cursor: "pointer", padding: "4px 0" });
+
+/** The profile's allowance: the PC's dials (QuotaBars), inside the card. */
+export const mQuotaDials = style({ padding: "16px 16px 14px" });

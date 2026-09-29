@@ -15,5 +15,3 @@ export const mLink = style({
   cursor: "pointer",
 });
 export const mIllus = style({ display: "block", maxWidth: "100%", height: "auto" });
-export const mQuotaWindow = style({ display: "inline-flex", alignItems: "center", gap: "2px" });
-globalStyle(`${mQuotaWindow} i`, { fontStyle: "normal", fontSize: "9px", fontWeight: "600", color: "var(--m-subtle)" });

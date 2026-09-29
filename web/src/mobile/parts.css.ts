@@ -36,8 +36,6 @@ export const mRing = style({
 });
 export const mRingDisc = style({ position: "relative", display: "grid", placeItems: "center" });
 export const mRingLabel = style({ fontSize: "12px", color: "var(--m-muted)" });
-export const mQuotaRing = style({ position: "relative", display: "inline-grid", placeItems: "center", flex: "none" });
-export const mQuotaRings = style({ display: "inline-flex", alignItems: "center", gap: "6px", flex: "none" });
 /** Laid out as a box wherever it is put (its look is the wide screen's spinner). */
 export const mSpinner = style({ display: "inline-block", flex: "none", boxSizing: "border-box" });
 /** A segmented choice: a track that tints what it sits on, and a thumb that slides to the chosen option. */
@@ -140,8 +138,6 @@ export const mLoading = style({
 globalStyle(`${mAvatar} img`, { width: "100%", height: "100%", objectFit: "cover" });
 globalStyle(`${mRingDisc} svg`, { position: "absolute", inset: "0" });
 globalStyle(`${mRingDisc} b`, { position: "relative", fontWeight: "600", color: "var(--m-ink)" });
-globalStyle(`${mQuotaRing} svg`, { position: "absolute", inset: "0" });
-globalStyle(`${mQuotaRing} b`, { position: "relative", fontWeight: "600", lineHeight: "1", color: "var(--m-ink)" });
 globalStyle(`${mNavbarTitle} b`, {
   maxWidth: "100%", fontSize: "16px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",

@@ -99,12 +99,15 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
       </span>
     );
   }
-  // The profile's own page: each window a larger ring, what is left of it and when it refills under it.
+  // The profile's own page: each window's number large, ten cells lit as far as is left, its name and when it refills.
   return (
     <div className={css.quotaDials}>
       {quota.windows.map((w) => (
-        <div key={w.label} className={css.quotaDial}>
-          <QuotaRing left={w.left} level={w.level} size={64} />
+        <div key={w.label} className={css.quotaDial} data-level={w.level}>
+          <span className={css.quotaDialNumber}>{w.left}<small>%</small></span>
+          <span className={css.quotaDialCells} role="img" aria-label={`${w.label}剩余 ${w.left}%`}>
+            {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < Math.round(w.left / 10) || undefined} />)}
+          </span>
           <span className={css.quotaDialLabel}>{w.label}</span>
           <span className={css.quotaDialReset}>{w.refills ?? "\u00a0"}</span>
         </div>
@@ -117,12 +120,12 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
  * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
 export function QuotaRing({ left, level, size = 26 }: { left: number; level: Level; size?: number }) {
   const used = 100 - left;
-  const stroke = size > 40 ? 5 : 3;
+  const stroke = 3;
   const c = size / 2;
   const r = c - stroke / 2 - 0.5;
   const around = 2 * Math.PI * r;
   return (
-    <span className={css.quotaRing} data-level={level} data-size={size > 40 ? "large" : undefined} style={{ width: size, height: size }} role="img" aria-label={`剩余 ${left}%`}>
+    <span className={css.quotaRing} data-level={level} style={{ width: size, height: size }} role="img" aria-label={`剩余 ${left}%`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ strokeWidth: stroke }}>
         <circle className={css.quotaRingTrack} cx={c} cy={c} r={r} />
         {left > 0 && <circle className={css.quotaRingFill} cx={c} cy={c} r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} ${c} ${c})`} />}

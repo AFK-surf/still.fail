@@ -74,14 +74,26 @@ export const quotaRingFill = style({ fill: "none", stroke: "currentColor", strok
 export const quotaRingNumber = style({
   position: "relative", fontSize: "9.5px", fontWeight: "600", color: vars.text, fontVariantNumeric: "tabular-nums",
   letterSpacing: "-0.02em",
+});
+/** A profile's own page: per window its number large, ten cells lit as far as is left, its name and when it refills. */
+export const quotaDials = style({ display: "flex", flexWrap: "wrap", gap: "12px 36px" });
+export const quotaDial = style({
+  display: "grid", justifyItems: "start", gap: "2px", minWidth: "96px", color: vars.green,
   selectors: {
-    [`${quotaRing}[data-size="large"] &`]: { fontSize: "17px", letterSpacing: "-0.03em" },
+    "&[data-level=\"amber\"]": { color: vars.amber },
+    "&[data-level=\"red\"]": { color: vars.red },
   },
 });
-/** A profile's own page: a ring per window, larger, with its name and when it refills. */
-export const quotaDials = style({ display: "flex", flexWrap: "wrap", gap: "28px" });
-export const quotaDial = style({ display: "grid", justifyItems: "center", gap: "4px", minWidth: "88px" });
-export const quotaDialLabel = style({ fontSize: vars.textSm, fontWeight: "500" });
+/** Its number quiet (the text's colour) while there is plenty; in its colour once it runs low. */
+export const quotaDialNumber = style({
+  fontSize: "28px", fontWeight: "600", lineHeight: "1.15", letterSpacing: "-0.02em", color: vars.text,
+  fontVariantNumeric: "tabular-nums",
+  selectors: {
+    [`${quotaDial}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
+  },
+});
+export const quotaDialCells = style({ display: "flex", gap: "3px", margin: "4px 0 6px" });
+export const quotaDialLabel = style({ fontSize: vars.textSm, fontWeight: "500", color: vars.text });
 export const quotaDialReset = style({ fontSize: vars.textXs, color: vars.muted });
 export const quotaNote = style({});
 export const peopleStack = style({ display: "inline-flex", alignItems: "center", flex: "none" });
@@ -129,10 +141,13 @@ globalStyle(`${quotaChipEdge} rect`, {
   rx: `calc(6px * ${vars.cornerScale} - 0.75px)`, fill: "none", strokeWidth: "1.5px",
 });
 globalStyle(`${quotaRing} svg`, { position: "absolute", inset: "0" });
-globalStyle(`${quotaDial} ${quotaRing}`, { marginBottom: "4px" });
+globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500", marginLeft: "1px", color: vars.muted });
+globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.neutralBg });
+globalStyle(`${quotaDialCells} i[data-on]`, { background: "currentColor" });
 globalStyle(`${peopleStack} > :first-child`, { marginLeft: "0" });
 globalStyle(`${peopleStack} ${personLetter}`, { width: "16px", height: "16px", fontSize: "9px" });
 globalStyle(`${ring} svg`, { flex: "none" });
 globalStyle(`${ring} text`, {
   fontSize: "9px", fontWeight: "600", fill: vars.text, fontVariantNumeric: "tabular-nums",
 });
+

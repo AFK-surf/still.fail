@@ -6,6 +6,7 @@ import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
 import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
+import { QuotaBars } from "../components.tsx";
 import * as css from "./parts.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -133,36 +134,9 @@ export function Ring({ percent, label, level, size = 46 }: { percent: number; la
   );
 }
 
-/**
- * An allowance as a ring: what is left, eaten clockwise from the top as it is used; coloured by the core's level. The
- * number is what is left, and a full one shows none.
- */
-export function QuotaRing({ left, level, size = 20 }: { left: number; level: string; size?: number }) {
-  const w = 2;
-  const r = size / 2 - w / 2 - 0.5;
-  const used = 100 - left;
-  return (
-    <span className={css.mQuotaRing} style={{ width: size, height: size }}>
-      <svg width={size} height={size} aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-line)" strokeWidth={w} />
-        {left > 0 && <path d={arc(size / 2, r, used * 3.6, (360 * left) / 100)} fill="none" stroke={levelColor(level)} strokeWidth={w} strokeLinecap="round" />}
-      </svg>
-      {left < 100 && <b style={{ fontSize: size * 0.42 }}>{left}</b>}
-    </span>
-  );
-}
-
-/** A profile's allowance in a line: every window (shortest first, as the core puts them), a ring with its mark beside it. */
+/** A profile's allowance in a line: the PC's chips (QuotaBars), without their own tips (the row is what is tapped). */
 export function QuotaRings({ quota }: { quota?: Quota | undefined }) {
-  const windows = quota?.state === "ok" ? quota.windows : [];
-  if (!windows.length) return null;
-  return (
-    <span className={css.mQuotaRings}>
-      {windows.map((w) => (
-        <span key={w.mark} className={partsCss.mQuotaWindow}><QuotaRing left={w.left} level={w.level} /><i>{w.mark}</i></span>
-      ))}
-    </span>
-  );
+  return <QuotaBars quota={quota} compact bare />;
 }
 
 /** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
