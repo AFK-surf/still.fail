@@ -1527,7 +1527,7 @@ async fn a_widgets_state_is_kept_for_its_session_and_its_model_rides_along_with_
     let thread_ts = made["thread"]["threadTs"].as_str().unwrap().to_string();
     let path = "/w/uploads/pick.html";
     let mut posted = NewMessage::new(chat_id, "9.1", AuthorKind::Agent, &key, "![](pick.html)");
-    posted.attachments = vec![Attachment { name: "pick.html".into(), path: path.into(), size: 9, width: None, height: None }];
+    posted.attachments = vec![Attachment { name: "pick.html".into(), path: path.into(), size: 9, width: None, height: None, thumbhash: None }];
     t.store.insert_message(posted).unwrap();
     let get = format!("{}?path={}", route(&key), enc(path));
     assert_eq!(t.get(&get).await, json!({ "state": null }));

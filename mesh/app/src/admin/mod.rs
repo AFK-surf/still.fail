@@ -700,7 +700,7 @@ impl AdminApi {
                         if text.is_empty() && attachments.is_empty() && quotes.is_empty() {
                             return Err(http_error(400, "消息是空的"));
                         }
-                        crate::thumbs::make_later(attachments.iter().map(|a| a.path.clone().into()).collect(), crate::thumbs::dir(&self.config().data_dir));
+                        let attachments = crate::thumbs::keep(attachments, crate::thumbs::dir(&self.config().data_dir)).await;
                         let n = self.deps.hub.say(thread_id, &viewer.id(), &text, attachments, quotes)?;
                         return ok(json!({ "n": n }));
                     }

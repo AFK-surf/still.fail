@@ -59,7 +59,9 @@ data class Attachment (
 	val path: String,
 	val size: Long,
 	val width: Long? = null,
-	val height: Long? = null
+	val height: Long? = null,
+	/// An image's ThumbHash (base64): a blurred likeness of it, shown until it loads.
+	val thumbhash: String? = null
 )
 
 /// How full something is.
