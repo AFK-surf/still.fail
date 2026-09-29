@@ -1,4 +1,6 @@
+import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
+import { reducedMotion } from "./motion.ts";
 import * as css from "./ChatMark.css.ts";
 
 export type ChatTone = "busy" | "done" | "alert";
@@ -12,8 +14,26 @@ export function chatTone(item: ChatItem): ChatTone | undefined {
 
 const LABEL: Record<ChatTone, string> = { busy: "工作中", done: "做完了，有新消息", alert: "需要处理" };
 
-/** A chat's state as a mark at its picture's corner (the picture is `position: relative`; it sets `--mark-around`). */
+/**
+ * The mark each chat has and since when, to know one that has just come: every list the chat is in pops it (all and
+ * mine), also as its row is drawn anew on the way to its new place.
+ */
+const shown = new Map<string, { tone: ChatTone | undefined; since: number }>();
+
+/**
+ * A chat's state as a mark at its picture's corner (the picture is `position: relative`; it sets `--mark-around`). A mark
+ * that comes while the chat is in view (a new message, work begun) pops in; ones there when the list is first drawn do not.
+ */
 export function ChatMark({ item }: { item: ChatItem }) {
   const tone = chatTone(item);
-  return tone ? <span className={css.chatMark} data-tone={tone} role="img" aria-label={LABEL[tone]} /> : null;
+  const mark = useRef<HTMLSpanElement>(null);
+  const key = `${item.station}/${item.id}`;
+  useLayoutEffect(() => {
+    let had = shown.get(key);
+    if (!had) shown.set(key, had = { tone, since: -Infinity });
+    else if (had.tone !== tone) shown.set(key, had = { tone, since: performance.now() });
+    if (!tone || performance.now() - had.since > 300 || !mark.current || reducedMotion()) return;
+    mark.current.animate([{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
+  }, [key, tone]);
+  return tone ? <span ref={mark} className={css.chatMark} data-tone={tone} role="img" aria-label={LABEL[tone]} /> : null;
 }

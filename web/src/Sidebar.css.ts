@@ -43,7 +43,8 @@ export const brand = style({
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
 export const brandCompact = style({ height: 48, padding: "0 16px" });
 
-export const navScroll = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 8px 12px" });
+// Positioned: the rows moving in it are placed by their offsets in it (listMotion.ts).
+export const navScroll = style({ position: "relative", flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 8px 12px" });
 /** 全部 and 我参与的 side by side on one track; the switch slides it, as its thumb slides. */
 export const navSlider = style({ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" });
 export const navTrack = style({
@@ -89,7 +90,7 @@ globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
 
 /** Archiving a chat: a button at the row's top right while it is pointed at, the title making room for it. */
 export const navSessionWrap = style({
-  position: "relative",
+  position: "relative", borderRadius: vars.rNav, cornerShape: vars.cornerShape,
   selectors: { "& + &": { marginTop: 2 } },
 });
 export const navSession = style({

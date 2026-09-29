@@ -13,12 +13,13 @@ import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { CHANGEABLE, useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
-import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename } from "./Rename.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
 import { OpenJobs } from "./OpenJobs.tsx";
+import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -139,17 +140,21 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   const archived = useSyncExternalStore(pending.subscribe, pending.getSnapshot, pending.getSnapshot);
   const view = chats.value;
   const stations = view?.stations ?? [];
-  const days = (view?.days ?? []).map((day) => ({ ...day, items: day.items.filter((item) => !archived.has(archiveKey(item))) })).filter((day) => day.items.length > 0);
+  const [over, pointer] = usePointerOver();
+  const days = useHeldOrder((view?.days ?? []).map((day) => ({ ...day, items: day.items.filter((item) => !archived.has(archiveKey(item))) })).filter((day) => day.items.length > 0), rowKey, over);
   // One station of one's own: its name says nothing, and its state is the page's.
   const several = scope !== "local";
   const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
   const failed = several ? stations.filter((s) => s.state === "error") : [];
   const loading = !view || view.loading;
   const scroller = useScrolling();
+  const list = useRef<HTMLDivElement | null>(null);
+  const ref = useCallback((el: HTMLDivElement | null) => { list.current = el; return scroller(el); }, [scroller]);
+  useListMotion(list);
   // A station's link coming back is said on its rows (the core's `reconnecting`); only with no rows at all to show does
   // the list say it, in place of the rows.
   return (
-    <div ref={scroller} className={nav.navScroll} aria-hidden={hidden || undefined} inert={hidden || undefined}>
+    <div ref={ref} className={nav.navScroll} aria-hidden={hidden || undefined} inert={hidden || undefined} {...pointer}>
       {chats.error && !view && <p className={`${nav.navEmpty} ${nav.navError}`}>{chats.error.message}</p>}
       {days.length === 0 && !loading && failed.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>连不上「{s.name}」，正在重试…</p></Tip>)}
       {days.length === 0 && (loading || connecting.length > 0) && !chats.error && <SkeletonRows />}
@@ -160,13 +165,19 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
       )}
       {days.map((day) => (
         <section key={day.daysAgo} aria-label={day.label}>
-          <div className={nav.navHeading}>{day.label}</div>
-          {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
+          <div className={nav.navHeading} data-flip={`day:${day.daysAgo}`}>{day.label}</div>
+          {day.items.map((item) => <ChatRow key={rowKey(item)} item={item} />)}
         </section>
       ))}
     </div>
   );
 }
+
+/**
+ * A row's key in the list, kept as it changes: a chat asked for here goes by the key given here (its `clientKey`) before
+ * and after its station makes it.
+ */
+const rowKey = (item: ChatItem): string => `${item.station}/${item.clientKey ?? item.id}`;
 
 /** Marks a scroller `data-scrolling` while it scrolls and a moment after (its rows ignore the pointer meanwhile). */
 function useScrolling() {
@@ -226,7 +237,7 @@ function ChatRow({ item }: { item: ChatItem }) {
     </NavLink>
   );
   return (
-    <div className={nav.navSessionWrap} data-editing={editing || undefined}>
+    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)}>
     {menu ? (
       // Right-clicking a row: what can be done to the chat.
       <ContextMenu.Root modal={false}>

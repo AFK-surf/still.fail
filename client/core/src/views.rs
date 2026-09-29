@@ -304,6 +304,8 @@ impl Views {
             let mut row = json!({
                 "id": id, "session": id, "thread": thread, "title": title.unwrap_or_else(|| "新对话".to_string()), "agents": [], "last": null,
                 "unread": false, "mine": true, "lastActiveAt": chat.created_at.round() as i64, "connect": null, "origin": null,
+                // As its station's row will say it: the list keeps it the same row from asked to made to listed.
+                "clientKey": key,
             });
             if chat.made.is_none() {
                 row["pending"] = json!(true);

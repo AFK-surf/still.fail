@@ -635,7 +635,9 @@ data class ChatItem (
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null,
 	/// A new chat asked for here that its station has not made yet. Absent otherwise.
-	val pending: Boolean? = null
+	val pending: Boolean? = null,
+	/// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
+	val clientKey: String? = null
 )
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日).
