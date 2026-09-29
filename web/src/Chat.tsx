@@ -1016,7 +1016,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
               <Tip key={f.id} label={f.error ?? f.name}><span className={css.composerThumb} data-error={f.error ? true : undefined}>
                 <img src={f.preview} alt={f.name} />
                 {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
-                <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={11} /></button>
+                <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={12} /></button>
               </span></Tip>
             ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
           })}

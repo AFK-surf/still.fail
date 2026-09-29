@@ -193,14 +193,14 @@ export const fileCard = style({
   },
 });
 export const fileCardMeta = style({
-  fontSize: "11px", color: vars.muted,
+  fontSize: "11px", lineHeight: "16px", color: vars.muted,
   selectors: {
     [`${fileCard}[data-error] &`]: { color: vars.red },
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
 export const fileCardName = style({
-  fontSize: vars.textSm, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textSm, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const fileCardRemove = style({
   display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "50%",
