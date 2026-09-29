@@ -16,8 +16,13 @@ const listeners = new Set<() => void>();
 function choose(theme: SiteTheme): void {
   localStorage.setItem(KEY, theme);
   const root = document.documentElement;
+  // The whole page changes at once: what eases its own colour on hover (a button's background) does not ease into
+  // the new theme behind the rest (site.css.ts), for the frame the theme changes in.
+  root.dataset.themeSwitching = "";
   if (theme === "system") delete root.dataset.theme;
   else root.dataset.theme = theme;
+  void root.offsetWidth;
+  requestAnimationFrame(() => requestAnimationFrame(() => delete root.dataset.themeSwitching));
   for (const listener of listeners) listener();
   announceAppearance();
 }

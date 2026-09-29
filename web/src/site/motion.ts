@@ -138,6 +138,8 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   }
   overlay.style.display = "none";
   await Promise.all(reveal);
+  // The English's clip let go of too (the motion leaves its last value on the element).
+  for (const el of title.querySelectorAll<HTMLElement>(`.${css.word}`)) el.style.removeProperty("clip-path");
   // The demo under it waits for this to start playing (demo/mount.tsx), and for the stage it rises on (site.css.ts).
   await wait(1.4);
   window.dispatchEvent(new Event("ember-site-opened"));

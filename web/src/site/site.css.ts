@@ -56,6 +56,9 @@ const gridLines = {
   backgroundSize: "64px 64px",
 };
 
+// While the theme changes (ThemeSwitch.tsx), nothing eases into it: the page changes in one frame.
+globalStyle(":root[data-theme-switching] *, :root[data-theme-switching] *::before, :root[data-theme-switching] *::after", { transition: "none !important" });
+
 // ---- Nav ----
 
 export const nav = style({
