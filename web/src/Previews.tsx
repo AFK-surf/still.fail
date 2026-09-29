@@ -2,6 +2,9 @@
 // not close one (nor load it anew); it goes small into the bottom-right corner, still live, and back into its chat's
 // side panel when that is in view again. Only closing it (its tab in the chat, or × on the small one) ends it.
 //
+// The chat under the small ones makes way for them, as a whole (its messages and composer): whatever of it is marked
+// `data-avoid-previews` leaves them the window's side from their left edge on (`--avoid-previews`, its styles).
+//
 // A frame loads anew whenever it moves in the document, so every kept one is drawn here, in one layer over the page,
 // and never moves in it: the chat's side panel has a slot (PreviewSlot) that only says where the frame should be.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -140,6 +143,16 @@ interface Drawn { transform: string; clipPath: string; opacity: string }
 /** A small one's page is laid out this wide (as a window's would be), and drawn scaled down: all of it shows. */
 const LAID = 800;
 
+/** Makes way, in whatever is marked for it, for what is in the corner from `edge` on (none: no room is taken). The first
+ * time it is seen it takes its room at once (a page come in with small ones there); after that it eases. */
+function avoid(edge: number | null): void {
+  for (const el of document.querySelectorAll<HTMLElement>("[data-avoid-previews]")) {
+    const room = `${edge === null ? 0 : Math.max(0, Math.round(el.getBoundingClientRect().right - edge))}px`;
+    if (el.style.getPropertyValue("--avoid-previews") !== room) el.style.setProperty("--avoid-previews", room);
+    if (el.dataset.avoidPreviews !== "settled") requestAnimationFrame(() => { el.dataset.avoidPreviews = "settled"; });
+  }
+}
+
 /** A frame over `box` (its bar `bar` high), drawn stretched over `seen`'s area. */
 function draw(box: Box, bar: number, seen: Seen, opacity = 1): Drawn {
   const top = seen.bar ? 0 : bar;
@@ -212,6 +225,7 @@ export function Previews() {
     if (!all.length) {
       order.current = [];
       setDeck([]);
+      avoid(null);
       return;
     }
     let raf = 0;
@@ -298,6 +312,9 @@ export function Previews() {
         }
         placed.current.set(entry.key, { mode, box, seen: at, to, layout, style });
       }
+      // What the chat keeps free: the small ones at rest (not as they are laid out while pointed at), or the capsule.
+      const pill = tucked ? capsule.current?.getBoundingClientRect() : undefined;
+      avoid(!small.length ? null : pill ? pill.left - SMALL.margin : tucked ? null : right - width - SMALL.margin);
       raf = requestAnimationFrame(place);
     };
     place();

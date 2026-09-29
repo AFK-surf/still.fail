@@ -212,7 +212,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     return (
       <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
         <div className={jobsCss.sessionMain}>
-          <section className={sessionCss.chat} aria-label="对话" data-under-composer="">
+          <section className={sessionCss.chat} aria-label="对话" data-under-composer="" data-avoid-previews="">
             <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} detail={<StatusLine />} />
             <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
           </section>

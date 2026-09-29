@@ -44,10 +44,15 @@ export const chatList = style({
   gap: "28px", position: "relative", overflowAnchor: "none",
   selectors: {
     [`${chat}[data-under-composer] &`]: { paddingBottom: "calc(24px + var(--composer-height))" },
+    // Making way for the small web services in the corner (Previews.tsx), with its composer: what it shows, not its
+    // scrollbar, which stays at the window's edge.
+    [`${chat}[data-avoid-previews=settled] &`]: { transition: "padding-right 280ms cubic-bezier(.2, .8, .2, 1)" },
   },
+  paddingRight: "calc(32px + var(--avoid-previews, 0px))",
   "@media": {
     "(max-width: 700px)": {
       padding: "16px",
+      paddingRight: "calc(16px + var(--avoid-previews, 0px))",
     },
   },
 });

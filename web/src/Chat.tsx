@@ -79,7 +79,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
-    <section className={sessionCss.chat} aria-label="对话" data-under-composer="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
+    <section className={sessionCss.chat} aria-label="对话" data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
       {rows.away && (
         <Tip label="跳到最新" shortcut="chat.latest" side="top">

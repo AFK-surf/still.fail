@@ -11,7 +11,12 @@ export const composerSlot = style({
     [`${newChatInner} > &`]: { justifySelf: "stretch" },
     // A chat's list runs on under its composer, which floats over it frosted, as the phone's does: what scrolls under it
     // shows through, blurred. The list's foot leaves the composer's height free, so its last message still ends above it.
-    [`${chat}[data-under-composer] > &`]: { position: "absolute", left: "0", right: "0", bottom: "0", pointerEvents: "none" },
+    [`${chat}[data-under-composer] > &`]: {
+      position: "absolute", left: "0", bottom: "0", pointerEvents: "none",
+      // Clear of the small web services in the corner, with the rest of the chat (session.css.ts chat).
+      right: "var(--avoid-previews, 0px)",
+    },
+    [`${chat}[data-under-composer][data-avoid-previews=settled] > &`]: { transition: "right 280ms cubic-bezier(.2, .8, .2, 1)" },
   },
 });
 export const composerDock = style({
