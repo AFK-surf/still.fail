@@ -337,6 +337,13 @@ impl Source for Router {
             self.notices.changed();
             return;
         }
+        // Kept on the device (data.rs) and nowhere else: what is there goes out, or, with nothing written, empty.
+        if let Topic::Draft { .. } = topic {
+            if let Some(core) = self.core.upgrade() {
+                core.store.invalidate(topic);
+            }
+            return;
+        }
         if topic.is_view() {
             let (name, station) = match topic {
                 Topic::Chat { station, .. } => ("chat.open", Some(station)),
@@ -360,7 +367,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if *topic == Topic::Status || *topic == Topic::Notices {
+        if *topic == Topic::Status || *topic == Topic::Notices || matches!(topic, Topic::Draft { .. }) {
             return;
         }
         if topic.is_view() {
@@ -382,6 +389,10 @@ impl Source for Router {
         }
         if *topic == Topic::Notices {
             return Some(Ok(self.notices.value()));
+        }
+        // A draft held has its record's value (data.rs); none is nothing written.
+        if let Topic::Draft { .. } = topic {
+            return Some(Ok(json!({ "text": "", "quotes": [], "files": [] })));
         }
         let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic) };
         // Still opening: what it starts now (a chat's agents) is part of it too.
@@ -620,6 +631,16 @@ impl Inner {
             Call::HistoryOlder { station, key } => Ok(json!({ "more": self.stations.history_older(&StationAddr::parse(&station)?, &key).await? })),
             Call::ChatRead { station, thread, seq } => {
                 self.stations.read(&StationAddr::parse(&station)?, thread, seq).await?;
+                Ok(Value::Null)
+            }
+            Call::DraftPut { station, chat, draft } => {
+                let topic = Topic::Draft { station, chat };
+                let empty = |field: &str| draft.get(field).is_none_or(|v| v.as_str().is_some_and(|s| s.trim().is_empty()) || v.as_array().is_some_and(Vec::is_empty));
+                if empty("text") && empty("quotes") && empty("files") {
+                    self.data.forget_topic(&topic);
+                } else {
+                    self.data.set(&topic, draft);
+                }
                 Ok(Value::Null)
             }
             Call::StationUpload { station, name, bytes } => {
@@ -1448,6 +1469,8 @@ enum Call {
     /// signed-in account, and to each signed in later.
     PushRegister { registration: Value },
     PushUnregister,
+    /// What is written to a chat on this device, as it is now (`Topic::Draft`): nothing written forgets it.
+    DraftPut { station: String, chat: String, draft: Value },
 }
 
 impl Call {
@@ -1469,6 +1492,7 @@ impl Call {
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
+            Call::DraftPut { station, .. } => Some(station),
         }
     }
 }
@@ -1707,6 +1731,17 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "chat.read" => {
             let p: Read = read(params)?;
             Call::ChatRead { station: p.station, thread: p.thread, seq: p.seq }
+        }
+        "draft.put" => {
+            let mut p = params_or_empty(params);
+            let at = |field: &str| p.get(field).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+            let (Some(station), Some(chat)) = (at("station"), at("chat")) else { return Err(CoreError::invalid("参数不对：要有 station 和 chat")) };
+            if let Some(o) = p.as_object_mut() {
+                o.remove("station");
+                o.remove("chat");
+            }
+            let draft = stillfail_shapes::conform::<stillfail_shapes::DraftView>(p).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
+            Call::DraftPut { station, chat, draft }
         }
         "station.upload" => {
             let p: Upload = read(params)?;
@@ -2384,6 +2419,59 @@ mod tests {
             // Stations still hear that these are not recorded.
             let parents: Vec<String> = host.requests.borrow().iter().filter_map(|r| header(r, "traceparent")).collect();
             assert!(!parents.is_empty() && parents.iter().all(|p| p.ends_with("-00")), "{parents:?}");
+        });
+    }
+
+    #[test]
+    fn a_draft_is_kept_on_the_device_until_emptied() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            let topic = Topic::Draft { station: "local".into(), chat: "new".into() };
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: topic.clone() });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            // Nothing written: empty, not waiting.
+            assert_eq!(values[&1], json!({ "text": "", "quotes": [], "files": [] }));
+            core.receive(ui, ClientMessage::Call { id: 2, call: "draft.put".into(), params: json!({
+                "station": "local", "chat": "new", "text": "修一下登录",
+                "quotes": [{ "author": "a", "text": "b", "comment": "" }], "files": [{ "name": "x.png", "path": "up/x.png", "size": 3 }],
+            }) });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["text"], "修一下登录");
+            assert_eq!(values[&1]["files"][0]["path"], "up/x.png");
+            // Kept across a restart, with no station to ask.
+            drop(core);
+            host.take_emitted();
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: topic.clone() });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["text"], "修一下登录");
+            assert_eq!(values[&1]["quotes"][0]["author"], "a");
+            // Emptied (sent): gone, from the device too.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "draft.put".into(), params: json!({ "station": "local", "chat": "new", "text": " ", "quotes": [], "files": [] }) });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!({ "text": "", "quotes": [], "files": [] }));
+            drop(core);
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: topic });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["text"], "");
+            // What is not a draft is refused.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "draft.put".into(), params: json!({ "station": "local", "chat": "new", "text": 3 }) });
+            core.receive(ui, ClientMessage::Call { id: 4, call: "draft.put".into(), params: json!({ "chat": "new", "text": "x" }) });
+            host.settle().await;
+            let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 3 | 4, .. })).count();
+            assert_eq!(refused, 2);
         });
     }
 

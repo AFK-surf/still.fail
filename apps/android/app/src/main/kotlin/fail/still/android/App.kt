@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedContent
@@ -59,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import fail.still.android.data.AccountWorkspaces
 import fail.still.android.data.Account
 import fail.still.android.data.ChatOf
@@ -323,21 +326,21 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                 if (!following) { swiped = true; following = true }
                 pages.seekTo((dx / width.coerceAtLeast(1f)).coerceIn(0f, 1f), under)
             }
+            // Let go: on from where the finger left it at once, moving as it was (out, easing to rest), and only then off
+            // the stack. Popping first waited a frame or two for the pages to recompose, then started from still: a stop
+            // where the finger let go.
+            // Not called off once let go (another swipe meanwhile would run it backwards).
+            if (following && under != null) withContext(NonCancellable) {
+                val from = pages.fraction
+                seekAlong(from, 1f, (280f * (1f - from)).coerceAtLeast(120f), EaseOut) { pages.seekTo(it, under) }
+                pages.snapTo(under)
+                swiped = false
+            }
             app.pop()
         } catch (e: CancellationException) {
             // Called off: back along the same way (the seek run backwards to 0, 200ms), then at rest on the page again.
             if (following && under != null) scope.launch {
-                val from = pages.fraction
-                // Seeked frame by frame (the seek is what the pages draw), on the system's animation speed.
-                val scale = coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
-                val start = withFrameNanos { it }
-                while (true) {
-                    val now = withFrameNanos { it }
-                    val t = if (scale <= 0f) 1f else ((now - start) / 1_000_000f / (200f * scale)).coerceAtMost(1f)
-                    pages.seekTo(from * (1f - FastOutSlowInEasing.transform(t)), under)
-                    if (t >= 1f) break
-                }
-                pages.seekTo(0f, under)
+                seekAlong(pages.fraction, 0f, 200f, FastOutSlowInEasing) { pages.seekTo(it, under) }
                 pages.snapTo(app.stack.last())
                 swiped = false
             }
@@ -375,6 +378,21 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                 }
             }
         }
+    }
+}
+
+/** Out of a swipe let go: starts moving, no ease in (easeOutQuad). */
+private val EaseOut = CubicBezierEasing(0.25f, 0.46f, 0.45f, 0.94f)
+
+/** Seeks from `from` to `to` over `ms` frame by frame (the seek is what the pages draw), on the system's animation speed. */
+private suspend fun seekAlong(from: Float, to: Float, ms: Float, easing: Easing, seek: suspend (Float) -> Unit) {
+    val scale = kotlin.coroutines.coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
+    val start = withFrameNanos { it }
+    while (true) {
+        val now = withFrameNanos { it }
+        val t = if (scale <= 0f) 1f else ((now - start) / 1_000_000f / (ms * scale)).coerceAtMost(1f)
+        seek(from + (to - from) * easing.transform(t))
+        if (t >= 1f) break
     }
 }
 

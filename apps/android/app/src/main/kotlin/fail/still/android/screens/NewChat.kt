@@ -138,7 +138,8 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
 private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: String, view: StationView, stations: List<StationView>, onStation: (String) -> Unit, host: Host, leaving: Boolean) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    val draft = remember(view.station) { Draft() }
+    // Kept on the device like a chat's, by its station (web/src/NewChat.tsx: `new:<address>`).
+    val draft = rememberDraft("new:${view.station}")
     var choice by remember(view.station) { mutableStateOf(app.lastChoice(view.station)) }
     // The model first, from what the station's profiles have enabled; the runtime only when it runs on more than one. A
     // remembered model or runtime no longer there gives way to the first that is.

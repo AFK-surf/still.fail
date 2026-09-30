@@ -37,7 +37,9 @@ export type Topic =
   // What the core is waiting on, when it is worth saying (a core from before it answers an error: nothing to say).
   | { topic: "status" }
   // What a person hears about while the client runs (docs/notifications.md).
-  | { topic: "notices" };
+  | { topic: "notices" }
+  // What is written to a chat on this device, until sent: `chat` its key, `thread:<id>`, or `new` (a new chat there).
+  | { topic: "draft"; station: string; chat: string };
 
 export interface ErrorBody {
   code: string;

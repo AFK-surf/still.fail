@@ -1090,6 +1090,18 @@ pub struct NoticesView {
     pub items: Vec<Notice>,
 }
 
+/// What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages
+/// it quotes with what is said about them, and the files already up (the station keeps them in no chat until a
+/// message takes them). Files still going up are the page's own.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftView {
+    pub text: String,
+    pub quotes: Vec<Quote>,
+    pub files: Vec<Attachment>,
+}
+
 /// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
 /// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
 /// `url` opens it.

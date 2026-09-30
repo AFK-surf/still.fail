@@ -842,6 +842,16 @@ data class DiskRoom (
 	val totalBytes: Long
 )
 
+/// What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages
+/// it quotes with what is said about them, and the files already up (the station keeps them in no chat until a
+/// message takes them). Files still going up are the page's own.
+@Serializable
+data class DraftView (
+	val text: String,
+	val quotes: List<Quote>,
+	val files: List<Attachment>
+)
+
 @Serializable
 data class HistoryFrom (
 	val name: String,

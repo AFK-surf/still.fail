@@ -121,6 +121,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
+import fail.still.android.data.DraftView
+import fail.still.android.data.decode
+import fail.still.core.StillFailCore
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
@@ -170,8 +179,17 @@ class Draft {
 
     /** The key it is kept on the device by (Drafts); null: not kept. */
     internal var keptAs: String? = null
+    /** What the core kept of it has been read: only then is it kept as it is (not written over before). */
+    internal var loaded = false
     /** Keeps it on the device as it is now (a chat's draft). */
-    fun save() { keptAs?.let { Drafts.save(it, this) } }
+    fun save() { keptAs?.takeIf { loaded }?.let { Drafts.save(it, this) } }
+
+    internal fun fill(kept: DraftView) {
+        text = kept.text
+        kept.quotes.forEach { q -> quotes += DraftQuote(System.nanoTime(), q.author, q.text, q.ts, q.role ?: "person", q.file).also { it.comment = q.comment } }
+        kept.files.forEach { a -> files += Pending(System.nanoTime(), a.name, a.size, null).also { it.done = a } }
+    }
+    internal val empty get() = text.isEmpty() && quotes.isEmpty() && files.isEmpty()
 
     fun quote(author: String, text: String, ts: String?, role: String) {
         val q = DraftQuote(System.nanoTime(), author, text, ts, role)
@@ -197,46 +215,79 @@ class Taken(val text: String, val files: List<Pending>, val quotes: List<DraftQu
 @Serializable
 private class KeptQuote(val author: String, val text: String, val comment: String = "", val ts: String? = null, val role: String = "person", val file: String? = null)
 
+/** How the app kept a draft before the core did (in its "drafts" preferences): moved into the core when next opened. */
 @Serializable
 private class KeptDraft(val text: String = "", val quotes: List<KeptQuote> = emptyList(), val files: List<Attachment> = emptyList())
 
 /**
- * Each chat's draft, by its station's address and the chat ("<address>:<chat>", as the web keys it): the same one while
- * the app runs (files still going up go on), and on the device what it holds (the text, the quotes with what is said
- * about them, the files already up; the station keeps those in no chat until a message takes them) for after a restart.
+ * Each chat's draft, by its station's address and the chat ("<address>:<chat>", or "new:<address>" for a new chat
+ * there, as the web keys it): the same one while the app runs (files still going up go on); what it holds (the text,
+ * the quotes with what is said about them, the files already up; the station keeps those in no chat until a message
+ * takes them) the core keeps on the device (its `draft` topic, `draft.put`), as it does for the web.
  */
 object Drafts {
     private val open = HashMap<String, Draft>()
+    private var core: StillFailCore? = null
     private var prefs: SharedPreferences? = null
+    private val scope = MainScope()
 
     private fun prefs(context: Context) = prefs ?: context.applicationContext.getSharedPreferences("drafts", Context.MODE_PRIVATE).also { prefs = it }
 
-    fun of(context: Context, key: String): Draft = open.getOrPut(key) {
-        val kept = prefs(context).getString(key, null)?.let { runCatching { StillFailJson.decodeFromString(KeptDraft.serializer(), it) }.getOrNull() }
+    /** The chat a key names, as the core keeps it. */
+    private fun at(key: String): Pair<String, String>? =
+        if (key.startsWith("new:")) key.removePrefix("new:") to "new"
+        else key.indexOf(':').takeIf { it > 0 }?.let { key.substring(0, it) to key.substring(it + 1) }
+
+    fun of(context: Context, core: StillFailCore, key: String): Draft = open.getOrPut(key) {
+        this.core = core
         Draft().apply {
             keptAs = key
-            if (kept != null) {
-                text = kept.text
-                kept.quotes.forEach { q -> quotes += DraftQuote(System.nanoTime(), q.author, q.text, q.ts, q.role, q.file).also { it.comment = q.comment } }
-                kept.files.forEach { a -> files += Pending(System.nanoTime(), a.name, a.size, null).also { it.done = a } }
+            // Kept by the app before the core kept drafts: into the core, once.
+            val p = prefs(context)
+            val old = p.getString(key, null)?.let { runCatching { StillFailJson.decodeFromString(KeptDraft.serializer(), it) }.getOrNull() }
+            if (old != null) {
+                fill(DraftView(old.text, old.quotes.map { Quote(it.author, it.text, it.comment, it.ts, it.role, it.file) }, old.files))
+                p.edit().remove(key).apply()
+                loaded = true
+                save()
+                return@apply
+            }
+            val (station, chat) = at(key) ?: run { loaded = true; return@apply }
+            scope.launch {
+                val state = core.topic(Topics.draft(station, chat)).first { it.value != null || it.error != null }
+                val kept = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(DraftView.serializer(), it) }.getOrNull() }
+                // Written here meanwhile: that is what is kept now.
+                if (kept != null && empty) fill(kept)
+                loaded = true
+                if (!empty) save()
             }
         }
     }
 
     internal fun save(key: String, d: Draft) {
-        val p = prefs ?: return
-        val kept = KeptDraft(d.text, d.quotes.map { KeptQuote(it.author, it.text, it.comment, it.ts, it.role, it.file) }, d.files.mapNotNull { it.done })
-        if (kept.text.isBlank() && kept.quotes.isEmpty() && kept.files.isEmpty()) p.edit().remove(key).apply()
-        else p.edit().putString(key, StillFailJson.encodeToString(KeptDraft.serializer(), kept)).apply()
+        val core = core ?: return
+        val (station, chat) = at(key) ?: return
+        val view = DraftView(d.text, d.quotes.map { it.sent().copy(comment = it.comment) }, d.files.mapNotNull { it.done })
+        val params = buildJsonObject {
+            put("station", station); put("chat", chat)
+            StillFailJson.encodeToJsonElement(DraftView.serializer(), view).jsonObject.forEach { (k, v) -> put(k, v) }
+        }
+        // A core that refuses it keeps nothing: the draft lives while the app does.
+        scope.launch { try { core.call("draft.put", params) } catch (_: CoreException) {} }
     }
 }
 
 /** A chat's draft (Drafts), kept on the device as it changes and when the page goes. */
 @Composable
-fun rememberDraft(station: String, of: ChatOf): Draft {
+fun rememberDraft(station: String, of: ChatOf): Draft =
+    rememberDraft("$station:" + when (of) { is ChatOf.Session -> of.key; is ChatOf.Thread -> "thread:${of.id}" })
+
+/** The draft kept by `key` (Drafts): a chat's, or a new chat's on a station ("new:<address>", as the web keys it). */
+@Composable
+fun rememberDraft(key: String): Draft {
     val context = LocalContext.current
-    val key = "$station:" + when (of) { is ChatOf.Session -> of.key; is ChatOf.Thread -> "thread:${of.id}" }
-    val draft = remember(key) { Drafts.of(context, key) }
+    val core = LocalApp.current.core
+    val draft = remember(key) { Drafts.of(context, core, key) }
     LaunchedEffect(draft) {
         snapshotFlow { Triple(draft.text, draft.quotes.map { it.id to it.comment }, draft.files.map { it.id to it.done }) }
             .drop(1).collectLatest { delay(400); draft.save() }

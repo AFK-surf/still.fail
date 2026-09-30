@@ -805,6 +805,17 @@ export interface DiskRoom {
 	totalBytes: number;
 }
 
+/**
+ * What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages
+ * it quotes with what is said about them, and the files already up (the station keeps them in no chat until a
+ * message takes them). Files still going up are the page's own.
+ */
+export interface DraftView {
+	text: string;
+	quotes: Quote[];
+	files: Attachment[];
+}
+
 export interface HistoryFrom {
 	name: string;
 	slackUser?: string;

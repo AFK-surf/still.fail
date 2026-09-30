@@ -2,8 +2,12 @@
 // its text, the passages it quotes, and files on their way to the station. Each chat has its own (a `key`): moving to
 // another chat, or leaving the page, puts it away, and coming back brings it back. Sending empties it at once (the
 // message waits in the chat's outbox until the station has it); if the chat it goes to cannot be made, it comes back.
+// The core keeps each on the device (its `draft` topic, `draft.put`), so it outlives the page; what is on its way up
+// stays with the page.
 import { createContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
+import { core } from "./core/react.ts";
+import type { DraftView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
 import { expandRefs } from "./chatRefs.ts";
 
@@ -81,6 +85,67 @@ const kept = new Map<string, { text: string; files: Pending[]; quotes: DraftQuot
 
 let nextId = 1;
 
+/** The chat a draft's key names, as the core keeps it: `new:<station>` a new chat there, else `<station>:<chat>`. */
+function keptAt(key: string): { station: string; chat: string } | null {
+  if (key.startsWith("new:")) return { station: key.slice(4), chat: "new" };
+  const at = key.indexOf(":");
+  return at > 0 ? { station: key.slice(0, at), chat: key.slice(at + 1) } : null;
+}
+
+/** Writes waiting, by key: the latest of each goes to the core a moment after the last change. */
+const writes = new Map<string, { draft: DraftView; timer: ReturnType<typeof setTimeout> }>();
+
+/** Has the core keep `key`'s draft as it is now (`now`: at once rather than a moment later). */
+function persist(key: string, draft: { text: string; files: Pending[]; quotes: DraftQuote[] } | undefined, now = false): void {
+  const at = keptAt(key);
+  if (!at) return;
+  const view: DraftView = {
+    text: draft?.text ?? "",
+    quotes: (draft?.quotes ?? []).map(({ id: _, ...q }) => q),
+    files: (draft?.files ?? []).flatMap((f) => (f.done ? [f.done] : [])),
+  };
+  const before = writes.get(key);
+  if (before) clearTimeout(before.timer);
+  const write = () => {
+    writes.delete(key);
+    // A core from before drafts refuses it: the draft is then the page's only, as it was.
+    core().call("draft.put", { ...at, ...view }).catch(() => undefined);
+  };
+  if (now) write();
+  else writes.set(key, { draft: view, timer: setTimeout(write, 300) });
+}
+
+/** Leaving the page: what waits goes now. */
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    for (const [key, { draft, timer }] of writes) {
+      clearTimeout(timer);
+      writes.delete(key);
+      const at = keptAt(key);
+      if (at) core().call("draft.put", { ...at, ...draft }).catch(() => undefined);
+    }
+  });
+}
+
+/** `key`'s draft as the core keeps it (null: none, or a core that keeps none). */
+function readKept(key: string): Promise<DraftView | null> {
+  const at = keptAt(key);
+  if (!at) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let stop: (() => void) | null = null;
+    let done = false;
+    const finish = (value: DraftView | null) => {
+      if (done) return;
+      done = true;
+      resolve(value);
+      // Unsubscribed on the next turn: the answer may come while subscribing.
+      queueMicrotask(() => stop?.());
+    };
+    stop = core().subscribe({ topic: "draft", ...at }, (value) => finish(value as DraftView), () => finish(null));
+    if (done) stop();
+  });
+}
+
 export function useDraft({ key, station, carry, upload, quotes: held }: {
   /** Whose draft it is. With none (a new chat, before it is made), what is written goes on into the first key it gets. */
   key: string | undefined;
@@ -112,11 +177,39 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     if (at !== undefined && (text || files.length || quotes.length)) kept.set(at, { text, files, quotes });
   };
   const shown = useRef(key);
+  /** The key whose kept draft has been read (or that nothing was kept for): only then is what is written kept for it. */
+  const loaded = useRef<string | undefined>(undefined);
+  /** Has the core keep what `at` has now, if what it kept was read (else it stays as it was). */
+  const leave = (at: string) => {
+    if (loaded.current === at) persist(at, kept.get(at), true);
+  };
+  /** Brings back what the core kept for `at`, unless something has been written here meanwhile. */
+  const fromCore = (at: string) => {
+    loaded.current = undefined;
+    void readKept(at).then((view) => {
+      if (shown.current !== at) return;
+      const { text, files, quotes } = now.current;
+      if (view && !text && !files.length && !quotes.length) {
+        if (view.text) setText(view.text);
+        if (view.files.length) setFiles(view.files.map((done) => ({ id: nextId++, name: done.name, size: done.size, done, error: null })));
+        if (view.quotes.length && !held) setOwnQuotes(view.quotes.map((q, i) => ({ ...q, id: `${Date.now()}-${i}` })));
+      }
+      loaded.current = at;
+      // Written meanwhile: that is what is kept now.
+      if (text || files.length || quotes.length) persist(at, now.current);
+    });
+  };
   useLayoutEffect(() => {
     const before = shown.current;
     if (before === key) return;
     shown.current = key;
-    if (carry && key !== undefined && carry.current === key) { carry.current = null; return; }
+    if (carry && key !== undefined && carry.current === key) {
+      carry.current = null;
+      // What it has now is the chat's; the new chat's is empty.
+      if (before !== undefined && loaded.current === before) persist(before, undefined, true);
+      loaded.current = key;
+      return;
+    }
     // The first key: what was written before it goes on into it; with nothing written, its own draft comes back (the
     // page knew its chat only once its station was known).
     if (before === undefined) {
@@ -125,6 +218,10 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       if (next && !text && !files.length && !quotes.length) {
         kept.delete(key!);
         setText(next.text); setFiles(next.files); if (!held) setOwnQuotes(next.quotes);
+      }
+      if (key !== undefined) {
+        if (next || text || files.length || quotes.length) loaded.current = key;
+        else fromCore(key);
       }
       return;
     }
@@ -136,12 +233,19 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
       const theirs = kept.get(key)?.files ?? [];
       kept.delete(key);
       setFiles(theirs); setError(null);
+      leave(before);
+      loaded.current = key;
       return;
     }
     put(before);
+    leave(before);
     const next = key === undefined ? undefined : kept.get(key);
     if (key !== undefined) kept.delete(key);
     setText(next?.text ?? ""); setFiles(next?.files ?? []); if (!held) setOwnQuotes(next?.quotes ?? []); setError(null);
+    if (key !== undefined) {
+      if (next) loaded.current = key;
+      else fromCore(key);
+    }
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   // Made for a chat: its draft comes back; leaving the page puts it away.
   useLayoutEffect(() => {
@@ -150,9 +254,19 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     if (at !== undefined && next) {
       kept.delete(at);
       setText(next.text); setFiles(next.files); if (!held) setOwnQuotes(next.quotes);
-    }
-    return () => put(shown.current);
+      loaded.current = at;
+    } else if (at !== undefined) fromCore(at);
+    return () => {
+      put(shown.current);
+      if (shown.current !== undefined) leave(shown.current);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // What is written goes to the core as it changes, once what it kept has been read (not to write over it before).
+  useEffect(() => {
+    const at = shown.current;
+    if (at === undefined || loaded.current !== at) return;
+    persist(at, { text, files, quotes: held ? [] : quotes });
+  }, [text, files, quotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const add = (picked: FileList | File[]) => {
     for (const file of Array.from(picked)) {

@@ -17,6 +17,8 @@
 
 ## 待部署
 
+- 草稿挪进 core（android-new-chat-draft）：core 加了 `draft` topic 和 `draft.put`，存在 core 的数据库里（新表名 `draft`，不改库结构）。web 和 wasm 一起发布，不用排顺序。安卓要发新包；安卓旧版存在 SharedPreferences 里的草稿，首次打开时会搬进 core。桌面端 core 如果比页面旧，不认识 `draft.put`，这时草稿只留在内存里（和以前一样），不会报错。上线后验：web 在 new chat 写一句，刷新后还在；安卓在 new chat 写一句，杀掉进程重开后还在；返回手势松手后不会停一下。
+
 ## 2026-09-30
 
 ### 21:13 部署 d00630c（relay 预算不再逐帧转发）

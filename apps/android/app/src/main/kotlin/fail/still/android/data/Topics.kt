@@ -99,6 +99,8 @@ object Topics {
     val status = buildJsonObject { put("topic", "status") }
     /** What wants the viewer in the chats they take part in, the last 20 (docs/notifications.md; Notices.kt). */
     val notices = buildJsonObject { put("topic", "notices") }
+    /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
+    fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
 
     /** A connect's Slack app as Slack has it (read through the station; again after a write to the connect). */
     fun slackApp(station: String, connect: String) = buildJsonObject { put("topic", "slackApp"); put("station", station); put("connect", connect) }

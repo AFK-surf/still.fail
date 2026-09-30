@@ -78,6 +78,10 @@ pub enum Topic {
     Status,
     /// What a person hears about while the client runs (notices.rs): chats of theirs that want them, newest last.
     Notices,
+    /// What is being written to a chat on this device (its text, quotes, and files already up), kept until sent
+    /// (`draft.put`). `chat`: its session key, `thread:<id>`, or `new` for a new chat on the station; empty until
+    /// something is written.
+    Draft { station: String, chat: String },
 }
 
 impl Topic {
@@ -86,7 +90,7 @@ impl Topic {
         match self {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } => Some(station),
-            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices => None,
+            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Draft { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } => None,
         }
     }
