@@ -718,14 +718,15 @@ export class Directory extends DurableObject<Env> {
     for (const ws of this.#presence(station)) this.#drop(ws, code, reason);
   }
 
-  /** Where a station is and what it is called; sent on connect and when that changes. */
+  /** Where a station is and what it is called, and the cloud's own addresses as it has them now (a station enrolled
+   * under an old host follows them: its links then use the new one); sent on connect and when that changes. */
   #sendState(station: string): void {
     const sockets = this.#presence(station);
     if (!sockets.length) return;
     const row = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
     if (!row) return;
     const revocations = this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace as string, nowSeconds() - REVOCATION_DAYS * 86400);
-    const frame = JSON.stringify({ type: "state", ...row, grant_keys: grantKeys(this.env), revocations });
+    const frame = JSON.stringify({ type: "state", ...row, origin: this.env.PUBLIC_ORIGIN, relay_url: this.env.RELAY_URL || this.env.PUBLIC_ORIGIN, grant_keys: grantKeys(this.env), revocations });
     for (const ws of sockets) ws.send(frame);
   }
 

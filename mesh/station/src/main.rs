@@ -736,14 +736,21 @@ fn removed(station: &Station) {
 }
 
 /// still.fail cloud says where the station is and what it is called (on connect and whenever that changes, with every
-/// revocation it keeps), and what it takes back as it does.
+/// revocation it keeps, and its own origin and relay as it has them now: a station enrolled under the old host moves
+/// to the new one, and its links with it), and what it takes back as it does.
 fn apply_state(station: &Station, text: &str) {
     let Ok(body) = serde_json::from_str::<Value>(text) else { return };
     let mut guard = station.state.lock().unwrap();
     let s = &mut *guard;
     match body["type"].as_str() {
         Some("state") => {
-            for (field, key) in [(&mut s.workspace, "workspace"), (&mut s.workspace_name, "workspace_name"), (&mut s.name, "name")] {
+            for (field, key) in [
+                (&mut s.workspace, "workspace"),
+                (&mut s.workspace_name, "workspace_name"),
+                (&mut s.name, "name"),
+                (&mut s.origin, "origin"),
+                (&mut s.relay_url, "relay_url"),
+            ] {
                 if let Some(value) = body[key].as_str() {
                     *field = value.to_string();
                 }
