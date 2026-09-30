@@ -13,7 +13,7 @@ import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { ConnectionPill } from "./Connection.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
-import { useShortcut } from "./keymap.ts";
+import { shortcutOf, takesKeys, useKeymap, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear } from "./FilePreview.tsx";
 import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -933,12 +933,15 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     if (!el || el.disabled || !el.getClientRects().length) return false;
     el.focus();
   });
+  // Nothing focused, the box says which key brings the cursor back (its key changed here, or none).
+  useKeymap();
+  const hint = useSpaceHint(locked);
   useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
   const ready = draft.ready && !locked;
   const submit = () => {
     if (ready) void send();
   };
-  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className: css.composerText, onType: warm, onSubmit: submit });
+  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder: hint ?? placeholder, className: css.composerText, onType: warm, onSubmit: submit });
   // Capsule ⇄ box, in one motion (morph.ts); laid out for another page (a new chat's roomy box ⇄ a chat's foot), the
   // dock moves it (dock.tsx).
   const multiline = roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
@@ -974,6 +977,27 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
   );
+}
+
+/**
+ * With a mouse, and nothing that takes keys focused, what the composer's box says instead of its placeholder: that
+ * "composer.focus"'s key puts the cursor there. Null while it has the cursor (or another field or button has).
+ */
+function useSpaceHint(locked: boolean): string | null {
+  const [away, setAway] = useState(false);
+  useEffect(() => {
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    const at = (el: EventTarget | null) => setAway(!takesKeys(el instanceof Element ? el : null));
+    const onIn = (e: FocusEvent) => at(e.target);
+    const onOut = (e: FocusEvent) => at(e.relatedTarget);
+    at(document.activeElement);
+    document.addEventListener("focusin", onIn);
+    document.addEventListener("focusout", onOut);
+    return () => { document.removeEventListener("focusin", onIn); document.removeEventListener("focusout", onOut); };
+  }, []);
+  const key = shortcutOf("composer.focus");
+  if (!away || locked || !key) return null;
+  return /^[\u4e00-\u9fff]+$/.test(key) ? `按${key}输入` : `按 ${key} 输入`;
 }
 
 /**

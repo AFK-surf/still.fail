@@ -156,6 +156,10 @@ const handlers = new Map<Action, Handler[]>();
 const TYPED = "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea, select, [contenteditable]:not([contenteditable='false'])";
 const PRESSED = "button, a[href], summary, input, [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider']";
 /** Open over the page, taking the keys: a dialog (a file's preview), a menu, a popover. */
+/** Whether a focused element keeps keys with no modifier (Space) for itself: a text field, a button… */
+export function takesKeys(el: Element | null): boolean {
+  return !!el?.closest(`${TYPED}, ${PRESSED}`);
+}
 const OVER = "[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']";
 
 function onKey(e: KeyboardEvent) {
