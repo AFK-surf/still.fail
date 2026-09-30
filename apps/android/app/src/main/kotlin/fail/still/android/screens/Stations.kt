@@ -229,11 +229,10 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
 
 
 /**
- * This device's connection to a station, as the web's phone card has it (cloud/StationCards.tsx `Net`, stacked): how it
- * goes and its round trip (with the last minute's as a small line) on one line, the speed each way (and packets lost,
- * when some were) on the next, what went over it on the last. Grey, but for what the core says is off. Always these
- * three lines, the figures in fixed-width digits with room kept for them: the lines do not wrap one second and not the
- * next as the figures change.
+ * This device's connection to a station: how it goes (and packets lost, when some were) over its round trip (with the
+ * last minute's as a small line) on the left; the speed each way stacked on the right, ↑ over ↓, the figures in a
+ * column of their own; what went over it below. Grey, but for what the core says is off. Every line is one line,
+ * the figures in fixed-width digits with room kept for them: nothing wraps or moves as the figures change.
  */
 @Composable
 internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
@@ -242,19 +241,27 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
     val figure = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(net.path, Modifier.weight(1f, fill = false), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            net.rtt?.let { rtt ->
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(net.path, Modifier.weight(1f, fill = false), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    net.loss?.let { Text(it.text, style = figure, color = tone(it), maxLines = 1) }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("延时 ", fontSize = 13.sp, color = C.muted, maxLines = 1)
-                    Text(rtt.text, Modifier.widthIn(min = 52.dp), style = figure, color = tone(rtt), maxLines = 1)
-                    if (net.rttHistory.size > 1) Spark(net.rttHistory, if (rtt.level == "ok") c.subtle else tone(rtt), Modifier.padding(start = 6.dp))
+                    net.rtt?.let { rtt ->
+                        Text("延时 ", fontSize = 13.sp, color = C.muted, maxLines = 1)
+                        Text(rtt.text, Modifier.widthIn(min = 52.dp), style = figure, color = tone(rtt), maxLines = 1)
+                        if (net.rttHistory.size > 1) Spark(net.rttHistory, if (rtt.level == "ok") c.subtle else tone(rtt), Modifier.padding(start = 6.dp))
+                    }
                 }
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row { Text("↓ ", fontSize = 13.sp, color = C.muted); Text(net.down, Modifier.widthIn(min = 72.dp), style = figure, color = C.ink, maxLines = 1) }
-            Row { Text("↑ ", fontSize = 13.sp, color = C.muted); Text(net.up, Modifier.widthIn(min = 72.dp), style = figure, color = C.ink, maxLines = 1) }
-            net.loss?.let { Text(it.text, style = figure, color = tone(it), maxLines = 1) }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                listOf("↑" to net.up, "↓" to net.down).forEach { (arrow, rate) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(arrow, fontSize = 13.sp, color = C.muted)
+                        Text(rate, Modifier.padding(start = 6.dp).width(72.dp), style = figure, color = C.ink, maxLines = 1)
+                    }
+                }
+            }
         }
         Text(net.total, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
