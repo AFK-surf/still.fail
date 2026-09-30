@@ -161,7 +161,7 @@ class AgentHere(val view: ChatAgent, val live: Live?) {
 
 /**
  * The chat's own colours, as web mobile draws its messages: with the wide screen's tokens (web/src/styles/global.css.ts,
- * inside mobile/styles/root.css.ts → wide), over the phone's paper.
+ * inside mobile/styles/root.css.ts → wide), over the phone's paper; neutral is the phone's bubble (--m-bubble, Theme.kt bubble).
  */
 internal class ChatInk(
     val text: Color, val muted: Color, val subtle: Color, val neutral: Color, val name: Color, val card: Color,
@@ -169,11 +169,11 @@ internal class ChatInk(
 )
 
 private val LightInk = ChatInk(
-    text = Color(0xFF24272B), muted = Color(0xFF646970), subtle = Color(0xFF73787D), neutral = Color(0xFFEDEFF1), name = Color(0xFFA23203),
+    text = Color(0xFF24272B), muted = Color(0xFF646970), subtle = Color(0xFF73787D), neutral = Color(0xFFE8E4DC), name = Color(0xFFA23203),
     card = Color(0xFFF6F6F7), accent = Color(0xFFEF6A3C), amber = Color(0xFF7F5306), canvas = Color(0xFFFFFFFF),
 )
 private val DarkInk = ChatInk(
-    text = Color(0xFFE9E9EA), muted = Color(0xFFA3A5A9), subtle = Color(0xFF8C8F94), neutral = Color(0xFF2A2B2F), name = Color(0xFFFC9B6F),
+    text = Color(0xFFE9E9EA), muted = Color(0xFFA3A5A9), subtle = Color(0xFF8C8F94), neutral = Color(0xFF313237), name = Color(0xFFFC9B6F),
     card = Color(0xFF27282B), accent = Color(0xFFF57E4D), amber = Color(0xFFE6B55D), canvas = Color(0xFF1F2023),
 )
 

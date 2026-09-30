@@ -28,7 +28,8 @@ export const m = style({
     "--m-warn": "#D9962B",
     "--m-blue": "#1559C4",
     "--m-chip": "#EFECE6",
-    "--m-bubble": "#EDEAE4",
+    // A step darker than the page (the wide screen's grey sat as light as this warm page, and its bubbles barely showed).
+    "--m-bubble": "#E8E4DC",
     "--m-thumb": "#FFFFFF",
     "--m-ease": "cubic-bezier(.2, .8, .2, 1)",
     "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
@@ -54,7 +55,7 @@ export const m = style({
         "--m-red": "#EB6B58",
         "--m-blue": "#81AEFA",
         "--m-chip": "#313237",
-        "--m-bubble": "#33343A",
+        "--m-bubble": "#313237",
         "--m-thumb": "#3A3B40",
       },
     },
@@ -83,7 +84,7 @@ export const m = style({
             "--m-red": "#EB6B58",
             "--m-blue": "#81AEFA",
             "--m-chip": "#313237",
-            "--m-bubble": "#33343A",
+            "--m-bubble": "#313237",
             "--m-thumb": "#3A3B40",
           },
         },
@@ -103,7 +104,7 @@ export const m = style({
  */
 export const wide = style({
   color: vars.text, fontSize: vars.textBody, lineHeight: "1.55",
-  vars: { [vars.textXs]: "13px", [vars.textSm]: "15px", [vars.textBody]: "15px" },
+  vars: { [vars.textXs]: "13px", [vars.textSm]: "15px", [vars.textBody]: "15px", [vars.neutralBg]: "var(--m-bubble)" },
 });
 globalStyle(`${m} button:not(${wide} *)`, { font: "inherit", color: "inherit" });
 globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });
