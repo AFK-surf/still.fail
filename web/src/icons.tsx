@@ -194,11 +194,11 @@ export function Other(props: IconProps) {
 }
 
 export function PanelClose(props: IconProps) {
-  return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M14.5 4.5V19.5 M7 12H12 M9.5 9L6.5 12L9.5 15" /></Svg>;
+  return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M14.5 4.5V19.5 M6.5 12H11.5 M9 9L12 12L9 15" /></Svg>;
 }
 
 export function PanelOpen(props: IconProps) {
-  return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M14.5 4.5V19.5 M6.5 12H11.5 M9 9L12 12L9 15" /></Svg>;
+  return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M14.5 4.5V19.5 M7 12H12 M9.5 9L6.5 12L9.5 15" /></Svg>;
 }
 
 export function Pause(props: IconProps) {
