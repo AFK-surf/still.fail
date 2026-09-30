@@ -4,7 +4,7 @@
 import { useToast } from "./toast.tsx";
 import { ChevronDown, ChevronRight, Hourglass, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
@@ -44,6 +44,11 @@ export function History({ station, sessionKey, summary, actions, details, focus 
       ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link>
       : <span className={css.hPlace}>{inner}</span>;
   };
+  // The items are drawn again only when they change (HistoryItemView): what they are handed stays the same function,
+  // the latest one behind it.
+  const latest = useRef(where);
+  latest.current = where;
+  const [stableWhere] = useState(() => (place: Place | null) => latest.current(place));
   const [usageOpen, setUsageOpen] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
@@ -100,7 +105,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
               <div key={item.key} className={css.hItem} data-item={i} data-enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text" ? true : undefined}>
-                <HistoryItemView item={item} where={where} />
+                <HistoryItemView item={item} where={stableWhere} />
               </div>
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
@@ -113,7 +118,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   );
 }
 
-function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Place | null): ReactNode }) {
+const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Place | null): ReactNode }) {
   const body = item.body;
   switch (body.kind) {
     case "received":
@@ -149,7 +154,7 @@ function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Plac
     case "group":
       return <Group group={body.content} />;
   }
-}
+});
 
 /**
  * A Slack user's name: "你" once the viewer said it is them. Clicking it offers "这是我" (the station then takes that

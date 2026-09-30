@@ -3,7 +3,7 @@
 // Grammars load on demand, one chunk per language, with Shiki's JavaScript
 // regex engine so no wasm is fetched.
 import { Check, Copy } from "./icons.tsx";
-import { isValidElement, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { isValidElement, memo, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
@@ -138,7 +138,9 @@ function rowItem(f: Attachment): CSSProperties {
  * image, or a link on a line of its own; a link within a sentence stays a
  * link (its words), opening the file.
  */
-export function Prose({ children, files, file }: { children: string; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
+// Parsing Markdown is the costly part of drawing a message: drawn again only when what it is given changes (a history
+// or chat that draws again for something else leaves its texts as they are).
+export const Prose = memo(function Prose({ children, files, file }: { children: string; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
   // The components are made once and read the files as last given: new ones each render would be new component types,
   // and React would draw what they hold anew (an image fetched again, flashing, whenever the message rendered).
   const given = useRef({ files, file });
@@ -166,4 +168,4 @@ export function Prose({ children, files, file }: { children: string; files?: Map
   // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.
   const url = (u: string) => (files?.has(nameOf(u)) ? u : defaultUrlTransform(u));
   return <Markdown remarkPlugins={[remarkGfm]} components={withFiles} urlTransform={url}>{children}</Markdown>;
-}
+});

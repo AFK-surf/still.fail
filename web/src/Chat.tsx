@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
-import { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
@@ -160,12 +160,17 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
         </div>
       )}
       {messages.map((m) => {
-        const line = m.seq === divider ? <div key={`new-${m.seq}`} className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
+        const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
         const { enter, emitted } = rowOf(m);
-        return [line, (
-          <MessageRow key={m.seq} message={m} enter={enter} emitted={emitted}
-            agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory} />
-        )];
+        // Keyed as a whole: a bare [line, row] pair is placed by its index, and an older page coming in above would
+        // shift every index and draw every message anew.
+        return (
+          <Fragment key={m.seq}>
+            {line}
+            <MessageRow message={m} enter={enter} emitted={emitted}
+              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory} />
+          </Fragment>
+        );
       })}
       {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
       {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}

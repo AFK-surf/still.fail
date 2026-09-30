@@ -15,6 +15,7 @@
     "dev:site": "vite --config web/vite.demo.config.ts",
     "typecheck": "sh scripts/shapes.sh --check && python3 scripts/icons.py --check && tsgo -p tsconfig.json && tsgo -p web/tsconfig.json",
     "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\"",
+    "perf:chat": "node test/perf/chat.mjs",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
     "check": "sh scripts/check.sh all"
   },
