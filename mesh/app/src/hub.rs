@@ -167,6 +167,8 @@ pub struct Hub {
     adopted: Mutex<HashSet<String>>,
     /// Chats made lately by session key: the key their client gave them, and when (NewChat::client_key).
     client_keys: Mutex<HashMap<String, (String, i64)>>,
+    /// Titles agents gave chats someone has open, waiting until they leave (titles.rs), by thread.
+    titles: Mutex<HashMap<i64, String>>,
     me: Weak<Hub>,
 }
 
@@ -207,6 +209,7 @@ impl Hub {
             held: AtomicBool::new(false),
             adopted: Mutex::default(),
             client_keys: Mutex::default(),
+            titles: Mutex::default(),
             me: me.clone(),
         })
     }
@@ -1124,6 +1127,7 @@ impl Hub {
                         "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written)." },
                         "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
                         "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they stay in still.fail and the post links there). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
+                        "title": { "type": "string", "description": "A still.fail chat's name in lists: a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first final post in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
                     },
                     "required": ["to"],
                     "additionalProperties": false,
@@ -1308,10 +1312,14 @@ impl Hub {
         if let Some(kind) = kind {
             self.declare(key, kind);
         }
+        let titled = match args.get("title").and_then(Value::as_str) {
+            Some(title) => self.name_chat(&thread.thread, title)?,
+            None => String::new(),
+        };
         let place = thread_address(&thread.thread.channel, &thread.thread.thread_ts);
         Ok(match kind {
-            Some(kind) => format!("Posted to {place}, and recorded state {}.", kind.as_str()),
-            None => format!("Posted to {place}."),
+            Some(kind) => format!("Posted to {place}, and recorded state {}.{titled}", kind.as_str()),
+            None => format!("Posted to {place}.{titled}"),
         })
     }
 
@@ -1669,6 +1677,7 @@ pub fn post_entries(posts: &[Post]) -> Vec<TimelineEntry> {
 }
 
 mod others;
+mod titles;
 
 #[cfg(test)]
 mod tests;

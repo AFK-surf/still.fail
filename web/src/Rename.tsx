@@ -1,5 +1,5 @@
 // Naming a chat by hand, where its name is shown: the name turns into a field; Enter or leaving it keeps what was
-// typed, Escape leaves the name as it was. An empty name gives the chat back its own (its first message).
+// typed, Escape leaves the name as it was. An empty name gives the chat back its own (its agent's, else its first message).
 import { useEffect, useRef } from "react";
 import { stationApi, useStationCall } from "./api.ts";
 import { useToast } from "./toast.tsx";
@@ -20,7 +20,7 @@ export function TitleInput({ value, onDone, className }: { value: string; onDone
   };
   return (
     <input ref={input} className={`${css.titleInput} ${className ?? ""}`} defaultValue={value} maxLength={80} aria-label="对话名称"
-      placeholder="留空则用第一句话作名字"
+      placeholder="留空则自动起名"
       // Inside a chat's row (a link): pressing and clicking here stay in the field.
       onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onKeyDown={(e) => {

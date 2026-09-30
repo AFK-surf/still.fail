@@ -18,6 +18,7 @@
 ## 待部署
 
 - 补历史不播动画（history-no-arrive-anim）：只改客户端（core 的 wasm、web、安卓），station 和 cloud 不用动。web 跟着 cloud / station 的页面上线；安卓要发新版才有。`caught` 是可选字段，新旧页面和 core 混用都不坏（没有 caught 时和以前一样）。上线后验：设备上已经存了某个 chat，关掉页面，等 chat 里来几条新消息后再打开，补回来的消息直接显示，不上浮、不平滑滚动；页面开着时新来的消息照常有进场动画。
+- agent 自动起标题（auto-chat-title）：改的是 station（mesh），要重新发 station 包，各台 station 更新后才生效；web 和安卓只改了重命名框的提示文字。db 在打开时原地给 `threads` 补三列（`auto_title`、`auto_title_n`、`auto_title_changes`），旧 station 照样能读这份 db。标题是 station 算好下发的，客户端没有改字段，新旧页面怎么混用都不坏。上线后验：新开一个 chat 说句话，agent 发完带 `title` 的 final 后，侧栏标题从第一句话换成它起的名字；手动改过名的 chat 不会被改。
 
 ## 2026-09-30
 

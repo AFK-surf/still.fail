@@ -146,7 +146,7 @@ private fun askTitle(app: AppState, station: String, of: ChatOf, view: ChatView)
         SheetHead("重命名对话")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Field(text, { text = it }, "对话名称")
-            Text("留空则用第一句话作名字", fontSize = 12.sp, color = C.muted)
+            Text("留空则自动起名", fontSize = 12.sp, color = C.muted)
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }

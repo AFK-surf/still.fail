@@ -1220,7 +1220,7 @@ async fn chats_are_archived_with_their_session_or_alone_and_listed_in_the_archiv
 }
 
 #[tokio::test]
-async fn a_chat_is_renamed_by_hand_and_named_by_its_first_message_again_when_the_name_is_cleared() {
+async fn a_chat_is_renamed_by_hand_and_named_by_its_agent_or_first_message_again_when_the_name_is_cleared() {
     let t = setup().await;
     let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
     let key = made["key"].as_str().unwrap().to_string();
@@ -1238,6 +1238,13 @@ async fn a_chat_is_renamed_by_hand_and_named_by_its_first_message_again_when_the
     assert_eq!(title(&t.get("/chats").await), json!("修一下登录"), "no name: its first line again");
     t.call("PUT", &format!("/threads/{own}/title"), Some(json!({ "title": null }))).await;
     assert_eq!(title(&t.get("/chats").await), json!("修一下登录"));
+    // Its agent named it: that name, until people give one; cleared, the agent's again.
+    t.store.set_auto_title(own, "登录超时", false).unwrap();
+    assert_eq!(title(&t.get("/chats").await), json!("登录超时"));
+    t.call("PUT", &format!("/threads/{own}/title"), Some(json!({ "title": "我的名字" }))).await;
+    assert_eq!(title(&t.get("/chats").await), json!("我的名字"));
+    t.call("PUT", &format!("/threads/{own}/title"), Some(json!({ "title": "" }))).await;
+    assert_eq!(title(&t.get("/chats").await), json!("登录超时"));
     // Naming the session names its own chat too.
     t.call("POST", &format!("/sessions/{}/title", enc(&key)), Some(json!({ "title": "值班" }))).await;
     assert_eq!(title(&t.get("/chats").await), json!("值班"));

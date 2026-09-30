@@ -59,15 +59,20 @@ pub fn slack_connect_of(t: &ThreadSummary) -> Option<String> {
     t.sessions.iter().map(|m| m.connect.clone()).find(|c| c != INTERNAL_CONNECT)
 }
 
-/// Whether a chat has a title of its own, or something a person said in it to take one from.
-fn has_words(t: &ThreadSummary) -> bool {
-    t.thread.title.as_deref().is_some_and(|s| !s.trim().is_empty()) || t.first_text.as_deref().is_some_and(|s| !s.trim().is_empty())
+/// The name a chat has been given: by people, else by its agent (ThreadRow::auto_title).
+fn given_title(t: &ThreadSummary) -> Option<&str> {
+    [t.thread.title.as_deref(), t.thread.auto_title.as_deref()].into_iter().flatten().map(str::trim).find(|s| !s.is_empty())
 }
 
-/// What a thread is called: its title, else the first line a person wrote in it (Slack mentions left out, spaces
-/// collapsed), else its Slack channel (`#name`, 私信 for a direct message).
+/// Whether a chat has a title of its own, or something a person said in it to take one from.
+fn has_words(t: &ThreadSummary) -> bool {
+    given_title(t).is_some() || t.first_text.as_deref().is_some_and(|s| !s.trim().is_empty())
+}
+
+/// What a thread is called: the name people gave it, else the one its agent gave it, else the first line a person
+/// wrote in it (Slack mentions left out, spaces collapsed), else its Slack channel (`#name`, 私信 for a direct message).
 pub fn chat_title(t: &ThreadSummary, channel_name: Option<&str>) -> String {
-    if let Some(title) = t.thread.title.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(title) = given_title(t) {
         return title.to_string();
     }
     let text = without_mentions(t.first_text.as_deref().unwrap_or(""));

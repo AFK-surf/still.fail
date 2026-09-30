@@ -134,6 +134,9 @@ pub struct ThreadRow {
     pub channel: String,
     pub thread_ts: String,
     pub title: Option<String>,
+    /// The name its agent gave it (chat_post's title), shown while people have given it none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_title: Option<String>,
     pub created_by: Option<String>,
     pub created_at: i64,
     /// A chat on the page made for a session (the first one it has there): that session's own, archived and shown with
@@ -148,6 +151,16 @@ pub struct ThreadRow {
     /// When a chat of its own was last shown again by hand, as a session's shown_at.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shown_at: Option<i64>,
+}
+
+/// The name a chat's agent gave it (Store::auto_title).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AutoTitle {
+    pub title: Option<String>,
+    /// The thread's last entry when it was given.
+    pub n: i64,
+    /// How often it was changed after the first.
+    pub changes: i64,
 }
 
 /// A thread of a session, with the connect the session posts there through.
@@ -521,6 +534,9 @@ CREATE TABLE IF NOT EXISTS threads (
   hidden_at INTEGER,
   hidden_by TEXT,
   shown_at INTEGER,
+  auto_title TEXT,
+  auto_title_n INTEGER,
+  auto_title_changes INTEGER NOT NULL DEFAULT 0,
   UNIQUE (surface, channel, thread_ts)
 );
 CREATE TABLE IF NOT EXISTS thread_sessions (
@@ -672,6 +688,7 @@ fn to_thread(r: &Row) -> rusqlite::Result<ThreadRow> {
         channel: r.get("channel")?,
         thread_ts: r.get("thread_ts")?,
         title: r.get("title")?,
+        auto_title: r.get("auto_title")?,
         created_by: r.get("created_by")?,
         created_at: r.get("created_at")?,
         home: r.get("home")?,
@@ -743,6 +760,21 @@ fn add_client_column(db: &Connection) -> Result<()> {
     }
     if !has("merged", "client")? {
         db.execute_batch(&format!("BEGIN; DROP VIEW IF EXISTS merged; {MERGED} COMMIT;"))?;
+    }
+    Ok(())
+}
+
+/// The columns a chat's own name from its agent came with (threads.auto_title…), added to a database made before them
+/// the same way as add_archive_columns' (a station without them reads the database as it is).
+fn add_auto_title_columns(db: &Connection) -> Result<()> {
+    let has = |column: &str| -> Result<bool> {
+        let mut stmt = db.prepare("SELECT 1 FROM pragma_table_info('threads') WHERE name = ?")?;
+        Ok(stmt.exists([column])?)
+    };
+    for (column, kind) in [("auto_title", "TEXT"), ("auto_title_n", "INTEGER"), ("auto_title_changes", "INTEGER NOT NULL DEFAULT 0")] {
+        if !has(column)? {
+            db.execute_batch(&format!("ALTER TABLE threads ADD COLUMN {column} {kind}"))?;
+        }
     }
     Ok(())
 }
@@ -889,6 +921,7 @@ impl Store {
         db.execute_batch(SCHEMA)?;
         add_archive_columns(&db)?;
         add_client_column(&db)?;
+        add_auto_title_columns(&db)?;
         db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
         let (archive_dir, temp) = match archive {
             Some(dir) => (dir.to_path_buf(), None),
@@ -1044,6 +1077,47 @@ impl Store {
             changes.push(StoreChange::Thread { id: thread, entries: vec![] });
             Ok(())
         })
+    }
+
+    /// The name a chat's agent gave it, as it stands: the name, the entry it came at, and how often it was changed since.
+    pub fn auto_title(&self, thread: i64) -> Result<AutoTitle> {
+        self.with(|i, _| {
+            Ok(i.db
+                .query_row("SELECT auto_title, auto_title_n, auto_title_changes FROM threads WHERE id = ?", [thread], |r| {
+                    Ok(AutoTitle { title: r.get(0)?, n: r.get::<_, Option<i64>>(1)?.unwrap_or(0), changes: r.get(2)? })
+                })
+                .optional()?
+                .unwrap_or_default())
+        })
+    }
+
+    /// Names a chat as its agent did (AutoTitle): the first name, or (`changed`) another one, counted.
+    pub fn set_auto_title(&self, thread: i64, title: &str, changed: bool) -> Result<()> {
+        self.with(|i, changes| {
+            let n = i.last_entry(thread)?;
+            i.db.execute(
+                "UPDATE threads SET auto_title = ?1, auto_title_n = ?2, auto_title_changes = auto_title_changes + ?3 WHERE id = ?4",
+                params![title, n, changed as i64, thread],
+            )?;
+            changes.push(StoreChange::Thread { id: thread, entries: vec![] });
+            Ok(())
+        })
+    }
+
+    /// How many messages people have written in a thread after entry `n`.
+    pub fn people_said_after(&self, thread: i64, n: i64) -> Result<i64> {
+        self.with(|i, _| {
+            Ok(i.db.query_row(
+                "SELECT COUNT(*) FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person'",
+                params![thread, n],
+                |r| r.get(0),
+            )?)
+        })
+    }
+
+    /// When anyone last read a thread (moved their read position), in ms; None if nobody has.
+    pub fn last_read_at(&self, thread: i64) -> Result<Option<i64>> {
+        self.with(|i, _| Ok(i.db.query_row("SELECT MAX(at) FROM reads WHERE thread = ?", [thread], |r| r.get(0))?))
     }
 
     /// A session's own chat on the page (ThreadRow::home), if it has one.

@@ -124,7 +124,7 @@ impl Hub {
         let mut lines = Vec::new();
         let mut matched = 0;
         for t in &threads {
-            let titles: Vec<String> = t.thread.title.iter().chain(t.first_text.iter()).cloned().chain(t.sessions.iter().filter_map(|m| sessions.get(&m.session)?.title.clone())).collect();
+            let titles: Vec<String> = t.thread.title.iter().chain(t.thread.auto_title.iter()).chain(t.first_text.iter()).cloned().chain(t.sessions.iter().filter_map(|m| sessions.get(&m.session)?.title.clone())).collect();
             let last = t.last_message.as_ref().map(|m| m.text.clone()).unwrap_or_default();
             if !query.is_empty() {
                 let haystack = format!("{} {} {}", titles.join(" "), last, t.sessions.iter().map(|m| m.session.as_str()).collect::<Vec<_>>().join(" ")).to_lowercase();

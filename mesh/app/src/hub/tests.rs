@@ -1410,3 +1410,52 @@ fn files_posted_to_slack_stay_in_still_fail_and_the_post_links_there() {
     assert_eq!((posted.as_str(), kept.as_str()), ("看图：[天气](weather.html)\n\n<L?file=weather.html|在 still.fail 里查看图表>", "看图：[天气](weather.html)"), "placed already: kept as written");
     assert_eq!(slack_with_files("", &[file("a b.pdf")], "L"), ("<L?file=a%20b.pdf|在 still.fail 里查看附件>".into(), String::new()));
 }
+
+#[tokio::test]
+async fn an_agent_names_its_chat_once_and_again_only_after_people_said_enough_never_over_peoples_name_nor_while_it_is_open() {
+    let r = setup();
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
+    r.hub.say(thread.id, "local", "帮我看下这个", vec![], vec![], None).unwrap();
+    settle().await;
+    let to = format!("EMBER/{}", thread.thread_ts);
+    let post = |title: &str| r.call(&web, "chat_post", json!({ "to": to, "text": "ok", "title": title }));
+    let named = || r.store.get_thread(thread.id).unwrap().unwrap().auto_title;
+    assert_eq!(post("  登录\n排查。 ").await.unwrap(), format!("Posted to {to}. Titled the chat \"登录 排查\"."));
+    assert_eq!(named().as_deref(), Some("登录 排查"));
+    assert_eq!(post("登录 排查").await.unwrap(), format!("Posted to {to}."), "the same name: nothing to say");
+    assert!(post("登录问题排查").await.unwrap().contains("Title not changed: people have said too little"));
+    for n in 0..5 {
+        r.hub.say(thread.id, "local", &format!("再看 {n}"), vec![], vec![], None).unwrap();
+    }
+    settle().await;
+    assert!(post("部署失败").await.unwrap().ends_with("Titled the chat \"部署失败\"."));
+    assert_eq!(r.store.auto_title(thread.id).unwrap().changes, 1);
+    // Someone has it open: the new name waits for them to leave.
+    for n in 0..5 {
+        r.hub.say(thread.id, "local", &format!("又一件 {n}"), vec![], vec![], None).unwrap();
+    }
+    r.store.set_read("local", thread.id, r.store.last_entry(thread.id).unwrap()).unwrap();
+    settle().await;
+    assert!(post("证书过期").await.unwrap().ends_with("The chat will be titled \"证书过期\" once nobody has it open."));
+    assert_eq!(named().as_deref(), Some("部署失败"));
+    // A name people gave stays.
+    r.store.set_thread_title(thread.id, Some("值班")).unwrap();
+    assert!(post("别的").await.unwrap().contains("Title not changed: people named this chat"));
+    // No title given: the post as before.
+    assert_eq!(r.call(&web, "chat_post", json!({ "to": to, "text": "ok" })).await.unwrap(), format!("Posted to {to}."));
+    // A Slack thread is named in Slack.
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let said = r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "ok", "title": "x" })).await.unwrap();
+    assert!(said.contains("a Slack thread is named in Slack"), "{said}");
+    assert_eq!(r.thread("C1", &m.thread_ts).auto_title, None);
+}
+
+#[test]
+fn titles_are_one_short_line() {
+    assert_eq!(super::titles::clean_title("  修一下\n登录。"), "修一下 登录");
+    assert_eq!(super::titles::clean_title(&"长".repeat(40)).chars().count(), 30);
+    assert_eq!(super::titles::clean_title(" 。 "), "");
+}
