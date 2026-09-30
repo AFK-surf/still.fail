@@ -241,7 +241,7 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
                     override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                         val url = request.url.toString()
                         if (request.isForMainFrame && (url.startsWith("http://") || url.startsWith("https://"))) {
-                            view.post { if (!app.openLink(url)) try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url)) } catch (_: Exception) {} }
+                            view.post { app.openLink(url) { try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url)) } catch (_: Exception) {} } }
                         }
                         return true
                     }

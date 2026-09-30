@@ -67,27 +67,10 @@ fun glyphLayout(c: GlyphCounts): Pair<List<GlyphArc>, List<Float>> {
     return arcs to List(k) { i -> 180f + (i - (k - 1) / 2f) * step }
 }
 
-/** The counts from the home list's view: each station by its link, and one at work if a chat of it is running. */
+/** What the glyph draws: the core's counts for the list (its `glyph`), asleep while the core reaches nothing at all. */
 fun glyphCounts(view: ChatsView?, asleep: Boolean): GlyphCounts {
-    val stations = view?.stations.orEmpty()
-    val running = view?.days.orEmpty().flatMap { it.items }.filter { it.state == "run" }.map { it.station }.toSet()
-    val online = stations.filter { it.state == "online" }
-    return GlyphCounts(
-        online = online.size,
-        dim = stations.count { it.state == "offline" || it.state == "connecting" },
-        failing = stations.count { it.state == "error" },
-        working = online.count { it.station in running },
-        asleep = asleep,
-    )
-}
-
-fun glyphLabel(c: GlyphCounts): String {
-    if (c.asleep) return "没有网络"
-    val parts = mutableListOf("${c.online + c.dim + c.failing} 台 station", "${c.online} 台在线")
-    if (c.working > 0) parts += "${c.working} 台在干活"
-    if (c.dim > 0) parts += "${c.dim} 台离线"
-    if (c.failing > 0) parts += "${c.failing} 台出错"
-    return parts.joinToString("，")
+    val g = view?.glyph
+    return GlyphCounts(g?.online?.toInt() ?: 0, g?.dim?.toInt() ?: 0, g?.failing?.toInt() ?: 0, g?.working?.toInt() ?: 0, asleep)
 }
 
 @Composable

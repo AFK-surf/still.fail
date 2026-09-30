@@ -20,7 +20,7 @@ import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename } from "./Rename.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
 import { OpenJobs } from "./OpenJobs.tsx";
-import { StationGlyph, glyphCounts, glyphLabel, glyphSummary } from "./StationGlyph.tsx";
+import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -116,10 +116,10 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const counts = glyphCounts(view, status?.state === "trouble");
   const trouble = view.trouble;
   const waiting = !trouble && status?.state ? status : undefined;
-  const text = trouble?.text ?? waiting?.text ?? glyphSummary(view, counts);
-  const retry = trouble ? trouble.state !== "reconnecting" : waiting?.state === "trouble";
+  const text = trouble?.text ?? waiting?.text ?? view.glyph?.summary ?? "";
+  const retry = trouble ? !!trouble.retry : waiting?.state === "trouble";
   const row = (
-    <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state ?? waiting?.state} data-retry={retry || undefined} aria-label={`Station：${trouble?.text ?? waiting?.text ?? glyphLabel(counts)}`}>
+    <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state ?? waiting?.state} data-retry={retry || undefined} aria-label={`Station：${trouble?.text ?? waiting?.text ?? view.glyph?.label ?? ""}`}>
       <span className={nav.stationTroubleMark}><StationGlyph counts={counts} size={18} /></span>
       <span className={nav.stationTroubleText}>{text}</span>
     </NavLink>
@@ -138,11 +138,8 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
   const days = useHeldOrder(view?.days ?? [], rowKey, over, pinMoved);
-  // One station of one's own: its name says nothing, and its state is the page's.
-  const several = scope !== "local";
-  const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
-  const failed = several ? stations.filter((s) => s.state === "error") : [];
-  const loading = !view || view.loading;
+  // What the list says with no rows, the core's (a station's own page is only ever reading or empty).
+  const note = view?.note ?? { reading: !view || view.loading, failing: [], empty: false };
   const scroller = useScrolling();
   const list = useRef<HTMLDivElement | null>(null);
   const ref = useCallback((el: HTMLDivElement | null) => { list.current = el; return scroller(el); }, [scroller]);
@@ -154,9 +151,9 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   return (
     <div ref={ref} className={nav.navScroll} aria-hidden={hidden || undefined} inert={hidden || undefined} {...pointer}>
       {chats.error && !view && <p className={`${nav.navEmpty} ${nav.navError}`}>{chats.error.message}</p>}
-      {days.length === 0 && !loading && failed.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>连不上「{s.name}」，正在重试…</p></Tip>)}
-      {days.length === 0 && (loading || connecting.length > 0) && !chats.error && <SkeletonRows />}
-      {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
+      {days.length === 0 && note.failing.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>{s.text}</p></Tip>)}
+      {days.length === 0 && note.reading && !chats.error && <SkeletonRows />}
+      {days.length === 0 && view && note.empty && (
         <p className={nav.navEmpty}>{onlyMine ? "没有你参与的会话。"
           : stations.length ? "还没有会话。"
           : <>还没有 station，到 <NavLink className={chatCss.inlineLink} to={stationsPage}>设置 → Station</NavLink> 添加。</>}</p>

@@ -45,11 +45,7 @@ import fail.still.android.data.Auth
 import fail.still.android.ui.C
 import fail.still.android.ui.Illustration
 import fail.still.core.CoreException
-import java.io.IOException
-import java.net.URL
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -63,15 +59,12 @@ suspend fun signIn(app: AppState, context: Context) {
     }
 }
 
-/** A dev cloud (cloud/test/dev.ts) signs its users in without Google: alice (its admin, with a workspace) or bob (let in by nothing yet). The account goes to the core as the web's old storage would. */
+/** A dev cloud (cloud/test/dev.ts) signs its users in without Google: alice (its admin, with a workspace) or bob (let in by nothing yet), through the core (`dev.signIn`). */
 private val DEV_CLOUD = Regex("^http://(127\\.0\\.0\\.1|localhost|10\\.0\\.2\\.2):\\d+$")
 
 private suspend fun devSignIn(app: AppState, user: String) {
     try {
-        val account = withContext(Dispatchers.IO) { URL("${app.cloudOrigin}/__dev/account?user=$user").readText() }
-        app.core.call("migrate", buildJsonObject { put("accounts", "[$account]") })
-    } catch (e: IOException) {
-        app.toast = "开发云没有回应：${e.message}"
+        app.core.call("dev.signIn", buildJsonObject { put("user", user) })
     } catch (e: CoreException) {
         app.toast = "没能登录：${e.message}"
     }

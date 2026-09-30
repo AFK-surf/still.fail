@@ -12,7 +12,7 @@ import { ChatMark } from "../ChatMark.tsx";
 import { RowAside, RowPicture } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
-import { StationGlyph, glyphCounts, glyphLabel } from "../StationGlyph.tsx";
+import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
 import * as css from "./Home.css.ts";
@@ -71,8 +71,11 @@ export function Home() {
 /** The bar's way to the stations, drawn as how they are: what the core cannot reach at all (`status` in trouble) puts it to sleep. */
 function StationButton({ view }: { view: ChatsView | undefined }) {
   const app = useApp();
-  const counts = glyphCounts(view, useStatus()?.state === "trouble");
-  const label = view?.trouble ? `Station：${glyphLabel(counts)}（${view.trouble.text}）` : `Station：${glyphLabel(counts)}`;
+  const status = useStatus();
+  const counts = glyphCounts(view, status?.state === "trouble");
+  // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
+  const said = counts.asleep ? status?.text ?? "" : view?.glyph?.label ?? "";
+  const label = view?.trouble ? `Station：${said}（${view.trouble.text}）` : `Station：${said}`;
   return (
     <button type="button" className={barsCss.mNavButton} onClick={() => app.push(app.at("/settings/stations"))} aria-label={label}>
       <StationGlyph counts={counts} />
@@ -96,9 +99,9 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
       {!view ? <Note text={chats.error?.message ?? reading(status)} error={!!chats.error} /> : (
         <>
           {/* A station's link coming back is said on its rows; only with no rows to show does the list say it. */}
-          {view.days.length === 0 && (view.loading || view.stations.some((s) => s.state === "connecting")) && <Note text={reading(status)} />}
-          {view.days.length === 0 && !view.loading && view.stations.filter((s) => s.state === "error").map((s) => <Note key={`e/${s.station}`} text={`连不上「${s.name}」，正在重试…`} error />)}
-          {view.days.length === 0 && !view.loading && !view.stations.some((s) => s.state === "error" || s.state === "connecting") && <Empty view={view} onlyMine={onlyMine} />}
+          {view.note?.reading && <Note text={reading(status)} />}
+          {view.note?.failing.map((s) => <Note key={`e/${s.station}`} text={s.text} error />)}
+          {view.note?.empty && <Empty view={view} onlyMine={onlyMine} />}
           {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
           <OpenJobs scope={scope} />
           {view.days.map((day) => (

@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import fail.still.android.LocalApp
 import fail.still.android.R
+import fail.still.android.data.Buddy
 import fail.still.android.data.StillFailJson
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
@@ -165,13 +166,11 @@ internal val NEW_APP = SlackAppSettings(
 /** A picture to start from: a buddy (assets/avatars/<id>.webp, the web's) or a model maker's mark, on a colour of its own. */
 internal class AppAvatar(val id: String, val label: String, val bg: String, val mark: Int? = null, val mono: Boolean = false)
 
-@Serializable private class BuddyEntry(val id: String, val label: String = "", val bg: String = "#FFFFFF")
-
-/** still.fail's buddy at the jobs a bot is made for, so people tell bots apart by what they do. */
-private fun buddies(context: Context): List<AppAvatar> = try {
-    val text = context.assets.open("avatars/index.json").bufferedReader().use { it.readText() }
-    StillFailJson.decodeFromString(ListSerializer(BuddyEntry.serializer()), text).map { AppAvatar(it.id, it.label, it.bg) }
-} catch (_: Exception) { emptyList() }
+/** still.fail's buddy at the jobs a bot is made for, so people tell bots apart by what they do (the core's list, `buddies`). */
+private suspend fun buddies(core: fail.still.core.StillFailCore): List<AppAvatar> = try {
+    StillFailJson.decodeFromJsonElement(ListSerializer(Buddy.serializer()), core.call("buddies", kotlinx.serialization.json.JsonObject(emptyMap())))
+        .map { AppAvatar(it.id, it.label, it.bg) }
+} catch (_: CoreException) { emptyList() }
 
 /** The model makers' marks, each on its own colour. */
 private val MAKER_AVATARS = listOf(
@@ -270,7 +269,9 @@ internal class IconPick(val bitmap: ImageBitmap, val data: String)
 internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, String?) -> Unit, fresh: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val buddyList = remember { buddies(context) }
+    val core = LocalApp.current.core
+    var buddyList by remember { mutableStateOf<List<AppAvatar>>(emptyList()) }
+    LaunchedEffect(Unit) { buddyList = buddies(core) }
     // What was picked: an avatar (its id), or an upload (its edge's colour).
     var picked by remember { mutableStateOf<AppAvatar?>(null) }
     var uploadBg by remember { mutableStateOf<String?>(null) }
@@ -293,7 +294,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
         if (HEX.matches(bg)) draw(picked, bg)
     }
     // A new app starts as the general helper (else the first avatar), on its colour.
-    LaunchedEffect(Unit) { if (fresh && icon == null) (buddyList.firstOrNull { it.id == "general-helper" } ?: buddyList.firstOrNull())?.let { pick(it) } }
+    LaunchedEffect(buddyList) { if (fresh && icon == null && picked == null) (buddyList.firstOrNull { it.id == "general-helper" } ?: buddyList.firstOrNull())?.let { pick(it) } }
     val upload = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
             val b = try { toIcon(context, uri) } catch (_: Exception) { null }

@@ -56,7 +56,7 @@ class Harness(val rule: MotionRule) {
         val prefs = context.getSharedPreferences("motion-test", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("notifyAsked", true).putString("workspace", Fixtures.WS).putString("theme", if (dark) "dark" else "light").commit()
         rule.runOnUiThread { context.enableEdgeToEdge() }
-        app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9"))
+        app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", fake.core))
         stack.forEach { if (it != Screen.Home) app.push(it) }
         rule.setContent { StillFailTheme(dark) { CompositionLocalProvider(LocalApp provides app) { StillFailApp(app) } } }
         settle()

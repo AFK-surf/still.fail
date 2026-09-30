@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.StationGlyph
 import fail.still.android.ui.glyphCounts
-import fail.still.android.ui.glyphLabel
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -175,7 +174,9 @@ fun HomeScreen(current: WorkspaceEntry) {
             // at all (`status` in trouble) puts it to sleep.
             val status by rememberTopic<StatusView>(app.core, Topics.status)
             val counts = glyphCounts(all.value, status.value?.state == "trouble")
-            val label = "Station：${glyphLabel(counts)}" + (all.value?.trouble?.let { "（${it.text}）" } ?: "")
+            // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
+            val said = if (counts.asleep) status.value?.text.orEmpty() else all.value?.glyph?.label.orEmpty()
+            val label = "Station：$said" + (all.value?.trouble?.let { "（${it.text}）" } ?: "")
             Box(Modifier.size(34.dp).clip(CircleShape).clickable { app.push(Screen.Stations) }.semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
                 StationGlyph(counts)
             }
@@ -220,12 +221,11 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine:
             item(key = "wait") { Note(chats.error?.message ?: reading, error = chats.error != null) }
         } else {
             val stations = view.stations
-            val connecting = stations.filter { it.state == "connecting" }
-            val failed = stations.filter { it.state == "error" }
-            // A station's link coming back is said on its rows; only with no rows to show does the list say it.
-            if (days.isEmpty() && (view.loading || connecting.isNotEmpty())) item(key = "loading") { Note(reading) }
-            if (days.isEmpty() && !view.loading) failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
-            if (days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(current, view, onlyMine) }
+            // A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's `note`).
+            val note = view.note
+            if (note?.reading == true) item(key = "loading") { Note(reading) }
+            note?.failing?.forEach { s -> item(key = "e/${s.station}") { Note(s.text, error = true) } }
+            if (note?.empty == true) item(key = "empty") { Empty(current, view, onlyMine) }
             // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
             item(key = "open-jobs") { OpenJobs(current.workspace.id) }
             for (day in days) {

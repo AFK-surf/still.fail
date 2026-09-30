@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity() {
             // drawn with them (the theme among them), not with defaults first.
             Prefs.tellDevice(core)
             Prefs.moveIn(core, shared)
-            val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN), Prefs.first(core))
+            val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN, core), Prefs.first(core))
             // The notification settings the app kept, into the core before anything goes by them.
             made.moveNotify()
             made.inFront = Notifier.inFront
@@ -165,17 +165,11 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent?) {
         val uri = intent?.data ?: return
         val app = app ?: return
-        val parts = uri.pathSegments
-        // http too: a notification opens its chat on a dev cloud's origin (Notifier.show).
-        if ((uri.scheme == "https" || uri.scheme == "http") && parts.size == 4 && parts[0] == "o") {
+        // What the link opens is the core's (`link.parse`); http too: a notification opens its chat on a dev cloud's
+        // origin (Notifier.show). An item opens over the list; an invitation or a chat's reference as tapped in the app.
+        if (uri.scheme == "https" || uri.scheme == "http") {
             setIntent(Intent())
-            app.openItem(parts[1], parts[2], parts[3], uri.getQueryParameter("service")?.takeIf { it.isNotEmpty() })
-            return
-        }
-        // An invitation's link, or a link to a chat as chats refer to each other: as a link tapped in the app.
-        if (uri.scheme == "https" && (parts == listOf("invite") || parts.firstOrNull() == "w")) {
-            setIntent(Intent())
-            app.openLink(uri.toString())
+            app.openLink(uri.toString(), outside = true)
             return
         }
         if (uri.scheme !in AUTH_SCHEMES || uri.host != "auth") return

@@ -53,6 +53,17 @@ data class AgentWait (
 	val seconds: Long? = null
 )
 
+/// A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):
+/// `file` is under /releases/.
+@Serializable
+data class AppRelease (
+	val versionCode: Long,
+	val versionName: String,
+	val file: String,
+	val sha256: String,
+	val size: Long
+)
+
 /// An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
 /// archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
 /// is more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere).
@@ -135,6 +146,14 @@ data class Bind (
 	val model: String? = null,
 	val effort: String? = null,
 	val profile: String? = null
+)
+
+/// A buddy a Slack app can wear (`buddies`): its picture is avatars/<id>.webp (and .thumb.webp), on `bg`.
+@Serializable
+data class Buddy (
+	val id: String,
+	val label: String,
+	val bg: String
 )
 
 /// A person as the core names them: `display` is 你 for the viewer.
@@ -420,7 +439,9 @@ data class Profile (
 	/// first: how the list to enable them from is laid out.
 	val series: List<ModelSeries>,
 	/// How many of the models it could run are enabled, in words.
-	val modelsText: String
+	val modelsText: String,
+	/// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
+	val available: List<String>? = null
 )
 
 /// Used up until a time (or no one knows when), in words.
@@ -859,6 +880,15 @@ data class Link (
 	val message: String? = null
 )
 
+/// A chat's link to its station while it is not as it should be: `tone` trouble (down; `detail` why) | busy (coming
+/// back), and the line that says it.
+@Serializable
+data class LinkShown (
+	val tone: String,
+	val text: String,
+	val detail: String? = null
+)
+
 /// An item's page: its chat (with the viewer's read position), or its agent before it has one.
 @Serializable
 data class ChatView (
@@ -892,7 +922,9 @@ data class ChatView (
 	/// The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it.
 	val key: String? = null,
 	/// Why the station could not make it, the last time it was tried.
-	val failed: String? = null
+	val failed: String? = null,
+	/// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
+	val connection: LinkShown? = null
 )
 
 @Serializable
@@ -906,14 +938,44 @@ data class StationState (
 )
 
 /// What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
+/// `retry`: down, not only coming back, so it can be tried again at once (absent from a core before it).
 @Serializable
 data class StationTrouble (
 	val text: String,
-	val state: String
+	val state: String,
+	val retry: Boolean? = null
 )
 
 /// Whose pictures lead the rows of a list (`ChatsView::leading`).
 typealias Lead = String
+
+/// The stations at a glance (the glyph): how many are online, offline or connecting (`dim`), failing, and at work; the
+/// line beside it while all is well (the one station by name, else how many; and who works), and all of it in words.
+@Serializable
+data class StationsGlyph (
+	val online: Long,
+	val dim: Long,
+	val failing: Long,
+	val working: Long,
+	val summary: String,
+	val label: String
+)
+
+@Serializable
+data class StationFailing (
+	val station: String,
+	val text: String,
+	val message: String? = null
+)
+
+/// What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
+/// says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
+@Serializable
+data class ListNote (
+	val reading: Boolean,
+	val failing: List<StationFailing>,
+	val empty: Boolean
+)
 
 @Serializable
 data class ChatsView (
@@ -927,7 +989,10 @@ data class ChatsView (
 	/// How many people the scope has (one on a station's own page), for how rows are pictured; absent until known.
 	val members: Long? = null,
 	/// Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone).
-	val leading: Lead? = null
+	val leading: Lead? = null,
+	/// The stations at a glance, and what the list says with no rows; absent from a core before them.
+	val glyph: StationsGlyph? = null,
+	val note: ListNote? = null
 )
 
 @Serializable
@@ -1220,6 +1285,19 @@ data class KeptTabs (
 	val active: String? = null
 )
 
+/// What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
+/// item (`item`: its `session`, and `service` its web service); the call answers null for any other link.
+@Serializable
+data class LinkTarget (
+	val opens: String,
+	val token: String? = null,
+	val workspace: String? = null,
+	val station: String? = null,
+	val chat: String? = null,
+	val session: String? = null,
+	val service: String? = null
+)
+
 @Serializable
 data class TimelineEntry (
 	val at: String? = null,
@@ -1307,7 +1385,9 @@ data class MachineLogin (
 	/// Its allowance, as a profile on it would show (none until read, or when it cannot be).
 	val quota: Quota? = null,
 	/// In a line, as the pages show it.
-	val text: String
+	val text: String,
+	/// Offered for a profile: signed in, on a plan, and no profile on it yet.
+	val offered: Boolean? = null
 )
 
 @Serializable
@@ -1334,6 +1414,12 @@ data class MadeSlackApp (
 	val state: String? = null,
 	val installed: Boolean,
 	val installedTeam: String? = null
+)
+
+@Serializable
+data class MemoryFile (
+	val path: String,
+	val text: String
 )
 
 @Serializable
@@ -1438,6 +1524,9 @@ data class StationView (
 	val name: String,
 	/// Its line in a list: offline since when, or what it is and whether its agents work.
 	val summary: String,
+	/// Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线).
+	val face: String? = null,
+	val line: String? = null,
 	val online: Boolean,
 	/// Seconds, from still.fail cloud.
 	val lastSeen: Long? = null,
@@ -1617,6 +1706,26 @@ data class SessionDetail (
 	val session: Session,
 	val threads: List<ChatThread>,
 	val turns: List<TurnRecord>
+)
+
+/// A skill: `body` its text as people read it (no frontmatter), `about` when it applies (a project's without its
+/// 项目记忆：); both absent from a core before them.
+@Serializable
+data class SkillFile (
+	val name: String,
+	val description: String,
+	val project: Boolean,
+	val builtin: Boolean,
+	val text: String,
+	val body: String? = null,
+	val about: String? = null
+)
+
+/// The agents' memory on a station (`memory.get`): the global one, and the skills (projects' memories among them).
+@Serializable
+data class StationMemory (
+	val global: MemoryFile,
+	val skills: List<SkillFile>
 )
 
 /// One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble.

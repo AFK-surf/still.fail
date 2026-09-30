@@ -110,6 +110,8 @@ struct Inner {
     /// Preview sockets open (`preview.socket`), by client and the name its UI gave each: where `preview.socket.send`
     /// puts the page's messages.
     preview_sockets: Rc<RefCell<HashMap<(ClientId, String), SocketInbox>>>,
+    /// What UIs ask that is no station's or account's call (asks.rs).
+    asks: crate::asks::Asks,
 }
 
 struct Socket {
@@ -224,6 +226,7 @@ impl Core {
                 wakes,
                 calls: RefCell::default(),
                 preview_sockets: Rc::default(),
+                asks: crate::asks::Asks::new(host.clone()),
             }
         });
         // Whom each account reaches, as the data center has it from the last run: views put together before the
@@ -684,6 +687,7 @@ impl Inner {
                 }
                 crate::ops::Target::Station(station) => {
                     let addr = StationAddr::parse(&station)?;
+                    let path = op.path.clone();
                     let machine = op.method == "GET" && op.path.starts_with("/machine-sessions");
                     let mut result = match (self.stations.request(&addr, op.method, &op.path, op.body.clone()).await, op.fallback) {
                         // A station from before the request knew another way.
@@ -698,7 +702,11 @@ impl Inner {
                             crate::choose::machine_meta(s, now);
                         }
                     }
-                    result
+                    // What the clients show of it, put in here (looks.rs).
+                    result.map(|mut value| {
+                        crate::looks::answer(op.method, &path, &mut value);
+                        value
+                    })
                 }
             },
             // Out of the chat lists at once while its station archives it; back if it could not.
@@ -939,6 +947,7 @@ impl Inner {
                     _ => Err(CoreError::new("not_found", "这个 WebSocket 已经关了")),
                 }
             }
+            Call::Ask(ask) => self.asks.run(ask, &self.accounts).await,
             Call::Migrate { accounts, device } => {
                 if let Some(accounts) = accounts {
                     self.accounts.migrate(accounts).await?;
@@ -1712,6 +1721,8 @@ enum Call {
     PrefsSet { patch: Value, fill: bool },
     /// What the device is, as its host says once at start (prefs.rs).
     ClientDevice { facts: Value },
+    /// A link's target, a newer app, a picture, the buddies, a dev sign-in (asks.rs).
+    Ask(crate::asks::Ask),
 }
 
 impl Call {
@@ -1737,6 +1748,7 @@ impl Call {
             Call::Attend(_) | Call::ChatRefsKeep { .. } => None,
             Call::Choose { params, .. } => params.get("station").and_then(Value::as_str),
             Call::PrefsSet { .. } | Call::ClientDevice { .. } => None,
+            Call::Ask(_) => None,
         }
     }
 }
@@ -2083,10 +2095,14 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             let session = params.get("session").and_then(Value::as_str).unwrap_or("").to_string();
             Call::ChatArchive { op, thread: params.get("thread").and_then(Value::as_u64), session, archived: params.get("archived").and_then(Value::as_bool) == Some(true) }
         }
-        _ => match crate::ops::request(name, &params_or_empty(params)) {
-            Some(op) => Call::Op(op?),
-            None => return Err(CoreError::new("unknown_call", format!("没有这个调用：{name}"))),
-        },
+        _ => {
+            let params = params_or_empty(params);
+            match (crate::asks::parse(name, &params), crate::ops::request(name, &params)) {
+                (Some(ask), _) => Call::Ask(ask?),
+                (None, Some(op)) => Call::Op(op?),
+                (None, None) => return Err(CoreError::new("unknown_call", format!("没有这个调用：{name}"))),
+            }
+        }
     })
 }
 

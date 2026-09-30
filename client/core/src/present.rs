@@ -372,6 +372,13 @@ pub fn profile(p: &mut Value) {
     all.dedup();
     let text = if all.is_empty() { "还没有列出模型".to_string() } else { format!("已启用 {} / {} 个模型", enabled.len(), all.len()) };
     let by_series = series(&all);
+    // What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
+    let mut available: Vec<String> = Vec::new();
+    for m in found.iter().filter_map(Value::as_str).chain(enabled.iter().copied()) {
+        if !available.iter().any(|a| a == m) {
+            available.push(m.to_string());
+        }
+    }
     let names: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
         .chain(p.get("model").into_iter())
         .filter_map(Value::as_str).filter(|m| !m.is_empty()).map(|m| (m.to_string(), json!(stillfail_shapes::model::name(m)))).collect();
@@ -379,6 +386,7 @@ pub fn profile(p: &mut Value) {
     p["names"] = Value::Object(names);
     p["series"] = by_series;
     p["modelsText"] = json!(text);
+    p["available"] = json!(available);
 }
 
 /// Models by series, newest first (stillfail_shapes::model::order), those of no known series last as 其他:
@@ -507,6 +515,15 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
             }
             value.get_mut("connects").and_then(Value::as_array_mut).into_iter().flatten().for_each(connect);
             value.get_mut("profiles").and_then(Value::as_array_mut).into_iter().flatten().for_each(profile);
+            // The machine's own logins a profile could use now: signed in, on a plan, and no profile on it yet.
+            let taken: Vec<Value> = value.get("profiles").and_then(Value::as_array).into_iter().flatten()
+                .filter(|p| p.get("machine").and_then(Value::as_bool) == Some(true)).filter_map(|p| p.get("runtime").cloned()).collect();
+            for l in value.get_mut("machineLogins").and_then(Value::as_array_mut).into_iter().flatten() {
+                let offered = l.get("loggedIn").and_then(Value::as_bool) == Some(true)
+                    && l.get("plan").is_some_and(|p| p.as_str().is_some_and(|p| !p.is_empty()))
+                    && !l.get("runtime").is_some_and(|r| taken.contains(r));
+                l["offered"] = json!(offered);
+            }
         }
         // Its agents' jobs, each with its dot and words (jobs.rs); a job, its output.
         Topic::Chat { .. } => {
@@ -596,6 +613,26 @@ mod tests {
             {"name": "Sonnet", "models": ["claude-sonnet-5"]},
             {"name": "其他", "models": ["my-model"]},
         ]));
+    }
+
+    #[test]
+    fn what_a_profile_can_enable_and_which_machine_logins_are_offered() {
+        let mut p = json!({"models": ["mine", "b"], "check": {"models": ["a", "b"]}});
+        profile(&mut p);
+        assert_eq!(p["available"], json!(["a", "b", "mine"]));
+        let c = Clock { now: 0.0, offset_min: 0 };
+        let mut o = json!({
+            "profiles": [{"runtime": "claude", "machine": true, "models": []}],
+            "machineLogins": [
+                {"runtime": "claude", "loggedIn": true, "plan": "max"},
+                {"runtime": "codex", "loggedIn": true, "plan": "plus"},
+                {"runtime": "codex", "loggedIn": true, "plan": null},
+                {"runtime": "codex", "loggedIn": false, "plan": "plus"},
+            ],
+        });
+        decorate(&Topic::Overview { station: "w/s".into() }, &mut o, c);
+        let offered: Vec<bool> = o["machineLogins"].as_array().unwrap().iter().map(|l| l["offered"] == true).collect();
+        assert_eq!(offered, [false, true, false, false]);
     }
 
     #[test]

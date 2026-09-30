@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStatus, type Link, type StatusView } from "./api.ts";
+import { useStatus, type LinkShown, type StatusView } from "./api.ts";
 import { core } from "./core/react.ts";
 import { StatusDot, Tip } from "./ui.tsx";
 import * as css from "./Connection.css.ts";
@@ -16,9 +16,9 @@ type Shown = { tone: "busy" | "trouble" | "back"; text: string; detail?: string 
  * `status`: what, how long, how fast): nothing while all is well. Down, it offers to try again at once (no more
  * waiting, the connections tried against new ones: client/core/src/wake.rs `retry`); back, it says so a moment.
  */
-export function ConnectionPill({ link, name, phone }: { link?: Link | undefined; name?: string | undefined; phone?: boolean }) {
+export function ConnectionPill({ connection, phone }: { connection?: LinkShown | undefined; phone?: boolean }) {
   const status = useStatus();
-  const now = shownOf(link, name, status);
+  const now = shownOf(connection, status);
   const [back, setBack] = useState(false);
   const was = useRef(false);
   useEffect(() => {
@@ -60,18 +60,10 @@ export function ConnectionPill({ link, name, phone }: { link?: Link | undefined;
   return <Tip label={items} side="bottom">{pill}</Tip>;
 }
 
-function shownOf(link: Link | undefined, name: string | undefined, status: StatusView | undefined): Shown | null {
-  const station = name ? `「${name}」` : " station";
-  if (link?.state === "offline" || link?.state === "error") return { tone: "trouble", text: `连不上${station}`, detail: why(link.message) };
-  if (link?.state === "reconnecting") return { tone: "busy", text: `正在重连${station}`, items: status?.items };
+/** The chat's link as the core says it (its `connection`) while down or coming back, else what the core waits on. */
+function shownOf(connection: LinkShown | undefined, status: StatusView | undefined): Shown | null {
+  if (connection) return { tone: connection.tone === "trouble" ? "trouble" : "busy", text: connection.text, detail: connection.detail, items: connection.tone === "busy" ? status?.items : undefined };
   if (status?.state === "trouble") return { tone: "trouble", text: status.text ?? "连不上 still.fail cloud", items: status.items };
   if (status?.state === "slow") return { tone: "busy", text: status.text ?? "", items: status.items };
   return null;
-}
-
-/** Why the link is down, less its own "连不上这台 station：" (the pill says that already). */
-function why(message: string | undefined): string | undefined {
-  if (!message) return undefined;
-  const at = message.indexOf("：");
-  return at >= 0 && message.slice(0, at).includes("连不上") ? message.slice(at + 1) : message;
 }

@@ -5,8 +5,8 @@
 import { useStation } from "../station.tsx";
 import { Check, External, ImageUpload, ShieldCheck } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
-import { useTopic } from "../core/react.ts";
-import { useAction, useApi, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
+import { core, useTopic } from "../core/react.ts";
+import { useAction, useApi, type Buddy, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Field, ICON, Section, Tip } from "../ui.tsx";
 import * as css from "./SlackApp.css.ts";
@@ -177,13 +177,13 @@ export const MAKERS: Avatar[] = [
 ];
 
 /**
- * ember's buddy at the jobs a bot is made for, so people tell bots apart by what they do (web/public/avatars/:
- * index.json, and each as <id>.webp (1024 px, for the icon) with a small <id>.thumb.webp (128 px, for the list)).
+ * ember's buddy at the jobs a bot is made for, so people tell bots apart by what they do: the list is the core's
+ * (`buddies`, from web/public/avatars/index.json), each drawn from <id>.webp (1024 px, for the icon) with a small
+ * <id>.thumb.webp (128 px, for the list). A core from before it has none to offer.
  */
 let buddies: Promise<Avatar[]> | null = null;
 function loadBuddies(): Promise<Avatar[]> {
-  buddies ??= fetch(`${BASE}avatars/index.json`).then((r) => r.json() as Promise<{ id: string; label: string; bg: string }[]>)
-    .then((list) => list.map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.webp`, thumb: `${BASE}avatars/${a.id}.thumb.webp` })), () => []);
+  buddies ??= core().call("buddies").then((list) => (list as Buddy[]).map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.webp`, thumb: `${BASE}avatars/${a.id}.thumb.webp` })), () => []);
   return buddies;
 }
 export function useBuddies(): Avatar[] | null {

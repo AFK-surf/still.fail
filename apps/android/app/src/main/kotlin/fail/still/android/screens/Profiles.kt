@@ -526,8 +526,7 @@ fun MachineLoginOffers(station: String, overview: Overview, inset: androidx.comp
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf<String?>(null) }
-    val taken = overview.profiles.filter { it.machine == true }.map { it.runtime }.toSet()
-    val offers = overview.machineLogins.orEmpty().filter { it.loggedIn && it.plan != null && it.runtime !in taken }
+    val offers = overview.machineLogins.orEmpty().filter { it.offered == true }
     if (offers.isEmpty()) return
     Text("这台机器上已经登录了", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = inset + 12.dp, end = inset + 12.dp, top = 8.dp, bottom = 4.dp))
     Column(Modifier.padding(horizontal = inset).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {

@@ -49,7 +49,6 @@ import fail.still.android.Screen
 import fail.still.android.data.ACCESS_LABEL
 import fail.still.android.data.Profile
 import fail.still.android.ui.QuotaRings
-import fail.still.android.data.available
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
@@ -77,9 +76,9 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun Buddy(s: StationView, size: Int = 40) {
     val dark = C.dark
-    val face = when {
-        !s.online -> if (dark) R.drawable.buddy_offline_dark else R.drawable.buddy_offline
-        (s.overview?.counts?.running ?: 0) > 0 -> if (dark) R.drawable.buddy_working_dark else R.drawable.buddy_working
+    val face = when (s.face) {
+        "offline" -> if (dark) R.drawable.buddy_offline_dark else R.drawable.buddy_offline
+        "working" -> if (dark) R.drawable.buddy_working_dark else R.drawable.buddy_working
         else -> if (dark) R.drawable.buddy_idle_dark else R.drawable.buddy_idle
     }
     Image(painterResource(face), null, Modifier.size(size.dp))
@@ -144,7 +143,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
     Column(Modifier.fillMaxSize()) {
         val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
-            { Text(st.host?.cpuModel?.ifEmpty { null } ?: if (st.online) "在线" else "离线", fontSize = 11.sp, color = C.muted, maxLines = 1) }
+            { Text(st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
         if (s == null) return Loading(stations.error?.message ?: "正在读取…")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {

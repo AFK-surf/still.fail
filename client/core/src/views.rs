@@ -423,6 +423,28 @@ impl Views {
             return None;
         }
         self.sync(view);
+        // A chat's link, when not as it should be, in words (looks.rs).
+        if let Topic::Chat { station, .. } = view {
+            return self.chat_view(view).map(|value| value.map(|mut v| {
+                if v.get("link").is_some_and(Value::is_object) {
+                    v["connection"] = crate::looks::link_shown(&v["link"], &self.station_name(station));
+                }
+                v
+            }));
+        }
+        self.chat_view(view)
+    }
+
+    /// A station's name as its workspace has it (none on a station's own page), else its id.
+    fn station_name(&self, station: &str) -> String {
+        let Some((scope, id)) = station.split_once('/') else { return String::new() };
+        match self.stations(scope) {
+            Some(Ok(stations)) => stations.into_iter().find(|s| s.address == station).map(|s| s.name).unwrap_or_else(|| id.to_string()),
+            _ => id.to_string(),
+        }
+    }
+
+    fn chat_view(&self, view: &Topic) -> Option<Result<Value>> {
         match view {
             Topic::Chats { scope, mine } => self.chats(scope, *mine),
             Topic::ChatSearch { scope, query, station, exclude, limit } => {
@@ -797,19 +819,23 @@ impl Views {
         // One says itself; several are counted, marked by the worst.
         let trouble = match troubles.as_slice() {
             [] => Value::Null,
-            [(state, text)] => json!({ "text": text, "state": state }),
+            // Down, not only coming back, it can be tried again at once.
+            [(state, text)] => json!({ "text": text, "state": state, "retry": *state != "reconnecting" }),
             all => {
                 let worst = ["error", "offline", "reconnecting"].into_iter().find(|w| all.iter().any(|(s, _)| s == w)).unwrap_or("offline");
-                json!({ "text": format!("{} 台 station 异常", all.len()), "state": worst })
+                json!({ "text": format!("{} 台 station 异常", all.len()), "state": worst, "retry": worst != "reconnecting" })
             }
         };
+        // The glyph, and what the list says with no rows (looks.rs).
+        let glyph = crate::looks::glyph(&states, &days);
+        let note = crate::looks::list_note(scope == "local", &states, &days, loading);
         // How many people the scope has: one on a station's own page; a workspace's members, once known.
         let members = if scope == "local" { Some(1) } else {
             self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).map(Vec::len))
         };
         // Whose pictures lead, by the device's setting (prefs.rs).
         let leading = crate::prefs::leading(self.ok(Topic::Prefs).as_ref(), members);
-        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members, "leading": leading })))
+        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members, "leading": leading, "glyph": glyph, "note": note })))
     }
 
     /// Rows newest first, grouped by the viewer's local calendar day; those the viewer pinned above them all, in a group
@@ -879,6 +905,7 @@ impl Views {
             };
             json!({
                 "station": s.address, "id": s.id, "name": s.name, "summary": summary,
+                "face": crate::looks::face(s.online, overview.as_ref()), "line": crate::looks::station_line(s.online, host.as_ref()),
                 "online": s.online, "lastSeen": s.last_seen, "version": s.version,
                 "link": self.link(&s.address),
                 "runtimes": runtimes(overview.as_ref()),
@@ -1890,6 +1917,9 @@ mod tests {
                 {"station": "ws/c", "id": "c", "name": "gamma", "state": "connecting"},
             ]));
             assert_eq!(v["days"], json!([]));
+            // No rows yet: the list says it is reading; the glyph has the three dim (looks.rs).
+            assert_eq!(v["note"], json!({"reading": true, "failing": [], "empty": false}));
+            assert_eq!((v["glyph"]["dim"].as_u64(), v["glyph"]["online"].as_u64(), v["glyph"]["summary"].as_str()), (Some(3), Some(0), Some("3 台 station")));
             // gamma is not reached: down.
             t.set(link("ws/c"), json!({"state": "offline"}));
 
@@ -1925,15 +1955,17 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(ids(&v), vec!["1", "1", "s1"]);
             assert_eq!(v["stations"][1]["state"], "offline");
+            assert_eq!(v["glyph"]["label"], "3 台 station，1 台在线，2 台离线");
+            assert_eq!(v["note"]["reading"], false);
             // Under the list, what is wrong: beta and gamma offline, counted.
-            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline"}));
+            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline", "retry": true}));
             // Each of its rows says so itself; the online station's say nothing.
             let items = &v["days"][0]["items"];
             assert_eq!((items[0]["offline"].clone(), items[1]["offline"].clone()), (Value::Null, json!("beta 离线")));
             t.set(link("ws/b"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             // One wrong station says itself.
-            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline"}));
+            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline", "retry": true}));
 
             // One station failing shows as that station's state; the other's rows stay.
             t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
@@ -1949,7 +1981,7 @@ mod tests {
             assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][0]["message"].as_str()), (Some("connecting"), Some("连接断开了")));
             assert_eq!(ids(&v).len(), 2);
             // alpha coming back and gamma offline: counted, marked by the worse.
-            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline"}));
+            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline", "retry": true}));
             // Its rows say so themselves; the other station's say nothing. Failing and retried, the same, in other words.
             let reconnecting = |v: &Value| v["days"][0]["items"].as_array().unwrap().iter().map(|i| (i["station"].as_str().unwrap().to_string(), i["reconnecting"].clone())).collect::<Vec<_>>();
             assert!(reconnecting(&v).contains(&("ws/a".into(), json!("正在重连 alpha…"))), "{v}");
@@ -2295,7 +2327,7 @@ mod tests {
 
     /// A value without what the clients show of it (present.rs): what a view puts together, alone.
     fn plain(v: &Value) -> Value {
-        const SHOWN: [&str; 32] = ["time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary", "modelsText"];
+        const SHOWN: [&str; 39] = ["face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary", "modelsText"];
         match v {
             Value::Array(items) => Value::Array(items.iter().map(plain).collect()),
             // An absent option is left out, as the shapes send it.

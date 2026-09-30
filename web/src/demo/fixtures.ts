@@ -219,9 +219,13 @@ export function chatsView(chats: DemoChat[]): ChatsView {
   const startOfDay = new Date().setHours(0, 0, 0, 0);
   const today = items.filter((item) => item.lastActiveAt >= Math.min(startOfDay, ago(12 * 60)));
   const earlier = items.filter((item) => !today.includes(item));
+  const working = items.some((i) => i.state === "run") ? 1 : 0;
   return {
     me: { id: "local" }, stations: [{ id: "local", station: "local", name: "", state: "online" }], loading: false,
     days: [{ daysAgo: 0, at: Date.now(), label: "今天", items: today }, ...(earlier.length ? [{ daysAgo: 1, at: ago(24 * 60), label: "昨天", items: earlier }] : [])],
+    // As the core puts them (client/core/src/looks.rs): the one station of its own page, at work while a chat runs.
+    glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 在干活" : "这台机器", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
+    note: { reading: false, failing: [], empty: items.length === 0 },
   };
 }
 

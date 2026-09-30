@@ -165,7 +165,7 @@ class OverMotionTest {
         val prefs = context.getSharedPreferences("motion-test", Context.MODE_PRIVATE)
         prefs.edit().clear().putString("theme", "light").commit()
         rule.runOnUiThread { context.enableEdgeToEdge() }
-        val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9"))
+        val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", h.fake.core))
         val file = Attachment(name = "wwl.png", path = "ws/c-1/wwl.png", size = bytes.size.toLong(), width = 800, height = 600)
         rule.setContent {
             StillFailTheme(false) {
@@ -260,7 +260,7 @@ class OverMotionTest {
         val prefs = context.getSharedPreferences("motion-test", Context.MODE_PRIVATE)
         prefs.edit().clear().putString("theme", "light").commit()
         rule.runOnUiThread { context.enableEdgeToEdge() }
-        val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9"))
+        val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", h.fake.core))
         val file = Attachment(name = "clip.mp4", path = "ws/c-1/clip.mp4", size = bytes.size.toLong(), width = 320, height = 240)
         rule.setContent {
             StillFailTheme(false) {

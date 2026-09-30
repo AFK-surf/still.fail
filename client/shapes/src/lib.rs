@@ -624,6 +624,9 @@ pub struct Profile {
     pub series: Vec<ModelSeries>,
     /// How many of the models it could run are enabled, in words.
     pub models_text: String,
+    /// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
+    #[serde(default)]
+    pub available: Vec<String>,
 }
 
 /// Models of one series (Opus), newest first.
@@ -787,6 +790,9 @@ pub struct MachineLogin {
     pub quota: Option<Quota>,
     /// In a line, as the pages show it.
     pub text: String,
+    /// Offered for a profile: signed in, on a plan, and no profile on it yet.
+    #[serde(default)]
+    pub offered: bool,
 }
 
 /// A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
@@ -1062,12 +1068,140 @@ pub struct StationState {
 }
 
 /// What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
+/// `retry`: down, not only coming back, so it can be tried again at once (absent from a core before it).
 #[typeshare]
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct StationTrouble {
     pub text: String,
     pub state: String,
+    pub retry: Option<bool>,
+}
+
+/// The stations at a glance (the glyph): how many are online, offline or connecting (`dim`), failing, and at work; the
+/// line beside it while all is well (the one station by name, else how many; and who works), and all of it in words.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StationsGlyph {
+    #[typeshare(serialized_as = "I54")]
+    pub online: i64,
+    #[typeshare(serialized_as = "I54")]
+    pub dim: i64,
+    #[typeshare(serialized_as = "I54")]
+    pub failing: i64,
+    #[typeshare(serialized_as = "I54")]
+    pub working: i64,
+    pub summary: String,
+    pub label: String,
+}
+
+/// What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
+/// says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListNote {
+    pub reading: bool,
+    pub failing: Vec<StationFailing>,
+    pub empty: bool,
+}
+
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StationFailing {
+    pub station: String,
+    pub text: String,
+    pub message: Option<String>,
+}
+
+/// A chat's link to its station while it is not as it should be: `tone` trouble (down; `detail` why) | busy (coming
+/// back), and the line that says it.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkShown {
+    pub tone: String,
+    pub text: String,
+    pub detail: Option<String>,
+}
+
+/// What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
+/// item (`item`: its `session`, and `service` its web service); the call answers null for any other link.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkTarget {
+    pub opens: String,
+    pub token: Option<String>,
+    pub workspace: Option<String>,
+    pub station: Option<String>,
+    pub chat: Option<String>,
+    pub session: Option<String>,
+    pub service: Option<String>,
+}
+
+/// A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):
+/// `file` is under /releases/.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppRelease {
+    #[typeshare(serialized_as = "I54")]
+    pub version_code: i64,
+    pub version_name: String,
+    pub file: String,
+    pub sha256: String,
+    #[typeshare(serialized_as = "I54")]
+    pub size: i64,
+}
+
+/// A buddy a Slack app can wear (`buddies`): its picture is avatars/<id>.webp (and .thumb.webp), on `bg`.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Buddy {
+    pub id: String,
+    pub label: String,
+    pub bg: String,
+}
+
+/// The agents' memory on a station (`memory.get`): the global one, and the skills (projects' memories among them).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StationMemory {
+    pub global: MemoryFile,
+    pub skills: Vec<SkillFile>,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryFile {
+    pub path: String,
+    pub text: String,
+}
+
+/// A skill: `body` its text as people read it (no frontmatter), `about` when it applies (a project's without its
+/// 项目记忆：); both absent from a core before them.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillFile {
+    pub name: String,
+    pub description: String,
+    pub project: bool,
+    pub builtin: bool,
+    pub text: String,
+    pub body: Option<String>,
+    pub about: Option<String>,
 }
 
 /// What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a
@@ -1564,6 +1698,9 @@ pub struct ChatsView {
     pub members: Option<i64>,
     /// Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone).
     pub leading: Option<Lead>,
+    /// The stations at a glance, and what the list says with no rows; absent from a core before them.
+    pub glyph: Option<StationsGlyph>,
+    pub note: Option<ListNote>,
 }
 
 /// Used up until a time (or no one knows when), in words.
@@ -1902,6 +2039,8 @@ pub struct ChatView {
     pub key: Option<String>,
     /// Why the station could not make it, the last time it was tried.
     pub failed: Option<String>,
+    /// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
+    pub connection: Option<LinkShown>,
 }
 
 #[typeshare]
@@ -1943,6 +2082,9 @@ pub struct StationView {
     pub name: String,
     /// Its line in a list: offline since when, or what it is and whether its agents work.
     pub summary: String,
+    /// Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线).
+    pub face: Option<String>,
+    pub line: Option<String>,
     pub online: bool,
     /// Seconds, from still.fail cloud.
     #[typeshare(serialized_as = "Option<I54>")]

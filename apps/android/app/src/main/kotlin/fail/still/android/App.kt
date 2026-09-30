@@ -73,7 +73,9 @@ import fail.still.android.data.decode
 import fail.still.core.CoreException
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import fail.still.android.data.LinkTarget
 import fail.still.android.data.StationApi
+import fail.still.android.data.StillFailJson
 import fail.still.android.data.Topics
 import fail.still.android.data.entries
 import fail.still.android.data.rememberTopic
@@ -276,44 +278,53 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     val chatAgents = HashMap<String, Set<String>>()
 
     /**
-     * still.fail's own links in a chat (cloud origin /o/<workspace>/<station>/<session>, as agents post them) open here, as
-     * pages over the one they are on: a web service of one of this chat's agents (`?service=<job>`) over the chat,
-     * another session as its chat (and its service over that). Answers false for any other link (the system opens it).
+     * still.fail's own links in a chat open here, as pages over the one they are on: the core says what a link opens
+     * (`link.parse`: an invitation, a chat's page, an item and its web service); a web service of one of this chat's
+     * agents (`?service=<job>`) over the chat, another session as its chat (and its service over that). Any other link
+     * goes to `orElse` (the system opens it). `outside`: a link from outside the app (a notification, the browser),
+     * whose item opens over the list.
      */
-    fun openLink(url: String): Boolean {
-        val uri = android.net.Uri.parse(url)
-        val origin = android.net.Uri.parse(cloudOrigin)
-        val parts = uri.pathSegments
-        val same = uri.scheme == origin.scheme && uri.host == origin.host && uri.port == origin.port
-        // The production cloud answers on its new host and its old one alike: a link with either opens here.
-        val sameCloud = origin.host in CLOUD_HOSTS && uri.scheme == "https" && uri.host in CLOUD_HOSTS && uri.port == -1
-        // An invitation's link (<cloud>/invite#<token>): what it leads to, in a sheet, before it is accepted.
-        if ((same || sameCloud) && parts == listOf("invite") && !uri.fragment.isNullOrEmpty()) {
-            fail.still.android.screens.openInvite(this, uri.fragment!!)
-            return true
+    fun openLink(url: String, outside: Boolean = false, orElse: () -> Unit = {}) {
+        scope.launch {
+            val target = try {
+                core.call("link.parse", buildJsonObject { put("url", url) }).takeIf { it !is JsonNull }
+                    ?.let { StillFailJson.decodeFromJsonElement(LinkTarget.serializer(), it) }
+            } catch (_: CoreException) { null }
+            if (target == null || !open(target, outside)) orElse()
         }
-        // A reference to another chat (web/src/chatRefs.ts): its page, /w/<workspace>/s/<station>/chats/<key>, opened over this one.
-        if ((same || sameCloud) && parts.size == 6 && parts[0] == "w" && parts[2] == "s" && parts[4] == "chats") {
-            val (ws, station, chat) = Triple(parts[1], parts[3], parts[5])
-            val top = stack.last()
-            if (top is Screen.Chat && top.station == "$ws/$station" && (top.of as? ChatOf.Session)?.key == chat) return true
-            if (ws != workspace) openItem(ws, station, chat)
-            else { sheet = null; menu = null; forward = true; stack = stack + Screen.Chat("$ws/$station", ChatOf.Session(chat)) }
-            return true
-        }
-        if (!(same || sameCloud) || parts.size != 4 || parts[0] != "o") return false
-        val (ws, station, session) = Triple(parts[1], parts[2], parts[3])
-        val service = uri.getQueryParameter("service")?.takeIf { it.isNotEmpty() }
-        val address = "$ws/$station"
-        val top = stack.last()
-        val here = top is Screen.Chat && top.station == address && ((top.of as? ChatOf.Session)?.key == session || chatAgents[top.id]?.contains(session) == true)
-        when {
-            here -> if (service != null) push(Screen.Preview(address, service))
-            ws != workspace -> openItem(ws, station, session, service)
-            else -> {
-                sheet = null; menu = null; forward = true
-                stack = stack + Screen.Chat(address, ChatOf.Session(session)) + listOfNotNull(service?.let { Screen.Preview(address, it) })
+    }
+
+    private fun open(t: LinkTarget, outside: Boolean): Boolean {
+        val ws = t.workspace.orEmpty()
+        val station = t.station.orEmpty()
+        when (t.opens) {
+            // An invitation's link: what it leads to, in a sheet, before it is accepted.
+            "invite" -> fail.still.android.screens.openInvite(this, t.token ?: return false)
+            // A reference to another chat (web/src/chatRefs.ts), opened over this one.
+            "chat" -> {
+                val chat = t.chat ?: return false
+                val top = stack.last()
+                if (top is Screen.Chat && top.station == "$ws/$station" && (top.of as? ChatOf.Session)?.key == chat) return true
+                if (ws != workspace) openItem(ws, station, chat)
+                else { sheet = null; menu = null; forward = true; stack = stack + Screen.Chat("$ws/$station", ChatOf.Session(chat)) }
             }
+            "item" -> {
+                val session = t.session ?: return false
+                val service = t.service
+                val address = "$ws/$station"
+                val top = stack.last()
+                val here = top is Screen.Chat && top.station == address && ((top.of as? ChatOf.Session)?.key == session || chatAgents[top.id]?.contains(session) == true)
+                when {
+                    outside -> openItem(ws, station, session, service)
+                    here -> if (service != null) push(Screen.Preview(address, service))
+                    ws != workspace -> openItem(ws, station, session, service)
+                    else -> {
+                        sheet = null; menu = null; forward = true
+                        stack = stack + Screen.Chat(address, ChatOf.Session(session)) + listOfNotNull(service?.let { Screen.Preview(address, it) })
+                    }
+                }
+            }
+            else -> return false
         }
         return true
     }
@@ -354,8 +365,6 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     }
 }
 
-/** The production cloud's hosts: app.still.fail, and ember.3720.org from before the rename (kept, not redirected). */
-private val CLOUD_HOSTS = setOf("app.still.fail", "ember.3720.org")
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("no app") }
 
@@ -367,7 +376,7 @@ fun StillFailApp(app: AppState) {
     val workspaces by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     // Links in what agents write go through here: still.fail's own open in the app (AppState.openLink), the rest as before.
     val system = LocalUriHandler.current
-    val links = remember(system) { object : UriHandler { override fun openUri(uri: String) { if (!app.openLink(uri)) system.openUri(uri) } } }
+    val links = remember(system) { object : UriHandler { override fun openUri(uri: String) { app.openLink(uri) { system.openUri(uri) } } } }
     CompositionLocalProvider(LocalUriHandler provides links) { Box(Modifier.fillMaxSize().background(C.bg)) {
         val signedIn = accounts.value
         Box(Modifier.fillMaxSize().hazeSource(app.haze).background(C.bg)) { when {

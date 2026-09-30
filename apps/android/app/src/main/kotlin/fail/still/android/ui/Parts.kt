@@ -184,20 +184,23 @@ fun Avatar(id: String, name: String, size: Dp, modifier: Modifier = Modifier, pi
     }
 }
 
-/** Pictures by URL, once each for the app's life. */
+/** Pictures by URL as drawn, once each for the app's life (the core fetches and keeps their bytes: `picture`). */
 private val pictures = java.util.concurrent.ConcurrentHashMap<String, androidx.compose.ui.graphics.ImageBitmap>()
 
 @Composable
 private fun rememberPicture(url: String?): androidx.compose.ui.graphics.ImageBitmap? {
+    val core = fail.still.android.LocalApp.current.core
     val known = url?.let { pictures[it] }
     val loaded by androidx.compose.runtime.produceState(known, url) {
         if (url.isNullOrBlank() || value != null) return@produceState
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                java.net.URL(url).openStream().use { android.graphics.BitmapFactory.decodeStream(it) }?.asImageBitmap()
-            } catch (_: java.io.IOException) {
-                null
-            }
+        val bytes = try {
+            val answer = core.call("picture", kotlinx.serialization.json.buildJsonObject { put("url", kotlinx.serialization.json.JsonPrimitive(url)) })
+            android.util.Base64.decode((answer as kotlinx.serialization.json.JsonObject)["bytes"]!!.let { (it as kotlinx.serialization.json.JsonPrimitive).content }, android.util.Base64.DEFAULT)
+        } catch (_: fail.still.core.CoreException) {
+            null
+        } ?: return@produceState
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
         }?.also { pictures[url] = it }
     }
     return loaded

@@ -88,13 +88,11 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
-  const overview = useOverview(useStation().address);
   const use = useAction((runtime: MachineLogin["runtime"]) => api.useMachineLogin(runtime), ({ id }) => {
     toast("已添加 Profile，用的是这台机器的登录");
     navigate(link(`/settings/accounts/${id}`));
   });
-  const taken = new Set(overview.value?.profiles.filter((p) => p.machine).map((p) => p.runtime));
-  const offers = (logins ?? []).filter((l) => l.loggedIn && l.plan && !taken.has(l.runtime));
+  const offers = (logins ?? []).filter((l) => l.offered);
   if (!offers.length) return null;
   return (
     <div className={css.machineLogins}>

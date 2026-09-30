@@ -35,37 +35,10 @@ export function glyphLayout(c: GlyphCounts): { arcs: GlyphArc[]; dots: number[] 
   return { arcs, dots };
 }
 
-/** The counts from the home list's view: each station by its link, and one at work if a chat of it is running. */
+/** What the glyph draws: the core's counts for the list (its `glyph`), asleep while the core reaches nothing at all. */
 export function glyphCounts(view: ChatsView | undefined, asleep: boolean): GlyphCounts {
-  const stations = view?.stations ?? [];
-  const running = new Set<string>();
-  for (const day of view?.days ?? []) for (const item of day.items) if (item.state === "run") running.add(item.station);
-  const online = stations.filter((s) => s.state === "online");
-  return {
-    online: online.length,
-    dim: stations.filter((s) => s.state === "offline" || s.state === "connecting").length,
-    failing: stations.filter((s) => s.state === "error").length,
-    working: online.filter((s) => running.has(s.station)).length,
-    asleep,
-  };
-}
-
-/** The line beside it on the wide screen while all is well: the one station by name, else how many; and who works. */
-export function glyphSummary(view: ChatsView, c: GlyphCounts): string {
-  const n = c.online + c.dim + c.failing;
-  // The one station of a station's own page goes unnamed: it is this machine.
-  const one = n === 1 ? view.stations[0]?.name || "这台机器" : undefined;
-  if (one) return c.working ? `${one} · 在干活` : one;
-  return c.working ? `${n} 台 station · ${c.working} 台在干活` : `${n} 台 station`;
-}
-
-export function glyphLabel(c: GlyphCounts): string {
-  const n = c.online + c.dim + c.failing;
-  const parts = [`${n} 台 station`, `${c.online} 台在线`];
-  if (c.working) parts.push(`${c.working} 台在干活`);
-  if (c.dim) parts.push(`${c.dim} 台离线`);
-  if (c.failing) parts.push(`${c.failing} 台出错`);
-  return c.asleep ? "没有网络" : parts.join("，");
+  const g = view?.glyph;
+  return { online: g?.online ?? 0, dim: g?.dim ?? 0, failing: g?.failing ?? 0, working: g?.working ?? 0, asleep };
 }
 
 const at = (deg: number, r = R) => [CX + r * Math.sin(deg * Math.PI / 180), CY - r * Math.cos(deg * Math.PI / 180)] as const;

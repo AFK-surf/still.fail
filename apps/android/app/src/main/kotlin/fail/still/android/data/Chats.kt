@@ -13,6 +13,3 @@ fun badgeState(badge: Badge?): ChatState? = when (badge) {
 val Session.state: ChatState get() = badgeState(mark) ?: ChatState.Done
 val RowAgent.state: ChatState get() = badgeState(mark) ?: ChatState.Done
 val ChatAgent.state: ChatState get() = badgeState(badge) ?: ChatState.Done
-
-/** What can be enabled on a profile: what its provider lists, and whatever is enabled already. */
-val Profile.available: List<String> get() = ((check?.models ?: emptyList()) + models).distinct()

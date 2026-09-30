@@ -46,6 +46,18 @@ export interface AgentWait {
 }
 
 /**
+ * A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):
+ * `file` is under /releases/.
+ */
+export interface AppRelease {
+	versionCode: number;
+	versionName: string;
+	file: string;
+	sha256: string;
+	size: number;
+}
+
+/**
  * An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
  * archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
  * is more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere).
@@ -125,6 +137,13 @@ export interface Bind {
 	model?: string;
 	effort?: string;
 	profile?: string;
+}
+
+/** A buddy a Slack app can wear (`buddies`): its picture is avatars/<id>.webp (and .thumb.webp), on `bg`. */
+export interface Buddy {
+	id: string;
+	label: string;
+	bg: string;
 }
 
 /** A person as the core names them: `display` is 你 for the viewer. */
@@ -403,6 +422,8 @@ export interface Profile {
 	series: ModelSeries[];
 	/** How many of the models it could run are enabled, in words. */
 	modelsText: string;
+	/** What can be enabled on it: what its provider lists, then whatever is enabled already, each once. */
+	available?: string[];
 }
 
 /** Used up until a time (or no one knows when), in words. */
@@ -833,6 +854,16 @@ export interface Link {
 	message?: string;
 }
 
+/**
+ * A chat's link to its station while it is not as it should be: `tone` trouble (down; `detail` why) | busy (coming
+ * back), and the line that says it.
+ */
+export interface LinkShown {
+	tone: string;
+	text: string;
+	detail?: string;
+}
+
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
 	/** Archived chats must be restored before composing another message. */
@@ -870,6 +901,8 @@ export interface ChatView {
 	key?: string;
 	/** Why the station could not make it, the last time it was tried. */
 	failed?: string;
+	/** Its link while it is down or coming back, in words; absent while it is up (and from a core before it). */
+	connection?: LinkShown;
 }
 
 export interface StationState {
@@ -881,14 +914,47 @@ export interface StationState {
 	message?: string;
 }
 
-/** What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting. */
+/**
+ * What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
+ * `retry`: down, not only coming back, so it can be tried again at once (absent from a core before it).
+ */
 export interface StationTrouble {
 	text: string;
 	state: string;
+	retry?: boolean;
 }
 
 /** Whose pictures lead the rows of a list (`ChatsView::leading`). */
 export type Lead = "agents" | "people";
+
+/**
+ * The stations at a glance (the glyph): how many are online, offline or connecting (`dim`), failing, and at work; the
+ * line beside it while all is well (the one station by name, else how many; and who works), and all of it in words.
+ */
+export interface StationsGlyph {
+	online: number;
+	dim: number;
+	failing: number;
+	working: number;
+	summary: string;
+	label: string;
+}
+
+export interface StationFailing {
+	station: string;
+	text: string;
+	message?: string;
+}
+
+/**
+ * What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
+ * says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
+ */
+export interface ListNote {
+	reading: boolean;
+	failing: StationFailing[];
+	empty: boolean;
+}
 
 export interface ChatsView {
 	me: Me;
@@ -904,6 +970,9 @@ export interface ChatsView {
 	members?: number;
 	/** Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone). */
 	leading?: Lead;
+	/** The stations at a glance, and what the list says with no rows; absent from a core before them. */
+	glyph?: StationsGlyph;
+	note?: ListNote;
 }
 
 export interface ConfigTokenOwner {
@@ -1161,6 +1230,20 @@ export interface KeptTabs {
 	active?: string;
 }
 
+/**
+ * What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
+ * item (`item`: its `session`, and `service` its web service); the call answers null for any other link.
+ */
+export interface LinkTarget {
+	opens: string;
+	token?: string;
+	workspace?: string;
+	station?: string;
+	chat?: string;
+	session?: string;
+	service?: string;
+}
+
 export interface TimelineEntry {
 	at?: string;
 	/** user | assistant | thinking | tool_call | tool_result */
@@ -1245,6 +1328,8 @@ export interface MachineLogin {
 	quota?: Quota;
 	/** In a line, as the pages show it. */
 	text: string;
+	/** Offered for a profile: signed in, on a plan, and no profile on it yet. */
+	offered?: boolean;
 }
 
 export interface SlackAppLinks {
@@ -1269,6 +1354,11 @@ export interface MadeSlackApp {
 	state?: string;
 	installed: boolean;
 	installedTeam?: string;
+}
+
+export interface MemoryFile {
+	path: string;
+	text: string;
 }
 
 export interface MeshStatus {
@@ -1367,6 +1457,9 @@ export interface StationView {
 	name: string;
 	/** Its line in a list: offline since when, or what it is and whether its agents work. */
 	summary: string;
+	/** Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线). */
+	face?: string;
+	line?: string;
 	online: boolean;
 	/** Seconds, from still.fail cloud. */
 	lastSeen?: number;
@@ -1555,6 +1648,26 @@ export interface SessionDetail {
 	session: Session;
 	threads: ChatThread[];
 	turns: TurnRecord[];
+}
+
+/**
+ * A skill: `body` its text as people read it (no frontmatter), `about` when it applies (a project's without its
+ * 项目记忆：); both absent from a core before them.
+ */
+export interface SkillFile {
+	name: string;
+	description: string;
+	project: boolean;
+	builtin: boolean;
+	text: string;
+	body?: string;
+	about?: string;
+}
+
+/** The agents' memory on a station (`memory.get`): the global one, and the skills (projects' memories among them). */
+export interface StationMemory {
+	global: MemoryFile;
+	skills: SkillFile[];
 }
 
 /** One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble. */

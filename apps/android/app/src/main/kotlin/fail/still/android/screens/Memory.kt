@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
 import fail.still.android.data.StationView
+import fail.still.android.data.SkillFile
+import fail.still.android.data.StationMemory
 import fail.still.android.data.StillFailJson
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
@@ -51,17 +53,6 @@ import fail.still.android.ui.Markdown
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
 import fail.still.core.CoreException
-import kotlinx.serialization.Serializable
-
-@Serializable private class MemoryFile(val path: String = "", val text: String = "")
-@Serializable private class SkillFile(val name: String, val description: String = "", val project: Boolean = false, val builtin: Boolean = false, val text: String = "")
-@Serializable private class StationMemory(val global: MemoryFile = MemoryFile(), val skills: List<SkillFile> = emptyList())
-
-/** A SKILL.md without its frontmatter: what people read. */
-private fun body(text: String): String {
-    val head = Regex("^---\\n[\\s\\S]*?\\n---\\n?").find(text)
-    return (if (head != null) text.substring(head.range.last + 1) else text).trim()
-}
 
 @Composable
 fun MemoryScreen(current: WorkspaceEntry, address: String) {
@@ -107,7 +98,7 @@ private fun Note(text: String) = Text(text, fontSize = 13.sp, color = C.muted, m
 @Composable
 private fun SkillRow(skill: SkillFile) {
     var open by rememberSaveable(skill.name) { mutableStateOf(false) }
-    val about = if (skill.project) skill.description.removePrefix("项目记忆：") else skill.description
+    val about = skill.about ?: skill.description
     // As the web's row (Memory.tsx, shared by its phone and PC): inset in the card, tinted while open (the web's --hover).
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)) {
         Row(
@@ -125,6 +116,6 @@ private fun SkillRow(skill: SkillFile) {
                 Text(about.ifEmpty { "（没写什么时候用）" }, fontSize = 13.sp, color = C.muted)
             }
         }
-        if (open) Markdown(body(skill.text).ifEmpty { "（空的）" }, Modifier.padding(start = 38.dp, end = 12.dp, top = 12.dp, bottom = 18.dp), size = 14)
+        if (open) Markdown((skill.body ?: skill.text).ifEmpty { "（空的）" }, Modifier.padding(start = 38.dp, end = 12.dp, top = 12.dp, bottom = 18.dp), size = 14)
     }
 }

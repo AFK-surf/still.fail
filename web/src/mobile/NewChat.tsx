@@ -180,7 +180,7 @@ function NoProfile({ view }: { view: StationView }) {
       <p className={css.mNewProblem} data-wait>给 {view.name} 添加一个 Profile。agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。</p>
       <Button label="添加 Profile" primary onClick={() => app.push(app.at(`/s/${view.id}/profiles/new`))} />
       <div className={`${sheetsCss.mForm} ${settingsCss.mSteps}`} style={{ alignSelf: "stretch", marginTop: 12, padding: 0, textAlign: "left" }}>
-        <MachineLoginOffers inForm logins={view.overview?.machineLogins} profiles={view.overview?.profiles ?? []}
+        <MachineLoginOffers inForm logins={view.overview?.machineLogins}
           onSignIn={(kind) => app.push(app.at(`/s/${view.id}/profiles/new?kind=${kind}`))} />
       </div>
     </StationContext.Provider>

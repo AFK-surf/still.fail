@@ -3,7 +3,7 @@
 // 项目记忆： and says when it applies (its whole text is read when a task matches). The station's other skills are
 // listed too.
 import { useEffect, useState } from "react";
-import { stationApi, useStationCall } from "./api.ts";
+import { stationApi, useStationCall, type SkillFile, type StationMemory as Memory } from "./api.ts";
 import { Prose } from "./Prose.tsx";
 import { About, MobileBack, Section } from "./ui.tsx";
 import { ChevronDown, ChevronRight } from "./icons.tsx";
@@ -12,19 +12,13 @@ import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 
-export interface SkillFile { name: string; description: string; project: boolean; builtin: boolean; text: string }
-export interface Memory { global: { path: string; text: string }; skills: SkillFile[] }
-
-/** A SKILL.md without its frontmatter: what people read. */
-function body(text: string): string {
-  const m = /^---\n[\s\S]*?\n---\n?/.exec(text);
-  return (m ? text.slice(m[0].length) : text).trim();
-}
+export type { SkillFile, StationMemory as Memory } from "./api.ts";
 
 /** A skill as a row that opens to its text, rendered. */
 export function SkillRow({ skill }: { skill: SkillFile }) {
   const [open, setOpen] = useState(false);
-  const about = skill.project ? skill.description.replace(/^项目记忆：/, "") : skill.description;
+  // What it is for and its text as people read it, the core's (a desktop core from before them: as written).
+  const about = skill.about ?? skill.description;
   return (
     <div className={css.memorySkill} data-open={open || undefined}>
       <button type="button" className={css.memorySkillRow} onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -34,7 +28,7 @@ export function SkillRow({ skill }: { skill: SkillFile }) {
           <span>{about || "（没写什么时候用）"}</span>
         </span>
       </button>
-      {open && <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{body(skill.text) || "（空的）"}</Prose></div>}
+      {open && <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{(skill.body ?? skill.text) || "（空的）"}</Prose></div>}
     </div>
   );
 }

@@ -188,8 +188,7 @@ function Quota({ p }: { p: Profile }) {
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
 function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void }) {
   const [filter, setFilter] = useState("");
-  const available = [...new Set([...(p.check?.models ?? []), ...p.models])];
-  const all = [...available].sort();
+  const all = [...(p.available ?? [])].sort();
   const shown = all.filter((m) => [m, p.names[m] ?? m].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
   const save = (models: string[]) => onSave([...new Set(models)].sort());
   const suffix = filter.trim() ? "筛选结果" : "";
@@ -384,10 +383,10 @@ export function NewProfileScreen() {
         ) : (
           <>
             {overview && (
-              <MachineLoginOffers inForm logins={overview.machineLogins} profiles={overview.profiles}
+              <MachineLoginOffers inForm logins={overview.machineLogins}
                 onSignIn={(c) => { setChoice(c); setBusy(true); setError(null); api.newLogin(CHOICES[c].runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
             )}
-            {overview && machineOffers(overview.machineLogins, overview.profiles).length > 0 && <b className={sheetsCss.mFormLabel}>或者添加一个新的</b>}
+            {overview && machineOffers(overview.machineLogins).length > 0 && <b className={sheetsCss.mFormLabel}>或者添加一个新的</b>}
             <ListCard>
               {(Object.keys(CHOICES) as Choice[]).map((c) => (
                 <PickRow key={c} label={CHOICES[c].title} sub={CHOICES[c].description} checked={choice === c} onClick={() => setChoice(c)}
@@ -415,9 +414,9 @@ export function NewProfileScreen() {
 }
 
 /** The machine's logins no profile is on yet. */
-function machineOffers(logins: MachineLogin[] | undefined, profiles: Profile[]): MachineLogin[] {
-  const taken = new Set(profiles.filter((p) => p.machine).map((p) => p.runtime));
-  return (logins ?? []).filter((l) => l.loggedIn && l.plan && !taken.has(l.runtime));
+/** The machine's own logins a profile could use now (the core's `offered`). */
+function machineOffers(logins: MachineLogin[] | undefined): MachineLogin[] {
+  return (logins ?? []).filter((l) => l.offered);
 }
 
 const MACHINE_RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
@@ -428,12 +427,12 @@ const MACHINE_RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Clau
  * login, which follows it); one kept only in the keychain is offered as a sign-in with the same account (`onSignIn`); a
  * refused account is said so, with its reason, and nothing to do with it. The station in context.
  */
-export function MachineLoginOffers({ logins, profiles, onSignIn, inForm = false }: { logins: MachineLogin[] | undefined; profiles: Profile[]; onSignIn: (choice: Choice) => void; inForm?: boolean }) {
+export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { logins: MachineLogin[] | undefined; onSignIn: (choice: Choice) => void; inForm?: boolean }) {
   const app = useApp();
   const api = useApi();
   const station = useStation();
   const [busy, setBusy] = useState(false);
-  const offers = machineOffers(logins, profiles);
+  const offers = machineOffers(logins);
   if (!offers.length) return null;
   const use = (l: MachineLogin) => {
     setBusy(true);

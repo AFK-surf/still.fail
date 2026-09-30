@@ -1,6 +1,7 @@
-// The app keeps itself current: still.fail cloud says which build is the latest (/releases/android/latest.json, put there
-// by scripts/release.sh), and a newer one is downloaded, checked against its sha256 and handed to the system's
-// installer, which installs it over this one (the same package and signing key) once the person agrees.
+// The app keeps itself current: the core asks still.fail cloud which build is the latest (`app.update`, at most hourly;
+// /releases/android/latest.json, put there by scripts/release.sh), and a newer one is downloaded, checked against its
+// sha256 and handed to the system's installer, which installs it over this one (the same package and signing key) once
+// the person agrees.
 package fail.still.android
 
 import android.app.PendingIntent
@@ -15,49 +16,35 @@ import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import fail.still.android.data.AppRelease
 import fail.still.android.data.StillFailJson
+import fail.still.core.CoreException
+import fail.still.core.StillFailCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-/** A build of the app on still.fail cloud: `file` is under /releases/ (android/stillfail-<n>.apk; android/ember-<n>.apk before the rename). */
-@Serializable
-data class Release(val versionCode: Long, val versionName: String, val file: String, val sha256: String, val size: Long)
-
-class Updates(context: Context, private val origin: String) {
+class Updates(context: Context, private val origin: String, private val core: StillFailCore) {
     private val context = context.applicationContext
     /** A build newer than this one, once a check found it. */
-    var available by mutableStateOf<Release?>(null); private set
+    var available by mutableStateOf<AppRelease?>(null); private set
     /** What an update under way is doing ("下载中 40%"), null when none is. */
     var progress by mutableStateOf<String?>(null); private set
-    private var checkedAt = 0L
 
-    /** Asks still.fail cloud for the latest build, at most once an hour unless `now`; the newer one it finds, if any. */
-    suspend fun check(now: Boolean = false): Release? {
-        val time = System.currentTimeMillis()
-        if (!now && time - checkedAt < 60 * 60 * 1000) return null
-        checkedAt = time
+    /** Asks the core for a newer build (it asks still.fail cloud at most once an hour unless `now`); the one it finds, if any. */
+    suspend fun check(now: Boolean = false): AppRelease? {
         val latest = try {
-            withContext(Dispatchers.IO) {
-                val connection = URL("$origin/releases/android/latest.json").openConnection() as HttpURLConnection
-                connection.connectTimeout = 10_000
-                connection.readTimeout = 10_000
-                connection.useCaches = false
-                try {
-                    if (connection.responseCode != 200) null
-                    else StillFailJson.decodeFromString(Release.serializer(), connection.inputStream.bufferedReader().readText())
-                } finally {
-                    connection.disconnect()
-                }
-            }
-        } catch (e: Exception) {
+            core.call("app.update", buildJsonObject { put("platform", "android"); put("versionCode", BuildConfig.VERSION_CODE.toLong()); put("now", now) })
+                .takeIf { it !is JsonNull }?.let { StillFailJson.decodeFromJsonElement(AppRelease.serializer(), it) }
+        } catch (_: CoreException) {
             null
         } ?: return null
-        if (latest.versionCode <= BuildConfig.VERSION_CODE) return null
         available = latest
         return latest
     }
@@ -88,7 +75,7 @@ class Updates(context: Context, private val origin: String) {
         }
     }
 
-    private suspend fun download(release: Release): File = withContext(Dispatchers.IO) {
+    private suspend fun download(release: AppRelease): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
         val apk = File(dir, "stillfail-${release.versionCode}.apk")

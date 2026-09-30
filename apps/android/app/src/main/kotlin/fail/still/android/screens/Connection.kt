@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
 import fail.still.android.LocalApp
-import fail.still.android.data.Link
+import fail.still.android.data.LinkShown
 import fail.still.android.data.StatusView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
@@ -57,10 +57,10 @@ private const val BACK_MS = 1500L
  * connections tried against new ones: client/core/src/wake.rs `retry`); back, it says so a moment.
  */
 @Composable
-fun ConnectionPill(name: String, link: Link?, haze: HazeState, modifier: Modifier = Modifier) {
+fun ConnectionPill(connection: LinkShown?, haze: HazeState, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val status by rememberTopic<StatusView>(app.core, Topics.status)
-    val now = shownOf(link, name, status.value)
+    val now = shownOf(connection, status.value)
     var back by remember { mutableStateOf(false) }
     var was by remember { mutableStateOf(false) }
     LaunchedEffect(now != null) {
@@ -110,20 +110,10 @@ fun ConnectionPill(name: String, link: Link?, haze: HazeState, modifier: Modifie
     }
 }
 
-private fun shownOf(link: Link?, name: String, status: StatusView?): PillShown? {
-    val station = if (name.isNotEmpty()) "「$name」" else " station"
-    return when {
-        link?.state == "offline" || link?.state == "error" -> PillShown(PillTone.Trouble, "连不上$station", why(link.message))
-        link?.state == "reconnecting" -> PillShown(PillTone.Busy, "正在重连$station")
-        status?.state == "trouble" -> PillShown(PillTone.Trouble, status.text ?: "连不上 still.fail cloud")
-        status?.state == "slow" -> PillShown(PillTone.Busy, status.text ?: "")
-        else -> null
-    }
-}
-
-/** Why the link is down, less its own "连不上这台 station：" (the pill says that already). */
-private fun why(message: String?): String? {
-    if (message.isNullOrEmpty()) return null
-    val at = message.indexOf('：')
-    return if (at >= 0 && message.substring(0, at).contains("连不上")) message.substring(at + 1) else message
+/** The chat's link as the core says it (its `connection`) while down or coming back, else what the core waits on. */
+private fun shownOf(connection: LinkShown?, status: StatusView?): PillShown? = when {
+    connection != null -> PillShown(if (connection.tone == "trouble") PillTone.Trouble else PillTone.Busy, connection.text, connection.detail)
+    status?.state == "trouble" -> PillShown(PillTone.Trouble, status.text ?: "连不上 still.fail cloud")
+    status?.state == "slow" -> PillShown(PillTone.Busy, status.text ?: "")
+    else -> null
 }

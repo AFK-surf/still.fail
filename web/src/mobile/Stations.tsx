@@ -30,7 +30,7 @@ const BASE = import.meta.env.BASE_URL;
 /** The buddy's face for a station: at work, idle, or asleep. */
 export function Buddy({ s, size = 40 }: { s: StationView; size?: number }) {
   const dark = useDark();
-  const face = !s.online ? "offline" : (s.overview?.counts.running ?? 0) > 0 ? "working" : "idle";
+  const face = s.face ?? "idle";
   return <img className={css.mBuddy} src={`${BASE}${face}${dark ? "-dark" : ""}.svg`} alt="" width={size} height={size} />;
 }
 
@@ -151,7 +151,7 @@ export function StationScreen() {
                 {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/profiles/new`))}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加 Profile</span></ListRow>}
               </ListCard>
               {/* The machine's own logins not used yet, each offered as a profile. */}
-              {s.online && <MachineLoginOffers logins={s.overview.machineLogins} profiles={s.overview.profiles}
+              {s.online && <MachineLoginOffers logins={s.overview.machineLogins}
                 onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
               <SectionHeader title="连接" start={24} />
               <ListCard>
