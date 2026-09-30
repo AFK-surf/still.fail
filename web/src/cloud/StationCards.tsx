@@ -61,32 +61,26 @@ function Dial({ m }: { m: Meter }) {
   );
 }
 
-/** A minute's round trips as a small line, drawn on twice the highest: a steady one runs across the middle, a spike
- * rises from it. */
-function Spark({ points }: { points: number[] }) {
-  const w = 60, h = 14, top = Math.max(1, Math.max(...points) * 2);
-  const at = points.map((v, i) => `${((i * w) / (points.length - 1)).toFixed(1)},${(h - 1 - ((h - 2) * v) / top).toFixed(1)}`).join(" ");
-  return <svg className={css.spark} width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true"><polyline points={at} /></svg>;
-}
-
 function Figure({ f }: { f: NetFigure }) {
   return <b data-level={f.level}>{f.text}</b>;
 }
 
-/** This device's connection to it: how it goes and its round trip, then the speed each way and what went over it. In
- * a line on a wide card; `stacked` (the phone's, mobile/Stations.tsx) puts the two on lines of their own. */
+/** This device's connection to it: how it goes (and packets lost, when some were) over its round trip; beside them, ↑
+ * over ↓, the speed each way and what went that way since it opened, each in a column of its own. Every line stays one
+ * line with room kept for its figures: nothing wraps or moves as they change. */
 export function Net({ net, stacked = false }: { net: StationNet; stacked?: boolean }) {
   return (
     <div className={stacked ? `${css.net} ${css.netStacked}` : css.net}>
       <span className={css.netPart}>
-        <span>{net.path}</span>
-        {net.rtt && <span data-level={net.rtt.level}>延时 <Figure f={net.rtt} />{net.rttHistory.length > 1 && <Spark points={net.rttHistory} />}</span>}
-        {net.loss && <span><Figure f={net.loss} /></span>}
+        <span className={css.netLine}>
+          <span>{net.path}</span>
+          {net.loss && <Figure f={net.loss} />}
+        </span>
+        {net.rtt && <span>延时 <Figure f={net.rtt} /></span>}
       </span>
-      <span className={css.netPart}>
-        <span>↓ <b>{net.down}</b></span>
-        <span>↑ <b>{net.up}</b></span>
-        <span>{net.total}</span>
+      <span className={css.netRates}>
+        <span>↑</span><b>{net.up}</b><span>{net.upTotal && `共 ${net.upTotal}`}</span>
+        <span>↓</span><b>{net.down}</b><span>{net.downTotal && `共 ${net.downTotal}`}</span>
       </span>
     </div>
   );

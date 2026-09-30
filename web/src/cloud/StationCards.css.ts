@@ -46,17 +46,19 @@ export const cardFoot = style({
   display: "flex", flexWrap: "wrap", gap: "0 12px", marginLeft: "17px", fontSize: vars.textXs, color: vars.muted,
 });
 
-/** This device's connection to the station: grey figures, coloured only when the core says one is off. */
+/** This device's connection to the station: grey figures, coloured only when the core says one is off. How it goes
+ * on the left, the rates each way in columns on the right. */
 export const net = style({
-  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 14px", marginLeft: "17px",
-  fontSize: vars.textSm, color: vars.muted, fontVariantNumeric: "tabular-nums",
+  display: "flex", alignItems: "center", gap: "14px", marginLeft: "17px",
+  fontSize: vars.textSm, color: vars.muted, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
 globalStyle(`${net} b`, { fontWeight: "500", color: vars.text });
 globalStyle(`${net} b[data-level="amber"]`, { color: vars.amber });
 globalStyle(`${net} b[data-level="red"]`, { color: vars.red });
-/** On the phone's cards: its two parts on lines of their own, under the rings. */
-export const netStacked = style({ flexDirection: "column", alignItems: "flex-start", gap: "4px", marginLeft: "0", paddingTop: "10px", fontSize: "13px" });
-export const netPart = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 14px", minWidth: "0" });
-export const spark = style({ marginLeft: "6px", verticalAlign: "middle", fill: "none", stroke: vars.subtle, strokeWidth: "1.3", strokeLinejoin: "round", strokeLinecap: "round" });
-globalStyle(`${net} [data-level="amber"] ${spark}`, { stroke: vars.amber });
-globalStyle(`${net} [data-level="red"] ${spark}`, { stroke: vars.red });
+/** On the phone's cards: under the rings, the rates pushed to the right. */
+export const netStacked = style({ marginLeft: "0", paddingTop: "10px", fontSize: "13px" });
+/** How it goes: as wide as it says on the phone, room kept for it on a wide card, so the rates stay put. */
+export const netPart = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: "0", flex: "0 1 14em", selectors: { [`${netStacked} &`]: { flex: "1 1 0" } } });
+export const netLine = style({ display: "flex", gap: "8px", minWidth: "0" });
+globalStyle(`${netLine} > *:last-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
+export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5ch 7.5ch", columnGap: "5px", rowGap: "2px", alignItems: "baseline", flex: "none" });
