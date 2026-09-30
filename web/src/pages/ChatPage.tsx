@@ -315,9 +315,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       <div className={jobsCss.sessionMain}>
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label="对话" />
-        {list && <ListBack scope={scopeOf(station.address)} to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : "/chats"} />}
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
+          {list && <ListBack scope={scopeOf(station.address)} to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : "/chats"} />}
           {renaming
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
             : <h1 onDoubleClick={renamable ? () => setRenaming(true) : undefined}>{chat.title}</h1>}
