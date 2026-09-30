@@ -21,6 +21,7 @@
 - 安卓 chat 停在底部离开、没有新消息时再进，直接开在底部（android-back-at-bottom）：只改了 app，要发一版安卓才能用上。发了以后，停在一个有图片或活动行的 chat 底部，退出再进，应该还在底部。
 - 离线 station 不在左下角给重试，改在 station 页给（offline-station-no-retry）：改了 core（wasm 和安卓 ffi 都要带上）、web 和安卓。新页面接旧 core 时，左下角也不会出重试。安卓要发一版才会在单台 station 页上有重试。验证：停掉一台 station，左下角只显示「xx 离线」；设置里的 Station 页，那张卡片上有「重试」。
 - 中继带名字、station 卡片网络行重排（relay-names）：改了 cloud（`wrangler.jsonc` 的 `RELAY_NAMES`，`/v1/me`、credential 和推给 station 的 state 多带一个 `relay_names`）、core（wasm 和安卓 ffi 都要带上）、web、手机 web 和安卓。要部署 api 这个 Worker，名字才会下发。旧客户端会忽略这个字段；新客户端碰到旧 cloud 没有名字，就显示「中继 host」。安卓要发一版才会用上。验证：设置 → Station 的卡片上，经北京 relay 连的显示「北京中继」，右边 ↑↓ 速度后面跟着「共 …」，没有走势线。
+- station 的 CPU、内存、磁盘改成和额度一样的圆角框（meter-chips），额度框的线也加粗了、灰色淡了一些：只改了 web、手机 web 和安卓的界面，不用部署 cloud 或 station，core 也没动。安卓要发一版才有。验证：设置 → Station 的卡片右上角是「CPU 34%」这样的框，边线画到用了多少；模型选择器里的额度框也是粗一点的线。
 
 ## 2026-10-01
 
