@@ -36,6 +36,8 @@ export const fp = style({
   },
 });
 globalStyle(`${fp}[data-kind="image"]`, { vars: dark, background: "#000" });
+// The page bars under it drag the desktop window whatever lies over them: without this, the top of its bar takes no pointer.
+globalStyle(`[data-desktop] ${fp}`, { WebkitAppRegion: "no-drag" });
 /** What floats: shown while the pointer moves, and whenever it or focus is on it (faded, it stays where it is to be clicked). */
 const floating = {
   ...pageGlass,
