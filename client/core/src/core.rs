@@ -551,8 +551,8 @@ impl Inner {
                     }
                 }
             },
-            Call::ChatSend { station, thread, text, attachments, quotes } => {
-                let message = json!({ "text": text, "attachments": attachments, "quotes": quotes });
+            Call::ChatSend { station, thread, text, attachments, quotes, client } => {
+                let message = outgoing(text, attachments, quotes, client);
                 let id = self.views.outbox_add(&station, thread, message.clone());
                 self.deliver(&station, thread, &id, message).await
             }
@@ -562,8 +562,8 @@ impl Inner {
                 self.make_chat(&key);
                 Ok(json!({ "key": key }))
             }
-            Call::ChatSendTo { station, session, text, attachments, quotes } => {
-                let message = json!({ "text": text, "attachments": attachments, "quotes": quotes });
+            Call::ChatSendTo { station, session, text, attachments, quotes, client } => {
+                let message = outgoing(text, attachments, quotes, client);
                 match self.views.pending_thread(&station, &session) {
                     Some(Some(thread)) => {
                         let id = self.views.outbox_add(&station, thread, message.clone());
@@ -602,8 +602,7 @@ impl Inner {
             Call::ChatRetry { station, thread, id } => {
                 let entry = self.views.outbox_get(&station, thread, &id).ok_or_else(|| CoreError::invalid("没有这条待发的消息"))?;
                 self.views.outbox_state(&station, thread, &id, None);
-                let message = json!({ "text": entry["text"], "attachments": entry["attachments"], "quotes": entry["quotes"] });
-                self.deliver(&station, thread, &id, message).await
+                self.deliver(&station, thread, &id, crate::views::sent_as(&entry)).await
             }
             Call::ChatDiscard { station, thread, id } => {
                 self.views.outbox_remove(&station, thread, &id);
@@ -1315,6 +1314,15 @@ impl<K: std::hash::Hash + Eq, V> Drop for Registered<K, V> {
     }
 }
 
+/// A message as it goes to the station: with the app it is sent from, when the UI said.
+fn outgoing(text: String, attachments: Value, quotes: Value, client: Option<String>) -> Value {
+    let mut message = json!({ "text": text, "attachments": attachments, "quotes": quotes });
+    if let Some(client) = client.filter(|c| !c.is_empty()) {
+        message["client"] = json!(client);
+    }
+    message
+}
+
 fn answer(id: RequestId, result: Result<Value>) -> CoreMessage {
     match result {
         Ok(ok) => CoreMessage::Ok { id, ok },
@@ -1339,12 +1347,13 @@ enum Call {
     SignOut { account: String },
     /// Something to have done on a station or still.fail cloud, by its name (ops.rs): the UI never makes a request itself.
     Op(crate::ops::Request),
-    ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value },
+    /// `client`: the app it is sent from ("android 0.1.1123"), for the station to tell its agent; older UIs give none.
+    ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value, client: Option<String> },
     /// A new chat on a station (`POST /sessions` with `ask`): answered at once with the key it goes by here; the
     /// station makes it meanwhile (views.rs, `Pending`).
     ChatCreate { station: String, ask: Value },
     /// Sending, trying again, dropping in a chat by its key: one asked for here goes to its thread once made.
-    ChatSendTo { station: String, session: String, text: String, attachments: Value, quotes: Value },
+    ChatSendTo { station: String, session: String, text: String, attachments: Value, quotes: Value, client: Option<String> },
     ChatRetryIn { station: String, session: String, id: String },
     ChatDiscardIn { station: String, session: String, id: String },
     ChatRetry { station: String, thread: u64, id: String },
@@ -1421,6 +1430,8 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         attachments: Value,
         #[serde(default = "empty_list")]
         quotes: Value,
+        #[serde(default)]
+        client: Option<String>,
     }
     fn empty_list() -> Value {
         json!([])
@@ -1435,6 +1446,8 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         attachments: Value,
         #[serde(default = "empty_list")]
         quotes: Value,
+        #[serde(default)]
+        client: Option<String>,
     }
     #[derive(Deserialize)]
     struct OutgoingIn {
@@ -1583,7 +1596,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         // By its key (`session`) rather than its thread: a chat asked for here, made or not.
         "chat.send" if params.get("session").is_some() && params.get("thread").is_none() => {
             let p: SendTo = read(params)?;
-            Call::ChatSendTo { station: p.station, session: p.session, text: p.text, attachments: p.attachments, quotes: p.quotes }
+            Call::ChatSendTo { station: p.station, session: p.session, text: p.text, attachments: p.attachments, quotes: p.quotes, client: p.client }
         }
         "chat.retry" if params.get("session").is_some() && params.get("thread").is_none() => {
             let p: OutgoingIn = read(params)?;
@@ -1595,7 +1608,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "chat.send" => {
             let p: Send = read(params)?;
-            Call::ChatSend { station: p.station, thread: p.thread, text: p.text, attachments: p.attachments, quotes: p.quotes }
+            Call::ChatSend { station: p.station, thread: p.thread, text: p.text, attachments: p.attachments, quotes: p.quotes, client: p.client }
         }
         "chat.retry" => {
             let p: Outgoing = read(params)?;
@@ -1760,7 +1773,11 @@ mod tests {
         );
         assert_eq!(
             parse_call("chat.send", json!({"station": "w/s", "thread": 7, "text": "hi"})).unwrap(),
-            Call::ChatSend { station: "w/s".into(), thread: 7, text: "hi".into(), attachments: json!([]), quotes: json!([]) }
+            Call::ChatSend { station: "w/s".into(), thread: 7, text: "hi".into(), attachments: json!([]), quotes: json!([]), client: None }
+        );
+        assert_eq!(
+            parse_call("chat.send", json!({"station": "w/s", "thread": 7, "text": "hi", "client": "android 0.1.1123"})).unwrap(),
+            Call::ChatSend { station: "w/s".into(), thread: 7, text: "hi".into(), attachments: json!([]), quotes: json!([]), client: Some("android 0.1.1123".into()) }
         );
         assert_eq!(
             parse_call("chat.retry", json!({"station": "w/s", "thread": 7, "id": "out-1"})).unwrap(),
@@ -1781,7 +1798,7 @@ mod tests {
         );
         assert_eq!(
             parse_call("chat.send", json!({"station": "w/s", "session": "new:1-1", "text": "hi"})).unwrap(),
-            Call::ChatSendTo { station: "w/s".into(), session: "new:1-1".into(), text: "hi".into(), attachments: json!([]), quotes: json!([]) }
+            Call::ChatSendTo { station: "w/s".into(), session: "new:1-1".into(), text: "hi".into(), attachments: json!([]), quotes: json!([]), client: None }
         );
         assert_eq!(parse_call("chat.retry", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatRetryIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
         assert_eq!(parse_call("chat.discard", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatDiscardIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
@@ -2285,14 +2302,16 @@ mod tests {
             apply(&host, &mut values);
             assert_eq!(values[&2]["pending"], true);
             up.set(true);
-            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({"station": "local", "session": key, "text": "修一下登录"}) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({"station": "local", "session": key, "text": "修一下登录", "client": "android 0.1.1123"}) });
             host.settle().await;
             let asked: Vec<(String, String)> = host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.contains("/admin/api/"))
                 .map(|r| (r.url.trim_start_matches("https://stillfail.test/admin/api").to_string(), String::from_utf8(r.body.clone().unwrap_or_default()).unwrap())).collect();
             assert_eq!(asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["/sessions", "/sessions", "/threads/9/messages"]);
             // It carries the key given here: the station's rows say it of the chat made.
             assert_eq!(serde_json::from_str::<Value>(&asked[0].1).unwrap(), json!({"runtime": "claude", "model": "opus", "clientKey": key}));
-            assert_eq!(serde_json::from_str::<Value>(&asked[2].1).unwrap()["text"], "修一下登录");
+            // With the app it was sent from, which waited with it.
+            let sent = serde_json::from_str::<Value>(&asked[2].1).unwrap();
+            assert_eq!((sent["text"].clone(), sent["client"].clone()), (json!("修一下登录"), json!("android 0.1.1123")));
             // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
             apply(&host, &mut values);
             assert_eq!((values[&2]["pending"].clone(), values[&2]["key"].clone()), (json!(false), json!("ember:c-1")));

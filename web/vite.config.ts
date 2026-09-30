@@ -23,6 +23,15 @@ function posthogKey(): { host: string; key: string; release: string } | null {
   return { host, key, release };
 }
 
+/** This build as the apps number theirs, 0.1.<commits in the history>; null outside a checkout. */
+function buildNumber(): string | null {
+  try {
+    return `0.1.${execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: here("."), encoding: "utf8" }).trim()}`;
+  } catch {
+    return null;
+  }
+}
+
 /** The station's own error reports (src/telemetry.ts) use the same key: it goes next to the page it came with. */
 function stationKeyFile(posthog: { host: string; key: string; release: string }): Plugin {
   return {
@@ -50,6 +59,8 @@ export default defineConfig(({ mode }) => {
       __POSTHOG__: JSON.stringify(posthog),
       // When this build was made: the core's worker of a newer build takes over from an older one (src/core/worker.ts).
       __BUILT_AT__: JSON.stringify(Date.now()),
+      // Which build it is, as the app a message was sent from (src/api.ts).
+      __BUILD__: JSON.stringify(buildNumber()),
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
       __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
     },

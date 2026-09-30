@@ -16,6 +16,7 @@ fn message(n: i64, ts: &str, author: &str, rich: bool, kind: AuthorKind) -> Mess
         attachments: if rich { vec![Attachment { name: "a.png".into(), path: "/w/uploads/a.png".into(), size: 3, width: None, height: None, thumbhash: None }] } else { vec![] },
         quotes: if rich { vec![Quote { author: "U2".into(), text: "line1\nline2".into(), comment: "see".into(), ts: Some("99.0".into()), role: Some("person".into()), file: None }] } else { vec![] },
         declared: None,
+        client: None,
         created_at: 1,
         edited_at: None,
     }
@@ -76,6 +77,15 @@ fn a_thread_new_to_the_session_is_said_to_have_earlier_messages_only_when_it_has
     // Slack: a thread's first message has none; a reply does, whether the station saw them or not.
     assert!(!hinted(1, "100.0", "slack:T1", "C1", "100.0"));
     assert!(hinted(1, "101.0", "slack:T1", "C1", "100.0"));
+}
+
+#[test]
+fn the_app_a_message_was_sent_from_rides_on_its_envelope() {
+    let sent = MessageRow { client: Some("android 0.1.1123".into()), ..message(2, "101.0", "a@x.com", false, AuthorKind::Person) };
+    let inbound = format_inbound(&[pending(sent.clone(), STILLFAIL_SURFACE, "EMBER", "1.0")], &HashSet::new(), &HashMap::new(), &HashMap::new());
+    assert!(inbound.starts_with("<message via=\"web\" connect=\"cl\" thread=\"EMBER/1.0\" from=\"a@x.com\" client=\"android 0.1.1123\" ts=\"101.0\">"), "{inbound}");
+    let history = format_history(&[sent], STILLFAIL_SURFACE, "EMBER/1.0", "me", &HashMap::new());
+    assert!(history.starts_with("<message via=\"web\" thread=\"EMBER/1.0\" from=\"a@x.com\" client=\"android 0.1.1123\" ts=\"101.0\">"), "{history}");
 }
 
 #[test]

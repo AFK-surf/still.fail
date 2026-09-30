@@ -4,6 +4,7 @@
 package fail.still.android.data
 
 import android.util.Base64
+import fail.still.android.BuildConfig
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.serialization.builtins.ListSerializer
@@ -21,6 +22,9 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 
+/** Which app a message is sent from ("android 0.1.1123"): the station tells the chat's agent; never shown. */
+private val SENT_FROM = "android " + BuildConfig.VERSION_NAME
+
 /** The admin API of one station, by what each call does. */
 class StationApi(private val core: StillFailCore, val station: String) {
     private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
@@ -35,6 +39,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
             put("text", text)
             put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
+            put("client", SENT_FROM)
         }
     }
 
@@ -289,6 +294,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
             put("session", session); put("text", text)
             put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
+            put("client", SENT_FROM)
         }
     }
     /** A failed message of such a chat, by its key: sent again, or dropped. */

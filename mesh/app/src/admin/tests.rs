@@ -943,6 +943,11 @@ async fn connects_sessions_and_chats_remember_who_created_them() {
     assert_eq!(firsts, vec![(json!("hello from the page"), vec![json!("local")]), (json!("<@UBOT> hi"), vec![json!("slack:ds:U42")])]);
     let slack_thread = after["threads"][1]["id"].as_i64().unwrap();
     assert_eq!(t.call("POST", &format!("/threads/{slack_thread}/messages"), Some(json!({ "text": "hi" }))).await.0, 400, "Slack threads are written in Slack");
+    // The app a message was sent from is kept with it, for its agent; older apps say none.
+    t.call("POST", &format!("/threads/{chat_id}/messages"), Some(json!({ "text": "from the phone", "client": " android 0.1.1123\n" }))).await;
+    let entries = t.get(&format!("/threads/{chat_id}/entries")).await["entries"].clone();
+    let clients: Vec<(Value, Value)> = entries.as_array().unwrap().iter().map(|e| (e["text"].clone(), e["client"].clone())).collect();
+    assert_eq!(clients, vec![(json!("hello from the page"), Value::Null), (json!("from the phone"), json!("android 0.1.1123"))]);
 }
 
 #[tokio::test]
@@ -1063,7 +1068,7 @@ async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_f
     let t = setup().await;
     let (_, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     for i in 1..=5 {
-        t.hub.say(thread.id, "local", &format!("m{i}"), vec![], vec![]).unwrap();
+        t.hub.say(thread.id, "local", &format!("m{i}"), vec![], vec![], None).unwrap();
     }
     let latest = t.get(&format!("/threads/{}/entries?limit=2", thread.id)).await;
     let rows: Vec<(Value, Value, Value)> = latest["entries"].as_array().unwrap().iter().map(|e| (e["n"].clone(), e["text"].clone(), e["authorName"].clone())).collect();
@@ -1078,7 +1083,7 @@ async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_f
     let slack = t.store.thread_at("slack:T1", "C1", "7.000001").unwrap().unwrap();
     let opened = t.get(&format!("/threads/{}/entries", slack.id)).await;
     t.hub.receive("ds", ChatEvent::Changed { channel: "C1".into(), thread_ts: "7.000001".into(), ts: "7.000001".into(), text: "<@UBOT> one, edited".into() }).await.unwrap();
-    t.hub.say(thread.id, "local", "m6", vec![], vec![]).unwrap();
+    t.hub.say(thread.id, "local", "m6", vec![], vec![], None).unwrap();
     let since = t.get(&format!("/threads/{}/entries?after={}", slack.id, opened["last"])).await;
     let rows: Vec<Vec<Value>> = since["entries"].as_array().unwrap().iter().map(|e| vec![e["n"].clone(), e["kind"].clone(), e["target"].clone(), e["text"].clone()]).collect();
     assert_eq!(rows, vec![vec![json!(3), json!("edit"), json!(1), json!("<@UBOT> one, edited")]]);
@@ -1097,8 +1102,8 @@ async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_f
 async fn read_positions_and_unread_counts_are_per_viewer_and_only_move_forward() {
     let t = setup().await;
     let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
-    let first = t.hub.say(thread.id, "local", "mine", vec![], vec![]).unwrap();
-    t.hub.say(thread.id, "dev@example.com", "theirs", vec![], vec![]).unwrap();
+    let first = t.hub.say(thread.id, "local", "mine", vec![], vec![], None).unwrap();
+    t.hub.say(thread.id, "dev@example.com", "theirs", vec![], vec![], None).unwrap();
     t.store.insert_message(NewMessage::new(thread.id, "9.000001", AuthorKind::Agent, &key, "answer")).unwrap();
     let route = format!("/threads?session={}", enc(&key));
     let unread = |viewer: Viewer| {
@@ -1305,7 +1310,7 @@ async fn the_sidebar_is_one_kind_of_item_an_agent_merged_with_its_internal_chat_
         vec![row["session"].clone(), row["title"].clone(), row["connect"].clone(), row["origin"].clone(), json!(ids(&row["agents"], "key"))],
         vec![json!(slack_key), json!("部署挂了"), json!("ds"), origin.clone(), json!([slack_key])]
     );
-    t.hub.say(chat_id, "local", "看看日志", vec![], vec![]).unwrap();
+    t.hub.say(chat_id, "local", "看看日志", vec![], vec![], None).unwrap();
     let row = find(&rows().await, slack_key);
     assert_eq!(
         vec![row["title"].clone(), row["last"]["text"].clone(), row["last"]["authorKind"].clone(), row["unread"].clone(), row["mine"].clone()],

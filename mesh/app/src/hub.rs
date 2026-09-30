@@ -599,10 +599,10 @@ impl Hub {
     }
 
     /// A person's message in a chat on the station's pages: recorded with its quotes and files and delivered to every
-    /// session in the chat, like a Slack message. Returns its entry number.
-    pub fn say(&self, thread: i64, user: &str, text: &str, attachments: Vec<Attachment>, quotes: Vec<Quote>) -> Result<i64> {
+    /// session in the chat, like a Slack message. `client`: the app it was sent from, as it said. Returns its entry number.
+    pub fn say(&self, thread: i64, user: &str, text: &str, attachments: Vec<Attachment>, quotes: Vec<Quote>, client: Option<String>) -> Result<i64> {
         self.stillfail_chat(thread)?;
-        let message = NewMessage { attachments, quotes, ..NewMessage::new(thread, &next_ts(), AuthorKind::Person, user, text) };
+        let message = NewMessage { attachments, quotes, client, ..NewMessage::new(thread, &next_ts(), AuthorKind::Person, user, text) };
         let (n, _) = self.store.insert_message(message)?;
         let sessions: Vec<String> = self.store.thread_sessions(thread)?.into_iter().map(|m| m.session).collect();
         self.hand_over(thread, n, &sessions, text)?;

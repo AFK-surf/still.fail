@@ -739,8 +739,10 @@ impl AdminApi {
                         if text.is_empty() && attachments.is_empty() && quotes.is_empty() {
                             return Err(http_error(400, "消息是空的"));
                         }
+                        // Which app sent it ("android 0.1.1123"): for its agent, never shown. Older apps say nothing.
+                        let client = input.str("client").map(|c| c.trim().chars().filter(|c| !c.is_control()).take(80).collect::<String>()).filter(|c| !c.is_empty());
                         let attachments = crate::thumbs::keep(attachments, crate::thumbs::dir(&self.config().data_dir)).await;
-                        let n = self.deps.hub.say(thread_id, &viewer.id(), &text, attachments, quotes)?;
+                        let n = self.deps.hub.say(thread_id, &viewer.id(), &text, attachments, quotes, client)?;
                         return ok(json!({ "n": n }));
                     }
                     (Some("read"), "PUT") => {

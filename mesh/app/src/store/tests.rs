@@ -388,6 +388,39 @@ fn a_database_made_before_archiving_gains_its_columns_and_each_sessions_first_ch
 }
 
 #[test]
+fn a_database_made_before_clients_gains_the_column_and_a_message_keeps_its_app_through_archiving() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ember.db");
+    {
+        let db = Connection::open(&path).unwrap();
+        let old = SCHEMA.replace("  client TEXT,\n", "");
+        assert!(!old.contains("client"));
+        db.execute_batch(&old).unwrap();
+        // The view as it was made before.
+        db.execute_batch(&MERGED.replace("m.declared, m.client,", "m.declared,")).unwrap();
+        db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}")).unwrap();
+    }
+    let store = Store::open(path.to_str().unwrap(), Some(&dir.path().join("archive"))).unwrap();
+    session(&store, "a");
+    let thread = store.open_thread("ember", "EMBER", "1.1", None, None).unwrap();
+    store.join_thread(thread.id, "a", "ember").unwrap();
+    say(&store, thread.id, "1.2", AuthorKind::Person, "local", "旧的");
+    let (n, _) = store.insert_message(NewMessage { client: Some("android 0.1.1123".into()), ..NewMessage::new(thread.id, "1.3", AuthorKind::Person, "local", "新的") }).unwrap();
+    store.deliver(thread.id, n, &["a".to_string()]).unwrap();
+    let clients = |store: &Store| store.messages_before(thread.id, None, 10).unwrap().into_iter().map(|m| m.client).collect::<Vec<_>>();
+    assert_eq!(clients(&store), vec![None, Some("android 0.1.1123".to_string())]);
+    assert_eq!(store.pending_messages("a").unwrap()[0].message.client.as_deref(), Some("android 0.1.1123"));
+    store.set_archived("a", true, MANUAL).unwrap();
+    assert!(archive_file(&store, thread.id).exists());
+    assert_eq!(clients(&store), vec![None, Some("android 0.1.1123".to_string())]);
+    store.set_archived("a", false, MANUAL).unwrap();
+    assert_eq!(clients(&store), vec![None, Some("android 0.1.1123".to_string())]);
+    drop(store);
+    // Opened again: nothing more to add.
+    Store::open(path.to_str().unwrap(), None).unwrap();
+}
+
+#[test]
 fn a_widgets_state_is_kept_by_session_and_path_its_model_told_once_until_it_changes() {
     let store = memory();
     session(&store, "a");

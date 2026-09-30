@@ -86,6 +86,7 @@ CREATE TABLE entries (
   attachments TEXT, quotes TEXT,      -- message and edit: JSON (an edit gives the message's whole new version)
   declared TEXT,                      -- message: an agent's final | block
   at INTEGER NOT NULL,
+  client TEXT,                        -- message: the still.fail app a person sent it from (added in place)
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
@@ -188,9 +189,10 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   station knows them when read).
 - `PUT /threads/:id/read {n}` — the viewer's read position; it only moves
   forward, and the answer says where it is.
-- `POST /threads/:id/messages {text, attachments, quotes}` — a person's
+- `POST /threads/:id/messages {text, attachments, quotes, client?}` — a person's
   message in a still.fail chat (Slack threads are written in Slack), answered
-  with its `{ n }`; attachments must be uploads of a session in the thread
+  with its `{ n }`; `client` is the app it was sent from ("android 0.1.1123"),
+  kept for the chat's agent (`client="…"` on its message) and not shown; attachments must be uploads of a session in the thread
   (`POST /sessions/:key/files`). `POST /threads {session, title?}` opens
   another chat on a session; `POST /threads/:id/sessions {session}` brings
   another session into a still.fail chat. `POST /sessions` (a new chat) makes the

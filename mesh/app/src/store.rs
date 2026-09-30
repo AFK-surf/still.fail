@@ -256,6 +256,9 @@ pub struct EntryRow {
     pub quotes: Vec<Quote>,
     /// message: an agent's final or block, posted with it.
     pub declared: Option<String>,
+    /// message: the still.fail app a person sent it from ("android 0.1.1123"); None elsewhere and from older apps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
     pub at: i64,
 }
 
@@ -272,6 +275,8 @@ pub struct MessageRow {
     pub attachments: Vec<Attachment>,
     pub quotes: Vec<Quote>,
     pub declared: Option<String>,
+    /// The still.fail app a person sent it from, if one said.
+    pub client: Option<String>,
     pub created_at: i64,
     /// When its latest edit came; None if never edited.
     pub edited_at: Option<i64>,
@@ -375,12 +380,13 @@ pub struct NewMessage {
     pub attachments: Vec<Attachment>,
     pub quotes: Vec<Quote>,
     pub declared: Option<String>,
+    pub client: Option<String>,
     pub at: Option<i64>,
 }
 
 impl NewMessage {
     pub fn new(thread: i64, ts: &str, author_kind: AuthorKind, author: &str, text: &str) -> NewMessage {
-        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, at: None }
+        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, client: None, at: None }
     }
 }
 
@@ -538,6 +544,7 @@ CREATE TABLE IF NOT EXISTS entries (
   quotes TEXT,
   declared TEXT,
   at INTEGER NOT NULL,
+  client TEXT,
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
@@ -563,17 +570,6 @@ CREATE TABLE IF NOT EXISTS profile_status (
   check_json TEXT, checked_at INTEGER,
   quota_json TEXT, quota_at INTEGER
 );
--- Each message as it reads now: its latest edit's words, files and quotes.
-CREATE VIEW IF NOT EXISTS merged AS
-  SELECT m.thread, m.n, m.ts, m.author_kind, m.author,
-    CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
-    CASE WHEN e.n IS NULL THEN m.attachments ELSE e.attachments END AS attachments,
-    CASE WHEN e.n IS NULL THEN m.quotes ELSE e.quotes END AS quotes,
-    m.declared, m.at AS created_at, e.at AS edited_at
-  FROM entries m
-  LEFT JOIN entries e ON e.thread = m.thread
-    AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n)
-  WHERE m.kind = 'message';
 CREATE TABLE IF NOT EXISTS bindings (
   connect TEXT PRIMARY KEY,
   session_key TEXT NOT NULL
@@ -723,6 +719,34 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Each message as it reads now: its latest edit's words, files and quotes.
+const MERGED: &str = "CREATE VIEW merged AS
+  SELECT m.thread, m.n, m.ts, m.author_kind, m.author,
+    CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
+    CASE WHEN e.n IS NULL THEN m.attachments ELSE e.attachments END AS attachments,
+    CASE WHEN e.n IS NULL THEN m.quotes ELSE e.quotes END AS quotes,
+    m.declared, m.client, m.at AS created_at, e.at AS edited_at
+  FROM entries m
+  LEFT JOIN entries e ON e.thread = m.thread
+    AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n)
+  WHERE m.kind = 'message';";
+
+/// The column a message's app came with (entries.client), added to a database made before it the same way as
+/// add_archive_columns' (a station without it reads the database as it is), and the `merged` view made anew with it.
+fn add_client_column(db: &Connection) -> Result<()> {
+    let has = |table: &str, column: &str| -> Result<bool> {
+        let mut stmt = db.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?"))?;
+        Ok(stmt.exists([column])?)
+    };
+    if !has("entries", "client")? {
+        db.execute_batch("ALTER TABLE entries ADD COLUMN client TEXT")?;
+    }
+    if !has("merged", "client")? {
+        db.execute_batch(&format!("BEGIN; DROP VIEW IF EXISTS merged; {MERGED} COMMIT;"))?;
+    }
+    Ok(())
+}
+
 fn to_session_thread(r: &Row) -> rusqlite::Result<SessionThread> {
     Ok(SessionThread { thread: to_thread(r)?, connect: r.get("connect")? })
 }
@@ -744,6 +768,7 @@ fn to_entry(r: &Row) -> rusqlite::Result<EntryRow> {
         attachments: from_json_list(r.get("attachments")?),
         quotes: from_json_list(r.get("quotes")?),
         declared: r.get("declared")?,
+        client: r.get("client")?,
         at: r.get("at")?,
     })
 }
@@ -759,6 +784,7 @@ fn to_message(r: &Row) -> rusqlite::Result<MessageRow> {
         attachments: from_json_list(r.get("attachments")?),
         quotes: from_json_list(r.get("quotes")?),
         declared: r.get("declared")?,
+        client: r.get("client")?,
         created_at: r.get("created_at")?,
         edited_at: r.get("edited_at")?,
     })
@@ -782,6 +808,7 @@ fn merge_entries(entries: &[EntryRow]) -> Vec<MessageRow> {
                         attachments: e.attachments.clone(),
                         quotes: e.quotes.clone(),
                         declared: e.declared.clone(),
+                        client: e.client.clone(),
                         created_at: e.at,
                         edited_at: None,
                     },
@@ -861,6 +888,7 @@ impl Store {
         }
         db.execute_batch(SCHEMA)?;
         add_archive_columns(&db)?;
+        add_client_column(&db)?;
         db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
         let (archive_dir, temp) = match archive {
             Some(dir) => (dir.to_path_buf(), None),
@@ -1291,6 +1319,7 @@ impl Store {
                     attachments: m.attachments,
                     quotes: m.quotes,
                     declared: m.declared,
+                    client: m.client,
                     at: m.at.unwrap_or_else(now_ms),
                 },
                 changes,
@@ -1321,6 +1350,7 @@ impl Store {
                     attachments: message.attachments,
                     quotes: message.quotes,
                     declared: None,
+                    client: None,
                     at: now_ms(),
                 },
                 changes,
@@ -2176,7 +2206,7 @@ impl Inner {
 
 fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
     db.execute(
-        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             e.thread,
             e.n,
@@ -2189,6 +2219,7 @@ fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
             json_list(&e.attachments),
             json_list(&e.quotes),
             e.declared,
+            e.client,
             e.at
         ],
     )?;

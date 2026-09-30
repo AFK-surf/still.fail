@@ -952,7 +952,7 @@ async fn a_chat_opened_on_the_admin_page_reaches_the_session_like_slack_and_the_
     r.store.set_title(&key, Some("排查")).unwrap();
     let thread = r.hub.open_chat(&key, "local", None).unwrap();
     assert_eq!(thread.title.as_deref(), Some("排查"), "its own chat keeps the name the session was given");
-    r.hub.say(thread.id, "local", "现在进展如何？", vec![], vec![]).unwrap();
+    r.hub.say(thread.id, "local", "现在进展如何？", vec![], vec![], None).unwrap();
     settle().await;
     let prompt = r.claude.last().prompts().pop().unwrap();
     assert!(prompt.contains(&format!("<message via=\"web\" connect=\"ember\" thread=\"EMBER/{}\" from=\"管理员 (local)\"", thread.thread_ts)), "{prompt}");
@@ -977,7 +977,7 @@ async fn a_persons_message_in_a_chat_with_several_agents_reaches_each_of_them_on
     let two = r.hub.new_session(new_chat(RuntimeKind::Codex)).unwrap();
     r.hub.add_to_thread(one.1.id, &two.0).unwrap();
     let quote = Quote { author: "Claude".into(), role: Some("agent".into()), ts: Some("1.000001".into()), text: "上一条".into(), comment: "这里".into(), file: None };
-    r.hub.say(one.1.id, "a@example.com", "你们俩分一下工", vec![], vec![quote]).unwrap();
+    r.hub.say(one.1.id, "a@example.com", "你们俩分一下工", vec![], vec![quote], None).unwrap();
     settle().await;
     for driver in [&r.claude, &r.codex] {
         assert_eq!(driver.count(), 1);
@@ -1076,7 +1076,7 @@ async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unrea
     r.claude.last().complete();
     settle().await;
     let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
-    r.hub.say(thread.id, "local", "hi", vec![], vec![]).unwrap();
+    r.hub.say(thread.id, "local", "hi", vec![], vec![], None).unwrap();
     settle().await;
     // The agent's answer is unread: the chat stays.
     r.call(&web, "chat_post", json!({ "to": format!("EMBER/{}", thread.thread_ts), "text": "hello", "kind": "final" })).await.unwrap();
@@ -1316,7 +1316,7 @@ async fn in_a_chat_on_the_stations_page_with_several_agents_what_one_posts_reach
     let one = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
     let two = r.hub.new_session(new_chat(RuntimeKind::Codex)).unwrap();
     r.hub.add_to_thread(one.1.id, &two.0).unwrap();
-    r.hub.say(one.1.id, "local", "分一下工", vec![], vec![]).unwrap();
+    r.hub.say(one.1.id, "local", "分一下工", vec![], vec![], None).unwrap();
     settle().await;
     r.call(&one.0, "chat_state", json!({ "kind": "final" })).await.unwrap();
     r.call(&two.0, "chat_state", json!({ "kind": "final" })).await.unwrap();
@@ -1359,7 +1359,7 @@ async fn a_session_the_machine_kept_goes_on_in_a_chat_run_in_its_own_directory_w
     settle().await;
     assert_eq!(r.claude.count(), 0, "what was said before is not handed to the agent again");
 
-    r.hub.say(thread.id, "local", "and the tests", vec![], vec![]).unwrap();
+    r.hub.say(thread.id, "local", "and the tests", vec![], vec![], None).unwrap();
     settle().await;
     let opened = r.claude.last();
     assert_eq!(opened.options.resume.as_deref(), Some(found.id.as_str()));
@@ -1372,7 +1372,7 @@ async fn a_session_the_machine_kept_goes_on_in_a_chat_run_in_its_own_directory_w
     assert!(first.contains(&format!("- Project directory: {}.", project.display())));
     opened.complete();
     settle().await;
-    r.hub.say(thread.id, "local", "one more", vec![], vec![]).unwrap();
+    r.hub.say(thread.id, "local", "one more", vec![], vec![], None).unwrap();
     settle().await;
     let next = r.claude.last().prompts().last().cloned().unwrap();
     assert!(!next.contains("<stillfail-instructions>"), "said once: {next}");

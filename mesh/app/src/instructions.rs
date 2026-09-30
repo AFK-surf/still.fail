@@ -21,7 +21,7 @@ Who you are: you have no name of your own. still.fail (called ember before) is t
 
 Messages and where they come from:
 - Each message reaches you as <message via="slack" connect="…" you="…" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message>. `you` is what you are called where that message was said — your name there and how you are mentioned (e.g. "ds-helper (<@U123>)"); it belongs to that connect only, so answer to it there and do not take it as your name elsewhere. Web chats give none. The thread attribute says which conversation it belongs to. Messages from different threads can arrive in the same session; keep them apart and answer each where it was asked.
-- via="web" messages come from a chat on still.fail's own admin page (thread EMBER/…), usually an operator looking at this session. Treat them like any other conversation and answer there with chat_post.
+- via="web" messages come from a chat on still.fail's own admin page (thread EMBER/…), usually an operator looking at this session. Treat them like any other conversation and answer there with chat_post. Their client attribute, when there, is the still.fail app and version they were sent from (e.g. client="android 0.1.1123"): which one a reported problem is in.
 - Not every message is addressed to you; read it in context before acting.
 - Other agents may take part in a conversation too, each with its own session. What they post reaches you like what people say, marked bot, from the name they go by there (with their mention in Slack). Work with them: do what is asked of you, leave or hand over what another agent is doing or better placed to do, build on what they found instead of repeating it, and mention them when you need something from them.
 - Messages via="ember" come from the station itself: a background job you started (job_start) telling you something, or that it ended. They belong to no conversation; act on them, and tell the people who asked for the work when it matters to them.
@@ -114,6 +114,11 @@ fn via(surface: &str) -> &'static str {
     if surface == STILLFAIL_SURFACE { "web" } else { "slack" }
 }
 
+/// The still.fail app a message was sent from, as an attribute; nothing for one that did not say.
+fn client_attr(m: &MessageRow) -> String {
+    m.client.as_ref().map(|c| format!(" client=\"{}\"", escape_attr(c))).unwrap_or_default()
+}
+
 /// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
 pub fn format_inbound(messages: &[PendingMessage], new_threads: &HashSet<i64>, names: &HashMap<String, String>, selves: &HashMap<String, String>) -> String {
     let mut lines = Vec::new();
@@ -138,11 +143,12 @@ pub fn format_inbound(messages: &[PendingMessage], new_threads: &HashSet<i64>, n
             (None, false) => m.author.clone(),
         };
         lines.push(format!(
-            "<message via=\"{}\" connect=\"{}\"{you} thread=\"{address}\" from=\"{}\"{} ts=\"{}\">\n{}\n</message>",
+            "<message via=\"{}\" connect=\"{}\"{you} thread=\"{address}\" from=\"{}\"{}{} ts=\"{}\">\n{}\n</message>",
             via(&p.surface),
             escape_attr(&p.connect),
             escape_attr(&from),
             if agent { " bot" } else { "" },
+            client_attr(m),
             m.ts,
             message_for_agent(m)
         ));
@@ -184,7 +190,7 @@ pub fn format_history(messages: &[MessageRow], surface: &str, address: &str, sel
                 }
             };
             let bot = if m.author_kind != AuthorKind::Person && from != "you" { " bot" } else { "" };
-            format!("<message via=\"{}\" thread=\"{address}\" from=\"{}\"{bot} ts=\"{}\">\n{}\n</message>", via(surface), escape_attr(&from), m.ts, message_for_agent(m))
+            format!("<message via=\"{}\" thread=\"{address}\" from=\"{}\"{bot}{} ts=\"{}\">\n{}\n</message>", via(surface), escape_attr(&from), client_attr(m), m.ts, message_for_agent(m))
         })
         .collect::<Vec<_>>()
         .join("\n")

@@ -195,7 +195,7 @@ impl Views {
             chat.made = Some((session.to_string(), thread));
             (chat.station.clone(), std::mem::take(&mut chat.queue))
         };
-        let sends = queue.iter().map(|m| (m["id"].as_str().unwrap_or("").to_string(), json!({ "text": m["text"], "attachments": m["attachments"], "quotes": m["quotes"] }))).collect();
+        let sends = queue.iter().map(|m| (m["id"].as_str().unwrap_or("").to_string(), sent_as(m))).collect();
         if !queue.is_empty() {
             self.outbox.borrow_mut().entry((station.clone(), thread)).or_default().extend(queue);
         }
@@ -1145,6 +1145,15 @@ impl Views {
 
 
 /// The session keys taking part in a thread.
+/// What an outbox entry sends to its station: its words, files and quotes, and the app it was sent from if said.
+pub fn sent_as(entry: &Value) -> Value {
+    let mut message = json!({ "text": entry["text"], "attachments": entry["attachments"], "quotes": entry["quotes"] });
+    if let Some(client) = entry.get("client").filter(|c| c.is_string()) {
+        message["client"] = client.clone();
+    }
+    message
+}
+
 fn members(thread: &Value) -> Vec<String> {
     thread.get("sessions").and_then(Value::as_array).into_iter().flatten().filter_map(|m| Some(m.get("session")?.as_str()?.to_string())).collect()
 }
