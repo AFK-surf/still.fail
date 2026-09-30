@@ -54,15 +54,18 @@ globalStyle(listBar, { gridTemplateColumns: "minmax(max-content, 1fr) minmax(0, 
 globalStyle(`${listBar} ${pageBarTitle}`, { gridColumn: "2", paddingLeft: 0 });
 globalStyle(`${listBar} ${pageBarActions}`, { gridColumn: "3" });
 
-/** In a chat's bar, just left of its title: back to the list, and the others' states; a short line between it and the title. */
+/**
+ * In a chat's bar, just left of its title: back to the list, and the others' states; a short line between it and the
+ * title, 2px clear of the pill it shows when pointed at, as far from the last count as from the title.
+ */
 export const back = style({
   display: "inline-flex", alignItems: "center", gap: 10, height: 32, borderRadius: 999,
-  gridColumn: "1", justifySelf: "end", position: "relative", marginRight: 12, padding: "0 10px", color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
+  gridColumn: "1", justifySelf: "end", position: "relative", marginRight: 13, padding: "0 8px", color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
   transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
     "&::after": {
-      content: '""', position: "absolute", right: -6, top: 9, bottom: 9, width: 1, background: vars.lineStrong, pointerEvents: "none",
+      content: '""', position: "absolute", right: -3, top: 6, bottom: 6, width: 1, background: vars.lineStrong, pointerEvents: "none",
     },
   },
 });
