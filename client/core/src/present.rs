@@ -410,12 +410,22 @@ pub fn host(h: &mut Value) {
         json!({ "label": label, "short": short, "percent": p, "level": if p >= 90 { "red" } else if p >= 75 { "amber" } else { "ok" }, "value": value, "note": note })
     };
     let swap = n(&["memory", "swapUsedBytes"]);
+    // How busy the CPUs are, all of them together (up to 100%), the load average beside it; stations before cpuBusy: the
+    // load average over the cores alone.
+    let model = src.get("cpuModel").and_then(Value::as_str).filter(|m| !m.is_empty());
+    let cpu = match src.get("cpuBusy").and_then(Value::as_f64) {
+        Some(busy) => {
+            let note = [Some(format!("负载 {:.1}", load * cpus)), model.map(str::to_string)].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+            meter("CPU", "CPU", busy * 100.0, format!("{}%", (busy * 100.0).round()), Some(note))
+        }
+        None => meter("CPU 负载", "CPU", load * 100.0, format!("{}%", (load * 100.0).round()), model.map(str::to_string)),
+    };
     h["facts"] = json!([
         src.get("hostname").and_then(Value::as_str).unwrap_or(""), os, format!("{arch} · {cpus} 核"),
         format!("已运行 {}", if days > 0.0 { format!("{days} 天 {hours} 小时") } else { format!("{hours} 小时") }),
     ]);
     h["meters"] = json!([
-        meter("CPU 负载", "CPU", load * 100.0, format!("{}%", (load * 100.0).round()), src.get("cpuModel").and_then(Value::as_str).map(str::to_string)),
+        cpu,
         meter("内存", "内存", if mem_total > 0.0 { mem_used / mem_total * 100.0 } else { 0.0 }, format!("{} / {}", format::gb1(mem_used), format::gb1(mem_total)),
             (swap > 0.0).then(|| format!("swap {}", format::gb1(swap)))),
         meter("磁盘", "磁盘", if disk_total > 0.0 { (disk_total - disk_free) / disk_total * 100.0 } else { 0.0 }, format!("剩 {} / {}", format::gb1(disk_free), format::gb1(disk_total)), None),
@@ -578,7 +588,14 @@ mod tests {
         host(&mut h);
         assert!(h["meters"][0]["percent"].is_i64() && v["quota"]["windows"][0]["left"].is_i64(), "whole numbers: clients read them as such");
         assert_eq!((h["summary"].as_str(), h["facts"][3].as_str()), (Some("8 核 · 32 GB"), Some("已运行 1 天 1 小时")));
-        assert_eq!((h["meters"][2]["level"].as_str(), h["meters"][2]["value"].as_str(), h["emberText"].as_str()), (Some("red"), Some("剩 50.0 GB / 1000 GB"), Some("still.fail 100 MB")));
+        assert_eq!((h["meters"][0]["label"].as_str(), h["meters"][0]["value"].as_str()), (Some("CPU 负载"), Some("50%")), "a station before cpuBusy: the load");
+        h["cpuBusy"] = json!(0.93);
+        h["cpuModel"] = json!("Apple M2 Max");
+        host(&mut h);
+        let cpu = &h["meters"][0];
+        assert_eq!((cpu["label"].as_str(), cpu["percent"].as_i64(), cpu["level"].as_str(), cpu["value"].as_str(), cpu["note"].as_str()),
+            (Some("CPU"), Some(93), Some("red"), Some("93%"), Some("负载 4.0 · Apple M2 Max")));
+                assert_eq!((h["meters"][2]["level"].as_str(), h["meters"][2]["value"].as_str(), h["emberText"].as_str()), (Some("red"), Some("剩 50.0 GB / 1000 GB"), Some("still.fail 100 MB")));
     }
 
 }

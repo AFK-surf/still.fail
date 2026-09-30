@@ -30,7 +30,7 @@ function problems(s: StationView, silent: boolean): { key: string; level: Level;
     return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? "离线：在那台机器上打开 still.fail，它就会重新连上" : "还没连上过：在那台机器上打开 still.fail" }];
   }
   const said: Record<string, (m: Meter) => string> = {
-    CPU: (m) => `CPU 负载 ${m.percent}%`,
+    CPU: (m) => `${m.label} ${m.value}`,
     内存: (m) => `内存快满了：${m.value}`,
     磁盘: (m) => `磁盘快满了：${m.value}`,
   };

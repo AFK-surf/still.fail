@@ -39,6 +39,8 @@ pub struct HostInfo {
     pub cpu_model: String,
     /// 1-minute load average divided by CPU count, 0–1+.
     pub load: f64,
+    /// How busy the CPUs were since the last look (or over a moment, the first time), all of them together: 0–1.
+    pub cpu_busy: Option<f64>,
     pub uptime_sec: u64,
     pub memory: HostMemory,
     pub disk: HostDisk,
@@ -90,6 +92,67 @@ fn load_average() -> f64 {
         return 0.0;
     }
     loads[0]
+}
+
+/// CPU time since boot, all CPUs together, in ticks: (busy, total).
+#[cfg(target_os = "macos")]
+fn cpu_ticks() -> Option<(u64, u64)> {
+    unsafe extern "C" {
+        fn mach_host_self() -> u32;
+        fn host_statistics(host: u32, flavor: i32, info: *mut u32, count: *mut u32) -> i32;
+    }
+    const HOST_CPU_LOAD_INFO: i32 = 3;
+    // user, system, idle, nice (CPU_STATE_MAX).
+    let mut ticks = [0u32; 4];
+    let mut count = ticks.len() as u32;
+    static HOST: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    // SAFETY: the host port is this task's; host_statistics writes at most `count` integers.
+    let host = *HOST.get_or_init(|| unsafe { mach_host_self() });
+    if unsafe { host_statistics(host, HOST_CPU_LOAD_INFO, ticks.as_mut_ptr(), &mut count) } != 0 {
+        return None;
+    }
+    let [user, system, idle, nice] = ticks.map(u64::from);
+    Some((user + system + nice, user + system + idle + nice))
+}
+
+/// CPU time since boot from /proc/stat's first line: waiting on disks (iowait) counts as idle, as top counts it.
+#[cfg(not(target_os = "macos"))]
+fn cpu_ticks() -> Option<(u64, u64)> {
+    proc_stat_ticks(&std::fs::read_to_string("/proc/stat").ok()?)
+}
+
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn proc_stat_ticks(stat: &str) -> Option<(u64, u64)> {
+    let line = stat.lines().find(|l| l.starts_with("cpu "))?;
+    let v: Vec<u64> = line.split_whitespace().skip(1).take(8).filter_map(|n| n.parse().ok()).collect();
+    if v.len() < 4 {
+        return None;
+    }
+    let total: u64 = v.iter().sum();
+    let idle = v[3] + v.get(4).copied().unwrap_or(0);
+    Some((total - idle, total))
+}
+
+/// The ticks last seen, and when.
+static TICKS: Mutex<Option<(i64, (u64, u64))>> = Mutex::new(None);
+
+/// How busy the CPUs have been since the last look, if that was within a minute; otherwise over the next moment.
+async fn cpu_busy() -> Option<f64> {
+    let share = |(b0, t0): (u64, u64), (b1, t1): (u64, u64)| (t1 > t0).then(|| (b1.saturating_sub(b0) as f64 / (t1 - t0) as f64).clamp(0.0, 1.0));
+    let last = TICKS.lock().unwrap().filter(|(at, _)| now_ms() - at < 60_000).map(|(_, t)| t);
+    let mut now = cpu_ticks()?;
+    let busy = match last.and_then(|last| share(last, now)) {
+        Some(busy) => busy,
+        None => {
+            // A real half second, even where tokio's clock is paused (the station's tests).
+            let _ = tokio::task::spawn_blocking(|| std::thread::sleep(Duration::from_millis(500))).await;
+            let then = now;
+            now = cpu_ticks()?;
+            share(then, now)?
+        }
+    };
+    *TICKS.lock().unwrap() = Some((now_ms(), now));
+    Some((busy * 100.0).round() / 100.0)
 }
 
 fn disk(path: &Path) -> HostDisk {
@@ -179,7 +242,7 @@ pub async fn host_info(data_dir: &Path) -> HostInfo {
     if let Some(cached) = CACHED.lock().unwrap().clone().filter(|c| now_ms() - c.checked_at < 10_000) {
         return cached;
     }
-    let (memory, os, cpu_model, uptime_sec, stillfail_rss_bytes) = tokio::join!(memory(), os_name(), cpu_model(), uptime_sec(), own_rss());
+    let (memory, os, cpu_model, uptime_sec, stillfail_rss_bytes, cpu_busy) = tokio::join!(memory(), os_name(), cpu_model(), uptime_sec(), own_rss(), cpu_busy());
     let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
     let value = HostInfo {
         hostname: hostname(),
@@ -188,6 +251,7 @@ pub async fn host_info(data_dir: &Path) -> HostInfo {
         cpus,
         cpu_model,
         load: (load_average() / cpus.max(1) as f64 * 100.0).round() / 100.0,
+        cpu_busy,
         uptime_sec,
         memory,
         disk: disk(data_dir),
@@ -211,7 +275,15 @@ mod tests {
         assert!(info.disk.total_bytes > 0 && info.stillfail_rss_bytes > 0 && info.uptime_sec > 0);
         let json = serde_json::to_value(&info).unwrap();
         assert!(json["memory"]["totalBytes"].is_u64() && json["cpuModel"].is_string());
+        assert!(info.cpu_busy.is_some_and(|b| (0.0..=1.0).contains(&b)), "how busy the CPUs are: {:?}", info.cpu_busy);
         assert_eq!(host_info(dir.path()).await.checked_at, info.checked_at, "read again within ten seconds: the same");
+    }
+
+    #[test]
+    fn proc_stat_is_read() {
+        // user nice system idle iowait irq softirq steal
+        assert_eq!(proc_stat_ticks("cpu  100 0 50 800 50 0 0 0 0 0\ncpu0 1 2 3 4\n"), Some((150, 1000)));
+        assert_eq!(proc_stat_ticks("intr 1 2\n"), None);
     }
 
     #[test]

@@ -20,6 +20,7 @@
 - 侧栏头像显示参与的人（sidebar-people-avatars）：station（mesh）、core（wasm 和安卓的 core）、web、安卓都改了。station 的 `/chats` 每行多给 `creator` 和 `people`，core 给人配名字和头像，`chats` 视图多一个 `members`（workspace 人数，本机页算 1），都是可选字段。新旧混跑：旧 station 不给 people 时，行里就没有这个字段，页面照旧只画 agent；旧页面遇到新 station，多出来的字段直接忽略。要重新发 station 包，各台 station 更新后才看得到人；web 跟着部署生效；安卓要发新版。上线后验：在多人 workspace 里，侧栏左边显示的是参与的人，发起人带一圈描边，agent 缩到标题右边，同一家的 agent 只画一个图标；状态点在标题前面；设置 → 外观 →「侧栏头像」（手机在「我」→「列表头像」）切到 Agent 为主或人为主，列表跟着变。
 - 固定 chat（pin-chats）：station（mesh）、core 的 wasm、web、安卓都改了。station 在打开 db 时建 `pins` 表（IF NOT EXISTS，不升 schema 版本，旧 station 照样能读），侧栏行多一个 `pinned` 字段（固定的时间或 null），新增 `PUT/DELETE /sessions/:key/pin`；有人固定的 chat 不会因为闲置被自动归档。新旧混跑：旧 station 不发 `pinned`，新页面就不显示固定的菜单项；旧页面忽略这个字段，列表照旧按时间排。安卓要发新版才有详情页的入口。先发 station 包或先发页面都可以。上线后验：PC 右键一个 chat 点「固定」，它进到列表顶部的「已固定」一组，换一台设备也在；别人登录看不到你的固定；手机详情页「固定到列表顶部」同样生效。
 - 改权限后自动打开 Slack 同意页（slack-approve-opens）：只改客户端（web、安卓），station 和 cloud 不用动。web 在点「应用到 Slack」时如果权限有变，先同步开一个标签页，station 回来后跳到 Slack 的 install 页，失败就关掉；桌面端和安卓等结果回来后用系统浏览器打开。web 跟着 cloud / station 的页面上线，安卓要发新版。上线后验：在 Slack app 设置里勾一个新权限点应用，新标签页先显示「正在更新 Slack app…」，随后到 Slack 的同意页；只改名字不开标签页。
+- CPU 显示真实占用率（cpu-usage-meter）：station（mesh）、core（wasm 和安卓的 core）、web 都改了。station 的 host 多给一个可选的 `cpuBusy`（0–1，所有核合起来；macOS 读 host_statistics，Linux 读 /proc/stat），core 有它时 CPU 表显示占用率、附注写「负载 x · 芯片」，没有时照旧按「load ÷ 核数」显示「CPU 负载」。新旧混跑：旧 station 不给 cpuBusy 就是旧显示；旧页面和旧 core 忽略这个字段。要重新发 station 包，各台 station 更新后才换成占用率；安卓要发新版（core 在里面）。上线后验：cloud 的 Station 列表里，没满的机器 CPU 圆环和 `top` 的占用率对得上，不再是 load ÷ 核数；悬停圆环看到「负载 …」。
 
 ## 2026-09-30
 

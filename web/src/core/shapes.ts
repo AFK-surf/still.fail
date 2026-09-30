@@ -962,7 +962,10 @@ export interface Host {
 	arch: string;
 	cpus: number;
 	cpuModel: string;
+	/** 1-minute load average divided by CPU count, 0–1+. */
 	load: number;
+	/** How busy the CPUs are, all together, 0–1 (stations before it: absent). */
+	cpuBusy?: number;
 	uptimeSec: number;
 	memory: Memory;
 	disk: Disk;

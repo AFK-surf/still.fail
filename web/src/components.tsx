@@ -160,7 +160,7 @@ function Meter({ meter }: { meter: Host["meters"][number] }) {
   );
 }
 
-const METER_LABELS = ["CPU 负载", "内存", "磁盘"];
+const METER_LABELS = ["CPU", "内存", "磁盘"];
 
 /**
  * The machine a station runs on: how loaded (the core's words), then what it is and what ember takes, quieter

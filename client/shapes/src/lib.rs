@@ -899,7 +899,10 @@ pub struct Host {
     #[typeshare(serialized_as = "I54")]
     pub cpus: i64,
     pub cpu_model: String,
+    /// 1-minute load average divided by CPU count, 0–1+.
     pub load: f64,
+    /// How busy the CPUs are, all together, 0–1 (stations before it: absent).
+    pub cpu_busy: Option<f64>,
     pub uptime_sec: f64,
     pub memory: Memory,
     pub disk: Disk,

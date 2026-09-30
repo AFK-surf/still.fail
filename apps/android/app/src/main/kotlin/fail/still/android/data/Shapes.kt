@@ -1028,7 +1028,10 @@ data class Host (
 	val arch: String,
 	val cpus: Long,
 	val cpuModel: String,
+	/// 1-minute load average divided by CPU count, 0–1+.
 	val load: Double,
+	/// How busy the CPUs are, all together, 0–1 (stations before it: absent).
+	val cpuBusy: Double? = null,
 	val uptimeSec: Double,
 	val memory: Memory,
 	val disk: Disk,
