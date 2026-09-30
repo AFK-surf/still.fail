@@ -453,16 +453,20 @@ pub fn host(h: &mut Value) {
 }
 
 /// A station's connection as its card shows it (shapes `StationNet`), from what `Topic::Net` read of it; None
-/// while there is none. Only what is off is coloured: a slow round trip, packets lost.
-pub fn net(raw: &Value) -> Option<Value> {
+/// while there is none. Only what is off is coloured: a slow round trip, packets lost. A relay is said by the name
+/// still.fail gives it (`relay_name`, by host), or its host.
+pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<Value> {
     if !raw.is_object() {
         return None;
     }
     let path = match raw.get("path").and_then(Value::as_str) {
         Some("direct") => "直连".to_string(),
         Some("relay") => match raw.get("relay").and_then(Value::as_str).filter(|h| !h.is_empty()) {
-            Some(host) => format!("经 relay（{host}）"),
-            None => "经 relay".to_string(),
+            Some(host) => match relay_name(host) {
+                Some(name) => format!("经中继{name}"),
+                None => format!("经中继（{host}）"),
+            },
+            None => "经中继".to_string(),
         },
         _ => "正在选路".to_string(),
     };
@@ -582,10 +586,11 @@ mod tests {
 
     #[test]
     fn a_connection_is_said_in_words_and_only_what_is_off_is_coloured() {
-        assert_eq!(net(&Value::Null), None);
+        let unnamed = |_: &str| None;
+        assert_eq!(net(&Value::Null, &unnamed), None);
         let sample = |rtt: f64, sent: u64, lost: u64| json!({ "at": 0, "rttMs": rtt, "rxBps": 1_468_006, "txBps": 83_968, "sent": sent, "lost": lost });
         let raw = json!({ "path": "direct", "rttMs": 38.4, "rxBytes": 222_298_112u64, "txBytes": 10_066_329u64, "samples": [sample(40.0, 50, 0), sample(38.4, 50, 0)] });
-        let shown = net(&raw).unwrap();
+        let shown = net(&raw, &unnamed).unwrap();
         assert_eq!(shown["path"], "直连");
         assert_eq!(shown["rtt"], json!({ "text": "38 ms", "level": "ok" }));
         assert_eq!(shown["rttHistory"], json!([40.0, 38.4]));
@@ -594,12 +599,14 @@ mod tests {
         assert_eq!(shown["loss"], Value::Null);
 
         let raw = json!({ "path": "relay", "relay": "relay.still.fail", "rttMs": 286.0, "rxBytes": 0, "txBytes": 0, "samples": [sample(1200.0, 40, 2)] });
-        let shown = net(&raw).unwrap();
-        assert_eq!(shown["path"], "经 relay（relay.still.fail）");
+        let shown = net(&raw, &unnamed).unwrap();
+        assert_eq!(shown["path"], "经中继（relay.still.fail）");
+        let named = |host: &str| (host == "relay.still.fail").then(|| "北京".to_string());
+        assert_eq!(net(&raw, &named).unwrap()["path"], "经中继北京");
         assert_eq!(shown["rtt"]["level"], "ok");
         assert_eq!(shown["loss"], json!({ "text": "丢包 5.0%", "level": "amber" }));
         // Not yet two readings: nothing to say of speed.
-        let shown = net(&json!({ "path": null, "rttMs": 1500.0, "rxBytes": 0, "txBytes": 0, "samples": [] })).unwrap();
+        let shown = net(&json!({ "path": null, "rttMs": 1500.0, "rxBytes": 0, "txBytes": 0, "samples": [] }), &unnamed).unwrap();
         assert_eq!((shown["path"].as_str(), shown["down"].as_str()), (Some("正在选路"), Some("—")));
         assert_eq!(shown["rtt"], json!({ "text": "1.5 s", "level": "red" }));
     }

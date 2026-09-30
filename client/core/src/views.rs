@@ -31,11 +31,14 @@ const DAY_MS: f64 = 86_400_000.0;
 
 /// The email of the signed-in account that reaches a workspace.
 pub type EmailOf = Rc<dyn Fn(&str) -> Option<String>>;
+/// What still.fail calls a relay, by its host, as `/v1/me` said (`relay_names`).
+pub type RelayName = Rc<dyn Fn(&str) -> Option<String>>;
 
 pub struct Views {
     host: Rc<dyn Host>,
     store: Rc<Store>,
     email_of: EmailOf,
+    relay_name: RelayName,
     /// Per live view, the topics it watches.
     views: RefCell<HashMap<Topic, HashMap<Topic, Watch>>>,
     /// Messages sent from here that the chat does not show yet, per (station, thread), oldest first.
@@ -90,11 +93,12 @@ struct StationInfo {
 }
 
 impl Views {
-    pub fn new(host: Rc<dyn Host>, store: Rc<Store>, email_of: EmailOf) -> Rc<Views> {
+    pub fn new(host: Rc<dyn Host>, store: Rc<Store>, email_of: EmailOf, relay_name: RelayName) -> Rc<Views> {
         Rc::new(Views {
             host,
             store,
             email_of,
+            relay_name,
             views: RefCell::default(),
             outbox: RefCell::default(),
             sent: Cell::new(0),
@@ -911,7 +915,7 @@ impl Views {
                 "runtimes": runtimes(overview.as_ref()),
                 "models": models(overview.as_ref(), self.host.now_ms()),
                 "overview": shown, "host": host,
-                "net": read(Topic::Net { station: s.address.clone() }).as_ref().and_then(crate::present::net),
+                "net": read(Topic::Net { station: s.address.clone() }).as_ref().and_then(|raw| crate::present::net(raw, &*self.relay_name)),
             })
         });
         Some(Ok(Value::Array(items.collect())))
@@ -1655,7 +1659,7 @@ mod tests {
         store.set_shaped();
         let router = Rc::new(Router::default());
         let email_of: EmailOf = Rc::new(|ws: &str| (ws == "ws").then(|| "Me@x.com".to_string()));
-        *router.views.borrow_mut() = Some(Views::new(host.clone(), store.clone(), email_of));
+        *router.views.borrow_mut() = Some(Views::new(host.clone(), store.clone(), email_of, Rc::new(|_: &str| None)));
         store.set_source(router.clone());
         Setup { host, store, router }
     }

@@ -123,7 +123,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.equal(first.status, 101);
     await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations });
+    assert.deepEqual(first.frames![0], { type: "state", workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];

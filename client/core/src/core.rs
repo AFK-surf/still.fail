@@ -181,7 +181,7 @@ impl Core {
             status.set_names(name_of(me.clone()));
             let kept = Kept::new(host.clone());
             let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone(), status.clone());
-            let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
+            let views = Views::new(host.clone(), store.clone(), email_of(me.clone()), relay_name(me.clone()));
             let choose = Choose::new(host.clone(), store.clone(), data.clone(), views.clone(), check_profile(me.clone()));
             let sync = Sync::new(store.clone(), host.clone());
             let notices = Notices::new(store.clone(), host.clone(), email_of(me.clone()));
@@ -536,6 +536,21 @@ fn email_of(core: Weak<Inner>) -> EmailOf {
         let core = core.upgrade()?;
         let sub = core.owners.borrow().get(workspace).cloned()?;
         core.accounts.list().into_iter().find(|a| a.sub == sub).map(|a| a.email)
+    })
+}
+
+/// What still.fail calls the relay at a host, as any account's `/v1/me` said (`relay_names`, by URL).
+fn relay_name(core: Weak<Inner>) -> crate::views::RelayName {
+    Rc::new(move |host: &str| {
+        let core = core.upgrade()?;
+        core.accounts.list().into_iter().find_map(|account| {
+            let me = core.data.record("me", &account.sub)?;
+            let names = me.get("relay_names")?.as_object()?.clone();
+            names.into_iter().find_map(|(url, name)| {
+                let url: iroh::RelayUrl = url.parse().ok()?;
+                (url.host_str() == Some(host)).then(|| name.as_str().map(str::to_string)).flatten()
+            })
+        })
     })
 }
 

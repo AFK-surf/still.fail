@@ -1464,7 +1464,7 @@ export interface Overview {
  * over the last minute, and what goes over it.
  */
 export interface StationNet {
-	/** 直连, 经 relay（host）, or 正在选路. */
+	/** 直连, 经中继北京 (the relay's name, or 经中继（host）), or 正在选路. */
 	path: string;
 	rtt?: NetFigure;
 	/** Round trips over the last minute, oldest first, in milliseconds. */

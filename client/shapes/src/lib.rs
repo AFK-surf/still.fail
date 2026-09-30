@@ -2111,7 +2111,7 @@ pub struct StationView {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct StationNet {
-    /// 直连, 经 relay（host）, or 正在选路.
+    /// 直连, 经中继北京 (the relay's name, or 经中继（host）), or 正在选路.
     pub path: String,
     pub rtt: Option<NetFigure>,
     /// Round trips over the last minute, oldest first, in milliseconds.
