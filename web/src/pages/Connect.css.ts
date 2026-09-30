@@ -3,6 +3,7 @@ import { vars } from "../styles/tokens.css.ts";
 
 export const kindTag = style({ display: "inline-flex", alignItems: "center", gap: "5px", color: vars.text });
 export const listRowTime = style({ flex: "none", minWidth: "5.5em", textAlign: "right", fontSize: vars.textXs });
+export const moreSessions = style({ marginTop: "8px" });
 export const pageError = style({ margin: "-16px 0 20px" });
 export const dialogStep = style({
   fontSize: vars.textSm, fontWeight: "400", color: vars.muted, fontVariantNumeric: "tabular-nums",

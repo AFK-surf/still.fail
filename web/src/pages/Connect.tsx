@@ -100,8 +100,8 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
 
       <SlackSection connect={connect} />
       <RunSection item={item} />
-      <ConnectSessions item={item} />
       <SlackAppSection connect={connect} />
+      <ConnectSessions item={item} />
 
       {replacing && <TokenDialog connect={connect} onClose={() => setReplacing(false)} />}
       {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
@@ -311,14 +311,19 @@ function ChooseSessionDialog({ item, onClose }: { item: ConnectItem; onClose(): 
   );
 }
 
+/** How many of its latest sessions show before the rest are asked for. */
+const SESSIONS_SHOWN = 5;
+
 function ConnectSessions({ item }: { item: ConnectItem }) {
   const { connect, sessions } = item;
   const link = useLink();
+  const [all, setAll] = useState(false);
+  const shown = all ? sessions : sessions.slice(0, SESSIONS_SHOWN);
   return (
     <Section title="最近的会话">
       {sessions.length === 0 ? <p className={shellCss.muted}>还没有会话。在 Slack 里 @{connect.name} 就会开始。</p> : (
         <ul className={pagesCss.list}>
-          {sessions.map((s) => {
+          {shown.map((s) => {
             const row = (
               <>
                 <span className={pagesCss.listRowTitle}>{s.titleText}</span>
@@ -329,6 +334,11 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
             return <li key={s.key}><Link className={pagesCss.listRow} to={link(`/chats/${encodeURIComponent(s.key)}`)}>{row}</Link></li>;
           })}
         </ul>
+      )}
+      {sessions.length > SESSIONS_SHOWN && (
+        <button type="button" className={`${chatCss.textButton} ${css.moreSessions}`} onClick={() => setAll(!all)}>
+          {all ? "收起" : `显示全部 ${sessions.length} 个`}
+        </button>
       )}
     </Section>
   );

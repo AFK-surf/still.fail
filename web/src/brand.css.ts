@@ -72,7 +72,8 @@ globalStyle(dialogLead, { textWrap: "balance", wordBreak: "keep-all", overflowWr
 globalStyle(`${pageNarrow} > *`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto" });
 /** Lists stand on spacing, not frames or rules: their rows' text lines up with the page's, a row's ground shows on hover. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(list, { listStyle: "none", margin: "0 -12px", padding: "0", display: "grid", gap: "2px" });
+// One column no wider than the page, so a long title is cut short rather than widening its row past it.
+globalStyle(list, { listStyle: "none", margin: "0 -12px", padding: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px" });
 /** Why a dialog's action did not work, just above its buttons. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textSm, color: vars.red, textWrap: "pretty" });

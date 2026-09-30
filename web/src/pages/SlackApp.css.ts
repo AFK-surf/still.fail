@@ -67,7 +67,7 @@ export const permGrid = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0 8px", margin: "0", padding: "0", listStyle: "none",
   "@media": { "(max-width: 720px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
 });
-export const appFold = style({ marginTop: "28px" });
+export const appFold = style({ marginTop: "28px", marginBottom: "28px" });
 export const appFoldTitle = style({ fontWeight: "600" });
 export const appFoldBody = style({ display: "grid", gap: "10px", marginTop: "8px" });
 export const appFoldLink = style({ justifySelf: "start", fontSize: vars.textXs, color: vars.muted });
