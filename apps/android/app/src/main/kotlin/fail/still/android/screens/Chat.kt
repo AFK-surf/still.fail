@@ -846,9 +846,10 @@ private fun Out(ctx: Here, o: Outgoing) {
     val pending = (ctx.of as? ChatOf.Session)?.key?.takeIf { it.startsWith("new:") }
     val failed = o.state == "failed"
     val ink = chatInk()
-    // On its way, it says so only if that takes a moment.
+    // On its way, it says so only if that takes a moment, counted from when it was sent: the row is drawn anew as a chat
+    // made here takes the page, and counting from then would hide what already showed.
     var slow by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { delay(800); slow = true }
+    LaunchedEffect(Unit) { delay(o.createdAt + 800 - System.currentTimeMillis()); slow = true }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Not sent: what was written faded.
         Column(Modifier.fillMaxWidth().alpha(if (failed) 0.55f else 1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {

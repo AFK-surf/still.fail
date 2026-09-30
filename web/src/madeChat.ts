@@ -147,7 +147,9 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
     if (bubble) moves.push(bubble.animate([{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
     for (const el of copy.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) {
-      el.style.animation = "none";
+      // "sending" shows when the row's does (its row, the copy gone, shows it then).
+      if (el.dataset.showsAt) showAt(el);
+      else el.style.animation = "none";
       moves.push(el.animate([{ opacity: 0 }, { opacity: 1 }], timing).finished);
     }
     // The composer's hint comes in once the words are out of it (above its top edge), not while they pass over it.
@@ -168,6 +170,11 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     delete root.dataset.made;
     delete root.dataset.madeHint;
   });
+}
+
+/** A copy of what shows at `data-shows-at` (OutboxRow's "sending"): its delay begins anew with it, so is what is left of it. */
+function showAt(el: HTMLElement): void {
+  el.style.animationDelay = `${Math.max(0, Number(el.dataset.showsAt) - Date.now())}ms`;
 }
 
 // ── a message sent in a chat already open ──────────────────────────────
@@ -251,6 +258,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       of = row;
       const next = row.cloneNode(true) as HTMLElement;
       next.style.opacity = "";
+      for (const el of next.querySelectorAll<HTMLElement>("[data-shows-at]")) showAt(el);
       if (copy) copy.replaceWith(next); else ghost.append(next);
       copy = next;
       if (!ground) {

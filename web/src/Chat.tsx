@@ -184,9 +184,15 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
   );
 }
 
+const SENDING_SHOWS_MS = 800;
+
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; locked: boolean; owner: (file: Attachment) => string | null }) {
   const sending = useChatSend();
+  // "正在发送" shows once it has been on its way a while, counted from when it was sent: the row is drawn anew as a chat
+  // made here takes the page, and copies of it fly in (madeChat.ts, by `data-shows-at`), all showing it at one time.
+  const showsAt = o.createdAt + SENDING_SHOWS_MS;
+  const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
     <MineMessage data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
       <MineWords message={o} owner={owner} />
@@ -199,7 +205,7 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
             <button type="button" className={css.msgUnsentBtn} disabled={locked} onClick={() => void (to !== null && sending.retry(to, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
             <button type="button" className={css.msgUnsentBtn} onClick={() => void (to !== null && sending.discard(to, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
           </div>
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
     </MineMessage>
   );
 }
