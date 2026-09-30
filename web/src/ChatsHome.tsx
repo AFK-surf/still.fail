@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { useChatSearch, useChats, type ChatItem } from "./api.ts";
 import { chatTone, type ChatTone } from "./ChatMark.tsx";
-import { Archive, ArrowLeft, Compose, Search, Settings } from "./icons.tsx";
+import { Archive, Compose, Search, Settings } from "./icons.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { ChatRow, rowKey, StationTrouble } from "./Sidebar.tsx";
 import { stationBase, useOnlyMine } from "./station.tsx";
@@ -99,8 +99,9 @@ const ORDER: ChatTone[] = ["alert", "busy", "done"];
 const SAID: Record<ChatTone, string> = { alert: "要处理", busy: "工作中", done: "有新消息" };
 
 /**
- * A chat's way back to the list (the 搜索列表 layout): an arrow, and how the other chats are doing, a dot of each
- * state with how many (as their rows' marks, ChatMark.tsx), so a chat that wants you is seen without leaving this one.
+ * A chat's way back to the list (the 搜索列表 layout), left of its title: how the other chats are doing, a dot of each
+ * state with how many (as their rows' marks, ChatMark.tsx), so a chat that wants you is seen without leaving this one;
+ * with nothing to say, 对话.
  */
 export function ListBack({ scope, to }: { scope: string; to: string }) {
   const view = useChats(scope, false).value;
@@ -115,7 +116,7 @@ export function ListBack({ scope, to }: { scope: string; to: string }) {
   return (
     <Tip label={said ? `对话列表：${said}` : "对话列表"}>
       <NavLink className={css.back} to={to} aria-label={said ? `对话列表，${said}` : "对话列表"}>
-        <ArrowLeft {...ICON} />
+        {!said && "对话"}
         {ORDER.filter((t) => counts.get(t)).map((t) => (
           <span key={t} className={css.backCount}><span className={markCss.chatMarkInline} data-tone={t} />{counts.get(t)}</span>
         ))}

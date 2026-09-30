@@ -46,23 +46,23 @@ globalStyle(`${row}[data-picked] .${navRow}`, { background: vars.hover, vars: { 
 globalStyle(`${row} .${navSessionWrap}`, { position: "relative" });
 
 /**
- * A chat's bar, with no sidebar: the title as wide as the messages under it (760px at most), the way back leading it;
- * its actions at the right, pushing it aside when there is no room beside the messages.
+ * A chat's bar, with no sidebar: the title as wide as the messages under it (760px at most), level with them; the way
+ * back just left of it, its actions at the right, either pushing it aside when there is no room beside the messages.
  */
 const listBar = `:root [data-layout="list"] ${sessionPage} ${pageBar}`;
-globalStyle(listBar, { gridTemplateColumns: "minmax(0, 1fr) minmax(0, 760px) minmax(max-content, 1fr)", gap: 0, paddingLeft: 12 });
+globalStyle(listBar, { gridTemplateColumns: "minmax(max-content, 1fr) minmax(0, 760px) minmax(max-content, 1fr)", gap: 0, paddingLeft: 12 });
 globalStyle(`${listBar} ${pageBarTitle}`, { gridColumn: "2", paddingLeft: 0 });
 globalStyle(`${listBar} ${pageBarActions}`, { gridColumn: "3" });
 
-/** In a chat's bar, before its title: back to the list, and the others' states; a short line between it and the title. */
+/** In a chat's bar, just left of its title: back to the list, and the others' states; a short line between it and the title. */
 export const back = style({
-  display: "inline-flex", alignItems: "center", gap: 10, height: 32, padding: "0 10px 0 8px", borderRadius: 999,
-  position: "relative", flex: "none", marginLeft: -8, marginRight: 7, color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
+  display: "inline-flex", alignItems: "center", gap: 10, height: 32, borderRadius: 999,
+  gridColumn: "1", justifySelf: "end", position: "relative", marginRight: 12, padding: "0 10px", color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
   transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
     "&::after": {
-      content: '""', position: "absolute", right: -8, top: 9, bottom: 9, width: 1, background: vars.lineStrong, pointerEvents: "none",
+      content: '""', position: "absolute", right: -6, top: 9, bottom: 9, width: 1, background: vars.lineStrong, pointerEvents: "none",
     },
   },
 });
