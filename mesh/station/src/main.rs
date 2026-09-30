@@ -75,6 +75,10 @@ struct CloudState {
     workspace_name: String,
     name: String,
     relay_url: String,
+    /// Every relay, still.fail's (`relay_url`) first: the station homes on the nearest (`relays`). Missing from a cloud
+    /// or a state file from before there were several.
+    #[serde(default)]
+    relay_urls: Vec<String>,
     grant_keys: Value,
     /// What the cloud took back (a member removed, a role changed, a session signed out): credentials of that
     /// account (`sub`) or session (`sid`) issued up to `at` are refused. Kept, so it holds with the cloud away.
@@ -163,6 +167,7 @@ async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
         workspace_name: text("workspace_name"),
         name: text("name"),
         relay_url: text("relay_url"),
+        relay_urls: strings(&body["relay_urls"]),
         grant_keys: body["grant_keys"].clone(),
         revocations: Vec::new(),
     };
@@ -558,11 +563,13 @@ const MDNS_SERVICE: &str = "ember";
 
 async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, ready: watch::Receiver<bool>, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
-    let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
-    // still.fail's relay (iroh's public ones only while it is down: `relay_fallback`); found without the cloud: on the
-    // LAN by mDNS, and which relay it is on, published to the Mainline DHT (clients look both up:
-    // client/core/src/mesh.rs).
-    let relays = iroh::RelayMap::from(relay.clone());
+    // still.fail's relays, homing on the nearest (iroh's public ones only while none answers: `keep_relays`); found
+    // without the cloud: on the LAN by mDNS, and which relay it is on, published to the Mainline DHT (clients look both
+    // up: client/core/src/mesh.rs).
+    let relays = iroh::RelayMap::from_iter(relays(&state));
+    if relays.is_empty() {
+        bail!("no relay url");
+    }
     let endpoint = Endpoint::builder(Minimal)
         .secret_key(key.clone())
         .alpns(vec![ALPN.to_vec(), FORMER_ALPN.to_vec()])
@@ -581,7 +588,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
         warn!("no relay link after 15 s; going online at still.fail cloud anyway");
     }
     tokio::spawn(presence(station.clone(), endpoint.secret_key().clone()));
-    tokio::spawn(relay_fallback(endpoint.clone(), relay));
+    tokio::spawn(keep_relays(endpoint.clone(), station.clone()));
     // What the chats' people hear about, pushed through still.fail cloud.
     tokio::spawn(notify::forward(station.clone(), endpoint.secret_key().clone()));
     if traces {
@@ -603,35 +610,63 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     Ok(())
 }
 
-/// How often still.fail's relay is checked (`relay_fallback`).
+/// How often still.fail's relays are checked (`keep_relays`).
 const RELAY_CHECK: Duration = Duration::from_secs(30);
 
-/// Keeps the station's home relay still.fail's, which is the one browsers reach (relay-only, they know no other): iroh's
-/// public relays are added only while ours does not answer, so the station can still be reached (the DHT says
-/// where), and taken away once it does again, so the station goes back home to it. With all of them in the map at once
-/// iroh would pick whichever is nearest, and browsers would lose the station.
-async fn relay_fallback(endpoint: Endpoint, ours: RelayUrl) {
+/// still.fail's relays as the cloud names them, its own first (`relay_urls`, or `relay_url` alone from a cloud or a
+/// state file from before there were several); one that does not parse is left out.
+fn relays(state: &CloudState) -> Vec<RelayUrl> {
+    let urls = if state.relay_urls.is_empty() { std::slice::from_ref(&state.relay_url) } else { &state.relay_urls[..] };
+    urls.iter().filter_map(|url| url.parse().inspect_err(|error| warn!(%url, %error, "not a relay url")).ok()).collect()
+}
+
+/// The strings in a JSON array (none for anything else).
+fn strings(value: &Value) -> Vec<String> {
+    value.as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect()
+}
+
+/// Keeps the station's relays still.fail's, the ones browsers reach (relay-only, they know no others), iroh homing
+/// on the nearest: a station in mainland China on the relay there, one abroad on Cloudflare's. Those the cloud adds or
+/// takes away later are put in or taken out as it says so. iroh's public relays are added only while none of ours
+/// answers, so the station can still be reached (the DHT says where), and taken away once one does again, so the
+/// station goes back home: with them in the map beside ours iroh could pick one of them as home, and browsers would
+/// lose the station.
+async fn keep_relays(endpoint: Endpoint, station: Arc<Station>) {
     let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().expect("http client");
-    let ping = format!("{}/ping", ours.as_str().trim_end_matches('/'));
     let public: Vec<Arc<iroh::RelayConfig>> = iroh::defaults::prod::default_relay_map().relays();
+    let mut ours: Vec<RelayUrl> = relays(&station.state.lock().unwrap());
     let mut added = false;
     loop {
-        // Two tries: one lost request is not the relay down.
+        let now = relays(&station.state.lock().unwrap());
+        if !now.is_empty() && now != ours {
+            info!(relays = ?now, "still.fail's relays changed");
+            for url in now.iter().filter(|url| !ours.contains(url)) {
+                endpoint.insert_relay(url.clone(), Arc::new(iroh::RelayConfig::from(url.clone()))).await;
+            }
+            for url in ours.iter().filter(|url| !now.contains(url)) {
+                endpoint.remove_relay(url).await;
+            }
+            ours = now;
+        }
+        // Two tries each: one lost request is not the relay down.
         let mut up = false;
-        for _ in 0..2 {
-            if client.get(&ping).send().await.is_ok_and(|r| r.status().is_success()) {
-                up = true;
-                break;
+        'relays: for relay in &ours {
+            let ping = format!("{}/ping", relay.as_str().trim_end_matches('/'));
+            for _ in 0..2 {
+                if client.get(&ping).send().await.is_ok_and(|r| r.status().is_success()) {
+                    up = true;
+                    break 'relays;
+                }
             }
         }
         if !up && !added {
-            warn!(relay = %ours, "still.fail's relay does not answer; adding iroh's public relays until it does");
+            warn!(relays = ?ours, "none of still.fail's relays answers; adding iroh's public relays until one does");
             for config in &public {
                 endpoint.insert_relay(config.url.clone(), config.clone()).await;
             }
             added = true;
         } else if up && added {
-            info!(relay = %ours, "still.fail's relay answers again; back home to it");
+            info!(relays = ?ours, "still.fail's relays answer again; back home to them");
             for config in &public {
                 endpoint.remove_relay(&config.url).await;
             }
@@ -754,6 +789,9 @@ fn apply_state(station: &Station, text: &str) {
                 if let Some(value) = body[key].as_str() {
                     *field = value.to_string();
                 }
+            }
+            if body["relay_urls"].is_array() {
+                s.relay_urls = strings(&body["relay_urls"]);
             }
             if body["grant_keys"].is_object() {
                 s.grant_keys = body["grant_keys"].clone();
@@ -1161,6 +1199,14 @@ mod tests {
 
     fn check(credential: &str, revocations: &[Revocation]) -> Result<Admitted> {
         verify_member(credential, &keys(), WS, DEVICE, revocations)
+    }
+
+    #[test]
+    fn its_relays_are_the_clouds_list_or_the_one_from_before_there_were_several() {
+        let before: CloudState = serde_json::from_value(json!({ "origin": "o", "station": "s", "workspace": "w", "workspace_name": "W", "name": "n", "relay_url": "https://app.still.fail", "grant_keys": {} })).unwrap();
+        assert_eq!(relays(&before).iter().map(|u| u.to_string()).collect::<Vec<_>>(), ["https://app.still.fail/"]);
+        let now = CloudState { relay_urls: strings(&json!(["https://app.still.fail", "not a url", "https://39.105.157.122"])), ..before };
+        assert_eq!(relays(&now).iter().map(|u| u.to_string()).collect::<Vec<_>>(), ["https://app.still.fail/", "https://39.105.157.122/"]);
     }
 
     #[test]

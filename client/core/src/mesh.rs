@@ -93,7 +93,8 @@ struct Hedge {
 pub struct Mesh {
     host: Rc<dyn Host>,
     tracer: Rc<Tracer>,
-    relay_url: String,
+    /// still.fail's relays, its own first (`relays`).
+    relays: Vec<String>,
     /// Replaced when `migrate` brings another device key.
     endpoint: RefCell<Endpoint>,
     links: RefCell<HashMap<String, Opening>>,
@@ -117,8 +118,8 @@ pub struct Mesh {
 
 impl Mesh {
     /// Binds the endpoint with the stored device key (making and storing one the first time).
-    /// An empty `relay_url` binds without a relay (direct addresses only: tests, a LAN).
-    pub async fn new(host: Rc<dyn Host>, tracer: Rc<Tracer>, relay_url: &str) -> Result<Rc<Mesh>> {
+    /// No relays binds without one (direct addresses only: tests, a LAN).
+    pub async fn new(host: Rc<dyn Host>, tracer: Rc<Tracer>, relays: &[String]) -> Result<Rc<Mesh>> {
         let stored = host.storage_get(DEVICE_KEY).await?;
         let secret: [u8; 32] = match stored.and_then(|bytes| bytes.try_into().ok()) {
             Some(secret) => secret,
@@ -130,11 +131,11 @@ impl Mesh {
                 secret
             }
         };
-        let endpoint = bind(&secret, relay_url).await?;
+        let endpoint = bind(&secret, relays).await?;
         let mesh = Rc::new(Mesh {
             host: host.clone(),
             tracer,
-            relay_url: relay_url.to_string(),
+            relays: relays.to_vec(),
             endpoint: RefCell::new(endpoint),
             links: RefCell::default(),
             changed: RefCell::default(),
@@ -259,7 +260,7 @@ impl Mesh {
             return self.endpoint();
         }
         self.rebound_at.set(now);
-        let endpoint = match bind(&self.secret.get(), &self.relay_url).await {
+        let endpoint = match bind(&self.secret.get(), &self.relays).await {
             Ok(endpoint) => endpoint,
             Err(_) => return self.endpoint(),
         };
@@ -303,7 +304,7 @@ impl Mesh {
         self.serials.set(serial);
         let (tx, hedged) = oneshot::channel();
         self.hedges.borrow_mut().insert(station_id.to_string(), Hedge { serial, credentials: credentials.clone(), tx: Some(tx) });
-        let first = self.tracer.instrument(Some(span.context()), open(self.host.clone(), endpoint.clone(), self.relay_url.clone(), station_id.to_string(), credentials, fresh));
+        let first = self.tracer.instrument(Some(span.context()), open(self.host.clone(), endpoint.clone(), self.relays.clone(), station_id.to_string(), credentials, fresh));
         let (hedges, stuck, id) = (self.hedges.clone(), self.stuck.clone(), station_id.to_string());
         let opening = async move {
             // The first link that opens, of this one and one tried beside it (`hedge`); failing, the other's result.
@@ -369,7 +370,7 @@ impl Mesh {
         if self.host.storage_get(DEVICE_KEY).await?.as_deref() == Some(&secret[..]) {
             return Ok(());
         }
-        let endpoint = bind(&secret, &self.relay_url).await?;
+        let endpoint = bind(&secret, &self.relays).await?;
         self.host.storage_set(DEVICE_KEY, secret.to_vec()).await?;
         self.secret.set(secret);
         let old = self.endpoint.replace(endpoint);
@@ -418,12 +419,12 @@ async fn watch(host: Rc<dyn Host>, mesh: Weak<Mesh>) {
 async fn hedge(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, credentials: CredentialSource, tx: HedgeTx) {
     let Some(this) = mesh.upgrade() else { return };
     let endpoint = if this.any_open() { this.endpoint() } else { this.rebind().await };
-    let (relay, tracer) = (this.relay_url.clone(), this.tracer.clone());
+    let (relays, tracer) = (this.relays.clone(), this.tracer.clone());
     drop(this);
     let mut span = tracer.span("mesh.hedge", Kind::Internal);
     span.set("stillfail.station", id.clone());
     span.set("stillfail.relay", relay_status(&endpoint));
-    let opened = tracer.instrument(Some(span.context()), open(host, endpoint, relay, id, credentials, false)).await;
+    let opened = tracer.instrument(Some(span.context()), open(host, endpoint, relays, id, credentials, false)).await;
     if opened.is_err() {
         span.fail();
     }
@@ -455,11 +456,11 @@ async fn race(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, old: Rc<Link>) {
         Neither,
     }
     let Some(this) = mesh.upgrade() else { return };
-    let (endpoint, relay, tracer) = (this.endpoint(), this.relay_url.clone(), this.tracer.clone());
+    let (endpoint, relays, tracer) = (this.endpoint(), this.relays.clone(), this.tracer.clone());
     drop(this);
     let mut span = tracer.span("mesh.race", Kind::Internal);
     span.set("stillfail.station", id.clone());
-    let fresh = tracer.instrument(Some(span.context()), open(host.clone(), endpoint, relay, id.clone(), old.credentials.clone(), false));
+    let fresh = tracer.instrument(Some(span.context()), open(host.clone(), endpoint, relays, id.clone(), old.credentials.clone(), false));
     let probe = old.answers(host.as_ref());
     pin_mut!(fresh, probe);
     let won = match futures::future::select(probe, fresh).await {
@@ -497,12 +498,12 @@ async fn race(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, old: Rc<Link>) {
 /// UDP and goes direct, and finds stations without still.fail cloud: on the LAN by
 /// mDNS (no relay needed at all), and which relay a station is on by the
 /// Mainline DHT (a station whose relay is not ember's, ember's being down).
-/// Its home relay is ember's everywhere (see `relays`).
-async fn bind(secret: &[u8; 32], relay_url: &str) -> Result<Endpoint> {
-    let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relays(relay_url)?).transport_config(transport());
+/// Its home relay is the nearest of still.fail's (see `relay_mode`).
+async fn bind(secret: &[u8; 32], relays: &[String]) -> Result<Endpoint> {
+    let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relay_mode(relays)?).transport_config(transport());
     // No relay (tests on localhost): nothing to look up either.
     #[cfg(not(target_arch = "wasm32"))]
-    let builder = if relay_url.is_empty() {
+    let builder = if relays.is_empty() {
         builder
     } else {
         builder
@@ -515,16 +516,20 @@ async fn bind(secret: &[u8; 32], relay_url: &str) -> Result<Endpoint> {
     builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
 }
 
-/// ember's relay only, as the station's and the browser's: with iroh's public ones beside it iroh picks whichever is
-/// nearest as home, and a phone on one of them was seen not to reach its station for minutes at a time (2026-09-30).
-/// A station moved to a public relay (its own down: mesh/station `relay_fallback`) is still reached there, the DHT
-/// saying which: a relay in no map is dialed all the same.
-fn relays(relay_url: &str) -> Result<RelayMode> {
-    if relay_url.is_empty() {
+/// still.fail's relays only, as the station's and the browser's, iroh homing on the nearest (the one inside mainland
+/// China there, Cloudflare's abroad): with iroh's public ones beside them iroh could pick one of those as home, and a
+/// phone on one was seen not to reach its station for minutes at a time (2026-09-30). A station moved to a public
+/// relay (its own down: mesh/station `keep_relays`) is still reached there, the DHT saying which: a relay in no map is
+/// dialed all the same.
+fn relay_mode(relays: &[String]) -> Result<RelayMode> {
+    if relays.is_empty() {
         return Ok(RelayMode::Disabled);
     }
-    let ours: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
-    Ok(RelayMode::Custom(iroh::RelayMap::from(ours)))
+    Ok(RelayMode::Custom(iroh::RelayMap::from_iter(relay_urls(relays)?)))
+}
+
+fn relay_urls(relays: &[String]) -> Result<Vec<RelayUrl>> {
+    relays.iter().map(|url| url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))).collect()
 }
 
 /// Through a relay a round trip is hundreds of milliseconds, and QUIC's default first window
@@ -547,16 +552,18 @@ pub fn transport() -> QuicTransportConfig {
 /// station reads a connection's first stream (the credential) before any request
 /// stream, so requests can follow at once. If it refuses, it closes the
 /// connection, the requests on it fail, and the next `Mesh::link` starts over.
-async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station_id: String, credentials: CredentialSource, fresh: bool) -> Result<Rc<Link>> {
+async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, station_id: String, credentials: CredentialSource, fresh: bool) -> Result<Rc<Link>> {
     let id: [u8; 32] = hex::decode(&station_id).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let id = PublicKey::from_bytes(&id).map_err(|_| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let device = hex::encode(endpoint.id().as_bytes());
     let connecting = async {
         // No waiting for our own relay link: the endpoint came up as soon as the relay was known (Core warms it),
         // and in the browser `online()` does not report it, so a wait would only ever run out.
+        // On every relay of still.fail's: the station is on the one nearest it, which need not be ours (a station in
+        // mainland China and a phone abroad), and the first packets go out on all of them, the station answering on
+        // the one it heard them on.
         let mut addr = EndpointAddr::new(id);
-        if !relay_url.is_empty() {
-            let relay: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
+        for relay in relay_urls(&relays)? {
             addr = addr.with_relay_url(relay);
         }
         let options = ConnectOptions::new().with_additional_alpns(vec![FORMER_ALPN.to_vec()]);
@@ -1059,7 +1066,7 @@ mod tests {
     }
 
     async fn setup_with(host: Rc<dyn Host>, station: Station) -> (Rc<Mesh>, Station) {
-        let mesh = Mesh::new(host.clone(), Tracer::new(host, 1.0), "").await.unwrap();
+        let mesh = Mesh::new(host.clone(), Tracer::new(host, 1.0), &[]).await.unwrap();
         mesh.add_addr(station.addr());
         (mesh, station)
     }
@@ -1208,8 +1215,8 @@ mod tests {
     fn keeps_the_device_key_and_migrates_to_the_pages() {
         run(async {
             let host = FakeHost::new();
-            let first = Mesh::new(host.clone(), Tracer::new(host.clone(), 1.0), "").await.unwrap();
-            let again = Mesh::new(host.clone(), Tracer::new(host.clone(), 1.0), "").await.unwrap();
+            let first = Mesh::new(host.clone(), Tracer::new(host.clone(), 1.0), &[]).await.unwrap();
+            let again = Mesh::new(host.clone(), Tracer::new(host.clone(), 1.0), &[]).await.unwrap();
             assert_eq!(first.device_id(), again.device_id());
 
             let page = [7u8; 32];

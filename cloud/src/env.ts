@@ -21,6 +21,8 @@ export interface Env {
   ADMIN_ORIGIN_ALIASES?: string;
   /** Where stations and clients find the relay; defaults to PUBLIC_ORIGIN (whose /relay is the relay: relay-worker.ts). */
   RELAY_URL?: string;
+  /** More relays beside it (comma-separated), for where it is slow or out of reach (relays.ts). */
+  RELAY_URLS?: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;

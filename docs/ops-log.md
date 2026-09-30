@@ -20,6 +20,11 @@
 - 新图标（app-icon-face）：桌面端图标换成 `apps/desktop/icon.png`（按 macOS 规格：1024 画布、824 圆角方形、四周透明），安卓自适应图标、PWA 图标、apple-touch、favicon 都换成橙色的脸。网页随部署上线；桌面端和安卓要发新包才换。上线后验：Dock 里图标和旁边的一样大，没有白框；安卓桌面上图标是橙色的脸，圆形遮罩下腮红完整；浏览器标签页是橙色小脸（浏览器可能缓存 favicon，强制刷新再看）。
 - 认证失败的系统消息链到 profile（auth-notice-profile-link）：station 在 `entries` 上原地加一列 `profile`，启动时自动加，不升 schema 版本；回滚到旧 station 也能打开这个库，多出来的列不影响。认证失败的消息会记下 runtime 当时用的 profile id，额度用完又换不了号的那条也记。胶囊里冒号后面那段（如 `401 authentication_failed`）变成带下划线的链接，点了进这个 profile 的页面。web 随部署上线；安卓要发新包。station 要重新构建（部署会做）。新旧混跑：旧 station 的消息没有这个 id，不显示链接；旧客户端忽略这个字段。Slack 里的文字不变。上线后验：让一个 profile 认证失败（比如在临时 station 里放一个坏 key），看胶囊里的错误文字能点，点了进对应 profile。
 - 安卓新包、桌面端新版还没发：各条改动的说明见 2026-10-01 00:35 那条记录。
+- 多 relay（multi-relay）：cloud 多发一个 `relay_urls`（still.fail 自己的在前，`RELAY_URLS` 里的在后；wrangler.jsonc 里写的是北京那台 `https://39.105.157.122`），`relay_url` 照旧只给第一个；relay Worker 的 `/ping` 加了 `access-control-allow-origin: *`，浏览器靠它测延迟选 relay。所以 relay 和 api 两个 Worker 都要部署。新 station 把所有 relay 放进 map，就近选一个作为 home（国内的会选北京）；cloud 以后增删 relay，station 运行中就会跟着改。新 core 拨 station 时所有 relay 都走一遍。
+  - 新旧混跑：旧 station 只认 `relay_url`，新客户端照样能连上。新 station 如果选了北京做 home，旧的原生客户端（桌面、安卓）只拨 Cloudflare，要靠 DHT 查到北京才连得上（在 studio 实测第一次连约 3 秒，之后正常）。旧网页（wasm 没有 DHT）连不上北京上的 station，要刷新成新页面才行：web 要和 cloud 一起发，部署后开着的旧标签页要刷新一下。客户端的 relay 列表是第一次 `/v1/me` 时定下的，设备上存着旧 `me` 记录的，要到下次打开 app 才用上新列表。
+  - 限制：一台 station 只能从它的 home relay 收到连接。北京那台从海外基本连不上（海外出口的本机也连不上），所以人在海外、station 在国内时，会连不上这台 station。
+  - 北京 relay 本身的情况：阿里云轻量北京，iroh-relay 1.1.0，证书是 Let's Encrypt 的 IP 证书（6 天有效，lego 自动续签后热加载），只能从 studio ssh 上去。具体见 ember skill。
+  - 上线后验：studio 的 station 日志里 home relay 是 `39.105.157.122`；在国内打开 web 连 studio 的 station，mesh.connect 的耗时明显下降。改之前在 studio 实测：全走 Cloudflare 时建连 2.6 秒、每个来回 540ms；走北京时建连 0.2 秒、每个来回 41ms。
 
 ## 2026-10-01
 

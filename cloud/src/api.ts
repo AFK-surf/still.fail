@@ -11,6 +11,7 @@ import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature } from "./grants";
 import { pushKey, registration, stationNotify } from "./push";
+import { relays } from "./relays";
 import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -80,7 +81,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => ({
       ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version)),
       station: input.station,
-      relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN,
+      ...relays(env),
       grant_keys: grantKeys(env),
     }));
   }
@@ -146,7 +147,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const role = (): Role => (ROLES.includes(input.role as Role) ? (input.role as Role) : "member");
 
   if (path === "/v1/me" && method === "GET") {
-    return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN }));
+    return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env) }));
   }
   const byId = /^\/v1\/invitations\/([0-9A-HJKMNP-TV-Z]{26})\/(accept|decline)$/.exec(path);
   if (byId && method === "POST") {
@@ -190,7 +191,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => {
       const role = await dir.memberRole(sub, ws);
       const signed = await signCredential(env, { sub, email: claims.email, name: claims.name ?? "", ws, role, device: input.device as string, sid: claims.sid });
-      return { ...signed, relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN };
+      return { ...signed, ...relays(env) };
     });
   }
   if (kind === "stations" && target && validKeyHex(target)) {

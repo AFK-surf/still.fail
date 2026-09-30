@@ -17,6 +17,7 @@ import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
+import { relays } from "./relays";
 import type { AccountEvent, AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
@@ -726,7 +727,7 @@ export class Directory extends DurableObject<Env> {
     const row = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
     if (!row) return;
     const revocations = this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace as string, nowSeconds() - REVOCATION_DAYS * 86400);
-    const frame = JSON.stringify({ type: "state", ...row, origin: this.env.PUBLIC_ORIGIN, relay_url: this.env.RELAY_URL || this.env.PUBLIC_ORIGIN, grant_keys: grantKeys(this.env), revocations });
+    const frame = JSON.stringify({ type: "state", ...row, origin: this.env.PUBLIC_ORIGIN, ...relays(this.env), grant_keys: grantKeys(this.env), revocations });
     for (const ws of sockets) ws.send(frame);
   }
 

@@ -59,6 +59,7 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     assert.equal((await enroll(enrollment.token, station.id, await forged.sign(message(station.id)))).status, 401, "must hold the key");
     const enrolled = await (await enroll(enrollment.token, station.id, await station.sign(message(station.id)))).json() as any;
     assert.deepEqual([enrolled.workspace, enrolled.name, enrolled.relay_url], [home.id, "studio", h.origin]);
+    assert.deepEqual(enrolled.relay_urls, [h.origin], "every relay, still.fail's first");
     assert.equal((await enroll(enrollment.token, forged.id, await forged.sign(message(forged.id)))).status, 404, "one use");
 
     const ts = Math.floor(Date.now() / 1000);

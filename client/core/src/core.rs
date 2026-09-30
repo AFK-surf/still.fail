@@ -83,7 +83,8 @@ struct Inner {
     center: Rc<Center>,
     /// The device endpoint, brought up once (it needs the relay url from `/v1/me`); cleared if that fails so the next use retries.
     mesh: RefCell<Option<Shared<LocalBoxFuture<'static, Result<Rc<Mesh>>>>>>,
-    relay_url: RefCell<Option<String>>,
+    /// still.fail's relays, its own first, as the first `/v1/me` of this run or the kept one said (`relays`).
+    relays: RefCell<Option<Vec<String>>>,
     /// Which account reaches each workspace, from the latest `/v1/me` answers.
     owners: RefCell<HashMap<String, String>>,
     /// Whether each account's latest `/v1/me` answered this run, or why it failed. What it said is the data
@@ -213,7 +214,7 @@ impl Core {
                 store,
                 stations,
                 mesh: RefCell::default(),
-                relay_url: RefCell::default(),
+                relays: RefCell::default(),
                 owners: RefCell::default(),
                 mes: RefCell::default(),
                 me_loading: RefCell::default(),
@@ -583,6 +584,16 @@ struct KeptCredential {
 
 fn gone() -> CoreError {
     CoreError::new("closed", "核心已关闭")
+}
+
+/// The relays a `/v1/me` names: `relay_urls`, still.fail's own first, or `relay_url` alone from a cloud from before
+/// there were several.
+fn relays_of(me: &Value) -> Option<Vec<String>> {
+    let all: Vec<String> = me.get("relay_urls").and_then(Value::as_array).into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect();
+    if !all.is_empty() {
+        return Some(all);
+    }
+    me.get("relay_url").and_then(Value::as_str).map(|url| vec![url.to_string()])
 }
 
 impl Inner {
@@ -1009,8 +1020,8 @@ impl Inner {
                 let core = self.me.clone();
                 let pending = async move {
                     let core = core.upgrade().ok_or_else(gone)?;
-                    let relay = core.relay_url().await?;
-                    Mesh::new(core.host.clone(), core.tracer.clone(), &relay).await
+                    let relays = core.relays().await?;
+                    Mesh::new(core.host.clone(), core.tracer.clone(), &relays).await
                 }
                 .boxed_local()
                 .shared();
@@ -1051,23 +1062,23 @@ impl Inner {
         }
     }
 
-    /// The relay the mesh uses, from any account's `/v1/me`.
-    async fn relay_url(&self) -> Result<String> {
-        if let Some(url) = self.relay_url.borrow().clone() {
-            return Ok(url);
+    /// The relays the mesh uses, from any account's `/v1/me`.
+    async fn relays(&self) -> Result<Vec<String>> {
+        if let Some(relays) = self.relays.borrow().clone() {
+            return Ok(relays);
         }
         // As last heard (kept on the device): the mesh comes up without still.fail cloud.
         for account in self.accounts.list() {
-            if let Some(url) = self.data.record("me", &account.sub).and_then(|me| me.get("relay_url")?.as_str().map(str::to_string)) {
-                return Ok(url);
+            if let Some(relays) = self.data.record("me", &account.sub).and_then(|me| relays_of(&me)) {
+                return Ok(relays);
             }
         }
         let mut last = CoreError::signed_out("还没有登录的账号");
         for (_, me) in self.load_me().await {
             match me {
                 Ok(me) => {
-                    if let Some(url) = me.get("relay_url").and_then(Value::as_str) {
-                        return Ok(url.to_string());
+                    if let Some(relays) = relays_of(&me) {
+                        return Ok(relays);
                     }
                 }
                 Err(error) => last = error,
@@ -1136,9 +1147,9 @@ impl Inner {
                 continue;
             }
             if let Ok(me) = &me {
-                if let Some(url) = me.get("relay_url").and_then(Value::as_str) {
-                    let first = self.relay_url.borrow().is_none();
-                    self.relay_url.borrow_mut().get_or_insert_with(|| url.to_string());
+                if let Some(relays) = relays_of(me) {
+                    let first = self.relays.borrow().is_none();
+                    self.relays.borrow_mut().get_or_insert(relays);
                     // The relay is known: bring the device endpoint up now and let it reach the relay while the page
                     // loads, so a station link has only its own handshake to do (no request of its own: the URL is here).
                     if first && self.mesh.borrow().is_none() {
@@ -2114,6 +2125,14 @@ fn params_or_empty(params: Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_relays_are_the_list_or_the_one_from_before_there_were_several() {
+        assert_eq!(relays_of(&json!({ "relay_url": "https://a", "relay_urls": ["https://a", "https://b"] })), Some(vec!["https://a".to_string(), "https://b".to_string()]));
+        assert_eq!(relays_of(&json!({ "relay_url": "https://a" })), Some(vec!["https://a".to_string()]));
+        assert_eq!(relays_of(&json!({ "relay_url": "https://a", "relay_urls": [] })), Some(vec!["https://a".to_string()]));
+        assert_eq!(relays_of(&json!({})), None);
+    }
 
     fn code(result: Result<Call>) -> String {
         result.unwrap_err().code

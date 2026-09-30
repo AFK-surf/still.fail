@@ -40,6 +40,9 @@
     "PUBLIC_ORIGIN_ALIASES": "https://ember.3720.org",
     "ADMIN_ORIGIN": "https://admin.still.fail",
     "ADMIN_ORIGIN_ALIASES": "https://admin.ember.3720.org",
+    // Relays beside still.fail's own (src/relays.ts): one in Beijing (Alibaba Cloud, by its IP: no ICP filing), for
+    // stations and devices in mainland China, where Cloudflare's is slow or out of reach.
+    "RELAY_URLS": "https://39.105.157.122",
     "GOOGLE_CLIENT_ID": "",
   },
   // The stations' releases (scripts/release.sh puts them, install.sh gets them from /releases/).

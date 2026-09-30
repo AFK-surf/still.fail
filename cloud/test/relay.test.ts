@@ -6,6 +6,7 @@ import path from "node:path";
 import { harness } from "./harness.ts";
 import { LIMITS } from "../src/limits.ts";
 import { relayCounters } from "../src/relay-metrics.ts";
+import { relays } from "../src/relays.ts";
 
 const upgrade = { upgrade: "websocket", "sec-websocket-protocol": "iroh-relay" };
 
@@ -89,4 +90,11 @@ test("a Worker restart cannot reset the anonymous relay byte budget", { timeout:
     await h.close();
     await fs.rm(persist, { recursive: true, force: true });
   }
+});
+
+test("the relays handed out: still.fail's first, then RELAY_URLS, each once", () => {
+  const env = { PUBLIC_ORIGIN: "https://app.still.fail" };
+  assert.deepEqual(relays(env), { relay_url: "https://app.still.fail", relay_urls: ["https://app.still.fail"] });
+  assert.deepEqual(relays({ ...env, RELAY_URLS: " https://39.105.157.122 ,,https://app.still.fail" }), { relay_url: "https://app.still.fail", relay_urls: ["https://app.still.fail", "https://39.105.157.122"] });
+  assert.deepEqual(relays({ ...env, RELAY_URL: "https://relay.example" }).relay_urls, ["https://relay.example"]);
 });
