@@ -303,7 +303,7 @@ function setGoing(to: string | null): void {
   for (const heard of goingHeard) heard();
 }
 function useGoing(): string | null {
-  return useSyncExternalStore((heard) => { goingHeard.add(heard); return () => goingHeard.delete(heard); }, () => going);
+  return useSyncExternalStore((heard) => { goingHeard.add(heard); return () => goingHeard.delete(heard); }, () => going, () => going);
 }
 
 function primeChat(item: ChatItem): void {
