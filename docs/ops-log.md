@@ -24,6 +24,12 @@
 
 ## 2026-09-30
 
+### 22:40 部署 b862d34，发安卓 0.1.1172
+
+- 部署：8652e08 → b862d34。包括安卓和 web 的动效（c8afea2），以及别的会话合进来的置顶对话、CPU 真实占用、桌面检查更新、Slack 权限批准、侧栏头像。部署了 web 和 admin，station 重新构建并重启，完整检查 9 项通过。
+- 前两次部署被完整检查拦下：`host::tests::the_machine_is_described_and_kept_for_a_while` 报 `cpu_busy` 是 None（54bf344 起）。macOS 的 `host_statistics` 隔一阵才更新 ticks，真睡了 505ms 以后两次读数一模一样；单独跑这个测试时碰巧能过，整套一起跑时常挂。b862d34 改成睡半秒后每 100ms 再读一次，直到读数变了，最多等 2 秒。连跑 6 次整套都通过了。
+- 安卓：`release.sh android` 在 c8afea2 上打包 0.1.1172，两个域名上的 `latest.json` 都已经是 1172。
+
 ### 20:20 桌面版 0.1.1169（586404e）
 
 - 发了桌面版 0.1.1169：菜单栏 still.fail 菜单里的「检查更新…」、设置里的「版本」页（desktop-check-updates）。两个域名上的 `desktop/stillfail-mac.yml` 都是 1169，zip 用 GET 下载是 200。上一版是 0.1.1123，改名以后桌面版就没再发过。
