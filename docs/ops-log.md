@@ -18,6 +18,7 @@
 ## 待部署
 
 - 新图标（app-icon-face）：桌面端图标换成 `apps/desktop/icon.png`（按 macOS 规格：1024 画布、824 圆角方形、四周透明），安卓自适应图标、PWA 图标、apple-touch、favicon 都换成橙色的脸。网页随部署上线；桌面端和安卓要发新包才换。上线后验：Dock 里图标和旁边的一样大，没有白框；安卓桌面上图标是橙色的脸，圆形遮罩下腮红完整；浏览器标签页是橙色小脸（浏览器可能缓存 favicon，强制刷新再看）。
+- 认证失败的系统消息链到 profile（auth-notice-profile-link）：station 在 `entries` 上原地加一列 `profile`，启动时自动加，不升 schema 版本；回滚到旧 station 也能打开这个库，多出来的列不影响。认证失败的消息会记下 runtime 当时用的 profile id，额度用完又换不了号的那条也记。胶囊里冒号后面那段（如 `401 authentication_failed`）变成带下划线的链接，点了进这个 profile 的页面。web 随部署上线；安卓要发新包。station 要重新构建（部署会做）。新旧混跑：旧 station 的消息没有这个 id，不显示链接；旧客户端忽略这个字段。Slack 里的文字不变。上线后验：让一个 profile 认证失败（比如在临时 station 里放一个坏 key），看胶囊里的错误文字能点，点了进对应 profile。
 - 安卓新包、桌面端新版还没发：各条改动的说明见 2026-10-01 00:35 那条记录。
 
 ## 2026-10-01

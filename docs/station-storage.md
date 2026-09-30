@@ -87,6 +87,7 @@ CREATE TABLE entries (
   declared TEXT,                      -- message: an agent's final | block
   at INTEGER NOT NULL,
   client TEXT,                        -- message: the still.fail app a person sent it from (added in place)
+  profile TEXT,                       -- message: for ember's notice about a profile (its sign-in failed), its id (added in place)
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;

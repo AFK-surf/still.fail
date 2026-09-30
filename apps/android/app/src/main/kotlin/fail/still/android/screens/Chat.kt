@@ -106,6 +106,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -733,7 +735,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.comp
     val jump = rememberJump(list, rows)
     val ink = chatInk()
     // What still.fail itself says (role "ember", as the core sends it): a notice across the chat, apart from people's and agents' messages.
-    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt")); return }
+    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt"), m.profile?.let { p -> { app.push(Screen.Profile(ctx.station, p)) } }); return }
     val motion = LocalChatMotion.current
     val flash = accentBg()
     if (ctx.mine(m)) {
@@ -786,7 +788,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.comp
  * with ⚠️; here a failure is the pill in red instead. A notice is a line of the UI, not prose: no 。 at its end.
  */
 @Composable
-private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?) {
+private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?) {
     val failed = remember(text) { Regex("^⚠️\\s*").find(text) }
     val said = remember(text) { (failed?.let { text.substring(it.range.last + 1) } ?: text).replace(Regex("。\\s*$"), "") }
     var open by remember { mutableStateOf(false) }
@@ -801,7 +803,22 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?) {
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = !open }
                 .padding(horizontal = 14.dp, vertical = 6.dp),
         ) {
-            if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
+            // In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
+            val colon = if (toProfile != null) said.indexOf('：') else -1
+            if (toProfile != null && colon >= 0) {
+                val linked = remember(said) {
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        append(said.substring(0, colon + 1))
+                        withLink(androidx.compose.ui.text.LinkAnnotation.Clickable("profile", androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(textDecoration = TextDecoration.Underline))) { toProfile() }) {
+                            append(said.substring(colon + 1))
+                        }
+                    }
+                }
+                Text(
+                    linked, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
+                    maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis,
+                )
+            } else if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
             else Text(
                 plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,

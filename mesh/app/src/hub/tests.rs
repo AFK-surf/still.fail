@@ -643,12 +643,23 @@ async fn stop_aborts_the_running_turn_and_confirms_once_it_ends() {
 #[tokio::test]
 async fn a_failed_turn_is_reported_to_the_thread_and_not_nudged() {
     let r = setup();
-    r.accept(&message()).await;
+    let m = message();
+    r.accept(&m).await;
     settle().await;
     r.claude.last().end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401 Missing API key".into() });
     settle().await;
     assert!(matches(&r.chat.last_text(), &["认证失败", "401 Missing API key"]));
     assert_eq!(r.claude.last().prompts().len(), 1);
+    // The notice says whose sign-in failed, for the clients to link that profile's page; another failure is no profile's.
+    let thread = r.thread("C1", &m.thread_ts);
+    let last = |r: &Rig| r.store.entries_before(thread.id, None, 1).unwrap().pop().unwrap();
+    assert_eq!((last(&r).author_kind, last(&r).profile.as_deref()), (AuthorKind::StillFail, Some("cc")));
+    r.accept(&InboundMessage { addressed: true, ..reply(&m, "9999.2", "<@UBOT> again") }).await;
+    settle().await;
+    r.claude.last().end(TurnOutcome::Failed { reason: FailureReason::Exited, message: "exit 1".into() });
+    settle().await;
+    assert!(matches(&r.chat.last_text(), &["意外退出"]));
+    assert_eq!(last(&r).profile, None);
 }
 
 #[tokio::test]

@@ -64,6 +64,9 @@ export const msgSystemBox = style({
     "&[data-open]": { borderRadius: "16px" },
   },
 });
+/** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
+export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
+globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });
 /**
  * A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge.
  * It wraps plainly, not `pretty` as the page does: that weighs the whole draft again at every letter typed, and the

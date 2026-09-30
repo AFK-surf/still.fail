@@ -814,6 +814,8 @@ export interface ChatMessage {
 	editedAt?: number;
 	mine: boolean;
 	system: boolean;
+	/** ember's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it. */
+	profile?: string;
 	by: MessageBy;
 	waiting: boolean;
 	/** Its times in words, by field (`createdAt`). */

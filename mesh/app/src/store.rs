@@ -272,6 +272,9 @@ pub struct EntryRow {
     /// message: the still.fail app a person sent it from ("android 0.1.1123"); None elsewhere and from older apps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<String>,
+    /// message: for ember's notice about one of the station's profiles (its sign-in failed), that profile's id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
     pub at: i64,
 }
 
@@ -394,12 +397,14 @@ pub struct NewMessage {
     pub quotes: Vec<Quote>,
     pub declared: Option<String>,
     pub client: Option<String>,
+    /// ember's notice about a profile: its id (EntryRow::profile).
+    pub profile: Option<String>,
     pub at: Option<i64>,
 }
 
 impl NewMessage {
     pub fn new(thread: i64, ts: &str, author_kind: AuthorKind, author: &str, text: &str) -> NewMessage {
-        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, client: None, at: None }
+        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, client: None, profile: None, at: None }
     }
 }
 
@@ -563,6 +568,7 @@ CREATE TABLE IF NOT EXISTS entries (
   declared TEXT,
   at INTEGER NOT NULL,
   client TEXT,
+  profile TEXT,
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
@@ -767,6 +773,10 @@ fn add_client_column(db: &Connection) -> Result<()> {
     if !has("entries", "client")? {
         db.execute_batch("ALTER TABLE entries ADD COLUMN client TEXT")?;
     }
+    // The profile a notice is about (entries.profile) came later, the same way; the `merged` view has no need of it.
+    if !has("entries", "profile")? {
+        db.execute_batch("ALTER TABLE entries ADD COLUMN profile TEXT")?;
+    }
     if !has("merged", "client")? {
         db.execute_batch(&format!("BEGIN; DROP VIEW IF EXISTS merged; {MERGED} COMMIT;"))?;
     }
@@ -810,6 +820,7 @@ fn to_entry(r: &Row) -> rusqlite::Result<EntryRow> {
         quotes: from_json_list(r.get("quotes")?),
         declared: r.get("declared")?,
         client: r.get("client")?,
+        profile: r.get("profile")?,
         at: r.get("at")?,
     })
 }
@@ -1404,6 +1415,7 @@ impl Store {
                     quotes: m.quotes,
                     declared: m.declared,
                     client: m.client,
+                    profile: m.profile,
                     at: m.at.unwrap_or_else(now_ms),
                 },
                 changes,
@@ -1435,6 +1447,7 @@ impl Store {
                     quotes: message.quotes,
                     declared: None,
                     client: None,
+                    profile: None,
                     at: now_ms(),
                 },
                 changes,
@@ -2341,7 +2354,7 @@ impl Inner {
 
 fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
     db.execute(
-        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             e.thread,
             e.n,
@@ -2355,6 +2368,7 @@ fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
             json_list(&e.quotes),
             e.declared,
             e.client,
+            e.profile,
             e.at
         ],
     )?;

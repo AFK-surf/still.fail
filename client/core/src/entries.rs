@@ -21,12 +21,17 @@ pub fn merge(entries: &[Value]) -> Vec<Value> {
         let field = |name: &str| entry.get(name).cloned().unwrap_or(Value::Null);
         match entry.get("kind").and_then(Value::as_str) {
             Some("message") => {
-                messages.insert(n, json!({
+                let mut message = json!({
                     "seq": n, "thread": field("thread"), "ts": field("ts"), "authorKind": field("authorKind"), "author": field("author"),
                     "authorName": field("authorName"), "text": entry.get("text").cloned().unwrap_or(json!("")),
                     "attachments": entry.get("attachments").cloned().unwrap_or(json!([])), "quotes": entry.get("quotes").cloned().unwrap_or(json!([])),
                     "declared": field("declared"), "createdAt": field("at"), "editedAt": null,
-                }));
+                });
+                // ember's notice about a profile (its sign-in failed): which one. Stations before it say none.
+                if let Some(profile) = entry.get("profile").filter(|p| p.is_string()) {
+                    message["profile"] = profile.clone();
+                }
+                messages.insert(n, message);
             }
             Some("edit") => {
                 let Some(message) = entry.get("target").and_then(Value::as_u64).and_then(|t| messages.get_mut(&t)) else { continue };
@@ -67,5 +72,14 @@ mod tests {
         assert_eq!(merged[1]["authorName"], "阿");
         // Changes to messages before the run have nothing to change.
         assert_eq!(merge(&entries[2..]).iter().map(|m| m["seq"].clone()).collect::<Vec<_>>(), vec![json!(4), json!(6)]);
+    }
+
+    #[test]
+    fn a_notice_about_a_profile_says_which() {
+        let mut notice = message(1, "⚠️ 认证失败");
+        notice["authorKind"] = json!("ember");
+        notice["profile"] = json!("cc");
+        let merged = merge(&[notice, message(2, "二")]);
+        assert_eq!((merged[0]["profile"].clone(), merged[1].get("profile")), (json!("cc"), None));
     }
 }

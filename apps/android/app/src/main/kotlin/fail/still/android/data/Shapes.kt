@@ -838,6 +838,8 @@ data class ChatMessage (
 	val editedAt: Long? = null,
 	val mine: Boolean,
 	val system: Boolean,
+	/// ember's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
+	val profile: String? = null,
 	val by: MessageBy,
 	val waiting: Boolean,
 	/// Its times in words, by field (`createdAt`).

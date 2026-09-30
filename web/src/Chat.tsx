@@ -5,10 +5,10 @@
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
-import { useHref, useSearchParams } from "react-router";
+import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
-import { usePerson, useStation } from "./station.tsx";
+import { stationBase, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
@@ -515,7 +515,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice text={m.text} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
   return (
@@ -566,13 +566,15 @@ export function PersonWords({ text }: { text: string }) {
 /**
  * What ember itself says: a pill across the chat, in one line and no time. A click opens it: all its words, wrapped,
  * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
- * red instead.
+ * red instead. In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
  */
-function SystemNotice({ text, time, ts, enter, caught }: { text: string; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined }) {
+function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string; profile: string | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined }) {
+  const station = useStation();
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
   // A notice is a line of the UI, not prose: no 。 at its end (stations before 2026-09-30 wrote them as sentences).
   const said = words.replace(/。\s*$/u, "");
+  const colon = profile ? said.indexOf("：") : -1;
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
@@ -581,7 +583,11 @@ function SystemNotice({ text, time, ts, enter, caught }: { text: string; time: S
         role="button" tabIndex={0} aria-expanded={open}
         onClick={(e) => { if (!(e.target as Element).closest("a")) toggle(); }}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
-        <div className={conversationCss.markdown}><Prose>{said}</Prose></div>
+        <div className={conversationCss.markdown}>
+          {profile && colon >= 0
+            ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+            : <Prose>{said}</Prose>}
+        </div>
       </div>
       {open && <Time className={conversationCss.msgTime} stamp={time} />}
     </div>

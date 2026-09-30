@@ -131,6 +131,8 @@ pub struct HandedWorking {
 struct State {
     /// The runtime session, with the generation it was opened in: events of an older one are ignored.
     agent: Option<(u64, Arc<dyn AgentSession>)>,
+    /// The profile that runtime session runs on: what a notice of its sign-in or allowance failing points to.
+    profile: Option<String>,
     generation: u64,
     turn: Option<Turn>,
     nudges: u32,
@@ -729,6 +731,7 @@ impl SessionActor {
         let row = store.get_session(&self.key)?.ok_or_else(|| anyhow!("session {} disappeared", self.key))?;
         let driver = deps.driver(self.runtime)?;
         let profile = deps.run_on(&self.key)?;
+        let profile_id = profile.id.clone();
         // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
         let model = row.model.as_deref().map(|m| profile.spelling(m).unwrap_or(m).to_string());
         let base = OpenOptions {
@@ -771,7 +774,11 @@ impl SessionActor {
         if row.runtime_session_id.as_deref() != Some(id.as_str()) {
             store.set_runtime_session_id(&self.key, &id)?;
         }
-        self.st().agent = Some((generation, agent.clone()));
+        {
+            let mut st = self.st();
+            st.agent = Some((generation, agent.clone()));
+            st.profile = Some(profile_id);
+        }
         self.follow(generation, received);
         Ok(agent)
     }
@@ -864,11 +871,14 @@ impl SessionActor {
                     }
                     return self.start_turn(&deps, "resume", GO_ON_AFTER_SPENT).await;
                 }
-                self.notice(&deps, &failure_notice(&outcome)).await;
+                let profile = self.st().profile.clone();
+                self.notice_about(&deps, &failure_notice(&outcome), profile).await;
             }
-            TurnOutcome::Failed { .. } => {
+            TurnOutcome::Failed { reason, .. } => {
                 self.st().nudges = 0;
-                self.notice(&deps, &failure_notice(&outcome)).await;
+                // A sign-in that failed is its profile's: the notice points there.
+                let profile = if *reason == FailureReason::Auth { self.st().profile.clone() } else { None };
+                self.notice_about(&deps, &failure_notice(&outcome), profile).await;
             }
             TurnOutcome::Aborted => {
                 self.st().nudges = 0;
@@ -958,6 +968,11 @@ impl SessionActor {
 
     /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there.
     async fn notice(&self, deps: &Arc<dyn SessionDeps>, text: &str) {
+        self.notice_about(deps, text, None).await;
+    }
+
+    /// A notice about one of the station's profiles (`profile`, its id): the clients link it to that profile's page.
+    async fn notice_about(&self, deps: &Arc<dyn SessionDeps>, text: &str, profile: Option<String>) {
         let store = deps.store();
         let latest = store.latest_thread(&self.key).ok().flatten();
         let Some((latest, chat)) = latest.and_then(|l| deps.chat(&l.connect).map(|c| (l, c))) else {
@@ -967,7 +982,7 @@ impl SessionActor {
         let thread = ThreadRef::new(&latest.thread.channel, &latest.thread.thread_ts);
         let posted = async {
             let ts = chat.post(&thread, text, &[]).await?;
-            store.insert_message(NewMessage::new(latest.thread.id, &ts, AuthorKind::StillFail, "ember", text))?;
+            store.insert_message(NewMessage { profile, ..NewMessage::new(latest.thread.id, &ts, AuthorKind::StillFail, "ember", text) })?;
             Ok::<_, anyhow::Error>(())
         };
         if let Err(e) = posted.await {

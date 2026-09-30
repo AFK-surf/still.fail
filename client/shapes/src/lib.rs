@@ -367,6 +367,8 @@ pub struct ChatMessage {
     pub edited_at: Option<i64>,
     pub mine: bool,
     pub system: bool,
+    /// ember's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
+    pub profile: Option<String>,
     pub by: MessageBy,
     pub waiting: bool,
     /// Its times in words, by field (`createdAt`).
