@@ -500,7 +500,9 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
                     iconError = (r["iconError"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
                     val updated = (r["permissionsUpdated"] as? JsonPrimitive)?.booleanOrNull == true
                     approve = updated
-                    app.toast = if (updated) "已更新，还需要在 Slack 同意新权限" else "已更新 Slack app"
+                    // Changed permissions are approved in Slack: its page opens at once (the notice stays, to go back to it).
+                    if (updated && links != null) open(links.install)
+                    app.toast = if (updated) "已更新，在 Slack 同意新权限后生效" else "已更新 Slack app"
                 } catch (e: CoreException) { error = e.message } finally { busy = false }
             }
         }

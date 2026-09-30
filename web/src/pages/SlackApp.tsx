@@ -415,6 +415,11 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
 
   const changed = (Object.keys(settings) as (keyof SlackAppSettings)[]).filter((k) => JSON.stringify(settings[k]) !== JSON.stringify(draft[k]));
   const dirty = changed.length > 0 || icon !== null;
+  // Changed permissions are approved in Slack. The browser lets a tab open only while the click is being handled, and
+  // the station's answer comes later: a tab is opened on the click, when the permissions change, and sent to Slack's
+  // page once the app is written (closed if it went wrong). The desktop app opens pages in the system browser, from
+  // any time.
+  const approval = useRef<Window | null>(null);
   const apply = useAction(() => api.putSlackApp(connect.id, {
     ...Object.fromEntries(changed.map((k) => [k, draft[k]])),
     ...(icon ? { icon } : {}),
@@ -422,9 +427,27 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
     setIcon(null);
     setIconError(result.iconError);
     setApprove(result.permissionsUpdated);
-    toast(result.permissionsUpdated ? "已更新，还需要在 Slack 同意新权限" : "已更新 Slack app");
+    const tab = approval.current;
+    approval.current = null;
+    if (result.permissionsUpdated && tab) tab.location.href = links.install;
+    else if (result.permissionsUpdated && window.stillfailDesktop) window.open(links.install, "_blank");
+    else tab?.close();
+    toast(result.permissionsUpdated ? "已更新，在 Slack 同意新权限后生效" : "已更新 Slack app");
     onSaved();
   });
+  const save = () => {
+    if (changed.includes("groups") && !window.stillfailDesktop) {
+      const tab = window.open("", "_blank");
+      if (tab) {
+        tab.opener = null;
+        tab.document.title = "正在更新 Slack app";
+        tab.document.body.style.cssText = "font: 15px system-ui, sans-serif; color: #666; display: grid; place-items: center; height: 100vh; margin: 0";
+        tab.document.body.textContent = "正在更新 Slack app…";
+      }
+      approval.current = tab;
+    }
+    void apply.run().then((done) => { if (done === undefined) { approval.current?.close(); approval.current = null; } });
+  };
 
   return (
     <div className={`${pagesCss.card} slack-app`}>
@@ -440,7 +463,7 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
       {apply.error && <p className={controlsCss.fieldError} role="alert">{apply.error.message}</p>}
       <div className={pagesCss.cardActions}>
         {dirty && <Button variant="ghost" onClick={() => { setDraft(settings); setIcon(null); }}>还原</Button>}
-        <Button variant="primary" disabled={!dirty} busy={apply.busy} onClick={() => void apply.run()}>应用到 Slack</Button>
+        <Button variant="primary" disabled={!dirty} busy={apply.busy} onClick={save}>应用到 Slack</Button>
       </div>
     </div>
   );
