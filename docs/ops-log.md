@@ -17,9 +17,14 @@
 
 ## 待部署
 
-- station 卡片的网络行（客户端到 station 的路径、延时、速度、丢包）：只改了客户端（core + web + 手机 web + 安卓），station 和 cloud 不用动，新旧混跑都没问题。web 要部署 web，安卓要等下一版 app。上线后怎么验：打开 workspace 设置 → Station，远端 station 的卡片上应该有「经 relay（…）/直连 · 延时 … · ↓ … ↑ …」这一行，每 2 秒刷新一次；本机 admin 页面里的本机 station 不显示这一行。
-
 ## 2026-10-01
+
+### 02:20 部署 76afc23（station 卡片的网络行）
+
+- 部署：86b8edb → 76afc23，这之间只有 76afc23（station 卡片显示客户端到 station 的路径、延时、速度、丢包）和一个只改 ops-log 的提交。完整检查 6 项通过；发了 web、admin，studio 的 station 只重建了页面没重启，station 发布包在后台上传。
+- 只改了客户端（core + web + 手机 web + 安卓），station 和 cloud 的接口没动。安卓要等下一版 app 才有。
+- 验证：app.still.fail 上的 CloudApp 和 core wasm 都是新构建（200，含网络行的文字）。还没在登录后的页面上实际看过：打开设置 → Station，远端 station 卡片上应该有「经 relay（…）/直连 · 延时 · ↓ ↑」这一行，每 2 秒刷新一次。
+- 没合的分支：preview-dock-edge、search-list-layout，这次没带。
 
 ### 01:40 部署 e407171（新图标），发安卓和桌面 0.1.1204
 
