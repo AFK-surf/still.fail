@@ -17,6 +17,9 @@ import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, 
 import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
+import { animate, arrive, EASE_OUT, follower, moveState, type Follower } from "./motion.ts";
+import { motionValue, type MotionValue } from "motion";
+import { flushSync } from "react-dom";
 import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
@@ -296,6 +299,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   ));
   const started = new Set(chat.agents.filter((a) => a.started).map((a) => a.session.key));
   const emissions = useEmissions(list);
+  useActivityGlide(list);
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
   const rowOf = (m: ChatMessage): RowState => {
@@ -1247,63 +1251,151 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
 }
 
 /**
+ * An activity keeps its place on screen as what is above it changes at once (a message arriving, one coming out of an
+ * avatar, an image loading): it glides from where it showed to where it is laid out now, and a change while it is on
+ * its way goes on from where it is and the speed it has. What the pane's width lays out anew is taken at once.
+ */
+const GLIDE = { type: "spring", visualDuration: 0.3, bounce: 0 } as const;
+
+function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const pane = list.current;
+    if (!pane) return;
+    const rows = new Map<HTMLElement, { top: number; y: Follower }>();
+    const contentWidth = () => {
+      const style = getComputedStyle(pane);
+      return pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    };
+    let width = contentWidth();
+    const check = () => {
+      const now = contentWidth();
+      const rewrapped = now !== width;
+      width = now;
+      const seen = new Set<HTMLElement>();
+      for (const el of pane.querySelectorAll<HTMLElement>(`:scope > .${css.agentActivity}`)) {
+        seen.add(el);
+        const top = layoutSpot(pane, el).y;
+        const row = rows.get(el);
+        if (!row) {
+          const made = { top, y: follower(top, (v) => { el.style.transform = Math.abs(v - made.top) < 0.01 ? "" : `translateY(${v - made.top}px)`; }) };
+          rows.set(el, made);
+          continue;
+        }
+        if (top === row.top) continue;
+        row.top = top;
+        if (rewrapped || document.visibilityState !== "visible") row.y.jump(top);
+        else {
+          row.y.to(top, GLIDE);
+          // Laid out elsewhere, it is drawn where it was until the glide takes it.
+          el.style.transform = `translateY(${row.y.value - top}px)`;
+        }
+      }
+      for (const [el, row] of rows) if (!seen.has(el)) { row.y.stop(); rows.delete(el); }
+    };
+    const resize = new ResizeObserver(check);
+    const watch = () => { resize.disconnect(); resize.observe(pane); for (const child of pane.children) resize.observe(child); };
+    const mutations = new MutationObserver(() => { watch(); check(); });
+    mutations.observe(pane, { childList: true, subtree: true, characterData: true });
+    watch();
+    check();
+    return () => {
+      resize.disconnect();
+      mutations.disconnect();
+      for (const row of rows.values()) row.y.stop();
+    };
+  }, [list]);
+}
+
+/** Where an element sits in the pane's content, by layout: scrolling does not move it, nor does a transform. */
+function layoutSpot(pane: HTMLElement, el: Element) {
+  let x = 0;
+  let y = 0;
+  for (let n: HTMLElement | null = el as HTMLElement; n && n !== pane; n = n.offsetParent as HTMLElement | null) {
+    x += n.offsetLeft;
+    y += n.offsetTop;
+  }
+  return { x, y };
+}
+
+/**
  * A message an agent posts while its activity shows comes out of the activity's avatar, one at a time:
  * the activity folds to its avatar (fold), the avatar floats to where the message goes (float), the message comes out
  * of it, growing into its place (spit), and the avatar goes on down to where the activity now is, which unfolds again
- * (return). The message's own avatar is where the flying one leaves it, the same picture in the same place, so
- * nothing blinks. Until its turn a message waits folded to nothing. With reduced motion messages just appear, and so
- * do those no one watches come out: arriving while the page is hidden or the reader has scrolled up (scroll.ts), and
- * all still waiting when the page is hidden or the reader scrolls up (the browser barely runs timers for a hidden
- * page, so a queue would otherwise still be playing out long after).
+ * (return). The avatar that flies is a copy over the list, put exactly where the real one is (and the real one hidden)
+ * as it sets out, and let go of only once it has come to rest exactly where the real one is, so nothing blinks or
+ * jumps; it moves on springs that follow where it goes as that moves (the message growing, the activity gliding down),
+ * from the speed it has. The message's own avatar is where it lands, the same picture in the same place. Until its turn
+ * a message waits folded to nothing. With reduced motion messages just appear, and so do those no one watches come
+ * out: arriving while the page is hidden or the reader has scrolled up (scroll.ts), and all still waiting when the page
+ * is hidden or the reader scrolls up (the browser barely runs timers for a hidden page, so a queue would otherwise
+ * still be playing out long after); an avatar then on its way goes home from where it is.
  */
 type Pose = "fold" | "float" | "spit" | "return";
 const FOLD_MS = 170;
-const FLOAT_MS = 240;
 const SPIT_MS = 380;
-const RETURN_MS = 320;
+const FLY = { type: "spring", visualDuration: 0.26, bounce: 0 } as const;
 
 export function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const decided = useRef(new Map<number, boolean>());
   const done = useRef(new Set<number>());
   const queue = useRef<{ seq: number; agent: string }[]>([]);
   const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose } | null>(null);
-  const flying = useRef<HTMLElement | null>(null);
+  const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number> } | null>(null);
   const [, rerender] = useState(0);
   const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
-  // Where an element sits in the list's content, by layout: what the flying avatar moves in (scrolling does not move
-  // it), and unmoved by the message's own growing scale.
-  const spot = (el: Element) => {
-    const pane = list.current!;
-    let x = 0;
-    let y = 0;
-    for (let n: HTMLElement | null = el as HTMLElement; n && n !== pane; n = n.offsetParent as HTMLElement | null) {
-      x += n.offsetLeft;
-      y += n.offsetTop;
-    }
-    return { x, y };
+  // Where the avatar of an agent's activity shows: where it is laid out, and how far its row is from there, gliding.
+  const home = (avatar: HTMLElement) => {
+    const at = layoutSpot(list.current!, avatar);
+    const row = avatar.closest<HTMLElement>(`.${css.agentActivity}`);
+    return { x: at.x, y: at.y + (row ? new DOMMatrixReadOnly(getComputedStyle(row).transform).m42 : 0) };
+  };
+  const launch = (pane: HTMLElement, avatar: HTMLElement) => {
+    const el = avatar.cloneNode(true) as HTMLElement;
+    el.classList.add(css.avatarFlying);
+    Object.assign(el.style, { left: "0", top: "0", width: `${avatar.offsetWidth}px`, height: `${avatar.offsetHeight}px` });
+    pane.append(el);
+    const at = { ...home(avatar), s: 1 };
+    const draw = () => { el.style.transform = `translate(${at.x}px, ${at.y}px) scale(${at.s})`; };
+    const s = motionValue(1);
+    s.on("change", (v) => { at.s = v; draw(); });
+    draw();
+    return { el, s, x: follower(at.x, (v) => { at.x = v; draw(); }), y: follower(at.y, (v) => { at.y = v; draw(); }) };
+  };
+  const land = () => {
+    const f = flight.current;
+    if (!f) return;
+    f.x.stop();
+    f.y.stop();
+    f.s.destroy();
+    f.el.remove();
+    flight.current = null;
   };
   const nextAfter = (agent: string | null) => {
     const next = queue.current.shift();
-    // The same agent's next message goes straight on: its activity is folded already.
+    // The same agent's next message goes straight on: its activity is folded already, and its avatar out.
     setCurrent(next ? { ...next, pose: next.agent === agent ? "float" : "fold" } : null);
   };
-  const finish = (seq: number, agent: string) => {
-    flying.current?.remove();
-    flying.current = null;
+  // Done: the copy let go of in the same frame as the real avatar shows again (or kept, flying on to the next message).
+  const finish = (seq: number, agent: string, sync = true) => {
     done.current.add(seq);
-    nextAfter(agent);
+    if (queue.current[0]?.agent !== agent || !sync) land();
+    if (sync) flushSync(() => nextAfter(agent));
+    else nextAfter(agent);
   };
 
-  // Everything waiting or coming out shows at once, where it is.
+  // Everything waiting or coming out shows at once, where it is; an avatar on its way goes home from there.
   const release = () => {
-    if (!current && !queue.current.length) return;
+    if (!queue.current.length && (!current || done.current.has(current.seq))) return;
     for (const q of queue.current) done.current.add(q.seq);
-    if (current) done.current.add(current.seq);
     queue.current = [];
-    flying.current?.remove();
-    flying.current = null;
-    setCurrent(null);
+    if (current) done.current.add(current.seq);
+    if (current && flight.current && document.visibilityState === "visible") {
+      if (current.pose !== "return") setCurrent({ ...current, pose: "return" });
+    } else {
+      land();
+      setCurrent(null);
+    }
     rerender((n) => n + 1);
   };
   const watched = () => document.visibilityState === "visible" && !list.current?.hasAttribute("data-reading-up");
@@ -1325,52 +1417,51 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     if (!current) return;
     const { seq, agent, pose } = current;
     const pane = list.current;
-    const avatar = pane?.querySelector(`.${css.agentActivity}[data-agent="${CSS.escape(agent)}"] .${css.activityAvatar}`);
+    const avatar = pane?.querySelector<HTMLElement>(`.${css.agentActivity}[data-agent="${CSS.escape(agent)}"] .${css.activityAvatar}`);
     const message = pane?.querySelector(`.${conversationCss.msg}[data-seq="${seq}"]`);
     const landing = message?.querySelector(`:scope > .${chatCss2.msgAvatar}`);
-    if (!pane || !avatar || !message || !landing) { finish(seq, agent); return; }
+    // Going home needs only its activity (the message may show already).
+    if (!pane || !avatar || (pose !== "return" && !landing)) { finish(seq, agent, false); return; }
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame = 0;
-    const go = (to: Pose | null, ms: number) => { timer = setTimeout(() => (to ? setCurrent({ seq, agent, pose: to }) : finish(seq, agent)), ms); };
-    // Each frame the avatar is put between where it set out and where it is going, both read anew: the message growing
-    // moves the one, the activity pushed down the other.
-    const move = (from: () => { x: number; y: number }, to: () => { x: number; y: number }, ms: number, swell = 0) => {
-      const el = flying.current;
-      if (!el) return;
-      const start = from();
-      const begun = performance.now();
+    const go = (to: Pose) => setCurrent({ seq, agent, pose: to });
+    // Each frame the avatar is sent on to where it goes, read anew; `arrived`, once it has come to rest there.
+    const follow = (to: () => { x: number; y: number }, arrived?: () => void) => {
       const step = () => {
-        const t = Math.min(1, (performance.now() - begun) / ms);
-        const e = 1 - (1 - t) ** 3;
-        const end = to();
-        const scale = 1 + swell * Math.sin(Math.PI * Math.min(1, t / 0.6));
-        el.style.transform = `translate(${start.x + (end.x - start.x) * e}px, ${start.y + (end.y - start.y) * e}px) scale(${scale})`;
-        if (t < 1) frame = requestAnimationFrame(step);
+        const f = flight.current;
+        if (!f) return;
+        const goal = to();
+        f.x.to(goal.x, FLY);
+        f.y.to(goal.y, FLY);
+        if (arrived && !f.x.moving && !f.y.moving && Math.abs(f.x.value - goal.x) < 0.5 && Math.abs(f.y.value - goal.y) < 0.5) {
+          f.x.jump(goal.x);
+          f.y.jump(goal.y);
+          arrived();
+          return;
+        }
+        frame = requestAnimationFrame(step);
       };
       step();
     };
-    if (pose === "fold") go("float", FOLD_MS);
+    if (pose === "fold") timer = setTimeout(() => go("float"), FOLD_MS);
     if (pose === "float") {
-      const el = avatar.cloneNode(true) as HTMLElement;
-      el.classList.add(css.avatarFlying);
-      Object.assign(el.style, { left: "0", top: "0", width: `${(avatar as HTMLElement).offsetWidth}px`, height: `${(avatar as HTMLElement).offsetHeight}px` });
-      pane.append(el);
-      flying.current = el;
-      move(() => spot(avatar), () => spot(landing), FLOAT_MS);
-      go("spit", FLOAT_MS);
+      flight.current ??= launch(pane, avatar);
+      follow(() => layoutSpot(pane, landing!), () => go("spit"));
     }
     // A small swell as it lets the message out, staying on the message's avatar as the message grows.
     if (pose === "spit") {
-      move(() => spot(landing), () => spot(landing), SPIT_MS, 0.16);
-      go("return", SPIT_MS);
+      const f = flight.current;
+      if (f) animate(f.s, [1, 1.16, 1], { duration: SPIT_MS / 1000, times: [0, 0.35, 0.7], ease: "easeInOut" });
+      follow(() => layoutSpot(pane, landing!));
+      timer = setTimeout(() => go("return"), SPIT_MS);
     }
     if (pose === "return") {
-      move(() => spot(landing), () => spot(avatar), RETURN_MS);
-      go(null, RETURN_MS);
+      if (!flight.current) { finish(seq, agent, false); return; }
+      follow(() => home(avatar), () => finish(seq, agent));
     }
     return () => { clearTimeout(timer); cancelAnimationFrame(frame); };
   }, [current?.seq, current?.pose]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => flying.current?.remove(), []);
+  useEffect(() => land, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     /** Agents whose activity must stay while their messages come out. */
@@ -1405,16 +1496,39 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
 /**
  * An agent at work, in one line: its avatar, ringed while it works, and what it does now (as the core says), with how
  * long its turn has run. No name: the avatar says whose. What it does changes by crossfading, and each thing stays a
- * moment, so a passing 请求中 does not flicker by. The line opens its history.
+ * moment, so a passing 请求中 does not flicker by. The line opens its history. It comes in opening its room as it fades
+ * in, the line growing from its avatar; it leaves fading and folding its room away; for a message to come out of its
+ * avatar the line folds to the avatar. Each of these goes from wherever it shows, cut off by the next or not.
  */
 function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
   const wait = agent.wait;
   const now = useSteady(wait ? { key: "wait", text: "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
+  const row = useRef<HTMLDivElement>(null);
+  const line = useRef<HTMLButtonElement>(null);
+  const tail = useRef<HTMLSpanElement>(null);
+  // One there when the chat opened is there at once.
+  useLayoutEffect(() => {
+    if (caught) return;
+    const move = { duration: FADE_MS / 1000, ease: EASE_OUT };
+    arrive([[row.current!, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Set here, not by React: the change is made where what shows before it can be read.
+  const was = useRef({ leaving: false, folded: false });
+  useLayoutEffect(() => {
+    const el = row.current!;
+    if (leaving !== was.current.leaving) {
+      moveState([[el, ["grid-template-rows", "opacity"]]], () => el.toggleAttribute("data-leaving", leaving), { duration: FADE_MS / 1000, ease: EASE_OUT });
+    }
+    if (pose.folded !== was.current.folded) {
+      moveState([[tail.current!, ["width", "opacity"]]], () => el.toggleAttribute("data-folded", pose.folded), { duration: FOLD_MS / 1000, ease: EASE_OUT });
+    }
+    was.current = { leaving, folded: pose.folded };
+  });
   return (
-    <div className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
-      <button type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
+    <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
+      <button ref={line} type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
-        <span className={css.activityTail}>
+        <span ref={tail} className={css.activityTail}>
           <span className={css.activityNow}>
             {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}
             <span key={now.n} className={css.activityNowText} data-in={now.switched || undefined}>{now.current.text}</span>

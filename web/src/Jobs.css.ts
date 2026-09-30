@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
-import { activityGrowKeyframes, activityInKeyframes, emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
+import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
 import { msg } from "./styles/conversation.css.ts";
 import { segmented, segmentedOption } from "./ui.css.ts";
 import { detailsList } from "./pages/ChatPage.css.ts";
@@ -172,22 +172,17 @@ globalStyle(`${jobDetail} > ${jobLast}`, { margin: "8px 0 12px" });
 /** Here rather than with its class: it comes after .job-notices li, and wins over it. */
 globalStyle(`${detailsList} li`, { display: "grid", gap: "2px" });
 /**
- * Activity: one line, the agent's avatar (ringed while it works) and what it does now. What it does crossfades; the
- * turn over, the line fades and folds away.
+ * Activity: one line, the agent's avatar (ringed while it works) and what it does now. What it does crossfades; coming
+ * in, leaving and folding are moved from script (Chat.tsx Activity), from wherever they show.
  */
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
-globalStyle(agentActivity, {
-  display: "grid", gridTemplateRows: "1fr", gridTemplateColumns: "minmax(0, 1fr)",
-  animation: `${activityInKeyframes} 220ms ${vars.easeOut} both`,
-  transition: `grid-template-rows 220ms ${vars.easeOut}, opacity 220ms ${vars.easeOut}`,
-});
-/** Coming in, as its room opens and it fades in, the line grows from its avatar's middle (4px in, 18px across), .5 → 1. */
+globalStyle(agentActivity, { display: "grid", gridTemplateRows: "1fr", gridTemplateColumns: "minmax(0, 1fr)" });
+/** The line grows (coming in) from its avatar's middle (4px in, 18px across). */
 globalStyle(`${agentActivity} > ${activityLine}`, {
   // At the top of its row, whole, whatever the row's height as it opens: not squeezed nor clipped, and not moving
   // with the middle of a row that grows (which, with its growing, made the line go up and back down).
   alignSelf: "start",
   transformOrigin: "13px 50%",
-  animation: `${activityGrowKeyframes} 220ms ${vars.easeOut} both`,
 });
 /** Here rather than with its class: it comes after .job-dot[data-tone="restart"], and wins over it. */
 globalStyle(`${msg}[data-emitting] > *`, {
@@ -195,18 +190,10 @@ globalStyle(`${msg}[data-emitting] > *`, {
   animation: `${emitOutKeyframes} 380ms ${vars.easeOut} both`,
 });
 /** Here rather than with its class: it comes after .agent-activity, and wins over it. */
-globalStyle(`${agentActivity}, ${agentActivity} > ${activityLine}, ${msg}[data-emitting] > *`, {
+globalStyle(`${msg}[data-emitting] > *`, {
   "@media": {
     "(prefers-reduced-motion: reduce)": {
       animation: "none",
-    },
-  },
-});
-/** Here rather than with its class: it comes after .agent-activity, and wins over it. */
-globalStyle(agentActivity, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      transition: "none",
     },
   },
 });

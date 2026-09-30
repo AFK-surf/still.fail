@@ -46,6 +46,8 @@ export function follower(start: number, draw: (value: number) => void): Follower
 }
 
 const changing = new WeakMap<HTMLElement, AnimationPlaybackControls>();
+/** A computed value as the motion takes it: a bare number (opacity) as a number, which it would otherwise end at once. */
+const asValue = (v: string): string | number => (/^-?(\d+\.?\d*|\.\d+)$/.test(v.trim()) ? Number(v) : v);
 /**
  * Does `change` (a class or an attribute that lays things out anew) and moves each of `moves`' properties from where
  * it shows now to where the change puts it; cut off by the next one, that goes on from wherever this had got to. The
@@ -67,7 +69,7 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
     if (!Object.keys(frames).length) return;
     // Held where it was until the motion takes it (from the next frame): the change is never seen at once.
     for (const [p, [start]] of Object.entries(frames)) el.style.setProperty(p, start);
-    const run = animate(el, frames, transition);
+    const run = animate(el, Object.fromEntries(Object.entries(frames).map(([p, f]) => [p, f.map(asValue)])), transition);
     changing.set(el, run);
     void run.finished.then(() => {
       if (changing.get(el) !== run) return;
@@ -75,4 +77,29 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
       for (const p of props) el.style.removeProperty(p);
     }, () => {});
   });
+}
+
+/**
+ * Moves each of `moves`' properties from the value given to where the rules put it now (a thing coming in, drawn at
+ * its place from the first frame); a moveState on the same element later goes on from wherever this had got to.
+ */
+export function arrive(moves: [HTMLElement, Record<string, string>][], transition: object = { duration: 0.38, ease: EASE_OUT }): void {
+  if (reducedMotion()) return;
+  for (const [el, from] of moves) {
+    changing.get(el)?.stop();
+    const style = getComputedStyle(el);
+    const frames: Record<string, [string, string]> = {};
+    for (const [p, start] of Object.entries(from)) {
+      el.style.removeProperty(p);
+      frames[p] = [start, style.getPropertyValue(p)];
+    }
+    for (const [p, [start]] of Object.entries(frames)) el.style.setProperty(p, start);
+    const run = animate(el, Object.fromEntries(Object.entries(frames).map(([p, f]) => [p, f.map(asValue)])), transition);
+    changing.set(el, run);
+    void run.finished.then(() => {
+      if (changing.get(el) !== run) return;
+      changing.delete(el);
+      for (const p of Object.keys(from)) el.style.removeProperty(p);
+    }, () => {});
+  }
 }

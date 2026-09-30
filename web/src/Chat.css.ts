@@ -350,16 +350,10 @@ export const activityAvatar = style({
 });
 export const activityTail = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", maxWidth: "100%",
-  transition: `max-width 200ms ${vars.easeOut}, opacity 160ms ${vars.easeOut}`,
   selectors: {
     // A message coming out of the avatar: the line folds to its avatar, which flies (a copy, over the list) to where the
-    // message goes and back down.
-    [`${agentActivity}[data-folded] &`]: { maxWidth: "0", opacity: "0" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      transition: "none",
-    },
+    // message goes and back down. Folding and unfolding are moved from script (Chat.tsx Activity).
+    [`${agentActivity}[data-folded] &`]: { width: "0", opacity: "0" },
   },
 });
 export const activityNow = style({ display: "grid", minWidth: "0" });
