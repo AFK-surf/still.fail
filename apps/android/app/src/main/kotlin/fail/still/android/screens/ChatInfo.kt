@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,6 +87,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                     }
                 }
             }
+            if (open) Spacer(Modifier.height(10.dp))
             InfoList {
                 Detail("来自", view?.place?.let { "Slack · $it" } ?: "still.fail 对话")
                 Detail("发起", (view?.thread ?: thread).creator?.shown?.display ?: "未记录")

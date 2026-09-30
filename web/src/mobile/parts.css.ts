@@ -119,6 +119,8 @@ export const mPickGrid = style({ display: "grid", gridTemplateColumns: "minmax(0
 export const mPickAside = style({ textAlign: "right" });
 export const mInfoList = style({
   borderRadius: "14px", background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", overflow: "hidden",
+  // Two lists one after the other, with no group label between them, are still two cards.
+  selectors: { "& + &": { marginTop: "10px" } },
 });
 export const mButton = style({
   display: "inline-flex", alignItems: "center", gap: "8px", flex: "none", height: "38px", padding: "0 16px",
