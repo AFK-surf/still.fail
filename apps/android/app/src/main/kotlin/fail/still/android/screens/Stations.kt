@@ -3,7 +3,16 @@
 // connections.
 package fail.still.android.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +59,8 @@ import fail.still.android.data.ACCESS_LABEL
 import fail.still.android.data.Profile
 import fail.still.android.ui.QuotaRings
 import fail.still.android.data.StationView
+import fail.still.android.data.StationNet
+import fail.still.android.data.NetFigure
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
@@ -119,6 +130,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             host.meters.forEach { Ring(it.percent, it.short, it.level, 40.dp) }
                         }
+                        s.net?.let { NetLine(it, Modifier.padding(top = 10.dp)) }
                     } else if (!s.online) {
                         Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
@@ -154,6 +166,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                         host.meters.forEach { Ring(it.percent, it.short, it.level) }
                     }
                     Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
+                    s.net?.let { NetLine(it, Modifier.padding(top = 6.dp)) }
                     s.overview?.processesText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp)) }
                 }
             } else if (!s.online) {
@@ -212,6 +225,50 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
 }
 
 
+
+/**
+ * This device's connection to a station, as the web's phone card has it (cloud/StationCards.tsx `Net`, stacked): how it
+ * goes and its round trip (with the last minute's as a small line) on one line, the speed each way and what went over
+ * it on the next. Grey, but for what the core says is off.
+ */
+@Composable
+internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
+    val c = C
+    val tone = { f: NetFigure -> when (f.level) { "red" -> c.red; "amber" -> c.warn; else -> c.ink } }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            Text(net.path, fontSize = 13.sp, color = C.muted)
+            net.rtt?.let { rtt ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("延时 ", fontSize = 13.sp, color = C.muted)
+                    Text(rtt.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = tone(rtt))
+                    if (net.rttHistory.size > 1) Spark(net.rttHistory, if (rtt.level == "ok") c.subtle else tone(rtt), Modifier.padding(start = 6.dp))
+                }
+            }
+            net.loss?.let { Text(it.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = tone(it)) }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row { Text("↓ ", fontSize = 13.sp, color = C.muted); Text(net.down, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink) }
+            Row { Text("↑ ", fontSize = 13.sp, color = C.muted); Text(net.up, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink) }
+            Text(net.total, fontSize = 13.sp, color = C.muted)
+        }
+    }
+}
+
+/** A minute's round trips as a small line, drawn on twice the highest: a steady one runs across the middle, a spike rises from it. */
+@Composable
+private fun Spark(points: List<Double>, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.width(48.dp).height(14.dp)) {
+        val top = (points.max() * 2).coerceAtLeast(1.0)
+        val w = 1.3.dp.toPx()
+        val path = Path()
+        points.forEachIndexed { i, v ->
+            val o = Offset(size.width * i / (points.size - 1), (size.height - w) * (1 - (v / top).toFloat()) + w / 2)
+            if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+        }
+        drawPath(path, color, style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
 
 /**
  * A profile on its station's page: whether it works (a dot before its name, its state in words, why when its provider

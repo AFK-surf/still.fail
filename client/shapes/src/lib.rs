@@ -2097,8 +2097,41 @@ pub struct StationView {
     pub models: Vec<ModelOption>,
     pub overview: Option<Overview>,
     pub host: Option<Host>,
+    /// How this device's connection to it runs; none for a station reached without one of its own (the page's own)
+    /// or before one is open.
+    pub net: Option<StationNet>,
     /// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
     pub time: Option<HashMap<String, Stamp>>,
+}
+
+/// This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
+/// over the last minute, and what goes over it.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StationNet {
+    /// 直连, 经 relay（host）, or 正在选路.
+    pub path: String,
+    pub rtt: Option<NetFigure>,
+    /// Round trips over the last minute, oldest first, in milliseconds.
+    pub rtt_history: Vec<f64>,
+    /// Bytes a second now, each way: 1.4 MB/s.
+    pub down: String,
+    pub up: String,
+    /// What went over it since it opened: 本次共 ↓ 212 MB · ↑ 9.6 MB.
+    pub total: String,
+    /// Packets lost over the last minute, when some were.
+    pub loss: Option<NetFigure>,
+}
+
+/// A figure in words, and how bad it is.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NetFigure {
+    pub text: String,
+    pub level: Level,
 }
 
 #[typeshare]

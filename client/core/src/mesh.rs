@@ -776,6 +776,27 @@ impl Link {
         self.conn.paths().iter().find(|p| p.is_selected()).map(|p| if p.is_relay() { "relay" } else { "direct" })
     }
 
+    /// How the connection runs, as QUIC measures it: the path it takes now, its round trip, and what went over it
+    /// (every datagram, both ways, since it opened), for the station's card (station.rs `Topic::Net`).
+    pub fn net(&self) -> LinkNet {
+        let paths = self.conn.paths();
+        let selected = paths.iter().find(|p| p.is_selected());
+        let relay = selected.as_ref().and_then(|p| match p.remote_addr() {
+            iroh::TransportAddr::Relay(url) => Some(url.host_str().unwrap_or_default().to_string()),
+            _ => None,
+        });
+        let stats = self.conn.stats();
+        LinkNet {
+            path: selected.as_ref().map(|p| if p.is_relay() { "relay" } else { "direct" }),
+            relay,
+            rtt_ms: selected.as_ref().map(|p| p.rtt().as_secs_f64() * 1000.0),
+            rx_bytes: stats.udp_rx.bytes,
+            tx_bytes: stats.udp_tx.bytes,
+            tx_packets: stats.udp_tx.datagrams,
+            lost_packets: stats.lost_packets,
+        }
+    }
+
     /// Whether the station answers on it within [`PROBE_MS`]: the credential presented again (any station answers
     /// that, one line back), a round trip that also shows the way there is open.
     async fn answers(&self, host: &dyn Host) -> bool {
@@ -792,6 +813,20 @@ impl Link {
     fn usable(&self) -> bool {
         self.conn.close_reason().is_none() && !self.renewal_failed.get()
     }
+}
+
+/// A link's connection as [`Link::net`] reads it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LinkNet {
+    /// `relay` or `direct`; None before a path is chosen.
+    pub path: Option<&'static str>,
+    /// The relay's host, on a relay path.
+    pub relay: Option<String>,
+    pub rtt_ms: Option<f64>,
+    pub rx_bytes: u64,
+    pub tx_bytes: u64,
+    pub tx_packets: u64,
+    pub lost_packets: u64,
 }
 
 /// In words, with the station's own reasons (mesh/station) spelled out.

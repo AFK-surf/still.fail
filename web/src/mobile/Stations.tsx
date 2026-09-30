@@ -14,6 +14,7 @@ import { ConnectRow, Presence, WaitingAppRow } from "./Connects.tsx";
 import { accessLabel, MachineLoginOffers, quotaTrouble, toneDot } from "./Profiles.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
+import { Net } from "../cloud/StationCards.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -60,7 +61,10 @@ export function StationsScreen() {
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
           {s.online && s.host ? (
-            <span className={css.mStationRings}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} size={40} />)}</span>
+            <>
+              <span className={css.mStationRings}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} size={40} />)}</span>
+              {s.net && <Net net={s.net} stacked />}
+            </>
           ) : !s.online ? (
             <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 still.fail 了</span></span>
           ) : null}
@@ -137,6 +141,7 @@ export function StationScreen() {
             <Card>
               <span className={`${css.mStationRings} ${css.mRings18}`}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} />)}</span>
               <span className={css.mStationLine}>{s.host.line}</span>
+              {s.net && <Net net={s.net} stacked />}
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (

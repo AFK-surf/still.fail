@@ -1373,6 +1373,12 @@ export interface MeshStatus {
 	name?: string;
 }
 
+/** A figure in words, and how bad it is. */
+export interface NetFigure {
+	text: string;
+	level: Level;
+}
+
 export interface RuntimeModels {
 	runtime: RuntimeKind;
 	models: string[];
@@ -1453,6 +1459,25 @@ export interface Overview {
 	processesText: string;
 }
 
+/**
+ * This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
+ * over the last minute, and what goes over it.
+ */
+export interface StationNet {
+	/** 直连, 经 relay（host）, or 正在选路. */
+	path: string;
+	rtt?: NetFigure;
+	/** Round trips over the last minute, oldest first, in milliseconds. */
+	rttHistory: number[];
+	/** Bytes a second now, each way: 1.4 MB/s. */
+	down: string;
+	up: string;
+	/** What went over it since it opened: 本次共 ↓ 212 MB · ↑ 9.6 MB. */
+	total: string;
+	/** Packets lost over the last minute, when some were. */
+	loss?: NetFigure;
+}
+
 export interface StationView {
 	station: string;
 	id: string;
@@ -1471,6 +1496,11 @@ export interface StationView {
 	models: ModelOption[];
 	overview?: Overview;
 	host?: Host;
+	/**
+	 * How this device's connection to it runs; none for a station reached without one of its own (the page's own)
+	 * or before one is open.
+	 */
+	net?: StationNet;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
 }

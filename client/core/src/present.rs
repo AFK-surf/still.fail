@@ -452,9 +452,47 @@ pub fn host(h: &mut Value) {
     h["emberText"] = json!(format!("still.fail {} MB", (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
 }
 
+/// A station's connection as its card shows it (shapes `StationNet`), from what `Topic::Net` read of it; None
+/// while there is none. Only what is off is coloured: a slow round trip, packets lost.
+pub fn net(raw: &Value) -> Option<Value> {
+    if !raw.is_object() {
+        return None;
+    }
+    let path = match raw.get("path").and_then(Value::as_str) {
+        Some("direct") => "直连".to_string(),
+        Some("relay") => match raw.get("relay").and_then(Value::as_str).filter(|h| !h.is_empty()) {
+            Some(host) => format!("经 relay（{host}）"),
+            None => "经 relay".to_string(),
+        },
+        _ => "正在选路".to_string(),
+    };
+    let samples: Vec<&Value> = raw.get("samples").and_then(Value::as_array).map(|a| a.iter().collect()).unwrap_or_default();
+    let rtt = raw.get("rttMs").and_then(Value::as_f64).map(|ms| {
+        let text = if ms >= 1000.0 { format!("{:.1} s", ms / 1000.0) } else { format!("{} ms", ms.round().max(1.0) as i64) };
+        json!({ "text": text, "level": if ms >= 1000.0 { "red" } else if ms >= 300.0 { "amber" } else { "ok" } })
+    });
+    let history: Vec<f64> = samples.iter().filter_map(|s| s.get("rttMs").and_then(Value::as_f64)).map(|ms| (ms * 10.0).round() / 10.0).collect();
+    let rate = |key: &str| samples.last().and_then(|s| s.get(key)).and_then(Value::as_f64).map(|b| format!("{}/s", format::bytes(b))).unwrap_or_else(|| "—".into());
+    let n = |key: &str| raw.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+    let (sent, lost) = samples.iter().fold((0.0, 0.0), |(sent, lost), s| {
+        (sent + s.get("sent").and_then(Value::as_f64).unwrap_or(0.0), lost + s.get("lost").and_then(Value::as_f64).unwrap_or(0.0))
+    });
+    // Over enough packets to say, and enough of them lost to matter.
+    let loss = (sent >= 20.0 && lost / sent >= 0.01).then(|| {
+        let pct = lost / sent * 100.0;
+        json!({ "text": format!("丢包 {pct:.1}%"), "level": if pct >= 10.0 { "red" } else { "amber" } })
+    });
+    Some(json!({
+        "path": path, "rtt": rtt, "rttHistory": history,
+        "down": rate("rxBps"), "up": rate("txBps"),
+        "total": format!("本次共 ↓ {} · ↑ {}", format::bytes(n("rxBytes")), format::bytes(n("txBytes"))),
+        "loss": loss,
+    }))
+}
+
 /// Whether what goes out of a topic shows times in words (sent again each minute).
 pub fn ticks(topic: &Topic) -> bool {
-    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::Prefs)
+    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Net { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::Prefs)
 }
 
 /// A topic's value through the shape the clients are generated from (client/shapes): what it does not declare is
@@ -541,6 +579,30 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_connection_is_said_in_words_and_only_what_is_off_is_coloured() {
+        assert_eq!(net(&Value::Null), None);
+        let sample = |rtt: f64, sent: u64, lost: u64| json!({ "at": 0, "rttMs": rtt, "rxBps": 1_468_006, "txBps": 83_968, "sent": sent, "lost": lost });
+        let raw = json!({ "path": "direct", "rttMs": 38.4, "rxBytes": 222_298_112u64, "txBytes": 10_066_329u64, "samples": [sample(40.0, 50, 0), sample(38.4, 50, 0)] });
+        let shown = net(&raw).unwrap();
+        assert_eq!(shown["path"], "直连");
+        assert_eq!(shown["rtt"], json!({ "text": "38 ms", "level": "ok" }));
+        assert_eq!(shown["rttHistory"], json!([40.0, 38.4]));
+        assert_eq!((shown["down"].as_str(), shown["up"].as_str()), (Some("1.4 MB/s"), Some("82 KB/s")));
+        assert_eq!(shown["total"], "本次共 ↓ 212 MB · ↑ 9.6 MB");
+        assert_eq!(shown["loss"], Value::Null);
+
+        let raw = json!({ "path": "relay", "relay": "relay.still.fail", "rttMs": 286.0, "rxBytes": 0, "txBytes": 0, "samples": [sample(1200.0, 40, 2)] });
+        let shown = net(&raw).unwrap();
+        assert_eq!(shown["path"], "经 relay（relay.still.fail）");
+        assert_eq!(shown["rtt"]["level"], "ok");
+        assert_eq!(shown["loss"], json!({ "text": "丢包 5.0%", "level": "amber" }));
+        // Not yet two readings: nothing to say of speed.
+        let shown = net(&json!({ "path": null, "rttMs": 1500.0, "rxBytes": 0, "txBytes": 0, "samples": [] })).unwrap();
+        assert_eq!((shown["path"].as_str(), shown["down"].as_str()), (Some("正在选路"), Some("—")));
+        assert_eq!(shown["rtt"], json!({ "text": "1.5 s", "level": "red" }));
+    }
 
     #[test]
     fn a_rows_people_are_said_in_words_who_started_it_first() {

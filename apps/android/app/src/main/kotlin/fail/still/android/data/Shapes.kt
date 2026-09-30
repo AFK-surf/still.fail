@@ -1435,6 +1435,13 @@ data class MeshStatus (
 	val name: String? = null
 )
 
+/// A figure in words, and how bad it is.
+@Serializable
+data class NetFigure (
+	val text: String,
+	val level: Level
+)
+
 @Serializable
 data class RuntimeModels (
 	val runtime: RuntimeKind,
@@ -1519,6 +1526,24 @@ data class Overview (
 	val processesText: String
 )
 
+/// This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
+/// over the last minute, and what goes over it.
+@Serializable
+data class StationNet (
+	/// 直连, 经 relay（host）, or 正在选路.
+	val path: String,
+	val rtt: NetFigure? = null,
+	/// Round trips over the last minute, oldest first, in milliseconds.
+	val rttHistory: List<Double>,
+	/// Bytes a second now, each way: 1.4 MB/s.
+	val down: String,
+	val up: String,
+	/// What went over it since it opened: 本次共 ↓ 212 MB · ↑ 9.6 MB.
+	val total: String,
+	/// Packets lost over the last minute, when some were.
+	val loss: NetFigure? = null
+)
+
 @Serializable
 data class StationView (
 	val station: String,
@@ -1538,6 +1563,9 @@ data class StationView (
 	val models: List<ModelOption>,
 	val overview: Overview? = null,
 	val host: Host? = null,
+	/// How this device's connection to it runs; none for a station reached without one of its own (the page's own)
+	/// or before one is open.
+	val net: StationNet? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null
 )

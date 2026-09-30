@@ -26,7 +26,7 @@
 //! (entries.rs).
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::rc::{Rc, Weak};
 
@@ -39,7 +39,7 @@ use crate::entries::n_of;
 use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest};
 use crate::kept::{Kept, Log};
-use crate::mesh::{CredentialSource, Link, Mesh, RequestHead};
+use crate::mesh::{CredentialSource, Link, LinkNet, Mesh, RequestHead};
 use crate::protocol::Topic;
 use crate::status::{Place, Status, Waiting, station_what};
 use crate::store::{Source, Store};
@@ -68,6 +68,10 @@ pub const LOG_READ_MAX_MS: u64 = 60_000;
 pub const SOCKET_OPEN_MS: u64 = 30_000;
 /// A burst of `thread` events becomes one read of each thread's summary.
 pub const EVENTS_COALESCE_MS: u64 = 400;
+/// How often a station's connection is read while its card shows it (`Topic::Net`), and how many readings are kept
+/// (a minute's).
+pub const NET_EVERY_MS: u64 = 2_000;
+const NET_KEPT: usize = 30;
 /// Entries per page of a thread.
 pub const PAGE: u64 = 50;
 /// Entries per page of a session's transcript (a step is a call and its result, so more of them).
@@ -161,6 +165,11 @@ pub trait StationWire {
     /// then opened again on the new one. Never, for a wire that does not race.
     fn replaced(&self, _station: &StationAddr) -> LocalBoxFuture<'static, ()> {
         futures::future::pending().boxed_local()
+    }
+    /// How the connection to the station runs now (its path, round trip, bytes both ways), for its card; None where
+    /// there is none of its own to read (the page's own station, over HTTP) or none open.
+    fn net(&self, _station: &StationAddr) -> Option<LinkNet> {
+        None
     }
     /// A preview page's WebSocket (`head.path` a preview's): the station's reply, then its frames both ways
     /// ([`SocketFrame`]). Only the mesh carries one.
@@ -414,6 +423,12 @@ impl StationWire for MeshWire {
         mesh.replaced(&station, &link)
     }
 
+    fn net(&self, station: &StationAddr) -> Option<LinkNet> {
+        let StationAddr::Remote { station, .. } = station else { return None };
+        let Some(Ok(mesh)) = (self.mesh)().now_or_never() else { return None };
+        mesh.current(station).map(|link| link.net())
+    }
+
     fn socket(&self, station: &StationAddr, head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
         let StationAddr::Remote { workspace, station } = station.clone() else {
             return async { Err(CoreError::invalid("本地站点不走 mesh")) }.boxed_local();
@@ -463,6 +478,13 @@ impl StationWire for RoutedWire {
         match station {
             StationAddr::Local => self.local.reset(station),
             StationAddr::Remote { .. } => self.remote.reset(station),
+        }
+    }
+
+    fn net(&self, station: &StationAddr) -> Option<LinkNet> {
+        match station {
+            StationAddr::Local => self.local.net(station),
+            StationAddr::Remote { .. } => self.remote.net(station),
         }
     }
 
@@ -1287,6 +1309,58 @@ impl Stations {
         };
         if live {
             self.sink.set(&Topic::Link { station: station.into() }, Ok(value));
+        }
+    }
+
+    /// Reads the connection to the station every [`NET_EVERY_MS`] while `topic` is watched, and keeps the last
+    /// [`NET_KEPT`] readings: `{ path, relay, rttMs, rxBytes, txBytes, samples: [{ at, rttMs, rxBps, txBps, sent, lost }] }`,
+    /// or null while there is no connection. Bytes are the connection's since it opened; a new one starts over.
+    async fn sample_net(self: Rc<Self>, topic: Topic, addr: StationAddr) {
+        let mut last: Option<(f64, LinkNet)> = None;
+        let mut samples: VecDeque<Value> = VecDeque::new();
+        loop {
+            if !self.is_live(&topic) {
+                return;
+            }
+            let now = self.host.now_ms();
+            let value = match self.wire.net(&addr) {
+                None => {
+                    last = None;
+                    samples.clear();
+                    Value::Null
+                }
+                Some(net) => {
+                    // What went over it since the reading before; none for a connection opened since (its counts
+                    // start again).
+                    let since = last.as_ref().filter(|(_, was)| net.rx_bytes >= was.rx_bytes && net.tx_bytes >= was.tx_bytes);
+                    if let Some((at, was)) = since {
+                        let secs = ((now - at) / 1000.0).max(0.001);
+                        samples.push_back(json!({
+                            "at": now.round(),
+                            "rttMs": net.rtt_ms,
+                            "rxBps": ((net.rx_bytes - was.rx_bytes) as f64 / secs).round(),
+                            "txBps": ((net.tx_bytes - was.tx_bytes) as f64 / secs).round(),
+                            "sent": net.tx_packets.saturating_sub(was.tx_packets),
+                            "lost": net.lost_packets.saturating_sub(was.lost_packets),
+                        }));
+                    } else {
+                        samples.clear();
+                    }
+                    while samples.len() > NET_KEPT {
+                        samples.pop_front();
+                    }
+                    let value = json!({
+                        "path": net.path, "relay": net.relay, "rttMs": net.rtt_ms,
+                        "rxBytes": net.rx_bytes, "txBytes": net.tx_bytes, "samples": samples,
+                    });
+                    last = Some((now, net));
+                    value
+                }
+            };
+            if self.sink.get(&topic).as_ref() != Some(&value) {
+                self.sink.set(&topic, Ok(value));
+            }
+            self.host.sleep(NET_EVERY_MS).await;
         }
     }
 
@@ -2284,6 +2358,13 @@ impl Source for Stations {
             }
             // Samples come on the events stream, which asks for them now.
             Topic::Host { .. } => {}
+            Topic::Net { .. } => {
+                let task = self.spawn(self.rc().sample_net(topic.clone(), addr.clone()));
+                if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
+                    s.tasks.insert(topic.clone(), task);
+                }
+                return;
+            }
             Topic::JobLog { .. } => {
                 let task = self.spawn(self.rc().follow_log(topic.clone()));
                 if let Some(s) = self.stations.borrow_mut().get_mut(&station) {

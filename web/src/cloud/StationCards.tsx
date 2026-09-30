@@ -3,7 +3,7 @@
 // rest (its meters as dials, what the machine is) stays grey.
 import { useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
-import type { Host, Level } from "../core/shapes.ts";
+import type { Host, Level, NetFigure, StationNet } from "../core/shapes.ts";
 import { StatusDot, Time, Tip } from "../ui.tsx";
 import { Versions } from "../Versions.tsx";
 import * as css from "./StationCards.css.ts";
@@ -60,6 +60,37 @@ function Dial({ m }: { m: Meter }) {
   );
 }
 
+/** A minute's round trips as a small line, drawn on twice the highest: a steady one runs across the middle, a spike
+ * rises from it. */
+function Spark({ points }: { points: number[] }) {
+  const w = 60, h = 14, top = Math.max(1, Math.max(...points) * 2);
+  const at = points.map((v, i) => `${((i * w) / (points.length - 1)).toFixed(1)},${(h - 1 - ((h - 2) * v) / top).toFixed(1)}`).join(" ");
+  return <svg className={css.spark} width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true"><polyline points={at} /></svg>;
+}
+
+function Figure({ f }: { f: NetFigure }) {
+  return <b data-level={f.level}>{f.text}</b>;
+}
+
+/** This device's connection to it: how it goes and its round trip, then the speed each way and what went over it. In
+ * a line on a wide card; `stacked` (the phone's, mobile/Stations.tsx) puts the two on lines of their own. */
+export function Net({ net, stacked = false }: { net: StationNet; stacked?: boolean }) {
+  return (
+    <div className={stacked ? `${css.net} ${css.netStacked}` : css.net}>
+      <span className={css.netPart}>
+        <span>{net.path}</span>
+        {net.rtt && <span data-level={net.rtt.level}>延时 <Figure f={net.rtt} />{net.rttHistory.length > 1 && <Spark points={net.rttHistory} />}</span>}
+        {net.loss && <span><Figure f={net.loss} /></span>}
+      </span>
+      <span className={css.netPart}>
+        <span>↓ <b>{net.down}</b></span>
+        <span>↑ <b>{net.up}</b></span>
+        <span>{net.total}</span>
+      </span>
+    </div>
+  );
+}
+
 /** Whether `waiting` has held for `ms`: a station that says it is online but has not answered for a while. */
 function useLong(waiting: boolean, ms: number): boolean {
   const [long, setLong] = useState(false);
@@ -86,6 +117,7 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
         <span className={css.menu}>{menu}</span>
       </div>
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
+      {s.online && s.net && <Net net={s.net} />}
       <div className={css.cardFoot}>
         {s.online && <span>{machine(s.host) || "正在读取设备信息…"}</span>}
         {/* A station that says its versions says the station's among them; one older, only what the cloud knows. */}

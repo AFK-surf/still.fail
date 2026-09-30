@@ -538,7 +538,7 @@ impl Views {
         let (scope, per_station): (&str, fn(String) -> Vec<Topic>) = match view {
             // Its overview says which Slack users are the viewer (a row's last thing said by one is "你").
             Topic::Chats { scope, .. } | Topic::ChatSearch { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
-            Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
+            Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station: station.clone() }, Topic::Net { station }]),
             Topic::Archive { scope } => (scope.as_str(), |station| vec![Topic::ArchivedRows { station }]),
             Topic::LongJobs { scope } => (scope.as_str(), |station| vec![Topic::Jobs { station }]),
             // A chat's jobs are its agents', as its view has them.
@@ -911,6 +911,7 @@ impl Views {
                 "runtimes": runtimes(overview.as_ref()),
                 "models": models(overview.as_ref(), self.host.now_ms()),
                 "overview": shown, "host": host,
+                "net": read(Topic::Net { station: s.address.clone() }).as_ref().and_then(crate::present::net),
             })
         });
         Some(Ok(Value::Array(items.collect())))
@@ -2195,7 +2196,7 @@ mod tests {
             t.subscribe(1, Topic::Stations { scope: "ws".into() });
             t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
-            let each = |st: &str| vec![link(st), overview(st), host_of(st)];
+            let each = |st: &str| vec![link(st), overview(st), host_of(st), Topic::Net { station: st.into() }];
             let watched = sorted([vec![workspace()], each("ws/a"), each("ws/b"), each("ws/c")].concat());
             assert_eq!(sorted(t.started()), watched);
             t.store.unsubscribe(1, 1);

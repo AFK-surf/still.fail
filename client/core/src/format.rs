@@ -150,6 +150,18 @@ pub fn gb1(bytes: f64) -> String {
     if bytes >= 100.0 * 1024f64.powi(3) { format!("{} GB", g.round() as i64) } else { format!("{g:.1} GB") }
 }
 
+/// Bytes in the unit that suits them, one decimal below 10: 0 B, 812 B, 82 KB, 1.4 MB, 3.2 GB.
+pub fn bytes(bytes: f64) -> String {
+    let units = ["B", "KB", "MB", "GB", "TB"];
+    let mut n = bytes.max(0.0);
+    let mut unit = 0;
+    while n >= 1000.0 && unit < units.len() - 1 {
+        n /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 || n >= 10.0 { format!("{} {}", n.round() as i64, units[unit]) } else { format!("{n:.1} {}", units[unit]) }
+}
+
 /// Bytes as whole gigabytes: 32 GB.
 pub fn gb(bytes: f64) -> String {
     format!("{} GB", (bytes / 1024f64.powi(3)).round() as i64)
@@ -364,6 +376,7 @@ mod tests {
 
     #[test]
     fn words_as_the_clients_had_them() {
+        assert_eq!((bytes(0.0), bytes(812.0), bytes(83_968.0), bytes(1_468_006.0), bytes(3.2 * 1024f64.powi(3))), ("0 B".into(), "812 B".into(), "82 KB".into(), "1.4 MB".into(), "3.2 GB".into()));
         assert_eq!(compact_number(950.0), "950");
         assert_eq!(compact_number(1200.0), "1.2K");
         assert_eq!(compact_number(70_600.0), "70.6K");

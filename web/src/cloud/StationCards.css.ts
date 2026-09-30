@@ -45,3 +45,18 @@ export const cardVersions = style({ marginLeft: "17px", selectors: { "&:empty": 
 export const cardFoot = style({
   display: "flex", flexWrap: "wrap", gap: "0 12px", marginLeft: "17px", fontSize: vars.textXs, color: vars.muted,
 });
+
+/** This device's connection to the station: grey figures, coloured only when the core says one is off. */
+export const net = style({
+  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 14px", marginLeft: "17px",
+  fontSize: vars.textSm, color: vars.muted, fontVariantNumeric: "tabular-nums",
+});
+globalStyle(`${net} b`, { fontWeight: "500", color: vars.text });
+globalStyle(`${net} b[data-level="amber"]`, { color: vars.amber });
+globalStyle(`${net} b[data-level="red"]`, { color: vars.red });
+/** On the phone's cards: its two parts on lines of their own, under the rings. */
+export const netStacked = style({ flexDirection: "column", alignItems: "flex-start", gap: "4px", marginLeft: "0", paddingTop: "10px", fontSize: "13px" });
+export const netPart = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 14px", minWidth: "0" });
+export const spark = style({ marginLeft: "6px", verticalAlign: "middle", fill: "none", stroke: vars.subtle, strokeWidth: "1.3", strokeLinejoin: "round", strokeLinecap: "round" });
+globalStyle(`${net} [data-level="amber"] ${spark}`, { stroke: vars.amber });
+globalStyle(`${net} [data-level="red"] ${spark}`, { stroke: vars.red });
