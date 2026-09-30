@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -48,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,6 +102,7 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
+import fail.still.android.ui.Follow
 import fail.still.android.ui.rememberFollow
 import fail.still.core.CoreException
 import androidx.compose.ui.platform.LocalDensity
@@ -236,20 +239,25 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
             follow.toEnd(); follow.placed = true; follow.on = true
         }
     }
-    LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item(key = "edge") { Edge(history.edge) }
-        itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
-            when (line) {
-                is Line.Item -> {
-                    val shade by androidx.compose.animation.animateColorAsState(if (line.item.key == marked) C.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent, tween(900), label = "marked")
-                    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(shade)) { Item(line.item, station, of, agent) }
+    CompositionLocalProvider(LocalFollow provides follow) {
+        LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item(key = "edge") { Edge(history.edge) }
+            itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
+                when (line) {
+                    is Line.Item -> {
+                        val shade by androidx.compose.animation.animateColorAsState(if (line.item.key == marked) C.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent, tween(900), label = "marked")
+                        Box(Modifier.clip(RoundedCornerShape(8.dp)).background(shade)) { Item(line.item, station, of, agent) }
+                    }
+                    is Line.Live -> Text(line.step.text, fontSize = 13.sp, color = C.muted, maxLines = 1)
+                    is Line.Phase -> PhaseLine(line.phase)
                 }
-                is Line.Live -> Text(line.step.text, fontSize = 13.sp, color = C.muted, maxLines = 1)
-                is Line.Phase -> PhaseLine(line.phase)
             }
-        }
+    }
     }
 }
+
+/** The steps' list: a group or a step opened is read from its top, not followed down to the end. */
+private val LocalFollow = staticCompositionLocalOf<Follow?> { null }
 
 @Composable
 private fun Edge(text: String) = Text(text, color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp))
@@ -404,8 +412,9 @@ private fun SlackName(station: String, user: String, name: String, mine: Boolean
 @Composable
 private fun Group(g: HistoryGroup) {
     var open by remember { mutableStateOf(false) }
+    val follow = LocalFollow.current
     Column {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconIn(if (open) Icons.ChevronDown else Icons.ChevronRight, 13.dp, C.subtle)
             Text(g.summary, color = if (g.failures > 0) C.red else C.muted, fontSize = 14.sp, maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             if (g.failures > 0) Pill("${g.failures} 项失败", C.red)
@@ -433,8 +442,9 @@ private fun StepRow(step: HistoryStep) {
 @Composable
 private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean, body: @Composable () -> Unit) {
     var open by remember { mutableStateOf(false) }
+    val follow = LocalFollow.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 13.sp, color = if (failed) C.red else C.ink, fontWeight = if (hint != null) FontWeight.Medium else null, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = hint == null))
             if (hint != null) Text(hint, fontSize = 12.sp, style = Mono, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (!meta.isNullOrEmpty()) Text(meta, fontSize = 11.sp, color = if (failed) C.red else C.subtle)

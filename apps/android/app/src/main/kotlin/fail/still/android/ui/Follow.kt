@@ -1,8 +1,11 @@
 // A list that keeps to its newest end (web/src/scroll.ts), with the reader not
 // touching it: a new message arriving while the list is at its end is followed
 // down until its top reaches the top, so a long one is read from its start;
-// anything else growing below keeps the end in view. Scrolling by the reader
-// sets the new position: at the end it follows again, elsewhere it stays put.
+// anything else growing below keeps the end in view. Any scroll it did not make
+// itself (the reader's finger and its fling, a code box within it handing on
+// at its edge, a jump) sets the new position, as the web's `moved`: once the
+// list is at rest, at the end it follows again, elsewhere it stays put.
+// Something the reader opens in the list (stay) is not new: it is not followed.
 // The list growing shorter (the keyboard) keeps its bottom in place.
 // Following glides (scroll.ts glide): each frame covers the same share of what
 // is left, 1 - e^(-dt/100ms), so a long way is quick and a goal that moves on
@@ -12,7 +15,6 @@
 package fail.still.android.ui
 
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,13 +48,27 @@ class Follow(val list: LazyListState, private val margin: Int) {
     var anchor by mutableStateOf<Any?>(null)
     /** Where an item is, by key (-1: not in the list). */
     var indexOf: (Any) -> Int = { -1 }
-    /** The reader's finger moved the list since the last scroll ended. */
+    /** Someone else moved the list since it was last at rest. */
     internal var touched = false
+    /** How many of its own scrolls are going (snapshot state: read with the list's scrolling). */
+    internal var own by mutableStateOf(0)
 
-    suspend fun toEnd() {
+    private suspend fun <T> mine(block: suspend () -> T): T {
+        own++
+        try { return block() } finally { own-- }
+    }
+
+    /** The reader opened something in the list to read it: what it grows by is not new, so not followed. */
+    fun stay() {
+        if (!placed) return
+        on = false
+        anchor = null
+    }
+
+    suspend fun toEnd(): Unit = mine {
         val info = list.layoutInfo
         val count = info.totalItemsCount
-        if (count == 0) return
+        if (count == 0) return@mine
         // Jumping to an item throws away what is on screen and composes it again; with the last one already in
         // view (most of the time: following), scrolling the rest of the way keeps what is there.
         if ((info.visibleItemsInfo.lastOrNull()?.index ?: -1) < count - 1) list.scrollToItem(count - 1)
@@ -67,9 +83,9 @@ class Follow(val list: LazyListState, private val margin: Int) {
         glide()
     }
 
-    internal suspend fun hold() {
+    internal suspend fun hold(): Unit = mine {
         // What a newly opened list first shows (images loading, the rest of it coming in) is taken at once.
-        if (grown) return glide()
+        if (grown) return@mine glide()
         val at = anchor?.let(indexOf)?.takeIf { it >= 0 }
         // The list stops at its end by itself, so this is the anchor's top or the end, whichever comes first.
         if (at != null) list.scrollToItem(at, -margin) else if (list.canScrollForward) toEnd()
@@ -96,12 +112,12 @@ class Follow(val list: LazyListState, private val margin: Int) {
     }
 
     /** Glides to the goal (see left), each frame 1 - e^(-dt/100ms) of what is left, slowed as the system slows animations. */
-    private suspend fun glide() {
+    private suspend fun glide(): Unit = mine {
         val scale = (currentCoroutineContext()[MotionDurationScale]?.scaleFactor ?: 1f).coerceAtLeast(0.001f)
         // Far below what is laid out (the newest many rows away), it goes most of the way at once: the list would lay
         // out every row it passes in one frame.
         val info = list.layoutInfo
-        val lastShown = info.visibleItemsInfo.lastOrNull()?.index ?: return
+        val lastShown = info.visibleItemsInfo.lastOrNull()?.index ?: return@mine
         if (anchor == null && info.totalItemsCount - 1 - lastShown > 12) list.scrollToItem(info.totalItemsCount - 1 - 6)
         var above = false
         list.scroll {
@@ -136,12 +152,10 @@ fun rememberFollow(list: LazyListState): Follow {
             delay(500)
             follow.grown = true
         }
+        // A scroll it did not make itself, once the list is at rest: at the end it follows again, elsewhere it stops.
         launch {
-            list.interactionSource.interactions.collect { if (it is DragInteraction.Start) { follow.touched = true; follow.anchor = null } }
-        }
-        // A scroll the reader made, ending at the end, follows again; ending elsewhere, it stops.
-        launch {
-            snapshotFlow { list.isScrollInProgress }.collect { scrolling ->
+            snapshotFlow { list.isScrollInProgress to (follow.own > 0) }.collect { (scrolling, own) ->
+                if (scrolling && !own && follow.placed) { follow.touched = true; follow.anchor = null }
                 if (!scrolling && follow.touched) { follow.touched = false; follow.on = !list.canScrollForward }
             }
         }
@@ -150,7 +164,7 @@ fun rememberFollow(list: LazyListState): Follow {
         launch {
             var last = -1
             snapshotFlow { list.layoutInfo.viewportSize.height }.collect { h ->
-                if (last > 0 && h > 0 && h != last && follow.placed) list.scrollBy((last - h).toFloat())
+                if (last > 0 && h > 0 && h != last && follow.placed) { follow.own++; try { list.scrollBy((last - h).toFloat()) } finally { follow.own-- } }
                 if (h > 0) last = h
             }
         }

@@ -11,6 +11,8 @@
 //   the message at the top of the pane keeps its place, whatever changes
 //   above it (older pages loading, images) or below it (new messages, however
 //   long). This is immediate, so nothing they read moves.
+// What the reader opens in it (a click there growing it: a tool's details, a
+// group) is not new: at the bottom too, their place is kept from then on.
 // Scrolling by anyone else (the reader: wheel, touch and its momentum, keys,
 // the scrollbar; a jump to a message) sets the new position, and whether it is
 // at the bottom; the pane carries `data-reading-up` while it is not. A
@@ -159,6 +161,19 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       moved();
     };
     const input = () => { lastInput = Date.now(); };
+    /** A click in the pane, until the frame after it: what grows or shrinks by then is the reader's doing. */
+    let opening = false;
+    const click = () => { opening = true; requestAnimationFrame(() => requestAnimationFrame(() => { opening = false; })); };
+    /** The reader opened something while it followed: nothing new came, so their place is kept instead. */
+    const readHere = () => {
+      if (!opening || !following) return;
+      stop();
+      following = false;
+      anchor = null;
+      note();
+      el.toggleAttribute("data-reading-up", true);
+    };
+    el.addEventListener("click", click, true);
     const toBottom = () => { anchor = null; reading = null; following = true; smooth = true; el.removeAttribute("data-reading-up"); hold(); };
     el.addEventListener("to-bottom", toBottom);
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -170,6 +185,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       const rewrapped = contentWidth() !== laidWidth;
       laidWidth = contentWidth();
       smooth = !rewrapped && grown() && entries.some((e) => e.target !== el && isMessage(e.target));
+      if (!rewrapped && entries.some((e) => e.target !== el)) readHere();
       hold();
     });
     const watch = () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); };
@@ -181,6 +197,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       const kids = [...el.children].filter(isMessage);
       const arrived = added.filter((n) => kids.slice(kids.indexOf(n) + 1).every((k) => added.includes(k) || k.hasAttribute("data-transient")));
       if (arrived.length && following) anchor = arrived.at(-1)!;
+      // Grown below by what the reader just opened (the bottom moved on with nothing new).
+      else if (!arrived.length && distance() > 1) readHere();
       smooth = grown() && (arrived.some((n) => !n.hasAttribute("data-caught")) || records.some((r) => r.target !== el && messageOf(r.target) !== null));
       watch();
       hold();
@@ -195,6 +213,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       stop();
       el.removeEventListener("to-bottom", toBottom);
       el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("click", click, true);
       for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, input);
       el.removeEventListener("load", onLoad, true);
       resize.disconnect();
