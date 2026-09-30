@@ -18,6 +18,6 @@ export const vizPage = style({
   display: "block", width: "100%", aspectRatio: "16 / 9", maxHeight: "80vh", border: "0",
   borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: vars.paper,
 });
-/** Where a visualization comes while its file is fetched: its least height, quietly. */
-export const vizWait = style({ height: "120px", margin: "0 0 8px", borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });
+/** Where a visualization's frame comes while its file is fetched, as tall as the frame will be (Viz.tsx sets it), quietly. */
+export const vizWait = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });
 export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textSm });

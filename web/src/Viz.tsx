@@ -48,6 +48,44 @@ const CSP = [
 
 /** Past this the frame scrolls within itself. */
 const MAX_HEIGHT = 1200;
+/** A frame's height before its content says (and what its place holds while the file comes), when none was kept. */
+const FIRST_HEIGHT = 120;
+
+// The height each visualization last had (the latest 300), by its file (`session\npath`) or a mermaid block's source:
+// shown again, its place and its frame start that tall, so the chat does not jump as it loads.
+const HEIGHTS = "stillfail.vizHeights";
+let heights: Record<string, number> | undefined;
+function keptHeights(): Record<string, number> {
+  if (!heights) {
+    try {
+      heights = JSON.parse(localStorage.getItem(HEIGHTS) ?? "{}") as Record<string, number>;
+    } catch {
+      heights = {};
+    }
+  }
+  return heights;
+}
+const keptHeight = (key: string) => keptHeights()[key];
+function keepHeight(key: string, height: number) {
+  const all = keptHeights();
+  if (all[key] === height) return;
+  delete all[key];
+  all[key] = height;
+  const keys = Object.keys(all);
+  for (const old of keys.slice(0, Math.max(0, keys.length - 300))) delete all[old];
+  try {
+    localStorage.setItem(HEIGHTS, JSON.stringify(all));
+  } catch {
+    // kept for this page only
+  }
+}
+const fileHeightKey = (sessionKey: string, file: Attachment) => `${sessionKey}\n${file.path}`;
+/** A mermaid block's key: its source, hashed (FNV-1a), not kept whole. */
+function mermaidHeightKey(code: string) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < code.length; i++) hash = Math.imul(hash ^ code.charCodeAt(i), 0x01000193);
+  return `mermaid\n${(hash >>> 0).toString(36)}:${code.length}`;
+}
 /** What a widget may keep, as Codex's Visualize allows. */
 export const MAX_STATE = 16 * 1024;
 
@@ -146,10 +184,10 @@ export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: g
  * The sandboxed frame itself. `state`: what the widget kept, given to it as it loads; `onState` keeps what it keeps
  * next; `onError` hears a failure the content reports (a mermaid chart that would not parse).
  */
-function Frame({ html, title, state = null, onState, onError }: {
-  html: string; title: string; state?: unknown; onState?: (state: unknown) => void; onError?: (message: string) => void;
+function Frame({ html, title, heightKey, state = null, onState, onError }: {
+  html: string; title: string; heightKey: string; state?: unknown; onState?: (state: unknown) => void; onError?: (message: string) => void;
 }) {
-  const [height, setHeight] = useState(0);
+  const [height, setHeight] = useState(() => keptHeight(heightKey) ?? FIRST_HEIGHT);
   const frame = useRef<HTMLIFrameElement>(null);
   // A whole page sizes itself to its window (height:100%, a stage scaled to fit), so it has no height of its own to
   // be sized to: it gets a screen-shaped window instead (2026-09-30 a 1920×1080 player drawn 120 px tall, its
@@ -158,8 +196,8 @@ function Frame({ html, title, state = null, onState, onError }: {
   // Made once per content: a new document would reload the frame and lose what it holds (its state, a chart drawn).
   // The state is only what it starts with.
   const srcDoc = useMemo(() => (page ? pageDocument(html) : documentOf(html, state)), [html]); // eslint-disable-line react-hooks/exhaustive-deps
-  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight: (h) => { if (!page) setHeight(Math.min(MAX_HEIGHT, h)); }, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
-  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={page ? undefined : { height: height || 120 }} />;
+  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight: (h) => { if (page || h <= 0) return; const next = Math.min(MAX_HEIGHT, h); setHeight(next); keepHeight(heightKey, next); }, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
+  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={page ? undefined : { height }} />;
 }
 
 /**
@@ -192,10 +230,12 @@ export function VizFile({ sessionKey, file, failed }: { sessionKey: string; file
   const open = useContext(OpenFile);
   const [previewing, setPreviewing] = useState(false);
   if (viz?.failed) return failed;
-  if (!viz) return <div className={css.vizWait} aria-busy="true" />;
+  const heightKey = fileHeightKey(sessionKey, file);
+  // While the file comes, its place is as tall as it will be (as it was last time), its bar's room included.
+  if (!viz) return <div className={css.viz} aria-busy="true"><div className={css.vizWait} style={{ height: keptHeight(heightKey) ?? FIRST_HEIGHT }} /><div className={css.vizBar} /></div>;
   return (
     <div className={css.viz}>
-      <Frame html={viz.html} title={file.name} state={viz.state} onState={viz.keep} />
+      <Frame html={viz.html} title={file.name} heightKey={heightKey} state={viz.state} onState={viz.keep} />
       <div className={css.vizBar}>
         <Tip label="全屏打开"><button type="button" className={css.vizOpen} aria-label="全屏打开" onClick={() => setPreviewing(true)}>
           <Expand size={14} strokeWidth={1.75} />
@@ -250,5 +290,5 @@ export function Mermaid({ code }: { code: string }) {
   const [failed, setFailed] = useState(false);
   const html = useMemo(() => mermaidDocument(code), [code]);
   if (failed) return <Code text={code} language="mermaid" />;
-  return <div className={css.viz}><Frame html={html} title="mermaid" onError={() => setFailed(true)} /></div>;
+  return <div className={css.viz}><Frame html={html} title="mermaid" heightKey={mermaidHeightKey(code)} onError={() => setFailed(true)} /></div>;
 }
