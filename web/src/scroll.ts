@@ -44,7 +44,9 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       // Only messages' room is held: what a pane shows before it has any (loading, an empty chat's note) is not.
       if (!lastMessage()) reached = 0;
       reached = Math.max(reached, end);
-      const height = `${Math.round(reached - end)}px`;
+      // Not rounded: what grows above it by a fraction of a pixel a frame (an activity opening) would make the content
+      // a pixel taller and shorter by turns, and the pane shake.
+      const height = `${reached - end}px`;
       if (f.style.height !== height) f.style.height = height;
     };
     /** Following the bottom (or `anchor`, a new message, from its top), or holding the reader's place (`reading`). */

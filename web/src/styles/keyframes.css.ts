@@ -19,6 +19,7 @@ export const popInKeyframes = keyframes({ "from": { opacity: "0", transform: "tr
 export const enterUpKeyframes = keyframes({ "from": { opacity: "0", transform: "translateY(6px)" }, "to": { opacity: "1", transform: "none" } });
 export const fadeInKeyframes = keyframes({ "from": { opacity: "0" }, "to": { opacity: "1" } });
 export const activityInKeyframes = keyframes({ "from": { gridTemplateRows: "0fr", opacity: "0" }, "to": { gridTemplateRows: "1fr", opacity: "1" } });
+export const activityGrowKeyframes = keyframes({ "from": { transform: "scale(.5)" }, "to": { transform: "none" } });
 export const nowInKeyframes = keyframes({ "from": { opacity: "0", transform: "translateY(5px)" }, "to": { opacity: "1", transform: "none" } });
 export const nowOutKeyframes = keyframes({ "from": { opacity: "1", transform: "none" }, "to": { opacity: "0", transform: "translateY(-5px)" } });
 export const emitOutKeyframes = keyframes({ "from": { opacity: "0", transform: "scale(.35)", clipPath: "inset(0 0 100% 0)" }, "35%": { opacity: "1" }, "to": { opacity: "1", transform: "none", clipPath: "inset(0 0 0 0)" } });

@@ -29,6 +29,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -83,6 +84,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.shadow
@@ -456,7 +459,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // core says it caught up (read after what was kept, or once the link is back), and the activity of an agent
     // already at work when first seen.
     val known = remember { HashSet<String>() }
-    SideEffect { rows.forEach { known += it.id } }
     val caughtUp = view.caught ?: 0L
     val statuses = remember { HashMap<String, String>() }
     val started = remember { HashSet<String>() }
@@ -473,6 +475,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             else -> false
         }
     }
+    // What is new is told here, as the list is composed: its rows are composed later (as it is laid out), after the
+    // SideEffect below has counted them in. Nothing is new on the first draw.
+    val arrived = remember { HashSet<String>() }
+    val drawn = remember { booleanArrayOf(false) }
+    if (drawn[0]) rows.forEach { if (it.id !in known && !caught(it)) arrived += it.id }
+    SideEffect { rows.forEach { known += it.id }; drawn[0] = true }
     val density = LocalDensity.current
     // The unread line near the top, below the bar, with about four lines of what came before it still in view (web
     // Chat.tsx → useUnreadLine: the bar's room and four of the list's 23px lines).
@@ -574,7 +582,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top + 14.dp, bottom = bottom + 10.dp), verticalArrangement = Arrangement.spacedBy(GAP, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
-                val fresh = remember(row.id) { row.id !in known && !caught(row) }
+                val fresh = remember(row.id) { arrived.remove(row.id) }
                 // What was just sent from here flies in from the composer instead (ChatHost.kt); an activity opens in its
                 // own way, and a message out of an avatar comes out of it instead.
                 val flies = host.takes(row.id, row is Entry.Out || (row is Entry.Said && row.m.mine && !row.m.system))
@@ -761,7 +769,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.comp
                 MessageTime(m.time?.get("createdAt"))
             }
             QuoteCards(m.quotes, jump, Alignment.Start)
-            Box(hold.clip(RoundedCornerShape(12.dp)).background(press)) {
+            Box(hold.drawBehind { drawRoundRect(press, cornerRadius = CornerRadius(12.dp.toPx())) }) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
                 if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.withRefs(m.text); val (mark, laid) = passageMark(words.text); Text(words, mark, fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = laid) } }
                 else AgentWords(ctx, m.text, m.attachments, draft)
@@ -851,7 +859,7 @@ private fun Out(ctx: Here, o: Outgoing) {
     LaunchedEffect(Unit) { delay(o.createdAt + 800 - System.currentTimeMillis()); slow = true }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Not sent: what was written faded.
-        Column(Modifier.fillMaxWidth().alpha(if (failed) 0.55f else 1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if (failed) 0.55f else 1f }, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             QuoteCards(o.quotes, null, Alignment.End)
             if (o.text.isNotEmpty()) Bubble(o.text, Modifier, Color.Transparent)
             Files(ctx, o.attachments, mine = true)
@@ -977,7 +985,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
     val away = motion?.away(agent.key) == true
     val tail by animateFloatAsState(if (folded) 0f else 1f, tween(200, easing = Ease.Out), label = "tail")
     val tailFade by animateFloatAsState(if (folded) 0f else 1f, tween(160, easing = Ease.Out), label = "tail-fade")
-    // Coming in, it opens from nothing and fades in (web activityIn: grid rows 0fr → 1fr and opacity, 220ms --ease-out).
+    // Coming in, its room opens from nothing (web activityIn: grid rows 0fr → 1fr, 220ms --ease-out) as it fades in and grows.
     val open = remember { Animatable(if (opening) 0f else 1f) }
     LaunchedEffect(Unit) { open.animateTo(1f, tween(220, easing = Ease.Out)) }
     val wait = agent.wait
@@ -986,15 +994,26 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")
+    val touch = remember { MutableInteractionSource() }
+    val pressed by touch.collectIsPressedAsState()
+    val pressInk = C.ink.copy(alpha = 0.1f)
     Row(
         Modifier.fillMaxWidth()
             .layout { measurable, constraints ->
                 val p = measurable.measure(constraints)
                 layout(p.width, (p.height * open.value).roundToInt()) { p.place(0, 0) }
             }
-            .clipToBounds().graphicsLayer { alpha = open.value }
             .onGloballyPositioned { motion?.activityRows?.set(agent.key, it) }
-            .alpha(fade).clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, ctx.station, ctx.of, agent.key) },
+            // Nothing is cut: its room opens (what is under it moves down) while it fades in and grows from its avatar,
+            // .5 → 1 (the ring reaches 3dp past the row's start, into the list's side room). Its press is drawn round
+            // rather than clipped, and it fades by a layer that does not clip (as Modifier.alpha's does).
+            .graphicsLayer {
+                alpha = open.value * fade
+                scaleX = 0.5f + 0.5f * open.value; scaleY = scaleX
+                transformOrigin = TransformOrigin(if (size.width > 0) 9.dp.toPx() / size.width else 0f, 0.5f)
+            }
+            .drawBehind { if (pressed) drawRoundRect(pressInk, cornerRadius = CornerRadius(6.dp.toPx())) }
+            .clickable(interactionSource = touch, indication = null) { openHistory(app, ctx.station, ctx.of, agent.key) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         // The avatar where its message lands (the messages' 18dp), its ring 3dp round it.

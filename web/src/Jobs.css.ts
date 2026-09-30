@@ -1,10 +1,10 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
-import { activityInKeyframes, emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
+import { activityGrowKeyframes, activityInKeyframes, emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
 import { msg } from "./styles/conversation.css.ts";
 import { segmented, segmentedOption } from "./ui.css.ts";
 import { detailsList } from "./pages/ChatPage.css.ts";
-import { agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
+import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
 
 export const jobDot = style({
@@ -181,13 +181,21 @@ globalStyle(agentActivity, {
   animation: `${activityInKeyframes} 220ms ${vars.easeOut} both`,
   transition: `grid-template-rows 220ms ${vars.easeOut}, opacity 220ms ${vars.easeOut}`,
 });
+/** Coming in, as its room opens and it fades in, the line grows from its avatar's middle (4px in, 18px across), .5 → 1. */
+globalStyle(`${agentActivity} > ${activityLine}`, {
+  // At the top of its row, whole, whatever the row's height as it opens: not squeezed nor clipped, and not moving
+  // with the middle of a row that grows (which, with its growing, made the line go up and back down).
+  alignSelf: "start",
+  transformOrigin: "13px 50%",
+  animation: `${activityGrowKeyframes} 220ms ${vars.easeOut} both`,
+});
 /** Here rather than with its class: it comes after .job-dot[data-tone="restart"], and wins over it. */
 globalStyle(`${msg}[data-emitting] > *`, {
   transformOrigin: "12px 12px", willChange: "transform, clip-path",
   animation: `${emitOutKeyframes} 380ms ${vars.easeOut} both`,
 });
 /** Here rather than with its class: it comes after .agent-activity, and wins over it. */
-globalStyle(`${agentActivity}, ${msg}[data-emitting] > *`, {
+globalStyle(`${agentActivity}, ${agentActivity} > ${activityLine}, ${msg}[data-emitting] > *`, {
   "@media": {
     "(prefers-reduced-motion: reduce)": {
       animation: "none",
