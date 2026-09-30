@@ -1102,6 +1102,111 @@ pub struct DraftView {
     pub files: Vec<Attachment>,
 }
 
+/// A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs
+/// there, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NewChatView {
+    /// The station last started on (or picked) in the scope, its id: the page holds its place with it until the
+    /// stations are known.
+    pub kept: String,
+    /// The scope's stations up now; none until its workspace has been read (`error`: why it could not be).
+    pub stations: Option<Vec<StationView>>,
+    pub error: Option<String>,
+    /// Whether the scope has any station, up or not.
+    pub any: bool,
+    /// The one it starts on: the one kept, else the first up; none when none is up.
+    pub station: Option<StationView>,
+    pub model: Option<ModelOption>,
+    pub runtime: Option<RuntimeKind>,
+    pub effort: Option<String>,
+    /// The account kept to, while it still runs the model there; none: the station's pick.
+    pub profile: Option<String>,
+    /// How hard it can think there, and who can run it (offered when more than one can: `pickAccount`).
+    pub efforts: Vec<String>,
+    pub accounts: Vec<RunnableProfile>,
+    pub pick_account: bool,
+    /// Its profiles are being read.
+    pub waiting: bool,
+    /// What keeps a chat from starting: `profile` (none added) or `models` (none enabled).
+    pub blocked: Option<String>,
+    /// In a line under the page's words: the profiles being read, or no model enabled.
+    pub problem: Option<String>,
+    /// Every account of the model has used up its allowance: what is sent waits for it.
+    pub spent: Option<String>,
+    /// Its model control (the `pick` topic of `new` on the station), with the page.
+    pub pick: Option<PickView>,
+}
+
+/// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
+/// station's pick.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Picked {
+    pub model: Option<String>,
+    pub runtime: RuntimeKind,
+    pub effort: Option<String>,
+    pub profile: Option<String>,
+}
+
+/// The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PickAccount {
+    pub text: String,
+    pub auto: bool,
+    pub level: Option<Level>,
+    pub profile: Option<RunnableProfile>,
+}
+
+/// A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
+/// until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
+/// station's pick, said so (`dropped`, `force`).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PickView {
+    pub options: Vec<ModelOption>,
+    pub runtime_fixed: bool,
+    pub value: Picked,
+    pub value_option: Option<ModelOption>,
+    /// The account the control names; none: it names none (a new chat's, while the station's pick is fine).
+    pub account: Option<PickAccount>,
+    pub draft: Picked,
+    /// The option picked in the panel, by its `model`.
+    pub option: Option<String>,
+    /// The runtimes offered for it (none: not asked), how hard it can think there, who can run it.
+    pub runtimes: Vec<RuntimeKind>,
+    pub efforts: Vec<String>,
+    pub accounts: Vec<RunnableProfile>,
+    pub dropped: Option<String>,
+    /// The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
+    /// station's pick runs low.
+    pub who: String,
+    pub who_level: Option<Level>,
+    /// The station's pick, said: who it is on now, or what it does.
+    pub auto_note: String,
+    pub changed: bool,
+    /// Full screen (the phone's): the model, depth and account as they were and as they become; why the account
+    /// must change; the model and account picked in words; what the button says.
+    pub was: Vec<String>,
+    pub becomes: Vec<String>,
+    pub force: Option<String>,
+    pub model_text: String,
+    pub maker: Option<Maker>,
+    pub account_text: String,
+    pub account_note: String,
+    pub account_warn: bool,
+    pub save_text: String,
+}
+
 /// Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
 /// system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
 /// show now, each taken by one page (`notice.claim`).
@@ -1385,6 +1490,19 @@ pub struct RunnableProfile {
     pub kind: Option<AccessKind>,
     pub runtime: Option<RuntimeKind>,
     pub quota: Option<Quota>,
+    /// What is left of its allowance, in a few words (a core from before it says nothing).
+    pub quota_line: Option<QuotaLine>,
+}
+
+/// What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
+/// its level.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuotaLine {
+    pub text: String,
+    pub level: Option<Level>,
 }
 
 /// A window of a session's account running out, as its ring draws it.

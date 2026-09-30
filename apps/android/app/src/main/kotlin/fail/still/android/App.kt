@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.MotionDurationScale
@@ -291,6 +294,32 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     val places = HashMap<String, Pair<String, Int>>()
     /** The pages, as what a sheet over them frosts. */
     val haze = HazeState()
+
+    init {
+        // What a new chat ran on, kept here before the core kept it (newChat/<station's address>, newChat.lastIn/<scope>,
+        // newChat.last): into the core once (newChat.migrate, by the stations' ids as the web keeps them), then gone.
+        val kept = prefs.all.keys.filter { it.startsWith("newChat/") || it.startsWith("newChat.lastIn/") || it == "newChat.last" }
+        if (kept.isNotEmpty()) scope.launch {
+            val id = { address: String -> address.substringAfterLast('/') }
+            val params = buildJsonObject {
+                putJsonObject("choices") {
+                    for (k in kept.filter { it.startsWith("newChat/") }) {
+                        val v = strings(k)
+                        if (v.size >= 3) putJsonObject(id(k.removePrefix("newChat/"))) {
+                            put("runtime", v[0]); put("model", v[1])
+                            put("effort", v[2].takeIf { it != "-" } ?: ""); put("profile", v.getOrNull(3)?.takeIf { it != "-" } ?: "")
+                        }
+                    }
+                }
+                putJsonObject("lastIn") {
+                    for (k in kept.filter { it.startsWith("newChat.lastIn/") }) strings(k).firstOrNull()?.let { put(k.removePrefix("newChat.lastIn/"), id(it)) }
+                }
+                strings("newChat.last").firstOrNull()?.let { put("last", id(it)) }
+            }
+            // A core that refuses it: kept here, tried again next time.
+            try { core.call("newChat.migrate", params); prefs.edit().apply { kept.forEach { remove(it) } }.apply() } catch (_: fail.still.core.CoreException) {}
+        }
+    }
 }
 
 /** The production cloud's hosts: app.still.fail, and ember.3720.org from before the rename (kept, not redirected). */

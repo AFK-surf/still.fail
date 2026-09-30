@@ -44,3 +44,26 @@ export async function migrateChatRefs(client: Pick<CoreClient, "call">, storage:
     // A core from before it: kept here until one takes them.
   }
 }
+
+const NEW_CHAT = "stillfail.newChat";
+
+/**
+ * What a new chat ran on, per station (its id), and the station per scope, as pages kept them in localStorage before
+ * the core kept them (`newChat.migrate`): handed over once, then gone from here.
+ */
+export async function migrateNewChat(client: Pick<CoreClient, "call">, storage: Storage = localStorage): Promise<void> {
+  const stored = storage.getItem(NEW_CHAT);
+  if (stored === null) return;
+  let kept: Record<string, unknown> = {};
+  try {
+    kept = JSON.parse(stored) as Record<string, unknown>;
+  } catch { /* unreadable: nothing to carry over */ }
+  const { last, lastIn, ...choices } = kept;
+  try {
+    await client.call("newChat.migrate", { choices, ...(typeof last === "string" ? { last } : {}), ...(lastIn && typeof lastIn === "object" ? { lastIn } : {}) });
+    storage.removeItem(NEW_CHAT);
+  } catch (error) {
+    // A core from before it: kept here, handed over by the next page.
+    console.error("still.fail core: migrating the new chat's choices failed", error);
+  }
+}

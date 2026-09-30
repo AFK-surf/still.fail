@@ -412,6 +412,15 @@ export interface Spent {
 	back?: string;
 }
 
+/**
+ * What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
+ * its level.
+ */
+export interface QuotaLine {
+	text: string;
+	level?: Level;
+}
+
 /** A profile that can run a model: `current` it runs on it now. */
 export interface RunnableProfile {
 	id: string;
@@ -421,6 +430,8 @@ export interface RunnableProfile {
 	kind?: AccessKind;
 	runtime?: RuntimeKind;
 	quota?: Quota;
+	/** What is left of its allowance, in a few words (a core from before it says nothing). */
+	quotaLine?: QuotaLine;
 }
 
 /** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
@@ -1151,41 +1162,9 @@ export interface MeshStatus {
 	name?: string;
 }
 
-/**
- * A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
- * new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
- * `url` opens it.
- */
-export interface Notice {
-	id: string;
-	kind: string;
-	station: string;
-	workspace: string;
-	stationId: string;
-	session: string;
-	thread?: number;
-	title: string;
-	body: string;
-	tag: string;
-	url: string;
-	at: number;
-}
-
-/** What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first. */
-export interface NoticesView {
-	items: Notice[];
-}
-
-/**
- * Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
- * system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
- * show now, each taken by one page (`notice.claim`).
- */
-export interface NotifyView {
-	on: boolean;
-	asked: boolean;
-	push: boolean;
-	show: Notice[];
+export interface RuntimeModels {
+	runtime: RuntimeKind;
+	models: string[];
 }
 
 /** Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`). */
@@ -1263,18 +1242,6 @@ export interface Overview {
 	processesText: string;
 }
 
-export interface RuntimeModels {
-	runtime: RuntimeKind;
-	models: string[];
-}
-
-/** A session with its threads and turns (`session` topic). */
-export interface SessionDetail {
-	session: Session;
-	threads: ChatThread[];
-	turns: TurnRecord[];
-}
-
 export interface StationView {
 	station: string;
 	id: string;
@@ -1292,6 +1259,151 @@ export interface StationView {
 	host?: Host;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
+}
+
+/**
+ * What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
+ * station's pick.
+ */
+export interface Picked {
+	model?: string;
+	runtime: RuntimeKind;
+	effort?: string;
+	profile?: string;
+}
+
+/** The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low. */
+export interface PickAccount {
+	text: string;
+	auto: boolean;
+	level?: Level;
+	profile?: RunnableProfile;
+}
+
+/**
+ * A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
+ * until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
+ * station's pick, said so (`dropped`, `force`).
+ */
+export interface PickView {
+	options: ModelOption[];
+	runtimeFixed: boolean;
+	value: Picked;
+	valueOption?: ModelOption;
+	/** The account the control names; none: it names none (a new chat's, while the station's pick is fine). */
+	account?: PickAccount;
+	draft: Picked;
+	/** The option picked in the panel, by its `model`. */
+	option?: string;
+	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
+	runtimes: RuntimeKind[];
+	efforts: string[];
+	accounts: RunnableProfile[];
+	dropped?: string;
+	/**
+	 * The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
+	 * station's pick runs low.
+	 */
+	who: string;
+	whoLevel?: Level;
+	/** The station's pick, said: who it is on now, or what it does. */
+	autoNote: string;
+	changed: boolean;
+	/**
+	 * Full screen (the phone's): the model, depth and account as they were and as they become; why the account
+	 * must change; the model and account picked in words; what the button says.
+	 */
+	was: string[];
+	becomes: string[];
+	force?: string;
+	modelText: string;
+	maker?: Maker;
+	accountText: string;
+	accountNote: string;
+	accountWarn: boolean;
+	saveText: string;
+}
+
+/**
+ * A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs
+ * there, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has.
+ */
+export interface NewChatView {
+	/**
+	 * The station last started on (or picked) in the scope, its id: the page holds its place with it until the
+	 * stations are known.
+	 */
+	kept: string;
+	/** The scope's stations up now; none until its workspace has been read (`error`: why it could not be). */
+	stations?: StationView[];
+	error?: string;
+	/** Whether the scope has any station, up or not. */
+	any: boolean;
+	/** The one it starts on: the one kept, else the first up; none when none is up. */
+	station?: StationView;
+	model?: ModelOption;
+	runtime?: RuntimeKind;
+	effort?: string;
+	/** The account kept to, while it still runs the model there; none: the station's pick. */
+	profile?: string;
+	/** How hard it can think there, and who can run it (offered when more than one can: `pickAccount`). */
+	efforts: string[];
+	accounts: RunnableProfile[];
+	pickAccount: boolean;
+	/** Its profiles are being read. */
+	waiting: boolean;
+	/** What keeps a chat from starting: `profile` (none added) or `models` (none enabled). */
+	blocked?: string;
+	/** In a line under the page's words: the profiles being read, or no model enabled. */
+	problem?: string;
+	/** Every account of the model has used up its allowance: what is sent waits for it. */
+	spent?: string;
+	/** Its model control (the `pick` topic of `new` on the station), with the page. */
+	pick?: PickView;
+}
+
+/**
+ * A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
+ * new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
+ * `url` opens it.
+ */
+export interface Notice {
+	id: string;
+	kind: string;
+	station: string;
+	workspace: string;
+	stationId: string;
+	session: string;
+	thread?: number;
+	title: string;
+	body: string;
+	tag: string;
+	url: string;
+	at: number;
+}
+
+/** What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first. */
+export interface NoticesView {
+	items: Notice[];
+}
+
+/**
+ * Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
+ * system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
+ * show now, each taken by one page (`notice.claim`).
+ */
+export interface NotifyView {
+	on: boolean;
+	asked: boolean;
+	push: boolean;
+	show: Notice[];
+}
+
+/** A session with its threads and turns (`session` topic). */
+export interface SessionDetail {
+	session: Session;
+	threads: ChatThread[];
+	turns: TurnRecord[];
 }
 
 /** One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble. */

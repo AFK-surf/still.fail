@@ -15,6 +15,7 @@ import type { Job } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
+import { usePick } from "../pick.ts";
 import { ChatPanel, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
@@ -560,18 +561,16 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   const { session } = agent;
   const station = useStation();
   const link = useLink();
-  const api = useApi();
   const toast = useToast();
   const host = useHost(station.address).value;
-  const change = useAction((input: { profile?: string | null; model?: string | null; effort?: string | null }) => api.sessionSettings(session.key, input), () => toast("已改，下一轮起生效"));
+  // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
+  const pick = usePick(station.address, `session:${session.key}`);
+  const change = useAction(() => pick.save(), () => toast("已改，下一轮起生效"));
   const usage = useHistory(station.address, session.key).value?.usageLine;
   return (
     <div className={css.sessionDetails}>
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
-      <ModelTriple runtimeFixed
-        options={agent.choices} current={agent.account}
-        value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort ?? null, profile: session.profilePinned ? session.profile ?? null : null }}
-        onPick={({ model, effort, profile }) => void change.run({ model, effort, profile })} />
+      <ModelTriple pick={pick} onConfirm={() => void change.run()} />
       {change.error && <p className={controlsCss.fieldError} role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
       <p className={`${css.runUsage} ${shellCss.muted}`}>

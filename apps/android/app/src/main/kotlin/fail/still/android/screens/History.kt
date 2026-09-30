@@ -76,6 +76,7 @@ import fail.still.android.data.HistoryPhase
 import fail.still.android.data.HistoryStep
 import fail.still.android.data.HistoryView
 import fail.still.android.data.ModelOption
+import fail.still.android.data.PickView
 import fail.still.android.data.Host
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
@@ -105,6 +106,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.put
 
 /** Opens an agent's execution history, over the item's page it belongs to. */
 /** `entry`: the transcript entry to open at (an activity row's), else its newest. */
@@ -510,85 +512,66 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
     val scope = rememberCoroutineScope()
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
+    // What it runs on, what is picked here and what that means, as the core has them (web/src/pick.ts).
+    val pickOf = "session:$key"
+    val picking by rememberTopic<PickView>(app.core, Topics.pick(station, pickOf))
+    val v = picking.value
+    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet(pickOf, fill) } catch (_: CoreException) {} }; Unit }
+    // Picked from what it runs on now, each time it is opened.
+    LaunchedEffect(station, key) { pick { put("open", true) } }
     // A long list (the models, the accounts) is a list of its own, picked from and back.
     var list by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
     Column(Modifier.fillMaxSize()) {
         NavBar(if (list != null) "换模型" else "返回", { if (list != null) list = null else app.pop() }, when (list) { "model" -> "选模型"; "account" -> "选账号"; else -> "换模型" })
-        if (agent == null) return Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
+        if (agent == null || v == null) return Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         val s = agent.session
-        val current = agent.account
-        val currentName = current?.name ?: ""
-        val kept = if (s.profilePinned == true) s.profile else null
-        var model by remember { mutableStateOf(s.model) }
-        var effort by remember { mutableStateOf(s.effort) }
-        var profile by remember { mutableStateOf(kept) }
         var busy by remember { mutableStateOf(false) }
-        val choice = agent.choices.optionOf(model)
-        val named = { m: String? -> m?.let { if (it == s.model) s.modelName ?: it else agent.choices.optionOf(it)?.name ?: it } }
-        val accounts = choice?.accounts?.get(s.runtime).orEmpty()
-        val chosen = profile?.takeIf { p -> accounts.any { it.id == p } }
-        val dropped = profile != null && chosen == null
-        val efforts = listOf<String?>(null) + s.efforts
-        // Another spelling of its model is its model.
-        val changed = (model != s.model && (choice == null || choice != agent.choices.optionOf(s.model))) || effort != s.effort || chosen != kept
-        val accountText = { id: String? -> if (id == null) "自动分配" else accounts.firstOrNull { it.id == id }?.name ?: id }
-        if (list == "model") return ModelList(agent.choices, s.runtime, model) { model = it; list = null }
-        if (list == "account") return AccountList(accounts, s.runtime, chosen) { profile = it; list = null }
+        val chosen = v.draft.profile
+        if (list == "model") return ModelList(v.options, s.runtime, v.option) { m -> pick { put("model", m) }; list = null }
+        if (list == "account") return AccountList(v.accounts, s.runtime, chosen) { p -> pick { put("profile", p) }; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             // Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why.
-            val was = listOf(named(s.model) ?: "默认模型", s.effort ?: "默认深度", if (kept != null) currentName else "自动 · $currentName")
-            // The station's pick moves off an account without the model (the one it is on now, when it has it).
-            val movesOff = chosen == null && kept == null && model != null && current != null && accounts.none { it.id == current.id }
-            val becomes = listOf(named(model) ?: "默认模型", effort ?: "默认深度", when {
-                chosen != null -> accountText(chosen)
-                movesOff -> "自动（换账号）"
-                current != null && accounts.any { it.id == current.id } -> "自动 · $currentName"
-                else -> "自动分配"
-            })
-            val force = when {
-                dropped -> "指定的账号「${accountText(profile)}」没有启用 ${named(model)}，改成了自动分配"
-                movesOff -> "现在的账号「$currentName」没有启用 ${named(model)}，会自动换一个启用了的"
-                else -> null
-            }
             Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Each property on its line: what it was, and, when it changes, an arrow to what it becomes.
                 listOf("模型", "深度", "账号").forEachIndexed { i, label ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
-                        val moved = becomes[i] != was[i]
-                        Text(was[i], fontSize = 14.sp, color = if (moved) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = !moved))
+                        val was = v.was.getOrElse(i) { "" }
+                        val becomes = v.becomes.getOrElse(i) { "" }
+                        val moved = becomes != was
+                        Text(was, fontSize = 14.sp, color = if (moved) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = !moved))
                         if (moved) {
                             IconIn(Icons.ArrowRight, 14.dp, C.accent)
-                            Text(becomes[i], fontSize = 14.sp, color = C.accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(becomes, fontSize = 14.sp, color = C.accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         }
                     }
                 }
-                if (force != null) Text(force, fontSize = 12.sp, color = C.warn)
+                v.force?.let { Text(it, fontSize = 12.sp, color = C.warn) }
                 Text("改了以后从下一轮开始生效。", fontSize = 12.sp, color = C.subtle)
             }
             GroupLabel("模型")
-            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(choice?.maker, s.runtime, 18.dp) }) { Text(named(model) ?: "选一个模型", fontSize = 15.sp, color = C.ink) }
+            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, s.runtime, 18.dp) }) { Text(v.modelText, fontSize = 15.sp, color = C.ink) }
             GroupLabel("思考深度")
             Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
-            EffortChips(efforts, effort) { effort = it }
+            EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
             GroupLabel("账号")
-            SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp) } }) {
-                Text(accountText(chosen), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (chosen == null) "额度用完或登录失效时换一个" else "固定用它", fontSize = 12.sp, color = C.muted)
-                if (dropped || (chosen == null && kept == null && current != null && model != null && accounts.none { it.id == current.id })) Text("这个模型要换账号", fontSize = 12.sp, color = C.warn)
+            SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp) } }) {
+                Text(v.accountText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(v.accountNote, fontSize = 12.sp, color = C.muted)
+                if (v.accountWarn) Text("这个模型要换账号", fontSize = 12.sp, color = C.warn)
             }
             Box(Modifier.height(16.dp))
         }
-        val go = changed && choice != null && !busy
+        val go = v.changed && v.option != null && !busy
         Box(
             Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(16.dp)).background(if (changed) C.ink else C.chip)
+                .clip(RoundedCornerShape(16.dp)).background(if (v.changed) C.ink else C.chip)
                 .clickable(enabled = !busy) {
                     if (!go) { app.pop(); return@clickable }
                     busy = true
                     scope.launch {
-                        try { app.api(station).sessionSettings(s.key, if (choice == agent.choices.optionOf(s.model)) s.model ?: choice!!.model else choice!!.model, effort, chosen); app.toast = "已改，下一轮起生效"; app.pop() }
+                        try { app.api(station).pickSave(pickOf); app.toast = "已改，下一轮起生效"; app.pop() }
                         catch (err: CoreException) { app.toast = err.message }
                         finally { busy = false }
                     }
@@ -596,10 +579,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                if (changed) "改成 ${named(model) ?: "默认模型"} · ${effort ?: "默认深度"} · ${accountText(chosen)}" else "不变",
-                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center,
-            )
+            Text(v.saveText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center)
         }
     }
 }

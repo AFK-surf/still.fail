@@ -105,6 +105,13 @@ pub enum Topic {
     ArchivedRows { station: String },
     /// A view: the archive of a scope's stations online (views/archive.rs).
     Archive { scope: String },
+    /// A new chat's page in a scope (choose.rs): the stations it can start on, the one it starts on and what it runs
+    /// there, as last picked on this device (`newChat.pick`).
+    NewChat { scope: String },
+    /// A model control's state (choose.rs): what a chat runs on now and what is picked in its panel until saved
+    /// (`pick.set`, `pick.save`). `of`: `new` (a new chat on the station), `session:<key>`, `connect:<id>`, or
+    /// `connect-new` (a connect being added).
+    Pick { station: String, of: String },
 }
 
 impl Topic {
@@ -116,6 +123,7 @@ impl Topic {
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } => None,
+            Topic::NewChat { .. } | Topic::Pick { .. } => None,
         }
     }
 

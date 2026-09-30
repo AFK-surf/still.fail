@@ -29,7 +29,7 @@ use crate::protocol::Topic;
 const SEP: char = '\u{1}';
 
 /// Every table, to load them all at start.
-const TABLES: &[&str] = &["me", "workspace", "overview", "session", "row", "session_summary", "thread", "list", "draft", "chat_ref"];
+const TABLES: &[&str] = &["me", "workspace", "overview", "session", "row", "session_summary", "thread", "list", "draft", "chat_ref", "choice"];
 
 /// How a topic's value is held.
 enum Shape {

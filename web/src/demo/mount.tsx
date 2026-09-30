@@ -13,6 +13,7 @@ import { ToastProvider } from "../toast.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
 import type { Entry } from "../mobile/app.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
+import type { ModelOption } from "../api.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -46,6 +47,9 @@ function valueOf(topic: Topic): unknown {
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
     case "archive": return station.archive();
+    // What the core puts together of them (client/core/src/choose.rs), as a new chat and a model control start.
+    case "newChat": return newChatView();
+    case "pick": return pickView(topic.of);
     // still.fail cloud's, for the phone's workspace pages (mobile/).
     case "accounts": return [station.ACCOUNT];
     case "workspaces": return station.workspaces();
@@ -55,6 +59,35 @@ function valueOf(topic: Topic): unknown {
       if (import.meta.env.DEV) console.warn("demo: no topic", topic);
       return null;
   }
+}
+
+/** A new chat on the demo's station, on its first model. */
+function newChatView(): unknown {
+  const s = station.stationView();
+  const m = (s.models as unknown as ModelOption[])[0];
+  const runtime = m?.runtimes[0];
+  return {
+    kept: s.id, stations: [s], any: true, station: s, model: m, runtime, efforts: runtime ? m.efforts[runtime] ?? [] : [],
+    accounts: runtime ? m.accounts[runtime] ?? [] : [], pickAccount: false, waiting: false,
+  };
+}
+
+/** A model control with nothing picked: a new chat's (on the first model), or an agent's (on its own). */
+function pickView(of: string): unknown {
+  const s = station.stationView();
+  const chat = of.startsWith("session:") ? chats.find((c) => c.key === of.slice(8)) : undefined;
+  const runs = station.runs();
+  const options = chat ? (chat.model.runtime === "claude" ? runs.choices : []) : s.models as unknown as ModelOption[];
+  const m = chat ? options.find((o) => o.model === chat.model.model) : options[0];
+  const runtime = chat?.model.runtime ?? m?.runtimes[0] ?? "claude";
+  const value = { model: chat?.model.model ?? m?.model, runtime, ...(chat ? { effort: chat.model.effort } : {}) };
+  const on = chat && runtime === "claude" ? { id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime, ...(runs.profile.quota ? { quota: runs.profile.quota } : {}) } : undefined;
+  return {
+    options, runtimeFixed: !!chat, value, valueOption: m, draft: value, option: m?.model, runtimes: [], efforts: m?.efforts[runtime] ?? [],
+    accounts: m?.accounts[runtime] ?? [], ...(on ? { account: { text: `自动 · ${on.name}`, auto: true, profile: on } } : {}),
+    who: "账号", autoNote: on ? `现在是 ${on.name}` : "额度用完或登录失效时换一个", changed: false, was: [], becomes: [],
+    modelText: m?.name ?? "", accountText: "自动分配", accountNote: "额度用完或登录失效时换一个", accountWarn: false, saveText: "不变",
+  };
 }
 
 // Every topic starts at its value: the first render shows the demo at once (and so does the site built to HTML).
@@ -69,14 +102,17 @@ function publish() {
 const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BAN_DETAIL}`;
 
 function answer(name: string, params: Record<string, unknown>): unknown {
-  if (name === "chat.create") {
+  if (name === "chat.create" || name === "newChat.create") {
     // 新建对话: made at once, under the key answered; what is sent to it follows.
     const made = newChat(Math.max(...chats.map((c) => c.thread)) + 1, typeof params.model === "string" ? params.model : undefined);
     made.title = "新对话";
     chats.push(made);
     setTimeout(publish, 0);
-    return { key: made.key };
+    return { key: made.key, runtime: made.model.runtime, model: made.model.model };
   }
+  // Picks change nothing here.
+  if (name === "newChat.pick" || name === "newChat.migrate" || name === "pick.set") return null;
+  if (name === "pick.save") return { saved: false };
   const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
   if (name === "chat.send" && chat && typeof params.text === "string" && params.text.trim()) {
     const text = params.text;

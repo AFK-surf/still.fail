@@ -431,6 +431,14 @@ data class Spent (
 	val back: String? = null
 )
 
+/// What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
+/// its level.
+@Serializable
+data class QuotaLine (
+	val text: String,
+	val level: Level? = null
+)
+
 /// A profile that can run a model: `current` it runs on it now.
 @Serializable
 data class RunnableProfile (
@@ -440,7 +448,9 @@ data class RunnableProfile (
 	val spent: Spent? = null,
 	val kind: AccessKind? = null,
 	val runtime: RuntimeKind? = null,
-	val quota: Quota? = null
+	val quota: Quota? = null,
+	/// What is left of its allowance, in a few words (a core from before it says nothing).
+	val quotaLine: QuotaLine? = null
 )
 
 /// A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it.
@@ -1220,40 +1230,10 @@ data class MeshStatus (
 	val name: String? = null
 )
 
-/// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
-/// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
-/// `url` opens it.
 @Serializable
-data class Notice (
-	val id: String,
-	val kind: String,
-	val station: String,
-	val workspace: String,
-	val stationId: String,
-	val session: String,
-	val thread: Long? = null,
-	val title: String,
-	val body: String,
-	val tag: String,
-	val url: String,
-	val at: Long
-)
-
-/// What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first.
-@Serializable
-data class NoticesView (
-	val items: List<Notice>
-)
-
-/// Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
-/// system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
-/// show now, each taken by one page (`notice.claim`).
-@Serializable
-data class NotifyView (
-	val on: Boolean,
-	val asked: Boolean,
-	val push: Boolean,
-	val show: List<Notice>
+data class RuntimeModels (
+	val runtime: RuntimeKind,
+	val models: List<String>
 )
 
 /// Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`).
@@ -1335,20 +1315,6 @@ data class Overview (
 )
 
 @Serializable
-data class RuntimeModels (
-	val runtime: RuntimeKind,
-	val models: List<String>
-)
-
-/// A session with its threads and turns (`session` topic).
-@Serializable
-data class SessionDetail (
-	val session: Session,
-	val threads: List<ChatThread>,
-	val turns: List<TurnRecord>
-)
-
-@Serializable
 data class StationView (
 	val station: String,
 	val id: String,
@@ -1366,6 +1332,143 @@ data class StationView (
 	val host: Host? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null
+)
+
+/// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
+/// station's pick.
+@Serializable
+data class Picked (
+	val model: String? = null,
+	val runtime: RuntimeKind,
+	val effort: String? = null,
+	val profile: String? = null
+)
+
+/// The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low.
+@Serializable
+data class PickAccount (
+	val text: String,
+	val auto: Boolean,
+	val level: Level? = null,
+	val profile: RunnableProfile? = null
+)
+
+/// A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
+/// until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
+/// station's pick, said so (`dropped`, `force`).
+@Serializable
+data class PickView (
+	val options: List<ModelOption>,
+	val runtimeFixed: Boolean,
+	val value: Picked,
+	val valueOption: ModelOption? = null,
+	/// The account the control names; none: it names none (a new chat's, while the station's pick is fine).
+	val account: PickAccount? = null,
+	val draft: Picked,
+	/// The option picked in the panel, by its `model`.
+	val option: String? = null,
+	/// The runtimes offered for it (none: not asked), how hard it can think there, who can run it.
+	val runtimes: List<RuntimeKind>,
+	val efforts: List<String>,
+	val accounts: List<RunnableProfile>,
+	val dropped: String? = null,
+	/// The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
+	/// station's pick runs low.
+	val who: String,
+	val whoLevel: Level? = null,
+	/// The station's pick, said: who it is on now, or what it does.
+	val autoNote: String,
+	val changed: Boolean,
+	/// Full screen (the phone's): the model, depth and account as they were and as they become; why the account
+	/// must change; the model and account picked in words; what the button says.
+	val was: List<String>,
+	val becomes: List<String>,
+	val force: String? = null,
+	val modelText: String,
+	val maker: Maker? = null,
+	val accountText: String,
+	val accountNote: String,
+	val accountWarn: Boolean,
+	val saveText: String
+)
+
+/// A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs
+/// there, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has.
+@Serializable
+data class NewChatView (
+	/// The station last started on (or picked) in the scope, its id: the page holds its place with it until the
+	/// stations are known.
+	val kept: String,
+	/// The scope's stations up now; none until its workspace has been read (`error`: why it could not be).
+	val stations: List<StationView>? = null,
+	val error: String? = null,
+	/// Whether the scope has any station, up or not.
+	val any: Boolean,
+	/// The one it starts on: the one kept, else the first up; none when none is up.
+	val station: StationView? = null,
+	val model: ModelOption? = null,
+	val runtime: RuntimeKind? = null,
+	val effort: String? = null,
+	/// The account kept to, while it still runs the model there; none: the station's pick.
+	val profile: String? = null,
+	/// How hard it can think there, and who can run it (offered when more than one can: `pickAccount`).
+	val efforts: List<String>,
+	val accounts: List<RunnableProfile>,
+	val pickAccount: Boolean,
+	/// Its profiles are being read.
+	val waiting: Boolean,
+	/// What keeps a chat from starting: `profile` (none added) or `models` (none enabled).
+	val blocked: String? = null,
+	/// In a line under the page's words: the profiles being read, or no model enabled.
+	val problem: String? = null,
+	/// Every account of the model has used up its allowance: what is sent waits for it.
+	val spent: String? = null,
+	/// Its model control (the `pick` topic of `new` on the station), with the page.
+	val pick: PickView? = null
+)
+
+/// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
+/// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
+/// `url` opens it.
+@Serializable
+data class Notice (
+	val id: String,
+	val kind: String,
+	val station: String,
+	val workspace: String,
+	val stationId: String,
+	val session: String,
+	val thread: Long? = null,
+	val title: String,
+	val body: String,
+	val tag: String,
+	val url: String,
+	val at: Long
+)
+
+/// What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first.
+@Serializable
+data class NoticesView (
+	val items: List<Notice>
+)
+
+/// Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
+/// system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
+/// show now, each taken by one page (`notice.claim`).
+@Serializable
+data class NotifyView (
+	val on: Boolean,
+	val asked: Boolean,
+	val push: Boolean,
+	val show: List<Notice>
+)
+
+/// A session with its threads and turns (`session` topic).
+@Serializable
+data class SessionDetail (
+	val session: Session,
+	val threads: List<ChatThread>,
+	val turns: List<TurnRecord>
 )
 
 /// One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble.

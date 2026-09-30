@@ -2,7 +2,7 @@
 // makes calls. Components that want the same topic share one subscription.
 import { use, useCallback, useRef, useSyncExternalStore } from "react";
 import { connectCore, type CoreClient, type CoreError, type Topic } from "./client.ts";
-import { migrateChatRefs, migrateLegacy } from "./migrate.ts";
+import { migrateChatRefs, migrateLegacy, migrateNewChat } from "./migrate.ts";
 
 let client: CoreClient | null = null;
 
@@ -12,6 +12,7 @@ export function core(): CoreClient {
     client = connectCore();
     void migrateLegacy(client);
     void migrateChatRefs(client);
+    void migrateNewChat(client);
   }
   return client;
 }

@@ -3,13 +3,16 @@
 // message (or file) makes the chat and its agent's session on that station.
 import { Key, Plus, Server } from "./icons.tsx";
 import { Link } from "react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useApi, useChatSend, useStations, type ModelOption, type RuntimeKind, type StationView } from "./api.ts";
+import { useMemo, useRef, useState } from "react";
+import type { RuntimeKind, StationView } from "./api.ts";
+import type { NewChatView } from "./core/shapes.ts";
+import { useReady } from "./core/react.ts";
+import { useNewChat, usePick } from "./pick.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { LOCAL_STATION, profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
-import { ModelTriple, optionOf } from "./ModelTriple.tsx";
+import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 import { keepTabs } from "./chatTabs.ts";
@@ -22,55 +25,18 @@ import { composerText } from "./Chat.css.ts";
 import { notSent, sendingFirst } from "./madeChat.ts";
 import { OVER_DOCK } from "./Chat.tsx";
 
-/** What a new chat runs on, kept per station (its id) for next time, on either screen (the phone's, mobile/NewChat.tsx). */
-export interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
-const LAST = "stillfail.newChat";
-
-export function lastChoice(station: string): Partial<Choice> {
-  try {
-    return (JSON.parse(localStorage.getItem(LAST) ?? "{}") as Record<string, Partial<Choice>>)[station] ?? {};
-  } catch {
-    return {};
-  }
-}
-export function keepChoice(station: string, choice: Choice): void {
-  try {
-    const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as Record<string, Choice>;
-    localStorage.setItem(LAST, JSON.stringify({ ...all, [station]: choice }));
-  } catch {
-    // storage full or blocked: choices are just not remembered
-  }
-}
-/** The station a scope's last chat was started on (or last picked there); `last` is what older pages kept, for any scope. */
-export function lastStation(scope: string): string {
-  try {
-    const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as { last?: string; lastIn?: Record<string, string> };
-    return all.lastIn?.[scope] ?? all.last ?? "";
-  } catch {
-    return "";
-  }
-}
-export function keepStation(scope: string, station: string): void {
-  try {
-    const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as { lastIn?: Record<string, string> };
-    localStorage.setItem(LAST, JSON.stringify({ ...all, last: station, lastIn: { ...all.lastIn, [scope]: station } }));
-  } catch {
-    // storage full or blocked: the first online station is taken
-  }
-}
-
 /** A new chat in a scope (a workspace, or "local"); `onCreated` gets the station's address and the new item's session (its address). */
 export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, session: string): void }) {
-  const stations = useStations(scope);
-  const online = (stations.value ?? []).filter((s) => s.online);
-  const [stationId, setStationId] = useState(() => lastStation(scope));
-  const onStation = (id: string) => {
-    setStationId(id);
-    keepStation(scope, id);
-  };
-  const view = online.find((s) => s.id === stationId) ?? online[0];
-  if (!stations.value) {
+  // What the core keeps of it (../pick.ts): held back a moment for its first value, so the page comes as it will be.
+  useReady({ topic: "newChat", scope }, 250);
+  const chat = useNewChat(scope);
+  const choice = chat.value;
+  const onStation = (id: string) => chat.pick({ station: id });
+  const view = choice?.station;
+  if (!choice?.stations) {
     // The station it will most likely be, by the one last written to (its draft comes with it).
+    const stationId = choice?.kept ?? "";
+    const error = choice?.error ?? chat.error?.message;
     const address = scope === "local" ? "local" : `${scope}/${stationId}`;
     const held: Station = scope === "local" ? LOCAL_STATION : { id: stationId, name: "", base: stationBase(address), address, online: true, settings: `/w/${scope}/settings` };
     // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
@@ -80,7 +46,7 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
         {/* The composer itself (dock.tsx), locked until there is a station to write to: it goes on from the page before
             without leaving the screen for as long as the stations take to come (the first time the page is opened). */}
         <ComposerSlot variant="new" station={held} draftKey={`new:${held.address}`} thread={null} sessionKey={null} placeholder="做任何事" locked roomy />
-        <p className={`${css.newChatStatus}${stations.error ? ` ${controlsCss.fieldError}` : ""}`}>{stations.error?.message ?? "正在读取 station…"}</p>
+        <p className={`${css.newChatStatus}${error ? ` ${controlsCss.fieldError}` : ""}`}>{error ?? "正在读取 station…"}</p>
       </div></div>
     );
   }
@@ -91,43 +57,23 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   const station: Station = { id: view.id, name: scope === "local" ? "" : view.name, base: stationBase(view.station), address: view.station, online: true, settings: scope === "local" ? "/settings" : `/w/${scope}/settings` };
   return (
     <StationContext.Provider value={station}>
-      <NewChatOn key={view.station} view={view} station={station} stations={online} onStation={onStation} onCreated={onCreated} />
+      <NewChatOn key={view.station} choice={choice} view={view} station={station} stations={choice.stations} onStation={onStation} create={chat.create} onCreated={onCreated} />
     </StationContext.Provider>
   );
 }
 
-function NewChatOn({ view, station, stations, onStation, onCreated }: { view: StationView; station: Station; stations: StationView[]; onStation(id: string): void; onCreated(station: string, session: string): void }) {
-  const api = useApi();
-  const profiles = view.overview?.profiles ?? [];
-  const [choice, setChoice] = useState<Choice>(() => ({ runtime: "", model: "", effort: "", ...lastChoice(station.id) }));
-  // The model first, from what the station's profiles have enabled; then, only when it runs on more than one, the
-  // runtime. Which profile runs the chat is the station's account pool's choice. A remembered model or runtime that is
-  // no longer there gives way to the first that is.
-  const entry = optionOf(view.models, choice.model) ?? view.models[0];
-  const model = entry?.model ?? "";
-  const runtimes = entry?.runtimes ?? [];
-  const runtime: RuntimeKind | undefined = runtimes.includes(choice.runtime as RuntimeKind) ? (choice.runtime as RuntimeKind) : runtimes[0];
-  useEffect(() => {
-    if (runtime && runtime !== choice.runtime) setChoice((c) => ({ ...c, runtime, effort: "" }));
-  }, [runtime]);
-  // The model menu lists what a profile's check found; profiles not checked since the station started are checked now, once.
-  const checked = useRef(new Set<string>());
-  useEffect(() => {
-    for (const p of profiles) {
-      if (p.check || checked.current.has(p.id)) continue;
-      checked.current.add(p.id);
-      void api.checkProfile(p.id).catch(() => {});
-    }
-  }, [profiles, api]);
+function NewChatOn({ choice, view, station, stations, onStation, create, onCreated }: {
+  choice: NewChatView; view: StationView; station: Station; stations: StationView[]; onStation(id: string): void;
+  create(station: string): Promise<Made>; onCreated(station: string, session: string): void;
+}) {
+  // What it runs on, as the core resolved it against what the station has (its model control: ../pick.ts).
+  const model = choice.model?.model;
+  const runtime = choice.runtime;
+  const pick = usePick(station.address, "new", choice);
   const [addingProfile, setAddingProfile] = useState(false);
   const [profileKind, setProfileKind] = useState<ProfileKind>("claude-sub");
-  const pick = (next: Partial<Choice>) => {
-    const c = { ...choice, ...next };
-    setChoice(c);
-    keepChoice(station.id, c);
-  };
-  // The chat is started here: the next new chat starts here too.
-  const ensureChat = useEnsureChat(station.address, entry, runtime, choice, () => onStation(station.id));
+  // Made with what is picked here; the next new chat starts here too (the core keeps it).
+  const ensureChat = useEnsureChat(station.address, create);
   const toolbar = useMemo(() => (
     <>
       {station.name && (
@@ -139,12 +85,10 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Link className={chatCss.chooser} to={profilesPage(station)}>没有可用模型 · 去勾选</Link>
       ) : (
-        <ModelTriple side="top" quietAccount options={view.models}
-          value={{ model, runtime, effort: choice.effort || null, profile: choice.profile || null }}
-          onPick={(p) => pick({ model: p.model, runtime: p.runtime, effort: p.effort ?? "", profile: p.profile ?? "" })} />
+        <ModelTriple side="top" pick={pick} onConfirm={() => void pick.save().catch(() => undefined)} />
       )}
     </>
-  ), [stations, station, view, runtime, choice, model]);
+  ), [stations, station, runtime, model, pick]);
 
   const carry = useCarryDraft();
   // The chat pages' one composer (dock.tsx): here in the page, then, once the first message is sent, in the chat's page,
@@ -169,7 +113,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       }} />
   );
   // Nothing to run a chat with yet: its first step is the page (the composer comes once it can send).
-  const blocked = view.overview ? (profiles.length === 0 ? "profile" : view.models.length === 0 ? "models" : null) : null;
+  const blocked = choice.blocked;
   if (blocked) {
     return (
       <div className={css.newChat}>
@@ -199,14 +143,10 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         <h1 className={css.newChatTitle} data-made-leave="up">新对话</h1>
         <p className={css.newChatSub} data-made-leave="up">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
-        {entry?.spent && (
-          <p className={css.spentNotice} role="status" data-made-leave="up">
-            {entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
-          </p>
-        )}
+        {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
         {composer}
         {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
-        <p className={css.newChatStatus} data-made-leave="fade">{!view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
+        <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting ? choice.problem : ""}</p>
         {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
         <div className={css.newChatOffer} data-made-leave="fade">
           <MachineSessions models={view.models} onContinued={(key) => {
@@ -219,29 +159,22 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   );
 }
 
+/** A chat made (`newChat.create`): its key, and what it runs on. */
+export interface Made { key: string; runtime: RuntimeKind; model: string; effort?: string }
+
 /**
  * What makes a new chat with its first message, on either screen (the phone's, mobile/NewChat.tsx): on the station at
- * `address`, the model `entry` on `runtime`, with the effort chosen and the profile chosen while it still runs the model
- * there. The core has it at once (its page, its row, the message waiting in it); the station makes it behind it. Made
- * once: what is sent meanwhile goes to the same chat; if it could not be made, the next message tries again.
+ * `address`, with what is picked there (the core has it: `newChat.create`). The core has the chat at once (its page,
+ * its row, the message waiting in it); the station makes it behind it. Made once: what is sent meanwhile goes to the
+ * same chat; if it could not be made, the next message tries again.
  */
-export function useEnsureChat(address: string, entry: ModelOption | undefined, runtime: RuntimeKind | undefined, choice: Pick<Choice, "effort" | "profile">, onMade: () => void) {
-  const chats = useChatSend(address);
+export function useEnsureChat(address: string, create: (station: string) => Promise<Made>) {
   const made = useRef<Promise<{ key: string; thread: string }> | null>(null);
   return () => {
-    const model = entry?.model;
-    if (!runtime || !model) return Promise.reject(new Error("先在 Profile 里启用模型"));
-    made.current ??= (async () => {
-      const { key } = await chats.create({
-        runtime, model,
-        ...(choice.effort ? { effort: choice.effort } : {}),
-        // Kept to a profile only while it still runs the model there.
-        ...(choice.profile && entry.accounts[runtime]?.some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
-      });
-      track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}) });
-      onMade();
+    made.current ??= create(address).then(({ key, runtime, model, effort }) => {
+      track("chat_created", { runtime, model, ...(effort ? { effort } : {}) });
       return { key, thread: key };
-    })().catch((error: unknown) => { made.current = null; throw error; });
+    }).catch((error: unknown) => { made.current = null; throw error; });
     return made.current;
   };
 }

@@ -6,6 +6,7 @@
 pub mod accounts;
 pub mod activity;
 pub mod attend;
+pub mod choose;
 pub mod cloud;
 pub mod data;
 pub mod core;

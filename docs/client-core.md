@@ -347,6 +347,10 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `preview.socket.send` | `socket`, one of `text`, `binary`, `close: [code, reason]` | — ; what the page sends on the socket it named so |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
 | `push.key` / `push.register` / `push.unregister` | see docs/notifications.md | this device's push registration, with every signed-in account |
+| `newChat.pick` | `scope`, `station?` (its id), `model?`, `runtime?`, `effort?`, `profile?` (null: the default depth, the station's pick) | — ; what a new chat in the scope starts on, kept on the device (choose.rs): the `newChat` view follows. A model keeps its runtime where it runs there; a runtime changed takes its default depth |
+| `newChat.create` | `station` | `{ key, runtime, model, effort? }`: `chat.create` with what is picked on that station; the scope's next new chat starts there |
+| `newChat.migrate` | `choices` (by station id), `last?`, `lastIn?` | — ; what a client kept before the core did, taken where the core keeps nothing |
+| `pick.set` / `pick.save` | `station`, `of` (`new`, `session:<key>`, `connect:<id>`, `connect-new`), and for `set` any of `model`, `runtime`, `effort`, `profile`, `open`, `clear` | a model control's picks until saved (the `pick` topic); `save` makes them what it runs on (`session.settings`, `connect.put`, the new chat's choice), `{ saved }` |
 
 A UI never makes a request of a station or still.fail cloud itself (no method, no
 path): it names what it wants done, and the core knows the request that does it

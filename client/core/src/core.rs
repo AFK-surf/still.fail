@@ -28,6 +28,7 @@ use serde_json::{Value, json};
 
 use crate::accounts::{AccountView, Accounts};
 use crate::attend::{Attend, Due};
+use crate::choose::{Choose, Saved};
 use crate::cloud::{Cloud, Credential};
 use crate::data::{Center, Data};
 use crate::error::{CoreError, Result};
@@ -72,6 +73,8 @@ struct Inner {
     /// What the core keeps in sync by itself, whatever the UI shows (sync.rs).
     sync: Rc<Sync>,
     views: Rc<Views>,
+    /// What chats run on, chosen: a new chat's, a model control's (choose.rs).
+    choose: Rc<Choose>,
     /// Threads' entries and transcripts kept on the device.
     kept: Rc<Kept>,
     /// The data center: what the cloud and the stations said (data.rs).
@@ -176,9 +179,10 @@ impl Core {
             let kept = Kept::new(host.clone());
             let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone(), status.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
+            let choose = Choose::new(host.clone(), store.clone(), data.clone(), views.clone(), check_profile(me.clone()));
             let sync = Sync::new(store.clone(), host.clone());
             let notices = Notices::new(store.clone(), host.clone(), email_of(me.clone()));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), status: status.clone(), notices: notices.clone(), attend: attend.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), notices: notices.clone(), attend: attend.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             sync.on_look({
                 let notices = Rc::downgrade(&notices);
                 let (attend, store) = (Rc::downgrade(&attend), Rc::downgrade(&store));
@@ -193,6 +197,7 @@ impl Core {
             Inner {
                 sync,
                 views,
+                choose,
                 kept,
                 data: data.clone(),
                 center,
@@ -328,6 +333,7 @@ struct Router {
     core: Weak<Inner>,
     stations: Rc<Stations>,
     views: Rc<Views>,
+    choose: Rc<Choose>,
     status: Rc<Status>,
     notices: Rc<Notices>,
     attend: Rc<Attend>,
@@ -357,6 +363,9 @@ impl Source for Router {
                 core.store.invalidate(topic);
             }
             return;
+        }
+        if Choose::handles(topic) {
+            return self.choose.start(topic);
         }
         // Kept on the device (data.rs) and nowhere else: what is there goes out, or, with nothing written, empty.
         if let Topic::Draft { .. } = topic {
@@ -393,6 +402,9 @@ impl Source for Router {
         if *topic == Topic::Status || *topic == Topic::Notices || *topic == Topic::Notify || matches!(topic, Topic::Draft { .. }) {
             return;
         }
+        if Choose::handles(topic) {
+            return self.choose.stop(topic);
+        }
         if topic.is_view() {
             // Given up before it had a value: recorded as cancelled.
             let opening = self.opening.borrow_mut().remove(topic);
@@ -415,6 +427,9 @@ impl Source for Router {
         }
         if *topic == Topic::Notify {
             return Some(Ok(self.attend.value()));
+        }
+        if Choose::handles(topic) {
+            return self.choose.compute(topic);
         }
         // A draft held has its record's value (data.rs); none is nothing written.
         if let Topic::Draft { .. } = topic {
@@ -460,6 +475,20 @@ impl Router {
         }.boxed_local());
         Ok(value)
     }
+}
+
+/// Has a station's profile check itself (what a new chat offers is what the check found).
+fn check_profile(core: Weak<Inner>) -> crate::choose::Check {
+    Rc::new(move |station: &str, profile: &str| {
+        let Some(core) = core.upgrade() else { return };
+        let (station, path) = (station.to_string(), format!("/profiles/{}/check", encode(profile)));
+        let run = core.clone();
+        core.host.spawn(async move {
+            if let Ok(addr) = StationAddr::parse(&station) {
+                let _ = run.stations.request(&addr, "POST", &path, None).await;
+            }
+        }.boxed_local());
+    })
 }
 
 /// A station's name by its address, as its workspace was last read (for what the status says).
@@ -532,6 +561,7 @@ fn gone() -> CoreError {
 impl Inner {
     /// Runs a call; `at` is the client and id it came with.
     async fn execute(&self, call: Call, progress: Progress, at: (ClientId, RequestId)) -> Result<Value> {
+        let at_call = at;
         match call {
             Call::AuthBegin { redirect_uri, return_to, device_name } => {
                 let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name).await?;
@@ -623,11 +653,21 @@ impl Inner {
                 }
                 crate::ops::Target::Station(station) => {
                     let addr = StationAddr::parse(&station)?;
-                    match (self.stations.request(&addr, op.method, &op.path, op.body.clone()).await, op.fallback) {
+                    let machine = op.method == "GET" && op.path.starts_with("/machine-sessions");
+                    let mut result = match (self.stations.request(&addr, op.method, &op.path, op.body.clone()).await, op.fallback) {
                         // A station from before the request knew another way.
                         (Err(e), Some((method, path))) if e.status == Some(404) => self.stations.request(&addr, method, &path, op.body).await,
                         (result, _) => result,
+                    };
+                    // The machine's own sessions, each in a line (choose.rs).
+                    if let (true, Ok(answer)) = (machine, result.as_mut()) {
+                        let now = self.host.now_ms();
+                        answer.get_mut("sessions").and_then(Value::as_array_mut).into_iter().flatten().for_each(|s| crate::choose::machine_meta(s, now));
+                        if let Some(s) = answer.get_mut("session") {
+                            crate::choose::machine_meta(s, now);
+                        }
                     }
+                    result
                 }
             },
             // Out of the chat lists at once while its station archives it; back if it could not.
@@ -732,6 +772,30 @@ impl Inner {
                 }
                 crate::attend::Call::Pushed => Ok(json!({ "show": self.attend.pushed() })),
             },
+            Call::Choose { name, params } => {
+                let at = |field: &str| params.get(field).and_then(Value::as_str).unwrap_or("").to_string();
+                match name.as_str() {
+                    "newChat.pick" => self.choose.pick_new(&at("scope"), &params).map(|_| Value::Null),
+                    "newChat.migrate" => {
+                        self.choose.migrate(&params);
+                        Ok(Value::Null)
+                    }
+                    // Made as `chat.create` makes it, with what is picked there.
+                    "newChat.create" => {
+                        let ask = self.choose.create(&at("station"))?;
+                        let made = Box::pin(self.execute(Call::ChatCreate { station: at("station"), ask: ask.clone() }, progress, at_call)).await?;
+                        Ok(json!({ "key": made["key"], "runtime": ask["runtime"], "model": ask["model"], "effort": ask.get("effort") }))
+                    }
+                    "pick.set" => self.choose.set(&at("station"), &at("of"), &params).map(|_| Value::Null),
+                    _ => match self.choose.save(&at("station"), &at("of"))? {
+                        Saved::Done(value) => Ok(value),
+                        Saved::Op(op) => {
+                            Box::pin(self.execute(Call::Op(op), progress, at_call)).await?;
+                            Ok(json!({ "saved": true }))
+                        }
+                    },
+                }
+            }
             Call::DraftPut { station, chat, draft } => {
                 let topic = Topic::Draft { station, chat };
                 let empty = |field: &str| draft.get(field).is_none_or(|v| v.as_str().is_some_and(|s| s.trim().is_empty()) || v.as_array().is_some_and(Vec::is_empty));
@@ -1601,6 +1665,9 @@ enum Call {
     ChatRef { station: String, id: String, title: String, base: Option<String> },
     /// Links of references kept by a client before the core kept them (title, link), the latest last.
     ChatRefsKeep { links: Vec<(String, String)> },
+    /// What a chat runs on, chosen (choose.rs): `newChat.pick`, `newChat.create`, `newChat.migrate`, `pick.set`,
+    /// `pick.save`.
+    Choose { name: String, params: Value },
 }
 
 impl Call {
@@ -1624,6 +1691,7 @@ impl Call {
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
             Call::DraftPut { station, .. } | Call::DraftGet { station, .. } | Call::ChatRef { station, .. } => Some(station),
             Call::Attend(_) | Call::ChatRefsKeep { .. } => None,
+            Call::Choose { params, .. } => params.get("station").and_then(Value::as_str),
         }
     }
 }
@@ -1867,6 +1935,19 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "chat.read" => {
             let p: Read = read(params)?;
             Call::ChatRead { station: p.station, thread: p.thread, seq: p.seq }
+        }
+        "newChat.pick" | "newChat.create" | "newChat.migrate" | "pick.set" | "pick.save" => {
+            let params = params_or_empty(params);
+            let needs: &[&str] = match name {
+                "newChat.pick" => &["scope"],
+                "newChat.create" => &["station"],
+                "pick.set" | "pick.save" => &["station", "of"],
+                _ => &[],
+            };
+            if let Some(field) = needs.iter().find(|f| params.get(**f).and_then(Value::as_str).is_none_or(str::is_empty)) {
+                return Err(CoreError::invalid(format!("参数不对：缺少 {field}")));
+            }
+            Call::Choose { name: name.to_string(), params }
         }
         "draft.put" | "draft.get" => {
             let mut p = params_or_empty(params);
@@ -2640,6 +2721,173 @@ mod tests {
             host.settle().await;
             let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 3 | 4, .. })).count();
             assert_eq!(refused, 2);
+        });
+    }
+
+    /// A profile as the station lists it: `used` percent of its five hours used; checked since the station started or not.
+    fn profile(id: &str, runtime: &str, models: &[&str], checked: bool, used: f64) -> Value {
+        json!({
+            "id": id, "name": format!("{id}@x.com"), "runtime": runtime, "runtimes": [runtime], "access": { "kind": "subscription", "key": "" },
+            "home": "/h", "homeExists": true, "model": null, "models": models, "env": [], "usedBy": [], "loginCommand": "",
+            "check": if checked { json!({ "state": "ok", "detail": "", "checkedAt": 1 }) } else { Value::Null },
+            "quota": { "state": "ok", "windows": [{ "label": "5 小时", "usedPercent": used, "resetsAt": null }], "detail": null, "checkedAt": 1 },
+        })
+    }
+
+    /// A local core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex.
+    async fn choosing_core() -> (Rc<FakeHost>, Core) {
+        let (host, core) = local_core(0.0).await;
+        host.on_fetch(|req| {
+            let path = req.url.trim_start_matches("https://stillfail.test");
+            match (req.method.as_str(), path.split('?').next().unwrap()) {
+                ("GET", "/admin/api/overview") => json_response(200, json!({
+                    "viewer": { "via": "local" }, "connects": [], "processes": [], "counts": { "sessions": 1, "running": 0, "warm": 0 },
+                    "mesh": null, "slackUsers": [], "slackTeams": [], "slackApps": [], "disk": null, "logins": [],
+                    "profiles": [
+                        profile("p1", "claude", &["claude-opus-5-5", "claude-sonnet-5"], false, 10.0),
+                        profile("p2", "claude", &["claude-opus-5-5"], true, 80.0),
+                        profile("p3", "codex", &["gpt-6-astra"], true, 0.0),
+                    ],
+                })),
+                ("GET", "/admin/api/sessions") => json_response(200, json!([session("k1")])),
+                ("GET", "/admin/api/sessions/k1") => json_response(200, json!({ "session": session("k1"), "threads": [], "turns": [] })),
+                ("GET", "/admin/api/machine-sessions") => json_response(200, json!({ "sessions": [{ "runtime": "codex", "id": "m1", "cwd": "/Users/bob/src/x", "updatedAt": 0 }] })),
+                ("POST", "/admin/api/profiles/p1/check") => json_response(200, json!({ "state": "ok", "detail": "", "checkedAt": 2 })),
+                ("POST", "/admin/api/sessions/k1/settings") => json_response(200, json!({ "ok": true })),
+                ("POST", "/admin/api/sessions") => json_response(400, json!({ "error": "not now" })),
+                _ => json_response(404, json!({})),
+            }
+        });
+        (host, core)
+    }
+
+    fn call(host: &Rc<FakeHost>, core: &Core, ui: ClientId, id: RequestId, name: &str, params: Value) -> impl std::future::Future<Output = Result<Value>> {
+        core.receive(ui, ClientMessage::Call { id, call: name.into(), params });
+        let host = host.clone();
+        async move {
+            host.settle().await;
+            let mut out = None;
+            let mut rest = Vec::new();
+            for (c, m) in host.take_emitted() {
+                match m {
+                    CoreMessage::Ok { id: i, ok } if i == id => out = Some(Ok(ok)),
+                    CoreMessage::Error { id: i, error } if i == id => out = Some(Err(error)),
+                    m => rest.push((c, m)),
+                }
+            }
+            host.emitted.borrow_mut().extend(rest);
+            out.expect("answered")
+        }
+    }
+
+    fn posted(host: &FakeHost, path: &str) -> Vec<Value> {
+        host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.ends_with(&format!("/admin/api{path}")))
+            .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or(b"null")).unwrap_or(Value::Null)).collect()
+    }
+
+    #[test]
+    fn a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_has_it() {
+        run(async {
+            let (host, core) = choosing_core().await;
+            let ui = core.connect();
+            // What the page kept before the core did comes in once.
+            call(&host, &core, ui, 1, "newChat.migrate", json!({ "choices": { "local": { "runtime": "claude", "model": "claude-sonnet-5", "effort": "low", "profile": "" } }, "last": "local" })).await.unwrap();
+            let topic = Topic::NewChat { scope: "local".into() };
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: topic.clone() });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            let v = &values[&2];
+            assert_eq!((v["kept"].as_str(), v["station"]["id"].as_str()), (Some("local"), Some("local")));
+            assert_eq!((v["model"]["model"].as_str(), v["runtime"].as_str(), v["effort"].as_str()), (Some("claude-sonnet-5"), Some("claude"), Some("low")));
+            assert_eq!((v["waiting"].clone(), v["blocked"].clone(), v["pickAccount"].clone()), (json!(false), Value::Null, json!(false)));
+            // Its unchecked profile is checked, once.
+            assert_eq!(posted(&host, "/profiles/p1/check").len(), 1);
+            assert!(posted(&host, "/profiles/p2/check").is_empty());
+            // An account kept to that does not run the model gives way to the station's pick.
+            call(&host, &core, ui, 3, "newChat.pick", json!({ "scope": "local", "model": "claude-opus-5-5", "profile": "p3" })).await.unwrap();
+            apply(&host, &mut values);
+            let v = &values[&2];
+            assert_eq!((v["model"]["model"].as_str(), v["effort"].as_str(), v["profile"].clone()), (Some("claude-opus-5-5"), Some("low"), Value::Null));
+            assert_eq!(v["accounts"].as_array().map(Vec::len), Some(2));
+            assert_eq!(v["pickAccount"], true);
+            assert_eq!(v["accounts"][0]["quotaLine"], json!({ "text": "5 小时 90%" }));
+            assert_eq!(v["accounts"][1]["quotaLine"], json!({ "text": "5 小时只剩 20%", "level": "amber" }));
+            // A model on another runtime takes it, and its default depth.
+            call(&host, &core, ui, 4, "newChat.pick", json!({ "scope": "local", "model": "gpt-6-astra" })).await.unwrap();
+            apply(&host, &mut values);
+            assert_eq!((values[&2]["runtime"].as_str(), values[&2]["effort"].clone()), (Some("codex"), Value::Null));
+            // Kept across a restart; what an older page kept does not come in over it.
+            drop(core);
+            host.take_emitted();
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            call(&host, &core, ui, 1, "newChat.migrate", json!({ "choices": { "local": { "runtime": "claude", "model": "claude-sonnet-5", "effort": "", "profile": "" } } })).await.unwrap();
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: topic });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!(values[&2]["model"]["model"], "gpt-6-astra");
+            // The model control of a new chat there: picked in its panel, then saved as what it runs on.
+            let pick = Topic::Pick { station: "local".into(), of: "new".into() };
+            core.receive(ui, ClientMessage::Subscribe { id: 5, subscribe: pick });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!((values[&5]["changed"].clone(), values[&5]["value"]["runtime"].clone(), values[&5]["account"].clone()), (json!(false), json!("codex"), Value::Null));
+            call(&host, &core, ui, 6, "pick.set", json!({ "station": "local", "of": "new", "model": "claude-opus-5-5", "profile": "p2" })).await.unwrap();
+            apply(&host, &mut values);
+            let p = &values[&5];
+            assert_eq!((p["changed"].clone(), p["draft"]["runtime"].clone(), p["draft"]["profile"].clone(), p["who"].clone()), (json!(true), json!("claude"), json!("p2"), json!("p2")));
+            assert_eq!(values[&2]["model"]["model"], "gpt-6-astra", "only a draft until saved");
+            assert_eq!(call(&host, &core, ui, 7, "pick.save", json!({ "station": "local", "of": "new" })).await.unwrap()["saved"], true);
+            apply(&host, &mut values);
+            assert_eq!((values[&2]["model"]["model"].as_str(), values[&2]["profile"].as_str()), (Some("claude-opus-5-5"), Some("p2")));
+            // Kept to an account running low: the control names it, amber.
+            assert_eq!(values[&5]["account"], json!({ "text": "p2@x.com", "auto": false, "level": "amber" }));
+            // A chat made there is asked for with it, and the scope's next new chat starts there too.
+            let made = call(&host, &core, ui, 8, "newChat.create", json!({ "station": "local" })).await.unwrap();
+            assert!(made["key"].as_str().is_some_and(|k| k.starts_with(crate::views::PENDING_PREFIX)));
+            assert_eq!(posted(&host, "/sessions").last().map(|b| (b["model"].clone(), b["profile"].clone())), Some((json!("claude-opus-5-5"), json!("p2"))));
+            // Refused: no scope, no station.
+            assert!(call(&host, &core, ui, 9, "newChat.pick", json!({ "model": "x" })).await.is_err());
+            assert!(call(&host, &core, ui, 10, "pick.set", json!({ "station": "local", "of": "nothing" })).await.is_err());
+        });
+    }
+
+    #[test]
+    fn a_sessions_model_control_says_what_changes_and_saves_it_on_the_station() {
+        run(async {
+            let (host, core) = choosing_core().await;
+            let ui = core.connect();
+            let pick = Topic::Pick { station: "local".into(), of: "session:k1".into() };
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: pick });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            let p = &values[&1];
+            // It runs on p1, the station's pick, with no model set.
+            assert_eq!((p["runtimeFixed"].clone(), p["value"]["model"].clone(), p["account"]["text"].clone()), (json!(true), Value::Null, json!("自动 · p1@x.com")));
+            assert_eq!(p["saveText"], "不变");
+            // Kept to p2 and moved to Sonnet, which p2 does not run: back to the station's pick, said so.
+            call(&host, &core, ui, 2, "pick.set", json!({ "station": "local", "of": "session:k1", "profile": "p2" })).await.unwrap();
+            call(&host, &core, ui, 3, "pick.set", json!({ "station": "local", "of": "session:k1", "model": "claude-sonnet-5", "effort": "high" })).await.unwrap();
+            apply(&host, &mut values);
+            let p = &values[&1];
+            assert_eq!(p["draft"]["profile"], Value::Null);
+            assert!(p["dropped"].as_str().is_some_and(|d| d.contains("改成了自动分配")), "{p}");
+            assert!(p["force"].as_str().is_some_and(|f| f.starts_with("指定的账号「p2」没有启用")), "{p}");
+            assert_eq!(p["whoLevel"], "amber");
+            assert_eq!(p["becomes"][1], "high");
+            assert_eq!(p["changed"], true);
+            call(&host, &core, ui, 4, "pick.save", json!({ "station": "local", "of": "session:k1" })).await.unwrap();
+            assert_eq!(posted(&host, "/sessions/k1/settings"), [json!({ "model": "claude-sonnet-5", "effort": "high", "profile": null })]);
+            // Opened again: from what it runs on.
+            call(&host, &core, ui, 5, "pick.set", json!({ "station": "local", "of": "session:k1", "open": true })).await.unwrap();
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["draft"]["effort"], Value::Null);
+            // The machine's own sessions come each with its line.
+            let listed = call(&host, &core, ui, 6, "machineSessions.list", json!({ "station": "local" })).await.unwrap();
+            assert!(listed["sessions"][0]["meta"].as_str().is_some_and(|m| m.starts_with("Codex · ~/src/x · ")), "{listed}");
         });
     }
 

@@ -223,19 +223,21 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Deletes a session for good: its chat, its history and its workspace directory. */
     suspend fun deleteSession(key: String) { op("session.delete") { put("key", key) } }
 
-    // ── a new chat (web/src/NewChat.tsx → useEnsureChat) ──
+    // ── what a chat runs on, chosen (client/core/src/choose.rs; web/src/pick.ts) ──
 
     /**
-     * A new chat, there at once: the core has its page, its row and what is sent to it under the key it answers (the
-     * station makes it behind it, told that key as `clientKey`, so its row is known for this one's, never guessed).
-     * `profile`: the one kept to, or null for the station's pick.
+     * A new chat, there at once, made with what is picked on this station (web/src/NewChat.tsx → useEnsureChat): the
+     * core has its page, its row and what is sent to it under the key it answers (the station makes it behind it, told
+     * that key as `clientKey`, so its row is known for this one's, never guessed).
      */
-    suspend fun createChat(runtime: String, model: String, effort: String?, profile: String?): String =
-        core.call("chat.create", buildJsonObject {
-            put("station", station); put("runtime", runtime); put("model", model)
-            if (effort != null) put("effort", effort)
-            if (profile != null) put("profile", profile)
-        }).jsonObject["key"]!!.jsonPrimitive.content
+    suspend fun createNewChat(): String =
+        core.call("newChat.create", buildJsonObject { put("station", station) }).jsonObject["key"]!!.jsonPrimitive.content
+    /** Picks in a model control's panel (`of`: new, session:<key>, …; null: the default, the station's pick); `open`: from what it runs on now again. */
+    suspend fun pickSet(of: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {
+        core.call("pick.set", buildJsonObject { put("station", station); put("of", of); fill() })
+    }
+    /** What the panel picked becomes what it runs on (nothing changed: nothing done). */
+    suspend fun pickSave(of: String) { core.call("pick.save", buildJsonObject { put("station", station); put("of", of) }) }
 
     // ── the machine's own sessions (web/src/MachineSessions.tsx) ──
 
@@ -308,6 +310,8 @@ data class MachineSession(
     val model: String? = null,
     val updatedAt: Long,
     val session: String? = null,
+    /** Its runtime, where it ran (the home directory as ~) and how long ago, in a line (the core's). */
+    val meta: String? = null,
 )
 
 /** Something said in one of them: by the person, else by its agent; when, in ms. */

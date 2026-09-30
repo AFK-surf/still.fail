@@ -15,11 +15,6 @@ import * as css from "./MachineSessions.css.ts";
 import * as uiCss from "./ui.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 
-/** The directory as people know it: the home directory as ~. */
-function shortPath(path: string): string {
-  return path.replace(/^\/(Users|home)\/[^/]+(?=\/|$)/, "~");
-}
-
 /** `models`: the station's, for the agents' names and pictures in a preview. */
 export function MachineSessions({ models, onContinued }: { models: ModelOption[]; onContinued(key: string): void }) {
   const api = useApi();
@@ -29,7 +24,6 @@ export function MachineSessions({ models, onContinued }: { models: ModelOption[]
   const [looking, setLooking] = useState<MachineSession | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const now = useNow(60_000);
   useEffect(() => {
     let live = true;
     // A station from before this answers 404: nothing is offered.
@@ -51,7 +45,8 @@ export function MachineSessions({ models, onContinued }: { models: ModelOption[]
       setBusy(false);
     }
   };
-  const meta = (s: MachineSession) => `${RUNTIME_LABEL[s.runtime]} · ${shortPath(s.cwd)} · ${ago(s.updatedAt, now)}`;
+  // Its runtime, where it ran and how long ago, in a line (the core's).
+  const meta = (s: MachineSession) => s.meta ?? "";
   return (
     <>
       <button type="button" className={css.offer} onClick={() => setOpen(true)}><Monitor size={14} />接着本机终端里的会话</button>

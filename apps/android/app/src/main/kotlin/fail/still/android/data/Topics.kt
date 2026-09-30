@@ -112,6 +112,10 @@ object Topics {
         put("topic", "chatSearch"); put("scope", scope); put("query", query)
         station?.let { put("station", it) }; exclude?.let { put("exclude", it) }; limit?.let { put("limit", it) }
     }
+    /** A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here (web/src/pick.ts). */
+    fun newChat(scope: String) = buildJsonObject { put("topic", "newChat"); put("scope", scope) }
+    /** A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new). */
+    fun pick(station: String, of: String) = buildJsonObject { put("topic", "pick"); put("station", station); put("of", of) }
 
     /** A connect's Slack app as Slack has it (read through the station; again after a write to the connect). */
     fun slackApp(station: String, connect: String) = buildJsonObject { put("topic", "slackApp"); put("station", station); put("connect", connect) }

@@ -48,7 +48,11 @@ export type Topic =
   // composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number }
   // The archived chats of a scope's stations online, newest first by day (client/core/src/views/archive.rs).
-  | { topic: "archive"; scope: string };
+  | { topic: "archive"; scope: string }
+  // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
+  | { topic: "newChat"; scope: string }
+  // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).
+  | { topic: "pick"; station: string; of: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

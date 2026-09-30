@@ -4,9 +4,10 @@
 // (how it runs, what it used, the station). Changing how it runs is a page of its own.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router";
-import { stationApi, useApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
+import { stationApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { ArrowRight, Check, ChevronDown, ChevronRight, Hourglass, Received, Send, Stop, Unplug } from "../icons.tsx";
-import { modelName, optionOf } from "../ModelTriple.tsx";
+import { optionOf } from "../ModelTriple.tsx";
+import { usePick } from "../pick.ts";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
 import { useOlderOnScroll, Waited } from "../Chat.tsx";
@@ -354,49 +355,33 @@ function RunRow({ agent, onOpen }: { agent: ChatAgent; onOpen: () => void }) {
 export function RunSettingsScreen() {
   const app = useApp();
   const station = useStation();
-  const api = useApi();
   const { chat = "", agent: key = "" } = useParams();
   const view = useChat(station.address, { session: chat });
   const agent = view.value?.agents.find((a) => a.session.key === key);
+  // What it runs on, what is picked here and what that means, as the core has them (../pick.ts).
+  const pick = usePick(station.address, `session:${key}`);
+  const v = pick.view;
+  // Picked from what it runs on now, each time it is opened.
+  const { set: pickSet } = pick;
+  useEffect(() => pickSet({ open: true }), [pickSet]);
   // A long list (the models, the accounts) is a list of its own, picked from and back.
   const [list, setList] = useState<"model" | "account" | null>(null);
-  const [draft, setDraft] = useState<{ model: string | null; effort: string | null; profile: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const title = list === "model" ? "选模型" : list === "account" ? "选账号" : "换模型";
   const bar = <NavBar back={list ? "换模型" : "返回"} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!agent) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? "正在读取…"}</p></div>;
+  if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? "正在读取…"}</p></div>;
   const s = agent.session;
-  const current = agent.account;
-  const currentName = current?.name ?? "";
-  const kept = s.profilePinned ? s.profile ?? null : null;
-  const model = draft ? draft.model : s.model ?? null;
-  const effort = draft ? draft.effort : s.effort ?? null;
-  const profile = draft ? draft.profile : kept;
-  const set = (next: Partial<{ model: string | null; effort: string | null; profile: string | null }>) => setDraft({ model, effort, profile, ...next });
-  const choice = optionOf(agent.choices, model);
-  const named = (m: string | null) => (m === null ? null : m === s.model ? s.modelName ?? m : modelName(agent.choices, m));
-  const accounts: RunnableProfile[] = choice?.accounts[s.runtime] ?? [];
-  const chosen = profile && accounts.some((a) => a.id === profile) ? profile : null;
-  const dropped = profile !== null && chosen === null;
-  const efforts: (string | null)[] = [null, ...s.efforts];
-  const changed = (model !== (s.model ?? null) && (!choice || choice !== optionOf(agent.choices, s.model))) || effort !== (s.effort ?? null) || chosen !== kept;
-  const accountText = (id: string | null) => (id === null ? "自动分配" : accounts.find((a) => a.id === id)?.name ?? id);
-  if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={agent.choices} runtime={s.runtime} picked={model} onPick={(m) => { set({ model: m }); setList(null); }} /></div>;
-  if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={accounts} runtime={s.runtime} picked={chosen} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
-  const was = [named(s.model ?? null) ?? "默认模型", s.effort ?? "默认深度", kept !== null ? currentName : `自动 · ${currentName}`];
-  // The station's pick moves off an account without the model (the one it is on now, when it has it).
-  const movesOff = chosen === null && kept === null && model !== null && !!current && !accounts.some((a) => a.id === current.id);
-  const becomes = [named(model) ?? "默认模型", effort ?? "默认深度",
-    chosen !== null ? accountText(chosen) : movesOff ? "自动（换账号）" : current && accounts.some((a) => a.id === current.id) ? `自动 · ${currentName}` : "自动分配"];
-  const force = dropped ? `指定的账号「${accountText(profile)}」没有启用 ${named(model)}，改成了自动分配`
-    : movesOff ? `现在的账号「${currentName}」没有启用 ${named(model)}，会自动换一个启用了的` : null;
+  const chosen = v.draft.profile ?? null;
+  if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={v.options} runtime={s.runtime} picked={v.option ?? null} onPick={(m) => { pick.set({ model: m }); setList(null); }} /></div>;
+  if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={v.accounts} runtime={s.runtime} picked={chosen} onPick={(p) => { pick.set({ profile: p }); setList(null); }} /></div>;
   const save = () => {
-    if (!changed || !choice) return app.pop();
+    if (!v.changed || !v.option) return app.pop();
     setBusy(true);
-    api.sessionSettings(s.key, { model: choice === optionOf(agent.choices, s.model) ? s.model ?? choice.model : choice.model, effort, profile: chosen })
+    pick.save()
       .then(() => { app.toast("已改，下一轮起生效"); app.pop(); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   };
+  const effort = v.draft.effort ?? null;
   return (
     <div className={pagesCss.mScreen}>
       {bar}
@@ -404,38 +389,38 @@ export function RunSettingsScreen() {
         {/* Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why. */}
         <div className={css.mRunSummary}>
           {["模型", "深度", "账号"].map((label, i) => {
-            const moved = becomes[i] !== was[i];
+            const moved = v.becomes[i] !== v.was[i];
             return (
               <div key={label} className={css.mRunLine}>
                 <span className={historyCss.mRunLabel}>{label}</span>
-                <span className={css.mRunWas} data-moved={moved || undefined}>{was[i]}</span>
-                {moved && <><ArrowRight size={14} className={partsCss.mAccent} /><b className={css.mRunBecomes}>{becomes[i]}</b></>}
+                <span className={css.mRunWas} data-moved={moved || undefined}>{v.was[i]}</span>
+                {moved && <><ArrowRight size={14} className={partsCss.mAccent} /><b className={css.mRunBecomes}>{v.becomes[i]}</b></>}
               </div>
             );
           })}
-          {force && <p className={`${css.mWarn} ${partsCss.mSmall}`}>{force}</p>}
+          {v.force && <p className={`${css.mWarn} ${partsCss.mSmall}`}>{v.force}</p>}
           <p className={`${partsCss.mSubtle} ${partsCss.mSmall}`}>改了以后从下一轮开始生效。</p>
         </div>
         <GroupLabel>模型</GroupLabel>
-        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={choice?.maker} runtime={s.runtime} size={18} />}>
-          <span className={historyCss.mSettingMain}>{named(model) ?? "选一个模型"}</span>
+        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={s.runtime} size={18} />}>
+          <span className={historyCss.mSettingMain}>{v.modelText}</span>
         </SettingRow>
         <GroupLabel>思考深度</GroupLabel>
         <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>想得越深越慢，也越费额度。</p>
         <div className={historyCss.mChips}>
-          {efforts.map((e) => <button key={e ?? "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e ?? "默认"}</button>)}
+          {[null, ...v.efforts].map((e) => <button key={e ?? "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => pick.set({ effort: e })}>{e ?? "默认"}</button>)}
         </div>
         <GroupLabel>账号</GroupLabel>
-        <SettingRow onClick={() => setList("account")} leading={(() => { const p = accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? s.runtime} kind={p.kind} size={18} /> : null; })()}>
-          <span className={historyCss.mSettingMain}>{accountText(chosen)}</span>
-          <small className={partsCss.mMuted}>{chosen === null ? "额度用完或登录失效时换一个" : "固定用它"}</small>
-          {(dropped || movesOff) && <small className={css.mWarn}>这个模型要换账号</small>}
+        <SettingRow onClick={() => setList("account")} leading={(() => { const p = v.accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? s.runtime} kind={p.kind} size={18} /> : null; })()}>
+          <span className={historyCss.mSettingMain}>{v.accountText}</span>
+          <small className={partsCss.mMuted}>{v.accountNote}</small>
+          {v.accountWarn && <small className={css.mWarn}>这个模型要换账号</small>}
         </SettingRow>
         <div style={{ height: 16 }} />
       </div>
-      <button type="button" className={historyCss.mRunGo} data-changed={changed || undefined} disabled={busy} onClick={save}>
+      <button type="button" className={historyCss.mRunGo} data-changed={v.changed || undefined} disabled={busy} onClick={save}>
         {busy && <Spinner size={14} />}
-        {changed ? `改成 ${named(model) ?? "默认模型"} · ${effort ?? "默认深度"} · ${accountText(chosen)}` : "不变"}
+        {v.saveText}
       </button>
     </div>
   );

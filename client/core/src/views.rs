@@ -1086,7 +1086,7 @@ impl Views {
     /// An agent of a chat: its session, the connect that started it, its profile, turns and threads. Until its detail
     /// is read it is its summary from the station's list (no turns, no threads yet); one that cannot be read at all
     /// (removed meanwhile) is `None`.
-    fn agent(&self, station: &str, key: &str) -> Option<Value> {
+    pub fn agent(&self, station: &str, key: &str) -> Option<Value> {
         let detail = match self.store.value(&Topic::Session { station: station.to_string(), key: key.to_string() }) {
             Some(Ok(detail)) => detail,
             Some(Err(_)) => return None,
@@ -1428,6 +1428,7 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
                 "kind": p.get("access").and_then(|a| a.get("kind")).cloned().unwrap_or(Value::Null),
                 "runtime": p.get("runtime").cloned().unwrap_or(Value::Null),
                 "quota": p.get("quota").cloned().unwrap_or(Value::Null),
+                "quotaLine": crate::choose::quota_line(p.get("quota")),
             })
         })
         .collect())
@@ -1435,7 +1436,7 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
 
 /// The models the station can run, each with the runtimes it runs on (those of the profiles that have it enabled):
 /// a model is chosen first, and a runtime only when it has more than one.
-fn models(overview: Option<&Value>, now: f64) -> Value {
+pub fn models(overview: Option<&Value>, now: f64) -> Value {
     // One model however its profiles spell it (openai/gpt-6-astra, gpt-6-astra).
     let mut on: BTreeMap<String, (BTreeSet<&str>, Vec<Option<f64>>, BTreeSet<&str>)> = BTreeMap::new();
     for p in overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten() {
@@ -1801,8 +1802,8 @@ mod tests {
         // Of its runtime, and with its model enabled.
         let session = json!({"runtime": "codex", "profile": "a", "model": "m"});
         assert_eq!(runnable_on(Some(&overview), &session, 0.0), json!([
-            {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null},
-            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0, "text": "额度用完 · 1 分钟内恢复", "back": "1 分钟内恢复"}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
+            {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null, "quotaLine": null},
+            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0, "text": "额度用完 · 1 分钟内恢复", "back": "1 分钟内恢复"}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}, "quotaLine": {"text": "只剩 0%", "level": "red"}},
         ]));
         // Every model of its runtime, each with who runs it.
         let choices = choices(Some(&overview), &session, 0.0);

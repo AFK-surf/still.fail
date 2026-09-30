@@ -56,7 +56,6 @@ import fail.still.android.Screen
 import fail.still.android.data.ChatOf
 import fail.still.android.data.MachineSaid
 import fail.still.android.data.MachineSession
-import fail.still.android.data.Quota
 import fail.still.android.data.RunnableProfile
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.ui.Markdown
@@ -64,6 +63,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextOverflow
 import fail.still.android.data.RUNTIME_LABEL
 import fail.still.android.data.ModelOption
+import fail.still.android.data.NewChatView
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
@@ -80,24 +80,12 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
-/** What the new chat runs on; kept per station for next time. `profile`: the account kept to ("" for the station's pick). */
-private data class Choice(val runtime: String, val model: String, val effort: String, val profile: String = "")
-
-private fun AppState.lastChoice(station: String): Choice? =
-    strings("newChat/$station").takeIf { it.size >= 3 }?.let { Choice(it[0], it[1], it[2], it.getOrNull(3)?.takeIf { p -> p != "-" } ?: "") }
-
-private fun AppState.keepChoice(station: String, c: Choice) {
-    setStrings("newChat/$station", listOf(c.runtime, c.model, c.effort.ifEmpty { "-" }, c.profile.ifEmpty { "-" }))
-}
-
-/** The station a workspace's last chat was started on (or last picked there); `newChat.last` is what the app kept before, for any workspace. */
-private fun AppState.lastStation(scope: String): String? =
-    strings("newChat.lastIn/$scope").firstOrNull() ?: strings("newChat.last").firstOrNull()
-
-private fun AppState.keepStation(scope: String, station: String) {
-    setStrings("newChat.lastIn/$scope", listOf(station))
-    setStrings("newChat.last", listOf(station))
+/** Picks for a new chat in a scope (`station`: its id; the core keeps them, client/core/src/choose.rs): each given changes only that. */
+private fun AppState.pickNew(scope: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {
+    this.scope.launch { try { core.call("newChat.pick", buildJsonObject { put("scope", scope); fill() }) } catch (_: CoreException) {} }
 }
 
 /**
@@ -108,26 +96,25 @@ private fun AppState.keepStation(scope: String, station: String) {
 fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false) {
     val app = LocalApp.current
     val scope = current.workspace.id
-    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(scope))
-    val all = stations.value
-    // The station last started on (or picked) in this workspace.
-    var picked by remember(scope) { mutableStateOf(app.lastStation(scope)) }
-    val onStation = { station: String -> picked = station; app.keepStation(scope, station) }
+    // The station last started on (or picked) in this workspace and what it runs there, as the core keeps them (web/src/pick.ts).
+    val chat by rememberTopic<NewChatView>(app.core, Topics.newChat(scope))
+    val choice = chat.value
+    val onStation = { id: String -> app.pickNew(scope) { put("station", id) } }
     // What the composer frosts, under it: this page (its own paper) until it leaves.
     Column(if (leaving) Modifier.fillMaxSize() else Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg)) {
         // Gone at once as it leaves (the chat has its own bar), its room kept so the scene leaves from where it was.
         Box(Modifier.alpha(if (leaving) 0f else 1f)) { NavBar("取消", app::pop, "新对话") }
-        val online = all?.filter { it.online }.orEmpty()
-        val view = online.firstOrNull { it.station == picked } ?: online.firstOrNull()
+        val view = choice?.station
+        val online = choice?.stations
         when {
-            all == null -> Loading(stations.error?.message ?: "正在读取 station…")
-            all.isEmpty() -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { FirstStation(current) }
+            choice == null || online == null -> Loading(choice?.error ?: chat.error?.message ?: "正在读取 station…")
+            !choice.any -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { FirstStation(current) }
             view == null -> Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                 Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 240.dp)
                 Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 Text("在一台机器上打开 still.fail，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             }
-            else -> androidx.compose.runtime.key(view.station) { NewChatOn(scope, view, online, onStation, host, leaving) }
+            else -> androidx.compose.runtime.key(view.station) { NewChatOn(scope, choice, view, online, onStation, host, leaving) }
         }
         // No composer without a station to write to.
         if (view == null && !leaving) host.spec = null
@@ -135,43 +122,27 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: String, view: StationView, stations: List<StationView>, onStation: (String) -> Unit, host: Host, leaving: Boolean) {
+private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: String, choice: NewChatView, view: StationView, stations: List<StationView>, onStation: (String) -> Unit, host: Host, leaving: Boolean) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     // Kept on the device like a chat's, by its station (web/src/NewChat.tsx: `new:<address>`).
     val draft = rememberDraft("new:${view.station}")
-    var choice by remember(view.station) { mutableStateOf(app.lastChoice(view.station)) }
-    // The model first, from what the station's profiles have enabled; the runtime only when it runs on more than one. A
-    // remembered model or runtime no longer there gives way to the first that is.
-    val entry = view.models.optionOf(choice?.model) ?: view.models.firstOrNull()
+    // What it runs on, as the core resolved it against what the station has now (the same as the web's).
+    val entry = choice.model
     val model = entry?.model
-    val runtime = entry?.runtimes?.firstOrNull { it == choice?.runtime } ?: entry?.runtimes?.firstOrNull()
-    val efforts = runtime?.let { entry?.efforts?.get(it) }.orEmpty()
-    val effort = choice?.effort?.takeIf { it != "-" && it in efforts } ?: ""
-    // Who runs it: kept to an account only while that one still runs the model there; else the station's pick.
-    val accounts = runtime?.let { entry?.accounts?.get(it) }.orEmpty()
-    val profile = choice?.profile?.takeIf { p -> p.isNotEmpty() && accounts.any { it.id == p } }
-    val pick = { next: Choice -> choice = next; app.keepChoice(view.station, next) }
-    // The model list is what a profile's check found; profiles not checked since the station started are checked now, once.
-    val profiles = view.overview?.profiles.orEmpty()
-    val checked = remember(view.station) { mutableSetOf<String>() }
-    LaunchedEffect(profiles) {
-        for (p in profiles) if (p.check == null && checked.add(p.id)) launch { try { app.api(view.station).checkProfile(p.id) } catch (_: CoreException) {} }
-    }
-    // The chat, made once with the first message (web/src/NewChat.tsx → useEnsureChat): the core has it at once under
-    // the key it answers, its station makes it behind it; the next new chat starts on this station too.
+    val runtime = choice.runtime
+    val effort = choice.effort ?: ""
+    val accounts = choice.accounts
+    val profile = choice.profile
+    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> app.pickNew(workspace, fill) }
+    // The chat, made once with the first message (web/src/NewChat.tsx → useEnsureChat), with what is picked here: the
+    // core has it at once under the key it answers, its station makes it behind it; the next new chat starts here too.
     var made by remember(view.station) { mutableStateOf<String?>(null) }
     // Whether a message went out to it: until then, another choice (model, runtime, depth, account) is made anew.
     var sent by remember(view.station) { mutableStateOf(false) }
     LaunchedEffect(runtime, model, effort, profile) { if (!sent && !draft.starting) made = null }
     val ensure: suspend () -> String = {
-        made ?: run {
-            val m = model ?: throw CoreException("no_model", "先在 Profile 里启用模型", null)
-            app.api(view.station).createChat(runtime!!, m, effort.ifEmpty { null }, profile).also {
-                made = it
-                app.keepStation(workspace, view.station)
-            }
-        }
+        made ?: app.api(view.station).createNewChat().also { made = it }
     }
     val launchers = AttachLaunchers { app.upload(draft, view.station, it, scope) }
     val haze = host.haze
@@ -184,28 +155,22 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
             Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
             Text("想让 agent 做什么？", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
             Text("说要做什么。它会在 ${view.name} 上用选好的模型开一个新会话。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-            val problem = when {
-                view.overview == null -> "正在读取 ${view.name} 的 Profile…"
-                profiles.isEmpty() -> null
-                view.models.isEmpty() -> "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。"
-                else -> null
-            }
-            if (problem != null) Text(problem, fontSize = 13.sp, color = if (view.overview == null) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            choice.problem?.let { Text(it, fontSize = 13.sp, color = if (choice.waiting) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)) }
             // No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too).
             val overview = view.overview
-            if (overview != null && profiles.isEmpty()) {
+            if (overview != null && choice.blocked == "profile") {
                 Text("给 ${view.name} 添加一个 Profile。agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
                 Button("添加 Profile", primary = true) { app.push(Screen.NewProfile(view.station)) }
                 Column(Modifier.fillMaxWidth().padding(top = 12.dp)) { MachineLoginOffers(view.station, overview, inset = 0.dp) }
             }
             // The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
-            if (overview != null && profiles.isNotEmpty()) MachineSessionsOffer(view)
+            if (overview != null && choice.blocked != "profile") MachineSessionsOffer(view)
         }
     }
     // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
-    if (!leaving) entry?.spent?.let { s ->
+    if (!leaving) choice.spent?.let { spent ->
         Text(
-            "${entry.name} 能用的账号额度都用完了" + (s.back?.let { "，$it" } ?: "") + "。现在发的消息要等额度恢复才会有回复；也可以换一个模型。",
+            spent,
             fontSize = 13.sp, color = C.ink,
             modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
         )
@@ -219,20 +184,19 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                 // Nothing to choose from: the chooser leads to where models are enabled.
                 Chooser(haze, null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
             } else {
-                val now = Choice(runtime, model, effort, profile ?: "")
                 Chooser(haze, { MakerIcon(entry.maker, runtime, 14.dp) }, entry.name) {
-                    pickModel(app, view, model) { m -> val rt = m.runtimes.firstOrNull { it == runtime } ?: m.runtimes.first(); pick(now.copy(runtime = rt, model = m.model, effort = if (rt != runtime) "" else effort)) }
+                    pickModel(app, view, model) { m -> pick { put("model", m.model) } }
                 }
                 // The runtime only when the model runs on more than one.
                 if (entry.runtimes.size > 1) Chooser(haze, { MakerIcon(null, runtime, 14.dp) }, RUNTIME_LABEL[runtime] ?: runtime) {
-                    pickRuntime(app, entry.runtimes, runtime) { rt -> pick(now.copy(runtime = rt, effort = "")) }
+                    pickRuntime(app, entry.runtimes, runtime) { rt -> pick { put("runtime", rt) } }
                 }
                 Chooser(haze, null, effort.ifEmpty { "默认深度" }) {
-                    pickEffort(app, efforts, effort) { e -> pick(now.copy(effort = e)) }
+                    pickEffort(app, choice.efforts, effort) { e -> pick { put("effort", e.ifEmpty { null }) } }
                 }
                 // Who runs it, only when there is a choice: the station's pick, or one account kept to.
-                if (accounts.size > 1) Chooser(haze, null, profile?.let { p -> accounts.firstOrNull { it.id == p }?.name } ?: "自动分配") {
-                    pickAccount(app, accounts, profile) { p -> pick(now.copy(profile = p ?: "")) }
+                if (choice.pickAccount) Chooser(haze, null, profile?.let { p -> accounts.firstOrNull { it.id == p }?.name } ?: "自动分配") {
+                    pickAccount(app, accounts, profile) { p -> pick { put("profile", p) } }
                 }
             }
         }
@@ -289,7 +253,7 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
         SheetHead("在哪台 station 上跑")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             stations.forEach { s ->
-                PickRow(s.name, s.summary, checked = s.station == current, leading = { Buddy(s, 36) }) { onPick(s.station); app.sheet = null }
+                PickRow(s.name, s.summary, checked = s.station == current, leading = { Buddy(s, 36) }) { onPick(s.id); app.sheet = null }
             }
         }
     }
@@ -336,36 +300,12 @@ private fun pickAccount(app: AppState, accounts: List<RunnableProfile>, current:
         SheetHead("账号")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow("自动分配", "额度用完或登录失效时换一个", checked = current == null) { onPick(null); app.sheet = null }
-            accounts.forEach { a -> PickRow(a.name, quotaLine(a.quota), checked = current == a.id) { onPick(a.id); app.sheet = null } }
+            accounts.forEach { a -> PickRow(a.name, a.quotaLine?.text, checked = current == a.id) { onPick(a.id); app.sheet = null } }
         }
     }
 }
 
-/** What is left of an account's allowance, in a few words (web/src/ModelTriple.tsx → quotaLine). */
-private fun quotaLine(quota: Quota?): String? {
-    if (quota == null) return null
-    if (quota.state != "ok" || quota.windows.isEmpty()) return quota.detail
-    val low = quota.windows.filter { it.level != "ok" }.minByOrNull { it.left }
-    if (low != null) return "${low.label}只剩 ${low.left}%"
-    return quota.windows.joinToString(" · ") { "${it.label} ${it.left}%" }
-}
-
 // ── going on with a session the machine kept (web/src/MachineSessions.tsx) ──
-
-/** The directory as people know it: the home directory as ~. */
-private fun shortPath(path: String) = path.replace(Regex("^/(Users|home)/[^/]+(?=/|$)"), "~")
-
-private fun sessionMeta(s: MachineSession): String {
-    val secs = (System.currentTimeMillis() - s.updatedAt) / 1000
-    val ago = when {
-        secs < 60 -> "刚刚"
-        secs < 3600 -> "${secs / 60} 分钟前"
-        secs < 86400 -> "${secs / 3600} 小时前"
-        secs < 2 * 86400 -> "昨天"
-        else -> "${secs / 86400} 天前"
-    }
-    return "${RUNTIME_LABEL[s.runtime] ?: s.runtime} · ${shortPath(s.cwd)} · $ago"
-}
 
 /**
  * The offer, when the station's machine kept any sessions of its own Claude Code or Codex (a station from before them
@@ -405,7 +345,7 @@ private fun openMachineSessions(app: AppState, view: StationView, sessions: List
                     MakerIcon(null, s.runtime, 18.dp)
                     Column(Modifier.weight(1f)) {
                         Text(s.title ?: s.first ?: "", fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(sessionMeta(s), fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(s.meta ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (s.session != null) Text("已在 still.fail 里", fontSize = 12.sp, color = C.muted, maxLines = 1)
                 }
@@ -426,7 +366,7 @@ private fun lookAtMachineSession(app: AppState, view: StationView, sessions: Lis
         }
         SheetGrab()
         SheetHead(s.title ?: s.first ?: "")
-        Text(sessionMeta(s), fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 8.dp))
+        Text(s.meta ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 8.dp))
         val scroll = rememberScrollState()
         LaunchedEffect(shown) { if (shown != null) scroll.scrollTo(scroll.maxValue) }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {

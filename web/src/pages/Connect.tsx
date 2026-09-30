@@ -4,10 +4,11 @@ import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "../icons.tsx";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModelOption, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
+import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModelOption, type Overview, type MadeSlackApp } from "../api.ts";
 import { MODE } from "../format.ts";
 import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
+import { usePick } from "../pick.ts";
 import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
@@ -187,6 +188,9 @@ function RunSection({ item }: { item: ConnectItem }) {
   const [changingMode, setChangingMode] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime));
+  // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
+  const pick = usePick(station.address, `connect:${connect.id}`);
+  const saveBind = useAction(() => pick.save(), ({ saved }) => { if (saved) toast("已保存，新会话会用新的设置"); });
   return (
     <Section title="怎么跑">
       <div className={`${pagesCss.card} ${css.runCard}`}>
@@ -194,9 +198,7 @@ function RunSection({ item }: { item: ConnectItem }) {
           <span className={css.runCardLabel}>模型</span>
           {models.length === 0
             ? <Link className={chatCss.inlineLink} to={profilesPage(station)}>{connect.runtimeText} 的 Profile 还没有启用模型 · 去勾选</Link>
-            : <ModelTriple runtimeFixed options={models}
-                value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort ?? null, profile: connect.bind.profile ?? null }}
-                onPick={(p) => save.put({ bind: { model: p.model, effort: p.effort ?? "", profile: p.profile } }, () => toast("已保存，新会话会用新的设置"))} />}
+            : <ModelTriple pick={pick} onConfirm={() => void saveBind.run()} />}
         </div>
         <div className={css.runCardRow}>
           <span className={css.runCardLabel}>会话</span>
@@ -217,7 +219,7 @@ function RunSection({ item }: { item: ConnectItem }) {
             <button type="button" className={chatCss.textButton} onClick={() => setChoosing(true)}>换一个</button>
           </div>
         )}
-        {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
+        {(save.error ?? saveBind.error) && <p className={controlsCss.fieldError} role="alert">{(save.error ?? saveBind.error)!.message}</p>}
         <p className={`${controlsCss.cardFoot} ${shellCss.muted}`}>跑在 {connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
       </div>
       {changingMode && <ModeDialog connect={connect} running={item.running} onClose={() => setChangingMode(false)} />}
@@ -399,28 +401,24 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
   const made: MadeSlackApp | undefined = madeId ? overview.value?.slackApps?.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
   const check = useTokenCheck(tokens, setTokens, { install: made?.state ?? undefined });
-  // The model first; the runtime only when the model runs on more than one.
+  // The model first; the runtime only when the model runs on more than one (the core's pick of a connect being added).
   const models = useStationModels();
-  const [model, setModel] = useState("");
-  const [picked, setPicked] = useState<RuntimeKind | null>(null);
-  const entry = models.find((m) => m.model === model) ?? models[0];
-  const runtime: RuntimeKind = entry && picked && entry.runtimes.includes(picked) ? picked : entry?.runtimes[0] ?? "claude";
-  const [effort, setEffort] = useState("");
-  const [profile, setProfile] = useState<string | null>(null);
+  const pick = usePick(station.address, "connect-new");
+  const bound = pick.view?.value;
   const [mode, setMode] = useState<{ mode: ConnectMode; requireMention: boolean }>({ mode: "multi-session", requireMention: true });
   // The workspace chosen, else the only one there is.
   const chosen = teams.find((t) => t.teamId === team) ?? (teams.length === 1 ? teams[0] : undefined);
 
   const close = () => {
     setStep("team"); setTeam(null); setAdding(false); setApp(NEW_APP); setIcon(null); setIconError(null); setMadeId(null);
-    setTokens(emptyTokens); setModel(""); setPicked(null); setEffort(""); setMode({ mode: "multi-session", requireMention: true });
+    setTokens(emptyTokens); pick.set({ clear: true }); setMode({ mode: "multi-session", requireMention: true });
     onClose();
   };
   const makeApp = useAction(() => api.makeSlackApp({ team: chosen!.teamId, settings: app, ...(icon ? { icon } : {}) }), (result) => {
     setMadeId(result.appId); setIconError(result.iconError); setStep("install");
   });
   const create = useAction(() => api.createConnect({
-    kind: "slack", ...mode, bind: { runtime, model: entry?.model ?? "", effort, profile },
+    kind: "slack", ...mode, bind: { runtime: bound?.runtime ?? "claude", model: bound?.model ?? "", effort: bound?.effort ?? "", profile: bound?.profile ?? null },
     slack: made?.state ? { appToken: tokens.appToken, install: made.state }
       : { appToken: tokens.appToken, botToken: tokens.botToken, ...(made ? { appId: made.appId } : {}) },
   }), ({ id }) => {
@@ -499,12 +497,10 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
       )}
       {step === "bind" && (
         <>
-          <Field label="模型" hint={entry && entry.runtimes.length > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
+          <Field label="模型" hint={(pick.view?.valueOption?.runtimes.length ?? 0) > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
             {models.length === 0
               ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
-              : <ModelTriple options={models}
-                  value={{ model: entry?.model ?? "", runtime, effort: effort || null, profile }}
-                  onPick={(p) => { setModel(p.model); setPicked(p.runtime); setEffort(p.effort ?? ""); setProfile(p.profile); }} />}
+              : <ModelTriple pick={pick} onConfirm={() => void pick.save().catch(() => undefined)} />}
           </Field>
           <Field label="会话方式">
             <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />

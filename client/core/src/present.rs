@@ -230,11 +230,17 @@ fn windows(list: &mut Vec<Value>, c: Clock) {
         let (mark, order) = format::window_mark(&label);
         w["mark"] = json!(mark);
         w["order"] = json!(order);
-        w["left"] = json!((100.0 - used).max(0.0).round() as i64);
-        w["level"] = json!(if used >= 90.0 { "red" } else if used >= 70.0 { "amber" } else { "ok" });
+        let (left, level) = left_level(used);
+        w["left"] = json!(left);
+        w["level"] = json!(level);
         w["refills"] = json!(w.get("resetsAt").and_then(Value::as_f64).map(|at| format::refills_in(at, c.now)));
     }
     list.sort_by_key(|w| w.get("order").and_then(Value::as_u64).unwrap_or(1));
+}
+
+/// What a window with `used` percent of it used has left, and how full it is (ok, amber, red).
+pub fn left_level(used: f64) -> (i64, &'static str) {
+    ((100.0 - used).max(0.0).round() as i64, if used >= 90.0 { "red" } else if used >= 70.0 { "amber" } else { "ok" })
 }
 
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
@@ -461,6 +467,8 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Draft { .. } => s::conform::<s::DraftView>(value),
         Topic::Notify => s::conform::<s::NotifyView>(value),
         Topic::Archive { .. } => s::conform::<s::ArchiveView>(value),
+        Topic::NewChat { .. } => s::conform::<s::NewChatView>(value),
+        Topic::Pick { .. } => s::conform::<s::PickView>(value),
         _ => Ok(value),
     }
 }

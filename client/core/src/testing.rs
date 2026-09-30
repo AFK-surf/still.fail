@@ -45,7 +45,7 @@ pub struct FakeHost {
     pub sleeps: RefCell<Vec<u64>>,
     /// Requests held back (`hold`): by what their url ends with, until let go.
     holds: RefCell<Vec<(String, futures::channel::oneshot::Receiver<()>)>>,
-    emitted: RefCell<Vec<(ClientId, CoreMessage)>>,
+    pub emitted: RefCell<Vec<(ClientId, CoreMessage)>>,
     seed: RefCell<u64>,
     utc_offset_min: Cell<i32>,
     speedup: Cell<u64>,

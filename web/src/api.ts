@@ -229,6 +229,8 @@ export interface MachineSession {
   size: number;
   /** The station's session already going on with it. */
   session: string | null;
+  /** Its runtime, where it ran (the home directory as ~) and how long ago, in a line (the core's). */
+  meta?: string;
 }
 
 /** Something said in one of the machine's sessions: by the person, else by its agent; when, in ms. */

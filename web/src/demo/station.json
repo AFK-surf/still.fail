@@ -948,7 +948,7 @@
  "machineSessions": {
   "sessions": [
    {
-    "cwd": "/Users/lin/code/acme-web",
+    "cwd": "/Users/lin/code/acme-web", "meta": "Claude Code · ~/code/acme-web · 1 小时前",
     "first": "帮我看看这个组件为什么重复渲染",
     "id": "5e7a1c90-2b4d-4f63-8a1e-9c0d7b3f2e14",
     "model": "claude-opus-5-5",
@@ -959,7 +959,7 @@
     "updatedAt": -5400000
    },
    {
-    "cwd": "/Users/lin/code/acme-api",
+    "cwd": "/Users/lin/code/acme-api", "meta": "Claude Code · ~/code/acme-api · 昨天",
     "first": "orders 接口加个分页",
     "id": "a1c3e5f7-0b2d-4e6f-8a9c-1d3e5f7a9b0c",
     "model": "claude-sonnet-5-5",
