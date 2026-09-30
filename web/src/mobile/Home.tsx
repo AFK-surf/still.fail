@@ -2,9 +2,10 @@
 // and grouped by day. A fixed head (you → settings · workspace · stations) and one bottom toolbar (全部 / 我参与的 · new
 // chat). Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
 import { useRef, useState } from "react";
-import { useChats, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
+import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, ChevronDown, Edit, Unplug } from "../icons.tsx";
+import { Archive, ChevronDown, Edit, Pin, Unplug } from "../icons.tsx";
+import { ask } from "./sheets.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { Avatar, Illustration, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
@@ -137,20 +138,41 @@ function Empty({ view, onlyMine }: { view: ChatsView; onlyMine: boolean }) {
  * A row: its title (bold while something in it is unread) and, for an agent that came from
  * Slack, the connect's mark; under it the last thing said; the chat's state a dot before its title (../ChatMark.tsx), who
  * is in it small at the second line's end (../RowPicture.tsx), as on the wide screen. Two lines,
- * always the same height. The time shows while the row is held (or, with a mouse, pointed at). One whose station is
- * offline is greyed and says so.
+ * always the same height. The time shows while the row is held (or, with a mouse, pointed at); held long, what can be
+ * done to the chat, as the wide screen's right click (../Sidebar.tsx). One whose station is offline is greyed and says so.
  */
 function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const app = useApp();
   const [held, setHeld] = useState(false);
+  const menu = useRowMenu(item);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const longPressed = useRef(false);
-  const release = () => { clearTimeout(timer.current); setHeld(false); };
+  const holding = useRef(false);
+  const touched = useRef(false);
+  const release = () => { clearTimeout(timer.current); if (!holding.current) setHeld(false); };
+  const hold = (row: HTMLElement, x: number) => {
+    longPressed.current = true;
+    setHeld(true);
+    if (!menu) return;
+    navigator.vibrate?.(10);
+    holding.current = true;
+    // Always just below the row (over it when there is no room below), centred on the finger across (the menu is 180
+    // wide, app.tsx MenuHost, which keeps it on the screen).
+    const r = row.getBoundingClientRect();
+    menu(new DOMRect(x - 90, r.top, 0, r.height), () => { holding.current = false; setHeld(false); });
+  };
   return (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
       aria-label={item.offline ? `${item.title}（${item.offline}）` : undefined}
-      onPointerDown={() => { longPressed.current = false; timer.current = setTimeout(() => { longPressed.current = true; setHeld(true); }, 450); }}
-      onPointerUp={release} onPointerCancel={release} onPointerLeave={release} onContextMenu={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        longPressed.current = false;
+        touched.current = e.pointerType !== "mouse";
+        const row = e.currentTarget, x = e.clientX;
+        if (touched.current) timer.current = setTimeout(() => hold(row, x), 450);
+      }}
+      onPointerUp={release} onPointerCancel={release} onPointerLeave={release}
+      // A long press has its menu already; a right click with a mouse opens it.
+      onContextMenu={(e) => { e.preventDefault(); if (!touched.current) hold(e.currentTarget, e.clientX); }}
       onClick={() => { if (!longPressed.current) app.push(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
       <span className={css.mChatText}>
       <span className={css.mChatLine1}>
@@ -169,6 +191,26 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       </span>
     </button>
   );
+}
+
+/**
+ * What can be done to a chat from its row: pin it, rename it, archive it. None for a new chat its station has not made
+ * yet, or one on a station offline.
+ */
+function useRowMenu(item: ChatItem) {
+  const app = useApp();
+  const api = stationApi(useStationCall(item.station));
+  if (item.offline || item.pending) return null;
+  const failed = (what: string) => (error: unknown) => app.toast(`没能${what}：${error instanceof Error ? error.message : String(error)}`);
+  return (anchor: DOMRect, onDismiss: () => void) => app.menu({ anchor, onDismiss, items: [
+    // A station from before pins says nothing of them: its chats are not pinned from here.
+    ...(item.pinned == null ? [] : [{ label: item.pinned ? "取消固定" : "固定", icon: <Pin size={16} />, action: () => void api.pin(item, !item.pinned).catch(failed(item.pinned ? "取消固定" : "固定")) }]),
+    { label: "重命名", icon: <Edit size={16} />, action: () => ask(app, {
+      title: "重命名对话", value: item.title, placeholder: "对话名称", action: "保存", empty: true, hint: "留空则用第一句话作名字",
+      run: (title) => api.rename(item, title),
+    }) },
+    { label: "归档", icon: <Archive size={16} />, action: () => void api.archive(item, true).then(() => app.toast("已归档"), failed("归档")) },
+  ] });
 }
 
 /** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */

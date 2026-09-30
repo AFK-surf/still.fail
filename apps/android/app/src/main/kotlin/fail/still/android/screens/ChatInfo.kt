@@ -66,7 +66,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
             // Archived or offline, it is only read: no name to change, nothing to archive.
             val open = view != null && view.archived != true && !view.offline
             if (open) InfoList {
-                InfoRow(onClick = { askTitle(app, station, of, view!!) }) {
+                InfoRow(onClick = { askTitle(app, station, view!!.thread?.id, (of as? ChatOf.Session)?.key ?: view.agents.firstOrNull()?.session?.key ?: "", view.title) }) {
                     Text("名称", fontSize = 14.sp, color = C.muted, modifier = Modifier.width(72.dp))
                     Text(view!!.title, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
@@ -150,8 +150,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
 }
 
 /** Renames the chat (web mobile/sheets.tsx → ask, with `empty`): an empty name gives it back its first message. */
-private fun askTitle(app: AppState, station: String, of: ChatOf, view: ChatView) {
-    val first = view.title
+internal fun askTitle(app: AppState, station: String, thread: Long?, session: String, first: String) {
     app.sheet = SheetSpec(0.42f) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(first) }
@@ -167,9 +166,8 @@ private fun askTitle(app: AppState, station: String, of: ChatOf, view: ChatView)
                 Button("取消", primary = false) { app.sheet = null }
                 Button("保存", primary = true, busy = busy, enabled = text.trim() != first) {
                     busy = true; error = null
-                    val session = (of as? ChatOf.Session)?.key ?: view.agents.firstOrNull()?.session?.key ?: ""
                     scope.launch {
-                        try { app.api(station).rename(view.thread?.id, session, text.trim()); app.sheet = null }
+                        try { app.api(station).rename(thread, session, text.trim()); app.sheet = null }
                         catch (e: CoreException) { error = e.message } finally { busy = false }
                     }
                 }

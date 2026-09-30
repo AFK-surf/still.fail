@@ -4,6 +4,13 @@
 // toolbar (全部 / 我参与的 · new chat), like Mail.
 package fail.still.android.screens
 
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.layout.boundsInRoot
+import fail.still.android.ui.MenuItem
+import fail.still.android.ui.MenuSpec
+import fail.still.core.CoreException
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -315,14 +322,45 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
 @Composable
 private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     val app = LocalApp.current
+    val haptics = LocalHapticFeedback.current
     var held by remember { mutableStateOf(false) }
-    ChatRowBody(item, view.leading ?: "agents", held, Modifier.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    if (app.menu == null && menuOpen) menuOpen = false
+    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
         detectTapGestures(
             onPress = { tryAwaitRelease(); held = false },
-            onLongPress = { held = true },
+            onLongPress = { at ->
+                held = true
+                // Held long, what can be done to the chat, as the wide screen's right click: always just below the row (over it
+                // when there is no room below), centred on the finger across (the menu is 180 wide, Sheet.kt MenuHost, which keeps it on the screen).
+                val items = rowMenu(app, item) ?: return@detectTapGestures
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                menuOpen = true
+                val x = bounds.left + at.x - 90.dp.toPx()
+                app.menu = MenuSpec(Rect(x, bounds.top, x, bounds.bottom), items, onDismiss = { menuOpen = false })
+            },
             onTap = { app.push(Screen.Chat(item.station, item.page)) },
         )
     }))
+}
+
+/**
+ * What can be done to a chat from its row (web mobile/Home.tsx useRowMenu): pin it, rename it, archive it. None for a
+ * new chat its station has not made yet, or one on a station offline.
+ */
+private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
+    if (item.offline != null || item.pending == true) return null
+    val api = app.api(item.station)
+    fun run(what: String, block: suspend () -> Unit) = app.scope.launch {
+        try { block() } catch (e: CoreException) { app.toast = "没能$what：${e.message}" }
+    }
+    return listOfNotNull(
+        // A station from before pins says nothing of them: its chats are not pinned from here.
+        item.pinned?.let { pinned -> MenuItem(if (pinned) "取消固定" else "固定", Icons.Pin) { run(if (pinned) "取消固定" else "固定") { api.setPinned(item.session, !pinned) } } },
+        MenuItem("重命名", Icons.Edit) { askTitle(app, item.station, item.thread, item.session, item.title) },
+        MenuItem("归档", Icons.Archive) { run("归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" } },
+    )
 }
 
 /** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`. */
