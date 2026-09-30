@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher's face in one colour (themed icons): the eyes and cheeks. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M36.29 52.20A4.51 4.51 0 1 0 45.31 52.20A4.51 4.51 0 1 0 36.29 52.20ZM62.69 52.20A4.51 4.51 0 1 0 71.71 52.20A4.51 4.51 0 1 0 62.69 52.20ZM29.92 67.32H34.88A2.93 2.93 0 0 1 34.88 73.19H29.92A2.93 2.93 0 0 1 29.92 67.32ZM73.12 67.32H78.08A2.93 2.93 0 0 1 78.08 73.19H73.12A2.93 2.93 0 0 1 73.12 67.32Z" android:fillColor="#FFFFFF" />
+</vector>
