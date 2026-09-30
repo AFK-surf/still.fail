@@ -112,6 +112,8 @@ object Topics {
     val notices = buildJsonObject { put("topic", "notices") }
     /** Notifications on this device: on or off, asked, whether to hold pushes, what to show now (attend.rs; Notices.kt). */
     val notify = buildJsonObject { put("topic", "notify") }
+    /** How its person likes it on this device, and what the device is (Prefs.kt). */
+    val prefs = buildJsonObject { put("topic", "prefs") }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
     /** The chats of a scope a few words find, titles first: only `station`'s, not `exclude` (a chat's id or agent), `limit` at most (ChatRefMenu). */

@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.lifecycleScope
 import fail.still.android.data.Auth
+import fail.still.android.data.Prefs
 import fail.still.android.ui.StillFailTheme
 import fail.still.android.ui.Loading
 import fail.still.core.CoreException
@@ -105,12 +106,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN)
-            val made = AppState(core, getSharedPreferences("stillfail", Context.MODE_PRIVATE), BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN))
+            val shared = getSharedPreferences("stillfail", Context.MODE_PRIVATE)
+            // The prefs are the core's (data/Prefs.kt): what the app kept before goes in once, and the first frame is
+            // drawn with them (the theme among them), not with defaults first.
+            Prefs.tellDevice(core)
+            Prefs.moveIn(core, shared)
+            val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN), Prefs.first(core))
             // The notification settings the app kept, into the core before anything goes by them.
             made.moveNotify()
             made.inFront = Notifier.inFront
             app = made
             launch { made.followNotify() }
+            launch { made.followPrefs() }
             handle(intent)
             listen()
             // Back to an activity made anew (the last one closed with back, the process kept): as back on screen.

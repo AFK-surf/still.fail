@@ -5,7 +5,6 @@ import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
 import { prime } from "./core/react.ts";
-import { leading, useRowPicture } from "./rowLead.ts";
 import { RowAside, RowPicture } from "./RowPicture.tsx";
 import { Retry, Waiting, WaitingItems } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
@@ -148,8 +147,8 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   const list = useRef<HTMLDivElement | null>(null);
   const ref = useCallback((el: HTMLDivElement | null) => { list.current = el; return scroller(el); }, [scroller]);
   useListMotion(list);
-  const [setting] = useRowPicture();
-  const lead = leading(setting, view?.members);
+  // Whose pictures lead, as the core puts the setting and the scope together (a core from before it: the agents).
+  const lead = view?.leading ?? "agents";
   // A station's link coming back is said on its rows (the core's `reconnecting`); only with no rows at all to show does
   // the list say it, in place of the rows.
   return (

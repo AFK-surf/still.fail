@@ -371,7 +371,7 @@ impl Source for Router {
             return self.choose.start(topic);
         }
         // Kept on the device (data.rs) and nowhere else: what is there goes out, or, with nothing written, empty.
-        if let Topic::Draft { .. } = topic {
+        if matches!(topic, Topic::Draft { .. } | Topic::Prefs) {
             if let Some(core) = self.core.upgrade() {
                 core.store.invalidate(topic);
             }
@@ -412,7 +412,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if *topic == Topic::Status || *topic == Topic::Notices || *topic == Topic::Notify || matches!(topic, Topic::Draft { .. }) {
+        if *topic == Topic::Status || *topic == Topic::Notices || *topic == Topic::Notify || matches!(topic, Topic::Draft { .. } | Topic::Prefs) {
             return;
         }
         if Choose::handles(topic) {
@@ -454,6 +454,10 @@ impl Source for Router {
         // A draft held has its record's value (data.rs); none is nothing written.
         if let Topic::Draft { .. } = topic {
             return Some(Ok(json!({ "text": "", "quotes": [], "files": [] })));
+        }
+        // Nothing chosen on this device yet: the defaults (the shape fills them in).
+        if *topic == Topic::Prefs {
+            return Some(Ok(json!({})));
         }
         let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic).map(|v| self.attended(topic, v)) };
         // Still opening: what it starts now (a chat's agents) is part of it too.
@@ -584,6 +588,8 @@ impl Inner {
         let at_call = at;
         match call {
             Call::AuthBegin { redirect_uri, return_to, device_name } => {
+                // Named by the UI (those from before `client.device`), else as the device is.
+                let device_name = device_name.or_else(|| crate::prefs::device_name(&self.data)).unwrap_or_else(|| "still.fail".into());
                 let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name).await?;
                 Ok(json!({ "url": url }))
             }
@@ -664,7 +670,12 @@ impl Inner {
             }
             Call::Op(op) => match op.target {
                 crate::ops::Target::Cloud(account) => {
+                    let made = op.method == "POST" && op.path == "/v1/workspaces";
                     let result = self.cloud.request(&account, op.method, &op.path, op.body).await?;
+                    // A workspace made: the invite code kept through signing in is done with.
+                    if made {
+                        crate::prefs::invite_used(&self.data);
+                    }
                     // A write may rename, join or leave a workspace: what the account topics show changed too.
                     if op.method != "GET" {
                         self.refresh_all().await;
@@ -706,7 +717,7 @@ impl Inner {
                 result
             }
             Call::ChatSend { station, thread, text, attachments, quotes, client } => {
-                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client);
+                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client.or_else(|| crate::prefs::sent_from(&self.data)));
                 let id = self.views.outbox_add(&station, thread, message.clone());
                 self.deliver(&station, thread, &id, message).await
             }
@@ -717,7 +728,7 @@ impl Inner {
                 Ok(json!({ "key": key }))
             }
             Call::ChatSendTo { station, session, text, attachments, quotes, client } => {
-                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client);
+                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client.or_else(|| crate::prefs::sent_from(&self.data)));
                 match self.views.pending_thread(&station, &session) {
                     Some(Some(thread)) => {
                         let id = self.views.outbox_add(&station, thread, message.clone());
@@ -833,6 +844,14 @@ impl Inner {
             }
             Call::ChatRefsKeep { links } => {
                 crate::refs::keep(&self.data, links);
+                Ok(Value::Null)
+            }
+            Call::PrefsSet { patch, fill } => {
+                crate::prefs::set(&self.data, patch, fill, self.host.now_ms())?;
+                Ok(Value::Null)
+            }
+            Call::ClientDevice { facts } => {
+                crate::prefs::device(&self.data, &facts)?;
                 Ok(Value::Null)
             }
             Call::StationUpload { station, name, bytes } => {
@@ -1639,7 +1658,8 @@ enum Call {
     /// `retry` goes with `network` from a UI that asks to try again: a core from before `retry` takes it for the
     /// network changed, which also tries everything again.
     Wake { away: f64, network: bool, retry: bool },
-    AuthBegin { redirect_uri: String, return_to: String, device_name: String },
+    /// `device_name`: as the device is (`client.device`) when not given.
+    AuthBegin { redirect_uri: String, return_to: String, device_name: Option<String> },
     AuthComplete { query: String },
     SignOut { account: String },
     /// Something to have done on a station or still.fail cloud, by its name (ops.rs): the UI never makes a request itself.
@@ -1688,6 +1708,10 @@ enum Call {
     /// What a chat runs on, chosen (choose.rs): `newChat.pick`, `newChat.create`, `newChat.migrate`, `pick.set`,
     /// `pick.save`.
     Choose { name: String, params: Value },
+    /// How its person likes it on this device (`Topic::Prefs`, prefs.rs); `fill`: only what is not kept yet.
+    PrefsSet { patch: Value, fill: bool },
+    /// What the device is, as its host says once at start (prefs.rs).
+    ClientDevice { facts: Value },
 }
 
 impl Call {
@@ -1712,6 +1736,7 @@ impl Call {
             Call::DraftPut { station, .. } | Call::DraftGet { station, .. } | Call::ChatRef { station, .. } => Some(station),
             Call::Attend(_) | Call::ChatRefsKeep { .. } => None,
             Call::Choose { params, .. } => params.get("station").and_then(Value::as_str),
+            Call::PrefsSet { .. } | Call::ClientDevice { .. } => None,
         }
     }
 }
@@ -1724,7 +1749,8 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     struct Begin {
         redirect_uri: String,
         return_to: String,
-        device_name: String,
+        #[serde(default)]
+        device_name: Option<String>,
     }
     #[derive(Deserialize)]
     struct Complete {
@@ -2005,6 +2031,12 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             }
             Call::ChatRefsKeep { links: read::<Links>(params)?.links }
         }
+        "prefs.set" => {
+            let mut p = params_or_empty(params);
+            let fill = p.as_object_mut().and_then(|o| o.remove("fill")).and_then(|v| v.as_bool()).unwrap_or(false);
+            Call::PrefsSet { patch: p, fill }
+        }
+        "client.device" => Call::ClientDevice { facts: params_or_empty(params) },
         "station.upload" => {
             let p: Upload = read(params)?;
             Call::StationUpload { bytes: base64(&p.bytes, "文件内容")?, station: p.station, name: p.name }
@@ -2117,7 +2149,7 @@ mod tests {
     fn parses_each_call() {
         assert_eq!(
             parse_call("auth.begin", json!({"redirect_uri": "r", "return_to": "/", "device_name": "Mac"})).unwrap(),
-            Call::AuthBegin { redirect_uri: "r".into(), return_to: "/".into(), device_name: "Mac".into() }
+            Call::AuthBegin { redirect_uri: "r".into(), return_to: "/".into(), device_name: Some("Mac".into()) }
         );
         assert_eq!(parse_call("auth.complete", json!({"query": "?code=c&state=s"})).unwrap(), Call::AuthComplete { query: "?code=c&state=s".into() });
         assert_eq!(parse_call("auth.signOut", json!({"account": "sub1"})).unwrap(), Call::SignOut { account: "sub1".into() });
@@ -2187,9 +2219,9 @@ mod tests {
 
     #[test]
     fn checks_params() {
-        let missing = parse_call("auth.begin", json!({"redirect_uri": "r", "return_to": "/"})).unwrap_err();
+        let missing = parse_call("auth.begin", json!({"redirect_uri": "r"})).unwrap_err();
         assert_eq!(missing.code, "invalid_params");
-        assert!(missing.message.contains("device_name"), "{}", missing.message);
+        assert!(missing.message.contains("return_to"), "{}", missing.message);
         assert_eq!(code(parse_call("auth.signOut", Value::Null)), "invalid_params");
         assert_eq!(code(parse_call("workspace.rename", json!({"account": "a", "name": "n"}))), "invalid_params");
         assert_eq!(code(parse_call("station.upload", json!({"station": "w/s", "name": "n", "bytes": "not base64!"}))), "invalid_params");
@@ -2688,6 +2720,113 @@ mod tests {
             let parents: Vec<String> = host.requests.borrow().iter().filter_map(|r| header(r, "traceparent")).collect();
             assert!(!parents.is_empty() && parents.iter().all(|p| p.ends_with("-00")), "{parents:?}");
         });
+    }
+
+    #[test]
+    fn prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Prefs });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            // Nothing chosen: the defaults.
+            assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone(), values[&1]["rowPicture"].clone()), (json!(false), json!("system"), json!("auto")));
+            assert_eq!(values[&1]["device"]["app"], "");
+            let set = |id, params: Value| core.receive(ui, ClientMessage::Call { id, call: "prefs.set".into(), params });
+            set(2, json!({ "onlyMine": true, "appearance": "dark", "lastChat": { "local": "/chats/k1", "ws": "/w/ws/new" }, "chatTabs": { "local:t": { "tabs": ["k1"], "active": "k1" } } }));
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone()), (json!(true), json!("dark")));
+            assert_eq!(values[&1]["chatTabs"]["local:t"], json!({ "tabs": ["k1"], "active": "k1" }));
+            // A map by entry: one gone, the other kept.
+            set(3, json!({ "lastChat": { "ws": null } }));
+            // What a device kept before, moved in: only what is not chosen here yet.
+            set(4, json!({ "fill": true, "appearance": "light", "rowPicture": "people", "lastChat": { "local": "/chats/old", "other": "/w/other/new" } }));
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!((values[&1]["appearance"].clone(), values[&1]["rowPicture"].clone()), (json!("dark"), json!("people")));
+            assert_eq!(values[&1]["lastChat"], json!({ "local": "/chats/k1", "other": "/w/other/new" }));
+            // Not a pref, or not one of its words: refused, nothing changed.
+            set(5, json!({ "appearance": "blue" }));
+            set(6, json!({ "device": { "app": "web" } }));
+            host.settle().await;
+            let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 5 | 6, .. })).count();
+            assert_eq!(refused, 2);
+            // The invite code a page came with, kept through signing in until a workspace is made.
+            set(7, json!({ "invite": "ABCD-EFGH" }));
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["invite"], "ABCD-EFGH");
+            crate::prefs::invite_used(&core.inner.data);
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1].get("invite"), None);
+            // Kept across a restart.
+            drop(core);
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Prefs });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone(), values[&1]["lastChat"]["local"].clone()), (json!(true), json!("dark"), json!("/chats/k1")));
+            // The tabs of the latest 200 chats are kept.
+            for i in 0..205u64 {
+                core.receive(ui, ClientMessage::Call { id: 10 + i, call: "prefs.set".into(), params: json!({ "chatTabs": { format!("local:{i}"): { "tabs": [], "active": null } } }) });
+                host.settle().await;
+            }
+            apply(&host, &mut values);
+            let tabs = values[&1]["chatTabs"].as_object().unwrap();
+            assert_eq!(tabs.len(), 200);
+            assert!(tabs.contains_key("local:204") && !tabs.contains_key("local:4") && !tabs.contains_key("local:t"));
+        });
+    }
+
+    #[test]
+    fn the_device_says_what_it_is_once_and_the_core_decides_what_follows() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Prefs });
+            let phone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+            core.receive(ui, ClientMessage::Call { id: 2, call: "client.device".into(), params: json!({ "app": "web", "build": "0.1.9", "userAgent": phone }) });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["device"], json!({ "app": "web", "phone": true, "handoff": false }));
+            // A message goes with the app it is sent from, unless the UI says.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({ "station": "local", "thread": 7, "text": "hi" }) });
+            host.settle().await;
+            let sent: Vec<Value> = host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.ends_with("/threads/7/messages"))
+                .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap()).collect();
+            assert_eq!(sent[0]["client"], "web 0.1.9 (phone)");
+            // A computer's browser: its links are offered to the desktop app first; it signs in by its browser's name.
+            let mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+            core.receive(ui, ClientMessage::Call { id: 4, call: "client.device".into(), params: json!({ "app": "web", "userAgent": mac }) });
+            core.receive(ui, ClientMessage::Call { id: 5, call: "auth.begin".into(), params: json!({ "redirect_uri": "r", "return_to": "/" }) });
+            core.receive(ui, ClientMessage::Call { id: 6, call: "client.device".into(), params: json!({ "app": "phone" }) });
+            host.settle().await;
+            let emitted = host.take_emitted();
+            let url = emitted.iter().find_map(|(_, m)| match m { CoreMessage::Ok { id: 5, ok } => ok["url"].as_str().map(str::to_string), _ => None }).unwrap();
+            assert!(url.contains(&format!("name={}", encode("still.fail 网页版 · Chrome · macOS"))), "{url}");
+            assert!(emitted.iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 6, .. })));
+            core.receive(ui, ClientMessage::Unsubscribe { id: 1, unsubscribe: true });
+            core.receive(ui, ClientMessage::Subscribe { id: 7, subscribe: Topic::Prefs });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!(values[&7]["device"], json!({ "app": "web", "phone": false, "handoff": true }));
+        });
+    }
+
+    #[test]
+    fn the_rows_are_led_by_the_setting_or_by_how_many_people_there_are() {
+        assert_eq!(crate::prefs::leading(None, None), "agents");
+        assert_eq!(crate::prefs::leading(Some(&json!({})), Some(3)), "people");
+        assert_eq!(crate::prefs::leading(Some(&json!({ "rowPicture": "agents" })), Some(3)), "agents");
+        assert_eq!(crate::prefs::leading(Some(&json!({ "rowPicture": "people" })), Some(1)), "people");
     }
 
     #[test]

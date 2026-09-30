@@ -1,6 +1,6 @@
 import "./renamed.ts";
 import "./styles/index.ts";
-import { applyAppearance } from "./theme.ts";
+import { followAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -9,7 +9,7 @@ import "@fontsource-variable/inter";
 import { App } from "./App.tsx";
 import { PageViews, startTelemetry } from "./telemetry.ts";
 
-applyAppearance();
+followAppearance();
 startScrollbars();
 const root = createRoot(document.getElementById("app")!);
 

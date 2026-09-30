@@ -10,7 +10,6 @@ import { useApp } from "./app.tsx";
 import { Avatar, Illustration, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
 import { RowAside, RowPicture } from "../RowPicture.tsx";
-import { leading, useRowPicture } from "../rowLead.ts";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { StationGlyph, glyphCounts, glyphLabel } from "../StationGlyph.tsx";
@@ -91,8 +90,7 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
   const view = chats.value;
   const scope = useApp().entry.id;
   const status = useStatus();
-  const [setting] = useRowPicture();
-  const lead = leading(setting, view?.members);
+  const lead = view?.leading ?? "agents";
   return (
     <div className={css.mHomePane}>
       {!view ? <Note text={chats.error?.message ?? reading(status)} error={!!chats.error} /> : (

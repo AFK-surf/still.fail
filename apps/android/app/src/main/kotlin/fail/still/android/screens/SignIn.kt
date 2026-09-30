@@ -1,7 +1,6 @@
 package fail.still.android.screens
 
 import android.content.Context
-import android.os.Build
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -57,7 +56,7 @@ import kotlinx.serialization.json.put
 /** Starts a Google sign-in through still.fail cloud in a Custom Tab; MainActivity finishes it when stillfail://auth/callback comes back. */
 suspend fun signIn(app: AppState, context: Context) {
     try {
-        val url = Auth.begin(app.core, "still.fail Android · ${Build.MANUFACTURER} ${Build.MODEL}")
+        val url = Auth.begin(app.core)
         CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, url.toUri())
     } catch (e: CoreException) {
         app.toast = "没能开始登录：${e.message}"

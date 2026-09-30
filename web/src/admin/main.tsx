@@ -4,7 +4,7 @@
 // the web app's and comes back to this host's /auth/callback.
 import "../renamed.ts";
 import "../styles/index.ts";
-import { applyAppearance } from "../theme.ts";
+import { followAppearance } from "../theme.ts";
 import { startScrollbars } from "../scrollbars.ts";
 import { Tooltip } from "radix-ui";
 import { StrictMode } from "react";
@@ -57,6 +57,6 @@ function NoPermission() {
   );
 }
 
-applyAppearance();
+followAppearance();
 startScrollbars();
 createRoot(document.getElementById("app")!).render(<StrictMode><AdminApp /></StrictMode>);

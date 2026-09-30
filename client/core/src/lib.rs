@@ -21,6 +21,7 @@ pub mod kept;
 pub mod mesh;
 pub mod notices;
 pub mod ops;
+pub mod prefs;
 pub mod present;
 pub mod protocol;
 pub mod refs;

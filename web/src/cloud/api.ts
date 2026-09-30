@@ -4,6 +4,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { ErrorBody } from "../core/client.ts";
 import { core, useTopic, type TopicState } from "../core/react.ts";
+import { prefs, setPrefs } from "../prefs.ts";
 import type { Account } from "./accounts.ts";
 import type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
@@ -85,21 +86,23 @@ export const needsInviteCode = (error: Error | null): boolean => codeOf(error) i
 
 export const errorText = (error: Error): string => INVITE_ERRORS[codeOf(error)] ?? error.message;
 
+/** Where a tab kept the code before the core did (moved into it the first time it is read). */
 const INVITE_KEY = "stillfail.invite";
 
 /**
- * The invite code this tab arrived with (`/?invite=CODE`), kept for the tab's
- * life: the page it came to may first send it to Google to sign in, or on to a
- * workspace before the code is asked for.
+ * The invite code this device arrived with (`/?invite=CODE`), kept by the core (prefs.ts): the page it came to may
+ * first send it to Google to sign in, or on to a workspace before the code is asked for. The core lets it go once a
+ * workspace is made.
  */
 export function inviteCode(): string {
-  const given = new URLSearchParams(location.search).get("invite");
-  if (given) sessionStorage.setItem(INVITE_KEY, given);
-  return sessionStorage.getItem(INVITE_KEY) ?? "";
-}
-
-export function forgetInviteCode(): void {
-  sessionStorage.removeItem(INVITE_KEY);
+  let given = new URLSearchParams(location.search).get("invite");
+  try {
+    given ??= sessionStorage.getItem(INVITE_KEY);
+    sessionStorage.removeItem(INVITE_KEY);
+  } catch { /* no storage */ }
+  // Kept after this render (the prefs' watchers are redrawn by it).
+  if (given && prefs().invite !== given) queueMicrotask(() => setPrefs({ invite: given }));
+  return given ?? prefs().invite ?? "";
 }
 
 export interface Action<A, T> {

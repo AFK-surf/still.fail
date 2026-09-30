@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreClient, CoreError, WAKE_ANSWER_MS, desktopOpener, type Channel, type Opener } from "../web/src/core/client.ts";
-import { migrateLegacy } from "../web/src/core/migrate.ts";
+import { migrateLegacy, migratePrefs } from "../web/src/core/migrate.ts";
 import { carryOver } from "../web/src/renamed.ts";
 
 /** A worker stand-in: records what the client posts and answers on demand. */
@@ -214,6 +214,34 @@ test("localStorage is handed to the core once", async () => {
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1], ["migrate", { accounts: [{ sub: "s" }], device: "AAEC" }]);
   assert.ok(store.get("stillfail.core.migrated"));
+});
+
+test("prefs the page kept are handed to the core once, filling only what it has not been told", async () => {
+  const store = new Map<string, string>([
+    ["stillfail.onlyMine", "1"], ["stillfail.appearance", "dark"], ["stillfail.rowPicture", "people"], ["stillfail.absoluteTime", "0"],
+    ["stillfail.keys", JSON.stringify({ "chat.new": ["Mod+J"], bad: "x" })],
+    ["stillfail.lastChat", JSON.stringify({ local: "/chats/k1" })],
+    ["stillfail.chatTabs", JSON.stringify({ "local:k1": { tabs: ["k1"], active: null }, "local:k2": { tabs: ["k2"], active: "k2" }, broken: { active: 3 } })],
+  ]);
+  const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) } as Storage;
+  const calls: unknown[] = [];
+  let failing = true;
+  const client = { call: async (name: string, params?: unknown) => { calls.push([name, params]); if (failing) throw new Error("no"); return null; } };
+  const quiet = console.error;
+  console.error = () => undefined;
+  await migratePrefs(client, storage);
+  console.error = quiet;
+  failing = false;
+  await migratePrefs(client, storage);
+  await migratePrefs(client, storage);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1], ["prefs.set", {
+    fill: true, onlyMine: true, appearance: "dark", rowPicture: "people", absoluteTime: false,
+    keys: { "chat.new": ["Mod+J"] }, lastChat: { local: "/chats/k1" }, chatTabs: { "local:k1": { tabs: ["k1"] }, "local:k2": { tabs: ["k2"], active: "k2" } },
+  }]);
+  assert.ok(store.get("stillfail.prefs.migrated"));
+  // The old keys stay, for a tab of an older build.
+  assert.equal(store.get("stillfail.appearance"), "dark");
 });
 
 test("keys from before the rename are copied to the new names once, the old ones kept", () => {

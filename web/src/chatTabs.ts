@@ -1,27 +1,15 @@
-// Which history tabs each chat has open, and which one is in front: each chat keeps its own (the latest 200 chats),
-// by `station:session` (or `station:thread`), as its page names it.
+// Which history tabs each chat has open, and which one is in front: each chat keeps its own (the core keeps the latest
+// 200 chats'), by `station:session` (or `station:thread`), as its page names it. Kept on this device (prefs.ts).
+import type { KeptTabs } from "./core/shapes.ts";
+import { prefs, setPrefs } from "./prefs.ts";
 
-const TABS = "stillfail.chatTabs";
 export type Kept = { tabs: string[]; active: string | null };
 
 export function keptTabs(chat: string): Kept | undefined {
-  try {
-    return (JSON.parse(localStorage.getItem(TABS) ?? "{}") as Record<string, Kept>)[chat];
-  } catch {
-    return undefined;
-  }
+  const kept: KeptTabs | undefined = prefs().chatTabs[chat];
+  return kept && { tabs: kept.tabs, active: kept.active ?? null };
 }
 
 export function keepTabs(chat: string, kept: Kept): void {
-  let all: Record<string, Kept> = {};
-  try {
-    all = JSON.parse(localStorage.getItem(TABS) ?? "{}") as Record<string, Kept>;
-  } catch {
-    // start over
-  }
-  delete all[chat];
-  all[chat] = kept;
-  const keys = Object.keys(all);
-  for (const key of keys.slice(0, Math.max(0, keys.length - 200))) delete all[key];
-  localStorage.setItem(TABS, JSON.stringify(all));
+  setPrefs({ chatTabs: { [chat]: { tabs: kept.tabs, ...(kept.active ? { active: kept.active } : {}) } } });
 }

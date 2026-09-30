@@ -748,6 +748,8 @@ data class ChatItem (
 	val people: List<Person>? = null,
 	/// Who started it, as in `people`.
 	val creator: Creator? = null,
+	/// Its people in words, who started it said ("小王 发起 · Lina、你"), with `people`.
+	val peopleText: String? = null,
 	/// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
 	val clientKey: String? = null,
 	/// Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned).
@@ -910,6 +912,9 @@ data class StationTrouble (
 	val state: String
 )
 
+/// Whose pictures lead the rows of a list (`ChatsView::leading`).
+typealias Lead = String
+
 @Serializable
 data class ChatsView (
 	val me: Me,
@@ -920,7 +925,9 @@ data class ChatsView (
 	/// corner of the list; absent while all are (a station first connecting is not one).
 	val trouble: StationTrouble? = null,
 	/// How many people the scope has (one on a station's own page), for how rows are pictured; absent until known.
-	val members: Long? = null
+	val members: Long? = null,
+	/// Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone).
+	val leading: Lead? = null
 )
 
 @Serializable
@@ -957,6 +964,17 @@ data class Counts (
 	val sessions: Long,
 	val running: Long,
 	val warm: Long
+)
+
+/// What this device is, as its host told the core at start (`client.device`), and what follows from it.
+@Serializable
+data class DeviceView (
+	/// `web`, `desktop` or `android`; empty until told.
+	val app: String? = null,
+	/// A phone (the Android app, or a phone's browser).
+	val phone: Boolean? = null,
+	/// An item's link from outside is offered to the desktop app first (a computer's browser).
+	val handoff: Boolean? = null
 )
 
 @Serializable
@@ -1193,6 +1211,13 @@ data class JobLogView (
 	val state: String? = null,
 	val last: String? = null,
 	val said: String? = null
+)
+
+/// A chat's history tabs as last left: which are open, which is in front.
+@Serializable
+data class KeptTabs (
+	val tabs: List<String>,
+	val active: String? = null
 )
 
 @Serializable
@@ -1553,6 +1578,37 @@ data class NotifyView (
 	val asked: Boolean,
 	val push: Boolean,
 	val show: List<Notice>
+)
+
+/// How the pages look: as the system does (the default), or always light, or always dark.
+typealias Appearance = String
+
+/// Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the
+/// people's.
+typealias RowPictureSetting = String
+
+/// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.
+@Serializable
+data class PrefsView (
+	/// The lists show only the chats and connects the viewer takes part in.
+	val onlyMine: Boolean? = null,
+	val appearance: Appearance? = null,
+	val rowPicture: RowPictureSetting? = null,
+	/// Times are shown as dates rather than "3 分钟前".
+	val absoluteTime: Boolean? = null,
+	/// Keys changed for an action (the desktop app's), by action.
+	val keys: Map<String, List<String>>? = null,
+	/// The workspace last open (the Android app's).
+	val workspace: String? = null,
+	/// The chat page last open, by scope (a workspace, or `local`).
+	val lastChat: Map<String, String>? = null,
+	/// Each chat's history tabs, by `<station>:<chat>` (the latest 200).
+	val chatTabs: Map<String, KeptTabs>? = null,
+	/// A Slack app made for a new connect, to go on with, by station (the Android app's).
+	val resume: Map<String, String>? = null,
+	/// The invite code a page was opened with, kept through signing in until a workspace is made with it.
+	val invite: String? = null,
+	val device: DeviceView? = null
 )
 
 /// A session with its threads and turns (`session` topic).

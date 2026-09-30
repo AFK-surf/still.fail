@@ -154,6 +154,11 @@ pub fn row_people(row: &mut Value, me: &Value, slack_users: &[String], members: 
             people.push(shown(p));
         }
     }
+    let display = |p: &Value| p["shown"]["display"].as_str().unwrap_or("").to_string();
+    let starter = creator.as_ref().and_then(|c| people.iter().position(|p| p.get("id").is_some() && p.get("id") == c.get("id")));
+    let rest: Vec<String> = people.iter().enumerate().filter(|(i, _)| Some(*i) != starter).map(|(_, p)| display(p)).collect();
+    let text: Vec<String> = starter.map(|i| format!("{} 发起", display(&people[i]))).into_iter().chain((!rest.is_empty()).then(|| rest.join("、"))).collect();
+    row["peopleText"] = json!(text.join(" · "));
     if let Some(creator) = creator {
         row["creator"] = creator;
     }
@@ -441,7 +446,7 @@ pub fn host(h: &mut Value) {
 
 /// Whether what goes out of a topic shows times in words (sent again each minute).
 pub fn ticks(topic: &Topic) -> bool {
-    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. })
+    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::Prefs)
 }
 
 /// A topic's value through the shape the clients are generated from (client/shapes): what it does not declare is
@@ -473,6 +478,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::LongJobs { .. } => s::conform::<s::LongJobsView>(value),
         Topic::Job { .. } => s::conform::<s::Job>(value),
         Topic::JobLog { .. } => s::conform::<s::JobLogView>(value),
+        Topic::Prefs => s::conform::<s::PrefsView>(value),
         _ => Ok(value),
     }
 }
@@ -518,6 +524,18 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_rows_people_are_said_in_words_who_started_it_first() {
+        let me = json!({ "id": "me@x.com", "email": "me@x.com" });
+        let mut row = json!({ "creator": { "id": "wang@x.com", "name": "小王" }, "people": [{ "id": "lina@x.com", "name": "Lina" }, { "id": "me@x.com", "name": "Me" }] });
+        row_people(&mut row, &me, &[], &[]);
+        assert_eq!(row["peopleText"], "小王 发起 · Lina、你");
+        // Nobody said to have started it: only who is in it.
+        let mut row = json!({ "people": [{ "id": "lina@x.com", "name": "Lina" }] });
+        row_people(&mut row, &me, &[], &[]);
+        assert_eq!(row["peopleText"], "Lina");
+    }
 
     #[test]
     fn a_session_stands_where_its_process_and_last_turn_say() {

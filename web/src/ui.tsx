@@ -4,6 +4,7 @@
 import { Mark } from "./brand.tsx";
 import { shortcutOf, useKeymap, type Action } from "./keymap.ts";
 import { useBackClose } from "./backClose.ts";
+import { setPrefs, usePrefs } from "./prefs.ts";
 import type { Badge, Maker, Stamp } from "./api.ts";
 import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Info, More, Sliders } from "./icons.tsx";
 import {
@@ -571,19 +572,10 @@ export function AgentMark({ maker, runtime, badge, badgeText, size = 20 }: { mak
   );
 }
 
-const TIME_MODE = "stillfail.absoluteTime";
-/** Every relative time on the page follows one switch: a click on any of them flips all between "3 分钟前" and the date. */
+/** Every relative time on the page follows one switch, kept on this device (prefs.ts): a click on any of them flips all between "3 分钟前" and the date. */
 function useAbsoluteTime(): [boolean, () => void] {
-  const [absolute, setAbsolute] = useState(() => localStorage.getItem(TIME_MODE) === "1");
-  useEffect(() => {
-    const sync = () => setAbsolute(localStorage.getItem(TIME_MODE) === "1");
-    window.addEventListener("stillfail-time", sync);
-    return () => window.removeEventListener("stillfail-time", sync);
-  }, []);
-  return [absolute, () => {
-    localStorage.setItem(TIME_MODE, absolute ? "0" : "1");
-    window.dispatchEvent(new Event("stillfail-time"));
-  }];
+  const absolute = usePrefs().absoluteTime;
+  return [absolute, () => setPrefs({ absoluteTime: !absolute })];
 }
 
 /** A time as the core says it (fresh each minute): relative by default; clicking flips every time on the page to absolute and back. `fixed`: always relative, not a switch (the sidebar's), the date on hover. */

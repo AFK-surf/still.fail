@@ -1,5 +1,5 @@
 // Who is in a chat, as its row in the list shows it (web/src/RowPicture.tsx): the picture, its agents' marks or its
-// people's faces as `lead` says (AppState.rowPicture), and at the title's end the other.
+// people's faces as `lead` says (the chats view's `leading`), and at the title's end the other.
 package fail.still.android.screens
 
 import androidx.compose.foundation.background
@@ -33,25 +33,11 @@ import fail.still.android.ui.C
 import fail.still.android.ui.MakerIcon
 import fail.still.android.ui.Mark
 
-/** Whose pictures lead: "agents" or "people"; `setting` auto by how many people the scope has (unknown: as if alone). */
-fun leading(setting: String, members: Long?): String = when (setting) {
-    "agents", "people" -> setting
-    else -> if ((members ?: 1L) > 1L) "people" else "agents"
-}
-
 /** A row's agents by their mark: those that look the same (one maker's models) are drawn once. */
 private data class AgentGroup(val key: String, val maker: Maker?, val runtime: String)
 
 private fun agentGroups(item: ChatItem): List<AgentGroup> =
     item.agents.map { AgentGroup(it.maker?.id ?: it.runtime, it.maker, it.runtime) }.distinctBy { it.key }
-
-/** A chat's people in words, who started it said: "小王 发起 · Lina、你". */
-private fun peopleLabel(item: ChatItem): String {
-    val people = item.people.orEmpty()
-    val starter = people.firstOrNull { it.id == item.creator?.id }
-    val rest = people.filter { it !== starter }.joinToString("、") { it.shown.display }
-    return listOfNotNull(starter?.let { "${it.shown.display} 发起" }, rest.ifEmpty { null }).joinToString(" · ")
-}
 
 private data class Cell(val x: Int, val y: Int, val size: Int)
 
@@ -105,7 +91,7 @@ fun RowPicture(item: ChatItem, lead: String, modifier: Modifier = Modifier) {
     val people = item.people.orEmpty()
     val groups = agentGroups(item)
     val byPeople = if (lead == "people") people.isNotEmpty() else groups.isEmpty() && people.isNotEmpty()
-    val label = if (byPeople) peopleLabel(item) else item.agents.joinToString("、") { it.agentText }
+    val label = if (byPeople) item.peopleText.orEmpty() else item.agents.joinToString("、") { it.agentText }
     Box(modifier.size(40.dp).semantics { contentDescription = label }) {
         when {
             byPeople -> Cluster(people.size) { i, size -> Face(people[i], size, people.size > 1 && people[i].id == item.creator?.id) }
@@ -137,7 +123,7 @@ fun RowAside(item: ChatItem, lead: String, modifier: Modifier = Modifier) {
     }
     if (people.none { !it.shown.mine }) return
     val shown = people.take(3)
-    Row(modifier.semantics { contentDescription = peopleLabel(item) }, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.semantics { contentDescription = item.peopleText.orEmpty() }, verticalAlignment = Alignment.CenterVertically) {
         shown.forEachIndexed { i, p ->
             val starter = people.size > 1 && p.id == item.creator?.id
             Face(

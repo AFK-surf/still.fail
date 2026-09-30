@@ -2,7 +2,9 @@
 // makes calls. Components that want the same topic share one subscription.
 import { use, useCallback, useRef, useSyncExternalStore } from "react";
 import { connectCore, type CoreClient, type CoreError, type Topic } from "./client.ts";
-import { migrateChatRefs, migrateLegacy, migrateNewChat } from "./migrate.ts";
+import { migrateChatRefs, migrateLegacy, migrateNewChat, migratePrefs } from "./migrate.ts";
+
+declare const __BUILD__: string | null;
 
 let client: CoreClient | null = null;
 
@@ -13,6 +15,11 @@ export function core(): CoreClient {
     void migrateLegacy(client);
     void migrateChatRefs(client);
     void migrateNewChat(client);
+    void migratePrefs(client);
+    // What this device is, said once: the core decides what follows from it (phone or computer, the name it signs in
+    // as, the app a message is sent from). A core from before it has the page say those itself.
+    const app = typeof window !== "undefined" && window.stillfailDesktop ? "desktop" : "web";
+    client.call("client.device", { app, build: typeof __BUILD__ === "string" ? __BUILD__ : "", userAgent: navigator.userAgent }).catch(() => undefined);
   }
   return client;
 }

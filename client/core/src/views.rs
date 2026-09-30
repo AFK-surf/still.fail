@@ -584,6 +584,9 @@ impl Views {
             }
             _ => return topics,
         };
+        if let Topic::Chats { .. } = view {
+            topics.insert(Topic::Prefs);
+        }
         if scope != "local" {
             topics.insert(Topic::Workspace { workspace: scope.to_string() });
         }
@@ -804,7 +807,9 @@ impl Views {
         let members = if scope == "local" { Some(1) } else {
             self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).map(Vec::len))
         };
-        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members })))
+        // Whose pictures lead, by the device's setting (prefs.rs).
+        let leading = crate::prefs::leading(self.ok(Topic::Prefs).as_ref(), members);
+        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members, "leading": leading })))
     }
 
     /// Rows newest first, grouped by the viewer's local calendar day; those the viewer pinned above them all, in a group
@@ -1869,7 +1874,7 @@ mod tests {
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
             t.read(&mut ui, 1).await;
-            assert_eq!(t.started(), vec![workspace()]);
+            assert_eq!(sorted(t.started()), sorted(vec![workspace(), Topic::Prefs]), "the workspace, and the device's prefs (whose pictures lead)");
             assert!(ui.value.is_none(), "nothing to show before the workspace is read");
 
             t.set(workspace(), stations(t.now_s()));
@@ -2046,6 +2051,25 @@ mod tests {
             let flags: Vec<Value> = v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i.get("pinned").cloned().unwrap_or(json!("absent")))).collect();
             assert_eq!(flags, [json!(true), json!(true), json!(false), json!("absent")], "a row from a station without pins says nothing");
             assert_eq!(v["days"][1].get("pinned"), None);
+        });
+    }
+
+    #[test]
+    fn the_rows_are_led_as_the_device_says_else_by_how_many_people_the_scope_has() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
+            t.set(rows("local"), json!([]));
+            t.read(&mut ui, 1).await;
+            // A station's own page is one person's: its agents lead.
+            assert_eq!(ui.value.as_ref().unwrap()["leading"], "agents");
+            t.set(Topic::Prefs, json!({ "rowPicture": "people" }));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.as_ref().unwrap()["leading"], "people");
+            t.set(Topic::Prefs, json!({}));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.as_ref().unwrap()["leading"], "agents");
         });
     }
 

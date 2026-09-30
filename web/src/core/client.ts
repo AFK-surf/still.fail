@@ -59,7 +59,9 @@ export type Topic =
   // The services and jobs left up a long while on the scope's stations that are up.
   | { topic: "longJobs"; scope: string }
   // A job as it is now (kept current by its events).
-  | { topic: "job"; station: string; id: string };
+  | { topic: "job"; station: string; id: string }
+  // How its person likes it on this device, and what the device is (prefs.ts).
+  | { topic: "prefs" };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

@@ -3,6 +3,7 @@
 // core's worker cannot read. The first page to start the core hands them over
 // once; the core keeps them in IndexedDB from then on.
 import type { CoreClient } from "./client.ts";
+import type { KeptTabs, PrefsView } from "./shapes.ts";
 
 const ACCOUNTS = "stillfail.accounts";
 const DEVICE = "stillfail.device";
@@ -66,4 +67,56 @@ export async function migrateNewChat(client: Pick<CoreClient, "call">, storage: 
     // A core from before it: kept here, handed over by the next page.
     console.error("still.fail core: migrating the new chat's choices failed", error);
   }
+}
+
+const PREFS_DONE = "stillfail.prefs.migrated";
+
+/**
+ * The prefs the page kept itself before the core did (the lists' filter, the appearance, keys changed, the chat last
+ * open, tabs…), into the core once: only what it has not been told on this device yet. The old
+ * keys stay (a tab of an older build may still read them).
+ */
+export async function migratePrefs(client: Pick<CoreClient, "call">, storage: Storage = localStorage): Promise<void> {
+  try {
+    if (storage.getItem(PREFS_DONE)) return;
+    const kept = legacyPrefs(storage);
+    if (Object.keys(kept).length) await client.call("prefs.set", { ...kept, fill: true });
+    storage.setItem(PREFS_DONE, String(Date.now()));
+  } catch (error) {
+    // Tried again on the next start (a core from before prefs refuses it); the old values stay where they are.
+    console.error("still.fail core: moving prefs in failed", error);
+  }
+}
+
+/** What the page kept itself before the core did (../prefs.ts), as the core keeps it. */
+export function legacyPrefs(from: Storage): Partial<PrefsView> {
+  const json = <T>(key: string): T | undefined => {
+    try { const raw = from.getItem(key); return raw === null ? undefined : JSON.parse(raw) as T; } catch { return undefined; }
+  };
+  const out: Partial<PrefsView> = {};
+  const onlyMine = from.getItem("stillfail.onlyMine");
+  if (onlyMine !== null) out.onlyMine = onlyMine === "1";
+  const appearance = from.getItem("stillfail.appearance");
+  if (appearance === "light" || appearance === "dark") out.appearance = appearance;
+  const picture = from.getItem("stillfail.rowPicture");
+  if (picture === "agents" || picture === "people" || picture === "auto") out.rowPicture = picture;
+  const absolute = from.getItem("stillfail.absoluteTime");
+  if (absolute !== null) out.absoluteTime = absolute === "1";
+  // Only entries of the shape the core keeps: one it would refuse would keep the rest out too.
+  const entries = <V>(key: string, fits: (v: unknown) => v is V): Record<string, V> | undefined => {
+    const all = json<Record<string, unknown>>(key);
+    if (!all || typeof all !== "object" || Array.isArray(all)) return undefined;
+    return Object.fromEntries(Object.entries(all).filter((e): e is [string, V] => fits(e[1])));
+  };
+  const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
+  const keys = entries("stillfail.keys", strings);
+  if (keys) out.keys = keys;
+  const lastChat = entries("stillfail.lastChat", (v): v is string => typeof v === "string");
+  if (lastChat) out.lastChat = lastChat;
+  const tabs = entries("stillfail.chatTabs", (v): v is KeptTabs => {
+    const t = v as { tabs?: unknown; active?: unknown } | null;
+    return !!t && strings(t.tabs) && (t.active == null || typeof t.active === "string");
+  });
+  if (tabs) out.chatTabs = Object.fromEntries(Object.entries(tabs).map(([k, t]) => [k, t.active == null ? { tabs: t.tabs } : t]));
+  return out;
 }

@@ -315,7 +315,7 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
 private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     val app = LocalApp.current
     var held by remember { mutableStateOf(false) }
-    ChatRowBody(item, leading(app.rowPicture, view.members), held, Modifier.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id) {
+    ChatRowBody(item, view.leading ?: "agents", held, Modifier.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id) {
         detectTapGestures(
             onPress = { tryAwaitRelease(); held = false },
             onLongPress = { held = true },

@@ -1102,6 +1102,102 @@ pub struct DraftView {
     pub files: Vec<Attachment>,
 }
 
+/// How the pages look: as the system does (the default), or always light, or always dark.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+/// Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the
+/// people's.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RowPictureSetting {
+    #[default]
+    Auto,
+    Agents,
+    People,
+}
+
+/// Whose pictures lead the rows of a list (`ChatsView::leading`).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Lead {
+    Agents,
+    People,
+}
+
+/// A chat's history tabs as last left: which are open, which is in front.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KeptTabs {
+    pub tabs: Vec<String>,
+    pub active: Option<String>,
+}
+
+/// What this device is, as its host told the core at start (`client.device`), and what follows from it.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceView {
+    /// `web`, `desktop` or `android`; empty until told.
+    #[serde(default)]
+    pub app: String,
+    /// A phone (the Android app, or a phone's browser).
+    #[serde(default)]
+    pub phone: bool,
+    /// An item's link from outside is offered to the desktop app first (a computer's browser).
+    #[serde(default)]
+    pub handoff: bool,
+}
+
+/// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PrefsView {
+    /// The lists show only the chats and connects the viewer takes part in.
+    #[serde(default)]
+    pub only_mine: bool,
+    #[serde(default)]
+    pub appearance: Appearance,
+    #[serde(default)]
+    pub row_picture: RowPictureSetting,
+    /// Times are shown as dates rather than "3 分钟前".
+    #[serde(default)]
+    pub absolute_time: bool,
+    /// Keys changed for an action (the desktop app's), by action.
+    #[serde(default)]
+    pub keys: HashMap<String, Vec<String>>,
+    /// The workspace last open (the Android app's).
+    #[serde(default)]
+    pub workspace: Option<String>,
+    /// The chat page last open, by scope (a workspace, or `local`).
+    #[serde(default)]
+    pub last_chat: HashMap<String, String>,
+    /// Each chat's history tabs, by `<station>:<chat>` (the latest 200).
+    #[serde(default)]
+    pub chat_tabs: HashMap<String, KeptTabs>,
+    /// A Slack app made for a new connect, to go on with, by station (the Android app's).
+    #[serde(default)]
+    pub resume: HashMap<String, String>,
+    /// The invite code a page was opened with, kept through signing in until a workspace is made with it.
+    #[serde(default)]
+    pub invite: Option<String>,
+    #[serde(default)]
+    pub device: DeviceView,
+}
+
 /// A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs
 /// there, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has.
 #[typeshare]
@@ -1429,6 +1525,8 @@ pub struct ChatItem {
     pub people: Option<Vec<Person>>,
     /// Who started it, as in `people`.
     pub creator: Option<Creator>,
+    /// Its people in words, who started it said ("小王 发起 · Lina、你"), with `people`.
+    pub people_text: Option<String>,
     /// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
     pub client_key: Option<String>,
     /// Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned).
@@ -1464,6 +1562,8 @@ pub struct ChatsView {
     /// How many people the scope has (one on a station's own page), for how rows are pictured; absent until known.
     #[typeshare(serialized_as = "Option<I54>")]
     pub members: Option<i64>,
+    /// Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone).
+    pub leading: Option<Lead>,
 }
 
 /// Used up until a time (or no one knows when), in words.

@@ -546,7 +546,7 @@ fun NewConnectScreen(station: String) {
     val teams = overview.value?.slackTeams.orEmpty()
     val models = stations.value?.firstOrNull { it.station == station }?.models.orEmpty()
     // An app made before and still waiting on the station, picked up where it was left (installing it).
-    val resume = remember { app.strings(RESUME + station).firstOrNull().also { app.setStrings(RESUME + station, emptyList()) } }
+    val resume = remember { app.resume(station).also { app.setResume(station, null) } }
     var step by remember { mutableStateOf(if (resume != null) "install" else "team") }
     var team by remember { mutableStateOf<String?>(null) }
     // The Slack app's default name, across the product (a bot user's display name takes a-z 0-9 - _ and .); its look starts as the general helper.
@@ -687,11 +687,9 @@ fun NewConnectScreen(station: String) {
     }
 }
 
-private const val RESUME = "newConnect.resume/"
-
 /** The new-connect page, from the start or (`resume`) going on with a Slack app made before; a screen carries only its station. */
 fun openNewConnect(app: AppState, station: String, resume: String? = null) {
-    app.setStrings(RESUME + station, listOfNotNull(resume))
+    app.setResume(station, resume)
     app.push(Screen.NewConnect(station))
 }
 

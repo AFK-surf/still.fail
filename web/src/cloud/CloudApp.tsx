@@ -16,10 +16,11 @@ import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
 import { MobileSignIn } from "../mobile/SignIn.tsx";
-import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
+import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
 import { useNotices } from "../notify.ts";
+import { usePrefs } from "../prefs.ts";
 import { stationApi, useStationCall } from "../api.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -114,7 +115,7 @@ function Landing() {
   const navigate = useNavigate();
   const create = useAction(
     (code: string) => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`, code),
-    (w) => { track("workspace_created", { first: true }); forgetInviteCode(); navigate(`/w/${w.id}`, { replace: true }); },
+    (w) => { track("workspace_created", { first: true }); navigate(`/w/${w.id}`, { replace: true }); },
   );
   const accept = useAction(
     (i: { sub: string; id: string }) => cloud.acceptInvitationById(i.sub, i.id),
@@ -267,9 +268,8 @@ function OpenItem() {
   // `?preview=<port>`: a web service of the session's, opened beside its chat.
   const { search } = useLocation();
   const target = `/w/${ws}/s/${station}/chats/${encodeURIComponent(session)}${search}`;
-  const inDesktop = "stillfailDesktop" in window;
-  const phone = /Android|iPhone|iPad/i.test(navigator.userAgent);
-  const [here, setHere] = useState(inDesktop || phone);
+  // Offered to the desktop app first only from a computer's browser, as the core says (prefs.ts `device`).
+  const [here, setHere] = useState(!usePrefs().device.handoff);
   useEffect(() => {
     if (here) return;
     const timer = setTimeout(() => setHere(true), 1200);

@@ -1,26 +1,33 @@
-// 外观: follow the system, or always light, or always dark — kept in this
-// browser. The choice is data-theme on the root ("light"/"dark"; absent for the
-// system), which the palette in styles/global.css.ts and the brand pictures follow.
+// 外观: follow the system, or always light, or always dark — kept on this device by the core (prefs.ts). What shows is
+// data-theme on the root ("light"/"dark"; absent for the system), which the palette in styles/global.css.ts and the
+// brand pictures follow. index.html sets it before the first paint from the copy of the core's last value
+// (`stillfail.appearance`), so a dark page never paints light first; the core's value then keeps it.
 import { useEffect, useState } from "react";
+import type { Appearance } from "./core/shapes.ts";
+import { onPrefs, prefs, setPrefs, usePrefs } from "./prefs.ts";
 
-export type Appearance = "system" | "light" | "dark";
-const KEY = "stillfail.appearance";
+export type { Appearance };
 const EVENT = "stillfail-appearance";
 
-export function readAppearance(): Appearance {
-  // What the page shows, when it says: set from the choice before the first paint (index.html), or fixed by a page
-  // that is always one (the official site is dark).
-  const shown = document.documentElement.dataset.theme;
-  if (shown === "light" || shown === "dark") return shown;
-  const value = localStorage.getItem(KEY);
-  return value === "light" || value === "dark" ? value : "system";
+/** What the page shows: its root's choice, or the system's when it says none. */
+function shown(): Appearance {
+  const theme = document.documentElement.dataset.theme;
+  return theme === "light" || theme === "dark" ? theme : "system";
 }
 
-/** Puts the saved choice on the page; call once before the first render. */
-export function applyAppearance(value: Appearance = readAppearance()): void {
+/** Puts a choice on the page. */
+function applyAppearance(value: Appearance): void {
   const root = document.documentElement;
+  if (value === shown()) return;
   if (value === "system") delete root.dataset.theme;
   else root.dataset.theme = value;
+  window.dispatchEvent(new Event(EVENT));
+}
+
+/** The page shows the appearance kept on this device from now on; call once before the first render. */
+export function followAppearance(): void {
+  applyAppearance(prefs().appearance);
+  onPrefs(() => applyAppearance(prefs().appearance));
 }
 
 /** Tells the page's parts that follow the appearance to read it again: a page that sets it itself (the official site). */
@@ -28,36 +35,25 @@ export function announceAppearance(): void {
   window.dispatchEvent(new Event(EVENT));
 }
 
-export function setAppearance(value: Appearance): void {
-  if (value === "system") localStorage.removeItem(KEY);
-  else localStorage.setItem(KEY, value);
-  applyAppearance(value);
-  window.dispatchEvent(new Event(EVENT));
-}
-
+/** The choice kept on this device, and how to change it. */
 export function useAppearance(): [Appearance, (value: Appearance) => void] {
-  const [value, set] = useState(readAppearance);
-  useEffect(() => {
-    const update = () => set(readAppearance());
-    window.addEventListener(EVENT, update);
-    window.addEventListener("storage", update);
-    return () => {
-      window.removeEventListener(EVENT, update);
-      window.removeEventListener("storage", update);
-    };
-  }, []);
-  return [value, setAppearance];
+  return [usePrefs().appearance, (appearance) => setPrefs({ appearance })];
 }
 
-/** Whether the page shows dark now: the choice, or the system's when following it. */
+/** Whether the page shows dark now: its choice, or the system's when following it. */
 export function useDark(): boolean {
-  const [appearance] = useAppearance();
+  const [appearance, setShown] = useState(shown);
   const [system, setSystem] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
     const update = () => setSystem(media.matches);
+    const again = () => setShown(shown());
     media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    window.addEventListener(EVENT, again);
+    return () => {
+      media.removeEventListener("change", update);
+      window.removeEventListener(EVENT, again);
+    };
   }, []);
   return appearance === "system" ? system : appearance === "dark";
 }

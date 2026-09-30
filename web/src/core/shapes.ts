@@ -722,6 +722,8 @@ export interface ChatItem {
 	people?: Person[];
 	/** Who started it, as in `people`. */
 	creator?: Creator;
+	/** Its people in words, who started it said ("小王 发起 · Lina、你"), with `people`. */
+	peopleText?: string;
 	/** The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it. */
 	clientKey?: string;
 	/** Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned). */
@@ -885,6 +887,9 @@ export interface StationTrouble {
 	state: string;
 }
 
+/** Whose pictures lead the rows of a list (`ChatsView::leading`). */
+export type Lead = "agents" | "people";
+
 export interface ChatsView {
 	me: Me;
 	stations: StationState[];
@@ -897,6 +902,8 @@ export interface ChatsView {
 	trouble?: StationTrouble;
 	/** How many people the scope has (one on a station's own page), for how rows are pictured; absent until known. */
 	members?: number;
+	/** Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone). */
+	leading?: Lead;
 }
 
 export interface ConfigTokenOwner {
@@ -929,6 +936,16 @@ export interface Counts {
 	sessions: number;
 	running: number;
 	warm: number;
+}
+
+/** What this device is, as its host told the core at start (`client.device`), and what follows from it. */
+export interface DeviceView {
+	/** `web`, `desktop` or `android`; empty until told. */
+	app?: string;
+	/** A phone (the Android app, or a phone's browser). */
+	phone?: boolean;
+	/** An item's link from outside is offered to the desktop app first (a computer's browser). */
+	handoff?: boolean;
 }
 
 export interface Disk {
@@ -1136,6 +1153,12 @@ export interface JobLogView {
 	state?: string;
 	last?: string;
 	said?: string;
+}
+
+/** A chat's history tabs as last left: which are open, which is in front. */
+export interface KeptTabs {
+	tabs: string[];
+	active?: string;
 }
 
 export interface TimelineEntry {
@@ -1493,6 +1516,38 @@ export interface NotifyView {
 	asked: boolean;
 	push: boolean;
 	show: Notice[];
+}
+
+/** How the pages look: as the system does (the default), or always light, or always dark. */
+export type Appearance = "system" | "light" | "dark";
+
+/**
+ * Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the
+ * people's.
+ */
+export type RowPictureSetting = "auto" | "agents" | "people";
+
+/** What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is. */
+export interface PrefsView {
+	/** The lists show only the chats and connects the viewer takes part in. */
+	onlyMine?: boolean;
+	appearance?: Appearance;
+	rowPicture?: RowPictureSetting;
+	/** Times are shown as dates rather than "3 分钟前". */
+	absoluteTime?: boolean;
+	/** Keys changed for an action (the desktop app's), by action. */
+	keys?: Record<string, string[]>;
+	/** The workspace last open (the Android app's). */
+	workspace?: string;
+	/** The chat page last open, by scope (a workspace, or `local`). */
+	lastChat?: Record<string, string>;
+	/** Each chat's history tabs, by `<station>:<chat>` (the latest 200). */
+	chatTabs?: Record<string, KeptTabs>;
+	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
+	resume?: Record<string, string>;
+	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
+	invite?: string;
+	device?: DeviceView;
 }
 
 /** A session with its threads and turns (`session` topic). */

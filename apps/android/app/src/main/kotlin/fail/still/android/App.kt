@@ -68,6 +68,11 @@ import androidx.compose.animation.core.Easing
 import fail.still.android.data.AccountWorkspaces
 import fail.still.android.data.Account
 import fail.still.android.data.ChatOf
+import fail.still.android.data.PrefsView
+import fail.still.android.data.decode
+import fail.still.core.CoreException
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import fail.still.android.data.StationApi
 import fail.still.android.data.Topics
 import fail.still.android.data.entries
@@ -91,12 +96,7 @@ import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.MenuSpec
 import fail.still.android.ui.ToastHost
 import fail.still.core.StillFailCore
-import fail.still.core.CoreException
 import fail.still.android.data.NotifyView
-import fail.still.android.data.decode
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlinx.coroutines.MainScope
 
 sealed interface Screen {
@@ -135,7 +135,7 @@ sealed interface Screen {
     data class SlackApp(val station: String, val connect: String) : Screen { override val id = "slack-app/$station/$connect" }
 }
 
-class AppState(val core: StillFailCore, private val prefs: SharedPreferences, val cloudOrigin: String, val updates: Updates) {
+class AppState(val core: StillFailCore, private val prefs: SharedPreferences, val cloudOrigin: String, val updates: Updates, kept: PrefsView = PrefsView()) {
     var stack by mutableStateOf(listOf<Screen>(Screen.Home)); private set
     /** Whether the last move went deeper, for the direction of the transition. */
     var forward by mutableStateOf(true); private set
@@ -145,20 +145,52 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     /** One entry of an execution history in full, over everything (the sheet stays under it). */
     var reader by mutableStateOf<ReaderSpec?>(null)
 
+    /** How its person likes it on this device, as the core keeps it (data/Prefs.kt). */
+    var kept by mutableStateOf(kept); private set
+    /** Changes sent and not answered yet; the core's values meanwhile wait, the latest shown once all are. */
+    private var sending = 0
+    private var waiting: PrefsView? = null
+
+    /** Changes them: shown at once (`shown`), then as the core has them (`patch`). */
+    private fun setPrefs(shown: PrefsView, patch: JsonObject) {
+        kept = shown
+        sending++
+        scope.launch {
+            try { core.call("prefs.set", patch) } catch (_: CoreException) {}
+            if (--sending == 0) waiting?.let { kept = it; waiting = null }
+        }
+    }
+
+    /** Follows the core's prefs for the app's life. */
+    suspend fun followPrefs() {
+        core.topic(Topics.prefs).collect { state ->
+            val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(PrefsView.serializer(), it) }.getOrNull() } ?: return@collect
+            if (sending > 0) waiting = value else kept = value
+        }
+    }
+
     /** The workspace chosen last; the first one when it is gone. */
-    var workspace by mutableStateOf(prefs.getString("workspace", null)); private set
-    fun pickWorkspace(id: String) { workspace = id; prefs.edit().putString("workspace", id).apply() }
+    val workspace: String? get() = kept.workspace
+    fun pickWorkspace(id: String) { if (id != kept.workspace) setPrefs(kept.copy(workspace = id), buildJsonObject { put("workspace", id) }) }
 
-    /** 外观: "system" (the default), "light" or "dark", kept on the device. */
-    var theme by mutableStateOf(prefs.getString("theme", null) ?: "system"); private set
-    fun useTheme(value: String) { theme = value; prefs.edit().putString("theme", value).apply() }
+    /** 外观: "system" (the default), "light" or "dark". */
+    val theme: String get() = kept.appearance ?: "system"
+    fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
 
-    /** 列表头像: whose pictures lead a chat's row, "auto" (the default), "agents" or "people" (RowPicture.kt). */
-    var rowPicture by mutableStateOf(prefs.getString("rowPicture", null) ?: "auto"); private set
-    fun useRowPicture(value: String) { rowPicture = value; prefs.edit().putString("rowPicture", value).apply() }
+    /** 列表头像: whose pictures lead a chat's row, "auto" (the default), "agents" or "people"; the chats view says which leads. */
+    val rowPicture: String get() = kept.rowPicture ?: "auto"
+    fun useRowPicture(value: String) = setPrefs(kept.copy(rowPicture = value), buildJsonObject { put("rowPicture", value) })
 
-    var onlyMine by mutableStateOf(prefs.getBoolean("onlyMine", false)); private set
-    fun showOnlyMine(on: Boolean) { onlyMine = on; prefs.edit().putBoolean("onlyMine", on).apply() }
+    val onlyMine: Boolean get() = kept.onlyMine ?: false
+    fun showOnlyMine(on: Boolean) = setPrefs(kept.copy(onlyMine = on), buildJsonObject { put("onlyMine", on) })
+
+    /** A Slack app made for a new connect on `station`, to go on with (screens/Connects.kt); null lets it go. */
+    fun resume(station: String): String? = kept.resume?.get(station)
+    fun setResume(station: String, app: String?) {
+        if (resume(station) == app) return
+        val shown = kept.resume.orEmpty() - station + listOfNotNull(app?.let { station to it })
+        setPrefs(kept.copy(resume = shown), buildJsonObject { put("resume", buildJsonObject { put(station, app) }) })
+    }
 
     /** 我 → 通知: local notices and pushes, on by default (Notices.kt, Push.kt), as the core keeps it (its `notify`). */
     var notify by mutableStateOf(true); private set

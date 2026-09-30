@@ -4,7 +4,6 @@
 package fail.still.android.data
 
 import android.util.Base64
-import fail.still.android.BuildConfig
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.serialization.builtins.ListSerializer
@@ -22,9 +21,6 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 
-/** Which app a message is sent from ("android 0.1.1123"): the station tells the chat's agent; never shown. */
-private val SENT_FROM = "android " + BuildConfig.VERSION_NAME
-
 /** The admin API of one station, by what each call does. */
 class StationApi(private val core: StillFailCore, val station: String) {
     private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
@@ -39,7 +35,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
             put("text", text)
             put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
-            put("client", SENT_FROM)
         }
     }
 
@@ -286,7 +281,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
             put("session", session); put("text", text)
             put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
-            put("client", SENT_FROM)
         }
     }
     /** A failed message of such a chat, by its key: sent again, or dropped. */
@@ -321,9 +315,9 @@ object Auth {
     // stillfail:// since the rename; the app still accepts ember:// coming back (MainActivity), and the cloud both.
     const val REDIRECT = "stillfail://auth/callback"
 
-    /** The URL to open in a Custom Tab; still.fail cloud comes back to REDIRECT. */
-    suspend fun begin(core: StillFailCore, deviceName: String): String =
-        core.call("auth.begin", buildJsonObject { put("redirect_uri", REDIRECT); put("return_to", "/"); put("device_name", deviceName) })
+    /** The URL to open in a Custom Tab; still.fail cloud comes back to REDIRECT. The device signs in by the name the core gives it. */
+    suspend fun begin(core: StillFailCore): String =
+        core.call("auth.begin", buildJsonObject { put("redirect_uri", REDIRECT); put("return_to", "/") })
             .jsonObject["url"]!!.jsonPrimitive.content
 
     /** Finishes a sign-in with the callback's query string ("?code=…&state=…"). */

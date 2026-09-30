@@ -119,6 +119,8 @@ pub enum Topic {
     LongJobs { scope: String },
     /// A background job as it is now (`/jobs/:id`, then its events).
     Job { station: String, id: String },
+    /// What this device keeps of how its person likes it, and what it is (prefs.rs; `prefs.set`, `client.device`).
+    Prefs,
 }
 
 impl Topic {
@@ -128,7 +130,7 @@ impl Topic {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
             Topic::ArchivedRows { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
-            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } => None,
+            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::Prefs => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
             // The core's own (jobs.rs), not the station module's.

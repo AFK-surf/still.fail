@@ -2,7 +2,8 @@
 // there is one, "local"; in ember cloud a workspace has several, and one page
 // shows them together. Components read the station from context: its address
 // (how the client core names it) and its base path (which prefixes links).
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
+import { setPrefs, usePrefs } from "./prefs.ts";
 
 export interface Station {
   /** "local" on a station's own page; the station's key in ember cloud. */
@@ -55,24 +56,9 @@ export function useLink(): (path: string) => string {
 /** Who is looking: on a station's own page "local"; in ember cloud the account's email. */
 export interface Me { id: string; email: string | null }
 
-const FILTER = "stillfail.onlyMine";
-/** The "only mine" filter, remembered across pages. */
-export function readOnlyMine(): boolean {
-  return localStorage.getItem(FILTER) === "1";
-}
-export function writeOnlyMine(value: boolean): void {
-  localStorage.setItem(FILTER, value ? "1" : "0");
-  window.dispatchEvent(new Event("stillfail-filter"));
-}
-
+/** The "only mine" filter, kept on this device (prefs.ts). */
 export function useOnlyMine(): [boolean, (value: boolean) => void] {
-  const [value, setValue] = useState(readOnlyMine);
-  useEffect(() => {
-    const update = () => setValue(readOnlyMine());
-    window.addEventListener("stillfail-filter", update);
-    return () => window.removeEventListener("stillfail-filter", update);
-  }, []);
-  return [value, writeOnlyMine];
+  return [usePrefs().onlyMine, (onlyMine) => setPrefs({ onlyMine })];
 }
 
 /** People by email, from ember cloud's member list; empty on a station's own page. */

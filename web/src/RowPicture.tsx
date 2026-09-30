@@ -18,7 +18,7 @@ export function RowPicture({ item, lead, box, className }: { item: ChatItem; lea
   const groups = agentGroups(item);
   if (byPeople) {
     return (
-      <Tip label={peopleLabel(item)}><span className={className}>
+      <Tip label={item.peopleText ?? ""}><span className={className}>
         <Cluster box={box} count={people.length} draw={(i, size) => {
           const p = people[i]!;
           return <Face key={p.id} person={p} size={size} starter={people.length > 1 && p.id === item.creator?.id} />;
@@ -112,19 +112,11 @@ export function RowAside({ item, lead, size, className }: { item: ChatItem; lead
   if (!people.some((p) => !p.shown.mine)) return null;
   const shown = people.slice(0, 3);
   return (
-    <Tip label={peopleLabel(item)} side="right"><span className={`${css.aside} ${className}`}>
+    <Tip label={item.peopleText ?? ""} side="right"><span className={`${css.aside} ${className}`}>
       {shown.map((p) => <Face key={p.id} person={p} size={size} starter={people.length > 1 && p.id === item.creator?.id} />)}
       {people.length > shown.length && <span className={css.asideMore}>+{people.length - shown.length}</span>}
     </span></Tip>
   );
-}
-
-/** A chat's people in words, who started it said: "小王 发起 · Lina、你". */
-function peopleLabel(item: ChatItem): string {
-  const people = item.people ?? [];
-  const starter = people.find((p) => p.id === item.creator?.id);
-  const rest = people.filter((p) => p !== starter).map((p) => p.shown.display);
-  return [starter && `${starter.shown.display} 发起`, rest.join("、")].filter(Boolean).join(" · ");
 }
 
 /** A person's picture, round: their account's, else a lettered one; ringed when they started the chat. */

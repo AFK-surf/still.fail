@@ -1,8 +1,9 @@
 // The app's keyboard shortcuts, all in one place: what each does, and the keys that do it. A component that can do an
 // action says so with useShortcut (the one mounted last answers); one listener on the window finds the action a key
-// press is bound to. The keys can be changed in the desktop app (`ember.keys` in its localStorage): what shows a shortcut
+// press is bound to. The keys can be changed in the desktop app (kept on this device by the core, prefs.ts): what shows a shortcut
 // (a tooltip, the list of them) reads it from here too.
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { onPrefs, prefs, setPrefs } from "./prefs.ts";
 
 export type Action =
   | "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings"
@@ -51,14 +52,12 @@ export const ACTIONS: Record<Action, Spec> = {
 };
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-const STORE = "stillfail.keys";
 
 /** Keys are changed only in the desktop app; the web pages keep the app's own. */
 export const CHANGEABLE = !!window.stillfailDesktop;
 
 function overrides(): Partial<Record<Action, Binding[]>> {
-  if (!CHANGEABLE) return {};
-  try { return JSON.parse(localStorage.getItem(STORE) ?? "{}") as Partial<Record<Action, Binding[]>>; } catch { return {}; }
+  return CHANGEABLE ? prefs().keys as Partial<Record<Action, Binding[]>> : {};
 }
 
 /** The keys that do an action here: changed on this device, or its own (with the desktop app's). */
@@ -71,11 +70,7 @@ export function keysOf(action: Action): Binding[] {
 
 /** Changes an action's keys on this device; null goes back to its own. */
 export function setKeys(action: Action, keys: Binding[] | null): void {
-  const all = overrides();
-  if (keys) all[action] = keys; else delete all[action];
-  try { localStorage.setItem(STORE, JSON.stringify(all)); } catch { /* private mode: not kept */ }
-  version++;
-  for (const f of watchers) f();
+  setPrefs({ keys: { [action]: keys } });
 }
 
 /** Whether an action's keys were changed on this device. */
@@ -83,13 +78,12 @@ export function changed(action: Action): boolean {
   return overrides()[action] !== undefined;
 }
 
-let version = 0;
-const watchers = new Set<() => void>();
-const watch = (f: () => void) => { watchers.add(f); return () => { watchers.delete(f); }; };
+/** The keys changed as last read: another object whenever they change. */
+const changedKeys = () => (CHANGEABLE ? prefs().keys : null);
 
 /** Redrawn when any action's keys change: what shows them reads them anew. */
-export function useKeymap(): number {
-  return useSyncExternalStore(watch, () => version, () => version);
+export function useKeymap(): unknown {
+  return useSyncExternalStore(onPrefs, changedKeys, () => null);
 }
 
 /** The action other than `except` a binding already does, if any. */

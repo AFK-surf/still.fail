@@ -346,7 +346,7 @@ export function useChatSend(address?: string) {
   const inContext = useStation().address;
   const station = address ?? inContext;
   return useMemo(() => ({
-    send: (to: ChatTo, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, ...chatTo(to), text, attachments, quotes, client: sentFrom() }),
+    send: (to: ChatTo, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, ...chatTo(to), text, attachments, quotes }),
     retry: (to: ChatTo, id: string) => call("chat.retry", { station, ...chatTo(to), id }),
     discard: (to: ChatTo, id: string) => call("chat.discard", { station, ...chatTo(to), id }),
     /** A new chat: there at once under the key answered (its page, its row); the station makes it behind it. */
@@ -355,19 +355,6 @@ export function useChatSend(address?: string) {
     /** Only for a core from before `client.focus` (an older desktop app's), which does not read chats itself. */
     read: (thread: number, seq: number) => call("chat.read", { station, thread, seq }),
   }), [call, station]);
-}
-
-declare const __BUILD__: string | null;
-
-/**
- * Which app a message is sent from ("desktop 0.1.1123", "web 0.1.1150 (phone)"): the station tells the chat's agent,
- * for telling which one a reported problem is in; never shown. The desktop app's page is packed with it, so its build
- * is the app's.
- */
-function sentFrom(): string {
-  const build = typeof __BUILD__ === "string" ? ` ${__BUILD__}` : "";
-  if (window.stillfailDesktop) return `desktop${build}`;
-  return `web${build} (${/Android|iPhone|iPad/i.test(navigator.userAgent) ? "phone" : "pc"})`;
 }
 
 /** Where a message goes: a chat's thread, or the key of a chat made here (`chat.create`), made by its station or not. */

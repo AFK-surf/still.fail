@@ -200,6 +200,8 @@ function chatItem(chat: DemoChat): ChatItem {
     ...(chat.originText ? { originText: chat.originText } : {}),
     // Who is in it: who asked first started it.
     people: chat.people, ...(chat.people[0] ? { creator: chat.people[0] } : {}),
+    // As the core says it (present.rs row_people).
+    peopleText: [chat.people[0] && `${chat.people[0].shown.display} 发起`, chat.people.slice(1).map((p) => p.shown.display).join("、")].filter(Boolean).join(" · "),
     last: {
       seq: last?.seq ?? 0, authorKind: byAgent ? "agent" : "person", author: byAgent ? chat.key : last?.author ?? "", text: preview, preview,
       createdAt: at,

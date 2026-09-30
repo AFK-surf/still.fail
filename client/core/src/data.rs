@@ -29,7 +29,7 @@ use crate::protocol::Topic;
 const SEP: char = '\u{1}';
 
 /// Every table, to load them all at start.
-const TABLES: &[&str] = &["me", "workspace", "overview", "session", "row", "session_summary", "thread", "list", "draft", "chat_ref", "choice"];
+const TABLES: &[&str] = &["me", "workspace", "overview", "session", "row", "session_summary", "thread", "list", "draft", "chat_ref", "choice", "prefs"];
 
 /// How a topic's value is held.
 enum Shape {
@@ -49,6 +49,7 @@ fn shape(topic: &Topic) -> Option<Shape> {
         Topic::Sessions { station } => Shape::List { table: "session_summary", scope: station.clone(), id_field: "key" },
         Topic::Threads { station } => Shape::List { table: "thread", scope: station.clone(), id_field: "id" },
         Topic::Draft { station, chat } => Shape::One { table: "draft", key: join(&[station, chat]) },
+        Topic::Prefs => Shape::One { table: "prefs", key: "device".into() },
         _ => return None,
     })
 }
