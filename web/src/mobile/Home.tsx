@@ -1,14 +1,14 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
-// and grouped by day. A fixed head (you → settings · workspace · stations) and one bottom toolbar (全部 / 我参与的 · new
-// chat). Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
+// and grouped by day. A fixed head (you → settings · workspace · the filter · stations) and the new-chat button floating
+// at the bottom. Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
 import { useRef, useState } from "react";
 import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, ChevronDown, Edit, Pin, Unplug } from "../icons.tsx";
+import { Archive, Check, ChevronDown, Edit, Filter, Pin, Unplug } from "../icons.tsx";
 import { ask } from "./sheets.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { Avatar, Illustration, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
+import { Avatar, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
@@ -52,20 +52,39 @@ export function Home() {
           {invited && <span className={css.mDot} aria-label="有邀请" />}
           <ChevronDown size={16} />
         </button>
-        {/* The archive: chats put away by hand or by the station once idle (the wide screen has it in the list's filter menu). */}
-        {(all.value?.stations.length ?? 0) > 0 && <NavButton icon={Archive} iconSize={20} label="已归档" onClick={() => app.push(app.at("/archive"))} />}
+        {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
+        {(all.value?.stations.length ?? 0) > 0 && <FilterButton onlyMine={onlyMine} setOnlyMine={setOnlyMine} />}
         {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
         <StationButton view={all.value} />
       </header>
-      {/* One capsule floating over the list, round at both ends like what is in it: the switch fills it, and the new-chat
-          button closes it at the right, a disc in the accent. */}
+      {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent in a glass ring. */}
       {!none && <div className={css.mHomeToolbar}>
         <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
-          <Seg options={["全部", "我参与的"]} selected={onlyMine ? 1 : 0} onSelect={(i) => setOnlyMine(i === 1)} height={44} fill radius={22} inset={0} track={false} className={partsCss.mGrow} />
           <button type="button" className={css.mNewChat} onClick={() => app.push(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
         </div>
       </div>}
     </div>
+  );
+}
+
+/** 全部 or 我参与的, and the archive, from a menu under it; marked in the accent while it narrows the list. */
+function FilterButton({ onlyMine, setOnlyMine }: { onlyMine: boolean; setOnlyMine: (on: boolean) => void }) {
+  const app = useApp();
+  const mark = (on: boolean) => on ? <Check size={16} /> : <span style={{ width: 16 }} />;
+  return (
+    <button type="button" className={`${barsCss.mNavButton} ${css.mFilter}`} data-on={onlyMine || undefined}
+      aria-label={`筛选会话：${onlyMine ? "我参与的" : "全部"}`}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        // The menu is 180 wide (app.tsx MenuHost): its right edge under the button's.
+        app.menu({ anchor: new DOMRect(r.right - 180, r.top, 0, r.height), items: [
+          { label: "全部", icon: mark(!onlyMine), action: () => setOnlyMine(false) },
+          { label: "我参与的", icon: mark(onlyMine), action: () => setOnlyMine(true) },
+          { label: "已归档", icon: <Archive size={16} />, action: () => app.push(app.at("/archive")) },
+        ] });
+      }}>
+      <Filter size={20} />
+    </button>
   );
 }
 

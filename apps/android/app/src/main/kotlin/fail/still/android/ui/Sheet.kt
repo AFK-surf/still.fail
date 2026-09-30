@@ -224,7 +224,8 @@ fun SheetHead(title: String, trailing: (@Composable () -> Unit)? = null) {
 
 // ── the long-press menu ────────────────────────────────────────────────
 
-class MenuItem(val label: String, val icon: ImageVector, val action: () -> Unit)
+/** `icon` null: the room for one left empty (a check on another item, say). */
+class MenuItem(val label: String, val icon: ImageVector?, val action: () -> Unit)
 class MenuSpec(val anchor: Rect, val items: List<MenuItem>, val onDismiss: () -> Unit = {})
 
 @Composable
@@ -258,7 +259,7 @@ fun MenuHost(app: AppState) {
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(item.label, fontSize = 15.sp, color = C.ink)
-                        IconIn(item.icon, 16.dp)
+                        item.icon?.let { IconIn(it, 16.dp) } ?: Box(Modifier.size(16.dp))
                     }
                 }
             }

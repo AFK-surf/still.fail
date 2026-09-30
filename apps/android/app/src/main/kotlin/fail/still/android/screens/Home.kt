@@ -1,7 +1,7 @@
 // Home is the `chats` view as the web's sidebar lists it: one kind of item (an
 // agent with its chat, or an agent with no chat yet), newest first and grouped
-// by day. A fixed head (you → settings · workspace · stations) and one bottom
-// toolbar (全部 / 我参与的 · new chat), like Mail.
+// by day. A fixed head (you → settings · workspace · the filter · stations) and
+// the new-chat button floating at the bottom.
 package fail.still.android.screens
 
 import androidx.compose.ui.geometry.Rect
@@ -125,7 +125,6 @@ import fail.still.android.ui.MakerIcon
 import fail.still.android.ui.Mark
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.SectionHeader
-import fail.still.android.ui.Seg
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.avatarColor
 import kotlinx.coroutines.launch
@@ -176,8 +175,23 @@ fun HomeScreen(current: WorkspaceEntry) {
                     Box(Modifier.align(Alignment.TopEnd).offset((-3).dp, 3.dp).size(13.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(C.accent))
                 }
             }
-            // The archive: chats put away by hand or by the station once idle (the wide screen has it in the list's filter menu).
-            if (all.value?.stations?.isNotEmpty() == true) Box(Modifier.semantics { contentDescription = "已归档" }) { NavButton(Icons.Archive, { app.push(Screen.Archive) }, 20.dp) }
+            // The filter, and the archive in its menu, as on the wide screen (web mobile/Home.tsx FilterButton): nothing
+            // to narrow or look back on with no station. The accent while it narrows the list.
+            if (all.value?.stations?.isNotEmpty() == true) {
+                var at by remember { mutableStateOf(Rect.Zero) }
+                Box(
+                    Modifier.size(34.dp).onGloballyPositioned { at = it.boundsInRoot() }.clip(CircleShape).clickable {
+                        // The menu is 180 wide (Sheet.kt MenuHost): its right edge under the button's.
+                        val left = at.right - with(density) { 180.dp.toPx() }
+                        app.menu = MenuSpec(Rect(left, at.top, left, at.bottom), listOf(
+                            MenuItem("全部", if (!app.onlyMine) Icons.Check else null) { app.showOnlyMine(false) },
+                            MenuItem("我参与的", if (app.onlyMine) Icons.Check else null) { app.showOnlyMine(true) },
+                            MenuItem("已归档", Icons.Archive) { app.push(Screen.Archive) },
+                        ))
+                    }.semantics { contentDescription = "筛选会话：" + if (app.onlyMine) "我参与的" else "全部" },
+                    contentAlignment = Alignment.Center,
+                ) { IconIn(Icons.Filter, 20.dp, if (app.onlyMine) C.accent else C.ink) }
+            }
             // The stations at a glance (ui/StationGlyph.kt); its page says which is which. The core reaching nothing
             // at all (`status` in trouble) puts it to sleep.
             val status by rememberTopic<StatusView>(app.core, Topics.status(scope))
@@ -463,20 +477,15 @@ private fun LastMessage(item: ChatItem) {
 
 @Composable
 private fun Toolbar(app: AppState, haze: HazeState, modifier: Modifier) {
-    // One capsule floating over the list, round at both ends like what is in it: the switch fills it, the capsule being its track, and the new-chat button
-    // closes it at the right, a disc in the accent (no line between them: shape and colour tell them apart).
-    Row(
+    // The new-chat button alone, floating over the list at the bottom right: a disc in the accent in a glass ring.
+    Box(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)
-            .floating(haze, RoundedCornerShape(percent = 50)).padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
+        contentAlignment = Alignment.CenterEnd,
     ) {
-        Seg(
-            listOf("全部", "我参与的"), if (app.onlyMine) 1 else 0, { app.showOnlyMine(it == 1) },
-            Modifier.weight(1f), height = 44.dp, fill = true, radius = 22.dp, inset = 0.dp, track = false,
-        )
         Box(
-            Modifier.size(44.dp).clip(CircleShape).background(C.accent).clickable { app.push(Screen.NewChat) },
+            Modifier.floating(haze, CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
+                .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = "新建对话" },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Edit, 20.dp, Color.White) }
     }

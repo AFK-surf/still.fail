@@ -32,11 +32,14 @@ export const mHomeWorkspace = style({
 });
 export const mHomeToolbar = style({
   position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
-  padding: "10px 16px calc(10px + var(--m-foot))",
+  display: "flex", justifyContent: "flex-end", padding: "10px 16px calc(10px + var(--m-foot))", pointerEvents: "none",
 });
 export const mHomeCapsule = style({
-  display: "flex", alignItems: "center", gap: "6px", padding: "6px", borderRadius: "999px",
+  display: "flex", alignItems: "center", gap: "6px", padding: "6px", borderRadius: "999px", pointerEvents: "auto",
 });
+/** The list's filter in the head: the accent while it narrows the list (over root.css.ts's `button { color: inherit }`). */
+export const mFilter = style({});
+globalStyle(`${mHomeBar} button${mFilter}[data-on]`, { color: "var(--m-accent)" });
 export const mNewChat = style({
   display: "grid", placeItems: "center", flex: "none", width: "44px", height: "44px", padding: "0", border: "0",
   borderRadius: "50%", background: "var(--m-accent)", color: "#fff !important", cursor: "pointer",
