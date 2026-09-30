@@ -1,6 +1,6 @@
 ---
 name: stillfail-viz
-description: Inline visualizations in still.fail chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in still.fail's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. In Slack threads the file stays in still.fail and the post links there.
+description: Inline visualizations in still.fail chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in still.fail's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. In Slack threads the file is uploaded into the thread.
 ---
 
 # Inline visualizations
@@ -19,9 +19,9 @@ drawn as a chart in still.fail's colours, no file needed. Use a file when you ne
 3. Place it: in the text, a line of its own that links to it by its file name: `[Session lifecycle](session-lifecycle.html)`.
    Put the words that explain it around that line; the figure is not read aloud, and a phone app may show only the file.
 
-In a Slack thread, attach the file the same way but do not place it (Slack would show the link as typed): Slack
-takes no files, so still.fail keeps it with the message, adds a link to see it in still.fail at the end of the post, and draws
-it there. Say in the text what the figure shows, for those who stay in Slack.
+In a Slack thread, attach the file the same way but do not place it (Slack would show the link as typed): it is
+uploaded into the thread below the text, and still.fail, which keeps it with the message, draws it there. Say in the
+text what the figure shows, for those who stay in Slack.
 
 ## Writing one
 

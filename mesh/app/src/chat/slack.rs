@@ -354,12 +354,15 @@ impl ChatSurface for SlackSurface {
 
     /// Posted as written (the agent writes Slack's formatting); a long message goes out in parts, the first part's ts
     /// standing for the whole.
+    /// Files are uploaded before anything is posted (an app without `files:write` fails there, with nothing said), then
+    /// shared into the thread below the text.
     async fn post(&self, thread: &ThreadRef, message: &str, files: &[Attachment]) -> Result<String> {
-        if !files.is_empty() {
-            bail!("attaching files is not supported in Slack yet; mention the file paths in the text instead");
+        let mut uploaded = Vec::new();
+        for file in files {
+            uploaded.push(upload(file, &self.bot_token).await?);
         }
         let mut first = None;
-        for text in split_for_slack(message, 3500) {
+        for text in split_for_slack(message, 3500).into_iter().filter(|t| !t.is_empty()) {
             let posted = slack_api(
                 "chat.postMessage",
                 &pairs(&[("channel", &thread.channel), ("thread_ts", &thread.thread_ts), ("text", &text), ("unfurl_links", "false")]),
@@ -368,6 +371,24 @@ impl ChatSurface for SlackSurface {
             .await?;
             if first.is_none() {
                 first = posted.get("ts").and_then(Value::as_str).map(String::from);
+            }
+        }
+        if !uploaded.is_empty() {
+            let list = Value::Array(uploaded.iter().map(|(id, title)| json!({ "id": id, "title": title })).collect()).to_string();
+            let shared = slack_api(
+                "files.completeUploadExternal",
+                &pairs(&[("files", &list), ("channel_id", &thread.channel), ("thread_ts", &thread.thread_ts)]),
+                &self.bot_token,
+            )
+            .await?;
+            if first.is_none() {
+                first = Some(match shared_ts(&shared, &uploaded[0].0, &thread.channel, &self.bot_token).await {
+                    Some(ts) => ts,
+                    None => {
+                        warn!("slack: shared files without text, their message's ts did not show up");
+                        format!("{:.6}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs_f64())
+                    }
+                });
             }
         }
         first.ok_or_else(|| anyhow!("nothing to post"))
@@ -476,6 +497,40 @@ impl ChatSurface for SlackSurface {
     async fn stop(&self) {
         self.stopped.send_replace(true);
     }
+}
+
+/// Sends a file's bytes to Slack (not yet shared anywhere): its file id and title.
+async fn upload(file: &Attachment, token: &str) -> Result<(String, String)> {
+    let bytes = tokio::fs::read(&file.path).await?;
+    let length = bytes.len().to_string();
+    let url = slack_api("files.getUploadURLExternal", &pairs(&[("filename", &file.name), ("length", &length)]), token).await?;
+    let (Some(upload_url), Some(id)) = (url.get("upload_url").and_then(Value::as_str), url.get("file_id").and_then(Value::as_str)) else {
+        bail!("slack files.getUploadURLExternal: no upload_url");
+    };
+    let sent = client().post(upload_url).timeout(Duration::from_secs(300)).body(bytes).send().await?;
+    if !sent.status().is_success() {
+        bail!("slack upload of {}: HTTP {}", file.name, sent.status());
+    }
+    Ok((id.to_string(), file.name.clone()))
+}
+
+/// The ts of the message files were shared in, which Slack fills in a moment after the share.
+async fn shared_ts(completed: &Value, file: &str, channel: &str, token: &str) -> Option<String> {
+    let find = |f: &Value| {
+        let shares = f.get("shares")?;
+        ["public", "private"].iter().find_map(|k| shares.get(k)?.get(channel)?.get(0)?.get("ts")?.as_str().map(String::from))
+    };
+    if let Some(ts) = completed.get("files").and_then(|f| f.get(0)).and_then(find) {
+        return Some(ts);
+    }
+    for _ in 0..10 {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let info = slack_api("files.info", &pairs(&[("file", file)]), token).await.ok()?;
+        if let Some(ts) = info.get("file").and_then(find) {
+            return Some(ts);
+        }
+    }
+    None
 }
 
 async fn channel_name_of(channel: &str, token: &str) -> Option<String> {

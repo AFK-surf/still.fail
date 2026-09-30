@@ -1144,7 +1144,7 @@ impl Hub {
                         "to": to.clone(),
                         "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written)." },
                         "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
-                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they stay in still.fail and the post links there). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
+                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they are uploaded below the text). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                         "title": { "type": "string", "description": "A still.fail chat's name in lists: a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first final post in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
                     },
                     "required": ["to"],
@@ -1303,21 +1303,25 @@ impl Hub {
         }
         let kind = state_arg(args.get("kind"))?;
         let thread = self.target(key, args.get("to"))?;
-        // Slack takes no files from here: they stay with the message in still.fail, and the post says where to see them.
+        // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
+        // them in still.fail instead.
         let slack = thread.thread.surface != STILLFAIL_SURFACE && !paths.is_empty();
-        let link = if slack {
-            Some((self.link)(key).ok_or_else(|| anyhow!("files cannot be shown from Slack until this station is in a still.fail workspace; mention their paths in the text instead"))?)
-        } else {
-            None
-        };
+        let link = || (self.link)(key).ok_or_else(|| anyhow!("files cannot be shown from Slack until this station is in a still.fail workspace; mention their paths in the text instead"));
         let files = if paths.is_empty() { vec![] } else { self.attach(key, &paths)? };
         let files = crate::thumbs::keep(files, crate::thumbs::dir(&self.config().data_dir)).await;
         let here = ThreadRef::new(&thread.thread.channel, &thread.thread.thread_ts);
-        let (posted, text) = match &link {
-            Some(link) => slack_with_files(&text, &files, link),
-            None => (text.clone(), text),
+        let chat = self.chat(&thread.connect)?;
+        let (ts, text) = if slack {
+            match chat.post(&here, &text, &files).await {
+                Err(e) if e.to_string().contains("missing_scope") => {
+                    let (posted, kept) = slack_with_files(&text, &files, &link()?);
+                    (chat.post(&here, &posted, &[]).await?, kept)
+                }
+                posted => (posted?, place_figures(&text, &files)),
+            }
+        } else {
+            (chat.post(&here, &text, &files).await?, text)
         };
-        let ts = self.chat(&thread.connect)?.post(&here, &posted, if slack { &[] } else { &files }).await?;
         let (n, _) = self.store.insert_message(NewMessage {
             attachments: files,
             declared: kind.map(|k| k.as_str().to_string()),
@@ -1628,13 +1632,28 @@ fn state_arg(value: Option<&Value>) -> Result<Option<DeclaredState>> {
     }
 }
 
-/// A post with files to a Slack thread (which takes none from here): what Slack is sent, the text with a link to the
-/// session in still.fail that opens its first figure (else its first file) on its own; and what still.fail keeps, the text with
-/// each HTML file not yet placed in it placed on a line of its own (drawn there as a visualization, as the agent would
-/// place it in a still.fail chat).
+fn is_html(f: &Attachment) -> bool {
+    let name = f.name.to_lowercase();
+    name.ends_with(".html") || name.ends_with(".htm")
+}
+
+/// What still.fail keeps of a post to Slack: the text with each HTML file not yet placed in it placed on a line of its
+/// own (drawn there as a visualization, as the agent would place it in a still.fail chat).
+fn place_figures(text: &str, files: &[Attachment]) -> String {
+    let mut kept = text.to_string();
+    for f in files.iter().filter(|f| is_html(f)) {
+        if !kept.contains(&format!("]({})", f.name)) {
+            kept = if kept.is_empty() { format!("[{0}]({0})", f.name) } else { format!("{kept}\n\n[{0}]({0})", f.name) };
+        }
+    }
+    kept
+}
+
+/// A post with files to a Slack thread that cannot take them (an app without files:write): what Slack is sent, the text
+/// with a link to the session in still.fail that opens its first figure (else its first file) on its own; and what
+/// still.fail keeps (place_figures).
 fn slack_with_files(text: &str, files: &[Attachment], link: &str) -> (String, String) {
-    let html = |f: &&Attachment| f.name.to_lowercase().ends_with(".html") || f.name.to_lowercase().ends_with(".htm");
-    let figure = files.iter().find(html);
+    let figure = files.iter().find(|f| is_html(f));
     let what = match (figure, files.len()) {
         (Some(_), 1) => "在 still.fail 里查看图表",
         (Some(_), _) => "在 still.fail 里查看图表和附件",
@@ -1645,13 +1664,7 @@ fn slack_with_files(text: &str, files: &[Attachment], link: &str) -> (String, St
         None => link.to_string(),
     };
     let posted = if text.is_empty() { format!("<{link}|{what}>") } else { format!("{text}\n\n<{link}|{what}>") };
-    let mut kept = text.to_string();
-    for f in files.iter().filter(html) {
-        if !kept.contains(&format!("]({})", f.name)) {
-            kept = if kept.is_empty() { format!("[{0}]({0})", f.name) } else { format!("{kept}\n\n[{0}]({0})", f.name) };
-        }
-    }
-    (posted, kept)
+    (posted, place_figures(text, files))
 }
 
 /// What an agent posted, as its execution history shows a post: the call (to the thread, its text, files and state)

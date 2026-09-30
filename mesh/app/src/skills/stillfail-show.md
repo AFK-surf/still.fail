@@ -19,8 +19,8 @@ what to look at.
 | Data, a comparison, a choice between options, a diagram | an inline HTML page (stillfail-viz skill) | drawn in the message in still.fail's look, interactive, can hand their choice back |
 
 Often two together: images in the message for the verdict at a glance, and the web service for those who want to try
-it. In a Slack thread only words reach Slack (files stay in still.fail, linked at the end of the post), so say there in
-words what the evidence shows.
+it. In a Slack thread files are uploaded below the text (not placed in it); say there in words what the evidence
+shows.
 
 ## Images
 

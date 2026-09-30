@@ -21,6 +21,7 @@
 - agent 自动起标题（auto-chat-title）：改的是 station（mesh），要重新发 station 包，各台 station 更新后才生效；web 和安卓只改了重命名框的提示文字。db 在打开时原地给 `threads` 补三列（`auto_title`、`auto_title_n`、`auto_title_changes`），旧 station 照样能读这份 db。标题是 station 算好下发的，客户端没有改字段，新旧页面怎么混用都不坏。上线后验：新开一个 chat 说句话，agent 发完带 `title` 的 final 后，侧栏标题从第一句话换成它起的名字；手动改过名的 chat 不会被改。
 - 分享卡片改名（og-image-still-fail）：`web/public/og-image.png` 换成 still.fail 的图，官网 `site/index.html` 的标题和 og:title 换成「还是不行！干的什么 JB！」，og:image 改成绝对地址。app 那边跟着 web 上线；官网不在默认部署里，要单独 `python3 cloud/deploy.py site`。上线后验：`curl https://still.fail/` 看 og:title，打开 https://still.fail/og-image.png 和 https://app.still.fail/og-image.png 是新图；Slack 等会缓存旧卡片，要过一阵才换。
 - Slack 同一个 thread 的消息排队处理（slack-duplicate-session-race）：只改 station（mesh/app/src/hub.rs），要重新发 station 包，各台 station 更新后才生效；接口和 db 都没动。修的是新 thread 里第一条 @ 偶尔多出一条「⚠️ 无法创建会话：UNIQUE constraint failed: sessions.key」（Slack 为一次 @ 发 app_mention 和 message 两个事件，两个同时去建会话）。上线后验：在新 thread 里 @ 几次机器人，不再出现这条报错。
+- Slack thread 里直接发文件（slack-file-upload）：只改 station（mesh），要重新发 station 包，各台 station 更新后才生效。以前 agent 用 chat_post 附的文件，在 Slack 里只附一个 still.fail 链接；现在走 getUploadURLExternal → 上传 → files.completeUploadExternal，文件挂在 thread 里、文字下面，HTML 也一样上传。Slack app 没有 `files:write`（老 app，或在设置里关了 files 组）时报 missing_scope，这时照旧发链接，什么都没发出去之前就会发现。db 和接口都没动。上线后验：在 Slack thread 里让 bot 发一张图、一个 pdf 和一个 html，三个文件都出现在 thread 里；关了 files 组的 app 仍然发 still.fail 链接。
 
 ## 2026-09-30
 

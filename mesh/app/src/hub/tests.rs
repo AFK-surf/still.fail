@@ -25,6 +25,10 @@ struct FakeChat {
     answers: Mutex<HashMap<String, Value>>,
     /// What the platform says was in a thread before the station saw it, by thread ts.
     earlier: Mutex<HashMap<String, Vec<ChatMessage>>>,
+    /// The names of the files each post carried.
+    files: Mutex<Vec<Vec<String>>>,
+    /// Like a Slack app without files:write.
+    no_files: AtomicBool,
 }
 
 impl FakeChat {
@@ -36,6 +40,8 @@ impl FakeChat {
             calls: Mutex::default(),
             answers: Mutex::default(),
             earlier: Mutex::default(),
+            files: Mutex::default(),
+            no_files: Default::default(),
         })
     }
     fn texts(&self) -> Vec<String> {
@@ -60,7 +66,11 @@ impl ChatSurface for FakeChat {
     async fn start(self: Arc<Self>, _handler: Handler) -> Result<()> {
         Ok(())
     }
-    async fn post(&self, thread: &ThreadRef, message: &str, _files: &[Attachment]) -> Result<String> {
+    async fn post(&self, thread: &ThreadRef, message: &str, files: &[Attachment]) -> Result<String> {
+        if !files.is_empty() && self.no_files.load(Ordering::SeqCst) {
+            anyhow::bail!("slack files.getUploadURLExternal: missing_scope");
+        }
+        self.files.lock().unwrap().push(files.iter().map(|f| f.name.clone()).collect());
         self.posts.lock().unwrap().push((thread.clone(), message.into()));
         Ok(format!("{}.000200", 9_000_000 + COUNTER.fetch_add(1, Ordering::SeqCst)))
     }
@@ -1400,8 +1410,35 @@ async fn a_session_whose_directory_is_gone_is_not_continued() {
     assert!(r.store.list_sessions().unwrap().is_empty());
 }
 
+#[tokio::test]
+async fn files_posted_to_slack_go_into_the_thread_apps_without_files_write_link_to_still_fail() {
+    let r = setup_with(Setup { link: true, ..Setup::default() });
+    let m = say("<@UBOT> chart it");
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let to = format!("C1/{}", m.thread_ts);
+    let workspace = r.store.get_session(&key).unwrap().unwrap().workspace;
+    for name in ["shot.png", "weather.html"] {
+        std::fs::write(Path::new(&workspace).join(name), "x").unwrap();
+    }
+    let link = format!("https://ember.test/o/ws/st/cl%3AC1%3A{}", m.thread_ts);
+    r.call(&key, "chat_post", json!({ "to": to, "text": "图在这", "files": ["shot.png"] })).await.unwrap();
+    assert_eq!((r.chat.last_text(), r.chat.files.lock().unwrap().last().cloned().unwrap()), ("图在这".to_string(), vec!["shot.png".to_string()]));
+    r.call(&key, "chat_post", json!({ "to": to, "text": "图表", "files": ["shot.png", "weather.html"] })).await.unwrap();
+    assert_eq!(r.chat.last_text(), "图表");
+    assert_eq!(r.chat.files.lock().unwrap().last().cloned().unwrap(), vec!["shot.png".to_string(), "weather.html".to_string()]);
+    let said = r.said(r.thread("C1", &m.thread_ts).id);
+    let last = said.last().unwrap();
+    assert_eq!((last.text.as_str(), last.attachments.len()), ("图表\n\n[weather.html](weather.html)", 2), "still.fail keeps both, the figure placed");
+    r.chat.no_files.store(true, Ordering::SeqCst);
+    r.call(&key, "chat_post", json!({ "to": to, "text": "再看", "files": ["shot.png"] })).await.unwrap();
+    assert_eq!(r.chat.last_text(), format!("再看\n\n<{link}?file=shot.png|在 still.fail 里查看附件>"), "no files:write: linked as before");
+    assert_eq!(r.chat.files.lock().unwrap().last().cloned().unwrap(), Vec::<String>::new());
+}
+
 #[test]
-fn files_posted_to_slack_stay_in_still_fail_and_the_post_links_there() {
+fn files_an_app_cannot_upload_stay_in_still_fail_and_the_post_links_there() {
     let file = |name: &str| Attachment { name: name.into(), path: format!("/w/uploads/{name}"), size: 1, width: None, height: None, thumbhash: None };
     let (posted, kept) = slack_with_files("这周的天气", &[file("weather.html"), file("shot.png")], "https://e/o/w/s/k");
     assert_eq!(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 still.fail 里查看图表和附件>", "the link opens the figure");
