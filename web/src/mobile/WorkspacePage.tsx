@@ -3,7 +3,7 @@
 import { parseEmails, useSlackPeople } from "../cloud/adding.ts";
 import { useEffect, useState } from "react";
 import { stamp } from "../api.ts";
-import { cloud, useWorkspace, type LoginSession, type MemberView, type Role, type WorkspaceView } from "../cloud/api.ts";
+import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, type Role, type WorkspaceView } from "../cloud/api.ts";
 import { useTopic } from "../core/react.ts";
 import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -202,7 +202,7 @@ function AddSheet({ view }: { view: WorkspaceView }) {
                   r.joined.length ? `${r.joined.length} 人已经加入` : "",
                   r.added.length ? `${r.added.length} 人第一次登录 still.fail 时自动加入` : "",
                   r.already.length ? `${r.already.length} 人本来就在` : "",
-                ].filter(Boolean).join("，") + "。"), (e: Error) => setError(e.message)).finally(() => setBusy(false));
+                ].filter(Boolean).join("，") + "。"), (e: Error) => setError(errorText(e))).finally(() => setBusy(false));
               }} />
             </div>
           </>

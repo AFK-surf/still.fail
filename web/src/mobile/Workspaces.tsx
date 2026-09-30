@@ -61,7 +61,7 @@ function WorkspacesSheet() {
                 <Button label="忽略" primary={false} busy={respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.join} onClick={() => respond.run({ account, invite, join: false })} />
               </div>
             ))}
-            {respond.error && <p className={`${partsCss.mError} ${partsCss.mPad}`}>{respond.error.message}</p>}
+            {respond.error && <p className={`${partsCss.mError} ${partsCss.mPad}`}>{errorText(respond.error)}</p>}
           </>
         )}
         {others.length > 0 && <div className={css.mSheetLabel}>切换到</div>}
@@ -113,7 +113,7 @@ function NewWorkspaceSheet() {
               : <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>still.fail 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。</p>}
           </>
         )}
-        {create.error && !asked && <p className={partsCss.mError}>{create.error.message}</p>}
+        {create.error && !asked && <p className={partsCss.mError}>{errorText(create.error)}</p>}
         <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label="新建" primary busy={create.busy} enabled={!!name.trim() && !!sub} onClick={() => create.run()} />

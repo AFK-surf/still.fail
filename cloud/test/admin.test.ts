@@ -105,7 +105,7 @@ test("the admin sees every user, workspace and code", async () => {
   }
 });
 
-test("creating a workspace takes the admin, someone let in before, or a code", async () => {
+test("creating a workspace takes the admin, an account with a code (or from before codes), and no one only invited", async () => {
   const h = await harness();
   try {
     const aliceTokens = await h.login("alice");
@@ -144,13 +144,17 @@ test("creating a workspace takes the admin, someone let in before, or a code", a
     const codes = ((await (await aliceAdmin("GET", "/v1/admin/invite-codes")).json()) as any).codes;
     assert.equal(codes.filter((c: any) => c.used_by).length, 1, "one code, one workspace");
 
-    // Invited into a workspace: allowed, even after leaving it.
+    // Invited into a workspace: in there only; making one of their own takes a code, and then the account may again.
     const home = await (await alice("POST", "/v1/workspaces", { name: "Home" })).json() as any;
     const invite = await (await alice("POST", `/v1/workspaces/${home.id}/invitations`, { role: "member", email: "bob@example.test" })).json() as any;
     assert.equal((await bob("POST", "/v1/invitations/accept", { token: invite.token })).status, 200);
+    assert.deepEqual(await create(bob, {}), [403, "invite_code_required"]);
+    assert.equal(await create(bob, { invite_code: await code() }), 200);
     const bobSub = ((await (await bob("GET", "/v1/me")).json()) as any).user.sub;
     assert.equal((await bob("DELETE", `/v1/workspaces/${home.id}/members/${bobSub}`)).status, 200);
     assert.equal(await create(bob, {}), 200);
+    const admitted = ((await (await aliceAdmin("GET", "/v1/admin/users")).json()) as any).users;
+    assert.equal(admitted.find((u: any) => u.sub === bobSub).admission, "code");
 
     // A member from before codes existed has no admission on record; being in a workspace is enough.
     const carolSub = ((await (await carol("GET", "/v1/me")).json()) as any).user.sub;
@@ -179,6 +183,48 @@ test("two creations racing on one code: exactly one gets it", async () => {
     assert.deepEqual(statuses, [200, 409, 409, 409]);
     const { workspaces } = await (await aliceAdmin("GET", "/v1/admin/workspaces")).json() as any;
     assert.equal(workspaces.length, 1);
+  } finally {
+    await h.close();
+  }
+});
+
+test("an account creates up to five workspaces, and a workspace lets in up to five people", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    const aliceAdmin = h.as(aliceTokens, "admin");
+    const bob = h.as(await h.login("bob"));
+    const carol = h.as(await h.login("carol"));
+    const { code } = await (await aliceAdmin("POST", "/v1/admin/invite-codes", {})).json() as any;
+    const made: any[] = [];
+    for (let i = 0; i < 5; i++) {
+      const response = await bob("POST", "/v1/workspaces", { name: `W${i}`, ...(i === 0 ? { invite_code: code } : {}) });
+      assert.equal(response.status, 200);
+      made.push(await response.json());
+    }
+    const sixth = await bob("POST", "/v1/workspaces", { name: "W5" });
+    assert.deepEqual([sixth.status, ((await sixth.json()) as any).error], [429, "too_many_workspaces"]);
+    // Being made owner of someone else's does not count against it; deleting one of its own frees one.
+    assert.equal((await bob("DELETE", `/v1/workspaces/${made[4].id}`)).status, 200);
+    assert.equal((await bob("POST", "/v1/workspaces", { name: "W5" })).status, 200);
+
+    // Five people: members, emails added, and open invitations all hold a seat.
+    const w = made[0].id;
+    const added = await bob("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["p1@example.test", "p2@example.test", "p3@example.test"] });
+    assert.equal(added.status, 200);
+    assert.equal((await bob("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "carol@example.test" })).status, 200);
+    // A newer invitation to the same email takes the older one's seat.
+    const again = await (await bob("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "carol@example.test" })).json() as any;
+    assert.equal((await bob("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["p4@example.test"] })).status, 200);
+    const full = await bob("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "p5@example.test" });
+    assert.deepEqual([full.status, ((await full.json()) as any).error], [429, "too_many_members"]);
+    const over = await bob("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["p5@example.test"] });
+    assert.deepEqual([over.status, ((await over.json()) as any).error], [429, "too_many_members"]);
+    // Adding someone already added, or invited, takes no new seat.
+    assert.equal((await bob("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["p1@example.test"] })).status, 200);
+    assert.equal((await carol("POST", "/v1/invitations/accept", { token: again.token })).status, 200);
+    const view = await (await bob("GET", `/v1/workspaces/${w}`)).json() as any;
+    assert.equal(view.members.length + view.added.length, 6);
   } finally {
     await h.close();
   }

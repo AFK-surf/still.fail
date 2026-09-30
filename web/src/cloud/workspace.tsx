@@ -317,7 +317,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && code.trim()) create.run(); }} />
         </Field>
       )}
-      {create.error && !needsInviteCode(create.error) && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
+      {create.error && !needsInviteCode(create.error) && <p className={controlsCss.fieldError} role="alert">{errorText(create.error)}</p>}
     </Dialog>
   );
 }

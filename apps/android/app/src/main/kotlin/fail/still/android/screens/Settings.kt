@@ -50,6 +50,7 @@ import fail.still.android.Screen
 import fail.still.android.data.Cloud
 import fail.still.android.data.Enrollment
 import fail.still.android.data.LoginSession
+import fail.still.android.data.errorText
 import fail.still.android.data.Member
 import fail.still.android.data.ROLE_HINT
 import fail.still.android.data.ROLE_LABEL
@@ -92,7 +93,7 @@ fun confirm(app: AppState, title: String, text: String, action: String, danger: 
                 Button("取消", primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, danger = danger) {
                     busy = true; error = null
-                    scope.launch { try { run(); app.sheet = null } catch (e: CoreException) { error = e.message } finally { busy = false } }
+                    scope.launch { try { run(); app.sheet = null } catch (e: CoreException) { error = errorText(e) } finally { busy = false } }
                 }
             }
         }
@@ -116,7 +117,7 @@ fun ask(app: AppState, title: String, value: String, placeholder: String, action
                 Button("取消", primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, enabled = text.isNotBlank() && text.trim() != value) {
                     busy = true; error = null
-                    scope.launch { try { run(text.trim()); app.sheet = null } catch (e: CoreException) { error = e.message } finally { busy = false } }
+                    scope.launch { try { run(text.trim()); app.sheet = null } catch (e: CoreException) { error = errorText(e) } finally { busy = false } }
                 }
             }
         }
@@ -357,7 +358,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
                             if (r.added.isNotEmpty()) "${r.added.size} 人第一次登录 still.fail 时自动加入" else "",
                             if (r.already.isNotEmpty()) "${r.already.size} 人本来就在" else "",
                         ).filter { it.isNotEmpty() }.joinToString("，") + "。"
-                    } catch (e: CoreException) { error = e.message } finally { busy = false }
+                    } catch (e: CoreException) { error = errorText(e) } finally { busy = false }
                 }
             }
         }
@@ -440,7 +441,7 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
                     if (onCancel != null) Button("取消", primary = false) { onCancel() }
                     Button("生成命令", primary = true, busy = busy, enabled = name.isNotBlank()) {
                         busy = true; error = null
-                        scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = e.message } finally { busy = false } }
+                        scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = errorText(e) } finally { busy = false } }
                     }
                 }
             }

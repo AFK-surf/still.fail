@@ -25,7 +25,7 @@ import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, IC
 import { signOut, type Account } from "./accounts.ts";
 import { lastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
-import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
+import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
@@ -530,7 +530,7 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
           done.already.length ? `${done.already.length} 人本来就在` : "",
         ].filter(Boolean).join("，")}。</span></div>
       )}
-      {add.error && <p className={controlsCss.fieldError} role="alert">{add.error.message}</p>}
+      {add.error && <p className={controlsCss.fieldError} role="alert">{errorText(add.error)}</p>}
     </Dialog>
   );
 }

@@ -221,7 +221,7 @@ function CodesPage({ account }: { account: Account }) {
   const usable = list?.filter((c) => codeState(c).label === "可用").length ?? 0;
   const copy = (url: string) => void navigator.clipboard.writeText(url).then(() => toast("已复制注册链接"));
   return (
-    <Page title="邀请码" lead="still.fail 只对受邀的人开放。没被邀请进任何 workspace 的人，要有邀请码才能新建 workspace；一个邀请码只能用一次，用过的人之后可以再建。">
+    <Page title="邀请码" lead="新建 workspace 的资格按账号给：用过邀请码的账号最多可以建 5 个 workspace，每个最多邀请 5 个人。被邀请加入的人只能加入，自己要建也得有邀请码。一个邀请码只能用一次。">
       <Section title={list ? `${list.length} 个，${usable} 个可用` : "邀请码"} actions={<Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>生成邀请码</Button>}>
         <Failed error={codes.error} />
         {!list ? !codes.error && <Loading label="正在读取…" fill={false} /> : list.length === 0 ? (
@@ -270,7 +270,7 @@ function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(
   const made = make.result;
   return (
     <Dialog open onClose={onClose} wide title={made ? "邀请码已生成" : "生成邀请码"}
-      description={made ? `把邀请码或注册链接发给对方。只能用一次，${days} 天后过期。` : "对方登录 still.fail 后，用它建一个自己的 workspace。一个邀请码只能用一次。"}
+      description={made ? `把邀请码或注册链接发给对方。只能用一次，${days} 天后过期。` : "对方登录 still.fail 后用它新建 workspace，这个账号从此就有资格，最多建 5 个。一个邀请码只能用一次。"}
       footer={made ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
         <Button variant="primary" busy={make.busy} onClick={() => make.run()}>生成</Button>

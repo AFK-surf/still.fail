@@ -26,7 +26,9 @@ const MANAGERS: readonly Role[] = ["owner", "admin"];
 
 export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SEC = 60 * 60;
-const LIMITS = { workspacesPerUser: 32, membersPerWorkspace: 200, stationsPerWorkspace: 64, openInvitations: 50, pushPerUser: 32 };
+// A workspace holds its creator and up to five people they let in; an account may create five. The admin's (and the
+// workspaces they created) go up to the old bounds.
+const LIMITS = { workspacesPerUser: 5, membersPerWorkspace: 6, adminWorkspaces: 32, adminMembers: 200, stationsPerWorkspace: 64, openInvitations: 50, pushPerUser: 32 };
 
 /** The events socket's subprotocols (api.ts socketToken), the new one first: clients from before the rename say "ember-events". */
 export const EVENTS_PROTOCOLS = ["stillfail-events", "ember-events"] as const;
@@ -193,14 +195,17 @@ export class Directory extends DurableObject<Env> {
     const joined: string[] = [];
     const added: string[] = [];
     const already: string[] = [];
-    const count = () => (this.#one("SELECT (SELECT COUNT(*) FROM members WHERE workspace = ?) + (SELECT COUNT(*) FROM added WHERE workspace = ?) AS n", workspace, workspace)!.n as number);
+    const cap = this.#memberCap(workspace);
     this.ctx.storage.transactionSync(() => {
       for (const email of wanted) {
         if (this.#one("SELECT 1 AS x FROM members m JOIN users u ON u.sub = m.sub WHERE m.workspace = ? AND lower(u.email) = ?", workspace, email)) {
           already.push(email);
           continue;
         }
-        if (count() >= LIMITS.membersPerWorkspace) fail(429, "too_many_members");
+        // An open invitation to this email, or its being added already, is replaced: its seat is this one.
+        const replaces = this.#one(`SELECT (SELECT COUNT(*) FROM invitations WHERE workspace = ? AND email = ? AND expires_at > ?)
+          + (SELECT COUNT(*) FROM added WHERE workspace = ? AND email = ?) AS n`, workspace, email, nowSeconds(), workspace, email)!.n as number;
+        if (this.#seats(workspace, true) - replaces >= cap) fail(429, "too_many_members");
         // An invitation to the same email is replaced by being added.
         this.#run("DELETE FROM invitations WHERE workspace = ? AND email = ?", workspace, email);
         const accounts = this.#byEmail(email);
@@ -240,17 +245,17 @@ export class Directory extends DurableObject<Env> {
   }
 
   /**
-   * still.fail is invite-only: the admin may create workspaces, and so may anyone
-   * let in before — through an invitation they accepted or a code they
-   * redeemed (or, from before codes existed, by being a member somewhere).
-   * Anyone else redeems a code, which is used up by this workspace. Nothing
-   * here awaits, so two creations with one code cannot both see it unused.
+   * still.fail is invite-only, and creating workspaces is the account's to earn: the admin may, and so may an account
+   * that redeemed a code (the code is used up by the workspace it made first), or that was in a workspace before codes
+   * existed, or has made one before. Being invited into a workspace lets one in there only; to make one of their own
+   * they redeem a code. An account makes up to LIMITS.workspacesPerUser. Nothing here awaits, so two creations with one
+   * code cannot both see it unused.
    */
   createWorkspace(sub: string, name: string, admin: boolean, code: unknown): WorkspaceView {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
-    const owned = this.#one("SELECT COUNT(*) AS n FROM members WHERE sub = ? AND role = 'owner'", sub)!.n as number;
-    if (owned >= LIMITS.workspacesPerUser) fail(429, "too_many_workspaces");
-    const redeem = admin || this.#admitted(sub) ? null : this.#redeemable(code);
+    const made = this.#one("SELECT COUNT(*) AS n FROM workspaces WHERE created_by = ?", sub)!.n as number;
+    if (made >= (admin ? LIMITS.adminWorkspaces : LIMITS.workspacesPerUser)) fail(429, "too_many_workspaces");
+    const redeem = admin || this.#mayCreate(sub) ? null : this.#redeemable(code);
     const id = ulid();
     const now = nowSeconds();
     this.ctx.storage.transactionSync(() => {
@@ -258,15 +263,32 @@ export class Directory extends DurableObject<Env> {
       this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, 'owner', ?)", id, sub, now);
       if (redeem) {
         this.#run("UPDATE invite_codes SET used_by = ?, used_at = ?, workspace = ? WHERE code = ?", sub, now, id, redeem);
-        this.#run("UPDATE users SET admitted = 'code' WHERE sub = ? AND admitted IS NULL", sub);
+        // An account let in by an invitation earns creating with its code.
+        this.#run("UPDATE users SET admitted = 'code' WHERE sub = ? AND (admitted IS NULL OR admitted = 'invitation')", sub);
       }
     });
     this.#tell([sub], LIST);
     return this.workspace(sub, id);
   }
 
-  #admitted(sub: string): boolean {
-    return Boolean(this.#one("SELECT 1 AS x FROM users WHERE sub = ? AND admitted IS NOT NULL UNION ALL SELECT 1 FROM members WHERE sub = ? LIMIT 1", sub, sub));
+  /** Whether an account may create workspaces without a code (the admin aside): see createWorkspace. */
+  #mayCreate(sub: string): boolean {
+    return Boolean(this.#one(`SELECT 1 AS x FROM users WHERE sub = ? AND admitted = 'code'
+      UNION ALL SELECT 1 FROM users u JOIN members m ON m.sub = u.sub WHERE u.sub = ? AND u.admitted IS NULL
+      UNION ALL SELECT 1 FROM workspaces WHERE created_by = ? LIMIT 1`, sub, sub, sub));
+  }
+
+  /** How many people a workspace may hold, its creator among them. */
+  #memberCap(workspace: string): number {
+    const creator = this.#one("SELECT u.email FROM workspaces w JOIN users u ON u.sub = w.created_by WHERE w.id = ?", workspace);
+    return creator && isAdmin(this.env, creator.email as string) ? LIMITS.adminMembers : LIMITS.membersPerWorkspace;
+  }
+
+  /** Who a workspace holds or has let in: members, emails added but not signed in yet, and, with `invited`, open invitations. */
+  #seats(workspace: string, invited = false): number {
+    return this.#one(`SELECT (SELECT COUNT(*) FROM members WHERE workspace = ?) + (SELECT COUNT(*) FROM added WHERE workspace = ?)
+      + (CASE WHEN ? THEN (SELECT COUNT(*) FROM invitations WHERE workspace = ? AND expires_at > ?) ELSE 0 END) AS n`,
+      workspace, workspace, invited ? 1 : 0, workspace, nowSeconds())!.n as number;
   }
 
   /** The stored form of a code that may be redeemed now; fails with why not. */
@@ -326,6 +348,9 @@ export class Directory extends DurableObject<Env> {
     if (this.#one("SELECT 1 AS x FROM members m JOIN users u ON u.sub = m.sub WHERE m.workspace = ? AND lower(u.email) = lower(?)", workspace, email!)) fail(409, "already_member");
     const open = this.#one("SELECT COUNT(*) AS n FROM invitations WHERE workspace = ? AND expires_at > ?", workspace, nowSeconds())!.n as number;
     if (open >= LIMITS.openInvitations) fail(429, "too_many_invitations");
+    // Every open invitation holds a seat, but a newer one to the same email takes the older one's.
+    const replaces = this.#one("SELECT 1 AS x FROM invitations WHERE workspace = ? AND email = ? AND expires_at > ?", workspace, email!.toLowerCase(), nowSeconds()) ? 1 : 0;
+    if (this.#seats(workspace, true) - replaces >= this.#memberCap(workspace)) fail(429, "too_many_members");
     const token = randomSecret();
     const id = ulid();
     const expires = nowSeconds() + INVITATION_TTL_SEC;
@@ -352,9 +377,8 @@ export class Directory extends DurableObject<Env> {
     if (!row) fail(404, "invitation_not_found");
     if (row!.email && (row!.email as string) !== email.toLowerCase()) fail(403, "invitation_for_other_email");
     const workspace = row!.workspace as string;
-    const count = this.#one("SELECT COUNT(*) AS n FROM members WHERE workspace = ?", workspace)!.n as number;
     const existing = this.#one("SELECT role FROM members WHERE workspace = ? AND sub = ?", workspace, sub);
-    if (!existing && count >= LIMITS.membersPerWorkspace) fail(429, "too_many_members");
+    if (!existing && this.#seats(workspace) >= this.#memberCap(workspace)) fail(429, "too_many_members");
     this.ctx.storage.transactionSync(() => {
       this.#run("DELETE FROM invitations WHERE id = ?", row!.id);
       // Accepting never lowers a role someone already has.
@@ -380,8 +404,7 @@ export class Directory extends DurableObject<Env> {
     if ((row!.email as string | null) !== email.toLowerCase()) fail(403, "invitation_for_other_email");
     const workspace = row!.workspace as string;
     const existing = this.#one("SELECT role FROM members WHERE workspace = ? AND sub = ?", workspace, sub);
-    const count = this.#one("SELECT COUNT(*) AS n FROM members WHERE workspace = ?", workspace)!.n as number;
-    if (!existing && count >= LIMITS.membersPerWorkspace) fail(429, "too_many_members");
+    if (!existing && this.#seats(workspace) >= this.#memberCap(workspace)) fail(429, "too_many_members");
     this.ctx.storage.transactionSync(() => {
       this.#run("DELETE FROM invitations WHERE id = ?", id);
       this.#run("UPDATE users SET admitted = 'invitation' WHERE sub = ? AND admitted IS NULL", sub);

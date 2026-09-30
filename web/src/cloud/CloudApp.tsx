@@ -245,7 +245,7 @@ function Invite() {
             <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
             <Button variant="primary" busy={accept.busy} onClick={() => accept.run()}>以 {list.find((a) => a.sub === sub)?.email} 加入</Button>
           </div>
-          {accept.error && <p className={controlsCss.fieldError} role="alert">{accept.error.message}</p>}
+          {accept.error && <p className={controlsCss.fieldError} role="alert">{errorText(accept.error)}</p>}
         </>
       )}
     </div>
