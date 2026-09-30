@@ -1,7 +1,7 @@
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
 // agent's execution history as a sheet opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
 // the same rows, avatars, names, quotes, files, activity and list behaviour), with the avatar and name in line with the
-// words rather than out in a margin. Long-press quotes or copies a message; ＋ adds files.
+// words rather than out in a margin. Long-press opens a message on its own page (Annotate.tsx); ＋ adds files.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
@@ -12,12 +12,13 @@ import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
-import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Plus, Stop, Web } from "../icons.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { PENDING } from "../lastChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
+import { annotatePath } from "./Annotate.tsx";
 import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
@@ -153,10 +154,11 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
     open: (key: string) => { const { app, here } = latest.current; openHistory(app, here.station, here.key, key); },
     quote: (q: Omit<Quote, "comment">) => latest.current.draft.quote(q),
     images: () => latest.current.images(),
+    hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
   }));
   // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
   const quoting = useSelectionQuote(list, stable.quote);
-  const hold = useHold(list, rows.messages, stable.quote);
+  const hold = useHold(list, rows.messages, stable.hold);
   const askedFile = useAskedFile(list, rows.messages, (f) => ownerIn(view, f));
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
   // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
@@ -205,11 +207,10 @@ function plain(text: string): string {
 }
 
 /**
- * Long-press on a message in the list (a right click with a mouse): quote it, or copy it. While its menu is open its
- * words are marked. Not on what does its own thing in it (a name, a quote, a file).
+ * Long-press on a message in the list (a right click with a mouse): its page, to pick passages of it to say something
+ * about or to copy (Annotate.tsx). Not on what does its own thing in it (a name, a quote, a file).
  */
-function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], quote: (q: Omit<Quote, "comment">) => void) {
-  const app = useApp();
+function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], onHold: (ts: string) => void) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const touched = useRef(false);
   const shown = useRef(messages);
@@ -219,21 +220,16 @@ function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], q
     const row = at.closest?.<HTMLElement>("[data-author][data-ts]");
     if (!row || !list.current?.contains(row) || at.closest("button, input, textarea")) return null;
     const m = shown.current.find((x) => x.ts === row.dataset.ts);
-    if (!m || m.system) return null;
+    if (!m || m.system || !m.text.trim()) return null;
     const words = row.querySelector<HTMLElement>(`.${conversationCss.msgBubble}, .${conversationCss.markdown}, .${chatCss2.msgPlain}`) ?? row;
-    return { row, m, words };
+    return { m, words };
   };
-  const open = ({ row, m, words }: NonNullable<ReturnType<typeof held>>) => {
+  const open = ({ m, words }: NonNullable<ReturnType<typeof held>>) => {
+    // Marked for a moment as the page comes over it.
     words.dataset.pressed = "";
-    const role = row.dataset.role === "agent" ? "agent" as const : "person" as const;
-    app.menu({
-      anchor: words.getBoundingClientRect(),
-      items: [
-        { label: "引用", icon: <QuoteIcon size={16} />, action: () => quote({ author: row.dataset.author!, text: plain(m.text), ...(m.ts ? { ts: m.ts } : {}), role }) },
-        { label: "拷贝", icon: <Copy size={16} />, action: () => { void navigator.clipboard.writeText(m.text).then(() => app.toast("已拷贝")); } },
-      ],
-      onDismiss: () => { delete words.dataset.pressed; },
-    });
+    setTimeout(() => { delete words.dataset.pressed; }, 600);
+    navigator.vibrate?.(10);
+    onHold(m.ts);
   };
   const cancel = () => clearTimeout(timer.current);
   // A finger holds for the menu; a mouse right-clicks for it (and selects words to quote a passage of them).

@@ -78,6 +78,7 @@ import "../mobile/SignIn.css.ts";
 import "../mobile/sheets.css.ts";
 import "../mobile/WorkspacePage.css.ts";
 import "../mobile/Preview.css.ts";
+import "../mobile/Annotate.css.ts";
 import "../mobile/Connects.css.ts";
 import "../mobile/Archive.css.ts";
 import "../mobile/Memory.css.ts";

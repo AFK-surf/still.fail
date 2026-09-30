@@ -5,6 +5,7 @@ import { Navigate, Route, Routes, useParams, type Location } from "react-router"
 import { useStations } from "../api.ts";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { MobileShell, type Entry } from "./app.tsx";
+import { AnnotateScreen } from "./Annotate.tsx";
 import { ArchiveScreen } from "./Archive.tsx";
 import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, NewConnectScreen } from "./Connects.tsx";
@@ -37,6 +38,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/leave" element={<WorkspaceScreen />} />
       <Route path="s/:station/chats/:chat" element={<ChatHost stations={stations} />} />
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
+      <Route path="s/:station/chats/:chat/messages/:ts" element={<InStation stations={stations}><AnnotateScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
       <Route path="s/:station/memory" element={<InStation stations={stations}><MemoryScreen /></InStation>} />

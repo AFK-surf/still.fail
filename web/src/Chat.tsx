@@ -561,7 +561,7 @@ export function MineBubble({ text }: { text: string }) {
 
 /** What a person wrote, as every message of a person's draws it (their own in its bubble, someone else's as it is):
  * plain text, its references to chats as chips. */
-function PersonWords({ text }: { text: string }) {
+export function PersonWords({ text }: { text: string }) {
   return <div className={chatCss2.msgPlain}><WithRefs text={text} /></div>;
 }
 
