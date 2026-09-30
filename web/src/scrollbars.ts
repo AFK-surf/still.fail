@@ -12,7 +12,7 @@ type Axis = "y" | "x";
 const HIDE_AFTER = 900;
 const MIN_THUMB = 28;
 const INSET = 2;
-const SIZE = 6;
+const SIZE = 3;
 
 /** How much of the pane's height, at its bottom, the vertical track leaves free: what floats over it there. */
 function endOf(el: Element): number {
