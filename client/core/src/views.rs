@@ -45,6 +45,8 @@ pub struct Views {
     /// after (a page that opened one keeps its key).
     pending: RefCell<HashMap<String, Pending>>,
     archiving: archive::Archiving,
+    /// Views whose words count seconds (a chat's jobs): each computed again when they next change, by the newest timer.
+    again: Rc<RefCell<(u64, HashMap<Topic, u64>)>>,
 }
 
 /// A chat asked for here. Until its station has made it, it is shown at once from what is known here: its page,
@@ -98,6 +100,7 @@ impl Views {
             sent: Cell::new(0),
             pending: RefCell::default(),
             archiving: Default::default(),
+            again: Rc::default(),
         })
     }
 
@@ -408,6 +411,7 @@ impl Views {
     }
 
     pub fn stop(&self, view: &Topic) {
+        self.again.borrow_mut().1.remove(view);
         let watches = self.views.borrow_mut().remove(view);
         // Released with nothing borrowed here.
         drop(watches);
@@ -438,8 +442,50 @@ impl Views {
             Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
             Topic::History { station, key } => self.history(station, key),
             Topic::Archive { scope } => self.archive(scope),
+            Topic::ChatJobs { station, thread, session } => {
+                let chat = Topic::Chat { station: station.clone(), thread: *thread, session: session.clone() };
+                Some(self.store.value(&chat)?.map(|chat| {
+                    let (jobs, next) = crate::jobs::chat_jobs(&chat, self.clock());
+                    self.again_in(view, next);
+                    jobs
+                }))
+            }
+            Topic::LongJobs { scope } => {
+                let stations = match self.stations(scope)? {
+                    Ok(stations) => stations,
+                    Err(error) => return Some(Err(error)),
+                };
+                // A station down, or too old to know the list, has none to show.
+                let several = stations.len() > 1;
+                let open: Vec<(String, Option<String>, Vec<Value>)> = stations.iter().filter(|s| s.online).map(|s| {
+                    let jobs = self.ok(Topic::Jobs { station: s.address.clone() }).and_then(|j| j.as_array().cloned()).unwrap_or_default();
+                    (s.address.clone(), several.then(|| s.name.clone()), jobs)
+                }).collect();
+                Some(Ok(crate::jobs::long_jobs(&open, self.clock())))
+            }
             _ => None,
         }
+    }
+
+    /// Has a view computed again in `ms` (the timer set last is the one that counts).
+    fn again_in(&self, view: &Topic, ms: f64) {
+        let mut again = self.again.borrow_mut();
+        if !ms.is_finite() {
+            again.1.remove(view);
+            return;
+        }
+        again.0 += 1;
+        let run = again.0;
+        again.1.insert(view.clone(), run);
+        let (sleep, store, again, view) = (self.host.sleep(ms.ceil() as u64), Rc::downgrade(&self.store), Rc::downgrade(&self.again), view.clone());
+        self.host.spawn(Box::pin(async move {
+            sleep.await;
+            let Some(again) = again.upgrade() else { return };
+            if again.borrow().1.get(&view) == Some(&run) {
+                again.borrow_mut().1.remove(&view);
+                invalidate(&store, &view);
+            }
+        }));
     }
 
     /// Watches what the view needs now and lets go of the rest.
@@ -472,6 +518,12 @@ impl Views {
             Topic::Chats { scope, .. } | Topic::ChatSearch { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             Topic::Archive { scope } => (scope.as_str(), |station| vec![Topic::ArchivedRows { station }]),
+            Topic::LongJobs { scope } => (scope.as_str(), |station| vec![Topic::Jobs { station }]),
+            // A chat's jobs are its agents', as its view has them.
+            Topic::ChatJobs { station, thread, session } => {
+                topics.insert(Topic::Chat { station: station.clone(), thread: *thread, session: session.clone() });
+                return topics;
+            }
             // Its sessions (the recent ones, the one it delivers into) and the chats they were last talked to in.
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station: station.clone() }, Topic::Sessions { station: station.clone() }, Topic::Threads { station }]),
             Topic::Chat { station, thread: None, session: Some(key) } if key.starts_with(PENDING_PREFIX) => {

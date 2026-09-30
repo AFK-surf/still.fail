@@ -15,6 +15,7 @@ pub mod entries;
 pub mod error;
 pub mod format;
 pub mod history;
+pub mod jobs;
 pub mod host;
 pub mod kept;
 pub mod mesh;

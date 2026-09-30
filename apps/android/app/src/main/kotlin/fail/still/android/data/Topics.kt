@@ -95,8 +95,15 @@ object Topics {
     fun live(station: String, key: String) = buildJsonObject { put("topic", "live"); put("station", station); put("key", key) }
     /** An agent's execution history, read for people (the core's). */
     fun history(station: String, key: String) = buildJsonObject { put("topic", "history"); put("station", station); put("key", key) }
-    /** A station's background jobs still up, newest first, each with the chat it is in (`/jobs`). */
-    fun jobs(station: String) = buildJsonObject { put("topic", "jobs"); put("station", station) }
+    /** A chat's services and background jobs as its pages show them (the same `of` as its `chat`; Jobs.kt). */
+    fun chatJobs(station: String, of: ChatOf) = buildJsonObject {
+        put("topic", "chatJobs"); put("station", station)
+        when (of) { is ChatOf.Thread -> put("thread", of.id); is ChatOf.Session -> put("session", of.key) }
+    }
+    /** The services and jobs left up a long while on the scope's stations that are up (OpenJobs.kt). */
+    fun longJobs(scope: String) = buildJsonObject { put("topic", "longJobs"); put("scope", scope) }
+    /** A job as it is now (kept current by the core). */
+    fun job(station: String, id: String) = buildJsonObject { put("topic", "job"); put("station", station); put("id", id) }
     /** A job's last `lines` lines of output and when it last grew, current as it grows. */
     fun jobLog(station: String, job: String, lines: Int) = buildJsonObject { put("topic", "jobLog"); put("station", station); put("job", job); put("lines", lines) }
     /** What the core has been waiting on for a while (a slow request, a link down), said under a page's "loading…". */

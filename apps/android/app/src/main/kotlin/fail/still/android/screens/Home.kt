@@ -227,7 +227,7 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine:
             if (days.isEmpty() && !view.loading) failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
             if (days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(current, view, onlyMine) }
             // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
-            item(key = "open-jobs") { OpenJobs(stations) }
+            item(key = "open-jobs") { OpenJobs(current.workspace.id) }
             for (day in days) {
                 item(key = dayKey(day)) { Moving(motion, dayKey(day), still) { SectionHeader(day.label) } }
                 items(day.items, key = ::rowKey) { Moving(motion, rowKey(it), still) { ChatRow(it, view) } }

@@ -441,7 +441,7 @@ pub fn host(h: &mut Value) {
 
 /// Whether what goes out of a topic shows times in words (sent again each minute).
 pub fn ticks(topic: &Topic) -> bool {
-    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::JobLog { .. })
+    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. })
 }
 
 /// A topic's value through the shape the clients are generated from (client/shapes): what it does not declare is
@@ -469,6 +469,10 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Archive { .. } => s::conform::<s::ArchiveView>(value),
         Topic::NewChat { .. } => s::conform::<s::NewChatView>(value),
         Topic::Pick { .. } => s::conform::<s::PickView>(value),
+        Topic::ChatJobs { .. } => s::conform::<s::ChatJobsView>(value),
+        Topic::LongJobs { .. } => s::conform::<s::LongJobsView>(value),
+        Topic::Job { .. } => s::conform::<s::Job>(value),
+        Topic::JobLog { .. } => s::conform::<s::JobLogView>(value),
         _ => Ok(value),
     }
 }
@@ -498,6 +502,14 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
             value.get_mut("connects").and_then(Value::as_array_mut).into_iter().flatten().for_each(connect);
             value.get_mut("profiles").and_then(Value::as_array_mut).into_iter().flatten().for_each(profile);
         }
+        // Its agents' jobs, each with its dot and words (jobs.rs); a job, its output.
+        Topic::Chat { .. } => {
+            for jobs in value.get_mut("agents").and_then(Value::as_array_mut).into_iter().flatten().filter_map(|a| a.get_mut("jobs")?.as_array_mut()) {
+                jobs.iter_mut().for_each(|j| *j = crate::jobs::shown(j, c));
+            }
+        }
+        Topic::Job { .. } => *value = crate::jobs::shown(value, c),
+        Topic::JobLog { .. } => crate::jobs::log(value, c),
         _ => {}
     }
     times(value, c);

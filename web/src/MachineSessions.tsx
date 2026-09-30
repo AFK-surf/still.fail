@@ -9,11 +9,46 @@ import { Button, Dialog, RuntimeLogo, Time, Tip } from "./ui.tsx";
 import { AgentAvatar, AgentWords, MessageName, MineBubble, MineMessage, OthersMessage } from "./Chat.tsx";
 import { modelName, optionOf } from "./ModelTriple.tsx";
 import * as conversationCss from "./styles/conversation.css.ts";
-import { ago, clock, useNow } from "./Jobs.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
 import * as css from "./MachineSessions.css.ts";
 import * as uiCss from "./ui.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
+
+// Times in words, still worked out here (they were the job lists' until those moved into the core).
+
+/** A time span in words: 12 秒, 4 分钟, 3 小时, 2 天. */
+function span(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s} 秒`;
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟`;
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时`;
+  return `${Math.floor(s / 86400)} 天`;
+}
+
+/** How long ago: 刚刚, 12 秒前, 4 分钟前, 3 小时前, 昨天, 2 天前. */
+function ago(at: number, now: number): string {
+  const s = Math.round((now - at) / 1000);
+  if (s < 5) return "刚刚";
+  if (s >= 86400 && s < 2 * 86400) return "昨天";
+  return `${span(now - at)}前`;
+}
+
+/** A clock time: 13:04 today, 9/27 13:04 before. */
+function clock(at: number, now: number): string {
+  const d = new Date(at);
+  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return new Date(now).toDateString() === d.toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+}
+
+/** Now, again every `every` ms: for the times in words. */
+function useNow(every: number): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), every);
+    return () => clearInterval(timer);
+  }, [every]);
+  return now;
+}
 
 /** `models`: the station's, for the agents' names and pictures in a preview. */
 export function MachineSessions({ models, onContinued }: { models: ModelOption[]; onContinued(key: string): void }) {

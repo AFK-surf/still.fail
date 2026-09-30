@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.AppState
+import fail.still.android.data.ChatJobsView
 import fail.still.android.data.ChatOf
 import fail.still.android.data.ChatView
 import fail.still.android.data.ChatThread
@@ -58,6 +59,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
     app.sheet = SheetSpec(0.72f, draggable = true) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val view = chat.value
+        val jobs by rememberTopic<ChatJobsView>(app.core, Topics.chatJobs(station, of))
         SheetGrab()
         SheetHead("对话信息")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
@@ -90,7 +92,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")
                 (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time?.get("createdAt")?.ago ?: "") }
             }
-            view?.let { JobGroups(app, station, of, jobsOf(it)) }
+            jobs.value?.let { JobGroups(app, station, of, it) }
             view?.slackUrl?.let { url ->
                 GroupLabel("在 Slack 里")
                 val context = LocalContext.current

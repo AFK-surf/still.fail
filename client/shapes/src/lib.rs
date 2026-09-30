@@ -1607,15 +1607,125 @@ pub struct Job {
     /// When its output last grew; absent when it has none.
     #[typeshare(serialized_as = "Option<I54>")]
     pub output_at: Option<i64>,
+    // What the core puts in for the clients to show (jobs.rs).
+    /// Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over).
+    pub tone: Option<String>,
+    /// A web service (it has a port).
+    pub service: Option<bool>,
+    /// A service whose page can be opened: up, or being started again.
+    pub open: Option<bool>,
+    /// Over, so clearing takes it away (stopped, failed, ended by itself; not a service started again).
+    pub ended: Option<bool>,
+    /// It matters now: up, alive, restarting, or died lately (a day).
+    pub current: Option<bool>,
+    /// Its state in a word (在线, 在盯着, 意外退出…), coloured as its dot.
+    pub word: Option<String>,
+    /// The line under its name, in parts (see `JobPart`).
+    pub meta: Option<Vec<JobPart>>,
+    /// Its state, how long, and how many notices, as a detail's head says it: 在盯着 · 3 分钟 · 2 条通知.
+    pub detail: Option<String>,
+    /// When its output last grew, in words: 最后输出 · 3 分钟前.
+    pub output_said: Option<String>,
+    /// How long it has been up: 3 小时.
+    pub age: Option<String>,
+    /// Among the open ones (`longJobs`): its station, that station's name when there are several, the chat it is in as
+    /// the viewer's sidebar has it, and all that in a line (studio · 修登录 · 已归档).
+    pub station: Option<String>,
+    pub station_name: Option<String>,
+    pub chat: Option<JobChat>,
+    pub where_text: Option<String>,
 }
 
-/// Something a job said, and when.
+/// A part of a job's line: `word` its state's word (coloured as its dot), `notice` what it said (in the text's colour),
+/// none the rest.
 #[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct JobPart {
+    pub text: String,
+    pub kind: Option<String>,
+}
+
+/// The chat an open job is in.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct JobChat {
+    pub id: String,
+    pub title: Option<String>,
+    #[serde(default)]
+    pub archived: bool,
+}
+
+/// Something a job said, and when; `ago` (3 分钟前) and `clock` (13:04, 9/27 13:04) put in by the core.
+#[typeshare]
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JobNotice {
     #[typeshare(serialized_as = "I54")]
     pub at: i64,
     pub text: String,
+    pub ago: Option<String>,
+    pub clock: Option<String>,
+}
+
+/// A chat's services and background jobs as its pages show them (the `chatJobs` view): every one, those that matter
+/// now first (died, restarting, up and alive, over; newest first within each); what the button's dot says; each
+/// group's head's note; how many matter now, how many are over and whose they are (clearing them is per session).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatJobsView {
+    pub jobs: Vec<Job>,
+    /// fail: one died lately; restart: a service is being started again.
+    pub alarm: Option<String>,
+    /// 2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say).
+    pub services_note: String,
+    pub jobs_note: String,
+    #[typeshare(serialized_as = "I54")]
+    pub current: i64,
+    #[typeshare(serialized_as = "I54")]
+    pub ended: i64,
+    /// The sessions whose jobs that are over clearing takes away (`job.clearEnded` each).
+    pub clear: Vec<String>,
+    /// 全部 5 个; 清掉 2 个已结束的; 另有 2 个已停止或结束.
+    pub all_text: String,
+    pub clear_text: String,
+    pub hidden_text: String,
+}
+
+/// The services and jobs left up a long while (an hour) on a scope's stations that are up (the `longJobs` view),
+/// oldest first, in groups: web services, then background jobs; none while empty.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct LongJobsView {
+    pub groups: Vec<LongJobsGroup>,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct LongJobsGroup {
+    /// services | jobs
+    pub key: String,
+    /// 开了很久的网页服务 · 3
+    pub head: String,
+    pub jobs: Vec<Job>,
+}
+
+/// A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
+/// station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct JobLogView {
+    pub text: String,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub output_at: Option<i64>,
+    pub state: Option<String>,
+    pub last: Option<String>,
+    pub said: Option<String>,
 }
 
 /// A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it.

@@ -198,14 +198,9 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** The services and jobs left up a long while on the workspace's stations that are online, each marked with its station's name when there are several. */
+/** The services and jobs left up a long while on the workspace's stations that are up, each marked with its station's name when there are several. */
 function WorkspaceOpenJobs({ scope }: { scope: string }) {
-  const stations = useChats(scope, false).value?.stations ?? [];
-  const several = stations.length > 1;
-  const online = useMemo(() => stations.filter((s) => s.state === "online").map((s) => ({ address: s.station, ...(several ? { name: s.name } : {}) })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [stations.map((s) => `${s.station}\t${s.name}\t${s.state}`).join("\n")]);
-  return <OpenJobs stations={online} />;
+  return <OpenJobs scope={scope} />;
 }
 
 /** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */

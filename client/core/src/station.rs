@@ -1640,6 +1640,8 @@ impl Stations {
     /// station's open ones while it is open (running, or a service being started again).
     fn on_job(&self, station: &str, job: &Value) {
         let (Some(id), Some(key)) = (job.get("id").and_then(Value::as_str), job.get("session").and_then(Value::as_str)) else { return };
+        // Shown by itself (a service's page, jobs.rs): as it is now.
+        self.sink.update(&Topic::Job { station: station.into(), id: id.into() }, &mut |shown| *shown = job.clone());
         self.sink.update(&Topic::Session { station: station.into(), key: key.into() }, &mut |detail| {
             // A station yet to list jobs with a session has none to put it in.
             let Some(jobs) = detail.get_mut("jobs").and_then(Value::as_array_mut) else { return };

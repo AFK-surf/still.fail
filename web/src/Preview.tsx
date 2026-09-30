@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
+import { useJob } from "./api.ts";
 import { bridge, type Answer, type Asked } from "./previewBridge.ts";
 import * as css from "./Preview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -266,15 +267,13 @@ function WebPreview({ station, port, file: _, serve, frame: given, fixed = false
 
 /** A web service on a page of its own (its "open on its own"): the whole window with its bar, found by its job. */
 export function ServicePage({ station, service }: { station: string; service: string }) {
-  const call = useCall();
-  const [job, setJob] = useState<{ name: string; port: number | null; state: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    call("job.get", { station, id: service })
-      .then((j) => { const found = j as { name: string; port: number | null; state: string }; setJob(found); document.title = found.name; }, (e: Error) => setError(e.message));
-  }, [call, station, service]);
+  // Kept current by the core (its events, or read again from a station too old to send them).
+  const found = useJob(station, service);
+  const job = found.value ?? null;
+  const error = job ? null : found.error?.message ?? null;
+  useEffect(() => { if (job) document.title = job.name; }, [job?.name]);
   if (error) return <div className={`${css.previewPage} ${css.previewMissing}`}>找不到这个服务：{error}</div>;
   if (!job) return <div className={css.previewPage} />;
-  if (job.port === null || (job.state !== "running" && job.state !== "exited")) return <div className={`${css.previewPage} ${css.previewMissing}`}>「{job.name}」已经停了。</div>;
+  if (!job.open || job.port == null) return <div className={`${css.previewPage} ${css.previewMissing}`}>「{job.name}」已经停了。</div>;
   return <div className={css.previewPage}><StationPreview station={station} port={job.port} name={job.name} service={service} alone /></div>;
 }

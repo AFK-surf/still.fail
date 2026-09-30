@@ -5,7 +5,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useReady } from "../core/react.ts";
-import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -23,10 +23,10 @@ import { annotatePath } from "./Annotate.tsx";
 import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
-import { ago, alarmOf, clock, isCurrent, isEnded, isService, JobDot, metaOf, sorted, toneOf, useClearEnded, useJobLog, useNow, useStopJob, type Tone } from "../Jobs.tsx";
+import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
 import { ConnectionPill } from "../Connection.tsx";
-import type { Job } from "../core/shapes.ts";
+import type { ChatJobsView, Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
 import { sendingHere } from "../madeChat.ts";
@@ -111,10 +111,10 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
 function ChatBar({ view, here }: { view: ChatView; here: Here }) {
   const app = useApp();
   const thread = view.thread;
-  const jobs = jobsOf(view);
+  const jobs = useChatJobs(here.station, { session: here.key }).value;
   return (
     <BarFrame title={view.title} more={!!thread} onMore={() => thread && openChatInfo(app, here, thread)}
-      trailing={jobs.length > 0 ? <JobsButton here={here} jobs={jobs} /> : null}>
+      trailing={jobs && jobs.jobs.length > 0 ? <JobsButton here={here} alarm={jobs.alarm} /> : null}>
       <PeopleStack people={view.people} max={5} />
       {view.agents.map((a) => (
         <button key={a.session.key} type="button" className={css.mBarAgent} onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={`${a.session.agentText} 的执行历史`}>
@@ -353,16 +353,11 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
 }
 
 // ── services and background jobs ───────────────────────────────────────
-
-/** The chat's agents' services and background jobs: those that matter now first, what is over faded and last. */
-function jobsOf(view: ChatView) {
-  return sorted(view.agents.flatMap((a) => a.jobs ?? []));
-}
+// As the core puts them (the `chatJobs` view): those that matter now first, what is over faded and last.
 
 /** The bar's button for the chat's services and jobs, with a dot when one died lately (red) or a service restarts (amber). */
-function JobsButton({ here, jobs }: { here: Here; jobs: Job[] }) {
+function JobsButton({ here, alarm }: { here: Here; alarm: string | undefined }) {
   const app = useApp();
-  const alarm = alarmOf(jobs, useNow(30_000));
   return (
     <button type="button" className={`${barsCss.mNavButton} ${css.mJobsTrigger}`} aria-label="服务和后台任务" onClick={() => openJobs(app, here)}>
       <Web size={18} />
@@ -377,14 +372,10 @@ function openJobs(app: MobileApp, here: Here) {
 }
 
 function JobsNow({ here }: { here: Here }) {
-  const now = useNow();
-  const view = useChat(here.station, { session: here.key }).value ?? here.view;
-  const jobs = jobsOf(view);
+  const view = useChatJobs(here.station, { session: here.key }).value ?? NO_JOBS;
+  const { jobs } = view;
   const [all, setAll] = useState(false);
-  const current = jobs.filter((j) => isCurrent(j, now));
-  const shown = all ? jobs : current;
-  const hidden = jobs.length - current.length;
-  const ended = jobs.filter(isEnded).length;
+  const shown = all ? jobs : jobs.filter((j) => j.current);
   const clear = useClearEnded(here.station);
   return (
     <>
@@ -393,13 +384,13 @@ function JobsNow({ here }: { here: Here }) {
       <div className={`${sheetsCss.mSheetScroll} ${partsCss.mPad18}`}>
         {jobs.length === 0 && <div className={css.mJobsEmpty}><b>还没有服务或后台任务</b><span>agent 开网页、或挂上长期盯着的任务时，会列在这里。</span></div>}
         {jobs.length > 0 && shown.length === 0 && <p className={homeCss.mNote}>眼下没有在跑的服务或任务。</p>}
-        <JobGroups here={here} view={view} jobs={shown} now={now} notes />
-        {hidden > 0 && (
+        <JobGroups here={here} view={view} jobs={shown} notes />
+        {jobs.length > view.current && (
           <button type="button" className={css.mJobsAll} onClick={() => setAll(!all)}>
-            {all ? "只看眼下的" : <>全部 {jobs.length} 个<span>另有 {hidden} 个已停止或结束</span></>}
+            {all ? "只看眼下的" : <>{view.allText}<span>{view.hiddenText}</span></>}
           </button>
         )}
-        {ended > 0 && <button type="button" className={css.mJobsAll} onClick={() => clear(jobs)}>清掉 {ended} 个已结束的</button>}
+        {view.ended > 0 && <button type="button" className={css.mJobsAll} onClick={() => clear(view.clear)}>{view.clearText}</button>}
       </div>
     </>
   );
@@ -409,32 +400,29 @@ function JobsNow({ here }: { here: Here }) {
  * Services, then background jobs. A service up or restarting opens its page; one that did not start (or is over), and
  * any job, opens what it said and its output. With `notes` each group's head says how many are up or alive.
  */
-function JobGroups({ here, view, jobs, now, notes = false }: { here: Here; view: ChatView; jobs: Job[]; now: number; notes?: boolean }) {
+function JobGroups({ here, view, jobs, notes = false }: { here: Here; view: ChatJobsView; jobs: Job[]; notes?: boolean }) {
   const app = useApp();
-  const services = jobs.filter(isService);
-  const plain = jobs.filter((j) => !isService(j));
-  const count = (list: Job[], tone: Tone) => list.filter((j) => toneOf(j) === tone).length;
-  const serviceNote = [count(services, "up") && `${count(services, "up")} 个在线`, count(services, "restart") && `${count(services, "restart")} 个在重启`].filter(Boolean).join("，");
-  const plainNote = count(plain, "live") ? `${count(plain, "live")} 个在盯着` : "";
-  const details = (j: Job) => app.sheet({ height: 0.8, draggable: true, content: () => <JobSheet station={here.station} sessionKey={here.key} jobId={j.id} view={view} /> });
+  const services = jobs.filter((j) => j.service);
+  const plain = jobs.filter((j) => !j.service);
+  const details = (j: Job) => app.sheet({ height: 0.8, draggable: true, content: () => <JobSheet station={here.station} sessionKey={here.key} jobId={j.id} /> });
   return (
     <>
       {services.length > 0 && (
         <>
-          <GroupLabel>服务{notes && serviceNote ? ` · ${serviceNote}` : ""}</GroupLabel>
+          <GroupLabel>服务{notes && view.servicesNote ? ` · ${view.servicesNote}` : ""}</GroupLabel>
           <InfoList>
             {services.map((j) => {
-              const up = toneOf(j) === "up" || toneOf(j) === "restart";
-              return <JobInfoRow key={j.id} job={j} now={now} onClick={up ? () => app.push(servicePath(here.station, here.key, j.id)) : () => details(j)} />;
+              const up = j.tone === "up" || j.tone === "restart";
+              return <JobInfoRow key={j.id} job={j} onClick={up ? () => app.push(servicePath(here.station, here.key, j.id)) : () => details(j)} />;
             })}
           </InfoList>
         </>
       )}
       {plain.length > 0 && (
         <>
-          <GroupLabel>后台任务{notes && plainNote ? ` · ${plainNote}` : ""}</GroupLabel>
+          <GroupLabel>后台任务{notes && view.jobsNote ? ` · ${view.jobsNote}` : ""}</GroupLabel>
           <InfoList>
-            {plain.map((j) => <JobInfoRow key={j.id} job={j} now={now} onClick={() => details(j)} />)}
+            {plain.map((j) => <JobInfoRow key={j.id} job={j} onClick={() => details(j)} />)}
           </InfoList>
         </>
       )}
@@ -443,13 +431,12 @@ function JobGroups({ here, view, jobs, now, notes = false }: { here: Here; view:
 }
 
 /** A job's row in the chat's sheets: its dot on its name's line, what it is up to under it. */
-function JobInfoRow({ job, now, onClick }: { job: Job; now: number; onClick?: (() => void) | undefined }) {
-  const tone = toneOf(job);
+function JobInfoRow({ job, onClick }: { job: Job; onClick?: (() => void) | undefined }) {
   const body = (
     <>
-      <span className={css.mJob} data-off={tone === "off" || undefined}>
-        <JobDot tone={tone} />
-        <span className={`${partsCss.mGrow} ${css.mJobText}`}><b>{job.name}</b><span>{metaOf(job, now)}</span></span>
+      <span className={css.mJob} data-off={job.tone === "off" || undefined}>
+        <JobDot tone={job.tone} />
+        <span className={`${partsCss.mGrow} ${css.mJobText}`}><b>{job.name}</b><span>{metaOf(job)}</span></span>
       </span>
       {onClick && <ChevronRight size={14} className={partsCss.mSubtle} />}
     </>
@@ -461,25 +448,24 @@ function JobInfoRow({ job, now, onClick }: { job: Job; now: number; onClick?: ((
  * A service or a job, from the chat's sheets: its command, then what it said or its output as it grows (a service, its
  * output); stopped from here.
  */
-function JobSheet({ station, sessionKey, jobId, view: first }: { station: string; sessionKey: string; jobId: string; view: ChatView }) {
-  const here = useChat(station, { session: sessionKey }).value ?? first;
-  const job = here.agents.flatMap((a) => a.jobs ?? []).find((j) => j.id === jobId);
-  const now = useNow();
+function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey: string; jobId: string }) {
+  const jobs = useChatJobs(station, { session: sessionKey });
+  const job = jobs.value?.jobs.find((j) => j.id === jobId);
   const stop = useStopJob(station);
   const [picked, setTab] = useState(0);
-  const service = !!job && isService(job);
+  const service = !!job?.service;
   const tab = service ? 1 : picked;
   const running = job?.state === "running";
   // Its last line, as it grows.
   const last = useJobLog(station, job && tab === 0 ? job.id : null, 1);
-  if (!job) return <><SheetGrab /><SheetHead title="任务" /><p className={homeCss.mNote}>这个任务已经不在了。</p></>;
-  const lastAt = last?.outputAt ?? job.outputAt;
+  if (!job) return <><SheetGrab /><SheetHead title="任务" />{jobs.value && <p className={homeCss.mNote}>这个任务已经不在了。</p>}</>;
+  const said = last ? last.said : job.outputSaid;
   return (
     <>
       <SheetGrab />
       <div className={css.mJobHead}>
-        <JobDot tone={toneOf(job)} />
-        <span className={partsCss.mGrow}><b>{job.name}</b><span>{metaOf(job, now)}</span></span>
+        <JobDot tone={job.tone} />
+        <span className={partsCss.mGrow}><b>{job.name}</b><span>{metaOf(job)}</span></span>
       </div>
       <div className={`${partsCss.mPad18} ${css.mJobBody}`}>
         {job.command && <div className={css.mJobCommand}>{job.command}</div>}
@@ -488,11 +474,11 @@ function JobSheet({ station, sessionKey, jobId, view: first }: { station: string
           ? (
             <div className={css.mJobNotices}>
               {(job.notices ?? []).length === 0 && <p className={homeCss.mNote}>还没有通知。</p>}
-              {(job.notices ?? []).map((n, i) => <p key={`${n.at}-${i}`}><time>{clock(n.at, now)}</time><span>{n.text}</span></p>)}
+              {(job.notices ?? []).map((n, i) => <p key={`${n.at}-${i}`}><time>{n.clock}</time><span>{n.text}</span></p>)}
             </div>
           )
           : <JobOutput station={station} job={job} />}
-        {tab === 0 && (lastAt || last?.text) && <div className={css.mJobLast}><span>最后输出{lastAt ? ` · ${ago(lastAt, now)}` : ""}</span>{last?.text && <code>{last.text.trim()}</code>}</div>}
+        {tab === 0 && said && <div className={css.mJobLast}><span>{said}</span>{last?.last && <code>{last.last}</code>}</div>}
         {running && <button type="button" className={css.mJobStop} onClick={() => stop(job)}><Stop size={16} />停止</button>}
       </div>
     </>
@@ -524,8 +510,8 @@ function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
 
 function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const app = useApp();
-  const now = useNow();
   const view = useChat(here.station, { session: here.key }).value ?? here.view;
+  const jobs = useChatJobs(here.station, { session: here.key }).value ?? NO_JOBS;
   const thread = view.thread ?? first;
   const call = useStationCall(here.station);
   return (
@@ -557,7 +543,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />
           {thread.lastMessage && <InfoDetail label="最近消息" value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
         </InfoList>
-        <JobGroups here={here} view={view} jobs={jobsOf(view)} now={now} />
+        <JobGroups here={here} view={jobs} jobs={jobs.jobs} />
         {view.slackUrl && (
           <>
             <GroupLabel>在 Slack 里</GroupLabel>

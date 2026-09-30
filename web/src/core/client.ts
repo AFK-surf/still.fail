@@ -52,7 +52,14 @@ export type Topic =
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
   | { topic: "newChat"; scope: string }
   // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).
-  | { topic: "pick"; station: string; of: string };
+  | { topic: "pick"; station: string; of: string }
+  // A chat's services and background jobs as its pages show them (the same thread or session as its `chat`).
+  | { topic: "chatJobs"; station: string; thread: number }
+  | { topic: "chatJobs"; station: string; session: string }
+  // The services and jobs left up a long while on the scope's stations that are up.
+  | { topic: "longJobs"; scope: string }
+  // A job as it is now (kept current by its events).
+  | { topic: "job"; station: string; id: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

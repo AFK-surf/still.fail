@@ -42,7 +42,7 @@ export function Sidebar() {
           <ChatList scope="local" newChat="/new" stationsPage="/settings" archive="/archive" />
           <div className={nav.navFoot}>
             <StationTrouble scope="local" to="/settings" />
-            <OpenJobs stations={LOCAL_STATIONS} />
+            <OpenJobs scope="local" />
             <NavLink className={nav.navRow} to="/settings"><Settings {...ICON} />设置</NavLink>
           </div>
         </>
@@ -50,8 +50,6 @@ export function Sidebar() {
     </nav>
   );
 }
-
-const LOCAL_STATIONS = [{ address: "local" }];
 
 function SettingsNav() {
   const link = useLink();

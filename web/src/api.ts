@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { ArchiveView, Attachment, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 
@@ -113,6 +113,16 @@ export function useConnects(scope: string, mine = false): TopicState<ConnectsVie
 /** An item's page: its chat (`thread`), or its agent before it has one (`session`). */
 export function useChat(station: string, of: { thread: number } | { session: string }): TopicState<ChatView> {
   return useTopic<ChatView>({ topic: "chat", station, ...of });
+}
+
+/** A chat's services and background jobs as its pages show them (the same `of` as its `useChat`). */
+export function useChatJobs(station: string, of: { thread: number } | { session: string }): TopicState<ChatJobsView> {
+  return useTopic<ChatJobsView>({ topic: "chatJobs", station, ...of });
+}
+
+/** A job as it is now (null: none). */
+export function useJob(station: string, id: string | null): TopicState<Job> {
+  return useTopic<Job>(id ? { topic: "job", station, id } : null);
 }
 
 export function useHistory(station: string, key: string): TopicState<HistoryView> {
@@ -312,8 +322,6 @@ export function stationApi(t: StationCall) {
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
     slackIdentity: (user: string, bound: boolean) => op<Overview>("slack.identity", { user, bound }),
     createAppUrl: (name: string) => op<{ url: string }>("slack.createAppUrl", { name }),
-    /** A background job (a web service's page finds its port by it). */
-    job: (id: string) => op<Job>("job.get", { id }),
     /** Stops a job from the page (its agent is told who did); the core puts it in place as it is now. */
     stopJob: (id: string) => op<Job>("job.stop", { id }),
     /** Takes a session's jobs that are over off its record; the core reads the session again. */

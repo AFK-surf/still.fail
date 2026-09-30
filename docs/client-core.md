@@ -114,7 +114,8 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
 | `jobs` | `station` | `/jobs`: its background jobs still up (running, or a service being started again), newest first, each with the `chat` it is in as the viewer's sidebar has it |
-| `jobLog` | `station`, `job` (id), `lines` | `{ text, outputAt }`: the job's last `lines` lines of output and when it last grew (below) |
+| `job` | `station`, `id` | `/jobs/:id` as it is now, with what the clients show of it (client/core/src/jobs.rs): kept current by its events, read again each half minute (every 4 s from a station too old to say whose it is) |
+| `jobLog` | `station`, `job` (id), `lines` | `{ text, outputAt, last, said }`: the job's last `lines` lines of output and when it last grew (below); `last` its last line, `said` (最后输出 · 3 分钟前) goes out fresh as it changes (jobs.rs) |
 | `thread` | `station`, `thread` (id) | `{ first, last, entries, thread }`: the thread's entries `first ..= last` (`EntryView`s, never changed once read): its latest page, older pages in front as `chat.older` loads them; `thread` is its summary as kept on the device (null when read from the station) |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
@@ -242,6 +243,8 @@ itself (one station, addressed `"local"`).
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
 | `chat` | `station`, and `thread` (id) or `session` (key) | an item's page: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
 | `archive` | `scope` | the archive: `{ days, errors, loading, note }`, every online station's archived chats newest first by the day they were archived |
+| `chatJobs` | as `chat` | the chat's services and jobs as its pages show them (`ChatJobsView`, jobs.rs): every one, what matters first, each with its dot (`tone`), word, line (`meta`) and times in words (computed again when they next change, to the second); the button's `alarm`, the groups' notes, how many are current and ended, whose ended ones clearing takes |
+| `longJobs` | `scope` | the services and jobs up longer than an hour on the scope's stations that are up (their `jobs`), oldest first, in groups: `{ groups: [{ key, head, jobs }] }`, each job with `whereText` and `age` |
 
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.

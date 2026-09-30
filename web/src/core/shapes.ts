@@ -523,10 +523,28 @@ export interface ChatThread {
 	time?: Record<string, Stamp>;
 }
 
-/** Something a job said, and when. */
+/** Something a job said, and when; `ago` (3 分钟前) and `clock` (13:04, 9/27 13:04) put in by the core. */
 export interface JobNotice {
 	at: number;
 	text: string;
+	ago?: string;
+	clock?: string;
+}
+
+/**
+ * A part of a job's line: `word` its state's word (coloured as its dot), `notice` what it said (in the text's colour),
+ * none the rest.
+ */
+export interface JobPart {
+	text: string;
+	kind?: string;
+}
+
+/** The chat an open job is in. */
+export interface JobChat {
+	id: string;
+	title?: string;
+	archived?: boolean;
 }
 
 /**
@@ -552,6 +570,34 @@ export interface Job {
 	notices?: JobNotice[];
 	/** When its output last grew; absent when it has none. */
 	outputAt?: number;
+	/** Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over). */
+	tone?: string;
+	/** A web service (it has a port). */
+	service?: boolean;
+	/** A service whose page can be opened: up, or being started again. */
+	open?: boolean;
+	/** Over, so clearing takes it away (stopped, failed, ended by itself; not a service started again). */
+	ended?: boolean;
+	/** It matters now: up, alive, restarting, or died lately (a day). */
+	current?: boolean;
+	/** Its state in a word (在线, 在盯着, 意外退出…), coloured as its dot. */
+	word?: string;
+	/** The line under its name, in parts (see `JobPart`). */
+	meta?: JobPart[];
+	/** Its state, how long, and how many notices, as a detail's head says it: 在盯着 · 3 分钟 · 2 条通知. */
+	detail?: string;
+	/** When its output last grew, in words: 最后输出 · 3 分钟前. */
+	outputSaid?: string;
+	/** How long it has been up: 3 小时. */
+	age?: string;
+	/**
+	 * Among the open ones (`longJobs`): its station, that station's name when there are several, the chat it is in as
+	 * the viewer's sidebar has it, and all that in a line (studio · 修登录 · 已归档).
+	 */
+	station?: string;
+	stationName?: string;
+	chat?: JobChat;
+	whereText?: string;
 }
 
 /** An agent of a chat: its session, the connect that started it, its profile, and what it can move to. */
@@ -692,6 +738,28 @@ export interface ChatDay {
 	label: string;
 	items: ChatItem[];
 	pinned?: boolean;
+}
+
+/**
+ * A chat's services and background jobs as its pages show them (the `chatJobs` view): every one, those that matter
+ * now first (died, restarting, up and alive, over; newest first within each); what the button's dot says; each
+ * group's head's note; how many matter now, how many are over and whose they are (clearing them is per session).
+ */
+export interface ChatJobsView {
+	jobs: Job[];
+	/** fail: one died lately; restart: a service is being started again. */
+	alarm?: string;
+	/** 2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say). */
+	servicesNote: string;
+	jobsNote: string;
+	current: number;
+	ended: number;
+	/** The sessions whose jobs that are over clearing takes away (`job.clearEnded` each). */
+	clear: string[];
+	/** 全部 5 个; 清掉 2 个已结束的; 另有 2 个已停止或结束. */
+	allText: string;
+	clearText: string;
+	hiddenText: string;
 }
 
 /** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */
@@ -1058,6 +1126,18 @@ export interface Host {
 	emberText: string;
 }
 
+/**
+ * A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
+ * station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
+ */
+export interface JobLogView {
+	text: string;
+	outputAt?: number;
+	state?: string;
+	last?: string;
+	said?: string;
+}
+
 export interface TimelineEntry {
 	at?: string;
 	/** user | assistant | thinking | tool_call | tool_result */
@@ -1111,6 +1191,22 @@ export interface Live {
 	activity?: Activity;
 	/** Its station is offline: this is what was kept. */
 	offline?: boolean;
+}
+
+export interface LongJobsGroup {
+	/** services | jobs */
+	key: string;
+	/** 开了很久的网页服务 · 3 */
+	head: string;
+	jobs: Job[];
+}
+
+/**
+ * The services and jobs left up a long while (an hour) on a scope's stations that are up (the `longJobs` view),
+ * oldest first, in groups: web services, then background jobs; none while empty.
+ */
+export interface LongJobsView {
+	groups: LongJobsGroup[];
 }
 
 /** Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over). */

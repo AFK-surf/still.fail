@@ -1,12 +1,8 @@
 // A web service an agent started (or a visualization it posted), full screen on a narrow screen: the desktop's preview (../Preview.tsx) under a bar
-// that goes back to the chat. Found by its job; people know it by its name. The job is its chat's, kept as the chat
-// changes (a restart is said over the page, and it loads again once the service is back); read once by itself until the
-// chat has it.
-import { useEffect, useState } from "react";
+// that goes back to the chat. Found by its job; people know it by its name. The core keeps the job as it changes (a
+// restart is said over the page, and it loads again once the service is back).
 import { useParams } from "react-router";
-import { useChat } from "../api.ts";
-import { useCall } from "../core/react.ts";
-import type { Job } from "../core/shapes.ts";
+import { useJob } from "../api.ts";
 import { fileSourceOf, StationPreview } from "../Preview.tsx";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
@@ -23,18 +19,11 @@ export function PreviewScreen() {
   const { chat = "", service = "" } = useParams();
   // A visualization an agent posted opens here too, as a service does (../Preview.tsx's fileService).
   const file = fileSourceOf(service);
-  const call = useCall();
-  const view = useChat(station.address, { session: chat }).value;
-  const live = view?.agents.flatMap((a) => a.jobs ?? []).find((j) => j.id === service);
-  const [read, setRead] = useState<Job | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (file) return;
-    call("job.get", { station: station.address, id: service })
-      .then((j) => setRead(j as Job), (e: Error) => setError(e.message));
-  }, [call, station.address, service]);
-  const job = live ?? read;
-  const up = job && job.port != null && (job.state === "running" || job.state === "exited");
+  // Kept current by the core (its events, or read again from a station too old to send them).
+  const found = useJob(station.address, file ? null : service);
+  const job = found.value ?? null;
+  const error = found.error?.message ?? null;
+  const up = job?.open && job.port != null;
   if (file) {
     return (
       <div className={`${pagesCss.mScreen} ${css.mPreview}`}>

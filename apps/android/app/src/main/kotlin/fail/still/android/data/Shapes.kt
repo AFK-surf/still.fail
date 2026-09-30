@@ -548,11 +548,29 @@ data class ChatThread (
 	val time: Map<String, Stamp>? = null
 )
 
-/// Something a job said, and when.
+/// Something a job said, and when; `ago` (3 分钟前) and `clock` (13:04, 9/27 13:04) put in by the core.
 @Serializable
 data class JobNotice (
 	val at: Long,
-	val text: String
+	val text: String,
+	val ago: String? = null,
+	val clock: String? = null
+)
+
+/// A part of a job's line: `word` its state's word (coloured as its dot), `notice` what it said (in the text's colour),
+/// none the rest.
+@Serializable
+data class JobPart (
+	val text: String,
+	val kind: String? = null
+)
+
+/// The chat an open job is in.
+@Serializable
+data class JobChat (
+	val id: String,
+	val title: String? = null,
+	val archived: Boolean? = null
 )
 
 /// A background job an agent started (a web service when it has a port): shown by its name; the port is how the
@@ -576,7 +594,33 @@ data class Job (
 	/// What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to.
 	val notices: List<JobNotice>? = null,
 	/// When its output last grew; absent when it has none.
-	val outputAt: Long? = null
+	val outputAt: Long? = null,
+	/// Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over).
+	val tone: String? = null,
+	/// A web service (it has a port).
+	val service: Boolean? = null,
+	/// A service whose page can be opened: up, or being started again.
+	val open: Boolean? = null,
+	/// Over, so clearing takes it away (stopped, failed, ended by itself; not a service started again).
+	val ended: Boolean? = null,
+	/// It matters now: up, alive, restarting, or died lately (a day).
+	val current: Boolean? = null,
+	/// Its state in a word (在线, 在盯着, 意外退出…), coloured as its dot.
+	val word: String? = null,
+	/// The line under its name, in parts (see `JobPart`).
+	val meta: List<JobPart>? = null,
+	/// Its state, how long, and how many notices, as a detail's head says it: 在盯着 · 3 分钟 · 2 条通知.
+	val detail: String? = null,
+	/// When its output last grew, in words: 最后输出 · 3 分钟前.
+	val outputSaid: String? = null,
+	/// How long it has been up: 3 小时.
+	val age: String? = null,
+	/// Among the open ones (`longJobs`): its station, that station's name when there are several, the chat it is in as
+	/// the viewer's sidebar has it, and all that in a line (studio · 修登录 · 已归档).
+	val station: String? = null,
+	val stationName: String? = null,
+	val chat: JobChat? = null,
+	val whereText: String? = null
 )
 
 /// An agent of a chat: its session, the connect that started it, its profile, and what it can move to.
@@ -719,6 +763,27 @@ data class ChatDay (
 	val label: String,
 	val items: List<ChatItem>,
 	val pinned: Boolean? = null
+)
+
+/// A chat's services and background jobs as its pages show them (the `chatJobs` view): every one, those that matter
+/// now first (died, restarting, up and alive, over; newest first within each); what the button's dot says; each
+/// group's head's note; how many matter now, how many are over and whose they are (clearing them is per session).
+@Serializable
+data class ChatJobsView (
+	val jobs: List<Job>,
+	/// fail: one died lately; restart: a service is being started again.
+	val alarm: String? = null,
+	/// 2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say).
+	val servicesNote: String,
+	val jobsNote: String,
+	val current: Long,
+	val ended: Long,
+	/// The sessions whose jobs that are over clearing takes away (`job.clearEnded` each).
+	val clear: List<String>,
+	/// 全部 5 个; 清掉 2 个已结束的; 另有 2 个已停止或结束.
+	val allText: String,
+	val clearText: String,
+	val hiddenText: String
 )
 
 /// Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture.
@@ -1119,6 +1184,17 @@ data class Host (
 	val emberText: String
 )
 
+/// A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
+/// station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
+@Serializable
+data class JobLogView (
+	val text: String,
+	val outputAt: Long? = null,
+	val state: String? = null,
+	val last: String? = null,
+	val said: String? = null
+)
+
 @Serializable
 data class TimelineEntry (
 	val at: String? = null,
@@ -1175,6 +1251,22 @@ data class Live (
 	val activity: Activity? = null,
 	/// Its station is offline: this is what was kept.
 	val offline: Boolean? = null
+)
+
+@Serializable
+data class LongJobsGroup (
+	/// services | jobs
+	val key: String,
+	/// 开了很久的网页服务 · 3
+	val head: String,
+	val jobs: List<Job>
+)
+
+/// The services and jobs left up a long while (an hour) on a scope's stations that are up (the `longJobs` view),
+/// oldest first, in groups: web services, then background jobs; none while empty.
+@Serializable
+data class LongJobsView (
+	val groups: List<LongJobsGroup>
 )
 
 /// Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over).

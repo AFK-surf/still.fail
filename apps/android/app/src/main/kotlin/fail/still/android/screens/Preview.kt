@@ -136,18 +136,13 @@ import kotlinx.serialization.json.jsonPrimitive
 @Composable
 fun PreviewScreen(station: String, service: String) {
     val app = LocalApp.current
-    // Read once by itself: its name, and the chat it is in (whose view then keeps it as it changes).
-    var read by remember { mutableStateOf<Job?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(station, service) {
-        try { read = app.api(station).job(service) } catch (e: CoreException) { error = e.message }
-    }
-    val session = read?.session
-    val chat by rememberTopic<ChatView>(app.core, session?.let { Topics.chat(station, ChatOf.Session(it)) })
-    val live = chat.value?.agents?.flatMap { it.jobs }?.firstOrNull { it.id == service }
-    val job = live ?: read
+    // Kept current by the core (its events, or read again from a station too old to send them).
+    val found by rememberTopic<Job>(app.core, Topics.job(station, service))
+    val job = found.value
+    val error = found.error?.message
+    val session = job?.session
     val port = job?.port
-    val up = port != null && (job.state == "running" || job.state == "exited")
+    val up = port != null && job.open == true
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         NavBar("对话", app::pop, job?.name ?: "服务", sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when {

@@ -205,8 +205,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     // ── background jobs and web services (web/src/Jobs.tsx) ──
 
-    /** A background job (a web service's page finds its port by it). */
-    suspend fun job(id: String): Job = decode(Job.serializer(), op("job.get") { put("id", id) })
+    // A job and its output are topics (Topics.job, Topics.jobLog): the core reads them again while shown.
     /** Stops a job from the app (its agent is told who did). */
     suspend fun stopJob(id: String) { op("job.stop") { put("id", id) } }
     /** Clears a session's ended jobs (stopped, failed, ended by itself) off its pages, as the station keeps them. */
@@ -317,10 +316,6 @@ data class MachineSession(
 /** Something said in one of them: by the person, else by its agent; when, in ms. */
 @kotlinx.serialization.Serializable
 data class MachineSaid(val person: Boolean, val text: String, val at: Long? = null)
-
-/** A job's output as its `jobLog` topic has it: its last lines, when it last grew. */
-@kotlinx.serialization.Serializable
-data class JobLog(val text: String = "", val outputAt: Long? = null)
 
 object Auth {
     // stillfail:// since the rename; the app still accepts ember:// coming back (MainActivity), and the cloud both.

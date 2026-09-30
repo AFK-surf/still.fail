@@ -65,6 +65,13 @@ pub fn clock(ms: f64, offset_min: i32) -> String {
     format!("{h:02}:{m:02}")
 }
 
+/// 14:05 today, 9/27 14:05 before: when a job said something.
+pub fn day_clock(ms: f64, now: f64, offset_min: i32) -> String {
+    let (_, month, day, _, _, _) = local(ms, offset_min);
+    let time = clock(ms, offset_min);
+    if local_day(ms, offset_min) == local_day(now, offset_min) { time } else { format!("{month}/{day} {time}") }
+}
+
 /// 刚刚, 3 分钟前, 5 小时前, 昨天 14:05, 9月20日 14:05.
 pub fn relative_time(ms: f64, now: f64, offset_min: i32) -> String {
     let seconds = ((now - ms) / 1000.0).round();

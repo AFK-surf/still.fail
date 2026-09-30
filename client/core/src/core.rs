@@ -182,7 +182,8 @@ impl Core {
             let choose = Choose::new(host.clone(), store.clone(), data.clone(), views.clone(), check_profile(me.clone()));
             let sync = Sync::new(store.clone(), host.clone());
             let notices = Notices::new(store.clone(), host.clone(), email_of(me.clone()));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), notices: notices.clone(), attend: attend.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
+            let jobs = crate::jobs::Polls::new(host.clone(), Rc::downgrade(&store), Rc::downgrade(&stations));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), notices: notices.clone(), attend: attend.clone(), jobs, tracer: tracer.clone(), opening: RefCell::default() }));
             sync.on_look({
                 let notices = Rc::downgrade(&notices);
                 let (attend, store) = (Rc::downgrade(&attend), Rc::downgrade(&store));
@@ -337,6 +338,8 @@ struct Router {
     status: Rc<Status>,
     notices: Rc<Notices>,
     attend: Rc<Attend>,
+    /// A job and its output, read again while shown (jobs.rs).
+    jobs: Rc<crate::jobs::Polls>,
     tracer: Rc<Tracer>,
     /// Views opening: each is a trace (`chat.open`, …) until its first value goes out.
     opening: RefCell<HashMap<Topic, Span>>,
@@ -374,9 +377,19 @@ impl Source for Router {
             }
             return;
         }
+        if crate::jobs::Polls::owns(topic) {
+            self.jobs.start(topic);
+            return;
+        }
+        // Followed by its station (station.rs, below); what it says in words goes out fresh as it changes (jobs.rs).
+        if let Topic::JobLog { .. } = topic {
+            self.jobs.words(topic);
+        }
         if topic.is_view() {
             let (name, station) = match topic {
                 Topic::Chat { station, .. } => ("chat.open", Some(station)),
+                Topic::ChatJobs { station, .. } => ("jobs.open", Some(station)),
+                Topic::LongJobs { .. } => ("jobs.open", None),
                 Topic::Chats { .. } => ("chats.open", None),
                 Topic::ChatSearch { .. } => ("chats.search", None),
                 Topic::Stations { .. } => ("stations.open", None),
@@ -404,6 +417,13 @@ impl Source for Router {
         }
         if Choose::handles(topic) {
             return self.choose.stop(topic);
+        }
+        if crate::jobs::Polls::owns(topic) {
+            return self.jobs.stop(topic);
+        }
+        // Followed by its station (station.rs); what it says in words goes out fresh as it changes (jobs.rs).
+        if let Topic::JobLog { .. } = topic {
+            self.jobs.stop(topic);
         }
         if topic.is_view() {
             // Given up before it had a value: recorded as cancelled.
@@ -3058,6 +3078,71 @@ mod tests {
             assert_eq!((ok(2), ok(3)), (json!({ "show": false }), json!({ "show": false })));
             let value = emitted.iter().find_map(|(_, m)| match m { CoreMessage::Value { id: 1, value } => Some(value.clone()), _ => None }).unwrap();
             assert_eq!(value["on"], false);
+        });
+    }
+
+    #[test]
+    fn a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_it_last_grew() {
+        run(async {
+            let host = FakeHost::new();
+            host.speed_up(SPEEDUP);
+            let now = (now_s() * 1000.0) as i64;
+            let reads = Rc::new(std::cell::Cell::new(0));
+            let counted = reads.clone();
+            host.on_fetch(move |req| {
+                let path = req.url.trim_start_matches("https://stillfail.test");
+                let job = |id: &str, patch: Value| {
+                    let mut j = json!({ "id": id, "session": "k1", "name": id, "state": "running", "port": null, "startedAt": now - 60_000, "command": "watch" });
+                    j.as_object_mut().unwrap().extend(patch.as_object().unwrap().clone());
+                    j
+                };
+                match path.split('?').next().unwrap() {
+                    "/admin/api/threads" => json_response(200, json!([{
+                        "id": 7, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": "7.0", "title": null, "createdBy": null,
+                        "creator": null, "createdAt": 1, "sessions": [{ "thread": 7, "session": "k1", "connect": "ember", "joinedAt": 1 }],
+                        "last": 0, "lastMessage": null, "read": 0, "unread": 0, "people": [], "firstText": null,
+                    }])),
+                    "/admin/api/threads/7/entries" => json_response(200, json!({ "last": 0, "entries": [] })),
+                    "/admin/api/sessions" => json_response(200, json!([session("k1")])),
+                    "/admin/api/sessions/k1" => json_response(200, json!({ "session": session("k1"), "threads": [], "turns": [], "jobs": [
+                        job("w", json!({ "notices": [{ "at": now - 120_000, "text": "CI 还在跑" }] })),
+                        job("s", json!({ "port": 4817, "state": "exited", "restarts": 1 })),
+                        job("done", json!({ "state": "exited", "exitCode": 0, "endedAt": now - 30_000 })),
+                    ] })),
+                    "/admin/api/overview" => json_response(200, json!({
+                        "viewer": { "via": "local" }, "connects": [], "profiles": [], "processes": [], "counts": { "sessions": 1, "running": 0, "warm": 0 },
+                        "mesh": null, "slackUsers": [], "slackTeams": [], "slackApps": [], "disk": null, "logins": [],
+                    })),
+                    "/admin/api/jobs/w/log" => {
+                        counted.set(counted.get() + 1);
+                        json_response(200, json!({ "text": "step 3\n", "outputAt": now - 180_000, "follows": true }))
+                    }
+                    _ => json_response(404, json!({})),
+                }
+            });
+            host.on_fetch_stream(|_| Ok(crate::host::StreamResponse { status: 200, headers: vec![], body: futures::stream::pending().boxed_local() }));
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::ChatJobs { station: "local".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::JobLog { station: "local".into(), job: "w".into(), lines: 1 } });
+            host.settle().await;
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            // Restarting first, then alive, then what is over; each with its dot and its line; the heads' notes.
+            let jobs = &values[&1];
+            let ids: Vec<&str> = jobs["jobs"].as_array().unwrap().iter().map(|j| j["id"].as_str().unwrap()).collect();
+            assert_eq!(ids, ["s", "w", "done"]);
+            assert_eq!((jobs["alarm"].as_str(), jobs["servicesNote"].as_str(), jobs["jobsNote"].as_str()), (Some("restart"), Some("1 个在重启"), Some("1 个在盯着")));
+            assert_eq!((jobs["ended"].as_i64(), jobs["clear"].clone(), jobs["clearText"].as_str()), (Some(1), json!(["k1"]), Some("清掉 1 个已结束的")));
+            let w = &jobs["jobs"][1];
+            assert_eq!((w["tone"].as_str(), w["meta"][0]["text"].as_str(), w["meta"][1]["text"].as_str(), w["detail"].as_str()), (Some("live"), Some("CI 还在跑"), Some(" · 2 分钟前"), Some("在盯着 · 1 分钟 · 1 条通知")));
+            assert_eq!((jobs["jobs"][0]["meta"][0]["text"].as_str(), jobs["jobs"][2]["tone"].as_str()), (Some("正在重启"), Some("off")));
+            // Its output: the last line and when, in words; the station follows it, so it is not read again.
+            assert_eq!((values[&2]["last"].as_str(), values[&2]["said"].as_str()), (Some("step 3"), Some("最后输出 · 3 分钟前")));
+            let before = reads.get();
+            pass(5_000).await;
+            assert_eq!(reads.get(), before);
         });
     }
 

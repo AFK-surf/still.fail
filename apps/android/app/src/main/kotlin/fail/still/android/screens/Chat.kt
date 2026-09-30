@@ -119,6 +119,7 @@ import fail.still.android.data.ActivityNow
 import fail.still.android.data.AgentWait
 import fail.still.android.data.Attachment
 import fail.still.android.data.ChatAgent
+import fail.still.android.data.ChatJobsView
 import fail.still.android.data.ChatOf
 import fail.still.android.data.ChatView
 import fail.still.android.data.Maker
@@ -265,10 +266,10 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
 private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val thread = view.thread
-    val jobs = jobsOf(view)
-    val alarm = alarmOf(jobs, rememberNow(30_000))
+    val jobs by rememberTopic<ChatJobsView>(app.core, Topics.chatJobs(station, of))
+    val alarm = jobs.value?.alarm?.let(::toneOf)
     BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier, trailing = {
-        if (jobs.isNotEmpty()) Box {
+        if (jobs.value?.jobs?.isNotEmpty() == true) Box {
             NavButton(Icons.Web, { openJobs(app, station, of) })
             if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(11.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
         }

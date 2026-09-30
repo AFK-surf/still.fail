@@ -112,6 +112,13 @@ pub enum Topic {
     /// (`pick.set`, `pick.save`). `of`: `new` (a new chat on the station), `session:<key>`, `connect:<id>`, or
     /// `connect-new` (a connect being added).
     Pick { station: String, of: String },
+    /// A chat's services and background jobs as its pages show them (jobs.rs): the same `thread` or `session` as its
+    /// `chat` view.
+    ChatJobs { station: String, #[serde(default)] thread: Option<u64>, #[serde(default)] session: Option<String> },
+    /// The services and jobs left up a long while on the scope's stations that are up (jobs.rs).
+    LongJobs { scope: String },
+    /// A background job as it is now (`/jobs/:id`, then its events).
+    Job { station: String, id: String },
 }
 
 impl Topic {
@@ -124,10 +131,12 @@ impl Topic {
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
+            // The core's own (jobs.rs), not the station module's.
+            Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::Job { .. } => None,
         }
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. })
     }
 }

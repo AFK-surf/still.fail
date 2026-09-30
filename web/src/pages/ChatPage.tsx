@@ -5,14 +5,14 @@ import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
 import { Boxes, Close, Edit, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
-import { alarmOf, JobDot, JobsPopover, JobsTab, toneOf, useNow } from "../Jobs.tsx";
+import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { lastChat, PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
-import type { Job } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
+import type { ChatJobsView } from "../core/shapes.ts";
+import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
@@ -108,9 +108,11 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
   const jobs = agents.flatMap((a) => a.jobs ?? []);
+  // As its pages show them (the core's `chatJobs`).
+  const jobsView = useChatJobs(station.address, of).value ?? NO_JOBS;
   // A kept web service that stopped is not kept any longer.
   useEffect(() => {
-    for (const job of jobs) if (job.state !== "running" && job.state !== "exited") closePreview(previewKey(station.address, job.id));
+    for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
   const open = agents.length ? tabs.filter((key) => key === JOBS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   // The job picked in the 任务 tab.
@@ -326,7 +328,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           ))}
         </div>
         <div className={css.pageBarActions}>
-          <JobsPanel station={station.address} jobs={jobs} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
+          <JobsPanel station={station.address} view={jobsView} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
             <Tip label="在 Slack 中打开">
@@ -374,7 +376,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
                         <Tip label={service.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
-                          <span className={css.sideTabAgent}><JobDot tone={toneOf(service)} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
+                          <span className={css.sideTabAgent}><JobDot tone={service.tone} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
@@ -401,7 +403,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (key === JOBS) {
                 return (
                   <Tabs.Content key={key} className={css.sideContent} value={key}>
-                    <JobsTab station={station.address} jobs={jobs} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
+                    <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
                   </Tabs.Content>
                 );
               }
@@ -458,20 +460,20 @@ function serviceOf(key: string): string | null {
 }
 
 /** The chat's web services and background jobs, from the title bar: what matters now, the rest in the 任务 tab. */
-function JobsPanel({ station, jobs, onService, onTab }: { station: string; jobs: Job[]; onService: (job: string) => void; onTab: (job?: string) => void }) {
+function JobsPanel({ station, view, onService, onTab }: { station: string; view: ChatJobsView; onService: (job: string) => void; onTab: (job?: string) => void }) {
   const [open, setOpen] = useState(false);
-  const alarm = alarmOf(jobs, useNow(30_000));
+  const alarm = view.alarm;
   const close = (then: () => void) => { setOpen(false); then(); };
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label="服务和后台任务" shortcut="chat.jobs">
         <Popover.Trigger asChild>
-          <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label="服务和后台任务" data-alarm={alarm} data-none={jobs.length === 0 || undefined}><Web {...ICON} /></button>
+          <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label="服务和后台任务" data-alarm={alarm} data-none={view.jobs.length === 0 || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.jobsPanel}`} align="end" sideOffset={6} collisionPadding={8}>
-          <JobsPopover station={station} jobs={jobs} onService={(job) => close(() => onService(job))} onTab={(job) => close(() => onTab(job))} />
+          <JobsPopover station={station} view={view} onService={(job) => close(() => onService(job))} onTab={(job) => close(() => onTab(job))} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

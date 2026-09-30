@@ -89,6 +89,7 @@ function reading(status: StatusView | undefined): string {
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days. */
 function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine: boolean }) {
   const view = chats.value;
+  const scope = useApp().entry.id;
   const status = useStatus();
   const [setting] = useRowPicture();
   const lead = leading(setting, view?.members);
@@ -101,7 +102,7 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
           {view.days.length === 0 && !view.loading && view.stations.filter((s) => s.state === "error").map((s) => <Note key={`e/${s.station}`} text={`连不上「${s.name}」，正在重试…`} error />)}
           {view.days.length === 0 && !view.loading && !view.stations.some((s) => s.state === "error" || s.state === "connecting") && <Empty view={view} onlyMine={onlyMine} />}
           {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
-          <OpenJobs stations={view.stations} />
+          <OpenJobs scope={scope} />
           {view.days.map((day) => (
             <section key={day.daysAgo}>
               <SectionHeader title={day.label} />
