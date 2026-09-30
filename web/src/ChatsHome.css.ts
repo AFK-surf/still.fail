@@ -32,6 +32,22 @@ export const searchBox = style({
   background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
   boxShadow: "0 1px 3px rgb(0 0 0 / .04)", color: vars.subtle, cursor: "text", pointerEvents: "auto",
 });
+/** The search and the filters' menu over it, in the chat's column. */
+export const searchWrap = style({ ...columned, position: "relative", pointerEvents: "auto" });
+globalStyle(`${searchWrap} > label`, { width: "100%", margin: 0 });
+/** The filters' menu, over the search as the composer's `@` menu is over it (ChatRef.css.ts). */
+export const filterMenu = style({ bottom: "calc(100% + 8px)", cursor: "default" });
+export const filterItem = style({ gridTemplateColumns: "16px minmax(0, 1fr) auto" });
+/** A filter in use, before what is typed. */
+export const chip = style({
+  flex: "none", display: "inline-flex", alignItems: "center", gap: 2, height: 26, padding: "0 4px 0 10px", borderRadius: 999,
+  background: vars.accentBg, color: vars.accentText, fontSize: vars.textXs, fontWeight: 500, whiteSpace: "nowrap",
+});
+export const chipOff = style({
+  display: "grid", placeItems: "center", width: 18, height: 18, border: 0, borderRadius: 999, background: "none", color: "inherit",
+  cursor: "pointer", opacity: 0.7,
+  selectors: { "&:hover": { opacity: 1 } },
+});
 export const searchInput = style({
   flex: 1, minWidth: 0, height: "100%", padding: 0, border: 0, outline: "none", background: "none", color: vars.text,
   font: "inherit", fontSize: vars.textSm,

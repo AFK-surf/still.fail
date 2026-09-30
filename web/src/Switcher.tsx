@@ -2,12 +2,13 @@
 // pick, ↩ opens, Esc closes, as everywhere; nothing says so).
 import { Dialog as RDialog } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useChatSearch, type ChatItem } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { useShortcut } from "./keymap.ts";
 import { useLayout } from "./layout.ts";
-import { rememberColumn } from "./ChatsHome.tsx";
+import { focusComposer, rememberColumn } from "./ChatsHome.tsx";
+import { lastChat } from "./lastChat.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
@@ -20,7 +21,19 @@ export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; n
   const [listing, setListing] = useState(false);
   // 搜索列表 (layout.ts): the list's page is the search, focused as it opens.
   const list = useLayout()[0] === "list";
-  useShortcut("chat.switch", () => list ? (rememberColumn(), navigate(scope === "local" ? "/chats" : `/w/${scope}`)) : setSwitching((s) => !s));
+  const home = scope === "local" ? "/chats" : `/w/${scope}`;
+  const path = useLocation().pathname;
+  useShortcut("chat.switch", () => {
+    if (!list) return setSwitching((s) => !s);
+    // On the list already: back to the chat last open, as Esc.
+    if (path === home) {
+      const last = lastChat(scope, "");
+      if (last) { navigate(last); focusComposer(); }
+      return;
+    }
+    rememberColumn();
+    navigate(home);
+  });
   useShortcut("shortcuts", () => setListing((s) => !s));
   useShortcut("chat.new", () => navigate(newChat));
   useShortcut("settings", () => navigate(settings));
