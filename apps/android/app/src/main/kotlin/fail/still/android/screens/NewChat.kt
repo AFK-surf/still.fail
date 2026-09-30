@@ -7,6 +7,11 @@ import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import fail.still.android.ui.floatingStill
+import fail.still.android.ui.Ease
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
 import androidx.compose.foundation.background
@@ -95,8 +100,12 @@ private fun AppState.keepStation(scope: String, station: String) {
     setStrings("newChat.last", listOf(station))
 }
 
+/**
+ * The new chat, above its host's composer (ChatHost.kt). `leaving`: it has become its chat, which is under it now; only
+ * its scene is drawn, going (up out of view, its choices fading where they are).
+ */
 @Composable
-fun NewChatScreen(current: WorkspaceEntry) {
+fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false) {
     val app = LocalApp.current
     val scope = current.workspace.id
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(scope))
@@ -104,8 +113,10 @@ fun NewChatScreen(current: WorkspaceEntry) {
     // The station last started on (or picked) in this workspace.
     var picked by remember(scope) { mutableStateOf(app.lastStation(scope)) }
     val onStation = { station: String -> picked = station; app.keepStation(scope, station) }
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
-        NavBar("取消", app::pop, "新对话")
+    // What the composer frosts, under it: this page (its own paper) until it leaves.
+    Column(if (leaving) Modifier.fillMaxSize() else Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg)) {
+        // Gone at once as it leaves (the chat has its own bar), its room kept so the scene leaves from where it was.
+        Box(Modifier.alpha(if (leaving) 0f else 1f)) { NavBar("取消", app::pop, "新对话") }
         val online = all?.filter { it.online }.orEmpty()
         val view = online.firstOrNull { it.station == picked } ?: online.firstOrNull()
         when {
@@ -116,13 +127,15 @@ fun NewChatScreen(current: WorkspaceEntry) {
                 Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 Text("在一台机器上打开 still.fail，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             }
-            else -> androidx.compose.runtime.key(view.station) { NewChatOn(scope, view, online, onStation) }
+            else -> androidx.compose.runtime.key(view.station) { NewChatOn(scope, view, online, onStation, host, leaving) }
         }
+        // No composer without a station to write to.
+        if (view == null && !leaving) host.spec = null
     }
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: String, view: StationView, stations: List<StationView>, onStation: (String) -> Unit) {
+private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: String, view: StationView, stations: List<StationView>, onStation: (String) -> Unit, host: Host, leaving: Boolean) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val draft = remember(view.station) { Draft() }
@@ -160,8 +173,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
         }
     }
     val launchers = AttachLaunchers { app.upload(draft, view.station, it, scope) }
-    val haze = remember { HazeState() }
-    Column(Modifier.weight(1f).hazeSource(haze).verticalScroll(rememberScrollState())) {
+    val haze = host.haze
+    // Leaving: the scene up out of view as it fades (140 ms, Ease.Arrive), the choices fading where they are (80 ms).
+    val lift = with(androidx.compose.ui.platform.LocalDensity.current) { 32.dp.toPx() }
+    val up = { if (leaving) Ease.Arrive.transform((host.leave.value / SCENE_LEAVE_MS).coerceIn(0f, 1f)) else 0f }
+    val fade = { if (leaving) Ease.LeaveFade.transform((host.leave.value / 80f).coerceIn(0f, 1f)) else 0f }
+    Column(Modifier.weight(1f).graphicsLayer { val a = up(); translationY = -lift * a; scaleX = 1f - 0.04f * a; scaleY = scaleX; alpha = 1f - a }.verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
             Text("想让 agent 做什么？", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
@@ -185,15 +202,15 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
         }
     }
     // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
-    entry?.spent?.let { s ->
+    if (!leaving) entry?.spent?.let { s ->
         Text(
             "${entry.name} 能用的账号额度都用完了" + (s.back?.let { "，$it" } ?: "") + "。现在发的消息要等额度恢复才会有回复；也可以换一个模型。",
             fontSize = 13.sp, color = C.ink,
             modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
-    // The choices, then the composer as a floating capsule, as in a chat.
-    Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below.
+    Column(Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - fade() }.padding(start = 10.dp, end = 10.dp, top = 8.dp)) {
         // Room above and below for the chips' shadows, which the scroll would cut.
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Chooser(haze, { IconIn(Icons.Server, 14.dp, C.ink) }, view.name) { pickStation(app, stations, view.station, onStation) }
@@ -218,31 +235,39 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                 }
             }
         }
-        ChatRefMenu(draft, view.station, null, haze)
-        Column(Modifier.fillMaxWidth().floatingStill(RoundedCornerShape(ComposerCorner)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }.padding(ComposerInset), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DraftExtras(draft)
-            ComposerBar(draft, "做任何事", onPlus = { openAttach(app, launchers) }, onType = {}, onSend = {
-                val taken = draft.take()
-                draft.starting = true
-                scope.launch {
-                    try {
-                        val key = ensure()
-                        // The message waits in the new chat (its outbox) until its station has made it; then it goes.
-                        app.api(view.station).sendIn(key, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
-                        sent = true
-                        // The new item's page, by the key the core gave it.
-                        app.replace(Screen.Chat(view.station, ChatOf.Session(key)))
-                    } catch (e: CoreException) {
-                        // Nothing sent: the draft comes back.
-                        draft.restore(taken); draft.error = e.message
-                    } finally {
-                        draft.starting = false
-                    }
-                }
-            })
-            draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
-        }
     }
+    // The composer's room: as tall as it was when the page began to leave (it changes shape under what leaves).
+    val room = remember { mutableStateOf(0) }
+    if (!leaving) room.value = host.composerHeight
+    Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { room.value.toDp() }))
+    if (leaving) return
+    host.spec = ComposerSpec(
+        station = view.station, here = null, draft = draft, placeholder = "做任何事",
+        onPlus = { openAttach(app, launchers) },
+        onSend = {
+            // Its words stay where they were in the composer until the chat's page takes them (ChatHost.kt).
+            host.sending(draft.text.trim(), carried = true)
+            val taken = draft.take()
+            draft.starting = true
+            scope.launch {
+                try {
+                    val key = ensure()
+                    // The message waits in the new chat (its outbox) until its station has made it; then it goes.
+                    app.api(view.station).sendIn(key, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                    sent = true
+                    // The new item's page, by the key the core gave it: this page becomes it, its composer kept.
+                    host.madeChat()
+                    app.made(Screen.Chat(view.station, ChatOf.Session(key)))
+                } catch (e: CoreException) {
+                    // Nothing sent: the draft comes back.
+                    host.notSent()
+                    draft.restore(taken); draft.error = e.message
+                } finally {
+                    draft.starting = false
+                }
+            }
+        },
+    )
 }
 
 @Composable

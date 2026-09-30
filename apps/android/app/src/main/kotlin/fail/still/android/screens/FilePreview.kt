@@ -90,8 +90,29 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import fail.still.android.ui.Ease
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -145,13 +166,197 @@ private sealed interface FileLoad {
  */
 @Composable
 fun FilePreview(station: String, key: String, file: Attachment, gallery: () -> List<Shown> = { emptyList() }, onClose: () -> Unit) {
-    Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Viewer(station, Shown(key, file), gallery, onClose)
+    // Drawn by ViewerHost, a layer of the app's own window over the pages (not a dialog's window of its own): it can grow
+    // out of the thumbnail in the chat and shrink back into it. Here it only says it is open, while it is.
+    val open = remember { ViewerOpen(station, Shown(key, file), gallery) }
+    open.onClose = onClose
+    DisposableEffect(open) {
+        FileViewers.shown = open
+        onDispose { if (FileViewers.shown === open) { FileViewers.shown = null; FileViewers.hidden = null } }
     }
 }
 
+// ── the viewer's layer, and its flight from and to the chat ────────────
+
+/** The viewer grows from the thumbnail this long, and shrinks back into it; both on web mobile's --m-ease (.2, .8, .2, 1). */
+private const val OPEN_MS = 320
+private const val CLOSE_MS = 280
+/** Opened or closed with no thumbnail on the screen: the web's fade (FilePreview.css.ts fp: 140ms ease-out). */
+private const val FADE_MS = 140
+
+internal class ViewerOpen(val station: String, val opened: Shown, val gallery: () -> List<Shown>) {
+    var onClose: () -> Unit = {}
+}
+
+/** Where a thumbnail in the chat is (in the window), what it shows, and whether any of it is on the screen. */
+internal class Thumb(val bounds: Rect, val visible: Boolean, val radius: Float, val picture: () -> ImageBitmap?)
+
+/** The viewer open, if one is; the chat's thumbnails by the file each shows; the one hidden while the viewer is its picture. */
+object FileViewers {
+    internal var shown by mutableStateOf<ViewerOpen?>(null)
+    val open: Boolean get() = shown != null
+    internal val thumbs = HashMap<String, Thumb>()
+    internal var hidden by mutableStateOf<String?>(null)
+    /**
+     * A video closed back into its thumbnail keeps the frame it was left at (web: its still is set to that time): the
+     * thumbnail shows it from then on, and opened again the video goes on from there. By the thumbnail's id.
+     */
+    internal val frames = mutableStateMapOf<String, KeptFrame>()
+    internal fun id(station: String, key: String, path: String) = "$station/$key/$path"
+}
+
+/**
+ * A thumbnail in the chat the viewer opens from (`id`: FileViewers.id): where it is, kept as it moves; hidden while the
+ * viewer shows its picture in its place (one picture on the screen, never two).
+ */
+internal fun Modifier.viewerThumb(id: String, radius: Float, picture: () -> ImageBitmap?): Modifier =
+    onGloballyPositioned { c ->
+        val at = c.positionInRoot()
+        FileViewers.thumbs[id] = Thumb(Rect(at, Size(c.size.width.toFloat(), c.size.height.toFloat())), c.boundsInRoot().let { it.width > 0 && it.height > 0 }, radius, picture)
+    }.graphicsLayer { alpha = if (FileViewers.hidden == id) 0f else 1f }
+
 @Composable
-private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, onClose: () -> Unit) {
+internal fun ForgetThumb(id: String) {
+    DisposableEffect(id) { onDispose { FileViewers.thumbs.remove(id) } }
+}
+
+/**
+ * The picture's flight: `p` 0 is the thumbnail (its box, its corners, the picture cropped to it as the chat shows it),
+ * 1 the picture where the stage puts it. One value moves the picture, its crop and corners, the black behind it and
+ * the bars together.
+ */
+@Stable
+internal class KeptFrame(val picture: ImageBitmap, val atUs: Long)
+
+internal class ViewerFlight {
+    enum class Phase { Waiting, Flying, Rest, Fading }
+    var phase by mutableStateOf(Phase.Rest)
+    val p = Animatable(1f)
+    val fade = Animatable(1f)
+    /** The thumbnail's box on the stage. */
+    var from: Rect? = null
+    var radius = 0f
+    /** The picture's box on the stage, as it is now (null until known). */
+    var target: () -> Rect? = { null }
+    /** A video's frame as it shows now, and where it is (null for a picture, or before the player has one). */
+    var frame: suspend () -> KeptFrame? = { null }
+    /** How much of the viewer's ground and bars shows. */
+    val chrome: Float get() = when (phase) { Phase.Waiting -> 0f; Phase.Flying -> p.value; else -> 1f }
+}
+
+/** The stage (what shows the picture) carried from the thumbnail's box to its own place, or back. */
+internal fun Modifier.viewerFlying(f: ViewerFlight): Modifier = graphicsLayer {
+    when (f.phase) {
+        ViewerFlight.Phase.Waiting -> alpha = 0f
+        ViewerFlight.Phase.Flying -> {
+            val from = f.from
+            val to = f.target()
+            if (from == null || to == null || to.width <= 0f || to.height <= 0f) return@graphicsLayer
+            val t = f.p.value
+            // Covering the thumbnail's box at the start, as a cropped picture does.
+            val s0 = max(from.width / to.width, from.height / to.height)
+            val s = s0 + (1f - s0) * t
+            val c = androidx.compose.ui.geometry.lerp(from.center, to.center, t)
+            transformOrigin = TransformOrigin(to.center.x / size.width, to.center.y / size.height)
+            scaleX = s; scaleY = s
+            translationX = c.x - to.center.x; translationY = c.y - to.center.y
+            // The crop, in the stage's own (unscaled) terms: the thumbnail's box growing into the picture's.
+            val w = (from.width + (to.width - from.width) * t) / s
+            val h = (from.height + (to.height - from.height) * t) / s
+            val r = f.radius * (1f - t) / s
+            val box = Rect(Offset(to.center.x - w / 2, to.center.y - h / 2), Size(w, h))
+            shape = object : Shape {
+                override fun createOutline(size: Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density) =
+                    Outline.Rounded(RoundRect(box, CornerRadius(r)))
+            }
+            clip = true
+        }
+        else -> {}
+    }
+}
+
+/** The viewer open over the pages (App.kt puts it over them, under sheets, menus and toasts). */
+@Composable
+fun ViewerHost() {
+    val open = FileViewers.shown ?: return
+    key(open) { ViewerLayer(open) }
+}
+
+@Composable
+private fun ViewerLayer(open: ViewerOpen) {
+    val scope = rememberCoroutineScope()
+    val flight = remember { ViewerFlight() }
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    var current by remember { mutableStateOf(open.opened) }
+    var closing by remember { mutableStateOf(false) }
+    // It comes up in the keyboard's place: what was being typed into lets go of it first.
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    fun idOf(s: Shown) = FileViewers.id(open.station, s.key, s.file.path)
+    fun thumbOf(s: Shown) = FileViewers.thumbs[idOf(s)]?.takeIf { it.visible && known(s) }
+    LaunchedEffect(Unit) {
+        focus.clearFocus(); keyboard?.hide()
+        val thumb = thumbOf(open.opened)
+        val known = thumb != null && withTimeoutOrNull(400) {
+            flight.phase = ViewerFlight.Phase.Waiting
+            snapshotFlow { flight.target() }.first { it != null }
+        } != null
+        if (thumb != null && known) {
+            flight.from = thumb.bounds.translate(-origin)
+            flight.radius = thumb.radius
+            flight.p.snapTo(0f)
+            FileViewers.hidden = idOf(open.opened)
+            flight.phase = ViewerFlight.Phase.Flying
+            flight.p.animateTo(1f, tween(OPEN_MS, easing = Ease.Arrive))
+        } else {
+            flight.phase = ViewerFlight.Phase.Fading
+            flight.fade.snapTo(0f)
+            flight.fade.animateTo(1f, tween(FADE_MS, easing = Ease.Out))
+        }
+        flight.phase = ViewerFlight.Phase.Rest
+        FileViewers.hidden = null
+    }
+    fun close() {
+        if (closing) return
+        closing = true
+        scope.launch {
+            val thumb = thumbOf(current)
+            if (thumb != null && flight.target() != null) {
+                flight.from = thumb.bounds.translate(-origin)
+                flight.radius = thumb.radius
+                if (flight.phase != ViewerFlight.Phase.Flying) flight.p.snapTo(1f)
+                // The thumbnail it lands in shows the frame it goes back with (hidden until then, so never seen changing).
+                flight.frame()?.let { FileViewers.frames[idOf(current)] = it }
+                FileViewers.hidden = idOf(current)
+                flight.phase = ViewerFlight.Phase.Flying
+                flight.p.animateTo(0f, tween(CLOSE_MS, easing = Ease.Arrive))
+            } else {
+                // As web's: the viewer fades from where it is (140ms), its thumbnail (if it hid one) shown again at once.
+                if (flight.phase == ViewerFlight.Phase.Flying) flight.fade.snapTo(flight.p.value)
+                FileViewers.hidden = null
+                flight.phase = ViewerFlight.Phase.Fading
+                flight.fade.animateTo(0f, tween(FADE_MS, easing = Ease.Out))
+            }
+            // Left drawn as it ended (on the thumbnail, or gone) until the page lets it go.
+            open.onClose()
+        }
+    }
+    BackHandler(enabled = !closing) { close() }
+    Box(
+        Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInRoot() }
+            .graphicsLayer { if (flight.phase == ViewerFlight.Phase.Fading) alpha = flight.fade.value }
+            // Its own: no touch reaches the page under it.
+            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false) } },
+    ) {
+        Viewer(open.station, open.opened, open.gallery, ::close, flight, closing) { current = it }
+    }
+}
+
+/** A kind the viewer carries between the thumbnail and its stage: images, and videos' stills. */
+private fun known(s: Shown) = kindOf(s.file.name).kind.let { it == PreviewKind.Image || it == PreviewKind.Video }
+
+@Composable
+private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, onClose: () -> Unit, flight: ViewerFlight, closing: Boolean, onShown: (Shown) -> Unit) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -159,6 +364,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
     var shown by remember { mutableStateOf(opened) }
     val file = shown.file
     val key = shown.key
+    LaunchedEffect(shown) { onShown(shown) }
     val known = remember(file.path) { kindOf(file.name) }
     val images = remember(file.path) { if (known.kind == PreviewKind.Image) gallery() else emptyList() }
     val at = images.indexOfFirst { it.file.path == file.path }
@@ -196,27 +402,46 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
     val marks = remember(file.path) { ImageMarks(zoom, density) }
     var source by remember(file.path) { mutableStateOf(false) }
     BackHandler(enabled = marks.on) { marks.back() }
-    val coming = kind == PreviewKind.Image && shownLoaded is FileLoad.Loading
+    val coming = (kind == PreviewKind.Image || kind == PreviewKind.Video && FileData.keptPicture("$fullId#still", 0) != null) && shownLoaded is FileLoad.Loading
     val haze = remember { HazeState() }
 
+    // The system bars' icons light over a dark viewer, as the app's again once it closes (it is in the app's own window).
     val view = androidx.compose.ui.platform.LocalView.current
-    val light = !dark && !C.dark
-    DisposableEffect(light) {
-        val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
-        if (window != null) androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
-            isAppearanceLightStatusBars = light; isAppearanceLightNavigationBars = light
-        }
-        onDispose {}
+    val appLight = !C.dark
+    val light = !dark && appLight
+    DisposableEffect(light, closing) {
+        val window = view.context.activity()?.window
+        val controller = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, view) }
+        val want = if (closing) appLight else light
+        controller?.apply { isAppearanceLightStatusBars = want; isAppearanceLightNavigationBars = want }
+        onDispose { controller?.apply { isAppearanceLightStatusBars = appLight; isAppearanceLightNavigationBars = appLight } }
     }
-    Box(Modifier.fillMaxSize().background(when { dark -> Color.Black; kind == PreviewKind.Pdf -> lerp(C.bg, C.ink, 0.05f); else -> chatInk().canvas })) {
+    // A video's still, as the chat shows it: what flies from the thumbnail, and stands in until the player's first frame.
+    val still = if (known.kind == PreviewKind.Video) remember(file.path) { FileViewers.thumbs[FileViewers.id(station, key, file.path)]?.picture?.invoke() ?: FileData.keptPicture("$fullId#still", 0) } else null
+    val videoZoom = remember(file.path) { ZoomState(density) }
+    LaunchedEffect(videoZoom, still) {
+        val sent = if (file.width != null && file.height != null && file.width > 0 && file.height > 0) IntSize(file.width.toInt(), file.height.toInt()) else null
+        if (videoZoom.natural == null) (still?.let { IntSize(it.width, it.height) } ?: sent)?.let { videoZoom.fitNatural(it) }
+    }
+    flight.target = when (known.kind) {
+        PreviewKind.Image -> ({ zoom.rect() })
+        PreviewKind.Video -> ({ videoZoom.rect() })
+        else -> ({ null })
+    }
+    val ground = when { dark -> Color.Black; kind == PreviewKind.Pdf -> lerp(C.bg, C.ink, 0.05f); else -> chatInk().canvas }
+    Box(Modifier.fillMaxSize().onSizeChanged { videoZoom.fitBox(it) }.drawBehind { drawRect(ground, alpha = flight.chrome) }) {
         Box(Modifier.fillMaxSize().hazeSource(haze)) {
             when {
-                known.kind == PreviewKind.Image -> ImageStage(station, key, file, bytes, zoom, marks, onTap = ::toggle,
+                known.kind == PreviewKind.Image -> ImageStage(station, key, file, bytes, zoom, marks, Modifier.viewerFlying(flight), onTap = ::toggle,
                     onSwipe = if (marks.on) null else { d -> (if (d < 0) before else after)?.let { shown = it } })
+                known.kind == PreviewKind.Video && still != null && (bytes == null || shownLoaded !is FileLoad.Ready) -> Poster(still, videoZoom, Modifier.viewerFlying(flight))
                 shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
                 shownLoaded is FileLoad.Failed -> Note { Text("载入失败：${shownLoaded.message}", fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
                 bytes == null -> {}
-                kind == PreviewKind.Video -> OnDisk(fullId, file.name, bytes) { VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, RoundedCornerShape(16.dp))) }
+                kind == PreviewKind.Video -> OnDisk(fullId, file.name, bytes, waiting = { if (still != null) Poster(still, videoZoom, Modifier.viewerFlying(flight)) else Note { Waiting() } }) {
+                    VideoViewer(it, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, RoundedCornerShape(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
+                        startAtUs = FileViewers.frames[FileViewers.id(station, key, file.path)]?.atUs ?: 0L, frameOut = { flight.frame = it })
+                }
                 kind == PreviewKind.Audio -> OnDisk(fullId, file.name, bytes) { Note { AudioViewer(it, file.name) } }
                 kind == PreviewKind.Pdf -> OnDisk(fullId, file.name, bytes) { PdfViewer(it, ::toggle) }
                 kind != null -> TextViewer(bytes, kind, known.language, file.name, source, ::toggle)
@@ -236,7 +461,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
         if (images.size > 1 && at >= 0 && !marks.on) {
             listOf(before to Alignment.CenterStart, after to Alignment.CenterEnd).forEachIndexed { i, (to, side) ->
                 if (to != null) Box(
-                    Modifier.align(side).padding(horizontal = 8.dp).alpha(if (show) 1f else 0f).size(36.dp).shadow(1.dp, CircleShape)
+                    Modifier.align(side).padding(horizontal = 8.dp).graphicsLayer { alpha = flight.chrome }.alpha(if (show) 1f else 0f).size(36.dp).shadow(1.dp, CircleShape)
                         .clip(CircleShape).background(DarkCanvas.copy(alpha = 0.8f)).clickable(enabled = show) { shown = to },
                     contentAlignment = Alignment.Center,
                 ) { IconIn(if (i == 0) Icons.ChevronLeft else Icons.ChevronRight, 22.dp, DarkText) }
@@ -244,7 +469,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
         }
         // The bar at the top: the file's name, its own tools, how far it has come, download and close.
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().coerceAtLeast(8.dp)
-        BoxWithConstraints(Modifier.fillMaxWidth().padding(top = top), contentAlignment = Alignment.TopCenter) {
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(top = top).graphicsLayer { alpha = flight.chrome }, contentAlignment = Alignment.TopCenter) {
             var widest by remember { mutableIntStateOf(0) }
             val shape = RoundedCornerShape(14.dp)
             val tint = if (dark) DarkMuted else C.muted
@@ -261,7 +486,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 if (coming && progress != null) Progress(progress, file.size, dark = true, inBar = true)
                 when {
                     marks.on -> MarksActions(marks, canDraft = true,
-                        onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p -> app.toast = if (download(context, p.name, p.bytes, "image/png")) "已存到「下载」" else "没能下载" } } },
+                        onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p -> app.toast = if (marks.save(context, p.name)) "已存到「下载」" else "没能下载" } } },
                         onDraft = {
                             // Into the draft of the chat whose agent keeps the image: its page takes it (Preview.kt → TakeDraftOffers).
                             if (bytes != null) scope.launch {
@@ -304,7 +529,7 @@ private suspend fun finish(marks: ImageMarks, bytes: ByteArray, zoom: ZoomState,
         marks.putDown()
         val made = marks.render(bytes, natural) ?: throw IllegalStateException("没能画出图片")
         val stamp = java.text.SimpleDateFormat("HHmmss", java.util.Locale.ROOT).format(java.util.Date())
-        use(Picked("${file.name.substringBeforeLast('.')}-标注-$stamp.png", made.bytes, made.width, made.height, made.preview))
+        use(Picked("${file.name.substringBeforeLast('.')}-标注-$stamp.png", made.bytes, made.width, made.height, made.preview, made.size))
     } catch (e: Exception) {
         marks.error = e.message ?: "没能画出图片"
     } finally {
@@ -395,10 +620,23 @@ private fun looksLikeText(bytes: ByteArray): Boolean {
 
 /** Shows `content` once the file is on the phone's disk (the players and PdfRenderer read files). */
 @Composable
-private fun OnDisk(id: String, name: String, bytes: ByteArray, content: @Composable (File) -> Unit) {
+private fun OnDisk(id: String, name: String, bytes: ByteArray, waiting: @Composable () -> Unit = { Note { Waiting() } }, content: @Composable (File) -> Unit) {
     val context = LocalContext.current
     val file by produceState<File?>(null, id) { value = FileData.onDisk(context, id, name, bytes) }
-    file?.let { content(it) } ?: Note { Waiting() }
+    file?.let { content(it) } ?: waiting()
+}
+
+/** A video's still where the player will show it (`zoom`), until it can. */
+@Composable
+private fun Poster(still: ImageBitmap, zoom: ZoomState, stage: Modifier) {
+    Canvas(Modifier.fillMaxSize().then(stage)) { drawFitted(still, zoom) }
+}
+
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFitted(p: ImageBitmap, zoom: ZoomState) {
+    val r = zoom.rect() ?: return
+    withTransform({ translate(r.left, r.top); scale(r.width / p.width, r.height / p.height, Offset.Zero) }) {
+        drawImage(p, filterQuality = FilterQuality.Medium)
+    }
 }
 
 // ── images ─────────────────────────────────────────────────────────────
@@ -409,7 +647,7 @@ private fun OnDisk(id: String, name: String, bytes: ByteArray, content: @Composa
  * over it, moved and zoomed with it.
  */
 @Composable
-private fun ImageStage(station: String, key: String, file: Attachment, bytes: ByteArray?, zoom: ZoomState, marks: ImageMarks, onTap: () -> Unit, onSwipe: ((Int) -> Unit)?) {
+private fun ImageStage(station: String, key: String, file: Attachment, bytes: ByteArray?, zoom: ZoomState, marks: ImageMarks, stage: Modifier, onTap: () -> Unit, onSwipe: ((Int) -> Unit)?) {
     val scope = rememberCoroutineScope()
     val thumbId = FileData.id(station, key, file, thumb = true)
     val chatLongest = with(LocalDensity.current) { 360.dp.roundToPx() }
@@ -444,7 +682,7 @@ private fun ImageStage(station: String, key: String, file: Attachment, bytes: By
     val gap = with(LocalDensity.current) { 24.dp.toPx() }
     val below = marks.writingBottom()?.let { it + gap - (zoom.box.height - ime) } ?: 0f
     val lift by animateFloatAsState(if (ime > 0 && below > 0) below else 0f, label = "lift")
-    Box(Modifier.fillMaxSize().graphicsLayer { translationY = -lift }.zoomable(zoom, scope, onTap, onSwipe, strokes = if (marks.on) marks else null)) {
+    Box(Modifier.fillMaxSize().then(stage).graphicsLayer { translationY = -lift }.zoomable(zoom, scope, onTap, onSwipe, strokes = if (marks.on) marks else null)) {
         Canvas(Modifier.fillMaxSize()) {
             val r = zoom.rect() ?: return@Canvas
             val p = picture ?: return@Canvas

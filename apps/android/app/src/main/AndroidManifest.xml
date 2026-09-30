@@ -16,7 +16,10 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.StillFail"
         android:supportsRtl="true"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true">
+        <!-- Back by the system's gesture is predictive (the default from targetSdk 36 on Android 16; this asks for it on
+             Android 13-15 too): the page follows the finger as it swipes (App.kt Pages). -->
         <!-- Frame stats and profiles from the shell, on an optimized build too. -->
         <profileable android:shell="true" />
         <!-- Turning the phone (or the video viewer's landscape button) keeps the activity: recreating it would rebuild

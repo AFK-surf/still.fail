@@ -5,6 +5,8 @@
 package fail.still.android.screens
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BitmapRegionDecoder
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
@@ -56,7 +58,6 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Strokes
 import fail.still.android.ui.ZoomState
-import java.io.ByteArrayOutputStream
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -79,8 +80,6 @@ private fun haloOf(color: Color) = COLORS.firstOrNull { it.first == color }?.sec
 
 /** On the screen, whatever the zoom (dp): a line's width, a text's size, how near a finger picks a mark. */
 private const val LINE = 3f
-/** A marked image is made at most this many pixels on its longest side. */
-private const val EXPORT_SIDE = 4096
 private const val TEXT = 18f
 private const val REACH = 12f
 private const val LINE_HEIGHT = 1.3f
@@ -261,6 +260,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
 
     fun leave() {
         on = false; doc = MarkDoc(emptyList(), emptyList(), emptyList()); picked = null; drag = null; writing = null; error = null; palette = false
+        made?.delete(); made = null
     }
 
     /** Back: puts down the words being written, closes the colours, lets go of the picked mark, else stops marking. */
@@ -484,42 +484,192 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
         }
     }
 
+    /** The last marked image made, on disk (it may be bigger than is kept in memory). */
+    private var made: java.io.File? = null
+
     /**
-     * The image (its whole bytes) with the marks drawn on it, as a PNG, with its size and a small picture: at its own
-     * size, or smaller so that its longest side is at most [EXPORT_SIDE] (read from the file already smaller, the marks
-     * drawn to scale).
+     * The image (its whole bytes) with the marks drawn on it, as a PNG at its own size, as web's (a canvas of the
+     * image's size, `toBlob("image/png")`), with its size and a small picture. Never held whole: read in bands
+     * ([BitmapRegionDecoder]), each band's marks drawn on it, its rows written out as they come ([PngRows]) into a
+     * file. Its bytes come in memory only if it can be sent (at most [MAX_MARKED]); a bigger one is handed on empty
+     * with its size, so the draft says it is too big, as web's does, and [save] still puts it in Downloads.
      */
     suspend fun render(bytes: ByteArray, natural: androidx.compose.ui.unit.IntSize): Picked? = withContext(Dispatchers.Default) {
         val all = all()
-        val longest = max(natural.width, natural.height).coerceAtLeast(1)
-        val scale = minOf(1f, EXPORT_SIDE.toFloat() / longest)
-        val w = max(1, (natural.width * scale).roundToInt())
-        val h = max(1, (natural.height * scale).roundToInt())
-        // Read at the smallest halving still at least as big as what is made.
-        var sample = 1
-        while (longest / (sample * 2) >= max(w, h)) sample *= 2
-        var source: Bitmap? = null
-        var out: Bitmap? = null
+        made?.delete(); made = null
+        val region = try {
+            if (android.os.Build.VERSION.SDK_INT >= 31) BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)
+            else @Suppress("DEPRECATION") BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false)
+        } catch (_: java.io.IOException) { null }
+        // What the region reader cannot read (a GIF, a BMP) is small enough to read whole.
+        val whole = if (region == null) BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@withContext null else null
+        val w = region?.width ?: whole!!.width
+        val h = region?.height ?: whole!!.height
+        val file = java.io.File.createTempFile("marked-", ".png")
+        var band: Bitmap? = null
+        var small: Bitmap? = null
         try {
-            source = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) ?: return@withContext null
-            out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(out)
-            canvas.drawBitmap(source, null, android.graphics.Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
-            source.recycle(); source = null
-            // The marks are in the image's own pixels.
-            canvas.scale(w.toFloat() / max(1, natural.width), h.toFloat() / max(1, natural.height))
-            drawMarks(canvas, all)
-            val png = ByteArrayOutputStream().also { out.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+            val rows = max(1, min(h, BAND_PIXELS / max(1, w)))
+            band = Bitmap.createBitmap(w, rows, Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(band)
             val side = max(1, max(w, h) / 160)
-            val small = Bitmap.createScaledBitmap(out, max(1, w / side), max(1, h / side), true)
-            // At the same size it is the same bitmap: kept, as the small picture.
-            if (small === out) out = null
-            Picked("", png, w, h, small.asImageBitmap())
+            small = Bitmap.createBitmap(max(1, w / side), max(1, h / side), Bitmap.Config.ARGB_8888)
+            val smallCanvas = android.graphics.Canvas(small)
+            val filter = Paint(Paint.FILTER_BITMAP_FLAG)
+            val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+            val line = IntArray(w)
+            var png: PngRows? = null
+            java.io.BufferedOutputStream(java.io.FileOutputStream(file), 1 shl 16).use { out ->
+                var y0 = 0
+                while (y0 < h) {
+                    val n = min(rows, h - y0)
+                    band.eraseColor(android.graphics.Color.TRANSPARENT)
+                    if (region != null) {
+                        val piece = region.decodeRegion(android.graphics.Rect(0, y0, w, y0 + n), opts) ?: return@withContext null
+                        canvas.drawBitmap(piece, 0f, 0f, null)
+                        // Whether it has any see-through at all, known from the first band (as the image's).
+                        if (png == null) png = PngRows(out, w, h, piece.hasAlpha())
+                        piece.recycle()
+                    } else {
+                        canvas.drawBitmap(whole!!, 0f, -y0.toFloat(), null)
+                        if (png == null) png = PngRows(out, w, h, whole.hasAlpha())
+                    }
+                    // The marks are in the image's own pixels (as shown: `natural`), this band from y0 down.
+                    canvas.save()
+                    canvas.translate(0f, -y0.toFloat())
+                    canvas.scale(w.toFloat() / max(1, natural.width), h.toFloat() / max(1, natural.height))
+                    drawMarks(canvas, all)
+                    canvas.restore()
+                    for (r in 0 until n) { band.getPixels(line, 0, w, 0, r, w, 1); png!!.row(line) }
+                    val k = small.height.toFloat() / h
+                    smallCanvas.drawBitmap(band, android.graphics.Rect(0, 0, w, n), android.graphics.RectF(0f, y0 * k, small.width.toFloat(), (y0 + n) * k), filter)
+                    y0 += n
+                }
+                png!!.end()
+            }
+            made = file
+            val size = file.length()
+            val picture = small.asImageBitmap()
+            small = null
+            if (size > MAX_MARKED) Picked("", ByteArray(0), w, h, picture, size) else Picked("", file.readBytes(), w, h, picture)
         } catch (_: OutOfMemoryError) {
+            file.delete()
             throw IllegalStateException("图片太大，没能画出来")
+        } catch (e: java.io.IOException) {
+            file.delete()
+            throw IllegalStateException("没能画出图片", e)
         } finally {
-            source?.recycle()
-            out?.recycle()
+            region?.recycle()
+            whole?.recycle()
+            band?.recycle()
+            small?.recycle()
+        }
+    }
+
+    /** The marked image last made ([render]) put in the phone's Downloads, streamed from its file. */
+    suspend fun save(context: android.content.Context, name: String): Boolean = withContext(Dispatchers.IO) {
+        val file = made ?: return@withContext false
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, "image/png")
+        }
+        val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return@withContext false
+        context.contentResolver.openOutputStream(uri)?.use { o -> file.inputStream().use { it.copyTo(o, 1 shl 16) } } != null
+    }
+}
+
+/** How many pixels a band of the image read at a time has (4 bytes each): a few MB, whatever the image. */
+private const val BAND_PIXELS = 2 shl 20
+/** What can be sent (Composer.kt MAX_FILE, the station's MAX_UPLOAD): bigger is not read into memory. */
+private const val MAX_MARKED = 50L * 1024 * 1024
+
+/**
+ * A PNG written a row at a time into `out`: 8-bit RGB (RGBA if `alpha`), each row filtered the way that leaves the
+ * least to squeeze (libpng's heuristic: the smallest sum of the filtered bytes as signed), deflated as it comes, in
+ * IDAT chunks of up to 256 KB.
+ */
+private class PngRows(private val out: java.io.OutputStream, private val width: Int, height: Int, alpha: Boolean) {
+    private val bpp = if (alpha) 4 else 3
+    private val n = width * bpp
+    private var prev = ByteArray(n)
+    private var cur = ByteArray(n)
+    /** The row filtered each way (None, Sub, Up, Average, Paeth), its filter's number first. */
+    private val ways = Array(5) { ByteArray(n + 1).also { b -> b[0] = it.toByte() } }
+    private val idat = Chunks(out)
+    private val deflater = java.util.zip.Deflater(6)
+    private val z = java.util.zip.DeflaterOutputStream(idat, deflater, 1 shl 16)
+
+    init {
+        out.write(byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 13, 10, 26, 10))
+        val ihdr = java.nio.ByteBuffer.allocate(13).putInt(width).putInt(height)
+            .put(8).put(if (alpha) 6 else 2).put(0).put(0).put(0).array()
+        chunk(out, "IHDR", ihdr, ihdr.size)
+    }
+
+    /** One row, as the non-premultiplied ARGB of [Bitmap.getPixels]. */
+    fun row(argb: IntArray) {
+        val c = cur
+        var j = 0
+        for (i in 0 until width) {
+            val p = argb[i]
+            c[j] = (p shr 16).toByte(); c[j + 1] = (p shr 8).toByte(); c[j + 2] = p.toByte()
+            if (bpp == 4) c[j + 3] = (p ushr 24).toByte()
+            j += bpp
+        }
+        val none = ways[0]; val sub = ways[1]; val up = ways[2]; val avg = ways[3]; val paeth = ways[4]
+        var s0 = 0L; var s1 = 0L; var s2 = 0L; var s3 = 0L; var s4 = 0L
+        val u = prev
+        for (i in 0 until n) {
+            val x = c[i].toInt() and 0xff
+            val a = if (i >= bpp) c[i - bpp].toInt() and 0xff else 0
+            val b = u[i].toInt() and 0xff
+            val cc = if (i >= bpp) u[i - bpp].toInt() and 0xff else 0
+            val pa = abs(b - cc); val pb = abs(a - cc); val pc = abs(a + b - 2 * cc)
+            val pred = if (pa <= pb && pa <= pc) a else if (pb <= pc) b else cc
+            val v0 = x.toByte(); val v1 = (x - a).toByte(); val v2 = (x - b).toByte(); val v3 = (x - ((a + b) shr 1)).toByte(); val v4 = (x - pred).toByte()
+            none[i + 1] = v0; sub[i + 1] = v1; up[i + 1] = v2; avg[i + 1] = v3; paeth[i + 1] = v4
+            s0 += abs(v0.toInt()); s1 += abs(v1.toInt()); s2 += abs(v2.toInt()); s3 += abs(v3.toInt()); s4 += abs(v4.toInt())
+        }
+        var best = 0; var least = s0
+        if (s1 < least) { best = 1; least = s1 }
+        if (s2 < least) { best = 2; least = s2 }
+        if (s3 < least) { best = 3; least = s3 }
+        if (s4 < least) { best = 4 }
+        z.write(ways[best], 0, n + 1)
+        prev = c; cur = u
+    }
+
+    fun end() {
+        z.finish()
+        deflater.end()
+        idat.flush()
+        chunk(out, "IEND", ByteArray(0), 0)
+    }
+
+    /** What the deflater gives, as IDAT chunks. */
+    private class Chunks(private val out: java.io.OutputStream) : java.io.OutputStream() {
+        private val buf = ByteArray(1 shl 18)
+        private var at = 0
+        override fun write(b: Int) { if (at == buf.size) flush(); buf[at++] = b.toByte() }
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            var o = off; var left = len
+            while (left > 0) {
+                if (at == buf.size) flush()
+                val k = min(left, buf.size - at)
+                System.arraycopy(b, o, buf, at, k); at += k; o += k; left -= k
+            }
+        }
+        override fun flush() { if (at > 0) { chunk(out, "IDAT", buf, at); at = 0 } }
+    }
+
+    companion object {
+        fun chunk(out: java.io.OutputStream, type: String, data: ByteArray, len: Int) {
+            val t = type.toByteArray(Charsets.US_ASCII)
+            val crc = java.util.zip.CRC32().apply { update(t); update(data, 0, len) }
+            out.write(java.nio.ByteBuffer.allocate(4).putInt(len).array())
+            out.write(t)
+            out.write(data, 0, len)
+            out.write(java.nio.ByteBuffer.allocate(4).putInt(crc.value.toInt()).array())
         }
     }
 }

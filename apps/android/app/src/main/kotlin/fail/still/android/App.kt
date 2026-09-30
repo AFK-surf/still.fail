@@ -9,7 +9,25 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
 import android.content.SharedPreferences
-import androidx.activity.compose.BackHandler
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.dp
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import androidx.compose.ui.MotionDurationScale
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
@@ -142,10 +160,18 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     fun strings(name: String): List<String> = prefs.getString(name, null)?.split('\u0000')?.filter { it.isNotEmpty() } ?: emptyList()
     fun setStrings(name: String, values: List<String>) = prefs.edit().putString(name, values.joinToString("\u0000")).apply()
 
-    fun push(screen: Screen) { sheet = null; menu = null; forward = true; stack = stack + screen }
+    fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat) madeChat = null; stack = stack + screen }
     fun pop() { if (stack.size > 1) { sheet = null; menu = null; forward = false; stack = stack.dropLast(1) } }
     /** The top page gives way to another (a new chat becomes the chat it made). */
     fun replace(screen: Screen) { sheet = null; forward = true; stack = stack.dropLast(1) + screen }
+    /**
+     * The chat a new chat became (`made`): it is the same page as the new chat was (screens/ChatHost.kt), not another
+     * pushed in over it; the page is the host's until the next new chat.
+     */
+    var madeChat by mutableStateOf<Screen.Chat?>(null); private set
+    fun made(screen: Screen.Chat) { madeChat = screen; replace(screen) }
+    /** The page a screen is drawn in: a new chat and the chat it became are one. */
+    fun pageOf(screen: Screen): String = if (screen == Screen.NewChat || screen == madeChat) "new-chat" else screen.id
     fun home() { sheet = null; forward = false; stack = listOf(Screen.Home) }
     /**
      * An item's link from outside: its workspace, and its page over the list (back goes to the list); a service's link
@@ -260,6 +286,8 @@ fun StillFailApp(app: AppState) {
         val context = LocalContext.current
         LaunchedEffect(top) { if (top is Screen.Chat && top.of is ChatOf.Session) Notifier.cancel(context, "${top.station}/${top.of.key}") }
         if (top !is Screen.Home && top !is Screen.Chat) Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
+        // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.
+        fail.still.android.screens.ViewerHost()
         SheetHost(app)
         ReaderHost(app)
         MenuHost(app)
@@ -269,19 +297,66 @@ fun StillFailApp(app: AppState) {
 
 @Composable
 private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry) {
-    BackHandler(enabled = app.stack.size > 1 && app.sheet == null && app.menu == null) { app.pop() }
+    val top = app.stack.last()
+    val pages = remember { SeekableTransitionState(top) }
+    val transition = rememberTransition(pages, label = "pages")
+    // Swiped back (the system's back gesture, predictive back): the page follows the finger and the one under it shows
+    // a little behind (web mobile/app.tsx's own edge swipe); let go, it goes on from there, or back if the system says so.
+    var swiped by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val width = LocalWindowInfo.current.containerSize.width.toFloat()
+    LaunchedEffect(top) {
+        if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
+        pages.animateTo(top, if (swiped) tween(300, easing = FastOutSlowInEasing) else null)
+        swiped = false
+    }
+    PredictiveBackHandler(enabled = app.stack.size > 1 && app.sheet == null && app.menu == null && !fail.still.android.screens.FileViewers.open) { progress ->
+        val under = app.stack.getOrNull(app.stack.size - 2)
+        var start: Float? = null
+        var following = false
+        try {
+            progress.collect { e ->
+                // Only from a page at rest (not while one still moves in); by the finger's own way from where it began.
+                if (under == null || pages.currentState != pages.targetState && !following) return@collect
+                val x0 = start ?: e.touchX.also { start = it }
+                val dx = if (e.swipeEdge == BackEventCompat.EDGE_RIGHT) x0 - e.touchX else e.touchX - x0
+                if (!following) { swiped = true; following = true }
+                pages.seekTo((dx / width.coerceAtLeast(1f)).coerceIn(0f, 1f), under)
+            }
+            app.pop()
+        } catch (e: CancellationException) {
+            // Called off: back along the same way (the seek run backwards to 0, 200ms), then at rest on the page again.
+            if (following && under != null) scope.launch {
+                val from = pages.fraction
+                // Seeked frame by frame (the seek is what the pages draw), on the system's animation speed.
+                val scale = coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
+                val start = withFrameNanos { it }
+                while (true) {
+                    val now = withFrameNanos { it }
+                    val t = if (scale <= 0f) 1f else ((now - start) / 1_000_000f / (200f * scale)).coerceAtMost(1f)
+                    pages.seekTo(from * (1f - FastOutSlowInEasing.transform(t)), under)
+                    if (t >= 1f) break
+                }
+                pages.seekTo(0f, under)
+                pages.snapTo(app.stack.last())
+                swiped = false
+            }
+            throw e
+        }
+    }
     val saved = rememberSaveableStateHolder()
-    AnimatedContent(
-        targetState = app.stack.last(),
-        transitionSpec = { transition(initialState, targetState, app.forward) },
-        label = "pages",
+    transition.AnimatedContent(
+        transitionSpec = { if (swiped) swipe() else transition(initialState, targetState, app.forward) },
+        // A new chat and the chat it becomes are one page (ChatHost.kt): it stays, rather than slide in again.
+        contentKey = { app.pageOf(it) },
     ) { screen ->
-        saved.SaveableStateProvider(screen.id) {
-            Box(Modifier.fillMaxSize().background(C.bg)) {
+        // The page swiped away casts a little shadow on the one it uncovers (web: -8px 0 24px rgba(0,0,0,.12)).
+        val lifted = swiped && screen == pages.currentState
+        saved.SaveableStateProvider(app.pageOf(screen)) {
+            Box(Modifier.fillMaxSize().then(if (lifted) Modifier.drawBehind { swipeShadow(((1f - pages.fraction) / 0.15f).coerceIn(0f, 1f)) } else Modifier).background(C.bg)) {
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
-                    is Screen.Chat -> ChatScreen(screen.station, screen.of)
-                    Screen.NewChat -> NewChatScreen(current)
+                    is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
                     Screen.Stations -> StationsScreen(current)
                     is Screen.Station -> StationScreen(current, screen.address)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
@@ -301,6 +376,22 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             }
         }
     }
+}
+
+/**
+ * Swiped back: the page goes right with the finger (linear in the seek, so it is where the finger is) and the one under
+ * it comes from 30% to the left, as web mobile's peek (translateX(-30% + dx·0.3)).
+ */
+private fun swipe(): ContentTransform {
+    val linear = tween<IntOffset>(300, easing = LinearEasing)
+    return (slideInHorizontally(linear) { -(it * 0.3f).roundToInt() } togetherWith slideOutHorizontally(linear) { it })
+        .apply { targetContentZIndex = -1f }
+}
+
+/** `alpha`: fading over the last of the way, so none is left at the screen's edge once the page has gone. */
+private fun DrawScope.swipeShadow(alpha: Float) {
+    val w = 24.dp.toPx()
+    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.12f * alpha)), startX = -w, endX = 0f), topLeft = Offset(-w, 0f), size = Size(w, size.height))
 }
 
 /**

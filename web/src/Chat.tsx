@@ -33,7 +33,8 @@ import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
-import { toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { thumbId } from "./viewerFlight.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -764,6 +765,7 @@ const revealed = new Set<string>();
 
 /** Images and video stills load near the screen; other files are a card. Either opens in a preview. */
 function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
+  const station = useStation();
   const image = isImage(file.name);
   const video = kindOf(file.name).kind === "video";
   const [videoFailed, setVideoFailed] = useState(false);
@@ -783,7 +785,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (video && sessionKey !== null) {
     return (
       <>
-        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} onClick={() => setOpen(true)} aria-label={`${videoFailed ? "查看" : "播放"} ${file.name}`} style={look.box(file)} data-unavailable={videoFailed || undefined}>
+        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={`${videoFailed ? "查看" : "播放"} ${file.name}`} style={look.box(file)} data-unavailable={videoFailed || undefined}>
           {url && !videoFailed && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
             {videoFailed ? <><Read size={24} /><span>暂时无法预览</span><small>{fileSize(file.size)}</small></> : "▶"}
@@ -798,6 +800,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
     return (
       <>
         <button ref={box} type="button" className={look.image} onClick={() => (url || failed) && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
+          data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>暂时无法预览</span></span>}
@@ -908,6 +911,13 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     void api.warm(sessionKey).catch(() => {});
   };
   const send = async () => {
+    // In a chat (not a new one's first message, onSending's): its words stay where they were typed until its row is in
+    // the list, then go there (madeChat.ts), over the dock.
+    const field = input.current;
+    const dock = field?.closest<HTMLElement>(`.${dockCss.composerDock}`);
+    const layer = dock?.offsetParent;
+    const list = document.querySelector<HTMLElement>(`.${css.chatMessages}`);
+    if (!onSending && field && list && layer instanceof HTMLElement) sendingHere(field, draft.text, { layer, z: OVER_DOCK, list });
     const to = await sendDraft(draft, thread, ensureChat, onSending);
     if (to !== null) onSent?.(to);
   };

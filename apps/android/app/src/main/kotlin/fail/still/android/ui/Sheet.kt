@@ -22,7 +22,16 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.verticalDrag
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.layout
+import kotlin.math.roundToInt
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,13 +83,30 @@ import fail.still.android.AppState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 
 /** A sheet: how much of the screen it takes at first, and whether its grabber drags it. */
 class SheetSpec(val height: Float, val draggable: Boolean = false, val content: @Composable ColumnScope.() -> Unit)
 
-/** Drags the open sheet by its grabber. */
-class SheetDrag(val draggable: Boolean, val drag: (Float) -> Unit, val release: () -> Unit, val tap: () -> Unit)
+/** Drags the open sheet by its top; `release` has the finger's speed (px/s of height, up is positive). */
+class SheetDrag(val draggable: Boolean, val drag: (Float) -> Unit, val release: (Float) -> Unit, val tap: () -> Unit)
+
+/** A vertical drag that starts within the sheet's top 64dp; what is under it (a list) scrolls if it takes the drag first. */
+private suspend fun PointerInputScope.dragTop(drag: SheetDrag) {
+    val zone = 64.dp.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (down.position.y > zone) return@awaitEachGesture
+        val speed = VelocityTracker().apply { addPointerInputChange(down) }
+        val first = awaitVerticalTouchSlopOrCancellation(down.id) { change, over -> change.consume(); speed.addPointerInputChange(change); drag.drag(over) }
+            ?: return@awaitEachGesture
+        val ended = verticalDrag(first.id) { change ->
+            speed.addPointerInputChange(change)
+            drag.drag(change.positionChange().y)
+            change.consume()
+        }
+        drag.release(if (ended) -speed.calculateVelocity().y else 0f)
+    }
+}
 
 private val LocalSheetDrag = staticCompositionLocalOf<SheetDrag?> { null }
 
@@ -101,41 +127,60 @@ fun SheetHost(app: AppState) {
         val height = remember { Animatable(current.height * total) }
         val offset = remember { Animatable(total) }
         val scope = rememberCoroutineScope()
-        val scrim by animateFloatAsState(if (spec != null) 1f else 0f, tween(300), label = "scrim")
+        val scrim by animateFloatAsState(if (spec != null) 1f else 0f, tween(300, easing = Ease.Css), label = "scrim")
         LaunchedEffect(spec) {
             if (spec != null) {
                 val target = spec.height * total
                 if (offset.value > 1f) {
                     height.snapTo(target)
-                    offset.animateTo(0f, tween(380, easing = Ease))
+                    offset.animateTo(0f, tween(380, easing = Ease.Arrive))
                 } else {
-                    height.animateTo(target, tween(320, easing = Ease))
+                    height.animateTo(target, tween(320, easing = Ease.Arrive))
                 }
             } else {
-                offset.animateTo(height.value, tween(300, easing = Ease))
+                offset.animateTo(height.value, tween(300, easing = Ease.Arrive))
                 shown = null
             }
         }
         val min = with(density) { 120.dp.toPx() }
+        val base = current.height * total
+        var held by remember { mutableStateOf<Float?>(null) }
+        // Let go: on to where it settles at the speed the finger left it (height per second, up is more).
+        fun settle(to: Float, velocity: Float = 0f) { scope.launch { height.animateTo(to, SheetSpring, velocity) } }
         val paper = C.bg
         val glass = C.surface.copy(alpha = 0.8f)
         // One per sheet: a new one would restart the grabber's gesture halfway through a drag.
         val drag = remember(current, total) { SheetDrag(
             draggable = current.draggable,
-            drag = { dy -> scope.launch { height.snapTo((height.value - dy).coerceIn(min, total * 0.94f)) } },
-            release = {
-                val f = height.value / total
-                if (f < 0.3f) app.sheet = null
-                else scope.launch { height.animateTo(if (f > 0.72f) total * 0.94f else total * 0.55f, tween(320, easing = Ease)) }
+            // A draggable sheet between half and full height (or down to close); any other only down, to close.
+            // Where the finger has it, kept here at once (the height follows a moment later, as its snaps run): let go
+            // in the same moment as the last move, it is judged by where the finger was.
+            drag = { dy ->
+                val from = held ?: height.value
+                val to = (from - dy).coerceIn(min, if (current.draggable) total * 0.94f else base)
+                held = to
+                scope.launch { height.snapTo(to) }
             },
-            tap = { scope.launch { height.animateTo(if (height.value > total * 0.9f) total * 0.55f else total * 0.94f, tween(320, easing = Ease)) } },
+            release = { v ->
+                val at = held ?: height.value
+                held = null
+                val f = at / total
+                when {
+                    !current.draggable -> if (base - at > with(density) { 80.dp.toPx() }) app.sheet = null else settle(base, v)
+                    f < 0.3f -> app.sheet = null
+                    else -> settle(if (f > 0.72f) total * 0.94f else total * 0.55f, v)
+                }
+            },
+            tap = { settle(if (height.value > total * 0.9f) total * 0.55f else total * 0.94f) },
         ) }
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f * scrim))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { app.sheet = null },
         )
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(with(density) { height.value.toDp() })
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                // Its height read as it is laid out: a drag moves it without making its content again.
+                .layout { m, c -> val h = height.value.roundToInt().coerceIn(c.minHeight, c.maxHeight); val p = m.measure(c.copy(minHeight = h, maxHeight = h)); layout(p.width, h) { p.place(0, 0) } }
                 .offset { IntOffset(0, offset.value.toInt()) }
                 .shadow(24.dp, RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
@@ -146,6 +191,8 @@ fun SheetHost(app: AppState) {
                     tints = listOf(HazeTint(Color.Black.copy(alpha = 0.28f * scrim)), HazeTint(glass))
                 }
                 .pointerInput(Unit) { detectTapGestures { } }
+                // With a finger its top (the grabber and the head, 64dp) drags it, as web mobile's does.
+                .pointerInput(drag) { dragTop(drag) }
                 // A field of the sheet's own brings the keyboard up under the sheet, not over it.
                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
         ) {
@@ -160,9 +207,8 @@ fun SheetGrab() {
     val drag = LocalSheetDrag.current
     Box(
         Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp).let { m ->
-            if (drag?.draggable == true) m.pointerInput(drag) {
-                detectVerticalDragGestures(onDragEnd = { drag.release() }, onDragCancel = { drag.release() }) { change, dy -> change.consume(); drag.drag(dy) }
-            }.pointerInput(drag) { detectTapGestures { drag.tap() } } else m
+            // Its drag is the sheet's top's (SheetHost); a tap switches a draggable sheet between half and full.
+            if (drag?.draggable == true) m.pointerInput(drag) { detectTapGestures { drag.tap() } } else m
         }.padding(vertical = 4.dp),
         contentAlignment = Alignment.Center,
     ) { Box(Modifier.size(38.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(C.line)) }
@@ -226,10 +272,13 @@ fun MenuHost(app: AppState) {
 fun ToastHost(app: AppState) {
     val text = app.toast
     LaunchedEffect(text) { if (text != null) { delay(2600); app.toast = null } }
+    // Kept while it fades, so it fades with its words.
+    var last by remember { mutableStateOf("") }
+    if (text != null) last = text
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 90.dp), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(text != null, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(text != null, enter = fadeIn(tween(200, easing = Ease.Css)), exit = fadeOut(tween(200, easing = Ease.Css))) {
             Text(
-                text ?: "", color = C.bg, fontSize = 14.sp,
+                last, color = C.bg, fontSize = 14.sp,
                 modifier = Modifier.padding(horizontal = 24.dp).clip(RoundedCornerShape(18.dp)).background(C.ink).padding(horizontal = 16.dp, vertical = 10.dp),
             )
         }
@@ -246,7 +295,9 @@ fun ReaderHost(app: AppState) {
     var shown by remember { mutableStateOf<ReaderSpec?>(null) }
     if (spec != null) shown = spec
     BackHandler(enabled = spec != null) { app.reader = null }
-    AnimatedVisibility(spec != null, enter = androidx.compose.animation.slideInHorizontally { it }, exit = androidx.compose.animation.slideOutHorizontally { it }) {
+    // web mobile's mReader: translateX 100% → 0 and back, 300ms (.4, 0, .2, 1).
+    val slide = tween<IntOffset>(300, easing = Ease.Standard)
+    AnimatedVisibility(spec != null, enter = androidx.compose.animation.slideInHorizontally(slide) { it }, exit = androidx.compose.animation.slideOutHorizontally(slide) { it }) {
         val current = shown ?: return@AnimatedVisibility
         Column(
             Modifier.fillMaxSize().background(C.bg).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}

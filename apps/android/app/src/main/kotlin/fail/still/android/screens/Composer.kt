@@ -18,7 +18,20 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.Stable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import fail.still.android.ui.Ease
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -517,22 +530,27 @@ fun DraftExtras(draft: Draft) {
  * The bar, inside a floating capsule that is its frame (web mobile/Chat.tsx → useComposerBar): ＋, a field that grows
  * with the text up to six lines right after it (its references drawn as marks, a backspace taking one whole), and a round
  * send button (a spinner while a new chat is made). Locked (offline, archived), neither ＋ nor send does anything.
+ * `hint`: how much the placeholder shows (words just sent pass over it first: ChatHost.kt); `morph`: the capsule's, whose
+ * parts ＋, the field and send are (they move with it); `onField`: where the field is, as it is laid out.
  */
 @Composable
-fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit) {
+fun ComposerBar(
+    draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit,
+    hint: () -> Float = { 1f }, morph: Morph? = null, onField: (LayoutCoordinates) -> Unit = {},
+) {
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = TextStyle(color = C.ink, fontSize = 16.sp, lineHeight = 21.sp)
     val locked = draft.locked
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(
-            Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus),
+            Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus),
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Plus, 18.dp, if (locked) C.ink.copy(alpha = 0.35f) else C.ink) }
         Box(
-            Modifier.weight(1f).heightIn(min = 36.dp).padding(end = 14.dp, top = 7.dp, bottom = 7.dp),
+            Modifier.weight(1f).part(morph, "field").heightIn(min = 36.dp).padding(end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            if (draft.text.isEmpty()) Text(placeholder, style = style.copy(color = C.subtle), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (draft.text.isEmpty()) Text(placeholder, style = style.copy(color = C.subtle), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.graphicsLayer { alpha = hint() })
             val focus = remember { FocusRequester() }
             LaunchedEffect(draft.focus) { if (draft.focus > 0) focus.requestFocus() }
             val accent = C.accent
@@ -550,20 +568,123 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
                 },
                 textStyle = style, visualTransformation = marks,
                 cursorBrush = SolidColor(C.accent), maxLines = 6,
-                modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { draft.focused = it.isFocused },
+                modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { draft.focused = it.isFocused }.onGloballyPositioned(onField),
             )
         }
         val ready = draft.ready
         // Not ready: the ink faint over the capsule's own ground (web: 18% text over --raised).
         val idle = C.ink.copy(alpha = 0.18f).compositeOver(C.surface)
         Box(
-            Modifier.size(36.dp).clip(CircleShape).background(if (ready) C.ink else idle).clickable(enabled = ready, onClick = onSend),
+            Modifier.part(morph, "send").size(36.dp).clip(CircleShape).background(if (ready) C.ink else idle).clickable(enabled = ready, onClick = onSend)
+                .semantics { contentDescription = "发送" },
             contentAlignment = Alignment.Center,
         ) {
             if (draft.starting) CircularProgressIndicator(Modifier.size(16.dp), color = C.surface, strokeWidth = 2.dp)
             else IconIn(Icons.ArrowUp, 18.dp, if (ready) C.bg else C.surface)
         }
     }
+}
+
+// ── the capsule's change of shape (web morph.ts → useMorph) ─────────────
+
+/**
+ * The composer's capsule growing or shrinking (a line more, a file or a quote, sent and emptied) in one motion, as the
+ * web's: its height, and with it its corners (a capsule's ends are half its height), and its parts (＋, the field,
+ * send) going from where they showed to where the new layout puts them, all on one timeline (260 ms, Ease.Out). The
+ * capsule stands on its bottom edge: what it holds is laid out anew at once from its top, in the box as tall as it is
+ * at that moment (the rest cut by its shape), and each part is carried from where it was to its place.
+ */
+@Stable
+class Morph {
+    /** A part: where it is in the content as laid out, where it goes from, and where it was last drawn (from the capsule's bottom edge). */
+    private class Part { var inContent = Offset.Zero; var from: Offset? = null; var drawn: Offset? = null; var coords: LayoutCoordinates? = null }
+    private val parts = HashMap<String, Part>()
+    private val progress = Animatable(1f)
+    /** Bumped for each change of height: what starts the motion. */
+    internal var run by mutableIntStateOf(0)
+    private var from = -1
+    private var to = -1
+    /** Set between a change being seen (in layout) and its motion starting (a frame later): it shows as it began. */
+    private var starting = false
+    internal var still = false
+
+    // Both read whatever holds (what reads them, a layout or a part's layer, is to run again as either changes).
+    private fun e(): Float { val t = progress.value; return if (starting || run < 0) 0f else Ease.Out.transform(t) }
+    /** The height drawn now. */
+    fun height(): Int = if (from < 0) to else (from + (to - from) * e()).roundToInt()
+
+    /** Where a part shows now, from the capsule's bottom edge. */
+    private fun shown(p: Part): Offset {
+        val at = p.inContent - Offset(0f, to.toFloat())
+        val was = p.from ?: return at
+        return was + (at - was) * e()
+    }
+
+    /** The content laid out anew, `h` tall: from where it shows now to there. */
+    internal fun retarget(h: Int) {
+        if (to < 0 || still) { to = h; from = -1; return }
+        val now = height()
+        // From where each part was last seen (a layout may have moved it since, before this change of height was seen).
+        parts.values.forEach { it.from = it.drawn ?: shown(it) }
+        from = now; to = h; starting = true
+        run++
+    }
+
+    internal suspend fun play() {
+        progress.snapTo(0f)
+        starting = false
+        progress.animateTo(1f, tween(260, easing = LinearEasing))
+        parts.values.forEach { it.from = null }
+        from = -1
+    }
+
+    internal fun placed(key: String, coords: LayoutCoordinates) {
+        val p = parts.getOrPut(key) { Part() }
+        p.coords = coords
+        content?.takeIf { it.isAttached && coords.isAttached }?.let {
+            val at = it.localPositionOf(coords, Offset.Zero)
+            // Moved: its layer is set again (it may have been set as it was placed, before this was known).
+            if (at != p.inContent) { p.inContent = at; moved++ }
+        }
+    }
+    private var moved by mutableIntStateOf(0)
+    /** How far a part is off its place in the layout now. */
+    internal fun offset(key: String): Offset {
+        val p = parts[key] ?: return Offset.Zero
+        // Where the layout puts it now, read as it is placed (its layer is set then, before any callback after the
+        // layout would say where it went).
+        moved
+        val c = content; val own = p.coords
+        if (c != null && own != null && c.isAttached && own.isAttached) p.inContent = c.localPositionOf(own, Offset.Zero)
+        val at = shown(p)
+        p.drawn = at
+        return at - (p.inContent - Offset(0f, height().toFloat()))
+    }
+    internal var content: LayoutCoordinates? = null
+    /** The height it is going to. */
+    internal val target get() = to
+}
+
+/** The capsule's content, its height the morph's (it measures itself as it would be, and shows as tall as the motion has got). */
+fun Modifier.morph(m: Morph): Modifier = this.layout { measurable, c ->
+    val p = measurable.measure(c.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+    if (p.height != m.target) m.retarget(p.height)
+    val h = m.height()
+    layout(p.width, h) { p.place(0, 0) }
+}.onPlaced { m.content = it }
+
+/** One of the capsule's parts: carried with it while it changes shape. */
+fun Modifier.part(m: Morph?, key: String): Modifier = if (m == null) this else this
+    .onPlaced { coords -> m.placed(key, coords) }
+    .graphicsLayer { val d = m.offset(key); translationX = d.x; translationY = d.y }
+
+/** A morph for a capsule, played whenever its height changes (at once with the system's animations off). */
+@Composable
+fun rememberMorph(): Morph {
+    val m = remember { Morph() }
+    m.still = fail.still.android.ui.reducedMotion()
+    LaunchedEffect(m.run) { if (m.run > 0) m.play() }
+    return m
 }
 
 /** An archived chat's composer keeps its draft and says so, with its restore (retried after an error): web ArchiveNotice.tsx. */
@@ -588,13 +709,13 @@ private fun ArchiveNotice(offline: Boolean, restore: suspend () -> Unit) {
 }
 
 /**
- * Where people write to the chat. The composer empties at once: the message lives in the chat's outbox until the station
- * has it (a failure shows there too). Before the agent has a chat, the first message makes one, bound to the agent, and
- * the page moves to it. `onHeight`: the capsule's height with its margins (what the list keeps clear of), not the menu
- * of chats over it.
+ * What the chat's composer (the host's: ChatHost.kt) writes to. The composer empties at once: the message lives in the
+ * chat's outbox until the station has it (a failure shows there too), its words flying from the composer to its place in
+ * the list (Host.sending). Before the agent has a chat, the first message makes one, bound to the agent, and the page
+ * moves to it.
  */
 @Composable
-internal fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, draft: Draft, haze: HazeState, modifier: Modifier = Modifier, onHeight: (Int) -> Unit = {}) {
+internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, draft: Draft): ComposerSpec {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val api = app.api(station)
@@ -604,55 +725,48 @@ internal fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<
     val thread = view.thread
     val archived = view.archived == true
     draft.locked = view.offline || archived
-    Column(modifier.fillMaxWidth()) {
-        ChatRefMenu(draft, station, keeper, haze, Modifier.padding(horizontal = 10.dp))
-        // A capsule floating over the list, which runs on around it.
-        Box(Modifier.fillMaxWidth().onSizeChanged { onHeight(it.height) }.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)) {
-            Column(
-                Modifier.fillMaxWidth().floating(haze, RoundedCornerShape(ComposerCorner))
-                    // A tap on the capsule's own room is a tap on the field.
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }
-                    .animateContentSize(tween(220)).padding(ComposerInset),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (archived) ArchiveNotice(view.offline) { api.setArchived(thread?.id, (of as? ChatOf.Session)?.key ?: keeper ?: "", false) }
-                if (view.offline) Text("这台 station 离线了：这里是之前读到的内容，暂时不能发消息。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
-                DraftExtras(draft)
-                ComposerBar(draft, if (archived) "还原对话后才能发送" else "发消息", onPlus = { openAttach(app, launchers) },
-                    // Typing starts the session's runtime, so a cold start overlaps the writing.
-                    onType = {
-                        if (!draft.locked && keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {
-                            draft.warmed = System.currentTimeMillis()
-                            scope.launch { try { api.warm(keeper) } catch (_: CoreException) {} }
-                        }
-                    },
-                    onSend = {
-                        if (draft.locked) return@ComposerBar
-                        val taken = draft.take()
-                        scope.launch {
-                            // A chat made here (`new:…`) is sent to by its key until its station has made it.
-                            val pending = (of as? ChatOf.Session)?.key?.takeIf { thread == null && it.startsWith("new:") }
-                            if (pending != null) {
-                                app.scope.launch { try { api.sendIn(pending, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (_: CoreException) {} }
-                                return@launch
-                            }
-                            val to = thread?.id ?: try {
-                                draft.starting = true
-                                api.chatFor((of as ChatOf.Session).key)
-                            } catch (e: CoreException) {
-                                // No chat to send into: the draft comes back.
-                                draft.restore(taken)
-                                draft.error = e.message
-                                return@launch
-                            } finally {
-                                draft.starting = false
-                            }
-                            // Sent from the app's scope: the page may move to the new chat before the station answers.
-                            app.scope.launch { try { api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (_: CoreException) {} }
-                        }
-                    })
-                draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
+    return ComposerSpec(
+        station = station, here = keeper, draft = draft, placeholder = if (archived) "还原对话后才能发送" else "发消息",
+        notices = {
+            if (archived) ArchiveNotice(view.offline) { api.setArchived(thread?.id, (of as? ChatOf.Session)?.key ?: keeper ?: "", false) }
+            if (view.offline) Text("这台 station 离线了：这里是之前读到的内容，暂时不能发消息。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+        },
+        onPlus = { openAttach(app, launchers) },
+        // Typing starts the session's runtime, so a cold start overlaps the writing.
+        onType = {
+            if (!draft.locked && keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {
+                draft.warmed = System.currentTimeMillis()
+                scope.launch { try { api.warm(keeper) } catch (_: CoreException) {} }
             }
-        }
-    }
+        },
+        onSend = {
+            if (!draft.locked) {
+                // Its words stay where they were typed until its row is in the list, then go there.
+                host.sending(draft.text.trim(), carried = false)
+                val taken = draft.take()
+                scope.launch {
+                    // A chat made here (`new:…`) is sent to by its key until its station has made it.
+                    val pending = (of as? ChatOf.Session)?.key?.takeIf { thread == null && it.startsWith("new:") }
+                    if (pending != null) {
+                        app.scope.launch { try { api.sendIn(pending, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (_: CoreException) { host.notSent() } }
+                        return@launch
+                    }
+                    val to = thread?.id ?: try {
+                        draft.starting = true
+                        api.chatFor((of as ChatOf.Session).key)
+                    } catch (e: CoreException) {
+                        // No chat to send into: the draft comes back.
+                        host.notSent()
+                        draft.restore(taken)
+                        draft.error = e.message
+                        return@launch
+                    } finally {
+                        draft.starting = false
+                    }
+                    // Sent from the app's scope: the page may move to the new chat before the station answers.
+                    app.scope.launch { try { api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (_: CoreException) { host.notSent() } }
+                }
+            }
+        },
+    )
 }

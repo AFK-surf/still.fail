@@ -39,7 +39,11 @@ android {
         buildConfigField("String", "FCM_APP_ID", "\"${fcm("fcmAppId")}\"")
         buildConfigField("String", "FCM_API_KEY", "\"${fcm("fcmApiKey")}\"")
         buildConfigField("String", "FCM_SENDER_ID", "\"${fcm("fcmSenderId")}\"")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    // The motion tests (src/androidTest, run by src/androidTest/motion.sh): -PmotionTest builds the app as an app of its
+    // own (fail.still.android.motion), so the tests install, run and uninstall it beside the signed-in one, untouched.
+    if (providers.gradleProperty("motionTest").isPresent) buildTypes.getByName("debug") { applicationIdSuffix = ".motion" }
     buildTypes {
         // What goes on a phone: optimized (R8), signed with the debug key for now so it installs over a debug build.
         release {
@@ -77,4 +81,9 @@ dependencies {
     // Pushes while the app is not in front (Push.kt); set up by hand, without the google-services plugin.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // The motion tests: frame by frame on the test clock (src/androidTest).
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

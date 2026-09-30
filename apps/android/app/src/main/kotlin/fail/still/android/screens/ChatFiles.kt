@@ -179,6 +179,7 @@ internal object FileData {
     }
 
     fun keptPicture(id: String, longest: Int): ImageBitmap? = pictures.get("$id@$longest")
+    fun keepPicture(id: String, longest: Int, picture: ImageBitmap) { pictures.put("$id@$longest", picture) }
 
     /** The file on the phone's disk, for what reads a file rather than bytes (the players, PdfRenderer). */
     suspend fun onDisk(context: Context, id: String, name: String, bytes: ByteArray): File = withContext(Dispatchers.IO) {
@@ -272,6 +273,14 @@ internal fun StationImage(station: String, key: String, file: Attachment, modifi
     if (open) FilePreview(station, key, file, gallery) { open = false }
 }
 
+/** One file of the chat on its own, as a message shows it, opening in the preview (what has no message around it). */
+@Composable
+internal fun StationFile(station: String, key: String, file: Attachment) {
+    var open by remember { mutableStateOf(false) }
+    FileItem(station, key, file) { open = true }
+    if (open) FilePreview(station, key, file) { open = false }
+}
+
 /** Images and video stills show in a box of their own proportions; other files are a card. Either opens in a preview. */
 @Composable
 private fun FileItem(station: String, key: String?, file: Attachment, onOpen: () -> Unit) {
@@ -330,7 +339,11 @@ private fun ChatImage(station: String, key: String, file: Attachment, size: Modi
             failed = true
         }
     }
-    MediaBox(file, Modifier.clickable(enabled = image != null || failed, onClick = onOpen), size = size) {
+    // What the viewer grows out of and shrinks back into (FilePreview.kt).
+    val thumb = FileViewers.id(station, key, file.path)
+    ForgetThumb(thumb)
+    val radius = with(LocalDensity.current) { 10.dp.toPx() }
+    MediaBox(file, Modifier.clickable(enabled = image != null || failed, onClick = onOpen), size = size, thumb = Modifier.viewerThumb(thumb, radius) { image }) {
         if (!instant) Waiting(file.thumbhash, loaded = image != null, still = failed)
         if (failed) Unavailable(20.dp, null)
         image?.let { Revealed(it, file.name, reveal) }
@@ -338,9 +351,9 @@ private fun ChatImage(station: String, key: String, file: Attachment, size: Modi
 }
 
 @Composable
-private fun MediaBox(file: Attachment, modifier: Modifier, background: Color = C.chip, size: Modifier? = null, content: @Composable BoxScope.() -> Unit) {
+private fun MediaBox(file: Attachment, modifier: Modifier, background: Color = C.chip, size: Modifier? = null, thumb: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val (w, h) = imageBox(file)
-    Box((size ?: Modifier.widthIn(max = w.dp).fillMaxWidth().aspectRatio(w / h)).clip(ImageShape).background(background).then(modifier), content = content)
+    Box((size ?: Modifier.widthIn(max = w.dp).fillMaxWidth().aspectRatio(w / h)).then(thumb).clip(ImageShape).background(background).then(modifier), content = content)
 }
 
 /** The picture, brushed in from the top when `reveal` (blurred to sharp, from a little larger), else just shown. */
@@ -448,12 +461,15 @@ private fun ChatVideo(station: String, key: String, file: Attachment, onOpen: ()
                 val r = MediaMetadataRetriever()
                 try { r.setDataSource(path.path); r.getFrameAtTime(0) } catch (_: Exception) { null } finally { r.release() }
             }
-            if (frame == null) failed = true else still = frame.asImageBitmap()
+            if (frame == null) failed = true else still = frame.asImageBitmap().also { FileData.keepPicture("$id#still", 0, it) }
         } catch (_: CoreException) {
             failed = true
         }
     }
-    MediaBox(file, Modifier.clickable(onClick = onOpen), background = if (failed) C.chip else Color.Black) {
+    val thumb = FileViewers.id(station, key, file.path)
+    ForgetThumb(thumb)
+    val radius = with(LocalDensity.current) { 10.dp.toPx() }
+    MediaBox(file, Modifier.clickable(onClick = onOpen), background = if (failed) C.chip else Color.Black, thumb = Modifier.viewerThumb(thumb, radius) { FileViewers.frames[thumb]?.picture ?: still }) {
         if (failed) {
             Column(Modifier.matchParentSize().padding(bottom = 30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
                 IconIn(Icons.Read, 24.dp, C.muted)
@@ -461,7 +477,8 @@ private fun ChatVideo(station: String, key: String, file: Attachment, onOpen: ()
                 Text(fileSize(file.size), fontSize = 11.sp, color = C.muted)
             }
         } else {
-            still?.let { Image(it, file.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+            // The frame the viewer was left at, once it has been closed back into here; else the first.
+            (FileViewers.frames[thumb]?.picture ?: still)?.let { Image(it, file.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
             // The web's "▶" at 20px: a solid triangle.
             Box(Modifier.align(Alignment.Center).size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.65f)), contentAlignment = Alignment.Center) {
                 androidx.compose.foundation.Canvas(Modifier.padding(start = 2.dp).size(12.dp, 14.dp)) {

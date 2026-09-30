@@ -1,0 +1,163 @@
+// A chat's rows and its scrolling, frame by frame (Harness.kt): an agent's reply coming out of its activity's avatar, the
+// list gliding after what comes in, the jump to the latest, and a quoted message flashing.
+package fail.still.android.motion
+
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import fail.still.android.Screen
+import fail.still.android.data.Activity
+import fail.still.android.data.ActivityNow
+import fail.still.android.data.ChatAgent
+import fail.still.android.data.ChatMessage
+import fail.still.android.data.ChatOf
+import fail.still.android.data.Live
+import fail.still.android.data.Quote
+import fail.still.android.data.Session
+import fail.still.android.data.Topics
+import org.junit.Rule
+import org.junit.Test
+
+class RowsMotionTest {
+    @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
+
+    private val topic = Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))
+    private val key = "ember:c-1"
+
+    private fun session() = Session(
+        key = key, runtime = "claude", process = "running", pending = 0, statusText = "工作中", tone = "accent", titleText = "修一下登录",
+        agentText = "Claude", maker = Fixtures.anthropic, runtimeText = "Claude Code", efforts = listOf("high"),
+    )
+
+    private fun agentAt(running: Boolean) = ChatAgent(
+        session = session(), status = if (running) "running" else "idle", profiles = emptyList(), choices = emptyList(), attention = emptyList(),
+        since = if (running) System.currentTimeMillis() - 42_000 else null, turns = emptyList(), threads = emptyList(), jobs = emptyList(),
+    )
+
+    private fun live(now: String) = Live(loaded = true, timeline = emptyList(), steps = emptyList(), activity = Activity(ActivityNow(key = now, text = now)))
+
+    private fun chat(messages: List<ChatMessage>, running: Boolean) = Fixtures.chat(messages).copy(agents = listOf(agentAt(running)))
+
+    /** The chat opened with its agent idle (a working one never lets the clock come to rest: its ring turns). */
+    private fun open(messages: List<ChatMessage>): Harness {
+        val h = Harness(rule)
+        h.fake.put(Topics.live(Fixtures.STATION, key), live("运行测试"))
+        h.fake.put(topic, chat(messages, running = false))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        return h
+    }
+
+    /** Said after the chat opened (else it would be unread, under the unread line). */
+    private fun later() = System.currentTimeMillis() + 60_000
+
+    private val asked = Fixtures.talk + Fixtures.mine(5, "再跑一遍测试，看看都过了没有")
+
+    /** The agent posts its reply while its activity shows: the reply comes out of the avatar; then its turn ends. */
+    @Test
+    fun replyComesOutOfTheAvatar() {
+        val h = open(asked)
+        val r = h.record("emit-one")
+        h.fake.put(topic, chat(asked, running = true))
+        h.deliver()
+        r.frames(30)
+        val reply = asked + Fixtures.agent(6, "都过了：42 个通过，0 个失败。登录页的三个用例也在里面。", later())
+        h.fake.put(topic, chat(reply, running = true))
+        h.deliver()
+        r.frames(80)
+        h.fake.put(topic, chat(reply, running = false))
+        h.deliver()
+        r.frames(60)
+        r.end()
+    }
+
+    /** Two replies at once: one after the other, the second straight from where the first left the avatar. */
+    @Test
+    fun twoRepliesOneAfterTheOther() {
+        val h = open(asked)
+        val r = h.record("emit-two")
+        h.fake.put(topic, chat(asked, running = true))
+        h.deliver()
+        r.frames(30)
+        val replies = asked + Fixtures.agent(6, "先说结果：都过了。", later()) + Fixtures.agent(7, "42 个通过，0 个失败；登录页的三个用例也在里面，Safari 那个现在是绿的。", later())
+        h.fake.put(topic, chat(replies, running = true))
+        h.deliver()
+        r.frames(150)
+        h.fake.put(topic, chat(replies, running = false))
+        h.deliver()
+        r.frames(60)
+        r.end()
+    }
+
+    private val long = (1L..24L).map { n ->
+        if (n % 2 == 1L) Fixtures.mine(n, "第 $n 条：登录页在 Safari 上点了没反应，帮我看一下这一段为什么会这样")
+        else Fixtures.agent(n, "第 $n 条：按钮的 `onClick` 在表单提交之前被 `preventDefault` 吞掉了。我把它改成在 `onSubmit` 里处理，Safari 和 Chrome 都试过了。")
+    }
+
+    /** A message arriving at the end while it is followed: the list glides after it (scroll.ts, 1 - e^(-dt/100ms)). */
+    @Test
+    fun followGlides() {
+        val h = open(long)
+        val r = h.record("follow-glide")
+        r.frames(4)
+        h.fake.put(topic, chat(long + Fixtures.agent(25, "改好了：密码错误、账号不存在、网络断开三种情况都有中文提示，另外把按钮的加载状态也补上了，点了以后会转圈，直到服务器回复。", later()), running = false))
+        h.deliver()
+        r.frames(40)
+        probe("follow-glide last")
+        r.end()
+        probe("follow-glide settled")
+    }
+
+    /** Where some rows are, to the fraction of a pixel (logged, tag motion-probe). */
+    private fun probe(label: String) {
+        val tops = listOf("改好了", "第 24 条", "第 20 条", "发消息").map { t ->
+            runCatching { rule.onAllNodesWithText(t, substring = true).fetchSemanticsNodes().joinToString("/") { n -> "%.2f+%d".format(n.positionInRoot.y, n.size.height) } }.getOrDefault("-")
+        }
+        android.util.Log.i("motion-probe", "$label ${tops.joinToString(" ")}")
+    }
+
+    /** Scrolled up, the button comes up; tapped, the list glides to the newest and the button goes. */
+    @Test
+    fun jumpToLatest() {
+        val h = open(long)
+        val show = h.record("jump-button-show")
+        show.frame { rule.onRoot().performTouchInput { swipeDown(startY = height * 0.35f, endY = height * 0.75f, durationMillis = 200) } }
+        // Until the fling the swipe leaves has come to rest (the list's own decay, about 2s here).
+        show.frames(150)
+        probe("jump-button-show last")
+        show.end()
+        probe("jump-button-show settled")
+        val r = h.record("jump-latest")
+        r.frame { rule.onNodeWithContentDescription("跳到最新").performClick() }
+        r.frames(50)
+        probe("jump-latest last")
+        r.end()
+        probe("jump-latest settled")
+    }
+
+    private fun quoteJump(name: String, quote: Quote, frames: Int = 170) {
+        val quoting = Fixtures.mine(26, "这个还会出现吗", later()).copy(quotes = listOf(quote))
+        val h = open(long + quoting)
+        val r = h.record(name)
+        r.frames(2)
+        r.frame { rule.onAllNodesWithText("这个还会出现吗", substring = true).fetchSemanticsNodes(); rule.onAllNodesWithText(quote.text.take(6), substring = true).let { it[it.fetchSemanticsNodes().size - 1].performClick() } }
+        r.frames(frames)
+        r.end()
+    }
+
+    /** A quote of part of your words: that passage is marked in the bubble, 28% then 12%, gone at 2600ms (web Chrome). */
+    @Test
+    fun quotePassageInABubble() = quoteJump("quote-passage-mine", Quote(author = "你", text = "登录页在 Safari 上点了没反应", comment = "", ts = "t3", role = "person"))
+
+    /** A quote of part of an agent's Markdown: marked in its paragraph, the code's marks gone as a quote takes them. */
+    @Test
+    fun quotePassageInMarkdown() = quoteJump("quote-passage-agent", Quote(author = "Claude", text = "preventDefault 吞掉了。我把它改成在 onSubmit 里处理", comment = "", ts = "t4", role = "agent"))
+
+    /** A quote its message's words do not hold (edited since, or across paragraphs): the whole message flashes (msgFlash). */
+    @Test
+    fun quoteFlashesWhole() = quoteJump("quote-flash-whole", Quote(author = "你", text = "早就改掉的一句话", comment = "", ts = "t3", role = "person"), 100)
+}

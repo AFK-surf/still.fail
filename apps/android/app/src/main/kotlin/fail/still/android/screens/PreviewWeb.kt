@@ -12,6 +12,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.webkit.JavascriptInterface
+import android.webkit.WebMessage
+import android.webkit.WebMessagePort
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -62,6 +64,9 @@ private const val HEAD_WAIT_S = 60L
  * no way to hold it back, and its thread must not wait): an answer that gets this far ahead of its reader is stopped.
  */
 private const val BUFFERED_MAX = 32L shl 20
+
+/** Where one cookie ends in a Set-Cookie header holding several (an Expires date's comma is not followed by name=). */
+private val COOKIES_JOINED = Regex(",\\s*(?=[!#$%&'*+.^_`|~0-9A-Za-z-]+=)")
 
 /** A path on the service, as the WebView has it: its path and query. */
 internal fun pathOf(url: android.net.Uri): String = (url.encodedPath ?: "/") + (url.encodedQuery?.let { "?$it" } ?: "")
@@ -114,6 +119,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         sockets.values.forEach { it.cancel() }
         sockets.clear()
         bodies.clear()
+        dropFetches()
     }
 
     private fun js(code: String) = main.post { web?.evaluateJavascript(code, null) }
@@ -173,16 +179,115 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         main.post { onMarked(said) }
     }
 
+    // ── the page's fetch() (page.js), answered as it comes ──
+    // A WebView hands the page what shouldInterceptRequest answers only once its buffer (2 KB) is full, so a body that
+    // comes a line at a time would reach the page in lumps. The page's fetch() of its own host comes here instead, over
+    // a message port only the page's top frame holds: its head, then each piece of its body as the station sends it.
+    // It can only ask the service at `port` of `station`, like every other request of the page's.
+
+    /** The page's port (main thread): one per page, given to it when its script asks (fetchPort). */
+    private var fetchPort: WebMessagePort? = null
+    /** The page's fetches under way, by the id the page gave each. */
+    private val fetches = ConcurrentHashMap<String, Job>()
+
+    /** The page's script asks for its port, which comes as a message (`token`, the port) to its window. False: none (a file's page). */
+    @JavascriptInterface
+    fun fetchPort(token: String): Boolean {
+        if (serve != null || token.isEmpty() || token.length > 64) return false
+        main.post {
+            val view = web ?: return@post
+            if (fetchPort != null) return@post
+            val (mine, theirs) = view.createWebMessageChannel()
+            fetchPort = mine
+            mine.setWebMessageCallback(object : WebMessagePort.WebMessageCallback() {
+                override fun onMessage(port: WebMessagePort, message: WebMessage?) {
+                    if (port === fetchPort) fetchSaid(port, message?.data ?: return)
+                }
+            }, main)
+            // Only to the preview's own page: a page from anywhere else in this WebView gets nothing.
+            view.postWebMessage(WebMessage(token, arrayOf(theirs)), android.net.Uri.parse("https://$PREVIEW_HOST"))
+        }
+        return true
+    }
+
+    /** A new page: the port and fetches of the one before go with it (main thread). */
+    private fun dropFetches() {
+        fetchPort?.close()
+        fetchPort = null
+        fetches.values.forEach { it.cancel() }
+        fetches.clear()
+    }
+
+    /** What the page says on its port: `go` (a request), `stop` (one it gave up). Anything else is let go. */
+    private fun fetchSaid(port: WebMessagePort, data: String) {
+        val o = try { kotlinx.serialization.json.Json.parseToJsonElement(data) as? JsonObject } catch (_: Exception) { null } ?: return
+        val id = (o["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() && it.length <= 64 } ?: return
+        when ((o["t"] as? JsonPrimitive)?.content) {
+            "stop" -> fetches.remove(id)?.cancel()
+            "go" -> {
+                val tell = { reply: JsonObject -> main.post { if (port === fetchPort) port.postMessage(WebMessage(reply.toString())) }; Unit }
+                val failed = { message: String -> tell(buildJsonObject { put("t", "error"); put("id", id); put("message", message) }) }
+                val method = (o["method"] as? JsonPrimitive)?.content?.uppercase()?.takeIf { Regex("[A-Z]{1,16}").matches(it) }
+                val path = (o["path"] as? JsonPrimitive)?.content?.takeIf { it.startsWith("/") && it.length <= 16384 && it.none { c -> c.code <= 0x20 || c.code == 0x7f } }
+                val headers = try {
+                    (o["headers"] as? JsonArray ?: JsonArray(emptyList())).take(200).map {
+                        val pair = it.jsonArray
+                        pair[0].jsonPrimitive.content to pair[1].jsonPrimitive.content
+                    }.filter { (k, v) -> Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}").matches(k) && v.none { c -> c == '\r' || c == '\n' } && !k.equals("host", ignoreCase = true) && !k.equals(BODY_HEADER, ignoreCase = true) }
+                } catch (_: Exception) { null }
+                val body = try { (o["body"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) } } catch (_: IllegalArgumentException) { return failed("请求内容不对") }
+                if (method == null || path == null || headers == null || fetches.containsKey(id)) return failed("请求不对")
+                val follow = (o["redirect"] as? JsonPrimitive)?.content != "manual" && (o["redirect"] as? JsonPrimitive)?.content != "error"
+                val withCookies = (o["cookies"] as? JsonPrimitive)?.content != "false"
+                val job = scope.launch(Dispatchers.IO) {
+                    val answer = try {
+                        follow(method, path, headers, body, follow, this, withCookies)
+                    } catch (e: Unanswered) {
+                        // As the WebView's own requests have it (answer): said as the answer, in words.
+                        tell(buildJsonObject {
+                            put("t", "head"); put("id", id); put("status", e.status); put("statusText", reason(e.status)); put("path", path); put("redirected", false)
+                            putJsonArray("headers") { add(JsonArray(listOf(JsonPrimitive("content-type"), JsonPrimitive("text/plain; charset=utf-8")))) }
+                        })
+                        tell(buildJsonObject { put("t", "chunk"); put("id", id); put("b", Base64.encodeToString((e.message ?: "").toByteArray(), Base64.NO_WRAP)) })
+                        return@launch tell(buildJsonObject { put("t", "end"); put("id", id) })
+                    }
+                    val head = answer.head
+                    tell(buildJsonObject {
+                        put("t", "head"); put("id", id); put("status", head.status); put("statusText", reason(head.status))
+                        put("path", answer.path); put("redirected", answer.redirected)
+                        putJsonArray("headers") { head.headers.forEach { (k, v) -> add(JsonArray(listOf(JsonPrimitive(k), JsonPrimitive(v)))) } }
+                    })
+                    // Each piece as it comes (a read gives what is there, never waiting for more).
+                    val buf = ByteArray(256 shl 10)
+                    try {
+                        head.body.use { input ->
+                            while (true) {
+                                val n = input.read(buf, 0, buf.size)
+                                if (n < 0) break
+                                if (n > 0) tell(buildJsonObject { put("t", "chunk"); put("id", id); put("b", Base64.encodeToString(buf, 0, n, Base64.NO_WRAP)) })
+                            }
+                        }
+                        tell(buildJsonObject { put("t", "end"); put("id", id) })
+                    } catch (e: IOException) {
+                        failed(e.message ?: "读到一半断了")
+                    }
+                }
+                fetches[id] = job
+                job.invokeOnCompletion { fetches.remove(id, job) }
+            }
+        }
+    }
+
     // ── the WebView's requests ──
 
     /** An answer's head, its body to come (read from `body`, closed to stop it). */
     private class Head(val status: Int, val headers: List<Pair<String, String>>, val body: Chunks)
 
     /** Asks the station, and waits here (a WebView's own request thread) until the answer's head is there (a minute at most). */
-    private fun ask(method: String, path: String, headers: List<Pair<String, String>>, body: ByteArray?): Head {
+    private fun ask(method: String, path: String, headers: List<Pair<String, String>>, body: ByteArray?, within: CoroutineScope = scope): Head {
         val head = CompletableFuture<Head>()
         val chunks = Chunks()
-        val job = scope.launch {
+        val job = within.launch(Dispatchers.Default) {
             try {
                 core.call("station.preview", buildJsonObject {
                     put("station", station); put("port", port); put("method", method); put("path", path); put("stream", true)
@@ -225,6 +330,50 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         }
     }
 
+    /** Why a request got no answer from the service: said to the page with `status`. */
+    private class Unanswered(val status: Int, message: String) : IOException(message)
+
+    /** An answer, where it came from in the end (after its redirects) and whether it was redirected there. */
+    private class Answer(val head: Head, val path: String, val redirected: Boolean)
+
+    /**
+     * Asks the station, following the service's redirects as a browser does (5 at most, to the service only), with the
+     * preview's cookies (the WebView's own, for its host: sent along, and what the service sets kept there). `follow`
+     * false: a redirect is the answer (its body closed). Throws [Unanswered].
+     */
+    private fun follow(method: String, path: String, headers: List<Pair<String, String>>, body: ByteArray?, follow: Boolean, within: CoroutineScope = scope, withCookies: Boolean = true): Answer {
+        var method = method
+        var bytes = body
+        var path = path
+        var headers = headers
+        val cookies = android.webkit.CookieManager.getInstance()
+        val given = !withCookies || headers.any { it.first.equals("cookie", ignoreCase = true) }
+        repeat(6) { hop ->
+            val url = "https://$PREVIEW_HOST$path"
+            val asked = if (given) headers else headers + (cookies.getCookie(url)?.takeIf { it.isNotEmpty() }?.let { listOf("Cookie" to it) } ?: emptyList())
+            val head = try {
+                ask(method, path, asked, bytes, within)
+            } catch (e: Exception) {
+                throw Unanswered(502, "没能从 station 取到：${e.message}")
+            }
+            // Several cookies may come joined in one header (", " before the next name=): each is kept.
+            if (withCookies) for ((k, v) in head.headers) if (k.equals("set-cookie", ignoreCase = true)) for (one in v.split(COOKIES_JOINED)) cookies.setCookie(url, one)
+            val location = head.headers.firstOrNull { it.first.equals("location", ignoreCase = true) }?.second
+            if (head.status !in 300..399 || location == null) return Answer(head, path, hop > 0)
+            if (!follow) { head.body.close(); return Answer(head, path, hop > 0) }
+            head.body.close()
+            if (hop == 5) throw Unanswered(508, "跳转太多次了")
+            val next = try { java.net.URI("https://$PREVIEW_HOST$path").resolve(location.trim()) } catch (_: Exception) { throw Unanswered(502, "这个网页跳到了一个读不懂的地址：$location") }
+            if (next.host != null && next.host != "localhost" && next.host != "127.0.0.1" && next.host != PREVIEW_HOST) throw Unanswered(502, "这个网页跳到了别的地址：$location")
+            path = (next.rawPath?.takeIf { it.startsWith("/") } ?: "/") + (next.rawQuery?.let { "?$it" } ?: "")
+            if (head.status == 303 || (head.status in 301..302 && method == "POST")) {
+                method = "GET"; bytes = null
+                headers = headers.filterNot { it.first.equals("content-type", ignoreCase = true) || it.first.equals("content-length", ignoreCase = true) }
+            }
+        }
+        throw Unanswered(508, "跳转太多次了")
+    }
+
     /** Answers a request of the preview's host from the station (following redirects here: a WebView takes no 3xx). */
     fun answer(request: WebResourceRequest): WebResourceResponse {
         val url = request.url
@@ -237,41 +386,26 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         val body = bodyKey?.let { asked.remove(it) }?.let { bodies.remove(it) }
         if (body?.type != null && asked.keys.none { it.equals("content-type", ignoreCase = true) }) asked["Content-Type"] = body.type
         val page = request.isForMainFrame || asked.entries.any { it.key.equals("accept", ignoreCase = true) && it.value.startsWith("text/html") }
-        var method = request.method
-        var bytes = body?.bytes
-        var path = pathOf(url)
-        repeat(5) {
-            val head = try {
-                ask(method, path, asked.map { it.key to it.value }, bytes)
-            } catch (e: Exception) {
-                return text(502, "没能从 station 取到：${e.message}")
-            }
-            val location = head.headers.firstOrNull { it.first.equals("location", ignoreCase = true) }?.second
-            if (head.status in 300..399 && location != null) {
-                head.body.close()
-                val next = android.net.Uri.parse(location)
-                if (next.host != null && next.host != "localhost" && next.host != "127.0.0.1" && next.host != PREVIEW_HOST) return text(502, "这个网页跳到了别的地址：$location")
-                path = pathOf(next)
-                if (head.status == 303 || (head.status in 301..302 && method == "POST")) { method = "GET"; bytes = null }
-                return@repeat
-            }
-            val type = head.headers.firstOrNull { it.first.equals("content-type", ignoreCase = true) }?.second ?: "application/octet-stream"
-            val mime = type.substringBefore(';').trim()
-            val charset = Regex("charset=([^;]+)").find(type)?.groupValues?.get(1)?.trim()?.trim('"')
-            val encoded = head.headers.any { it.first.equals("content-encoding", ignoreCase = true) && !it.second.equals("identity", ignoreCase = true) }
-            // A page of the service gets its script first (its sockets, its bodies, its marks).
-            val tagged = page && mime == "text/html" && !encoded
-            head.body.events = mime == "text/event-stream" && !encoded
-            val out: InputStream = if (tagged) WithTag(head.body) else head.body
-            val headers = LinkedHashMap<String, String>()
-            for ((k, v) in head.headers) {
-                if (tagged && k.equals("content-length", ignoreCase = true)) continue
-                headers[k] = headers[k]?.let { "$it, $v" } ?: v
-            }
-            val status = if (head.status in 200..599 && head.status !in 300..399) head.status else 200
-            return WebResourceResponse(mime, charset, status, reason(status), headers, out)
+        val head = try {
+            follow(request.method, pathOf(url), asked.map { it.key to it.value }, body?.bytes, follow = true).head
+        } catch (e: Unanswered) {
+            return text(e.status, e.message ?: "")
         }
-        return text(508, "跳转太多次了")
+        val type = head.headers.firstOrNull { it.first.equals("content-type", ignoreCase = true) }?.second ?: "application/octet-stream"
+        val mime = type.substringBefore(';').trim()
+        val charset = Regex("charset=([^;]+)").find(type)?.groupValues?.get(1)?.trim()?.trim('"')
+        val encoded = head.headers.any { it.first.equals("content-encoding", ignoreCase = true) && !it.second.equals("identity", ignoreCase = true) }
+        // A page of the service gets its script first (its sockets, its bodies, its marks).
+        val tagged = page && mime == "text/html" && !encoded
+        head.body.events = mime == "text/event-stream" && !encoded
+        val out: InputStream = if (tagged) WithTag(head.body) else head.body
+        val headers = LinkedHashMap<String, String>()
+        for ((k, v) in head.headers) {
+            if (tagged && k.equals("content-length", ignoreCase = true)) continue
+            headers[k] = headers[k]?.let { "$it, $v" } ?: v
+        }
+        val status = if (head.status in 200..599 && head.status !in 300..399) head.status else 200
+        return WebResourceResponse(mime, charset, status, reason(status), headers, out)
     }
 
     private fun text(status: Int, message: String) =

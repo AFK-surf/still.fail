@@ -12,6 +12,7 @@ browser = "1.9.0"
 commonmark = "0.24.0"
 haze = "1.6.0"
 firebase-bom = "34.19.0"
+androidx-test-runner = "1.7.0"
 
 [libraries]
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
@@ -35,6 +36,9 @@ commonmark-ext-task-list-items = { module = "org.commonmark:commonmark-ext-task-
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

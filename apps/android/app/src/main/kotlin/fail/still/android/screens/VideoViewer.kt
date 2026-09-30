@@ -57,6 +57,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -129,12 +131,27 @@ private fun short(ms: Long): String = "${ms / 60000}:${(ms / 1000 % 60).toString
  * longer; `onTap`: a tap on the picture shows or hides them).
  */
 @Composable
-fun VideoViewer(file: File, name: String, awake: Boolean, wake: () -> Unit, onTap: () -> Unit, glass: Modifier) {
+internal fun VideoViewer(
+    file: File, name: String, awake: Boolean, wake: () -> Unit, onTap: () -> Unit, glass: Modifier,
+    /** Where the picture shows (the viewer's own, known from the still before the player is ready). */
+    zoomOf: ZoomState? = null,
+    /** On the picture (and the still over it): the viewer's flight from the chat's thumbnail (FilePreview.kt). */
+    stage: Modifier = Modifier,
+    /** The still the chat shows, over the picture until the player's first frame is drawn. */
+    poster: androidx.compose.ui.graphics.ImageBitmap? = null,
+    /** How much of the controls shows as the viewer comes and goes. */
+    chrome: () -> Float = { 1f },
+    /** Where to start (µs): where it was left when closed before (the still over it is that frame). */
+    startAtUs: Long = 0L,
+    /** Hands over how to read the frame showing now and its time (for the viewer to close into the thumbnail with it). */
+    frameOut: ((suspend () -> KeptFrame?) -> Unit)? = null,
+) {
     val app = LocalApp.current
     val context = LocalContext.current
-    val density = LocalDensity.current.density
     val scope = rememberCoroutineScope()
-    val zoom = remember { ZoomState(density) }
+    val density = LocalDensity.current.density
+    val zoom = zoomOf ?: remember { ZoomState(density) }
+    var framed by remember { mutableStateOf(false) }
     val player = remember { MediaPlayer() }
     var ready by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(false) }
@@ -153,12 +170,15 @@ fun VideoViewer(file: File, name: String, awake: Boolean, wake: () -> Unit, onTa
         player.setOnPreparedListener { mp ->
             zoom.fitNatural(IntSize(mp.videoWidth.coerceAtLeast(1), mp.videoHeight.coerceAtLeast(1)))
             duration = mp.duration.toLong() * 1000
+            // Opened again where it was left: from there; left at its end, it stays on that frame (play starts over).
+            val resume = startAtUs in 1 until duration + 1
+            if (resume) { time = startAtUs; mp.seekTo((startAtUs + 999) / 1000, MediaPlayer.SEEK_CLOSEST) }
             ready = true
-            mp.start()
-            playing = true
+            if (!resume || startAtUs < duration - 50_000) { mp.start(); playing = true }
         }
         player.setOnVideoSizeChangedListener { _, w, h -> if (w > 0 && h > 0) zoom.fitNatural(IntSize(w, h)) }
-        player.setOnCompletionListener { playing = false }
+        // Played to the end: it rests on its last frame (and says so), as it would be left.
+        player.setOnCompletionListener { playing = false; time = frames?.last() ?: duration }
         player.setOnErrorListener { _, _, _ -> ready = false; playing = false; failed = true; true }
         try {
             player.setDataSource(file.path)
@@ -174,7 +194,8 @@ fun VideoViewer(file: File, name: String, awake: Boolean, wake: () -> Unit, onTa
     LaunchedEffect(playing) {
         while (playing && isActive) {
             withFrameMillis {}
-            try { time = player.currentPosition.toLong() * 1000 } catch (_: IllegalStateException) {}
+            // Not once it has stopped (at its end the player's clock reads back near the start; the end is kept).
+            try { if (playing) time = player.currentPosition.toLong() * 1000 } catch (_: IllegalStateException) {}
         }
     }
     // The picture where the zoom puts it.
@@ -196,6 +217,15 @@ fun VideoViewer(file: File, name: String, awake: Boolean, wake: () -> Unit, onTa
             snapshotFlow { zoom.rect() to zoom.box }.collect { place() }
         } finally {
             view.removeOnLayoutChangeListener(laid)
+        }
+    }
+    LaunchedEffect(frameOut) {
+        frameOut?.invoke {
+            val view = texture.value
+            val n = zoom.natural
+            // The texture's content (not the transform the zoom puts on it) at the video's own size: the whole frame.
+            if (!framed || view == null || n == null) null
+            else view.getBitmap(n.width, n.height)?.let { KeptFrame(it.asImageBitmap(), time) }
         }
     }
     DisposableEffect(Unit) {
@@ -227,25 +257,27 @@ fun VideoViewer(file: File, name: String, awake: Boolean, wake: () -> Unit, onTa
     }
     fun seek(us: Long) = go { if (starts != null) starts.at(us) else (us / GUESSED_STEP_US).toInt() }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Box(Modifier.fillMaxSize().zoomable(zoom, scope, onTap = onTap)) {
+    // Its ground is the viewer's (black, coming in with it).
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(stage).zoomable(zoom, scope, onTap = onTap)) {
             AndroidView({ ctx ->
                 TextureView(ctx).apply {
                     surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                         override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) { try { player.setSurface(Surface(st)) } catch (_: Exception) {} }
                         override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {}
                         override fun onSurfaceTextureDestroyed(st: SurfaceTexture) = true
-                        override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+                        override fun onSurfaceTextureUpdated(st: SurfaceTexture) { if (!framed) framed = true }
                     }
                     texture.value = this
                 }
             }, Modifier.fillMaxSize())
+            if (!framed && poster != null) Canvas(Modifier.fillMaxSize()) { drawFitted(poster, zoom) }
         }
         if (failed) Text("没能播放这个视频", fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.Center))
         // The controls: where it is, the steps and play, which frame, the speed, a frame saved, turned sideways.
         Column(
             Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 8.dp, vertical = 8.dp)
-                .fillMaxWidth().alpha(if (awake) 1f else 0f).then(glass).pointerInput(Unit) { detectTapGestures(onPress = { wake() }) }
+                .fillMaxWidth().graphicsLayer { alpha = chrome() }.alpha(if (awake) 1f else 0f).then(glass).pointerInput(Unit) { detectTapGestures(onPress = { wake() }) }
                 .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
         ) {
             val end = if (starts != null) starts.last() + (if (starts.size > 1) starts.last() - starts[starts.size - 2] else 0) else duration

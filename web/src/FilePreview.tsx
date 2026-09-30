@@ -14,6 +14,7 @@ import { Segmented, Tip } from "./ui.tsx";
 import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "./backClose.ts";
+import { thumbId, viewerFlight } from "./viewerFlight.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -214,11 +215,14 @@ export function chatImages(messages: { authorKind?: string; text: string; attach
 
 /** A file over the whole window, a bar with its name and tools on top; Esc closes it. */
 export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment }) {
-  useBackClose(open, onClose);
+  // Closed by hand (its button, Esc, back), it goes back into the chat's thumbnail first (viewerFlight.ts).
+  const closing = useRef<((done: () => void) => void) | null>(null);
+  const close = () => { const c = closing.current; if (c) c(onClose); else onClose(); };
+  useBackClose(open, close);
   return (
-    <RDialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <RDialog.Root open={open} onOpenChange={(o) => { if (!o) close(); }}>
       <RDialog.Portal>
-        {open && <Viewer onClose={onClose} sessionKey={sessionKey} file={file} />}
+        {open && <Viewer onClose={close} closing={closing} sessionKey={sessionKey} file={file} />}
       </RDialog.Portal>
     </RDialog.Root>
   );
@@ -236,7 +240,7 @@ export function FileLink({ sessionKey, file, children }: { sessionKey: string | 
   );
 }
 
-function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; file: Attachment }) {
+function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: RefObject<((done: () => void) => void) | null>; sessionKey: string; file: Attachment }) {
   const [{ sessionKey, file }, setShown] = useState<Shown>(opened);
   const gallery = useContext(Gallery);
   const images = isImage(file.name) ? gallery?.() ?? [] : [];
@@ -263,6 +267,16 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [before, after, step, marking]);
+  // Opened out of the chat's thumbnail of it, closed back into the thumbnail of the one it shows then.
+  const content = useRef<HTMLDivElement>(null);
+  const [flight] = useState(() => viewerFlight(() => content.current, { stage: css2.fpStage, steps: css2.fpStep }));
+  const showing = useRef(file.path);
+  showing.current = thumbId(station.address, sessionKey, file.path);
+  useLayoutEffect(() => {
+    flight.open(showing.current);
+    closing.current = (done) => flight.close(showing.current, done);
+    return () => { closing.current = null; flight.stop(); };
+  }, [flight, closing]);
   const loaded = useFile(sessionKey, file, true);
   const known = kindOf(file.name);
   // An image stands in as the chat showed it (its thumbnail, kept) while the whole of it comes.
@@ -320,7 +334,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
     }
   }
   return (
-    <RDialog.Content className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
+    <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
       // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
       onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onBar.current) setAwake(false); }}
@@ -401,7 +415,7 @@ function ImageViewer({ url, file, setControls, onSwipe, waiting = false, onMarki
   useEffect(() => () => setControls(null), [setControls]);
   return (
     <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps}>
-      <img className={css2.fpImage} src={url} alt={file.name} draggable={false} data-waiting={waiting || undefined}
+      <img className={css2.fpImage} src={url} alt={file.name} draggable={false} data-waiting={waiting || undefined} data-viewer-picture=""
         // A thumbnail's own size is not the image's: it only stands in the image's place.
         onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight && (!waiting || !natural)) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
         style={zoom.place ?? { visibility: "hidden" }} />

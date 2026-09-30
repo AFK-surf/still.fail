@@ -28,6 +28,8 @@ import { stillfailLinkClicked } from "../stillfailLink.ts";
 import { ConnectionPill } from "../Connection.tsx";
 import type { Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
+import * as hostCss from "./ChatHost.css.ts";
+import { sendingHere } from "../madeChat.ts";
 import * as css from "./Chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -96,7 +98,7 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
   const { draft, use } = useHost();
   const here: Here = { station: station.address, key: sessionKey, view };
-  useComposer(view, here, draft, use);
+  useComposer(view, here, draft, use, list);
   return (
     <div className={chatCss.mChat}>
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
@@ -322,7 +324,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  * it (a failure shows there too). Before the agent has a chat, the first message makes one, bound to the agent, and the
  * page stays (the core shows the chat at the same address).
  */
-function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostComposer) => void) {
+function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
   const call = useStationCall(here.station);
   const keeper = view.agents[0]?.session.key ?? null;
@@ -331,6 +333,11 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
     if (view.offline || view.archived) return;
     // A chat made here is sent to by its key until its thread is known.
     const to = view.thread?.id ?? (here.key.startsWith(PENDING) ? here.key : null);
+    // Its words stay where they were typed until its row is in the list, then go there (../madeChat.ts), over the composer.
+    const into = list.current;
+    const host = into?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
+    const field = host?.querySelector<HTMLElement>(`[data-made-composer] textarea:not([aria-hidden])`);
+    if (into && host && field) sendingHere(field, draft.text, { layer: host, z: "7", list: into });
     void sendDraft(draft, to, async () => ({ thread: (await stationApi(call).chatFor(here.key)).id }));
   };
   useLayoutEffect(() => use({

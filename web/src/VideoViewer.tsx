@@ -317,7 +317,7 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
   // Beside the pointer, on the side with room.
   const left = pixel && pixel.clientX > window.innerWidth - 220;
   return (
-    <div ref={root} className={css.vv}
+    <div ref={root} className={css.vv} data-viewer-ground=""
       // A mouse wakes them by moving; a finger has no hover, and a tap on the picture shows or hides them.
       onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onControls.current) setAwake(false); }}
@@ -328,7 +328,7 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
         if (awake) { clearTimeout(resting.current); setAwake(false); } else wake(TAP_REST_MS);
       }}>
       <div ref={zoom.stage} className={`${fpCss.fpStage} ${css.vvStage}`} {...zoom.stageProps} onPointerMove={onPointerMove} onPointerLeave={() => setPixel(null)}>
-        <video ref={video} className={css.vvPicture} data-pixelated={pixelated} src={url} autoPlay playsInline
+        <video ref={video} className={css.vvPicture} data-pixelated={pixelated} src={url} autoPlay playsInline data-viewer-picture=""
           style={zoom.place ?? { visibility: "hidden" }}
           onLoadedMetadata={(e) => { const v = e.currentTarget; setNatural({ w: v.videoWidth, h: v.videoHeight }); setDuration(v.duration); }}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />

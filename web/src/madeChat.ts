@@ -9,6 +9,7 @@
 // element taken away ends a view transition at once, and the chat's rows are (the message sent is drawn anew once its
 // station has it, maybe while it moves).
 import { pageChanging, transitionTo } from "./ui.tsx";
+import { reducedMotion } from "./motion.ts";
 import * as msgCss from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 
@@ -39,27 +40,31 @@ let sending: Sending | null = null;
  */
 export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElement, z: string): void {
   notSent();
-  const box = field.getBoundingClientRect();
-  const frame = layer.getBoundingClientRect();
-  const style = getComputedStyle(field);
-  let stand: HTMLElement | null = null;
-  if (text.trim()) {
-    stand = document.createElement("div");
-    stand.setAttribute("aria-hidden", "true");
-    stand.textContent = text;
-    Object.assign(stand.style, {
-      position: "absolute", left: `${box.left - frame.left}px`, top: `${box.top - frame.top}px`, width: `${box.width}px`,
-      height: `${box.height}px`, boxSizing: "border-box", padding: style.padding, overflow: "hidden", zIndex: z,
-      pointerEvents: "none", font: style.font, lineHeight: style.lineHeight, color: style.color, whiteSpace: "pre-wrap",
-      overflowWrap: style.overflowWrap, wordBreak: style.wordBreak, textAlign: style.textAlign,
-    });
-    layer.append(stand);
-  }
+  const stand = standIn(field, text, layer, z);
   // What follows the message comes out of the composer's top edge, as it was when sent.
   const composer = field.closest("[data-made-composer]") ?? field;
   sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand };
   field.dataset.madeField = "";
   document.documentElement.dataset.madeHint = "hidden";
+}
+
+/** The words just sent, drawn in `layer` (at `z`) where they were in `field` (a composer's text box), as they were typed. */
+function standIn(field: HTMLElement, text: string, layer: HTMLElement, z: string): HTMLElement | null {
+  if (!text.trim()) return null;
+  const box = field.getBoundingClientRect();
+  const frame = layer.getBoundingClientRect();
+  const style = getComputedStyle(field);
+  const stand = document.createElement("div");
+  stand.setAttribute("aria-hidden", "true");
+  stand.textContent = text;
+  Object.assign(stand.style, {
+    position: "absolute", left: `${box.left - frame.left}px`, top: `${box.top - frame.top}px`, width: `${box.width}px`,
+    height: `${box.height}px`, boxSizing: "border-box", padding: style.padding, overflow: "hidden", zIndex: z,
+    pointerEvents: "none", font: style.font, lineHeight: style.lineHeight, color: style.color, whiteSpace: "pre-wrap",
+    overflowWrap: style.overflowWrap, wordBreak: style.wordBreak, textAlign: style.textAlign,
+  });
+  layer.append(stand);
+  return stand;
 }
 
 /** The first message did not go (no chat could be made): the composer is as it was. */
@@ -163,4 +168,139 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     delete root.dataset.made;
     delete root.dataset.madeHint;
   });
+}
+
+// ── a message sent in a chat already open ──────────────────────────────
+
+/** How long the words sent wait at the composer for their row before they are given back to it. */
+const WAIT_FOR_ROW = 2000;
+/** How long the words take to their row (as a new chat's first message's). */
+const ARRIVE = 480;
+
+/** Words sent in an open chat, waiting for their row or on their way to it; `done` lets them go (at once). */
+let flying: { done(): void } | null = null;
+
+/**
+ * A message is sent in an open chat from `field` (a composer's text box, still showing `text`) into `list` (the chat's
+ * list): its words stay where they were typed, drawn in `layer` (over the composer, at `z`), its hint gone, until this
+ * device's own row for it is in the list (the first of the viewer's own not there when it was sent: the outbox's, or
+ * the station's message itself when it is quick). Then that row is drawn from there to its place, over what it
+ * passes, its words from the size they were typed at to their own, its bubble's ground and its time coming in on the
+ * way; where it goes is read again every frame (the list may move as it settles), and the list itself does not move.
+ * The row itself, hidden meanwhile, is shown again as the copy of it goes, in the same frame. With no row within a
+ * while (it could not be sent), the words are the composer's again.
+ */
+export function sendingHere(field: HTMLElement, text: string, { layer, z, list }: { layer: HTMLElement; z: string; list: HTMLElement }): void {
+  flying?.done();
+  if (reducedMotion()) return;
+  const stand = standIn(field, text, layer, z);
+  if (!stand) return;
+  const root = document.documentElement;
+  const mine = `.${msgCss.msgMine}`;
+  const before = new Set(list.querySelectorAll(mine));
+  const from = textAt(field);
+  const composer = field.closest("[data-made-composer]") ?? field;
+  field.dataset.madeField = "";
+  root.dataset.madeHint = "hidden";
+  root.dataset.sent = "";
+  // The rows it went into (the outbox's, then the message that takes its place): hidden while their copy is on its way,
+  // and never easing in by themselves.
+  const rows: HTMLElement[] = [];
+  const take = () => {
+    for (const el of list.querySelectorAll<HTMLElement>(mine)) {
+      if (before.has(el) || rows.includes(el)) continue;
+      el.style.animation = "none";
+      // Not visibility: what eases in inside it (its time's "sending") would show through.
+      el.style.opacity = "0";
+      rows.push(el);
+    }
+    return rows.findLast((el) => el.isConnected) ?? null;
+  };
+  let ghost: HTMLElement | null = null;
+  let copy: HTMLElement | null = null;
+  let of: HTMLElement | null = null;
+  let ground = "";
+  let clock: Animation | null = null;
+  let frame = 0;
+  let over = false;
+  const done = () => {
+    if (over) return;
+    over = true;
+    if (flying?.done === done) flying = null;
+    observer.disconnect();
+    clearTimeout(timeout);
+    cancelAnimationFrame(frame);
+    clock?.cancel();
+    ghost?.remove();
+    stand.remove();
+    for (const el of rows) el.style.opacity = "";
+    delete root.dataset.madeHint;
+    // The hint eases back (data-sent), then the field is as it was.
+    setTimeout(() => {
+      if (flying) return;
+      delete field.dataset.madeField;
+      delete root.dataset.sent;
+    }, 200);
+  };
+  // Where the row is now, its copy drawn so far on its way from the composer.
+  const place = () => {
+    const row = take();
+    if (!row || !ghost || !clock) return;
+    if (row !== of || !copy) {
+      // The first, or the one that took its place: drawn as it is now.
+      of = row;
+      const next = row.cloneNode(true) as HTMLElement;
+      next.style.opacity = "";
+      if (copy) copy.replaceWith(next); else ghost.append(next);
+      copy = next;
+      if (!ground) {
+        const bubble = copy.querySelector(`.${conversationCss.msgBubble}`);
+        ground = bubble ? getComputedStyle(bubble).backgroundColor : "";
+      }
+    }
+    const words = row.querySelector(`.${msgCss.msgPlain}`);
+    if (!words) return;
+    const to = textAt(words);
+    const at = row.getBoundingClientRect();
+    const box = layer.getBoundingClientRect();
+    const e = clock.effect?.getComputedTiming().progress ?? 1;
+    const s = from.size / to.size + (1 - from.size / to.size) * e;
+    Object.assign(copy.style, {
+      position: "absolute", left: `${at.left - box.left}px`, top: `${at.top - box.top}px`, width: `${at.width}px`, margin: "0",
+      transformOrigin: `${to.x - at.left}px ${to.y - at.top}px`,
+      transform: `translate(${(from.x - to.x) * (1 - e)}px, ${(from.y - to.y) * (1 - e)}px) scale(${s})`,
+    });
+    const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
+    if (bubble && ground) bubble.style.backgroundColor = `color-mix(in srgb, ${ground} ${e * 100}%, transparent)`;
+    // (Its own delay kept: "sending" shows when the row's does.)
+    for (const el of copy.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) el.style.opacity = `${e}`;
+    // Out of the composer (its top edge as it is now): its hint comes back.
+    if (root.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete root.dataset.madeHint;
+  };
+  const tick = () => { place(); frame = requestAnimationFrame(tick); };
+  // The row comes as the list is drawn anew: its copy takes the words' place before the frame is painted.
+  const start = () => {
+    const row = take();
+    if (!row || ghost) return;
+    if (!row.querySelector(`.${msgCss.msgPlain}`)) { done(); return; }
+    clearTimeout(timeout);
+    ghost = document.createElement("div");
+    ghost.className = list.className;
+    ghost.setAttribute("aria-hidden", "true");
+    Object.assign(ghost.style, {
+      position: "absolute", inset: "0", margin: "0", padding: "0", overflow: "visible", zIndex: z, pointerEvents: "none",
+      transform: "none", clipPath: "none", maskImage: "none",
+    });
+    layer.append(ghost);
+    stand.remove();
+    // The one timeline all of it follows (what it moves is read anew each frame): paused and stepped, so is it.
+    clock = ghost.animate([{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: EASE });
+    place();
+    frame = requestAnimationFrame(tick);
+    void clock.finished.then(done, () => {});
+  };
+  const observer = new MutationObserver(() => { if (ghost) take(); else start(); });
+  observer.observe(list, { childList: true, subtree: true });
+  const timeout = setTimeout(done, WAIT_FOR_ROW);
+  flying = { done };
 }

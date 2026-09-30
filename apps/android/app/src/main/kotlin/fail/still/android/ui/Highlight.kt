@@ -1,11 +1,9 @@
-// Code blocks coloured as the web colours them: Shiki with its vitesse-light theme (web/src/Prose.tsx), whose colours
-// are written into the page as they are, in the dark theme too. Not a grammar per language as Shiki has, but a light
-// tokenizer that knows how the common languages write comments, strings and numbers, and, per language family, which
-// words vitesse draws as control words (green), which as declarations and operators (red), and whether plain names
-// are variables (brown) or plain text; the colours below are the theme's, token for token as Shiki gives them
-// (checked against `codeToTokensBase` on samples of each family). One exception: the theme's plain text (#393a34) is
-// near black, which the web also writes into its dark theme, where it can hardly be read; there plain text keeps the
-// code's own ink (the caller's colour).
+// Code blocks coloured as the web colours them: Shiki with its dual themes, vitesse-light and vitesse-dark
+// (web/src/Prose.tsx). Not a grammar per language as Shiki has, but a light tokenizer that knows how the common
+// languages write comments, strings and numbers, and, per language family, which words vitesse draws as control words
+// (green), which as declarations and operators (red), and whether plain names are variables (brown) or plain text; the
+// colours below are the theme's, token for token as Shiki gives them (checked against `codeToTokens` on samples of each
+// family). Dark takes each light colour's vitesse-dark twin ([DARK], the pairs Shiki gives the same tokens).
 package fail.still.android.ui
 
 import androidx.compose.ui.graphics.Color
@@ -34,7 +32,21 @@ private object V {
     /** property names, support (builtins as print, echo) */
     val property = Color(0xFF998418)
     val propertyQuote = Color(0x77998418)
+    /** a diff's lines added and removed, a hunk's range (Shiki's own diff colours) */
+    val added = Color(0xFF22863A)
+    val removed = Color(0xFFB31D28)
+    val range = Color(0xFF6F42C1)
 }
+
+/** vitesse-dark's colour for each of vitesse-light's (Shiki's `--shiki-dark` beside the light colour, same token). */
+private val DARK = mapOf(
+    V.text to Color(0xEEDBD7CA), V.comment to Color(0xDD758575), V.punct to Color(0xFF666666),
+    V.string to Color(0xFFC98A7D), V.quote to Color(0x77C98A7D), V.number to Color(0xFF4C9A91),
+    V.control to Color(0xFF4D9375), V.storage to Color(0xFFCB7676), V.function to Color(0xFF80A665),
+    V.variable to Color(0xFFBD976A), V.constant to Color(0xFFC99076), V.type to Color(0xFF5DA994),
+    V.property to Color(0xFFB8A965), V.propertyQuote to Color(0x77B8A965),
+    V.added to Color(0xFF85E89D), V.removed to Color(0xFFFDAEB7), V.range to Color(0xFFB392F0),
+)
 
 /** How a family of languages is written and coloured. */
 private class Lang(
@@ -145,8 +157,8 @@ private val WORD = Regex("[A-Za-z_$][A-Za-z0-9_$]*!?")
 
 fun highlight(code: String, language: String?, dark: Boolean): AnnotatedString {
     if (language == null || language in setOf("text", "plain", "txt", "plaintext")) return AnnotatedString(code)
-    return buildAnnotatedString {
-        withStyle(SpanStyle(color = if (dark) Color.Unspecified else V.text)) {
+    val light = buildAnnotatedString {
+        withStyle(SpanStyle(color = V.text)) {
             when (language) {
                 "json", "jsonc", "json5" -> data(code, json = true)
                 "yaml", "yml" -> yaml(code)
@@ -159,6 +171,12 @@ fun highlight(code: String, language: String?, dark: Boolean): AnnotatedString {
             }
         }
     }
+    if (!dark) return light
+    return AnnotatedString(
+        light.text,
+        light.spanStyles.map { r -> AnnotatedString.Range(r.item.copy(color = DARK[r.item.color] ?: r.item.color), r.start, r.end) },
+        light.paragraphStyles,
+    )
 }
 
 private fun AnnotatedString.Builder.put(code: String, from: Int, until: Int, color: Color?) {
@@ -496,19 +514,25 @@ private fun AnnotatedString.Builder.css(code: String) {
     }
 }
 
-/** A diff: removed lines red, added green, hunks as the theme's meta colours. */
+/** A diff as Shiki colours one: removed lines red, added green (their `---`/`+++` marks grey), a hunk's range purple between grey `@@`. */
 private fun AnnotatedString.Builder.diff(code: String) {
     var i = 0
     while (i < code.length) {
         val e = lineEnd(code, i)
-        val color = when {
-            code.startsWith("+++", i) || code.startsWith("---", i) -> Color(0xFF005CC5)
-            code.startsWith("@@", i) -> Color(0xFF6F42C1)
-            code.startsWith("+", i) -> Color(0xFF22863A)
-            code.startsWith("-", i) -> Color(0xFFB31D28)
-            else -> null
+        when {
+            code.startsWith("+++", i) || code.startsWith("---", i) -> {
+                put(code, i, i + 3, V.punct); put(code, i + 3, e, if (code[i] == '+') V.added else V.removed)
+            }
+            code.startsWith("@@", i) -> {
+                val close = code.indexOf("@@", i + 2).takeIf { it in 0 until e }
+                put(code, i, i + 2, V.punct)
+                if (close == null) put(code, i + 2, e, V.range)
+                else { put(code, i + 2, close, V.range); put(code, close, close + 2, V.punct); put(code, close + 2, e, null) }
+            }
+            code.startsWith("+", i) -> put(code, i, e, V.added)
+            code.startsWith("-", i) -> put(code, i, e, V.removed)
+            else -> put(code, i, e, null)
         }
-        put(code, i, e, color)
         if (e < code.length) append('\n')
         i = e + 1
     }

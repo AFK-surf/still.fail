@@ -19,6 +19,6 @@ globalStyle(`${made} [data-made-composer]`, { viewTransitionName: "none" });
 // The first message is drawn on its way by a copy of it.
 globalStyle(`${made} [data-made-list] ${msgMine}`, { visibility: "hidden" });
 // The composer's hint is gone as the words are sent, and comes in where it is once they have left the composer (only
-// that eased: going, or a theme's change, is not).
-globalStyle(`${made}:not([data-made-hint]) [data-made-field]::placeholder`, { transition: "color 200ms cubic-bezier(.2, .8, .2, 1)" });
+// that eased: going, or a theme's change, is not). So too for a message sent in an open chat (data-sent).
+globalStyle(`:is(${made}, :root[data-sent]):not([data-made-hint]) [data-made-field]::placeholder`, { transition: "color 200ms cubic-bezier(.2, .8, .2, 1)" });
 globalStyle(`:root[data-made-hint="hidden"] [data-made-field]::placeholder`, { color: "transparent" });

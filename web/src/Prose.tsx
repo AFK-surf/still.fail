@@ -16,12 +16,13 @@ import { Tip } from "./ui.tsx";
 import { Mermaid } from "./Viz.tsx";
 
 let highlighter: Promise<HighlighterCore> | null = null;
-const THEME = "vitesse-light";
+/** Light and dark at once (Shiki's dual themes): light inline, dark as `--shiki-dark` vars the dark page picks (Prose.css.ts). */
+const THEMES = { light: "vitesse-light", dark: "vitesse-dark" } as const;
 
 function getHighlighter(): Promise<HighlighterCore> {
   highlighter ??= (async () => {
     const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([import("shiki/core"), import("shiki/engine/javascript")]);
-    return createHighlighterCore({ themes: [import("shiki/themes/vitesse-light.mjs")], langs: [], engine: createJavaScriptRegexEngine() });
+    return createHighlighterCore({ themes: [import("shiki/themes/vitesse-light.mjs"), import("shiki/themes/vitesse-dark.mjs")], langs: [], engine: createJavaScriptRegexEngine() });
   })();
   return highlighter;
 }
@@ -39,7 +40,7 @@ async function highlight(code: string, language: string): Promise<string | null>
   if (!load) return null;
   const h = await getHighlighter();
   if (!h.getLoadedLanguages().includes(lang)) await h.loadLanguage(load);
-  const html = h.codeToHtml(code, { lang, theme: THEME });
+  const html = h.codeToHtml(code, { lang, themes: THEMES });
   if (cache.size > 300) cache.delete(cache.keys().next().value!);
   cache.set(key, html);
   return html;

@@ -169,7 +169,8 @@
 
 // What a request of the service's carries (a POST's body): the WebView does not hand request bodies to the app, so a
 // body of the page's own fetch or XMLHttpRequest to its own host is left with the app first (stash), under an id the
-// request then carries in a header, x-stillfail-body, which the app takes off again.
+// request then carries in a header, x-stillfail-body, which the app takes off again. The top page's fetch() goes to
+// the app whole instead, and its answer comes as it is sent (below).
 (() => {
   const native = window.StillFailPreviewNative;
   if (!native || window.__stillfailBodies) return;
@@ -181,9 +182,108 @@
     native.stash(id, base64(bytes), type || "");
     return id;
   };
+  // The top page's fetch() of its own host goes through the app instead (PreviewWeb.kt fetchSaid), over a message port
+  // the app gives it: a WebView hands the page what the app answers only 2 KB at a time, and this way each piece of a
+  // body comes as the service sends it (a log, a streamed answer). Without the port (a file's page, an app from
+  // before), as below.
+  const bridge = (() => {
+    if (window !== window.top || typeof native.fetchPort !== "function") return null;
+    const token = "stillfail-fetch-" + crypto.randomUUID();
+    const waiting = new Map();
+    const port = new Promise((resolve) => {
+      const take = (event) => {
+        // Only the app's own message (no window sent it) carrying the token asked for.
+        if (event.data !== token || event.source !== null || !event.ports || !event.ports[0]) return;
+        event.stopImmediatePropagation();
+        removeEventListener("message", take, true);
+        const got = event.ports[0];
+        got.onmessage = ({ data }) => {
+          let said;
+          try { said = JSON.parse(data); } catch { return; }
+          waiting.get(said && said.id)?.(said);
+        };
+        resolve(got);
+      };
+      addEventListener("message", take, true);
+      setTimeout(() => resolve(null), 5000);
+    });
+    let asking = false;
+    try { asking = native.fetchPort(token) === true; } catch {}
+    if (!asking) return null;
+    const bytesOf = (text) => { const s = atob(text); const out = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; };
+    const define = (answer, props) => { for (const [k, v] of Object.entries(props)) Object.defineProperty(answer, k, { value: v }); return answer; };
+    const go = (to, asked, bytes) => new Promise((resolve, reject) => {
+      const id = crypto.randomUUID();
+      const signal = asked.signal;
+      const aborted = () => signal.reason ?? new DOMException("signal is aborted without reason", "AbortError");
+      if (signal.aborted) return reject(aborted());
+      let stream = null;
+      let done = false;
+      const finish = () => { done = true; waiting.delete(id); signal.removeEventListener("abort", onAbort); };
+      const stop = () => { if (done) return; finish(); to.postMessage(JSON.stringify({ t: "stop", id })); };
+      const onAbort = () => {
+        const why = aborted();
+        if (stream) { try { stream.error(why); } catch {} } else reject(why);
+        stop();
+      };
+      signal.addEventListener("abort", onAbort);
+      waiting.set(id, (said) => {
+        if (done) return;
+        if (said.t === "head") {
+          const moved = said.status >= 300 && said.status < 400 && said.headers.some(([k]) => k.toLowerCase() === "location");
+          const url = location.origin + said.path;
+          if (moved && asked.redirect === "error") { stop(); return reject(new TypeError("Failed to fetch")); }
+          if (moved && asked.redirect === "manual") { stop(); return resolve(define(Response.error(), { type: "opaqueredirect", url, redirected: false })); }
+          const headers = new Headers();
+          for (const [k, v] of said.headers) if (!/^set-cookie2?$/i.test(k)) { try { headers.append(k, v); } catch {} }
+          const empty = asked.method === "HEAD" || [101, 204, 205, 304].includes(said.status);
+          const body = empty ? null : new ReadableStream({ start: (c) => { stream = c; }, cancel: () => stop() }, new ByteLengthQueuingStrategy({ highWaterMark: 1 << 16 }));
+          let answer;
+          try { answer = new Response(body, { status: said.status, statusText: said.statusText || "", headers }); } catch (e) { stop(); return reject(new TypeError("Failed to fetch: " + e.message)); }
+          resolve(define(answer, { url, redirected: said.redirected === true, type: "basic" }));
+        } else if (said.t === "chunk") {
+          if (!stream) return;
+          stream.enqueue(bytesOf(said.b));
+          // Read too slowly (as in PreviewWeb.kt's Chunks): given up rather than kept here without end.
+          if (stream.desiredSize < -(32 << 20)) { stream.error(new TypeError("网页读得太慢，已停止")); stop(); }
+        } else if (said.t === "end") {
+          finish();
+          try { stream?.close(); } catch {}
+        } else if (said.t === "error") {
+          finish();
+          const why = new TypeError("Failed to fetch: " + said.message);
+          if (stream) { try { stream.error(why); } catch {} } else reject(why);
+        }
+      });
+      const to_ = new URL(asked.url);
+      const headers = new Headers(asked.headers);
+      // What the browser would add to a request of its own.
+      if (!headers.has("accept")) headers.set("accept", "*/*");
+      if (!headers.has("accept-language") && navigator.languages?.length) headers.set("accept-language", navigator.languages.join(","));
+      headers.set("user-agent", navigator.userAgent);
+      if (asked.referrer && asked.referrer !== "no-referrer") headers.set("referer", asked.referrer === "about:client" ? location.href : asked.referrer);
+      if (asked.method !== "GET" && asked.method !== "HEAD") headers.set("origin", location.origin);
+      to.postMessage(JSON.stringify({
+        t: "go", id, method: asked.method, path: to_.pathname + to_.search, headers: [...headers], redirect: asked.redirect,
+        cookies: asked.credentials !== "omit", body: bytes && bytes.length ? base64(bytes) : "",
+      }));
+    });
+    const through = async (asked, bytes) => {
+      const to = await port;
+      return to ? go(to, asked, bytes) : null;
+    };
+    through.ready = port;
+    return through;
+  })();
   const fetched = window.fetch;
   window.fetch = async function (input, init) {
-    const asked = new Request(input, init);
+    let asked;
+    try { asked = new Request(input, init); } catch { return fetched.call(this, input, init); }
+    if (bridge && own(asked.url) && /^https?:$/.test(new URL(asked.url).protocol) && !new URL(asked.url).pathname.startsWith("/_stillfail/")) {
+      const bytes = asked.method === "GET" || asked.method === "HEAD" ? null : new Uint8Array(await asked.clone().arrayBuffer());
+      const answer = await bridge(asked, bytes);
+      if (answer) return answer;
+    }
     if (!own(asked.url) || asked.method === "GET" || asked.method === "HEAD") return fetched.call(this, input, init);
     const bytes = new Uint8Array(await asked.clone().arrayBuffer());
     if (!bytes.length) return fetched.call(this, input, init);
@@ -222,6 +322,130 @@
       if (!asked.type && type) typed.call(this, "content-type", type);
       sent.call(this, buffer);
     }, () => sent.call(this, body));
+  };
+
+  // The top page's asynchronous XMLHttpRequest of its own host goes the same way (its progress as the body comes): the
+  // request itself stays the page's, with what it says (its state, its answer, its events) given here.
+  if (!bridge) return;
+  const opened2 = X.open, sent2 = X.send, typed2 = X.setRequestHeader, aborted2 = X.abort, header2 = X.getResponseHeader, headers2 = X.getAllResponseHeaders;
+  const SHOWN = ["readyState", "status", "statusText", "responseURL", "responseText", "response", "responseXML"];
+  const unshow = (xhr) => { for (const k of SHOWN) delete xhr[k]; };
+  X.open = function (method, url, async) {
+    const had = this.__stillfailX;
+    if (had && had.state && !had.state.over) { had.state.over = true; had.controller.abort(); }
+    unshow(this);
+    this.__stillfailX = { method: String(method).toUpperCase(), url: String(url), async: async !== false, headers: [] };
+    return opened2.apply(this, arguments);
+  };
+  X.setRequestHeader = function (name, value) {
+    this.__stillfailX?.headers.push([String(name), String(value)]);
+    return typed2.apply(this, arguments);
+  };
+  X.getResponseHeader = function (name) {
+    const state = this.__stillfailX?.state;
+    if (!state) return header2.apply(this, arguments);
+    return state.readyState >= 2 && state.headers ? state.headers.get(name) : null;
+  };
+  X.getAllResponseHeaders = function () {
+    const state = this.__stillfailX?.state;
+    if (!state) return headers2.apply(this, arguments);
+    return state.readyState >= 2 && state.headers ? [...state.headers].map(([k, v]) => k + ": " + v + "\r\n").join("") : "";
+  };
+  X.abort = function () {
+    const asked = this.__stillfailX;
+    if (!asked || !asked.state) return aborted2.apply(this, arguments);
+    const state = asked.state;
+    if (state.over) { state.readyState = 0; return; }
+    state.over = true;
+    asked.controller.abort();
+    state.fail("abort");
+    state.readyState = 0;
+  };
+  X.send = function (body) {
+    const asked = this.__stillfailX;
+    const xhr = this;
+    let to;
+    try { to = new URL(asked.url, location.href); } catch { return sent2.apply(this, arguments); }
+    if (!asked || !asked.async || asked.state || to.origin !== location.origin || to.pathname.startsWith("/_stillfail/") || xhr.responseType === "document" || (typeof Document !== "undefined" && body instanceof Document)) return sent2.apply(this, arguments);
+    const args = arguments;
+    const controller = new AbortController();
+    const state = { readyState: 1, status: 0, statusText: "", url: "", headers: null, text: "", pieces: [], loaded: 0, over: false };
+    asked.controller = controller;
+    const fire = (type) => xhr.dispatchEvent(type === "readystatechange" ? new Event(type) : new ProgressEvent(type, { lengthComputable: state.total > 0, loaded: state.loaded, total: state.total || 0 }));
+    const move = (n) => { state.readyState = n; fire("readystatechange"); };
+    state.fail = (type) => {
+      state.status = 0; state.statusText = ""; state.headers = null; state.text = ""; state.pieces = [];
+      move(4); fire(type); fire("loadend");
+    };
+    const whole = () => {
+      if (state.readyState !== 4) return null;
+      const type = xhr.responseType;
+      if (type === "json") { try { return JSON.parse(state.text); } catch { return null; } }
+      if (type === "arraybuffer") return joined();
+      if (type === "blob") return new Blob(state.pieces, { type: state.headers?.get("content-type") || "" });
+      return state.text;
+    };
+    const joined = () => { const out = new Uint8Array(state.loaded); let at = 0; for (const p of state.pieces) { out.set(p, at); at += p.length; } return out.buffer; };
+    (async () => {
+      const port = await bridge.ready;
+      if (!port) return sent2.apply(xhr, args);
+      let request;
+      try {
+        const headers = new Headers(asked.headers);
+        request = new Request(to.href, { method: asked.method, headers, body: asked.method === "GET" || asked.method === "HEAD" ? undefined : body ?? undefined, signal: controller.signal, credentials: "include" });
+      } catch {
+        return sent2.apply(xhr, args);
+      }
+      asked.state = state;
+      Object.defineProperties(xhr, {
+        readyState: { get: () => state.readyState, configurable: true },
+        status: { get: () => state.status, configurable: true },
+        statusText: { get: () => state.statusText, configurable: true },
+        responseURL: { get: () => state.url, configurable: true },
+        responseXML: { get: () => null, configurable: true },
+        responseText: { get: () => { if (xhr.responseType && xhr.responseType !== "text") throw new DOMException("responseType 不是文字", "InvalidStateError"); return state.text; }, configurable: true },
+        response: { get: () => (!xhr.responseType || xhr.responseType === "text" ? state.text : whole()), configurable: true },
+      });
+      fire("loadstart");
+      let timer = 0;
+      if (xhr.timeout > 0) timer = setTimeout(() => { if (state.over) return; state.over = true; controller.abort(); state.fail("timeout"); }, xhr.timeout);
+      try {
+        const bytes = asked.method === "GET" || asked.method === "HEAD" ? null : new Uint8Array(await request.clone().arrayBuffer());
+        const answer = await bridge(request, bytes);
+        if (state.over) return;
+        state.status = answer.status; state.statusText = answer.statusText; state.url = answer.url; state.headers = answer.headers;
+        state.total = Number(answer.headers.get("content-length")) || 0;
+        move(2);
+        const charset = /charset=([^;]+)/i.exec(answer.headers.get("content-type") || "")?.[1]?.trim().replace(/"/g, "") || "utf-8";
+        let decode;
+        try { decode = new TextDecoder(charset); } catch { decode = new TextDecoder(); }
+        const text = !xhr.responseType || xhr.responseType === "text" || xhr.responseType === "json";
+        if (answer.body) {
+          const reader = answer.body.getReader();
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (state.over) return;
+            if (done) break;
+            state.loaded += value.length;
+            if (text) state.text += decode.decode(value, { stream: true }); else state.pieces.push(value);
+            move(3);
+            fire("progress");
+          }
+        }
+        if (text) state.text += decode.decode();
+        state.over = true;
+        clearTimeout(timer);
+        if (state.readyState < 3) move(3);
+        move(4);
+        fire("load");
+        fire("loadend");
+      } catch {
+        clearTimeout(timer);
+        if (state.over) return;
+        state.over = true;
+        state.fail("error");
+      }
+    })();
   };
 })();
 

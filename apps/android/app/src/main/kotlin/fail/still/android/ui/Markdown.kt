@@ -573,5 +573,7 @@ private fun inlineText(n: Node): String = when (n) {
 
 @Composable
 private fun MdText(text: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
-    Text(text, color = LocalMdInk.current ?: C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, inlineContent = inline)
+    // A passage a quote led to, marked in these words (TextMark.kt).
+    val (mark, laid) = passageMark(text.text)
+    Text(text, mark, color = LocalMdInk.current ?: C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, inlineContent = inline, onTextLayout = laid)
 }

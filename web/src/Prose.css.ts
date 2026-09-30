@@ -65,5 +65,11 @@ globalStyle(`${codeShiki} pre.shiki`, {
   margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: "12px",
   lineHeight: "1.55",
 });
+// Dark: vitesse-dark's colours, which Shiki puts in `--shiki-dark` beside the light ones it writes inline.
+const shikiDark = { color: "var(--shiki-dark) !important" };
+globalStyle(`:root[data-theme="dark"] ${codeShiki} .shiki, :root[data-theme="dark"] ${codeShiki} .shiki span`, shikiDark);
+globalStyle(`:root:not([data-theme="light"]) ${codeShiki} .shiki, :root:not([data-theme="light"]) ${codeShiki} .shiki span`, {
+  "@media": { "(prefers-color-scheme: dark)": shikiDark },
+});
 globalStyle(`${codeShiki} pre.shiki code`, { fontFamily: vars.fontMono, padding: "0", background: "none" });
 globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: "12.5px", lineHeight: "1.6" });
