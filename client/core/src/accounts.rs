@@ -331,6 +331,11 @@ impl Accounts {
         if let Some(token) = bearer {
             headers.push(("authorization".into(), format!("Bearer {token}")));
         }
+        // A refresh asked twice with its one `request_id` is answered the same (cloud/src/account.ts, the retry
+        // window): it may go again on a new connection beside one that went quiet (wake.rs).
+        if path == "/v1/auth/refresh" {
+            headers.push((crate::wake::HEDGE.into(), "1".into()));
+        }
         let request = HttpRequest {
             method: "POST".into(),
             url: format!("{}{path}", self.host.cloud_origin()),

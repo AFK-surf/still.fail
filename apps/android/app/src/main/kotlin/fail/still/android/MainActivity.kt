@@ -2,6 +2,8 @@ package fail.still.android
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.SystemClock
@@ -39,8 +41,8 @@ class MainActivity : ComponentActivity() {
             ?.createMulticastLock("stillfail-mdns")?.apply { setReferenceCounted(false) }
     }
 
-    /** Since when the app has been off screen (elapsedRealtime: it counts deep sleep too); null while on it. */
-    private var hidden: Long? = null
+    /** The default network as it changes, told to the core (see [NetworkWatch]); registered while the activity lives. */
+    private var network: NetworkWatch? = null
 
     /** The core's `notices`, shown while the app is in front (Notices.kt); FCM's pushes are shown the rest of the time. */
     private var notices: Job? = null
@@ -68,15 +70,22 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    override fun onDestroy() {
+        network?.stop()
+        network = null
+        super.onDestroy()
+    }
+
     /**
      * Back on screen after a while in the background, as the web page does on visibilitychange (web/src/core/client.ts
      * connectCore): the core gives up requests that went out before and reconnects links gone quiet
      * (client/core/src/wake.rs), so nothing hangs on a socket the system dropped while away.
      */
     private fun wake() {
+        // No core yet (the activity made again, its core still starting): woken once it is there.
+        val app = app ?: return
         val since = hidden ?: return
         hidden = null
-        val app = app ?: return
         val away = (SystemClock.elapsedRealtime() - since).coerceAtLeast(0)
         lifecycleScope.launch {
             try {
@@ -97,6 +106,16 @@ class MainActivity : ComponentActivity() {
             app = AppState(core, getSharedPreferences("stillfail", Context.MODE_PRIVATE), BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN))
             handle(intent)
             listen()
+            // Back to an activity made anew (the last one closed with back, the process kept): as back on screen.
+            wake()
+            network = NetworkWatch(applicationContext) {
+                lifecycleScope.launch {
+                    try {
+                        core.call("client.wake", buildJsonObject { put("away", 0); put("network", true) })
+                    } catch (_: CoreException) {
+                    }
+                }
+            }.also { it.start() }
             app?.let { launch { Push.sync(applicationContext, core, it.notify) } }
             app?.checkUpdates()
         }
@@ -160,3 +179,50 @@ class MainActivity : ComponentActivity() {
 
 /** The sign-in callback's schemes: stillfail:// is what the app asks for; ember:// (the name before) is still accepted. */
 private val AUTH_SCHEMES = setOf("stillfail", "ember")
+
+/**
+ * Since when the app has been off screen (elapsedRealtime: it counts deep sleep too); null while on it. The process's,
+ * not an activity's: one closed with back and made again later is the same app coming back to the same core.
+ */
+private var hidden: Long? = null
+
+/**
+ * The default network, followed: `changed` when it becomes another one than before (Wi-Fi to mobile data, back
+ * online after none). Every connection the core has was on the old one and is dead with nothing said; iroh cannot
+ * see this on Android itself (client/core/src/wake.rs, mesh.rs `watch`). The first network seen is the one the core
+ * started on, so nothing is said of it.
+ */
+private class NetworkWatch(context: Context, private val changed: () -> Unit) : ConnectivityManager.NetworkCallback() {
+    private val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    private var current: Network? = null
+    private var seen = false
+
+    fun start() {
+        try {
+            connectivity?.registerDefaultNetworkCallback(this)
+        } catch (_: RuntimeException) {
+            // Too many callbacks registered (the system's limit), or no permission: the wake on coming back still is.
+        }
+    }
+
+    fun stop() {
+        try {
+            connectivity?.unregisterNetworkCallback(this)
+        } catch (_: RuntimeException) {
+        }
+    }
+
+    override fun onAvailable(network: Network) {
+        val before = synchronized(this) {
+            val before = current to seen
+            current = network
+            seen = true
+            before
+        }
+        if (before.second && before.first != network) changed()
+    }
+
+    override fun onLost(network: Network) {
+        synchronized(this) { if (current == network) current = null }
+    }
+}

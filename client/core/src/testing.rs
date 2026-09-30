@@ -37,6 +37,8 @@ pub struct FakeHost {
     pub sockets: RefCell<Vec<(String, Vec<String>, futures::channel::mpsc::UnboundedSender<Result<String, HostError>>)>>,
     /// Refuse to open WebSockets (as a browser does when the server says no).
     pub refuse_sockets: Cell<bool>,
+    /// How many times the core let the host's connections go (`reset_connections`).
+    pub resets: Cell<u32>,
     /// Every request fetched, in order.
     pub requests: RefCell<Vec<HttpRequest>>,
     /// Every sleep asked for (ms, before speeding up), in order: timers show here.
@@ -57,6 +59,7 @@ impl FakeHost {
             stream_responder: RefCell::default(),
             sockets: RefCell::default(),
             refuse_sockets: Cell::new(false),
+            resets: Cell::new(0),
             requests: RefCell::default(),
             sleeps: RefCell::default(),
             emitted: RefCell::default(),
@@ -171,6 +174,10 @@ impl Host for FakeHost {
         let (tx, rx) = futures::channel::mpsc::unbounded();
         self.sockets.borrow_mut().push((url, protocols, tx));
         async move { Ok(rx.boxed_local()) }.boxed_local()
+    }
+
+    fn reset_connections(&self) {
+        self.resets.set(self.resets.get() + 1);
     }
 
     fn storage_get(&self, key: &str) -> LocalBoxFuture<'static, Result<Option<Vec<u8>>, HostError>> {

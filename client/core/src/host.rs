@@ -46,7 +46,14 @@ pub struct StreamResponse {
 }
 
 /// A receive-only WebSocket's text frames. The stream ends when the socket closes; dropping it closes the socket.
+/// While it is open the host sends [`SOCKET_PING`] on it every [`SOCKET_PING_MS`]; still.fail cloud answers
+/// `pong` (a frame like any other), so the core knows a socket that stops answering is gone.
 pub type SocketFrames = LocalBoxStream<'static, Result<String, HostError>>;
+
+/// What a host sends on an open WebSocket to be answered `pong` (cloud/src/directory.ts, answered without waking it).
+pub const SOCKET_PING: &str = "ping";
+/// How often.
+pub const SOCKET_PING_MS: u64 = 25_000;
 
 /// Keys `[from, to)` of one table of the core's database (docs/core-db.md), in key order.
 #[derive(Clone, Debug, PartialEq)]
@@ -100,6 +107,9 @@ pub trait Host {
     fn woken(&self) -> LocalBoxFuture<'static, crate::wake::Wake> {
         Box::pin(futures::future::pending())
     }
+    /// The connections kept for requests are taken for gone (the UI back after long away, the network changed,
+    /// wake.rs): what is asked next goes on new ones. A host that keeps none has nothing to do.
+    fn reset_connections(&self) {}
     /// Runs a task to completion on the core's thread.
     fn spawn(&self, task: LocalBoxFuture<'static, ()>);
     fn random_bytes(&self, buf: &mut [u8]);

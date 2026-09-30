@@ -36,7 +36,7 @@ use crate::entries::n_of;
 use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest};
 use crate::kept::{Kept, Log};
-use crate::mesh::{CredentialSource, Mesh, RequestHead};
+use crate::mesh::{CredentialSource, Link, Mesh, RequestHead};
 use crate::protocol::Topic;
 use crate::status::{Place, Status, Waiting, station_what};
 use crate::store::{Source, Store};
@@ -71,6 +71,17 @@ const WARM_CHATS: usize = 30;
 const WARM_GAP_MS: u64 = 150;
 
 const EVENT_STREAM: &str = "text/event-stream";
+/// How a stream ends whose link was replaced by another (it is opened again on it at once).
+const REPLACED: &str = "换了一条连接";
+/// A write's key (mesh/app/src/admin/once.rs).
+pub const IDEMPOTENCY_KEY: &str = "idempotency-key";
+/// On a station's every answer when it keeps a write asked with a key to once.
+pub const IDEMPOTENT: &str = "stillfail-idempotent";
+
+/// A request the wire may send twice: a read, or a write with its key to a station known to keep it to once.
+fn may_repeat(head: &RequestHead, idempotent: bool) -> bool {
+    head.method.eq_ignore_ascii_case("GET") || (idempotent && head.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENCY_KEY)))
+}
 
 /// `"<workspace>/<station>"` or `"local"`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -134,6 +145,16 @@ pub trait StationWire {
     fn request(&self, station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply>>;
     /// The way to the station is taken for gone (wake.rs): what is open to it closes, and the next request opens it anew.
     fn reset(&self, _station: &StationAddr) {}
+    /// Whether the wire itself finds another way to a station when the UI comes back or the network changes (the
+    /// mesh races a new link against each open one, mesh.rs `race`), rather than leaving it to the wake rules.
+    fn races(&self) -> bool {
+        false
+    }
+    /// Resolves once the way to the station that a request would take now is replaced by another: a stream on it is
+    /// then opened again on the new one. Never, for a wire that does not race.
+    fn replaced(&self, _station: &StationAddr) -> LocalBoxFuture<'static, ()> {
+        futures::future::pending().boxed_local()
+    }
     /// A preview page's WebSocket (`head.path` a preview's): the station's reply, then its frames both ways
     /// ([`SocketFrame`]). Only the mesh carries one.
     fn socket(&self, _station: &StationAddr, _head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
@@ -228,17 +249,31 @@ fn wants_stream(head: &RequestHead) -> bool {
 /// The page's own station, over the host's HTTP (the origin is the station's).
 pub struct HttpWire {
     host: Rc<dyn Host>,
+    /// The station said it keeps writes with a key to once ([`IDEMPOTENT`]).
+    idempotent: Rc<std::cell::Cell<bool>>,
 }
 
 impl HttpWire {
     pub fn new(host: Rc<dyn Host>) -> Rc<HttpWire> {
-        Rc::new(HttpWire { host })
+        Rc::new(HttpWire { host, idempotent: Rc::default() })
     }
 }
 
 impl StationWire for HttpWire {
     fn request(&self, _station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply>> {
         let stream = wants_stream(&head);
+        let mut head = head;
+        // The host sends it again beside itself when a wake suspects its connection (wake.rs): a write only to a
+        // station that does it once.
+        if !head.method.eq_ignore_ascii_case("GET") && may_repeat(&head, self.idempotent.get()) {
+            head.headers.push((crate::wake::HEDGE.into(), "1".into()));
+        }
+        let idempotent = self.idempotent.clone();
+        let learn = move |headers: &[(String, String)]| {
+            if headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENT)) {
+                idempotent.set(true);
+            }
+        };
         let request = HttpRequest {
             url: format!("{}{}", self.host.cloud_origin(), head.path),
             body: if body.is_empty() && head.method.eq_ignore_ascii_case("GET") { None } else { Some(body) },
@@ -249,6 +284,7 @@ impl StationWire for HttpWire {
             let answer = self.host.fetch_stream(request);
             async move {
                 let r = answer.await?;
+                learn(&r.headers);
                 Ok(WireReply { status: r.status, headers: r.headers, body: r.body.map(|c| c.map_err(CoreError::from)).boxed_local(), via: Some("local") })
             }
             .boxed_local()
@@ -256,6 +292,7 @@ impl StationWire for HttpWire {
             let answer = self.host.fetch(request);
             async move {
                 let r = answer.await?;
+                learn(&r.headers);
                 Ok(WireReply { status: r.status, headers: r.headers, body: futures::stream::iter([Ok(r.body)]).boxed_local(), via: Some("local") })
             }
             .boxed_local()
@@ -274,11 +311,21 @@ pub struct MeshWire {
     mesh: MeshSource,
     credentials: StationCredentials,
     status: Rc<Status>,
+    /// Stations that said they keep writes with a key to once ([`IDEMPOTENT`]), by id.
+    idempotent: Rc<RefCell<HashSet<String>>>,
 }
 
 impl MeshWire {
     pub fn new(mesh: MeshSource, credentials: StationCredentials, status: Rc<Status>) -> Rc<MeshWire> {
-        Rc::new(MeshWire { mesh, credentials, status })
+        Rc::new(MeshWire { mesh, credentials, status, idempotent: Rc::default() })
+    }
+}
+
+/// Whichever of two attempts answers; one that fails leaves it to the other.
+async fn first_answer<T>(a: LocalBoxFuture<'static, Result<T>>, b: LocalBoxFuture<'static, Result<T>>) -> Result<T> {
+    match futures::future::select(a, b).await {
+        Either::Left((Ok(answer), _)) | Either::Right((Ok(answer), _)) => Ok(answer),
+        Either::Left((Err(_), other)) | Either::Right((Err(_), other)) => other.await,
     }
 }
 
@@ -290,6 +337,7 @@ impl StationWire for MeshWire {
         let mesh = (self.mesh)();
         let credentials = (self.credentials)(&workspace);
         let (status, address) = (self.status.clone(), Place::Station(format!("{workspace}/{station}")));
+        let (idempotent, reply_station) = (self.idempotent.clone(), station.clone());
         async move {
             // Bringing up the endpoint (the relay) and opening the link are waits of their own: a request slow for
             // them says so (status.rs).
@@ -301,18 +349,38 @@ impl StationWire for MeshWire {
                 let _waiting = status.begin(address.clone(), "连接", true);
                 mesh.link(&station, credentials.clone()).await?
             };
-            // A read whose link went before it was answered (the station restarting, a network change) is asked once more,
-            // on the link opened in its place; anything that changes something is not sent twice.
-            let (link, reply) = match link.request(head.clone(), body.clone()).await {
-                Err(error) if error.code == "mesh" && head.method == "GET" => {
-                    let _waiting = status.begin(address, "连接", true);
-                    let link = mesh.link(&station, credentials).await?;
-                    drop(_waiting);
-                    let reply = link.request(head, body).await?;
-                    (link, reply)
+            let repeats = may_repeat(&head, idempotent.borrow().contains(&station));
+            let ask = |link: Rc<Link>, head: RequestHead, body: Vec<u8>| async move { link.request(head, body).await.map(|reply| (link, reply)) }.boxed_local();
+            let first = ask(link.clone(), head.clone(), body.clone());
+            let (link, reply) = if repeats {
+                // The link is replaced while this is under way (it lost to a new one as the UI came back, mesh.rs
+                // `race`): asked again on the new one at once, and whichever answers first is the answer. A read may be
+                // asked twice; a write only with its key, to a station that keeps it to once.
+                match futures::future::select(first, mesh.replaced(&station, &link)).await {
+                    Either::Left((Err(error), _)) if error.code == "mesh" => {
+                        // Its link went before it was answered (the station restarting, a network change): once more,
+                        // on the link opened in its place.
+                        let _waiting = status.begin(address, "连接", true);
+                        let link = mesh.link(&station, credentials).await?;
+                        drop(_waiting);
+                        ask(link, head, body).await?
+                    }
+                    Either::Left((answered, _)) => answered?,
+                    Either::Right((_, first)) => {
+                        let again = async move {
+                            let link = mesh.link(&station, credentials).await?;
+                            ask(link, head, body).await
+                        }
+                        .boxed_local();
+                        first_answer(first, again).await?
+                    }
                 }
-                result => (link, result?),
+            } else {
+                first.await?
             };
+            if reply.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENT)) {
+                idempotent.borrow_mut().insert(reply_station);
+            }
             let (status, headers) = (reply.status, reply.headers.clone());
             let body = futures::stream::unfold(reply, |mut reply| async move { reply.next().await.map(|chunk| (chunk, reply)) });
             Ok(WireReply { status, headers, body: body.boxed_local(), via: link.path() })
@@ -326,6 +394,17 @@ impl StationWire for MeshWire {
         if let Some(Ok(mesh)) = (self.mesh)().now_or_never() {
             mesh.drop_link(station);
         }
+    }
+
+    fn races(&self) -> bool {
+        true
+    }
+
+    fn replaced(&self, station: &StationAddr) -> LocalBoxFuture<'static, ()> {
+        let StationAddr::Remote { station, .. } = station else { return futures::future::pending().boxed_local() };
+        let (Some(Ok(mesh)), station) = ((self.mesh)().now_or_never(), station.clone()) else { return futures::future::pending().boxed_local() };
+        let Some(link) = mesh.current(&station) else { return futures::future::pending().boxed_local() };
+        mesh.replaced(&station, &link)
     }
 
     fn socket(&self, station: &StationAddr, head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
@@ -817,6 +896,13 @@ impl Stations {
             span.set("http.request.body.size", body.len());
         }
         headers.push(("traceparent".into(), span.context().traceparent()));
+        // A write carries a key of its own: a station that keeps writes to once (mesh/app/src/admin/once.rs) does it
+        // once however often it arrives, so the wire may send it again on another way there (a link that went quiet).
+        if !method.eq_ignore_ascii_case("GET") && !method.eq_ignore_ascii_case("HEAD") && !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENCY_KEY)) {
+            let mut key = [0u8; 16];
+            self.host.random_bytes(&mut key);
+            headers.push((IDEMPOTENCY_KEY.into(), hex::encode(key)));
+        }
         let head = RequestHead { method: method.to_string(), path, headers };
         // Under the request's span: opening the link it needs (a credential, a connection) shows as part of it.
         let reply = self.tracer.instrument(Some(span.context()), self.wire.request(station, head, body));
@@ -1277,8 +1363,10 @@ impl Stations {
             let path = self.events_path(&station, &wants);
             let opening = self.tracer.instrument(Some(span.context()), self.open_stream(&addr, &path));
             // Still opening when the UI came back from being away since before: on a way taken for gone, tried anew now.
+            // (A wire that races its links asks again on the new one itself.)
             let sent = self.host.now_ms();
-            let dropped = wake::woken_for(self.host.clone(), move |w| w.drops_request(sent));
+            let races = self.wire.races();
+            let dropped = wake::woken_for(self.host.clone(), move |w| !races && w.drops_request(sent));
             pin_mut!(opening, dropped);
             let opened = match futures::future::select(opening, dropped).await {
                 Either::Left((opened, _)) => opened,
@@ -1309,16 +1397,25 @@ impl Stations {
                     let opened_at = self.host.now_ms();
                     let mut why = "ended".to_string();
                     let mut heard = opened_at;
+                    // The way it came is replaced by another (a link that lost to a new one, mesh.rs `race`): opened
+                    // again at once on the new one, the old one not waited on.
+                    let replaced = self.wire.replaced(&addr).shared();
                     loop {
-                        // Nothing on it while the UI was away (not even the keepalive): taken for gone, and the link with it.
-                        let gone = wake::woken_for(self.host.clone(), move |w| w.drops_stream(heard));
-                        pin_mut!(gone);
-                        let chunk = match futures::future::select(body.next(), gone).await {
+                        // Nothing on it while the UI was away (not even the keepalive): taken for gone, and the link with
+                        // it. A wire that races its links finds out itself, sooner: its link is replaced, or kept.
+                        let gone = wake::woken_for(self.host.clone(), move |w| !races && w.drops_stream(heard)).boxed_local();
+                        let ended = futures::future::select(gone, replaced.clone());
+                        pin_mut!(ended);
+                        let chunk = match futures::future::select(body.next(), ended).await {
                             Either::Left((Some(chunk), _)) => chunk,
                             Either::Left((None, _)) => break,
-                            Either::Right(_) => {
+                            Either::Right((Either::Left(_), _)) => {
                                 self.wire.reset(&addr);
                                 why = wake::GONE.to_string();
+                                break;
+                            }
+                            Either::Right((Either::Right(_), _)) => {
+                                why = REPLACED.to_string();
                                 break;
                             }
                         };
@@ -1335,7 +1432,7 @@ impl Stations {
                             }
                         }
                     }
-                    let woke = why == wake::GONE;
+                    let woke = why == wake::GONE || why == wake::NETWORK || why == REPLACED;
                     if !self.is_current(&station, generation) {
                         return;
                     }

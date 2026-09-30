@@ -47,6 +47,9 @@ use crate::wake::{self, Wake, Wakes, WakingHost};
 /// over once a socket held for a minute.
 pub const SOCKET_RETRY_MS: u64 = 1_000;
 pub const SOCKET_RETRY_MAX_MS: u64 = 60_000;
+/// An events socket that answered a ping before and then heard nothing this long (the host pings every
+/// `SOCKET_PING_MS`, host.rs) is on a connection that is gone though nothing said so: it is opened again.
+pub const SOCKET_IDLE_MS: u64 = 2 * crate::host::SOCKET_PING_MS + 10_000;
 /// The subprotocol still.fail cloud's `/v1/events` answers with; the token travels as a second one.
 pub const EVENTS_PROTOCOL: &str = "stillfail-events";
 
@@ -474,8 +477,13 @@ impl Inner {
                 let (account, return_to) = self.accounts.complete_sign_in(&query).await?;
                 Ok(json!({ "account": account, "return_to": return_to }))
             }
-            Call::Wake { away } => {
-                self.wakes.wake(Wake { at: self.host.now_ms(), away: away.max(0.0) });
+            Call::Wake { away, network } => {
+                let wake = Wake { at: self.host.now_ms(), away: away.max(0.0), network };
+                // What is asked again as the wake fails what was under way goes on new connections.
+                if wake.suspects_connections() {
+                    self.host.reset_connections();
+                }
+                self.wakes.wake(wake);
                 Ok(json!({}))
             }
             Call::ClientError { source, message } => {
@@ -1213,25 +1221,89 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
                 this.status.socket_up(&sub);
                 // Nothing is replayed: what changed while it was closed is read now.
                 this.refresh_all().await;
+                let host = this.host.clone();
                 drop(this);
                 let mut woke = false;
-                while let Some(frame) = frames.next().await {
+                // It answers pings (not a cloud from before them): from then on, silence is its end.
+                let mut answers = false;
+                let mut idle = false;
+                // Another one being opened beside it, as the UI came back or the network changed: once it is open it
+                // takes this one's place, so nothing waits to learn whether this one is gone.
+                let mut beside: Option<LocalBoxFuture<'static, Result<crate::host::SocketFrames>>> = None;
+                enum Ev {
+                    Frame(Option<std::result::Result<String, crate::host::HostError>>),
+                    Idle,
+                    Suspect,
+                    Beside(Result<crate::host::SocketFrames>),
+                }
+                loop {
+                    let ev = {
+                        let frame = frames.next().map(Ev::Frame);
+                        let idle_after = async {
+                            if answers {
+                                host.sleep(SOCKET_IDLE_MS).await;
+                                Ev::Idle
+                            } else {
+                                futures::future::pending().await
+                            }
+                        };
+                        let other = match beside.as_mut() {
+                            Some(opening) => opening.map(Ev::Beside).boxed_local(),
+                            None => wake::woken_for(host.clone(), |w| w.suspects_connections()).map(|_| Ev::Suspect).boxed_local(),
+                        };
+                        futures::pin_mut!(frame, idle_after);
+                        match futures::future::select(futures::future::select(frame, idle_after), other).await {
+                            futures::future::Either::Left((futures::future::Either::Left((ev, _)), _)) => ev,
+                            futures::future::Either::Left((futures::future::Either::Right((ev, _)), _)) => ev,
+                            futures::future::Either::Right((ev, _)) => ev,
+                        }
+                    };
                     let Some(this) = core.upgrade() else { break };
-                    match frame {
-                        Ok(text) => this.on_cloud_event(&sub, &text),
-                        Err(error) => {
-                            woke = error.0 == wake::GONE;
+                    match ev {
+                        Ev::Frame(None) => break,
+                        Ev::Frame(Some(Ok(text))) if text == "pong" => answers = true,
+                        Ev::Frame(Some(Ok(text))) => this.on_cloud_event(&sub, &text),
+                        Ev::Frame(Some(Err(error))) => {
+                            woke = error.0 == wake::GONE || error.0 == wake::NETWORK;
                             break;
                         }
+                        Ev::Idle => {
+                            idle = true;
+                            break;
+                        }
+                        Ev::Suspect => {
+                            let (core, sub) = (core.clone(), sub.clone());
+                            beside = Some(
+                                async move {
+                                    let this = core.upgrade().ok_or_else(gone)?;
+                                    this.open_socket(&sub).await
+                                }
+                                .boxed_local(),
+                            );
+                        }
+                        Ev::Beside(Ok(new)) => {
+                            beside = None;
+                            frames = new;
+                            answers = false;
+                            // The old one may have missed something before it went: read now.
+                            this.refresh_all().await;
+                        }
+                        // Not opened: the old one stays (it is watched as before).
+                        Ev::Beside(Err(_)) => beside = None,
                     }
                 }
+                drop(frames);
                 let Some(this) = core.upgrade() else { return };
                 // Held a while, or taken for gone when the UI came back (it was fine before): opened again soon.
-                if woke || this.host.now_ms() - opened >= 60_000.0 {
+                if woke || idle || this.host.now_ms() - opened >= 60_000.0 {
                     wait = SOCKET_RETRY_MS;
                 }
                 this.socket_state(&sub, SocketState::Retrying);
-                down = "连接断开了".into();
+                down = if idle { "连接没有回应".into() } else { "连接断开了".into() };
+                // Taken for gone as the UI came back, or silent: opened again at once.
+                if woke || idle {
+                    continue;
+                }
             }
             Err(error) if error.code == "signed_out" => {
                 this.sockets.borrow_mut().remove(&sub);
@@ -1340,8 +1412,9 @@ enum Call {
     /// span, so it is seen with the rest of the trace, the same one at most once a minute.
     ClientError { source: String, message: String },
     /// A UI is back after `away` ms (a page hidden, a phone's app in the background): what went out before is
-    /// suspect (wake.rs). Its answer also tells the UI the core is alive.
-    Wake { away: f64 },
+    /// suspect (wake.rs); `network`: the network changed, and all that is under way is. Its answer also tells the UI
+    /// the core is alive.
+    Wake { away: f64, network: bool },
     AuthBegin { redirect_uri: String, return_to: String, device_name: String },
     AuthComplete { query: String },
     SignOut { account: String },
@@ -1540,6 +1613,8 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     struct WakeParams {
         #[serde(default)]
         away: f64,
+        #[serde(default)]
+        network: bool,
     }
     #[derive(Deserialize)]
     struct Migrate {
@@ -1565,7 +1640,10 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             let p = read::<ClientErrorParams>(params)?;
             Call::ClientError { source: p.source, message: p.message }
         }
-        "client.wake" => Call::Wake { away: read::<WakeParams>(params)?.away },
+        "client.wake" => {
+            let params = read::<WakeParams>(params)?;
+            Call::Wake { away: params.away, network: params.network }
+        }
         "push.key" => Call::PushKey,
         "push.register" => {
             let registration = params_or_empty(params);
@@ -2061,6 +2139,45 @@ mod tests {
             assert_eq!(host.open_sockets("/v1/events"), 1);
             // Answered, so the page knows the core is there.
             assert!(host.take_emitted().iter().any(|(_, m)| *m == CoreMessage::Ok { id: 9, ok: json!({}) }));
+        });
+    }
+
+    #[test]
+    fn a_socket_that_answered_pings_and_went_silent_is_opened_again() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            host.settle().await;
+            let opened = host.sockets.borrow().len();
+            assert_eq!(host.open_sockets("/v1/events"), 1);
+            // Never a pong (a cloud from before them): silence is how it is.
+            pass(SOCKET_IDLE_MS * 2).await;
+            assert_eq!(host.sockets.borrow().len(), opened);
+            host.socket_send("/v1/events", "pong");
+            pass(SOCKET_IDLE_MS / 2).await;
+            assert_eq!(host.sockets.borrow().len(), opened, "answered a while ago: still there");
+            pass(SOCKET_IDLE_MS).await;
+            assert_eq!(host.sockets.borrow().len(), opened + 1, "silent past its pings: opened again");
+            assert_eq!(host.open_sockets("/v1/events"), 1);
+        });
+    }
+
+    #[test]
+    fn the_network_changing_opens_the_socket_again_at_once() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            host.settle().await;
+            let opened = host.sockets.borrow().len();
+            host.socket_send("/v1/events", "pong");
+            pass(0).await;
+            core.receive(ui, ClientMessage::Call { id: 9, call: "client.wake".into(), params: json!({ "away": 0, "network": true }) });
+            pass(0).await;
+            assert_eq!(host.sockets.borrow().len(), opened + 1);
+            assert_eq!(host.open_sockets("/v1/events"), 1);
+            assert_eq!(host.resets.get(), 1, "the host let its connections go");
         });
     }
 

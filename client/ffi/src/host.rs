@@ -3,12 +3,13 @@
 //! storage as files handed to a thread of their own so the core never waits
 //! on the disk.
 
+use std::cell::RefCell;
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use stillfail_core::host::{DbOp, DbRange, Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
+use stillfail_core::host::{DbOp, DbRange, Host, HostError, HttpRequest, HttpResponse, SOCKET_PING, SOCKET_PING_MS, SocketFrames, StreamResponse};
 use stillfail_core::{ClientId, CoreError, CoreMessage};
 use futures::future::LocalBoxFuture;
 use futures::stream;
@@ -23,7 +24,8 @@ use crate::{Command, CoreListener};
 pub struct NativeHost {
     cloud_origin: String,
     tls: Arc<rustls::ClientConfig>,
-    http: reqwest::Client,
+    /// Its pool of connections; replaced when they are taken for gone (`reset_connections`).
+    http: RefCell<reqwest::Client>,
     storage: Storage,
     listener: Arc<dyn CoreListener>,
     /// Back to the core thread's loop: a task that panicked ends this core.
@@ -35,13 +37,26 @@ pub struct NativeHost {
 impl NativeHost {
     pub fn new(data_dir: PathBuf, cloud_origin: String, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>) -> NativeHost {
         let tls = Arc::new(tls_config());
-        let http = reqwest::Client::builder()
-            .tls_backend_preconfigured((*tls).clone())
-            .connect_timeout(std::time::Duration::from_secs(15))
-            .build()
-            .expect("reqwest client");
+        let http = RefCell::new(http_client(&tls));
         NativeHost { cloud_origin, tls, http, storage: Storage::new(data_dir), listener, commands, started: std::time::Instant::now() }
     }
+}
+
+/// A client with a pool of its own. A phone that slept, or moved to another network, leaves the connections it had
+/// dead with nothing said; HTTP/2 pings (answered within 5 s, or the connection is closed and what is on it fails)
+/// and TCP keepalive find them out rather than a request waiting on one for the kernel's quarter of an hour.
+fn http_client(tls: &rustls::ClientConfig) -> reqwest::Client {
+    use std::time::Duration;
+    reqwest::Client::builder()
+        .tls_backend_preconfigured(tls.clone())
+        .connect_timeout(Duration::from_secs(15))
+        .pool_idle_timeout(Duration::from_secs(60))
+        .tcp_keepalive(Duration::from_secs(30))
+        .http2_keep_alive_interval(Duration::from_secs(20))
+        .http2_keep_alive_timeout(Duration::from_secs(5))
+        .http2_keep_alive_while_idle(true)
+        .build()
+        .expect("reqwest client")
 }
 
 /// The crypto provider is iroh's (ring); the roots Mozilla's, as iroh's own TLS
@@ -66,12 +81,24 @@ fn websocket(tls: Arc<rustls::ClientConfig>, url: String, protocols: Vec<String>
             request.headers_mut().insert("sec-websocket-protocol", value);
         }
         let (socket, _) = tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(Connector::Rustls(tls))).await.map_err(ws_error)?;
-        // Read as one stream (not split): reading is also what answers the server's pings.
-        let frames = stream::unfold(Some(socket), |socket| async move {
-            let mut socket = socket?;
+        // Read as one stream (not split): reading is also what answers the server's pings. `ping` goes out every
+        // SOCKET_PING_MS (host.rs), sent between reads.
+        let every = std::time::Duration::from_millis(SOCKET_PING_MS);
+        let frames = stream::unfold(Some((socket, tokio::time::Instant::now() + every)), move |state| async move {
+            let (mut socket, mut ping_at) = state?;
             loop {
-                match socket.next().await {
-                    Some(Ok(Message::Text(text))) => return Some((Ok(text.as_str().to_owned()), Some(socket))),
+                let message = tokio::select! {
+                    message = socket.next() => message,
+                    _ = tokio::time::sleep_until(ping_at) => {
+                        ping_at = tokio::time::Instant::now() + every;
+                        if let Err(error) = futures::SinkExt::send(&mut socket, Message::text(SOCKET_PING)).await {
+                            return Some((Err(ws_error(error)), None));
+                        }
+                        continue;
+                    }
+                };
+                match message {
+                    Some(Ok(Message::Text(text))) => return Some((Ok(text.as_str().to_owned()), Some((socket, ping_at)))),
                     Some(Ok(Message::Close(_))) | Some(Err(WsError::ConnectionClosed | WsError::AlreadyClosed)) | None => return None,
                     Some(Ok(_)) => {}
                     Some(Err(error)) => return Some((Err(ws_error(error)), None)),
@@ -123,7 +150,7 @@ impl Host for NativeHost {
     }
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>> {
-        let request = build(&self.http, request);
+        let request = build(&self.http.borrow(), request);
         Box::pin(async move {
             let response = request?.send().await.map_err(http_error)?;
             let (status, headers) = (response.status().as_u16(), headers(&response));
@@ -136,8 +163,13 @@ impl Host for NativeHost {
         websocket(self.tls.clone(), url, protocols)
     }
 
+    fn reset_connections(&self) {
+        // Requests already on the old pool keep it until they end (the core fails those it takes for gone).
+        *self.http.borrow_mut() = http_client(&self.tls);
+    }
+
     fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>> {
-        let request = build(&self.http, request);
+        let request = build(&self.http.borrow(), request);
         Box::pin(async move {
             let response = request?.send().await.map_err(http_error)?;
             let (status, headers) = (response.status().as_u16(), headers(&response));

@@ -234,6 +234,7 @@ fun ChatScreen(station: String, of: ChatOf) {
     Box(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
         ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
+        ConnectionPill(rememberStationName(station), view.link, haze, Modifier.align(Alignment.TopCenter).padding(top = with(density) { topBar.toDp() } + 8.dp))
         Composer(station, of, view, agents, draft, haze, Modifier.align(Alignment.BottomCenter), onHeight = { bottomBar = it })
     }
 }

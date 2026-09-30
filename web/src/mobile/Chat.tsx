@@ -23,6 +23,7 @@ import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
 import { ago, alarmOf, clock, isCurrent, isEnded, isService, JobDot, metaOf, sorted, toneOf, useClearEnded, useJobLog, useNow, useStopJob, type Tone } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
+import { ConnectionPill } from "../Connection.tsx";
 import type { Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as css from "./Chat.css.ts";
@@ -94,7 +95,7 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   useComposer(view, here, draft, use);
   return (
     <div className={chatCss.mChat}>
-      <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} />
+      <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
       <ChatBar view={view} here={here} />
     </div>
   );
@@ -134,8 +135,9 @@ export function BarFrame({ title, more, onMore, trailing, children }: { title: s
 // ── the list ───────────────────────────────────────────────────────────
 
 /** The wide screen's list (../Chat.tsx's ChatRows), in the page: over it, the bar; under it, the composer. */
-function Messages({ view, lives, list, floor, draft, here }: {
+function Messages({ view, lives, list, floor, draft, here, stationName }: {
   view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; floor: RefObject<HTMLDivElement | null>; draft: Draft; here: Here;
+  stationName?: string | undefined;
 }) {
   const app = useApp();
   const rows = useMessageList(list, floor, view, `${here.station}:${view.thread?.id ?? here.key}`, lives);
@@ -181,6 +183,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
     <OpenFile.Provider value={(session, file) => app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })))}>
       {quoting.pop}
       {askedFile}
+      <ConnectionPill link={view.link} name={stationName} phone />
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>

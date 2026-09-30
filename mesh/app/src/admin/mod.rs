@@ -9,6 +9,7 @@ mod edits;
 mod events;
 mod files;
 pub mod notify;
+mod once;
 mod slack;
 mod views;
 
@@ -179,6 +180,8 @@ pub struct AdminApi {
     app_ids: Mutex<HashMap<String, String>>,
     pending: Mutex<HashMap<String, Pending>>,
     events: Arc<Events>,
+    /// Writes asked with a key, done once (once.rs).
+    once: once::Once,
     me: Weak<AdminApi>,
 }
 
@@ -317,6 +320,7 @@ impl AdminApi {
             app_ids: Mutex::default(),
             pending: Mutex::default(),
             events: Events::new(me.clone()),
+            once: once::Once::default(),
             me: me.clone(),
             deps,
         });
@@ -395,16 +399,25 @@ impl AdminApi {
             Viewer::Access { .. } => "access",
             Viewer::Mesh { .. } => "mesh",
         };
-        let response = match self.route(&asked, body, &viewer).await {
-            Ok(response) => response,
-            Err(e) => {
-                let status = e.downcast_ref::<HttpError>().map(|h| h.status).unwrap_or(500);
-                if status == 500 {
-                    error!(path = asked.path, error = %format!("{e:#}"), "admin request failed");
+        let answer = async {
+            match self.route(&asked, body, &viewer).await {
+                Ok(response) => response,
+                Err(e) => {
+                    let status = e.downcast_ref::<HttpError>().map(|h| h.status).unwrap_or(500);
+                    if status == 500 {
+                        error!(path = asked.path, error = %format!("{e:#}"), "admin request failed");
+                    }
+                    json_response(status, &json!({ "error": e.to_string() }))
                 }
-                json_response(status, &json!({ "error": e.to_string() }))
             }
         };
+        // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
+        let key = parts.headers.get(once::KEY).and_then(|v| v.to_str().ok()).filter(|k| !k.is_empty() && k.len() <= 200);
+        let mut response = match key {
+            Some(key) if asked.method != "GET" && asked.method != "HEAD" => self.once.run(format!("{}\u{0}{}\u{0}{key}", viewer.id(), asked.path), answer).await,
+            _ => answer.await,
+        };
+        once::mark(&mut response);
         let query = if parts.uri.query().is_some() { format!("?{}", parts.uri.query().unwrap_or("")) } else { String::new() };
         info!(method = asked.method, path = format!("{}{query}", asked.path), status = response.status().as_u16(), ms = started.elapsed().as_millis() as u64, via = who, "admin request");
         response

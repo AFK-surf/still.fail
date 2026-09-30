@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs natively (client/node,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, ipcMain, MessageChannelMain, net, Notification, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -646,6 +646,7 @@ if (!app.requestSingleInstanceLock()) {
     keepUpdated();
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
+    followSleep();
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {
@@ -658,5 +659,21 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
+  });
+}
+
+/**
+ * The computer's sleep, told to the pages: one that stayed visible never goes hidden, so without this its core would
+ * not know its connections are suspect (web/src/core/client.ts wake). Asleep since the wall clock at `suspend`.
+ */
+function followSleep(): void {
+  let asleep: number | null = null;
+  powerMonitor.on("suspend", () => { asleep = Date.now(); });
+  powerMonitor.on("resume", () => {
+    const away = asleep === null ? 60_000 : Date.now() - asleep;
+    asleep = null;
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send("power:resume", away);
+    }
   });
 }

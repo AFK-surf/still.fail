@@ -26,6 +26,12 @@ const desktop = {
     get: (): Promise<boolean | null> => ipcRenderer.invoke("notify:get"),
     set: (on: boolean): Promise<void> => ipcRenderer.invoke("notify:set", on),
   },
+  /** The computer woke from sleep after `away` ms (main.ts): the page's core gives up what is under way (client.ts). */
+  onResume: (listener: (away: number) => void): (() => void) => {
+    const on = (_event: unknown, away: number) => listener(away);
+    ipcRenderer.on("power:resume", on);
+    return () => ipcRenderer.off("power:resume", on);
+  },
 };
 contextBridge.exposeInMainWorld("stillfailDesktop", desktop);
 // Its name before the rename, while pages built before it may still look for it (a dev server's, dev.sh HMR=1).

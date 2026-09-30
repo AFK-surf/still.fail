@@ -951,6 +951,39 @@ async fn connects_sessions_and_chats_remember_who_created_them() {
 }
 
 #[tokio::test]
+async fn a_write_asked_again_under_its_key_is_done_once() {
+    let t = setup().await;
+    t.hub.accept("ds", at("11.000001", "11.000001", "U42", "<@UBOT> hi", true)).await.unwrap();
+    settle().await;
+    let key = t.get("/sessions").await[0]["key"].as_str().unwrap().to_string();
+    let chat_id = t.call("POST", "/threads", Some(json!({ "session": key }))).await.1["id"].as_i64().unwrap();
+    let post = |text: &'static str, key: Option<&'static str>| {
+        let t = &t;
+        async move {
+            let mut req = Request::builder().method("POST").uri(format!("/admin/api/threads/{chat_id}/messages")).header("content-type", "application/json");
+            if let Some(key) = key {
+                req = req.header("idempotency-key", key);
+            }
+            let response = t.api.handle(req.body(Full::new(Bytes::from(json!({ "text": text }).to_string()))).unwrap(), local()).await;
+            assert_eq!(response.headers().get("stillfail-idempotent").map(|v| v.to_str().unwrap()), Some("1"), "every answer says so");
+            let status = response.status().as_u16();
+            let body: Value = serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+            (status, body["n"].clone())
+        }
+    };
+    // The same write on two connections at once, and once more later: said once, each told the same entry.
+    let (a, b) = tokio::join!(post("once", Some("k1")), post("once", Some("k1")));
+    let c = post("once", Some("k1")).await;
+    assert_eq!((a.0, b.0, c.0), (200, 200, 200));
+    assert!(a.1.is_u64() && a.1 == b.1 && b.1 == c.1, "{a:?} {b:?} {c:?}");
+    // Another key, or none (an older client), is another write.
+    post("twice", Some("k2")).await;
+    post("thrice", None).await;
+    let texts: Vec<Value> = t.get(&format!("/threads/{chat_id}/entries")).await["entries"].as_array().unwrap().iter().map(|e| e["text"].clone()).filter(|x| x != "<@UBOT> hi").collect();
+    assert_eq!(texts, vec![json!("once"), json!("twice"), json!("thrice")]);
+}
+
+#[tokio::test]
 async fn the_station_reports_the_machine_it_runs_on() {
     let t = setup().await;
     let (status, body) = t.call("GET", "/host", None).await;

@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use stillfail_core::host::{Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
+use stillfail_core::host::{Host, HostError, HttpRequest, HttpResponse, SOCKET_PING, SOCKET_PING_MS, SocketFrames, StreamResponse};
 use stillfail_core::{ClientId, CoreError, CoreMessage};
 use futures::channel::{mpsc, oneshot};
 use futures::future::LocalBoxFuture;
@@ -29,6 +29,17 @@ extern "C" {
 }
 
 /// Keeps a WebSocket's handlers alive with it, and closes it when dropped.
+fn delay(ms: u64) -> LocalBoxFuture<'static, ()> {
+    // setTimeout takes a signed 32-bit delay; anything longer fires at once.
+    let ms = ms.min(i32::MAX as u64) as i32;
+    let promise = Promise::new(&mut |resolve, _| {
+        set_timeout(&resolve, ms);
+    });
+    Box::pin(async move {
+        let _ = JsFuture::from(promise).await;
+    })
+}
+
 struct SocketGuard {
     socket: WebSocket,
     _handlers: (Closure<dyn FnMut()>, Closure<dyn FnMut(MessageEvent)>, Closure<dyn FnMut(CloseEvent)>),
@@ -202,6 +213,16 @@ impl Host for WebHost {
             socket.set_onclose(Some(on_close.as_ref().unchecked_ref()));
             let guard = SocketGuard { socket, _handlers: (on_open, on_message, on_close) };
             open.await.map_err(|_| HostError("websocket gone".into()))??;
+            // `ping` every SOCKET_PING_MS while it is open (host.rs); closed (the stream dropped), it stops.
+            let pinged = guard.socket.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                loop {
+                    delay(SOCKET_PING_MS).await;
+                    if pinged.ready_state() != WebSocket::OPEN || pinged.send_with_str(SOCKET_PING).is_err() {
+                        return;
+                    }
+                }
+            });
             // The guard lives as long as the stream; dropping the stream closes the socket.
             Ok(stream::unfold((rx, guard), |(mut rx, guard)| async move { rx.next().await.map(|frame| (frame, (rx, guard))) }).boxed_local())
         })
@@ -246,14 +267,7 @@ impl Host for WebHost {
     }
 
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
-        // setTimeout takes a signed 32-bit delay; anything longer fires at once.
-        let ms = ms.min(i32::MAX as u64) as i32;
-        let promise = Promise::new(&mut |resolve, _| {
-            set_timeout(&resolve, ms);
-        });
-        Box::pin(async move {
-            let _ = JsFuture::from(promise).await;
-        })
+        delay(ms)
     }
 
     fn spawn(&self, task: LocalBoxFuture<'static, ()>) {

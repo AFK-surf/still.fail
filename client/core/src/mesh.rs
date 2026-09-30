@@ -16,7 +16,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use futures::future::{Either, LocalBoxFuture, Shared};
@@ -44,6 +44,12 @@ pub const FORMER_ALPN: &[u8] = b"ember/admin/1";
 pub const RENEW_MS: u64 = 5 * 60_000;
 /// How long a link is tried before the station is taken for not there.
 pub const CONNECT_TIMEOUT_MS: u64 = 10_000;
+/// How long a link, tried as the UI comes back (wake.rs), has to answer before it is taken for gone (if the new one
+/// opened beside it has not opened yet either).
+pub const PROBE_MS: u64 = 5_000;
+/// How long a link that lost to a new one is kept before it is closed: what is still on it (a write to a station that
+/// does not keep writes to once, which is not asked again) may yet be answered.
+pub const RETIRE_MS: u64 = 10_000;
 
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD: usize = 64 * 1024;
@@ -74,6 +80,10 @@ pub struct Mesh {
     /// Replaced when `migrate` brings another device key.
     endpoint: RefCell<Endpoint>,
     links: RefCell<HashMap<String, Opening>>,
+    /// Told when `links` changes (a link opened, one put in place of another, one dropped): see `replaced`.
+    changed: RefCell<Vec<futures::channel::oneshot::Sender<()>>>,
+    /// Stations whose link is being tried against a new one (`race`).
+    racing: RefCell<std::collections::HashSet<String>>,
 }
 
 impl Mesh {
@@ -92,7 +102,86 @@ impl Mesh {
             }
         };
         let endpoint = bind(&secret, relay_url).await?;
-        Ok(Rc::new(Mesh { host, tracer, relay_url: relay_url.to_string(), endpoint: RefCell::new(endpoint), links: RefCell::default() }))
+        let mesh = Rc::new(Mesh { host: host.clone(), tracer, relay_url: relay_url.to_string(), endpoint: RefCell::new(endpoint), links: RefCell::default(), changed: RefCell::default(), racing: RefCell::default() });
+        host.spawn(watch(host.clone(), Rc::downgrade(&mesh)).boxed_local());
+        Ok(mesh)
+    }
+
+    /// The links open now, by station id.
+    fn open_links(&self) -> Vec<(String, Rc<Link>)> {
+        self.links.borrow().iter().filter_map(|(id, opening)| match opening.peek() {
+            Some(Ok(link)) if link.usable() => Some((id.clone(), link.clone())),
+            _ => None,
+        }).collect()
+    }
+
+    /// The station's link now, if one is open.
+    pub fn current(&self, station_id: &str) -> Option<Rc<Link>> {
+        self.links.borrow().get(station_id).and_then(|o| o.peek().and_then(|l| l.as_ref().ok().cloned()))
+    }
+
+    /// Whether `link` is the station's link now.
+    fn is_current(&self, station_id: &str, link: &Rc<Link>) -> bool {
+        let current = self.links.borrow().get(station_id).and_then(|o| o.peek().and_then(|l| l.as_ref().ok().cloned()));
+        current.is_some_and(|c| Rc::ptr_eq(&c, link))
+    }
+
+    /// Lets go of the link to a station if it is still `link` (not one opened since).
+    fn drop_if(&self, station_id: &str, link: &Rc<Link>) {
+        if self.is_current(station_id, link) {
+            self.drop_link(station_id);
+        }
+    }
+
+    fn notify(&self) {
+        for waiter in self.changed.take() {
+            let _ = waiter.send(());
+        }
+    }
+
+    /// Resolves once `link` is no longer the station's link: another put in its place (it lost to a new one, `race`),
+    /// or it was dropped. What is on it is then asked again on the way there now (station.rs `MeshWire`), and a stream
+    /// on it is opened again there (`follow_events`).
+    pub fn replaced(self: &Rc<Self>, station_id: &str, link: &Rc<Link>) -> LocalBoxFuture<'static, ()> {
+        let (mesh, id, link) = (Rc::downgrade(self), station_id.to_string(), link.clone());
+        async move {
+            loop {
+                let change = {
+                    let Some(mesh) = mesh.upgrade() else { return futures::future::pending().await };
+                    if !mesh.is_current(&id, &link) {
+                        return;
+                    }
+                    let (tx, rx) = futures::channel::oneshot::channel();
+                    mesh.changed.borrow_mut().push(tx);
+                    rx
+                };
+                if change.await.is_err() {
+                    return futures::future::pending().await;
+                }
+            }
+        }
+        .boxed_local()
+    }
+
+    /// Puts `new` in place of `old` as the station's link (if `old` still is: else `new` is not needed), and closes
+    /// `old` after [`RETIRE_MS`].
+    fn switch(&self, station_id: &str, old: &Rc<Link>, new: Rc<Link>) {
+        if !self.is_current(station_id, old) {
+            new.close();
+            return;
+        }
+        let ready: Opening = futures::future::ready(Ok(new)).boxed_local().shared();
+        let _ = ready.clone().now_or_never();
+        self.links.borrow_mut().insert(station_id.to_string(), ready);
+        self.notify();
+        let (host, old) = (self.host.clone(), old.clone());
+        self.host.spawn(
+            async move {
+                host.sleep(RETIRE_MS).await;
+                old.conn.close(0u32.into(), b"replaced");
+            }
+            .boxed_local(),
+        );
     }
 
     /// The device key's public half, hex: what credentials name.
@@ -142,6 +231,7 @@ impl Mesh {
         .boxed_local()
         .shared();
         self.links.borrow_mut().insert(station_id.to_string(), opening.clone());
+        self.notify();
         opening.await
     }
 
@@ -149,6 +239,7 @@ impl Mesh {
     /// another rather than waiting on this one. Requests on it fail (a read is asked once more, on the new one).
     pub fn drop_link(&self, station_id: &str) {
         let opening = self.links.borrow_mut().remove(station_id);
+        self.notify();
         if let Some(Ok(link)) = opening.as_ref().and_then(|o| o.peek()) {
             link.conn.close(0u32.into(), b"woke");
         }
@@ -169,6 +260,7 @@ impl Mesh {
         self.host.storage_set(DEVICE_KEY, secret.to_vec()).await?;
         let old = self.endpoint.replace(endpoint);
         let links: Vec<Opening> = self.links.borrow_mut().drain().map(|(_, opening)| opening).collect();
+        self.notify();
         for opening in links {
             if let Some(Ok(link)) = opening.peek() {
                 link.conn.close(0u32.into(), b"device key replaced");
@@ -176,6 +268,76 @@ impl Mesh {
         }
         self.host.spawn(async move { old.close().await }.boxed_local());
         Ok(())
+    }
+}
+
+/// What the mesh does as the UI comes back or the network changes (wake.rs): iroh is told (on Android it cannot see
+/// the network change itself, and after a long sleep its relay connection is suspect too), and each open link races a
+/// new one (`race`). Nothing waits to learn whether a link is gone before there is another way to its station.
+async fn watch(host: Rc<dyn Host>, mesh: Weak<Mesh>) {
+    loop {
+        let wake = host.woken().await;
+        let Some(this) = mesh.upgrade() else { return };
+        if !wake.suspects_connections() {
+            continue;
+        }
+        let endpoint = this.endpoint();
+        host.spawn(async move { endpoint.network_change().await }.boxed_local());
+        for (id, link) in this.open_links() {
+            if !this.racing.borrow_mut().insert(id.clone()) {
+                continue;
+            }
+            host.spawn(race(host.clone(), mesh.clone(), id, link).boxed_local());
+        }
+    }
+}
+
+/// A link suspect (the UI back after long away, the network changed) against a new one opened beside it at once: the
+/// old one is asked to answer (its credential presented again, `Link::answers`) while the new one opens. The old one
+/// answering first keeps it (the new one is let go before it is used); the new one opening first takes its place
+/// (`Mesh::switch`: what was on the old one is asked again on it); neither, the station is not reached (the link is
+/// dropped, the next request opens anew). Either way no more than one round trip or one connection's opening.
+async fn race(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, old: Rc<Link>) {
+    enum Won {
+        Old,
+        New(Rc<Link>),
+        Neither,
+    }
+    let Some(this) = mesh.upgrade() else { return };
+    let (endpoint, relay, tracer) = (this.endpoint(), this.relay_url.clone(), this.tracer.clone());
+    drop(this);
+    let mut span = tracer.span("mesh.race", Kind::Internal);
+    span.set("stillfail.station", id.clone());
+    let fresh = tracer.instrument(Some(span.context()), open(host.clone(), endpoint, relay, id.clone(), old.credentials.clone(), false));
+    let probe = old.answers(host.as_ref());
+    pin_mut!(fresh, probe);
+    let won = match futures::future::select(probe, fresh).await {
+        Either::Left((true, _)) => Won::Old,
+        Either::Left((false, fresh)) => match fresh.await {
+            Ok(new) => Won::New(new),
+            Err(_) => Won::Neither,
+        },
+        Either::Right((Ok(new), _)) => Won::New(new),
+        Either::Right((Err(_), probe)) => {
+            if probe.await {
+                Won::Old
+            } else {
+                Won::Neither
+            }
+        }
+    };
+    let Some(this) = mesh.upgrade() else { return };
+    this.racing.borrow_mut().remove(&id);
+    span.set("stillfail.race", match &won {
+        Won::Old => "old",
+        Won::New(_) => "new",
+        Won::Neither => "neither",
+    });
+    span.end();
+    match won {
+        Won::Old => {}
+        Won::New(new) => this.switch(&id, &old, new),
+        Won::Neither => this.drop_if(&id, &old),
     }
 }
 
@@ -275,7 +437,14 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station
     let (send, recv) = conn.open_bi().await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))?;
     let mut control = Control { send, recv, carry: Vec::new() };
     control.send(&credential.credential).await?;
-    let link = Rc::new(Link { conn, control: Mutex::new(control), renewal_failed: Cell::new(false), refused: RefCell::new(None) });
+    let link = Rc::new(Link {
+        conn,
+        control: Mutex::new(control),
+        renewal_failed: Cell::new(false),
+        refused: RefCell::new(None),
+        credential: RefCell::new(credential.credential.clone()),
+        credentials: credentials.clone(),
+    });
     // The station's answer to the first credential, while requests already go: a refusal closes the link.
     let answered = link.clone();
     host.spawn(
@@ -305,7 +474,13 @@ async fn renew(host: Rc<dyn Host>, link: Rc<Link>, credentials: CredentialSource
             return;
         }
         let renewed = match credentials(device.clone(), false).await {
-            Ok(credential) => link.control.lock().await.exchange(&credential.credential).await.map(|_| ()),
+            Ok(credential) => {
+                let answer = link.control.lock().await.exchange(&credential.credential).await.map(|_| ());
+                if answer.is_ok() {
+                    *link.credential.borrow_mut() = credential.credential;
+                }
+                answer
+            }
             Err(error) => Err(error),
         };
         if renewed.is_err() {
@@ -371,6 +546,10 @@ pub struct Link {
     renewal_failed: Cell<bool>,
     /// The station's refusal of the first credential, once it answered: what the link's requests fail with.
     refused: RefCell<Option<CoreError>>,
+    /// The credential last presented, which [`Link::answers`] presents again.
+    credential: RefCell<String>,
+    /// Where its credentials come from: a link opened beside it (`race`) takes the same.
+    credentials: CredentialSource,
 }
 
 impl Link {
@@ -438,6 +617,18 @@ impl Link {
     /// How the connection runs now: `relay`, or `direct` once hole punching found a way.
     pub fn path(&self) -> Option<&'static str> {
         self.conn.paths().iter().find(|p| p.is_selected()).map(|p| if p.is_relay() { "relay" } else { "direct" })
+    }
+
+    /// Whether the station answers on it within [`PROBE_MS`]: the credential presented again (any station answers
+    /// that, one line back), a round trip that also shows the way there is open.
+    async fn answers(&self, host: &dyn Host) -> bool {
+        let credential = self.credential.borrow().clone();
+        let exchange = async move { self.control.lock().await.exchange(&credential).await.is_ok() };
+        pin_mut!(exchange);
+        match futures::future::select(exchange, host.sleep(PROBE_MS)).await {
+            Either::Left((answered, _)) => answered,
+            Either::Right(_) => false,
+        }
     }
 
     /// Open, and its credential still being renewed.
@@ -563,7 +754,11 @@ mod tests {
             self.0.utc_offset_min(at_ms)
         }
         fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
-            self.0.sleep(if ms == RENEW_MS { 150 } else { ms })
+            self.0.sleep(match ms {
+                RENEW_MS => 150,
+                RETIRE_MS => 200,
+                ms => ms,
+            })
         }
         fn spawn(&self, task: LocalBoxFuture<'static, ()>) {
             self.0.spawn(task)
@@ -587,6 +782,9 @@ mod tests {
         endpoint: Endpoint,
         grants: Rc<RefCell<Vec<String>>>,
         conns: Rc<RefCell<Vec<Connection>>>,
+        /// Connections before this one (by the order they came) answer nothing more: a way there that went dead
+        /// with nothing said, as a phone's after it slept.
+        dead_below: Rc<Cell<usize>>,
     }
 
     impl Station {
@@ -604,13 +802,15 @@ mod tests {
                 .bind()
                 .await
                 .unwrap();
-            let station = Station { endpoint: endpoint.clone(), grants: Rc::default(), conns: Rc::default() };
-            let (grants, conns) = (station.grants.clone(), station.conns.clone());
+            let station = Station { endpoint: endpoint.clone(), grants: Rc::default(), conns: Rc::default(), dead_below: Rc::default() };
+            let (grants, conns, dead_below) = (station.grants.clone(), station.conns.clone(), station.dead_below.clone());
             tokio::task::spawn_local(async move {
                 while let Some(incoming) = endpoint.accept().await {
                     let Ok(conn) = incoming.await else { continue };
+                    let index = conns.borrow().len();
                     conns.borrow_mut().push(conn.clone());
-                    tokio::task::spawn_local(serve(conn, grants.clone()));
+                    let dead = { let dead_below = dead_below.clone(); Rc::new(move || index < dead_below.get()) };
+                    tokio::task::spawn_local(serve(conn, grants.clone(), dead));
                 }
             });
             station
@@ -630,7 +830,7 @@ mod tests {
         send.write_all(format!("{value}\n").as_bytes()).await.unwrap();
     }
 
-    async fn serve(conn: Connection, grants: Rc<RefCell<Vec<String>>>) {
+    async fn serve(conn: Connection, grants: Rc<RefCell<Vec<String>>>, dead: Rc<dyn Fn() -> bool>) {
         let Ok((mut send, mut recv)) = conn.accept_bi().await else { return };
         let mut carry = Vec::new();
         let answer = |line: &str, grants: &Rc<RefCell<Vec<String>>>| {
@@ -648,13 +848,18 @@ mod tests {
             return;
         }
         let renewals = grants.clone();
+        let still = dead.clone();
         tokio::task::spawn_local(async move {
             while let Ok(Some(line)) = read_line(&mut recv, &mut carry).await {
+                if still() {
+                    continue;
+                }
                 let reply = answer(&line, &renewals);
                 write_line(&mut send, &reply).await;
             }
         });
         while let Ok((mut send, mut recv)) = conn.accept_bi().await {
+            let dead = dead.clone();
             tokio::task::spawn_local(async move {
                 let mut carry = Vec::new();
                 let head = read_line(&mut recv, &mut carry).await.unwrap().unwrap();
@@ -664,6 +869,10 @@ mod tests {
                     body.extend_from_slice(&buf[..n]);
                 }
                 let head: Value = serde_json::from_str(&head).unwrap();
+                if dead() {
+                    // Never answered; held so the stream stays open.
+                    futures::future::pending::<()>().await;
+                }
                 write_line(&mut send, &json!({ "status": 200, "headers": { "content-type": "text/event-stream", "x-method": head["method"] } })).await;
                 send.write_all(format!("{}|{}", head, String::from_utf8_lossy(&body)).as_bytes()).await.unwrap();
                 // Then a stream that trickles, like /events.
@@ -851,6 +1060,104 @@ mod tests {
             assert_ne!(first.device_id(), again.device_id());
             first.migrate(page.to_vec()).await.unwrap();
             assert_eq!(first.migrate(vec![1, 2, 3]).await.err().unwrap().code, "invalid_params");
+        });
+    }
+
+    /// A mesh on a host whose wakes the test gives (wake.rs), its timers short (QuickHost).
+    async fn waking(station: Station) -> (Rc<Mesh>, Station, Rc<crate::wake::Wakes>, Rc<dyn Host>) {
+        let wakes = Rc::new(crate::wake::Wakes::default());
+        let host: Rc<dyn Host> = crate::wake::WakingHost::new(Rc::new(QuickHost(FakeHost::new())), wakes.clone());
+        let (mesh, station) = setup_with(host.clone(), station).await;
+        (mesh, station, wakes, host)
+    }
+
+    fn network(host: &Rc<dyn Host>) -> crate::wake::Wake {
+        crate::wake::Wake { at: host.now_ms(), away: 0.0, network: true }
+    }
+
+    #[test]
+    fn a_link_that_answers_as_the_network_changes_is_kept() {
+        run(async {
+            let (mesh, station, wakes, host) = waking(Station::start().await).await;
+            let link = mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
+            link.request(head("/admin/api/overview"), Vec::new()).await.unwrap();
+            wakes.wake(network(&host));
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            // It answered (its credential again) before, or about when, the one beside it opened: still the one.
+            assert!(Rc::ptr_eq(&link, &mesh.current(&station.id()).unwrap()));
+            assert_eq!(link.closed(), None);
+        });
+    }
+
+    #[test]
+    fn a_link_gone_quiet_is_replaced_by_one_opened_beside_it_at_once() {
+        run(async {
+            let (mesh, station, wakes, host) = waking(Station::start().await).await;
+            let id = station.id();
+            let old = mesh.link(&id, grants("ok", Rc::default())).await.unwrap();
+            old.request(head("/admin/api/overview"), Vec::new()).await.unwrap();
+            // The way it went is dead now: nothing on it is answered, and nothing says so.
+            station.dead_below.set(station.conns.borrow().len());
+            let replaced = mesh.replaced(&id, &old);
+            let started = std::time::Instant::now();
+            wakes.wake(network(&host));
+            replaced.await;
+            // Not after the probe gave up (PROBE_MS): as soon as the new one opened.
+            assert!(started.elapsed() < Duration::from_millis(PROBE_MS / 2), "{:?}", started.elapsed());
+            let new = mesh.current(&id).unwrap();
+            assert!(!Rc::ptr_eq(&old, &new));
+            assert_eq!(new.request(head("/admin/api/overview"), Vec::new()).await.unwrap().status, 200);
+            // The old one goes a while later (RETIRE_MS, short here).
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            assert!(old.closed().is_some());
+            assert_eq!(new.closed(), None);
+        });
+    }
+
+    #[test]
+    fn a_read_under_way_on_a_link_that_is_replaced_is_answered_on_the_new_one() {
+        run(async {
+            use crate::station::{MeshWire, StationAddr, StationWire};
+            let (mesh, station, wakes, host) = waking(Station::start().await).await;
+            let id = station.id();
+            let source = { let mesh = mesh.clone(); Rc::new(move || { let mesh = mesh.clone(); async move { Ok::<_, CoreError>(mesh) }.boxed_local() }) };
+            let count = Rc::new(Cell::new(0));
+            let wire = MeshWire::new(source, Rc::new(move |_: &str| grants("ok", count.clone())), crate::status::Status::new(host.clone()));
+            let addr = StationAddr::Remote { workspace: "w".into(), station: id.clone() };
+            let get = RequestHead { method: "GET".into(), path: "/admin/api/overview".into(), headers: vec![] };
+            wire.request(&addr, get.clone(), Vec::new()).await.unwrap();
+            station.dead_below.set(station.conns.borrow().len());
+            // Sent on the dead way: it would never be answered.
+            let asked = wire.request(&addr, get, Vec::new());
+            let asked = tokio::task::spawn_local(asked);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            wakes.wake(network(&host));
+            let reply = tokio::time::timeout(Duration::from_millis(PROBE_MS / 2), asked).await.expect("answered on the new link").unwrap().unwrap();
+            assert_eq!(reply.status, 200);
+            assert_eq!(station.conns.borrow().len(), 2);
+        });
+    }
+
+    #[test]
+    fn a_write_is_asked_again_only_of_a_station_that_does_it_once() {
+        run(async {
+            use crate::station::{MeshWire, StationAddr, StationWire};
+            let (mesh, station, wakes, host) = waking(Station::start().await).await;
+            let id = station.id();
+            let source = { let mesh = mesh.clone(); Rc::new(move || { let mesh = mesh.clone(); async move { Ok::<_, CoreError>(mesh) }.boxed_local() }) };
+            let count = Rc::new(Cell::new(0));
+            let wire = MeshWire::new(source, Rc::new(move |_: &str| grants("ok", count.clone())), crate::status::Status::new(host.clone()));
+            let addr = StationAddr::Remote { workspace: "w".into(), station: id.clone() };
+            let write = RequestHead { method: "POST".into(), path: "/admin/api/threads/1/messages".into(), headers: vec![("idempotency-key".into(), "k1".into())] };
+            wire.request(&addr, RequestHead { method: "GET".into(), path: "/admin/api/overview".into(), headers: vec![] }, Vec::new()).await.unwrap();
+            station.dead_below.set(station.conns.borrow().len());
+            // This station never said it keeps writes to once: the write stays on the way it went.
+            let asked = tokio::task::spawn_local(wire.request(&addr, write, Vec::new()));
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            wakes.wake(network(&host));
+            // It ends with the old way when that is closed (RETIRE_MS), never asked on the new one.
+            let answered = tokio::time::timeout(Duration::from_millis(2_000), asked).await.expect("ends with the old link").unwrap();
+            assert!(answered.is_err(), "not sent again");
         });
     }
 }

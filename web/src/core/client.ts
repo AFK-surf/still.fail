@@ -184,17 +184,28 @@ export class CoreClient {
    * (the system can end it without a word to its port): a new one is started.
    */
   wake(away: number): void {
-    if (this.#closed || !this.#channel) return;
+    if (this.#closed) return;
     const channel = this.#channel;
     const heard = this.#heard;
+    // With the worker being replaced it waits in the queue: a worker joined again (a shared one) is the same core.
     this.call("client.wake", { away: Math.max(0, Math.round(away)) }).catch(() => undefined);
-    if (!this.#up) return;
+    if (!this.#up || !channel) return;
     this.#schedule(WAKE_ANSWER_MS, () => {
       if (this.#channel !== channel || this.#heard !== heard) return;
       // A worker only frozen longer than this, not gone, drops this page's client rather than keep it.
       this.#post({ bye: true });
       this.#restart("回到前台后核心没有回应");
     });
+  }
+
+  /**
+   * The device's network changed (it came back online): every connection the core has was on the old one, so all
+   * that is under way is given up and opened anew (client/core/src/wake.rs). A core from before this takes it for a
+   * wake after no time away, which does nothing.
+   */
+  networkChanged(): void {
+    if (this.#closed) return;
+    this.call("client.wake", { away: 0, network: true }).catch(() => undefined);
   }
 
   close(): void {
@@ -366,6 +377,11 @@ export interface StillFailDesktop {
     get(): Promise<boolean | null>;
     set(on: boolean): Promise<void>;
   };
+  /**
+   * The computer woke from sleep after `away` ms (the window may have stayed visible all along, so the page is not
+   * told otherwise); the returned function stops listening. An app from before this has none.
+   */
+  onResume?(listener: (away: number) => void): () => void;
 }
 
 export type AppUpdate =
@@ -445,5 +461,8 @@ export function connectCore(): CoreClient {
     if (document.visibilityState === "hidden") hidden ??= Date.now();
     else back();
   });
+  addEventListener("online", () => client.networkChanged());
+  // The computer slept with the window open: the page never went hidden, so the app says so.
+  window.stillfailDesktop?.onResume?.((away) => client.wake(away));
   return client;
 }
