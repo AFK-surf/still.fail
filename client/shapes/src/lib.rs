@@ -1102,6 +1102,19 @@ pub struct DraftView {
     pub files: Vec<Attachment>,
 }
 
+/// Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
+/// system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
+/// show now, each taken by one page (`notice.claim`).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyView {
+    pub on: bool,
+    pub asked: bool,
+    pub push: bool,
+    pub show: Vec<Notice>,
+}
+
 /// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
 /// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
 /// `url` opens it.
@@ -1482,6 +1495,12 @@ pub struct ChatView {
     /// chat is open: those up to it show at once, those after it come in.
     #[typeshare(serialized_as = "Option<I54>")]
     pub caught: Option<i64>,
+    /// The message the unread line goes over: the first the viewer had not read when the chat was opened (not
+    /// theirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub unread_line: Option<i64>,
+    /// The unread line lies above the messages loaded: older pages are being loaded to find it.
+    pub unread_above: Option<bool>,
     pub outbox: Vec<Outgoing>,
     pub link: Link,
     pub offline: bool,

@@ -344,6 +344,11 @@ impl Store {
         self.value(topic)?.ok()
     }
 
+    /// Whether a UI subscribes to the topic now (not only watched, nor in its grace).
+    pub fn subscribed(&self, topic: &Topic) -> bool {
+        self.inner.borrow().topics.get(topic).is_some_and(|e| !e.subscribers.is_empty())
+    }
+
     /// Topics with at least one subscriber (or within their eviction grace).
     pub fn live_topics(&self) -> Vec<Topic> {
         self.inner.borrow().topics.keys().cloned().collect()

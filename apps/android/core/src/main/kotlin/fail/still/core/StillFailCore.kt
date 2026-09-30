@@ -89,11 +89,36 @@ class StillFailCore internal constructor(
     private val queue = ArrayList<String>()
     private var failures = 0
     private val topics = ConcurrentHashMap<JsonObject, Flow<TopicState>>()
+    /** Where the app's attention is, as told last (`client.focus`): told again to a core started anew. */
+    private var focus = JsonObject(emptyMap())
 
     private class Subscription(val topic: JsonObject, val onState: (TopicState) -> Unit) {
         /** The whole current value deltas apply to; null before the first value and after an error. */
         var value: JsonElement? = null
         var state = TopicState(null, null, true)
+    }
+
+    /**
+     * Tells the core where the app's attention is (client/core/src/attend.rs): whether it is in view and looked at, the
+     * chat it shows. Each field given changes; `chat: null` shows none; `left` says the chat named is not shown any
+     * more. Not waited for; a core that does not know it takes no notice.
+     */
+    fun focus(part: JsonObject) {
+        scope.launch(confined) {
+            val next = focus.toMutableMap()
+            part.forEach { (k, v) -> if (k != "left") next[k] = v }
+            val left = part["left"] as? JsonObject
+            val chat = next["chat"] as? JsonObject
+            if (left != null && chat != null && sameChat(chat, left)) next["chat"] = JsonNull
+            focus = JsonObject(next)
+            send(buildJsonObject { put("id", nextId++); put("call", "client.focus"); put("params", part) }.toString())
+        }
+    }
+
+    private fun sameChat(a: JsonObject, b: JsonObject): Boolean {
+        fun at(o: JsonObject, k: String) = (o[k] as? JsonPrimitive)?.contentOrNull
+        return at(a, "station") == at(b, "station") &&
+            ((at(a, "thread") != null && at(a, "thread") == at(b, "thread")) || (at(a, "session") != null && at(a, "session") == at(b, "session")))
     }
 
     /** One call of docs/client-core.md → Calls. Throws [CoreException]. */
@@ -187,6 +212,7 @@ class StillFailCore internal constructor(
         engine = next
         client = next.connect()
         for ((id, sub) in subs) post(buildJsonObject { put("id", id); put("subscribe", sub.topic) }.toString())
+        if (focus.isNotEmpty()) post(buildJsonObject { put("id", nextId++); put("call", "client.focus"); put("params", focus) }.toString())
         val queued = queue.toList()
         queue.clear()
         queued.forEach(::post)

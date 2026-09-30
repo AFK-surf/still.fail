@@ -77,6 +77,17 @@ Calls:
 | `push.key` | — | `{ vapid }`: still.fail cloud's VAPID public key (base64url), to subscribe a browser |
 | `push.register` | `{ kind: "web", endpoint, keys: { p256dh, auth } }` or `{ kind: "fcm", token }` | — ; registers this device with every signed-in account, and again with each account signed in later (kept in storage) |
 | `push.unregister` | — | — ; takes this device's registration off every account |
+| `notify.set` | `on?`, `asked?` | the `notify` value; kept on the device. Off also takes this device's registration off every account, and `push.register` does nothing while off |
+| `client.focus` | `visible?`, `focused?`, `chat?` (`{ station, thread?, session?, end? }` or null), `left?` (a chat) | — ; where this UI's attention is (each field given changes; `left`: that chat is not shown any more, if it is the one) |
+| `notice.claim` | `id` | `{ show }`: true for the first page that takes a notice of `notify.show` |
+| `notice.pushed` | — | `{ show }`: whether a push that came is shown (on, and no page in view) |
+
+`notify` (no params, attend.rs) is what the clients show from: `{ on, asked, push, show }`. `on` and `asked` (the
+system asked to allow them, once) are kept on the device, on by default. `push`: this device should hold a push
+registration. `show`: the notices to show now, decided as they come: none while off; none for a chat a UI is looking at
+(`client.focus`: `visible`, `focused`, that chat); none while this device has pushes and no page is in view (the push
+says it); only while some UI subscribes (what came before is old news). A page takes each with `notice.claim`, so it is
+shown once however many pages are open; one not taken goes after 30 s.
 
 ## still.fail cloud
 
@@ -129,12 +140,13 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
 
 - Web: a service worker (`/sw.js`) shows pushes when no page of the app is
   open, and opens (or focuses) the app on the notification's `url`. The page
-  shows local notices (`Notification`) unless it is showing that chat and has
-  focus. 设置 → 通知 turns them on (asking the browser's permission) and off,
-  on this browser.
+  shows the local notices the core's `notify` says to show (it tells the core
+  which chat it shows and whether it is in view and has focus). 设置 → 通知
+  turns them on (asking the browser's permission) and off, kept by the core.
 - Desktop: the main process holds `notices` and shows Electron notifications;
   clicking one opens the chat as a `stillfail://o/…` link would. Pages show
   none themselves. The setting is the same page.
 - Android: `POST_NOTIFICATIONS` is asked for; one channel (消息); local notices
-  while the app is in front (not for the open chat), FCM pushes while it is
-  not. The token is registered with `push.register`. 我 → 通知 turns them off.
+  while the app is in front (not for the open chat; the core's `notify`), FCM
+  pushes while it is not (`notice.pushed`). The token is registered with
+  `push.register`. 我 → 通知 turns them off, kept by the core.

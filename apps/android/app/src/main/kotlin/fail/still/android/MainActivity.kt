@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         multicast?.acquire()
         Notifier.inFront = true
+        app?.inFront = true
         listen()
         app?.let { lifecycleScope.launch { it.checkUpdates() } }
         wake()
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         Notifier.inFront = false
+        app?.inFront = false
         notices?.cancel()
         notices = null
         multicast?.release()
@@ -103,7 +105,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN)
-            app = AppState(core, getSharedPreferences("stillfail", Context.MODE_PRIVATE), BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN))
+            val made = AppState(core, getSharedPreferences("stillfail", Context.MODE_PRIVATE), BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN))
+            // The notification settings the app kept, into the core before anything goes by them.
+            made.moveNotify()
+            made.inFront = Notifier.inFront
+            app = made
+            launch { made.followNotify() }
             handle(intent)
             listen()
             // Back to an activity made anew (the last one closed with back, the process kept): as back on screen.
@@ -116,7 +123,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }.also { it.start() }
-            app?.let { launch { Push.sync(applicationContext, core, it.notify) } }
+            launch { Push.sync(applicationContext, core) }
             app?.checkUpdates()
         }
         setContent {

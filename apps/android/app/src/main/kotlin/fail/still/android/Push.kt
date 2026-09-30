@@ -14,7 +14,15 @@ import fail.still.core.StillFailCore
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import fail.still.android.data.NotifyView
+import fail.still.android.data.Topics
+import fail.still.android.data.decode
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.coroutines.resume
 
@@ -39,14 +47,17 @@ object Push {
     }
 
     /**
-     * Notifications on: this device's token registered with every signed-in account; off: taken off them. The token is
-     * what still.fail cloud sends to (FCM HTTP v1); firebase-messaging 25.1 deprecated it for registration by
-     * installation id (FID), which still works with tokens: moved over when the cloud sends that way.
+     * This device's token as the core wants it (its `notify` says `push`): registered with every signed-in account, or
+     * taken off them. The token is what still.fail cloud sends to (FCM HTTP v1); firebase-messaging 25.1 deprecated it
+     * for registration by installation id (FID), which still works with tokens: moved over when the cloud sends that way.
+     * `wanted`: what the core has just answered, else what its `notify` says.
      */
     @Suppress("DEPRECATION")
-    suspend fun sync(context: Context, core: StillFailCore, on: Boolean) {
+    suspend fun sync(context: Context, core: StillFailCore, wanted: Boolean? = null) {
         try {
-            if (!on) { core.call("push.unregister"); return }
+            val push = wanted ?: core.topic(Topics.notify).first { it.value != null || it.error != null }.value?.takeIf { it !is JsonNull }
+                ?.let { runCatching { decode(NotifyView.serializer(), it).push }.getOrNull() } ?: return
+            if (!push) { core.call("push.unregister"); return }
             if (!init(context)) return
             val token = suspendCancellableCoroutine<String?> { done ->
                 FirebaseMessaging.getInstance().token.addOnCompleteListener { done.resume(if (it.isSuccessful) it.result else null) }
@@ -71,8 +82,8 @@ class PushService : FirebaseMessagingService() {
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onNewToken(token: String) {
-        if (!Notifier.enabled(this)) return
-        // Called on FCM's worker thread: the core may not be running yet (no app in front).
+        // Called on FCM's worker thread: the core may not be running yet (no app in front). With notifications off it
+        // takes none.
         runBlocking {
             withTimeoutOrNull(30_000) {
                 try {
@@ -86,9 +97,21 @@ class PushService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        if (data["type"] != "notice" || Notifier.inFront || !Notifier.enabled(this)) return
+        if (data["type"] != "notice" || !shown()) return
         val tag = data["tag"] ?: return
         val url = data["url"] ?: return
         Notifier.show(this, tag, data["title"].orEmpty(), data["body"].orEmpty(), url)
+    }
+
+    /** Whether the core has a push shown: not with notifications off, nor with the app in front (it shows its own). */
+    private fun shown(): Boolean = runBlocking {
+        withTimeoutOrNull(5_000) {
+            try {
+                val answer = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN).call("notice.pushed")
+                (answer as? JsonObject)?.get("show")?.jsonPrimitive?.booleanOrNull
+            } catch (_: CoreException) {
+                null
+            }
+        } ?: !Notifier.inFront
     }
 }

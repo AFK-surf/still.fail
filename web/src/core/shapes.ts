@@ -722,6 +722,13 @@ export interface ChatView {
 	 * chat is open: those up to it show at once, those after it come in.
 	 */
 	caught?: number;
+	/**
+	 * The message the unread line goes over: the first the viewer had not read when the chat was opened (not
+	 * theirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it.
+	 */
+	unreadLine?: number;
+	/** The unread line lies above the messages loaded: older pages are being loaded to find it. */
+	unreadAbove?: boolean;
 	outbox: Outgoing[];
 	link: Link;
 	offline: boolean;
@@ -1116,6 +1123,18 @@ export interface Notice {
 /** What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first. */
 export interface NoticesView {
 	items: Notice[];
+}
+
+/**
+ * Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
+ * system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
+ * show now, each taken by one page (`notice.claim`).
+ */
+export interface NotifyView {
+	on: boolean;
+	asked: boolean;
+	push: boolean;
+	show: Notice[];
 }
 
 /** Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`). */

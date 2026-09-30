@@ -153,6 +153,8 @@ import fail.still.android.ui.rememberFollow
 import fail.still.core.CoreException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** The station part of an address ("ws/studio" → "studio"). */
 fun stationName(address: String) = address.substringAfter('/')
@@ -357,17 +359,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val api = app.api(station)
     val messages = view.messages
 
-    // Where the viewer had read up to when the chat opened, and when that was; it stays put for the visit. The line
-    // goes over the first message after it that is not theirs and was said before the chat opened, whether it came
-    // from what the device kept or from the station a moment later.
-    val open = remember { (thread?.read ?: 0L) to System.currentTimeMillis() }
-    val (readAt, openedAt) = open
-    val unread = { m: ChatMessage -> m.seq > readAt && m.createdAt <= openedAt && !ctx.mine(m) }
+    // The unread line, as the core puts it (client/core/src/attend.rs): over the first message not read when the chat
+    // opened, not the viewer's, held for the visit; while it lies above what is loaded, the core loads older pages
+    // first (none meanwhile).
+    val lineAt = view.unreadLine
+    val above = view.unreadAbove == true
     val first = view.messages.firstOrNull()?.seq
-    // Those not loaded yet may hold it: the pages before are loaded first.
-    val above = view.more && first != null && first > readAt + 1 && messages.any(unread)
-    val lineAt = if (above) null else messages.firstOrNull(unread)?.seq
-    LaunchedEffect(above, first) { if (above && thread != null) try { api.older(thread.id) } catch (_: CoreException) {} }
 
     // Messages the agents have not taken yet (the core says which): after a second, yours say they wait.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -549,13 +546,14 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     SideEffect { motion.watched = watched; motion.start() }
     LaunchedEffect(watched) { if (!watched) motion.release() }
     LaunchedEffect(motion.current) { motion.current?.let { motion.play(it) } }
-    val newest = view.messages.lastOrNull()?.seq ?: 0
-    val sent = remember { mutableLongStateOf(0L) }
-    LaunchedEffect(seen, newest, thread?.read) {
-        if (!seen || thread == null || newest <= thread.read || sent.longValue >= newest) return@LaunchedEffect
-        sent.longValue = newest
-        try { api.read(thread.id, newest) } catch (_: CoreException) { sent.longValue = 0 }
-    }
+    // The core is told this chat shows, and whether its end is (`seen`): what is read, where the unread line goes and
+    // which notices are left out follow there (client/core/src/attend.rs).
+    val session = (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
+    val shownAs = { end: Boolean? -> buildJsonObject {
+        put("station", station); put("thread", thread?.id); put("session", session); end?.let { put("end", it) }
+    } }
+    LaunchedEffect(station, thread?.id, session, seen) { app.core.focus(buildJsonObject { put("chat", shownAs(seen)) }) }
+    DisposableEffect(station, thread?.id, session) { onDispose { app.core.focus(buildJsonObject { put("left", shownAs(null)) }) } }
 
     // A new chat's first words on their way (ChatHost.kt): the list comes up after them, out of the composer's top edge.
     val flight = host.flight

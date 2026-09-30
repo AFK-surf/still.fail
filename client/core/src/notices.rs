@@ -52,9 +52,9 @@ impl Notices {
     }
 
     /// Looks at the stations' rows as they are now (`stations`: the addresses kept in sync); what changed since the
-    /// last look is noticed.
-    pub fn look(&self, stations: &[String]) {
-        let mut added = false;
+    /// last look is noticed, and answered.
+    pub fn look(&self, stations: &[String]) -> Vec<Value> {
+        let mut added = Vec::new();
         self.seen.borrow_mut().retain(|station, _| stations.contains(station));
         for station in stations {
             let Some(Ok(rows)) = self.store.value(&Topic::ChatRows { station: station.clone() }) else { continue };
@@ -75,17 +75,17 @@ impl Notices {
                 let Some(id) = row.get("id").and_then(Value::as_str) else { continue };
                 let then = before.get(id);
                 if let Some((kind, body)) = noticed(row, then, &me, &slack_users, &members) {
-                    self.add(station, row, kind, body);
-                    added = true;
+                    added.push(self.add(station, row, kind, body));
                 }
             }
         }
-        if added {
+        if !added.is_empty() {
             self.changed();
         }
+        added
     }
 
-    fn add(&self, station: &str, row: &Value, kind: &str, body: String) {
+    fn add(&self, station: &str, row: &Value, kind: &str, body: String) -> Value {
         let (workspace, id) = station.split_once('/').unwrap_or(("", station));
         let session = row.get("id").and_then(Value::as_str).unwrap_or("");
         let n = self.next.replace(self.next.get() + 1);
@@ -101,10 +101,11 @@ impl Notices {
             "at": self.host.now_ms() as i64,
         });
         let mut items = self.items.borrow_mut();
-        items.push_back(notice);
+        items.push_back(notice.clone());
         while items.len() > KEEP {
             items.pop_front();
         }
+        notice
     }
 }
 

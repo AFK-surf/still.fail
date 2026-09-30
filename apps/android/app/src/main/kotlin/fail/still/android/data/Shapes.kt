@@ -752,6 +752,11 @@ data class ChatView (
 	/// The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
 	/// chat is open: those up to it show at once, those after it come in.
 	val caught: Long? = null,
+	/// The message the unread line goes over: the first the viewer had not read when the chat was opened (not
+	/// theirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it.
+	val unreadLine: Long? = null,
+	/// The unread line lies above the messages loaded: older pages are being loaded to find it.
+	val unreadAbove: Boolean? = null,
 	val outbox: List<Outgoing>,
 	val link: Link,
 	val offline: Boolean,
@@ -1188,6 +1193,17 @@ data class Notice (
 @Serializable
 data class NoticesView (
 	val items: List<Notice>
+)
+
+/// Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
+/// system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
+/// show now, each taken by one page (`notice.claim`).
+@Serializable
+data class NotifyView (
+	val on: Boolean,
+	val asked: Boolean,
+	val push: Boolean,
+	val show: List<Notice>
 )
 
 /// Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`).

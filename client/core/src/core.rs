@@ -27,6 +27,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::accounts::{AccountView, Accounts};
+use crate::attend::{Attend, Due};
 use crate::cloud::{Cloud, Credential};
 use crate::data::{Center, Data};
 use crate::error::{CoreError, Result};
@@ -97,6 +98,8 @@ struct Inner {
     sockets: RefCell<HashMap<String, Socket>>,
     /// What is waited on, for the `status` topic.
     status: Rc<Status>,
+    /// Where each UI's attention is, and what follows (attend.rs).
+    attend: Rc<Attend>,
     /// Told when a UI is back after being away (wake.rs).
     wakes: Rc<Wakes>,
     /// The calls under way, by client and id: a UI cancels one, a UI gone cancels its own.
@@ -142,6 +145,7 @@ impl Core {
         // What was last known is there before any UI asks.
         let data = Data::new(host.clone());
         data.load().await;
+        let attend = Attend::load(host.clone()).await;
         let inner = Rc::new_cyclic(|me: &Weak<Inner>| {
             let store = Store::new(host.clone());
             // What goes out is what the clients' types say (client/shapes).
@@ -174,12 +178,15 @@ impl Core {
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
             let sync = Sync::new(store.clone(), host.clone());
             let notices = Notices::new(store.clone(), host.clone(), email_of(me.clone()));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), status: status.clone(), notices: notices.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), status: status.clone(), notices: notices.clone(), attend: attend.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             sync.on_look({
                 let notices = Rc::downgrade(&notices);
+                let (attend, store) = (Rc::downgrade(&attend), Rc::downgrade(&store));
                 Rc::new(move |stations: &[String]| {
-                    if let Some(notices) = notices.upgrade() {
-                        notices.look(stations);
+                    let (Some(notices), Some(attend), Some(store)) = (notices.upgrade(), attend.upgrade(), store.upgrade()) else { return };
+                    let added = notices.look(stations);
+                    if attend.noticed(&added, store.subscribed(&Topic::Notify)) {
+                        store.invalidate(&Topic::Notify);
                     }
                 })
             });
@@ -207,6 +214,7 @@ impl Core {
                 live: RefCell::default(),
                 sockets: RefCell::default(),
                 status: status.clone(),
+                attend: attend.clone(),
                 wakes,
                 calls: RefCell::default(),
                 preview_sockets: Rc::default(),
@@ -217,6 +225,10 @@ impl Core {
         inner.recompute_owners();
         // From now on the core keeps its workspaces and stations in sync, whatever the UI shows.
         inner.sync.start();
+        // Whether this device has pushes, as it was left.
+        if let Some(kept) = host.storage_get(PUSH_KEY).await.ok().flatten().and_then(|b| serde_json::from_slice::<KeptPush>(&b).ok()) {
+            attend.set_pushing(!kept.with.is_empty());
+        }
         let me = Rc::downgrade(&inner);
         tracer.set_export(Rc::new(move |body: Vec<u8>| {
             let me = me.clone();
@@ -247,6 +259,8 @@ impl Core {
     /// A UI went away (tab closed, port gone): its subscriptions end.
     pub fn disconnect(&self, client: ClientId) {
         self.inner.store.drop_client(client);
+        self.inner.attend.gone(client);
+        self.inner.attended();
         let calls: Vec<AbortHandle> = self.inner.calls.borrow_mut().extract_if(|(c, _), _| *c == client).map(|(_, abort)| abort).collect();
         for call in calls {
             call.abort();
@@ -316,6 +330,7 @@ struct Router {
     views: Rc<Views>,
     status: Rc<Status>,
     notices: Rc<Notices>,
+    attend: Rc<Attend>,
     tracer: Rc<Tracer>,
     /// Views opening: each is a trace (`chat.open`, …) until its first value goes out.
     opening: RefCell<HashMap<Topic, Span>>,
@@ -335,6 +350,12 @@ impl Source for Router {
         }
         if *topic == Topic::Notices {
             self.notices.changed();
+            return;
+        }
+        if *topic == Topic::Notify {
+            if let Some(core) = self.core.upgrade() {
+                core.store.invalidate(topic);
+            }
             return;
         }
         // Kept on the device (data.rs) and nowhere else: what is there goes out, or, with nothing written, empty.
@@ -367,7 +388,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if *topic == Topic::Status || *topic == Topic::Notices || matches!(topic, Topic::Draft { .. }) {
+        if *topic == Topic::Status || *topic == Topic::Notices || *topic == Topic::Notify || matches!(topic, Topic::Draft { .. }) {
             return;
         }
         if topic.is_view() {
@@ -390,13 +411,16 @@ impl Source for Router {
         if *topic == Topic::Notices {
             return Some(Ok(self.notices.value()));
         }
+        if *topic == Topic::Notify {
+            return Some(Ok(self.attend.value()));
+        }
         // A draft held has its record's value (data.rs); none is nothing written.
         if let Topic::Draft { .. } = topic {
             return Some(Ok(json!({ "text": "", "quotes": [], "files": [] })));
         }
-        let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic) };
+        let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic).map(|v| self.attended(topic, v)) };
         // Still opening: what it starts now (a chat's agents) is part of it too.
-        let value = self.tracer.enter(Some(context), || self.views.compute(topic));
+        let value = self.tracer.enter(Some(context), || self.views.compute(topic)).map(|v| self.attended(topic, v));
         let opened = if value.is_some() { self.opening.borrow_mut().remove(topic) } else { None };
         if let Some(mut span) = opened {
             if let Some(Err(error)) = &value {
@@ -406,6 +430,33 @@ impl Source for Router {
             span.end();
         }
         value
+    }
+}
+
+impl Router {
+    /// A chat as its UIs attend to it (attend.rs): its unread line; its older page loaded, or it read, when due.
+    fn attended(&self, topic: &Topic, value: Result<Value>) -> Result<Value> {
+        let Topic::Chat { station, session, .. } = topic else { return value };
+        let mut value = value?;
+        let due = self.attend.chat(station, session.as_deref(), &mut value);
+        if due.is_empty() {
+            return Ok(value);
+        }
+        let (Some(core), Ok(addr)) = (self.core.upgrade(), StationAddr::parse(station)) else { return Ok(value) };
+        let (station, me) = (station.clone(), Rc::downgrade(&core));
+        core.host.spawn(async move {
+            for due in due {
+                let Some(core) = me.upgrade() else { return };
+                let done = match due {
+                    Due::Older { thread } => core.stations.older(&addr, thread).await.map(|_| ()),
+                    Due::Read { thread, seq } => core.stations.read(&addr, thread, seq).await,
+                };
+                if done.is_err() {
+                    core.attend.failed(&station, &due);
+                }
+            }
+        }.boxed_local());
+        Ok(value)
     }
 }
 
@@ -532,11 +583,18 @@ impl Inner {
                 }
             }
             Call::PushRegister { registration } => {
+                // Notifications off: this device has no pushes (attend.rs).
+                if !self.attend.on() {
+                    return Ok(Value::Null);
+                }
                 let kept = KeptPush { registration, with: Vec::new() };
                 let _ = self.host.storage_set(PUSH_KEY, serde_json::to_vec(&kept).unwrap_or_default()).await;
-                self.push_registered().await
+                let done = self.push_registered().await;
+                self.attend.set_pushing(done.is_ok());
+                done
             }
             Call::PushUnregister => {
+                self.attend.set_pushing(false);
                 let kept = self.host.storage_get(PUSH_KEY).await.ok().flatten().and_then(|b| serde_json::from_slice::<KeptPush>(&b).ok());
                 let _ = self.host.storage_delete(PUSH_KEY).await;
                 if let Some(kept) = kept {
@@ -633,6 +691,30 @@ impl Inner {
                 self.stations.read(&StationAddr::parse(&station)?, thread, seq).await?;
                 Ok(Value::Null)
             }
+            Call::Attend(call) => match call {
+                crate::attend::Call::Focus(focus) => {
+                    self.attend.focus(at.0, focus);
+                    self.attended();
+                    Ok(Value::Null)
+                }
+                crate::attend::Call::Set { on, asked } => {
+                    self.attend.set(on, asked).await;
+                    self.store.invalidate(&Topic::Notify);
+                    // Off: this device's pushes go too.
+                    if on == Some(false) {
+                        Box::pin(self.execute(Call::PushUnregister, progress, at)).await?;
+                    }
+                    Ok(self.attend.value())
+                }
+                crate::attend::Call::Claim { id } => {
+                    let show = self.attend.claim(&id);
+                    if show {
+                        self.store.invalidate(&Topic::Notify);
+                    }
+                    Ok(json!({ "show": show }))
+                }
+                crate::attend::Call::Pushed => Ok(json!({ "show": self.attend.pushed() })),
+            },
             Call::DraftPut { station, chat, draft } => {
                 let topic = Topic::Draft { station, chat };
                 let empty = |field: &str| draft.get(field).is_none_or(|v| v.as_str().is_some_and(|s| s.trim().is_empty()) || v.as_array().is_some_and(Vec::is_empty));
@@ -1097,6 +1179,15 @@ impl Inner {
         }
     }
 
+    /// What UIs attend to changed: the chats shown are put together again (their lines, what is read).
+    fn attended(&self) {
+        for topic in self.store.live_topics() {
+            if matches!(topic, Topic::Chat { .. }) {
+                self.store.invalidate(&topic);
+            }
+        }
+    }
+
     /// Gives this device's push registration (as kept) to the signed-in accounts that do not have it yet.
     async fn push_registered(&self) -> Result<Value> {
         let Some(mut kept) = self.host.storage_get(PUSH_KEY).await.ok().flatten().and_then(|b| serde_json::from_slice::<KeptPush>(&b).ok()) else {
@@ -1473,6 +1564,8 @@ enum Call {
     PushUnregister,
     /// What is written to a chat on this device, as it is now (`Topic::Draft`): nothing written forgets it.
     DraftPut { station: String, chat: String, draft: Value },
+    /// Where a UI's attention is, notifications' settings, a notice taken to show (attend.rs).
+    Attend(crate::attend::Call),
 }
 
 impl Call {
@@ -1495,11 +1588,15 @@ impl Call {
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
             Call::DraftPut { station, .. } => Some(station),
+            Call::Attend(_) => None,
         }
     }
 }
 
 fn parse_call(name: &str, params: Value) -> Result<Call> {
+    if let Some(call) = crate::attend::parse(name, &params) {
+        return call.map(Call::Attend);
+    }
     #[derive(Deserialize)]
     struct Begin {
         redirect_uri: String,
@@ -2476,6 +2573,94 @@ mod tests {
             host.settle().await;
             let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 3 | 4, .. })).count();
             assert_eq!(refused, 2);
+        });
+    }
+
+    #[test]
+    fn a_chat_shown_has_its_unread_line_and_is_read_while_its_end_is_in_view() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            host.on_fetch(|req| {
+                let path = req.url.trim_start_matches("https://stillfail.test");
+                let said = |n: u64| json!({ "thread": 7, "n": n, "kind": "message", "ts": format!("{n}.0"), "authorKind": "agent", "author": "k1", "authorName": null, "text": "好", "at": n });
+                match (req.method.as_str(), path.split('?').next().unwrap()) {
+                    ("GET", "/admin/api/threads") => json_response(200, json!([{
+                        "id": 7, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": "7.0", "title": null, "createdBy": null,
+                        "creator": null, "createdAt": 1, "sessions": [{ "thread": 7, "session": "k1", "connect": "ember", "joinedAt": 1 }],
+                        "last": 3, "lastMessage": null, "read": 1, "unread": 2, "people": [], "firstText": null,
+                    }])),
+                    ("GET", "/admin/api/threads/7/entries") => json_response(200, json!({ "first": 1, "last": 3, "entries": [said(1), said(2), said(3)] })),
+                    ("PUT", "/admin/api/threads/7/read") => json_response(200, json!({ "n": 3 })),
+                    ("GET", "/admin/api/sessions") => json_response(200, json!([session("k1")])),
+                    ("GET", "/admin/api/sessions/k1") => json_response(200, json!({ "session": session("k1"), "threads": [], "turns": [] })),
+                    _ => json_response(404, json!({})),
+                }
+            });
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
+            host.settle().await;
+            apply(&host, &mut values);
+            // Not shown by any page yet: no line.
+            assert_eq!(values[&1]["messages"].as_array().unwrap().len(), 3);
+            assert_eq!(values[&1].get("unreadLine"), None);
+            // Shown: the line over the first not read when it was opened; not read while its end is out of view.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "client.focus".into(), params: json!({ "visible": true, "focused": true, "chat": { "station": "local", "thread": 7, "end": false } }) });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["unreadLine"], 2);
+            let reads = |host: &FakeHost| host.requests.borrow().iter().filter(|r| r.method == "PUT" && r.url.ends_with("/threads/7/read")).count();
+            assert_eq!(reads(&host), 0);
+            // Its end in view: read up to the newest, once; the line stays for the visit.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "client.focus".into(), params: json!({ "chat": { "station": "local", "thread": 7, "end": true } }) });
+            host.settle().await;
+            core.receive(ui, ClientMessage::Call { id: 4, call: "client.focus".into(), params: json!({ "visible": true }) });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(reads(&host), 1);
+            assert_eq!(values[&1]["unreadLine"], 2);
+            // The page gone: the visit ends with it; opened again, nothing unread.
+            core.disconnect(ui);
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "client.focus".into(), params: json!({ "visible": true, "chat": { "station": "local", "thread": 7 } }) });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["unreadLine"], Value::Null);
+        });
+    }
+
+    #[test]
+    fn notifications_are_on_until_turned_off_and_kept_so_with_no_pushes() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Notify });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!({ "on": true, "asked": false, "push": true, "show": [] }));
+            // Off (and asked, as Android moves its old settings over): pushes go, and are not taken while off.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "notify.set".into(), params: json!({ "on": false, "asked": true }) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "push.register".into(), params: json!({ "kind": "fcm", "token": "t" }) });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!({ "on": false, "asked": true, "push": false, "show": [] }));
+            assert_eq!(host.stored(PUSH_KEY), None);
+            // Kept across a restart.
+            drop(core);
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Notify });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "notice.pushed".into(), params: json!({}) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "notice.claim".into(), params: json!({ "id": "n1" }) });
+            host.settle().await;
+            let emitted = host.take_emitted();
+            let ok = |id| emitted.iter().find_map(|(_, m)| match m { CoreMessage::Ok { id: i, ok } if *i == id => Some(ok.clone()), _ => None }).unwrap();
+            assert_eq!((ok(2), ok(3)), (json!({ "show": false }), json!({ "show": false })));
+            let value = emitted.iter().find_map(|(_, m)| match m { CoreMessage::Value { id: 1, value } => Some(value.clone()), _ => None }).unwrap();
+            assert_eq!(value["on"], false);
         });
     }
 

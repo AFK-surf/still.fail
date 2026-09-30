@@ -338,6 +338,7 @@ export function useChatSend(address?: string) {
     /** A new chat: there at once under the key answered (its page, its row); the station makes it behind it. */
     create: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => call("chat.create", { station, ...input }) as Promise<{ key: string }>,
     older: (thread: number) => call("chat.older", { station, thread }) as Promise<{ more: boolean }>,
+    /** Only for a core from before `client.focus` (an older desktop app's), which does not read chats itself. */
     read: (thread: number, seq: number) => call("chat.read", { station, thread, seq }),
   }), [call, station]);
 }

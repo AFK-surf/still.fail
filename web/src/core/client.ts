@@ -41,7 +41,18 @@ export type Topic =
   // What a person hears about while the client runs (docs/notifications.md).
   | { topic: "notices" }
   // What is written to a chat on this device, until sent: `chat` its key, `thread:<id>`, or `new` (a new chat there).
-  | { topic: "draft"; station: string; chat: string };
+  | { topic: "draft"; station: string; chat: string }
+  // Notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (`notice.claim`).
+  | { topic: "notify" };
+
+/** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
+export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
+
+/**
+ * Where this page's attention is (`client.focus`, client/core/src/attend.rs): in view, looked at, the chat it shows.
+ * Each field given changes; `chat: null` shows none; `left` says the chat named is not shown any more.
+ */
+export interface Focus { visible?: boolean; focused?: boolean; chat?: ChatShown | null; left?: ChatShown }
 
 export interface ErrorBody {
   code: string;
@@ -127,6 +138,8 @@ export class CoreClient {
   #up = false;
   /** Bumped by every message from the worker, so a wake can tell whether anything came after it. */
   #heard = 0;
+  /** Where this page's attention is, as told last: told again to a worker started anew. */
+  #focus: Focus = {};
 
   constructor(open: Opener, options: ClientOptions = {}) {
     this.#open = open;
@@ -168,6 +181,15 @@ export class CoreClient {
     };
   }
 
+  /** Tells the core where this page's attention is (see `Focus`); a core from before it refuses it (`unknown_call`). */
+  focus(part: Focus): Promise<unknown> {
+    const { left, ...rest } = part;
+    const next: Focus = { ...this.#focus, ...rest };
+    if (left && next.chat && same(next.chat, left)) next.chat = null;
+    this.#focus = next;
+    return this.call("client.focus", part);
+  }
+
   /** The page is going away (or into the back/forward cache): the worker drops this client. */
   suspend(): void {
     if (this.#channel) this.#post({ bye: true });
@@ -180,6 +202,7 @@ export class CoreClient {
   resume(): void {
     this.#rejectCalls("页面已恢复，请重试");
     if (this.#channel) for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic });
+    this.#refocus();
   }
 
   /**
@@ -252,6 +275,12 @@ export class CoreClient {
     const queued = this.#queue;
     this.#queue = [];
     for (const message of queued) this.#post(message);
+    this.#refocus();
+  }
+
+  /** A core that forgot this page (a worker started anew, a page back from the cache) hears where it is again. */
+  #refocus(): void {
+    if (Object.keys(this.#focus).length) this.call("client.focus", this.#focus).catch(() => undefined);
   }
 
   #restart(reason: string): void {
@@ -463,6 +492,10 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
   };
 }
 
+function same(a: ChatShown, b: ChatShown): boolean {
+  return a.station === b.station && ((a.thread !== null && a.thread === b.thread) || (a.session !== null && a.session === b.session));
+}
+
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
   const open = window.stillfailDesktop ? desktopOpener(window.stillfailDesktop) : workerOpener();
@@ -484,6 +517,12 @@ export function connectCore(): CoreClient {
     if (document.visibilityState === "hidden") hidden ??= Date.now();
     else back();
   });
+  // In view, and looked at: what is read and which notices this page leaves out follow (client/core/src/attend.rs).
+  const attend = () => void client.focus({ visible: document.visibilityState === "visible", focused: document.hasFocus() }).catch(() => undefined);
+  attend();
+  document.addEventListener("visibilitychange", attend);
+  addEventListener("focus", attend);
+  addEventListener("blur", attend);
   addEventListener("online", () => client.networkChanged());
   // Another network with no time offline between (Wi-Fi to mobile data): only where the browser says which kind it is
   // on (Chrome on Android); its other changes (speed, round trip) are the same network.

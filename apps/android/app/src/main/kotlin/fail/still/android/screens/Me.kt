@@ -89,9 +89,8 @@ fun MeScreen(current: WorkspaceEntry) {
         ListCard {
             ListRow(onClick = {
                 val on = !app.notify
-                app.useNotify(on)
                 if (on) ask()
-                scope.launch { Push.sync(context.applicationContext, app.core, on) }
+                scope.launch { Push.sync(context.applicationContext, app.core, app.useNotify(on)) }
             }) {
                 Column(Modifier.weight(1f)) {
                     Text("通知", fontSize = 15.sp, color = C.ink)

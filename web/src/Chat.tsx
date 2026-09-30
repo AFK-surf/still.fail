@@ -27,6 +27,7 @@ import * as refCss from "./ChatRef.css.ts";
 import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs, type ChatRef } from "./ChatRef.tsx";
 import { refMark } from "./chatRefs.ts";
 import { useMorph } from "./morph.ts";
+import { core } from "./core/react.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
@@ -270,17 +271,18 @@ export interface RowState { enter: true | undefined; emitted: "held" | "emitting
  */
 export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: RefObject<HTMLDivElement | null>, chat: ChatView, place: string, lives: ReadonlyMap<string, Live>) {
   const sending = useChatSend();
+  const station = useStation().address;
   const id = chat.thread?.id ?? null;
   const messages = chat.messages;
   // Whose a message is, the core says.
   const mineOf = (m: ChatMessage) => m.mine;
   useStickToBottom(list, `.${conversationCss.msg}`, floor);
-  // Without a chat there is nothing older to load and nothing to read.
+  // Without a chat there is nothing older to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
-  useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
+  useShowing(floor, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
   useRememberPlace(list, place, messages.length > 0);
-  const divider = useUnreadLine(list, chat, messages, mineOf, older);
+  const divider = useUnreadLine(list, chat);
   const away = useAwayFromBottom(list);
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
@@ -327,37 +329,18 @@ export function sameMessage(a: ChatMessage, b: ChatMessage): boolean {
 }
 
 /**
- * The line over the first message the viewer had not read when the chat
- * opened (not their own), and the jump to it: the read position is taken as
- * the chat opens and does not move during the visit, so the line stays put as
- * the chat is read. A chat opens from what the device kept, so messages said
- * before it opened may still arrive from the station: the line goes over the
- * first of them wherever it came from; what is said during the visit gets
- * none. Older pages are loaded first when it lies above them. Nothing unread:
- * no line, and the chat opens at its bottom or where it was left; something
- * unread takes it to the line even so. Answers the seq of the message
- * the line goes over.
+ * The jump to the unread line (the core says where it goes: over the first message the viewer had not read when the
+ * chat was opened, not their own; it stays put for the visit, and the core loads older pages first when it lies above
+ * them). Nothing unread: no line, and the chat opens at its bottom or where it was left; something unread takes it to
+ * the line even so. Answers the seq of the message the line goes over.
  */
-export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: ChatMessage[], mine: (m: ChatMessage) => boolean, older: () => Promise<unknown>): number | null {
-  const [open] = useState(() => ({ read: chat.thread?.read ?? 0, at: Date.now() }));
-  const unread = (m: ChatMessage) => m.seq > open.read && m.createdAt <= open.at && !mine(m);
-  const first = messages[0]?.seq;
-  // Those not loaded yet may hold it: the pages before are loaded first.
-  const above = chat.more && first !== undefined && first > open.read + 1 && messages.some(unread);
-  const target = above ? null : messages.find(unread)?.seq ?? null;
-  const asked = useRef<number | undefined>(undefined);
+export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView): number | null {
+  const target = chat.unreadLine ?? null;
   // Until something unread shows (it may come from the station a moment after opening), there is nothing to jump to.
   // Coming back to a chat with something unread goes to the line too, over where it was left (useRememberPlace).
   const jumped = useRef(false);
-  const load = useRef(older);
-  load.current = older;
   useEffect(() => {
-    if (!above || asked.current === first) return;
-    asked.current = first;
-    void load.current().catch(() => { asked.current = undefined; });
-  }, [above, first]);
-  useEffect(() => {
-    if (jumped.current || above || target === null) return;
+    if (jumped.current || target === null) return;
     jumped.current = true;
     const pane = ref.current;
     const line = pane?.querySelector<HTMLElement>("[data-unread-line]");
@@ -370,7 +353,7 @@ export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView
     const covered = parseFloat(style.scrollPaddingTop) || 0;
     const text = parseFloat(style.lineHeight) || 22;
     pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 4 * text;
-  }, [ref, above, target]);
+  }, [ref, target]);
   return target;
 }
 
@@ -469,35 +452,46 @@ export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, more: boole
 }
 
 /**
- * Records how far the viewer has read: up to the newest message, whenever the
- * chat's bottom is in view on a visible page.
+ * Tells the core this page shows the chat, and whether its end (`floor`) is in view: what is read, where the unread
+ * line goes and which notices are not shown follow from it there (client/core/src/attend.rs).
  */
-export function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
+export function useShowing(floor: RefObject<HTMLElement | null>, station: string, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
+  const thread = chat.thread?.id ?? null;
+  const session = chat.key ?? chat.agents[0]?.session.key ?? null;
+  // A core from before `client.focus` (an older desktop app's) reads nothing itself: the page records what is read, as
+  // it did, up to the newest message whenever the end is in view on a visible page.
+  const old = useRef({ on: false, end: false, sent: 0 });
   const newest = chat.messages.at(-1)?.seq ?? 0;
   const known = chat.thread?.read ?? 0;
-  const sent = useRef(0);
-  const record = useRef(read);
-  record.current = read;
+  const latest = useRef({ newest, known, read });
+  latest.current = { newest, known, read };
+  const readHere = useCallback(() => {
+    const { newest, known, read } = latest.current;
+    const o = old.current;
+    if (!o.on || !o.end || document.visibilityState !== "visible" || newest <= known || o.sent >= newest) return;
+    o.sent = newest;
+    void read(newest).catch(() => { o.sent = 0; });
+  }, []);
+  useEffect(readHere, [readHere, newest, known]);
   useEffect(() => {
     const el = floor.current;
-    if (!el || newest <= known) return;
-    let seen = false;
-    const mark = () => {
-      if (!seen || document.visibilityState !== "visible" || sent.current >= newest) return;
-      sent.current = newest;
-      void record.current(newest).catch(() => { sent.current = 0; });
-    };
-    const observer = new IntersectionObserver((entries) => {
-      seen = entries.some((e) => e.isIntersecting);
-      mark();
+    const of = { station, thread, session };
+    const tell = () => void core().focus({ chat: { ...of, end: old.current.end } }).catch((e: unknown) => {
+      if ((e as { code?: string }).code === "unknown_call") { old.current.on = true; readHere(); }
     });
-    observer.observe(el);
-    document.addEventListener("visibilitychange", mark);
+    tell();
+    const observer = el && new IntersectionObserver((entries) => {
+      old.current.end = entries.some((e) => e.isIntersecting);
+      if (old.current.on) readHere(); else tell();
+    });
+    if (el) observer?.observe(el);
+    document.addEventListener("visibilitychange", readHere);
     return () => {
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", mark);
+      observer?.disconnect();
+      document.removeEventListener("visibilitychange", readHere);
+      void core().focus({ left: of }).catch(() => undefined);
     };
-  }, [floor, newest, known]);
+  }, [floor, station, thread, session, readHere]);
 }
 
 /**

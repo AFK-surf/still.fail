@@ -435,7 +435,7 @@ pub fn host(h: &mut Value) {
 
 /// Whether what goes out of a topic shows times in words (sent again each minute).
 pub fn ticks(topic: &Topic) -> bool {
-    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Status | Topic::Notices | Topic::Draft { .. } | Topic::JobLog { .. })
+    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::JobLog { .. })
 }
 
 /// A topic's value through the shape the clients are generated from (client/shapes): what it does not declare is
@@ -458,6 +458,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Status => s::conform::<s::StatusView>(value),
         Topic::Notices => s::conform::<s::NoticesView>(value),
         Topic::Draft { .. } => s::conform::<s::DraftView>(value),
+        Topic::Notify => s::conform::<s::NotifyView>(value),
         _ => Ok(value),
     }
 }

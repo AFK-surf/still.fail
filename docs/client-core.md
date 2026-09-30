@@ -118,6 +118,7 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
 | `notices` | — | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md) |
+| `notify` | — | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md) |
 
 ```jsonc
 // live
@@ -335,7 +336,8 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
 | `chat.older` | `station`, `thread` | `{ more }`: loads the page (50 entries) before the chat's oldest loaded entry into its `thread` topic — from what is kept, else from the station — so `messages` grows in front |
 | `history.older` | `station`, `key` | `{ more }`: loads the page (200 entries) of the session's transcript before its `live` topic's `first` into it — from what is kept, else from the station — so the `history` view's `items` grow in front (`more` in the view: there are older ones) |
-| `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows |
+| `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows. The clients no longer call it: the core reads a chat up to its newest message while a UI shows its end on a page in view (`client.focus`, attend.rs) |
+| `client.focus` | `visible?`, `focused?`, `chat?`, `left?` | — ; where this UI's attention is (docs/notifications.md): what is read, a chat's `unreadLine` (held for the visit, older pages loaded first while `unreadAbove`) and which notices show follow from it |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
 | `station.preview` | `station`, `port`, `method`, `path`, `headers?`, `body?`, `stream?` | a request to a web service on the station's machine (`/preview/<port>`): `{ status, headers, body }`; with `stream`, values `{ head: { status, headers } }` then `{ chunk }` for each piece of the body as it comes, and the answer (null) at its end. Only waited on (`status`) until its head; cancelled, the station stops asking the service |
@@ -407,6 +409,7 @@ client/
 - `data.rs` — the data center (docs/core-db.md): what still.fail cloud and the stations said, held as records.
 - `sync.rs` — what the core keeps in sync by itself, whatever the UI shows.
 - `notices.rs` — what a person hears about while the client runs (the `notices` topic), from how the chat rows change.
+- `attend.rs` — where each UI's attention is (`client.focus`): chats' unread lines and what is read, notifications' settings and which notices show (the `notify` topic).
 - `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down.
 - `activity.rs`, `history.rs`, `present.rs`, `format.rs` — what the clients show (an agent's current activity, its execution history, sessions' and rows' state, words and times), decided once for every client.
 - `error.rs` — the one error type calls and topics report.

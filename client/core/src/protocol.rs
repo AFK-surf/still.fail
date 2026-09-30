@@ -84,6 +84,9 @@ pub enum Topic {
     /// (`draft.put`). `chat`: its session key, `thread:<id>`, or `new` for a new chat on the station; empty until
     /// something is written.
     Draft { station: String, chat: String },
+    /// Notifications on this device (attend.rs): whether they are on, whether the system was asked to allow them,
+    /// whether it should hold a push registration, and the notices a page is to show now (`notice.claim` each).
+    Notify,
 }
 
 impl Topic {
@@ -92,7 +95,7 @@ impl Topic {
         match self {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
-            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Draft { .. } => None,
+            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } => None,
         }
     }

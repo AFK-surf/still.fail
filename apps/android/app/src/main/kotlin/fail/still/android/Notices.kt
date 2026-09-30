@@ -1,6 +1,7 @@
 // Notifications (docs/notifications.md → Clients): one channel (消息), one notification per chat (its tag), opening the
-// chat as its link would. Local notices come from the core's `notices` topic while the app is in front (MainActivity);
-// pushes from FCM while it is not (Push.kt). 我 → 通知 turns both off.
+// chat as its link would. Local notices are those the core's `notify` says to show while the app is in front
+// (MainActivity; client/core/src/attend.rs decides), pushes come from FCM while it is not (Push.kt). 我 → 通知 turns
+// both off (kept in the core).
 package fail.still.android
 
 import android.Manifest
@@ -18,24 +19,27 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
-import fail.still.android.data.ChatOf
 import fail.still.android.data.Notice
-import fail.still.android.data.NoticesView
+import fail.still.android.data.NotifyView
 import fail.still.android.data.Topics
 import fail.still.android.data.decode
+import fail.still.core.CoreException
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 object Notifier {
     private const val CHANNEL = "messages"
     /** Every notification has this id; the chat is its tag, so a newer one for a chat replaces the older. */
     private const val ID = 1
-    /** 我 → 通知, kept with the app's other settings (AppState.notify). */
+    /** Where the app kept 我 → 通知 before the core did (AppState.moveNotify). */
     const val FLAG = "notify"
 
-    /** Whether MainActivity is started: local notices are shown then, pushes are not. */
+    /** Whether MainActivity is started. */
     @Volatile var inFront = false
-
-    fun enabled(context: Context) = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getBoolean(FLAG, true)
 
     fun allowed(context: Context) = Build.VERSION.SDK_INT < 33 ||
         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -68,21 +72,17 @@ object Notifier {
 }
 
 /**
- * The core's `notices` while the app is in front: the first value is old news; each later item not seen before is
- * shown, unless its chat is the page on top or notifications are off.
+ * While the app is in front: the notices the core's `notify` says to show now (not while off, not for the chat looked
+ * at; client/core/src/attend.rs), each shown once it is taken (`notice.claim`).
  */
 suspend fun showNotices(context: Context, app: AppState) {
-    var seen: MutableSet<String>? = null
-    app.core.topic(Topics.notices).collect { state ->
+    val taken = HashSet<String>()
+    app.core.topic(Topics.notify).collect { state ->
         val json = state.value?.takeIf { it !is JsonNull } ?: return@collect
-        val items = try { decode(NoticesView.serializer(), json).items } catch (_: Exception) { return@collect }
-        val known = seen
-        seen = items.mapTo(known ?: HashSet()) { it.id }
-        if (known == null) return@collect
-        items.filter { it.id !in known }.forEach { notice ->
-            val top = app.stack.lastOrNull() as? Screen.Chat
-            val open = top != null && top.station == notice.station && (top.of as? ChatOf.Session)?.key == notice.session
-            if (!open && app.notify) Notifier.show(context, notice)
+        val show = try { decode(NotifyView.serializer(), json).show } catch (_: Exception) { return@collect }
+        show.filter { taken.add(it.id) }.forEach { notice ->
+            val answer = try { app.core.call("notice.claim", buildJsonObject { put("id", notice.id) }) } catch (_: CoreException) { return@forEach }
+            if ((answer as? JsonObject)?.get("show")?.jsonPrimitive?.booleanOrNull == true) Notifier.show(context, notice)
         }
     }
 }
@@ -98,8 +98,9 @@ fun rememberNotificationAsk(app: AppState, once: Boolean): () -> Unit {
         if (!granted && !once) app.toast = "在系统设置里允许 still.fail 发通知"
     }
     val ask = { if (!Notifier.allowed(context) && Build.VERSION.SDK_INT >= 33) launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
-    if (once) LaunchedEffect(Unit) {
-        if (app.notify && !app.flag("notifyAsked", false)) { app.setFlag("notifyAsked", true); ask() }
+    // Once the core says whether it was asked.
+    if (once) LaunchedEffect(app.notifyAsked) {
+        if (app.notify && app.notifyAsked == false) { app.askedNotify(); ask() }
     }
     return ask
 }

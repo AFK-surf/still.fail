@@ -101,6 +101,8 @@ object Topics {
     val status = buildJsonObject { put("topic", "status") }
     /** What wants the viewer in the chats they take part in, the last 20 (docs/notifications.md; Notices.kt). */
     val notices = buildJsonObject { put("topic", "notices") }
+    /** Notifications on this device: on or off, asked, whether to hold pushes, what to show now (attend.rs; Notices.kt). */
+    val notify = buildJsonObject { put("topic", "notify") }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
 

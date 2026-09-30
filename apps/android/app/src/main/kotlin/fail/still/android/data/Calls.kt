@@ -53,9 +53,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Brings the page of an agent's execution history before what it shows into the view. */
     suspend fun historyOlder(key: String) { core.call("history.older", buildJsonObject { put("station", station); put("key", key) }) }
 
-    /** The viewer has read the chat up to `seq`. */
-    suspend fun read(thread: Long, seq: Long) { chat("chat.read", thread) { put("seq", seq) } }
-
     // ── connects (web/src/api.ts → stationApi) ──
 
     /** Changes a connect: any of `bind`, `mode`, `requireMention`, `enabled`, `slack`, `owner`. */

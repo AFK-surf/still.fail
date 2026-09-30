@@ -1,14 +1,14 @@
 // Notifications in the browser (docs/notifications.md): the core's `notices` shown while a page is open, and pushes
 // through the service worker (/sw.js) while none is. The desktop app shows its own from its main process, so its
-// pages show none. Whether they are on is this browser's (localStorage), and the browser's permission.
+// pages show none. Whether they are on is the core's (kept on the device), and the browser's permission.
 import { useEffect, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router";
 import { core } from "./core/react.ts";
-import type { Notice, NoticesView } from "./core/shapes.ts";
+import type { Notice, NotifyView } from "./core/shapes.ts";
 
-const KEY = "stillfail.notify";
-/** Notices a page of this browser has shown (by id and time), so that several pages show each once. */
-const SHOWN = "stillfail.noticesShown";
+/** Where this browser kept the setting and the notices shown before the core did: moved into it once. */
+const OLD_KEY = "stillfail.notify";
+const OLD_SHOWN = "stillfail.noticesShown";
 
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((l) => l());
@@ -26,14 +26,42 @@ export const CAN_NOTIFY = NOTIFIES || !!DESKTOP;
 
 export type NotifyState = "on" | "off" | "denied" | "unsupported";
 
+/** The core's `notify` (null until it says; a core from before it: on, as the browser kept it). */
+let kept: NotifyView | null = null;
+let watching = false;
+let migrating: Promise<void> | null = null;
+/** The old setting moved into the core (or given up on for now): only then is the core's taken. */
+const migrated = () => (migrating ??= migrate());
+
+/** Follows the core's `notify` while the page runs. */
+function watch(): void {
+  if (watching || !NOTIFIES) return;
+  watching = true;
+  void migrated().then(() => {
+    core().subscribe({ topic: "notify" }, (value) => { kept = value as NotifyView; changed(); }, () => {});
+  });
+}
+
+/** The setting as this browser kept it before the core did (off, or nothing), into the core once. */
+async function migrate(): Promise<void> {
+  localStorage.removeItem(OLD_SHOWN);
+  if (localStorage.getItem(OLD_KEY) !== "off") return;
+  try {
+    await core().call("notify.set", { on: false });
+    localStorage.removeItem(OLD_KEY);
+  } catch { /* tried again on the next start */ }
+}
+
 function state(): NotifyState {
   if (DESKTOP) return desktopOn === null ? "unsupported" : desktopOn ? "on" : "off";
   if (!NOTIFIES) return "unsupported";
   if (Notification.permission === "denied") return "denied";
-  return Notification.permission === "granted" && localStorage.getItem(KEY) !== "off" ? "on" : "off";
+  const on = kept?.on ?? localStorage.getItem(OLD_KEY) !== "off";
+  return Notification.permission === "granted" && on ? "on" : "off";
 }
 
 export function useNotifyState(): NotifyState {
+  watch();
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, state);
 }
 
@@ -46,30 +74,31 @@ export async function setNotify(on: boolean): Promise<NotifyState> {
     return state();
   }
   if (!NOTIFIES) return "unsupported";
+  const set = async (on: boolean) => {
+    try { kept = await core().call("notify.set", { on }) as NotifyView; } catch { /* not now: as it was */ }
+  };
   if (on) {
     const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
-    if (permission === "granted") localStorage.removeItem(KEY);
+    if (permission === "granted") await set(true);
   } else {
-    localStorage.setItem(KEY, "off");
+    // The core takes this device's pushes off the accounts too.
+    await set(false);
   }
   changed();
   await syncPush();
   return state();
 }
 
-let pushing = false;
-
 /**
- * This browser's push subscription as the setting says: subscribed and given to the accounts while on, dropped while
- * off. A cloud with no pushes yet (no key) leaves the page to show them alone.
+ * This browser's push subscription as the core says (`push`): subscribed and given to the accounts while it wants
+ * one and the browser allows it, dropped otherwise. A cloud with no pushes yet (no key) leaves the page to show them.
  */
 async function syncPush(): Promise<void> {
   if (!PUSHES) return;
   try {
     const registration = await navigator.serviceWorker.register("/sw.js");
     const current = await registration.pushManager.getSubscription();
-    if (state() !== "on") {
-      pushing = false;
+    if (!(kept?.push ?? true) || Notification.permission !== "granted") {
       if (current) {
         await core().call("push.unregister").catch(() => {});
         await current.unsubscribe();
@@ -83,9 +112,8 @@ async function syncPush(): Promise<void> {
     const subscription = same ? current : await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const json = subscription.toJSON();
     await core().call("push.register", { kind: "web", endpoint: json.endpoint, keys: json.keys });
-    pushing = true;
   } catch {
-    pushing = false;
+    // Not now: the page shows them alone.
   }
 }
 
@@ -98,51 +126,43 @@ function equal(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-/** The chat a notice is about is the one this page shows, and the page is looked at. */
-function looking(n: Notice): boolean {
-  const path = decodeURIComponent(location.pathname);
-  return document.visibilityState === "visible" && document.hasFocus() && path.endsWith(`/s/${n.stationId}/chats/${n.session}`) && path.startsWith(`/w/${n.workspace}/`);
-}
-
-/** Whether another page of this browser showed it already; if not, it is this one's to show. */
-function claim(n: Notice): boolean {
-  const key = `${n.at}:${n.id}`;
-  let shown: string[] = [];
-  try { shown = JSON.parse(localStorage.getItem(SHOWN) ?? "[]") as string[]; } catch { /* none kept */ }
-  if (shown.includes(key)) return false;
-  localStorage.setItem(SHOWN, JSON.stringify([...shown, key].slice(-50)));
-  return true;
-}
-
 /**
- * Shows the core's notices from this page, and opens a chat when one is clicked (here, or in the service worker's
- * notification). A page hidden behind others leaves them to pushes, when this browser has them.
+ * Shows the notices the core says are to be shown now (docs/notifications.md; client/core/src/attend.rs decides:
+ * not for a chat looked at, not while pushes say them), each from the one page that takes it, and opens a chat when
+ * one is clicked (here, or in the service worker's notification).
  */
 export function useNotices(): void {
   const navigate = useNavigate();
   useEffect(() => {
     if (!NOTIFIES) return;
-    void syncPush();
+    watch();
     const open = (path: string) => { window.focus(); navigate(path); };
     const fromWorker = (event: MessageEvent) => {
       if (typeof event.data?.stillfailNavigate === "string") open(event.data.stillfailNavigate);
     };
     navigator.serviceWorker?.addEventListener("message", fromWorker);
-    let seen: Set<string> | null = null;
-    const stop = core().subscribe({ topic: "notices" }, (value) => {
-      const items = (value as NoticesView).items;
-      // What was there before this page came is old news.
-      if (!seen) { seen = new Set(items.map((n) => n.id)); return; }
-      for (const n of items) {
-        if (seen.has(n.id)) continue;
-        seen.add(n.id);
-        if (state() !== "on" || looking(n)) continue;
-        if (pushing && document.visibilityState !== "visible") continue;
-        if (!claim(n)) continue;
-        const shown = new Notification(n.title, { body: n.body, tag: n.tag, icon: "/icon-192.png" });
-        shown.onclick = () => { shown.close(); open(n.url); };
-      }
-    }, () => {});
-    return () => { stop(); navigator.serviceWorker?.removeEventListener("message", fromWorker); };
+    const taken = new Set<string>();
+    const show = (n: Notice) => {
+      const shown = new Notification(n.title, { body: n.body, tag: n.tag, icon: "/icon-192.png" });
+      shown.onclick = () => { shown.close(); open(n.url); };
+    };
+    let pushSynced = false;
+    let stop = () => {};
+    let gone = false;
+    void migrated().then(() => {
+      if (gone) return;
+      stop = core().subscribe({ topic: "notify" }, (value) => {
+        kept = value as NotifyView;
+        if (!pushSynced) { pushSynced = true; void syncPush(); }
+        for (const n of kept.show) {
+          if (taken.has(n.id)) continue;
+          taken.add(n.id);
+          void core().call("notice.claim", { id: n.id }).then((answer) => {
+            if ((answer as { show: boolean }).show && Notification.permission === "granted") show(n);
+          }, () => {});
+        }
+      }, () => {});
+    });
+    return () => { gone = true; stop(); navigator.serviceWorker?.removeEventListener("message", fromWorker); };
   }, [navigate]);
 }

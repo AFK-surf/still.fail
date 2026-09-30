@@ -88,6 +88,12 @@ import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.MenuSpec
 import fail.still.android.ui.ToastHost
 import fail.still.core.StillFailCore
+import fail.still.core.CoreException
+import fail.still.android.data.NotifyView
+import fail.still.android.data.decode
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.MainScope
 
 sealed interface Screen {
@@ -151,9 +157,53 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     var onlyMine by mutableStateOf(prefs.getBoolean("onlyMine", false)); private set
     fun showOnlyMine(on: Boolean) { onlyMine = on; prefs.edit().putBoolean("onlyMine", on).apply() }
 
-    /** 我 → 通知: local notices and pushes, on by default (Notices.kt, Push.kt). */
-    var notify by mutableStateOf(prefs.getBoolean(Notifier.FLAG, true)); private set
-    fun useNotify(on: Boolean) { notify = on; prefs.edit().putBoolean(Notifier.FLAG, on).apply() }
+    /** 我 → 通知: local notices and pushes, on by default (Notices.kt, Push.kt), as the core keeps it (its `notify`). */
+    var notify by mutableStateOf(true); private set
+    /** Whether the system was asked to allow notifications; null until the core says. */
+    var notifyAsked by mutableStateOf<Boolean?>(null); private set
+    /** The MainActivity is started (on screen, maybe under another app's window). */
+    var inFront by mutableStateOf(false)
+
+    /**
+     * Turns notifications on or off (the core takes this device's pushes off the accounts when off); answers whether the
+     * core wants this device to hold pushes now.
+     */
+    suspend fun useNotify(on: Boolean): Boolean {
+        notify = on
+        return try {
+            val view = decode(NotifyView.serializer(), core.call("notify.set", buildJsonObject { put("on", on) }))
+            notify = view.on
+            view.push
+        } catch (_: Exception) {
+            on
+        }
+    }
+
+    /** The system was asked to allow notifications (once). */
+    suspend fun askedNotify() {
+        notifyAsked = true
+        try { core.call("notify.set", buildJsonObject { put("asked", true) }) } catch (_: CoreException) {}
+    }
+
+    /** The settings as the app kept them before the core did, into the core once. */
+    suspend fun moveNotify() {
+        if (!prefs.contains(Notifier.FLAG) && !prefs.contains("notifyAsked")) return
+        try {
+            core.call("notify.set", buildJsonObject { put("on", prefs.getBoolean(Notifier.FLAG, true)); put("asked", prefs.getBoolean("notifyAsked", false)) })
+            prefs.edit().remove(Notifier.FLAG).remove("notifyAsked").apply()
+        } catch (_: CoreException) {
+            // Tried again on the next start; the old values stay where they are.
+        }
+    }
+
+    /** Follows the core's `notify` (the settings shown in 我). */
+    suspend fun followNotify() {
+        core.topic(Topics.notify).collect { state ->
+            val view = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(NotifyView.serializer(), it) }.getOrNull() } ?: return@collect
+            notify = view.on
+            notifyAsked = view.asked
+        }
+    }
 
     /** Looks for a newer build of the app: one found shows 更新 in the home page's top bar (and in 我). */
     suspend fun checkUpdates() { updates.check() }
@@ -288,6 +338,10 @@ fun StillFailApp(app: AppState) {
         // A chat opened: its notification is read (its tag, as Notices.kt shows it).
         val context = LocalContext.current
         LaunchedEffect(top) { if (top is Screen.Chat && top.of is ChatOf.Session) Notifier.cancel(context, "${top.station}/${top.of.key}") }
+        // Looked at while in front with a chat on top (the chat itself says which, screens/Chat.kt): its notices are
+        // not shown then (client/core/src/attend.rs).
+        val lookedAt = app.inFront && top is Screen.Chat
+        LaunchedEffect(app.inFront, lookedAt) { app.core.focus(buildJsonObject { put("visible", app.inFront); put("focused", lookedAt) }) }
         if (top !is Screen.Home && top !is Screen.Chat) Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
         // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.
         fail.still.android.screens.ViewerHost()

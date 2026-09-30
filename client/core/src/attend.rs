@@ -1,0 +1,448 @@
+//! Where the viewer's attention is, and what follows from it (the `notify` topic, `client.focus`).
+//!
+//! Each UI says whether its page is in view (`visible`), looked at (`focused`), and which chat it shows with its end
+//! in view or not (`client.focus`). From that the core decides:
+//! - a chat's unread line (`unreadLine`): over the first message the viewer had not read when the chat was opened
+//!   (not theirs, said before it opened), held for the visit, which lasts while some UI shows the chat; older pages
+//!   are loaded first when it lies above them (`unreadAbove`);
+//! - what is read: a chat is read up to its newest message while a UI shows its end on a page in view;
+//! - which notices a page shows now (`notify`): none while notifications are off, none for a chat a UI is looking
+//!   at, none while this device has pushes and no page is in view (the push tells then); each once (`notice.claim`).
+//!
+//! Whether notifications are on, and whether the system was asked to allow them, are kept on the device here.
+
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+use crate::error::{CoreError, Result};
+use crate::host::Host;
+use crate::protocol::ClientId;
+
+/// Where the settings are kept (host storage).
+const KEY: &str = "notify";
+/// A notice no page took this long is not shown any more.
+const SHOW_FOR_MS: f64 = 30_000.0;
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+struct Settings {
+    on: bool,
+    #[serde(default)]
+    asked: bool,
+}
+
+/// A chat as a UI names it: its thread, or its key before it has one (or both).
+#[derive(Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct ChatOf {
+    pub station: String,
+    #[serde(default)]
+    pub thread: Option<u64>,
+    #[serde(default)]
+    pub session: Option<String>,
+    /// Its end is in view (what is read).
+    #[serde(default)]
+    pub end: bool,
+}
+
+impl ChatOf {
+    fn is(&self, station: &str, thread: Option<u64>, session: Option<&str>) -> bool {
+        self.station == station
+            && (thread.is_some_and(|t| self.thread == Some(t)) || session.is_some_and(|s| self.session.as_deref() == Some(s)))
+    }
+}
+
+/// What one UI shows.
+#[derive(Clone, Debug, Default)]
+struct Focus {
+    visible: bool,
+    focused: bool,
+    chat: Option<ChatOf>,
+}
+
+/// A chat shown: from when, and up to where it had been read then.
+struct Visit {
+    at: f64,
+    read: u64,
+    session: Option<String>,
+    /// The first message shown when older ones were last asked for (once per page).
+    asked: Option<u64>,
+}
+
+/// What a UI said (`client.focus`): each field given changes, the rest stays. `chat: null` shows none; `left`: the
+/// chat it names is not shown any more, if it is the one shown (a page going as the next one comes).
+#[derive(Deserialize, Debug, Default, PartialEq)]
+pub struct FocusCall {
+    #[serde(default)]
+    visible: Option<bool>,
+    #[serde(default)]
+    focused: Option<bool>,
+    #[serde(default, deserialize_with = "some")]
+    chat: Option<Option<ChatOf>>,
+    #[serde(default)]
+    left: Option<ChatOf>,
+}
+
+fn some<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<Option<ChatOf>>, D::Error> {
+    Option::<ChatOf>::deserialize(d).map(Some)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Call {
+    Focus(FocusCall),
+    /// Notifications on or off, and the system asked to allow them.
+    Set { on: Option<bool>, asked: Option<bool> },
+    /// A page takes a notice to show: only the first one does.
+    Claim { id: String },
+    /// A push came while no page may be open (Android's FCM service): whether to show it.
+    Pushed,
+}
+
+/// The calls of this module, by name; `None`: not one of them.
+pub fn parse(name: &str, params: &Value) -> Option<Result<Call>> {
+    let params = if params.is_null() { json!({}) } else { params.clone() };
+    let bad = |e: serde_json::Error| CoreError::invalid(format!("参数不对：{e}"));
+    Some(match name {
+        "client.focus" => serde_json::from_value::<FocusCall>(params).map(Call::Focus).map_err(bad),
+        "notify.set" => {
+            #[derive(Deserialize)]
+            struct P { on: Option<bool>, asked: Option<bool> }
+            serde_json::from_value::<P>(params).map(|p| Call::Set { on: p.on, asked: p.asked }).map_err(bad)
+        }
+        "notice.claim" => {
+            #[derive(Deserialize)]
+            struct P { id: String }
+            serde_json::from_value::<P>(params).map(|p| Call::Claim { id: p.id }).map_err(bad)
+        }
+        "notice.pushed" => Ok(Call::Pushed),
+        _ => return None,
+    })
+}
+
+/// What a chat's value asks of the core once computed: its older page loaded, or a read position recorded.
+#[derive(Debug, PartialEq)]
+pub enum Due {
+    Older { thread: u64 },
+    Read { thread: u64, seq: u64 },
+}
+
+pub struct Attend {
+    host: Rc<dyn Host>,
+    settings: Cell<Settings>,
+    /// This device holds a push registration that still.fail cloud has.
+    pushing: Cell<bool>,
+    focus: RefCell<HashMap<ClientId, Focus>>,
+    visits: RefCell<HashMap<(String, u64), Visit>>,
+    /// Read positions asked for, by chat: each once.
+    reads: RefCell<HashMap<(String, u64), u64>>,
+    /// Notices to be shown now, and since when.
+    show: RefCell<Vec<(Value, f64)>>,
+}
+
+impl Attend {
+    pub async fn load(host: Rc<dyn Host>) -> Rc<Attend> {
+        let kept = host.storage_get(KEY).await.ok().flatten().and_then(|b| serde_json::from_slice::<Settings>(&b).ok());
+        Rc::new(Attend {
+            host,
+            settings: Cell::new(kept.unwrap_or(Settings { on: true, asked: false })),
+            pushing: Cell::default(),
+            focus: RefCell::default(),
+            visits: RefCell::default(),
+            reads: RefCell::default(),
+            show: RefCell::default(),
+        })
+    }
+
+    pub fn on(&self) -> bool {
+        self.settings.get().on
+    }
+
+    /// The `notify` topic: the settings, whether this device should hold a push registration, and what to show now.
+    pub fn value(&self) -> Value {
+        let now = self.host.now_ms();
+        let Settings { on, asked } = self.settings.get();
+        let show: Vec<Value> = self.show.borrow().iter().filter(|(_, at)| now - at < SHOW_FOR_MS).map(|(n, _)| n.clone()).collect();
+        json!({ "on": on, "asked": asked, "push": on, "show": show })
+    }
+
+    /// Changes the settings and keeps them.
+    pub async fn set(&self, on: Option<bool>, asked: Option<bool>) {
+        let mut s = self.settings.get();
+        s.on = on.unwrap_or(s.on);
+        s.asked = asked.unwrap_or(s.asked);
+        self.settings.set(s);
+        if !s.on {
+            self.show.borrow_mut().clear();
+        }
+        let _ = self.host.storage_set(KEY, serde_json::to_vec(&s).unwrap_or_default()).await;
+    }
+
+    pub fn set_pushing(&self, on: bool) {
+        self.pushing.set(on);
+    }
+
+    /// Any page in view.
+    fn seen(&self) -> bool {
+        self.focus.borrow().values().any(|f| f.visible)
+    }
+
+    /// A UI's focus changed.
+    pub fn focus(&self, client: ClientId, call: FocusCall) {
+        let mut all = self.focus.borrow_mut();
+        let f = all.entry(client).or_default();
+        if let Some(v) = call.visible {
+            f.visible = v;
+        }
+        if let Some(v) = call.focused {
+            f.focused = v;
+        }
+        if let Some(left) = call.left
+            && f.chat.as_ref().is_some_and(|c| c.is(&left.station, left.thread, left.session.as_deref()))
+        {
+            f.chat = None;
+        }
+        if let Some(chat) = call.chat {
+            f.chat = chat;
+        }
+        drop(all);
+        self.end_visits();
+    }
+
+    /// A UI went away.
+    pub fn gone(&self, client: ClientId) {
+        self.focus.borrow_mut().remove(&client);
+        self.end_visits();
+    }
+
+    /// A visit lasts while some UI shows its chat.
+    fn end_visits(&self) {
+        let focus = self.focus.borrow();
+        self.visits.borrow_mut().retain(|(station, thread), v| {
+            focus.values().filter_map(|f| f.chat.as_ref()).any(|c| c.is(station, Some(*thread), v.session.as_deref()))
+        });
+    }
+
+    /// The UIs showing a chat.
+    fn showing(&self, station: &str, thread: Option<u64>, session: Option<&str>) -> Vec<Focus> {
+        self.focus.borrow().values().filter(|f| f.chat.as_ref().is_some_and(|c| c.is(station, thread, session))).cloned().collect()
+    }
+
+    /// A chat's value as computed (`session`: the key its topic names it by): its unread line goes in
+    /// (`unreadLine`), and what it asks of the core comes back.
+    pub fn chat(&self, station: &str, session: Option<&str>, value: &mut Value) -> Vec<Due> {
+        let mut due = Vec::new();
+        let Some(thread) = value.get("thread").and_then(|t| t.get("id")).and_then(Value::as_u64) else { return due };
+        let shown = self.showing(station, Some(thread), session);
+        if shown.is_empty() {
+            return due;
+        }
+        let known = value["thread"].get("read").and_then(Value::as_u64).unwrap_or(0);
+        let messages = value.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
+        let seq = |m: &Value| m.get("seq").and_then(Value::as_u64).unwrap_or(0);
+        let now = self.host.now_ms();
+        let mut visits = self.visits.borrow_mut();
+        let visit = visits.entry((station.to_string(), thread)).or_insert_with(|| Visit { at: now, read: known, session: session.map(str::to_string), asked: None });
+        let (read, opened) = (visit.read, visit.at);
+        let unread = |m: &Value| {
+            seq(m) > read
+                && m.get("createdAt").and_then(Value::as_f64).is_some_and(|at| at <= opened)
+                && m.get("mine").and_then(Value::as_bool) != Some(true)
+        };
+        let first = messages.first().map(seq);
+        // Those not loaded yet may hold it: the pages before are loaded first.
+        let above = value.get("more").and_then(Value::as_bool) == Some(true)
+            && first.is_some_and(|f| f > read + 1) && messages.iter().any(unread);
+        value["unreadLine"] = if above { Value::Null } else { messages.iter().find(|m| unread(m)).map_or(Value::Null, |m| json!(seq(m))) };
+        value["unreadAbove"] = json!(above);
+        if above && visit.asked != first {
+            visit.asked = first;
+            due.push(Due::Older { thread });
+        }
+        drop(visits);
+        // Read: up to the newest, while its end is in view on a page in view.
+        let newest = messages.last().map(seq).unwrap_or(0);
+        if shown.iter().any(|f| f.visible && f.chat.as_ref().is_some_and(|c| c.end)) && newest > known {
+            let mut reads = self.reads.borrow_mut();
+            let sent = reads.entry((station.to_string(), thread)).or_default();
+            if *sent < newest {
+                *sent = newest;
+                due.push(Due::Read { thread, seq: newest });
+            }
+        }
+        due
+    }
+
+    /// What was due could not be done: asked again the next time.
+    pub fn failed(&self, station: &str, due: &Due) {
+        match *due {
+            Due::Older { thread } => {
+                if let Some(v) = self.visits.borrow_mut().get_mut(&(station.to_string(), thread)) {
+                    v.asked = None;
+                }
+            }
+            Due::Read { thread, .. } => {
+                self.reads.borrow_mut().remove(&(station.to_string(), thread));
+            }
+        }
+    }
+
+    /// Notices new since the last look (notices.rs): answers whether any is to be shown now. `listened`: a page takes
+    /// what is to be shown (someone subscribes to `notify`); with none, nothing waits to be shown later.
+    pub fn noticed(&self, added: &[Value], listened: bool) -> bool {
+        if !self.on() || !listened {
+            return false;
+        }
+        // No page in view and a push on its way: that says it.
+        if self.pushing.get() && !self.seen() {
+            return false;
+        }
+        let now = self.host.now_ms();
+        let mut show = self.show.borrow_mut();
+        show.retain(|(_, at)| now - at < SHOW_FOR_MS);
+        let before = show.len();
+        for n in added {
+            let station = n.get("station").and_then(Value::as_str).unwrap_or("");
+            let looking = self.showing(station, n.get("thread").and_then(Value::as_u64), n.get("session").and_then(Value::as_str))
+                .iter().any(|f| f.visible && f.focused);
+            if !looking {
+                show.push((n.clone(), now));
+            }
+        }
+        show.len() > before
+    }
+
+    /// A page takes a notice to show: the first to ask.
+    pub fn claim(&self, id: &str) -> bool {
+        let mut show = self.show.borrow_mut();
+        let before = show.len();
+        show.retain(|(n, _)| n.get("id").and_then(Value::as_str) != Some(id));
+        show.len() < before
+    }
+
+    /// A push came: shown unless notifications are off or a page is in view (it shows its own).
+    pub fn pushed(&self) -> bool {
+        self.on() && !self.seen()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::{FakeHost, run};
+
+    fn focus(v: Value) -> FocusCall {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn chat(read: u64, more: bool, messages: &[(u64, f64, bool)]) -> Value {
+        json!({
+            "thread": { "id": 7, "read": read },
+            "more": more,
+            "messages": messages.iter().map(|(seq, at, mine)| json!({ "seq": seq, "createdAt": at, "mine": mine })).collect::<Vec<_>>(),
+        })
+    }
+
+    #[test]
+    fn the_unread_line_holds_for_the_visit_and_older_pages_come_first() {
+        run(async {
+            let host = FakeHost::new();
+            let attend = Attend::load(host.clone()).await;
+            // Not shown anywhere: no line, nothing due.
+            let mut v = chat(2, false, &[(1, 0.0, false), (2, 0.0, false), (3, 0.0, true), (4, 0.0, false)]);
+            assert!(attend.chat("local", None, &mut v).is_empty());
+            assert!(v.get("unreadLine").is_none());
+            // Opened: over the first unread not mine (3 is mine).
+            attend.focus(1, focus(json!({ "visible": true, "focused": true, "chat": { "station": "local", "thread": 7 } })));
+            attend.chat("local", None, &mut v);
+            assert_eq!(v["unreadLine"], 4);
+            // Read meanwhile: the line stays for the visit; a message said after it opened gets none.
+            let later = host.now_ms() + 1.0;
+            let mut v = chat(4, false, &[(1, 0.0, false), (2, 0.0, false), (3, 0.0, true), (4, 0.0, false), (5, later, false)]);
+            attend.chat("local", None, &mut v);
+            assert_eq!(v["unreadLine"], 4);
+            // Left and opened again: read up to 4 now, 5 said before this visit.
+            attend.focus(1, focus(json!({ "left": { "station": "local", "thread": 7 } })));
+            attend.focus(1, focus(json!({ "chat": { "station": "local", "session": "k1", "thread": 7 } })));
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            attend.chat("local", Some("k1"), &mut v);
+            assert_eq!(v["unreadLine"], 5);
+            // A page of the chat another leaves does not end the visit.
+            attend.focus(1, focus(json!({ "left": { "station": "local", "thread": 8 } })));
+            assert_eq!(attend.visits.borrow().len(), 1);
+            // Unread above what is loaded: the older page first, asked once per page.
+            attend.focus(1, focus(json!({ "chat": null })));
+            attend.focus(2, focus(json!({ "chat": { "station": "local", "thread": 7 } })));
+            let mut v = chat(1, true, &[(10, 0.0, false), (11, 0.0, false)]);
+            assert_eq!(attend.chat("local", None, &mut v), [Due::Older { thread: 7 }]);
+            assert_eq!((v["unreadLine"].clone(), v["unreadAbove"].clone()), (Value::Null, json!(true)));
+            assert!(attend.chat("local", None, &mut v).is_empty());
+            let mut v = chat(1, false, &[(1, 0.0, false), (2, 0.0, false), (10, 0.0, false)]);
+            attend.chat("local", None, &mut v);
+            assert_eq!(v["unreadLine"], 2);
+        });
+    }
+
+    #[test]
+    fn a_chat_is_read_while_its_end_shows_on_a_page_in_view() {
+        run(async {
+            let host = FakeHost::new();
+            let attend = Attend::load(host.clone()).await;
+            let mut v = chat(1, false, &[(1, 0.0, false), (2, 0.0, false)]);
+            attend.focus(1, focus(json!({ "visible": false, "chat": { "station": "local", "thread": 7, "end": true } })));
+            assert!(attend.chat("local", None, &mut v).is_empty());
+            attend.focus(1, focus(json!({ "visible": true, "chat": { "station": "local", "thread": 7, "end": false } })));
+            assert!(attend.chat("local", None, &mut v).is_empty());
+            attend.focus(1, focus(json!({ "chat": { "station": "local", "thread": 7, "end": true } })));
+            assert_eq!(attend.chat("local", None, &mut v), [Due::Read { thread: 7, seq: 2 }]);
+            // Once; again if it failed.
+            assert!(attend.chat("local", None, &mut v).is_empty());
+            attend.failed("local", &Due::Read { thread: 7, seq: 2 });
+            assert_eq!(attend.chat("local", None, &mut v), [Due::Read { thread: 7, seq: 2 }]);
+            // Read already: nothing.
+            let mut v = chat(2, false, &[(1, 0.0, false), (2, 0.0, false)]);
+            assert!(attend.chat("local", None, &mut v).is_empty());
+        });
+    }
+
+    #[test]
+    fn notices_show_unless_off_looked_at_or_left_to_a_push_and_each_once() {
+        run(async {
+            let host = FakeHost::new();
+            let attend = Attend::load(host.clone()).await;
+            let n = |id: &str| json!({ "id": id, "station": "ws/st", "session": "k1", "thread": 7 });
+            let shown = |a: &Attend| a.value()["show"].as_array().unwrap().iter().map(|n| n["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+            // Nobody listening: nothing waits.
+            assert!(!attend.noticed(&[n("n1")], false));
+            attend.focus(1, focus(json!({ "visible": true, "focused": false, "chat": { "station": "ws/st", "thread": 7 } })));
+            // The chat shown but not looked at: shown.
+            assert!(attend.noticed(&[n("n2")], true));
+            // Looked at: not.
+            attend.focus(1, focus(json!({ "focused": true })));
+            assert!(!attend.noticed(&[n("n3")], true));
+            assert_eq!(shown(&attend), ["n2"]);
+            // Each page takes it once.
+            assert!(attend.claim("n2"));
+            assert!(!attend.claim("n2"));
+            assert!(shown(&attend).is_empty());
+            // With pushes and no page in view, the push says it.
+            attend.set_pushing(true);
+            attend.focus(1, focus(json!({ "visible": false, "focused": false })));
+            assert!(!attend.noticed(&[n("n4")], true));
+            assert!(attend.pushed());
+            attend.focus(2, focus(json!({ "visible": true })));
+            assert!(attend.noticed(&[n("n5")], true));
+            assert!(!attend.pushed());
+            // Off: none, and it is kept.
+            attend.set(Some(false), Some(true)).await;
+            assert!(!attend.noticed(&[n("n6")], true));
+            assert!(shown(&attend).is_empty());
+            let again = Attend::load(host.clone()).await;
+            assert_eq!(again.value(), json!({ "on": false, "asked": true, "push": false, "show": [] }));
+            // A page gone is in view no more.
+            attend.gone(2);
+            assert!(!attend.seen());
+        });
+    }
+}
