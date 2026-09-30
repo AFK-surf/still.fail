@@ -17,16 +17,14 @@
 
 ## 待部署
 
-- 补历史不播动画（history-no-arrive-anim）：只改客户端（core 的 wasm、web、安卓），station 和 cloud 不用动。web 跟着 cloud / station 的页面上线；安卓要发新版才有。`caught` 是可选字段，新旧页面和 core 混用都不坏（没有 caught 时和以前一样）。上线后验：设备上已经存了某个 chat，关掉页面，等 chat 里来几条新消息后再打开，补回来的消息直接显示，不上浮、不平滑滚动；页面开着时新来的消息照常有进场动画。
-- agent 自动起标题（auto-chat-title）：改的是 station（mesh），要重新发 station 包，各台 station 更新后才生效；web 和安卓只改了重命名框的提示文字。db 在打开时原地给 `threads` 补三列（`auto_title`、`auto_title_n`、`auto_title_changes`），旧 station 照样能读这份 db。标题是 station 算好下发的，客户端没有改字段，新旧页面怎么混用都不坏。上线后验：新开一个 chat 说句话，agent 发完带 `title` 的 final 后，侧栏标题从第一句话换成它起的名字；手动改过名的 chat 不会被改。
-- 分享卡片改名（og-image-still-fail）：`web/public/og-image.png` 换成 still.fail 的图，官网 `site/index.html` 的标题和 og:title 换成「还是不行！干的什么 JB！」，og:image 改成绝对地址。app 那边跟着 web 上线；官网不在默认部署里，要单独 `python3 cloud/deploy.py site`。上线后验：`curl https://still.fail/` 看 og:title，打开 https://still.fail/og-image.png 和 https://app.still.fail/og-image.png 是新图；Slack 等会缓存旧卡片，要过一阵才换。
-- Slack 同一个 thread 的消息排队处理（slack-duplicate-session-race）：只改 station（mesh/app/src/hub.rs），要重新发 station 包，各台 station 更新后才生效；接口和 db 都没动。修的是新 thread 里第一条 @ 偶尔多出一条「⚠️ 无法创建会话：UNIQUE constraint failed: sessions.key」（Slack 为一次 @ 发 app_mention 和 message 两个事件，两个同时去建会话）。上线后验：在新 thread 里 @ 几次机器人，不再出现这条报错。
-- Slack thread 里直接发文件（slack-file-upload）：只改 station（mesh），要重新发 station 包，各台 station 更新后才生效。以前 agent 用 chat_post 附的文件，在 Slack 里只附一个 still.fail 链接；现在走 getUploadURLExternal → 上传 → files.completeUploadExternal，文件挂在 thread 里、文字下面，HTML 也一样上传。Slack app 没有 `files:write`（老 app，或在设置里关了 files 组）时报 missing_scope，这时照旧发链接，什么都没发出去之前就会发现。db 和接口都没动。上线后验：在 Slack thread 里让 bot 发一张图、一个 pdf 和一个 html，三个文件都出现在 thread 里；关了 files 组的 app 仍然发 still.fail 链接。
-- Slack app 权限补全和分组（slack-scopes）：station（mesh）的 SLACK_GROUPS 加了 7 组（canvas、列表、频道话题和邀请、用户组和通话、搜索、Slack Connect、状态元数据和斜杠命令），每个 scope 都在 Slack 文档里核对过支持 bot token；web 和安卓的权限表单改成按五段分组的 checkbox，只显示名字，说明在悬停时显示。新建的 app 默认全开；已装好的 app 新组显示为没勾，要在设置里勾上（或点「全部打开」）、应用，再点 Slack 给的重新安装链接。新旧混跑：旧页面只提交它认识的组，新组保持原样；新页面配旧 station，新组读不到按没勾显示，勾了旧 station 也会忽略。安卓要发新版才有新表单。上线后验：在一个老 app 的设置里点「全部打开」→ 应用到 Slack，提示要同意新权限，点链接重新安装后，bot 建 canvas 不再报 missing_scope。
-- 切 chat 不闪（chat-open-no-flicker）：只改客户端（core 的 wasm、web），station 和 cloud 不用动；web 跟着 cloud / station 的页面上线，core 里的两处（topic 第一个值不等 50ms 攒批、没打开的 chat 收到新消息接进本地存的那份）安卓要发新版才有。没有字段和接口改动，新旧混跑都不坏。上线后验：打开一个 chat，在侧栏点到另一个（离开超过半分钟的），中间不再出现空白页，被点的那行立刻变选中；`node test/perf/chat.mjs` 的 hop 一项 `empty` 应为 0。
-- 侧栏头像显示参与的人（sidebar-people-avatars）：station（mesh）、core（wasm 和安卓的 core）、web、安卓都改了。station 的 `/chats` 每行多给 `creator` 和 `people`，core 给人配名字和头像，`chats` 视图多一个 `members`（workspace 人数，本机页算 1），都是可选字段。新旧混跑：旧 station 不给 people 时，行里就没有这个字段，页面照旧只画 agent；旧页面遇到新 station，多出来的字段直接忽略。要重新发 station 包，各台 station 更新后才看得到人；web 跟着部署生效；安卓要发新版。上线后验：在多人 workspace 里，侧栏左边显示的是参与的人，发起人带一圈描边，agent 缩到标题右边，同一家的 agent 只画一个图标；状态点在标题前面；设置 → 外观 →「侧栏头像」（手机在「我」→「列表头像」）切到 Agent 为主或人为主，列表跟着变。
-
 ## 2026-09-30
+
+### 18:19 部署 7fb7463 → 6614ba8 → 8652e08，官网
+
+- 部署：`ember-deploy` 从 6b6782f 起分三次上线。7fb7463：cloud api/web/admin、studio 的 station 重启、station 发布包上传。第一次跑在完整检查的「Rust: station」挂了，报 `iroh-mainline-address-lookup` 里 `iroh_dns` 有两个版本，Cargo.lock 其实只有一份。原因是在 studio 上给别的 worktree 跑测试时用了 `CARGO_TARGET_DIR=~/WebstormProjects/ember/mesh/target`，缓存被弄乱了；重跑就过了。以后在 worktree 里测试别共用主检出的 target。6614ba8、8652e08 只有 web/admin 变化。部署时 `ember.3720.org/healthz` 报过一次 SSL EOF，本机和 studio 重查都是 200。
+- 官网 `python3 cloud/deploy.py site`：`build:site` 的预渲染（SSR）连着被两处挡住：fe6f7ab 的 StationGlyph 用了 `CSS.escape`（6614ba8 修），6436a34 的侧栏 `useSyncExternalStore` 没给 getServerSnapshot（8652e08 修）。完整检查不跑 `build:site`，这类问题只有部署官网时才暴露；共用组件里别在渲染时用浏览器才有的 API，`useSyncExternalStore` 要给第三个参数。上线后 still.fail 的 title 和 og:image 已是新的。
+- 这次上线的（原「待部署」各条照做了）：history-no-arrive-anim、auto-chat-title、og-image-still-fail、slack-duplicate-session-race、slack-file-upload、slack-scopes、chat-open-no-flicker、sidebar-people-avatars。push 用的 VAPID / FCM 密钥还没有，推送没开。
+- 没做的：别的 station（mini2 等）要在各自机器上 `stillfail update`；安卓没发新版，新权限表单、切 chat 不闪等客户端改动要等下次 `release.sh android`。
 
 ### 13:10 部署 6b6782f，发安卓 0.1.1141
 
