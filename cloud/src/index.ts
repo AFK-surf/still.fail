@@ -5,7 +5,7 @@
 // connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
 // *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
 import { installScript, releaseType } from "./install.ts";
-import { serveRelease } from "./releases.ts";
+import { latestDownload, serveRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import { adminOrigins, publicOrigins } from "./compat";
@@ -55,6 +55,13 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const type = release ? releaseType(release) : null;
     if (release && type) {
       return serveRelease(request, env.RELEASES, release, type);
+    }
+    // The apps' latest builds at links that stay (the site's download buttons; under /releases/, which cloud's routes send here).
+    const app = /^\/releases\/latest\/(mac|android)$/.exec(path)?.[1];
+    if (app) {
+      const file = await latestDownload(env.RELEASES, app);
+      if (!file || !releaseType(file)) return notFound();
+      return new Response(null, { status: 302, headers: { location: `/releases/${file}`, "cache-control": "no-store" } });
     }
   }
   const onConsole = adminOrigins(env).includes(url.origin);

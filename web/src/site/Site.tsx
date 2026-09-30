@@ -7,6 +7,9 @@ import { ThemeSwitch } from "./ThemeSwitch.tsx";
 import { heroMotion } from "./motion.ts";
 
 const APP = "https://app.still.fail";
+/** The apps' latest builds (cloud's /releases/latest/<app> goes to the one released last). */
+const MAC = `${APP}/releases/latest/mac`;
+const ANDROID = `${APP}/releases/latest/android`;
 const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
 
 /** A picture of web/public and its -dark twin: the one for the page's theme shows (site.css.ts), with no script. */
@@ -95,6 +98,8 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           </div>
           <div className={`${css.actions} ${css.heroActions}`}>
             <Button href={APP} kind="primary" large then="开喷">我来指挥</Button>
+            <Button href={MAC} kind="ghost" large>下载 Mac 版</Button>
+            <Button href={ANDROID} kind="ghost" large>下载 Android 版</Button>
           </div>
           <div className={css.stage}>
             <div className={css.stageGlow} />
@@ -125,6 +130,8 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         <div className={`${css.wrap} ${css.footerRow}`}>
           <span className={css.footerFirst}>© 2026 still.fail</span>
           <a className={css.navLink} href={APP}>网页版</a>
+          <a className={css.navLink} href={MAC}>Mac</a>
+          <a className={css.navLink} href={ANDROID}>Android</a>
           <a className={css.navLink} href="https://github.com/zzj3720/ember">GitHub</a>
         </div>
       </footer>

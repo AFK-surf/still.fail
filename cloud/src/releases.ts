@@ -143,3 +143,24 @@ export function groupReads(ranges: Range[]): { start: number; end: number; last:
     if (reads.length <= MAX_READS || gap > 2 ** 40) return reads;
   }
 }
+
+/**
+ * The latest build of an app, for a link that does not change (the site's downloads, /releases/latest/<app>): where its
+ * updater's feed says it is, as a path under /releases/; null while there is none.
+ */
+export async function latestDownload(bucket: ReleaseBucket | undefined, app: string): Promise<string | null> {
+  const feed = app === "mac" ? "desktop/stillfail-mac.yml" : app === "android" ? "android/latest.json" : null;
+  const object = feed ? await bucket?.get(feed) : null;
+  if (!object) return null;
+  const text = await new Response(object.body).text();
+  if (app === "mac") {
+    const file = /^path:\s*(\S+)\s*$/m.exec(text)?.[1];
+    return file ? `desktop/${file}` : null;
+  }
+  try {
+    const file = (JSON.parse(text) as { file?: unknown }).file;
+    return typeof file === "string" ? file : null;
+  } catch {
+    return null;
+  }
+}

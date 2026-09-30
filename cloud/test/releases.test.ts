@@ -96,3 +96,21 @@ test("ranges are read from the bucket in a few reads", () => {
   // Out of order: a read never goes back.
   assert.deepEqual(groupReads([{ start: 50, end: 60 }, { start: 0, end: 10 }]).map((r) => r.last), [0, 1]);
 });
+
+test("/releases/latest/<app> goes to the app's latest build, as its updater's feed names it", async () => {
+  const h = await harness();
+  try {
+    assert.equal((await h.fetch("/releases/latest/mac", { redirect: "manual" })).status, 404, "none released yet");
+    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: Uint8Array | string): Promise<unknown> };
+    await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1200\nfiles:\n  - url: stillfail-0.1.1200-arm64-mac.zip\n    size: 5\npath: stillfail-0.1.1200-arm64-mac.zip\nsha512: x\n");
+    await bucket.put("android/latest.json", JSON.stringify({ versionCode: 1200, file: "android/stillfail-1200.apk" }));
+    const mac = await h.fetch("/releases/latest/mac", { redirect: "manual" });
+    assert.equal(mac.status, 302);
+    assert.equal(new URL(mac.headers.get("location")!, "http://x").pathname, "/releases/desktop/stillfail-0.1.1200-arm64-mac.zip");
+    const android = await h.fetch("/releases/latest/android", { redirect: "manual" });
+    assert.equal(new URL(android.headers.get("location")!, "http://x").pathname, "/releases/android/stillfail-1200.apk");
+    assert.equal((await h.fetch("/releases/latest/windows", { redirect: "manual" })).status, 404);
+  } finally {
+    await h.close();
+  }
+});
