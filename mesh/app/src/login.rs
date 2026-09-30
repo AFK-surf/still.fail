@@ -425,8 +425,10 @@ echo "Successfully logged in"
         crate::config::parse_config(&serde_json::from_value(raw).unwrap(), dir).unwrap().profiles.remove(0)
     }
 
+    // Up to 30 seconds: the fake command is a new executable each run, and on a busy machine (the deploy's full check,
+    // many builds at once) starting it has taken over 10.
     async fn wait(logins: &LoginManager, profile: &str, state: LoginState) -> LoginJob {
-        for _ in 0..500 {
+        for _ in 0..1500 {
             if let Some(job) = logins.get(profile).filter(|j| j.state == state) {
                 return job;
             }
