@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Edit, Brain, ChevronRight, Command, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
+import { Archive, ArrowLeft, Edit, Brain, Command, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -6,7 +6,7 @@ import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
 import { Waiting } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
-import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
@@ -19,6 +19,7 @@ import { TitleInput, useRename } from "./Rename.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
 import { OpenJobs } from "./OpenJobs.tsx";
+import { StationGlyph, glyphCounts, glyphLabel, glyphSummary } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -38,7 +39,7 @@ export function Sidebar() {
         <>
           <ChatList scope="local" newChat="/new" stationsPage="/settings" archive="/archive" />
           <div className={nav.navFoot}>
-            <LocalWaiting />
+            <StationTrouble scope="local" to="/settings" />
             <OpenJobs stations={LOCAL_STATIONS} />
             <NavLink className={nav.navRow} to="/settings"><Settings {...ICON} />设置</NavLink>
           </div>
@@ -49,12 +50,6 @@ export function Sidebar() {
 }
 
 const LOCAL_STATIONS = [{ address: "local" }];
-
-/** On a station's own page: only what the core waits on (its one station's state is the page's). */
-function LocalWaiting() {
-  const status = useStatus();
-  return status?.state ? <Waiting status={status} /> : null;
-}
 
 function SettingsNav() {
   const link = useLink();
@@ -114,23 +109,26 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
 }
 
 /**
- * The one place that says what is wrong or slow, at the top of the sidebar's foot: the workspace's stations not working
- * as they should (the core's `trouble`: which, or how many, and the worst state's dot, a spinner while one reconnects;
- * it leads to the stations); else what the core has been waiting on for a while, or ember cloud not reached (the
- * core's `status`: what, how long, how fast; each thing on hover). Nothing while all goes as it should.
+ * The stations at the top of the sidebar's foot, always: their glyph (./StationGlyph.tsx) and a line beside it, how many
+ * and who works while all is well, or what is wrong (the core's `trouble`: which, or how many; red while one fails). It
+ * leads to the stations. Above it, what the core has been waiting on for a while, or ember cloud not reached (the core's
+ * `status`: what, how long, how fast; each thing on hover); that last puts the glyph to sleep.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
-  const trouble = useChats(scope, false).value?.trouble;
+  const view = useChats(scope, false).value;
   const status = useStatus();
-  if (!trouble) return status?.state ? <Waiting status={status} /> : null;
+  const waiting = status?.state ? <Waiting status={status} /> : null;
+  if (!view || view.stations.length === 0) return waiting;
+  const counts = glyphCounts(view, status?.state === "trouble");
+  const trouble = view.trouble;
   return (
-    <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble.state}>
-      <span className={nav.stationTroubleMark}>
-        {trouble.state === "reconnecting" ? <span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" /> : <StatusDot state={trouble.state === "error" ? "error" : "offline"} />}
-      </span>
-      <span className={nav.stationTroubleText}>{trouble.text}</span>
-      <ChevronRight size={14} className={nav.stationTroubleGo} aria-hidden="true" />
-    </NavLink>
+    <>
+      {!trouble && waiting}
+      <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state} aria-label={`Station：${trouble?.text ?? glyphLabel(counts)}`}>
+        <span className={nav.stationTroubleMark}><StationGlyph counts={counts} size={18} /></span>
+        <span className={nav.stationTroubleText}>{trouble?.text ?? glyphSummary(view, counts)}</span>
+      </NavLink>
+    </>
   );
 }
 

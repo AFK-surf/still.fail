@@ -28,6 +28,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.graphics.drawscope.Stroke
 import fail.still.android.ui.reducedMotion
+import fail.still.android.ui.StationGlyph
+import fail.still.android.ui.glyphCounts
+import fail.still.android.ui.glyphLabel
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -168,13 +171,13 @@ fun HomeScreen(current: WorkspaceEntry) {
             }
             // The archive: chats put away by hand or by the station once idle (the wide screen has it in the list's filter menu).
             if (all.value?.stations?.isNotEmpty() == true) Box(Modifier.semantics { contentDescription = "已归档" }) { NavButton(Icons.Archive, { app.push(Screen.Archive) }, 20.dp) }
-            // A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which.
-            Box {
-                NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
-                all.value?.trouble?.let { t ->
-                    val dot = when (t.state) { "reconnecting" -> C.accent; "error" -> C.red; else -> C.subtle }
-                    Box(Modifier.align(Alignment.TopEnd).offset((-3).dp, 3.dp).size(13.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(dot).semantics { contentDescription = t.text })
-                }
+            // The stations at a glance (ui/StationGlyph.kt); its page says which is which. The core reaching nothing
+            // at all (`status` in trouble) puts it to sleep.
+            val status by rememberTopic<StatusView>(app.core, Topics.status)
+            val counts = glyphCounts(all.value, status.value?.state == "trouble")
+            val label = "Station：${glyphLabel(counts)}" + (all.value?.trouble?.let { "（${it.text}）" } ?: "")
+            Box(Modifier.size(34.dp).clip(CircleShape).clickable { app.push(Screen.Stations) }.semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+                StationGlyph(counts)
             }
         }
         Toolbar(app, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })

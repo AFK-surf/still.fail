@@ -170,13 +170,13 @@ export const rowArchive = style({
 });
 
 /** Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
-export const stationTrouble = style({
-  marginBottom: 4, color: vars.text,
-  selectors: { '&[data-state="error"]': { color: vars.red } },
-});
+export const stationTrouble = style({ marginBottom: 4, color: vars.text });
 export const stationTroubleMark = style({ width: 16, flex: "none", display: "grid", placeItems: "center" });
-export const stationTroubleText = style({ flex: 1, ...ellipsis });
-export const stationTroubleGo = style({ flex: "none", color: vars.muted });
+export const stationTroubleText = style({
+  flex: 1, ...ellipsis,
+  // Only the words go red: the glyph keeps its ink, a failing station its red dot.
+  selectors: { [`${stationTrouble}[data-state="error"] &`]: { color: vars.red } },
+});
 /** What is waited on: quieter than a station down, it is only slow; the row is no link. */
 globalStyle(`${stationTrouble}[data-state="slow"]`, { color: vars.muted, cursor: "default" });
 globalStyle(`${stationTrouble}[role="status"]:hover`, { background: "transparent" });

@@ -4,13 +4,15 @@
 import { useRef, useState } from "react";
 import { useChats, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, ChevronDown, Edit, Server, Unplug } from "../icons.tsx";
+import { Archive, ChevronDown, Edit, Unplug } from "../icons.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { Avatar, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
+import { StationGlyph, glyphCounts, glyphLabel } from "../StationGlyph.tsx";
+import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
 import * as css from "./Home.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -50,11 +52,8 @@ export function Home() {
         </button>
         {/* The archive: chats put away by hand or by the station once idle (the wide screen has it in the list's filter menu). */}
         {(all.value?.stations.length ?? 0) > 0 && <NavButton icon={Archive} iconSize={20} label="已归档" onClick={() => app.push(app.at("/archive"))} />}
-        {/* A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which. */}
-        <span className="m-home-station">
-          <NavButton icon={Server} iconSize={20} label={all.value?.trouble ? `Station：${all.value.trouble.text}` : "Station"} onClick={() => app.push(app.at("/settings/stations"))} />
-          {all.value?.trouble && <span className="m-trouble-dot" data-state={all.value.trouble.state} aria-hidden="true" />}
-        </span>
+        {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
+        <StationButton view={all.value} />
       </header>
       {/* One capsule floating over the list, round at both ends like what is in it: the switch fills it, and the new-chat
           button closes it at the right, a disc in the accent. */}
@@ -65,6 +64,18 @@ export function Home() {
         </div>
       </div>}
     </div>
+  );
+}
+
+/** The bar's way to the stations, drawn as how they are: what the core cannot reach at all (`status` in trouble) puts it to sleep. */
+function StationButton({ view }: { view: ChatsView | undefined }) {
+  const app = useApp();
+  const counts = glyphCounts(view, useStatus()?.state === "trouble");
+  const label = view?.trouble ? `Station：${glyphLabel(counts)}（${view.trouble.text}）` : `Station：${glyphLabel(counts)}`;
+  return (
+    <button type="button" className={barsCss.mNavButton} onClick={() => app.push(app.at("/settings/stations"))} aria-label={label}>
+      <StationGlyph counts={counts} />
+    </button>
   );
 }
 
