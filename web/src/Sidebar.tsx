@@ -4,6 +4,7 @@ import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
+import { prime } from "./core/react.ts";
 import { Waiting } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
@@ -86,6 +87,9 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
   // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
+  // The page it was going to is there (or another took its place).
+  const path = useLocation().pathname;
+  useEffect(() => setGoing(null), [path]);
   useEffect(() => {
     if (all.value && mine.value) {
       pending.reconcile(new Set([...all.value.days, ...mine.value.days].flatMap((day) => day.items.map(archiveKey))));
@@ -204,12 +208,22 @@ function ChatRow({ item }: { item: ChatItem }) {
   const archive = useArchive(item, to);
   const rename = useRename(item.station);
   const [editing, setEditing] = useState(false);
+  const goingTo = useGoing();
+  const here = decodeURIComponent(useLocation().pathname) === decodeURIComponent(to);
   // A new chat its station has not made yet, or one on a station offline, is neither renamed nor archived.
   const menu = !item.offline && !item.pending;
   const row = (
-    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={(e) => { if (editing) { e.preventDefault(); return; } chatClicked(); move(e, to, "chat"); }}
+    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={(e) => {
+        if (editing) { e.preventDefault(); return; }
+        chatClicked();
+        move(e, to, "chat");
+        if (!here && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setGoing(to);
+      }}
+      data-going={goingTo === null ? undefined : goingTo === to ? "here" : "away"}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
-      onMouseDown={(e) => e.preventDefault()}>
+      onMouseDown={(e) => e.preventDefault()}
+      // Pointed at or pressed: its chat is read meanwhile, there when the page opens.
+      onPointerEnter={() => primeChat(item)} onPointerDown={() => primeChat(item)} onFocus={() => primeChat(item)}>
       <AgentsPicture item={item} />
       <span className={nav.navSessionText}>
         {/* Where the chat happens sits at the title's end, top right. */}
@@ -275,6 +289,25 @@ function useArchive(item: ChatItem, to: string) {
       toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
     }
   };
+}
+
+/**
+ * The chat a row's click is going to, while its page is on the way (the page before stays until the chat is read,
+ * core/react.ts useReady): its row is the one shown selected meanwhile, so the click answers at once.
+ */
+let going: string | null = null;
+const goingHeard = new Set<() => void>();
+function setGoing(to: string | null): void {
+  if (going === to) return;
+  going = to;
+  for (const heard of goingHeard) heard();
+}
+function useGoing(): string | null {
+  return useSyncExternalStore((heard) => { goingHeard.add(heard); return () => goingHeard.delete(heard); }, () => going);
+}
+
+function primeChat(item: ChatItem): void {
+  if (!item.offline) prime({ topic: "chat", station: item.station, session: item.id });
 }
 
 /** Beside a chat's row while pointed at: puts it in the archive. */

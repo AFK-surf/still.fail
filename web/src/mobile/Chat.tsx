@@ -4,6 +4,7 @@
 // words rather than out in a margin. Long-press opens a message on its own page (Annotate.tsx); ＋ adds files.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
+import { useReady } from "../core/react.ts";
 import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
@@ -51,6 +52,8 @@ export function ChatScreen() {
     if (asked) app.push(servicePath(station.address, key, asked));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
+  // The page slides in once its chat is read (from the device, mostly at once; 250 ms at most), not empty.
+  useReady({ topic: "chat", station: station.address, session: key }, 250);
   const chat = useChat(station.address, { session: key });
   const view = chat.value;
   const navigate = useNavigate();

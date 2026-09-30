@@ -183,6 +183,22 @@ impl Kept {
         self.queued(async move |kept| kept.put(&log, from, entries, truncate, thread).await).map(|_| ()).boxed_local()
     }
 
+    /// Adds `entries`, numbered from `from` on, to what is kept of a log, if they carry on from it: nothing kept, or a
+    /// gap before them, and nothing changes (they are read when the log is opened).
+    pub fn extend(&self, log: &Log, from: u64, entries: Vec<Value>) -> LocalBoxFuture<'static, ()> {
+        let log = log.clone();
+        self.queued(async move |kept| {
+            let Some(held) = kept.held(&log).await else { return };
+            let to = from + entries.len() as u64;
+            if entries.is_empty() || from > held.last + 1 || to <= held.last + 1 {
+                return;
+            }
+            kept.put(&log, from, entries, false, None).await;
+        })
+        .map(|_| ())
+        .boxed_local()
+    }
+
     /// Keeps a thread's summary and sidebar title as last seen (each where given), if anything of it is kept.
     pub fn summary(&self, log: &Log, thread: Option<Value>, title: Option<Value>) -> LocalBoxFuture<'static, ()> {
         let log = log.clone();
@@ -434,6 +450,27 @@ mod tests {
             let (held, page) = kept.open(&log, 50).await.unwrap();
             assert_eq!((held.first, held.last, numbers(&page)), (400, 401, vec![400, 401]));
             assert_eq!((host.stored("thread/ws/st/7/0"), host.stored("thread/ws/st/7/1").is_some()), (None, true));
+        });
+    }
+
+    #[test]
+    fn extend_only_carries_on_what_is_kept() {
+        run(async {
+            let host = FakeHost::new();
+            let kept = Kept::new(host.clone());
+            let log = Log::thread("ws/st", 7);
+            // Nothing kept: nothing starts.
+            kept.extend(&log, 1, entries(1, 3)).await;
+            assert_eq!(kept.open(&log, 50).await, None);
+            kept.write(&log, 1, entries(1, 10), false, Some(json!({"id": 7}))).await;
+            // What carries on (overlapping or right after) is added; past a gap, or all known, nothing changes.
+            kept.extend(&log, 11, entries(11, 12)).await;
+            kept.extend(&log, 12, entries(12, 13)).await;
+            kept.extend(&log, 20, entries(20, 21)).await;
+            kept.extend(&log, 5, entries(5, 6)).await;
+            let (held, page) = kept.open(&log, 50).await.unwrap();
+            assert_eq!((held.first, held.last, held.thread), (1, 13, json!({"id": 7})));
+            assert_eq!(numbers(&page), (1..=13).collect::<Vec<_>>());
         });
     }
 

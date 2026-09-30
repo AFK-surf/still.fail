@@ -5,7 +5,8 @@
 //! its value stays cached until then, so a UI that re-subscribes gets it at
 //! once. `set` stores a value and schedules its emission; emissions are
 //! coalesced over [`COALESCE_MS`], one window for all topics, so topics changed
-//! together go out together, in the order they changed. A subscriber's first message is the whole value, the
+//! together go out together, in the order they changed; a topic's first value, which a page opening waits on, goes
+//! out on the next turn instead, with whatever else is pending. A subscriber's first message is the whole value, the
 //! next ones only what changed since the last one sent ([`delta`]), and an
 //! unchanged value sends nothing.
 //!
@@ -76,6 +77,8 @@ struct Inner {
     /// what one event changes (a live step ending, the timeline growing) goes out together.
     pending: Vec<Topic>,
     window_open: bool,
+    /// A flush on the next turn is on its way (a topic's first value).
+    soon: bool,
     /// The values of the topics the data center holds (`data.rs`): read there, never kept here but as sent.
     held: Option<Rc<dyn Fn(&Topic) -> Option<Value>>>,
     /// The minute clock runs: times in words go out fresh each minute while anything is shown.
@@ -350,12 +353,15 @@ impl Store {
     fn schedule_emit(&self, topic: &Topic) {
         let mut inner = self.inner.borrow_mut();
         inner.pending.push(topic.clone());
-        if std::mem::replace(&mut inner.window_open, true) {
+        // Nothing of it shown yet: whoever subscribed is waiting on it (a chat opening), not on it changing again.
+        let first = inner.topics.get(topic).is_some_and(|e| e.sent.is_none() && !e.subscribers.is_empty());
+        let open = if first { &mut inner.soon } else { &mut inner.window_open };
+        if std::mem::replace(open, true) {
             return;
         }
         drop(inner);
         let store = self.me.clone();
-        let sleep = self.host.sleep(COALESCE_MS);
+        let sleep = self.host.sleep(if first { 0 } else { COALESCE_MS });
         self.host.spawn(
             async move {
                 sleep.await;
@@ -371,7 +377,9 @@ impl Store {
     fn flush_pending(&self) {
         let pending = {
             let mut inner = self.inner.borrow_mut();
+            // Either timer takes all that is pending; the other one, when it comes, finds less or nothing.
             inner.window_open = false;
+            inner.soon = false;
             std::mem::take(&mut inner.pending)
         };
         for topic in pending {
@@ -821,6 +829,11 @@ mod tests {
             store.subscribe(1, 1, overview());
             store.subscribe(1, 2, session.clone());
             store.subscribe(1, 3, live.clone());
+            store.set(&overview(), Ok(json!("o0")));
+            store.set(&session, Ok(json!("s0")));
+            store.set(&live, Ok(json!("l0")));
+            pass(COALESCE_MS * 2).await;
+            host.take_emitted();
             // Real time, for a margin the timer resolution cannot eat.
             host.speed_up(1);
             let wait = |ms: u64| tokio::time::sleep(std::time::Duration::from_millis(ms));
@@ -831,6 +844,26 @@ mod tests {
             store.set(&live, Ok(json!("l")));
             wait(COALESCE_MS * 3 / 4).await;
             assert_eq!(host.take_emitted(), vec![(1, value(1, json!("o"))), (1, value(2, json!("s"))), (1, value(3, json!("l")))]);
+        });
+    }
+
+    #[test]
+    fn a_first_value_goes_out_without_waiting_the_window() {
+        run(async {
+            let (host, store, _) = setup();
+            let session = Topic::Session { station: "local".into(), key: "k".into() };
+            store.subscribe(1, 1, overview());
+            store.set(&overview(), Ok(json!("o0")));
+            pass(COALESCE_MS * 2).await;
+            host.take_emitted();
+            store.subscribe(1, 2, session.clone());
+            host.speed_up(1);
+            let wait = |ms: u64| tokio::time::sleep(std::time::Duration::from_millis(ms));
+            // A change opens the window; the new topic's first value does not wait for it, and takes the change along.
+            store.set(&overview(), Ok(json!("o")));
+            store.set(&session, Ok(json!("s")));
+            wait(COALESCE_MS / 5).await;
+            assert_eq!(host.take_emitted(), vec![(1, value(1, json!("o"))), (1, value(2, json!("s")))]);
         });
     }
 }

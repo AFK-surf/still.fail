@@ -1,6 +1,6 @@
 // React on the core: `useTopic` renders a topic's current value, `useCall`
 // makes calls. Components that want the same topic share one subscription.
-import { useCallback, useRef, useSyncExternalStore } from "react";
+import { use, useCallback, useRef, useSyncExternalStore } from "react";
 import { connectCore, type CoreClient, type CoreError, type Topic } from "./client.ts";
 import { migrateLegacy } from "./migrate.ts";
 
@@ -32,12 +32,18 @@ interface Entry {
   listeners: Set<() => void>;
   unsubscribe: (() => void) | null;
   drop: ReturnType<typeof setTimeout> | null;
+  /** What a render waits on for its first value (`useReady`), settled once waited, whether it came or not. */
+  ready?: Promise<void>;
+  /** How long it is kept once nobody watches it, when not LINGER_MS. */
+  linger?: number;
 }
 
 // A topic nobody watches is let go after a while: going back to what was just
 // shown (switching chats quickly, a remount) finds it current at once, with
 // no frame waiting for the core's first answer.
 const LINGER_MS = 30_000;
+// A chat is kept longer: going back to one read a few minutes ago shows it as it is, with nothing to wait for.
+const LINGER_CHAT_MS = 5 * 60_000;
 const entries = new Map<string, Entry>();
 
 /** What a page knows of a topic before any core answers: nothing, unless it said (setTopicSource). */
@@ -62,6 +68,7 @@ function entry(key: string, topic?: Topic): Entry {
   if (!found) {
     const value = topic && known ? known(topic) : undefined;
     found = { state: value === undefined || value === null ? { value: undefined, error: null, loading: true } : { value, error: null, loading: false }, listeners: new Set(), unsubscribe: null, drop: null };
+    if (topic?.topic === "chat") found.linger = LINGER_CHAT_MS;
     entries.set(key, found);
     // Created by a render that may never commit: dropped unless someone listens.
     linger(key, found);
@@ -75,7 +82,7 @@ function linger(key: string, e: Entry): void {
     if (e.listeners.size > 0) return;
     e.unsubscribe?.();
     entries.delete(key);
-  }, LINGER_MS);
+  }, e.linger ?? LINGER_MS);
 }
 
 function update(e: Entry, state: TopicState<unknown>): void {
@@ -111,6 +118,46 @@ export function useTopic<T = unknown>(topic: Topic | null): TopicState<T> {
   const snapshot = useCallback(() => (key ? entry(key, topic!).state : IDLE), [key]);
   // On the server (the site built to HTML) the same: what is known already.
   return useSyncExternalStore(subscribe, snapshot, snapshot) as TopicState<T>;
+}
+
+/**
+ * Holds the render back until the topic has its first value, `ms` at most. Rendered as part of a navigation (a
+ * transition), the page that was there stays until then instead of an empty one showing first. Once only per topic.
+ */
+export function useReady(topic: Topic | null, ms: number): void {
+  const wait = topic ? waitFor(topicKey(topic), topic, ms) : null;
+  if (wait) use(wait);
+}
+
+function waitFor(key: string, topic: Topic, ms: number): Promise<void> | null {
+  const e = entry(key, topic);
+  // Once waited on, always the same (settled) one: the render that suspended on it must use it again when it goes on.
+  if (e.ready) return e.ready;
+  if (!e.state.loading) return null;
+  let resolve!: () => void;
+  const ready = new Promise<void>((r) => { resolve = r; });
+  e.ready = ready;
+  let over = false;
+  let off: (() => void) | null = null;
+  const done = () => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    off?.();
+    // Marked as React reads it: used again, it goes on at once rather than suspending for a tick.
+    Object.assign(ready, { status: "fulfilled", value: undefined });
+    resolve();
+  };
+  const timer = setTimeout(done, ms);
+  off = listen(key, topic, () => { if (!e.state.loading) done(); });
+  if (over) off();
+  return ready;
+}
+
+/** Starts reading a topic ahead of a page that will show it (a row hovered), kept a while for it. */
+export function prime(topic: Topic): void {
+  const key = topicKey(topic);
+  listen(key, topic, () => undefined)();
 }
 
 /** Several topics at once (as many as there are, which may change): their states in the order given. */

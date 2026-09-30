@@ -1656,8 +1656,14 @@ impl Stations {
     /// up on by reading (see `thread_value`).
     fn put_entries(&self, station: &str, id: u64, entries: Vec<Value>, told: bool) {
         let topic = Topic::Thread { station: station.into(), thread: id };
-        // Until it has a value, what it reads next covers these.
-        let Some(last) = self.sink.get(&topic).and_then(|v| v.get("last")?.as_u64()) else { return };
+        // Until it has a value, what it reads next covers these. A chat not open meanwhile keeps up on the device: it
+        // opens from there as it is, rather than what came since landing after it (warm only reads once).
+        let Some(last) = self.sink.get(&topic).and_then(|v| v.get("last")?.as_u64()) else {
+            if told && !self.is_live(&topic) && let Some(first) = entries.first().and_then(n_of) {
+                self.host.spawn(self.kept.extend(&Log::thread(station, id), first, entries));
+            }
+            return;
+        };
         let fresh: Vec<Value> = entries.into_iter().filter(|e| n_of(e).is_some_and(|n| n > last)).collect();
         let Some(first) = fresh.first().and_then(n_of) else { return };
         {
@@ -2862,6 +2868,31 @@ mod tests {
             assert_eq!(numbers(&sink, 7), (203..=302).collect::<Vec<_>>(), "two pages, both from what is kept");
             assert_eq!(wire.paths().iter().filter(|p| p.contains("before=")).count(), 0);
             assert_eq!(texts(&sink, 7).last().unwrap(), "m302");
+        });
+    }
+
+    #[test]
+    fn a_chat_not_open_keeps_up_on_the_device() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 300, "entries": entries(251, 300)}));
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 300, 0)]));
+            stations.start(&thread(7));
+            stations.start(&threads());
+            host.settle().await;
+            // Closed (let go by the store, its value with it); what is said meanwhile carries on what is kept. Past a
+            // gap it does not: that is read when it opens.
+            stations.stop(&thread(7));
+            sink.values.borrow_mut().remove(&thread(7));
+            wire.event("thread", json!({"id": 7, "entries": [entry(301, "m301")]}));
+            wire.event("thread", json!({"id": 7, "entries": [entry(303, "m303")]}));
+            host.settle().await;
+            wire.answer("GET /admin/api/threads/7/entries?after=301", 200, json!({"last": 303, "entries": [entry(302, "m302"), entry(303, "m303")]}));
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(texts(&sink, 7).last().unwrap(), "m303");
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?after=301"), 1, "asked only for what came after what was kept");
+            assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 303);
         });
     }
 

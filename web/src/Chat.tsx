@@ -1507,7 +1507,9 @@ function flashRange(range: Range): void {
 export function goToNeighbour(step: -1 | 1): boolean {
   // The list in view: the other one (全部 or 我参与的) sits beside it out of view, and a row of it is not a neighbour.
   const rows = [...document.querySelectorAll<HTMLAnchorElement>(`.${nav.sidebar} .${nav.navScroll}:not([inert]) [data-flip]:not([data-leaving]) a.${nav.navSession}`)];
-  const at = rows.findIndex((row) => row.getAttribute("aria-current") === "page");
+  // From the row on its way to be the current one (clicked, its page not there yet), else the current one.
+  const going = rows.findIndex((row) => row.dataset.going === "here");
+  const at = going >= 0 ? going : rows.findIndex((row) => row.getAttribute("aria-current") === "page");
   const next = at < 0 ? null : rows[at + step];
   if (!next) return false;
   next.click();

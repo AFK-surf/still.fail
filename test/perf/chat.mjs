@@ -1,5 +1,6 @@
-// How a chat page performs on a station's real chats: opening one (a fresh page load, and a switch to it from the
-// new chat page through the sidebar, the way people do), and scrolling it from the latest message to the first and
+// How a chat page performs on a station's real chats: opening one (a fresh page load, a switch to it from the new
+// chat page through the sidebar, the way people do, and a hop to it from another chat once the sidebar's chats are on
+// the device: how many frames show no messages between the two), and scrolling it from the latest message to the first and
 // back. It reads what a station has; it sends nothing, though opening a chat marks it read as it would for a person.
 //
 //   node test/perf/chat.mjs                       the local station's page (http://127.0.0.1:4760/admin/), its 3 longest chats
@@ -32,19 +33,20 @@ const { values: opt } = parseArgs({
   allowPositionals: true,
 });
 
+// What each measurement reports, in order (medians over the runs).
+const COLUMNS = {
+  open: ["firstRow", "settled", "dropped", "worst", "long", "blocking", "rows", "nodes", "heapMB"],
+  switch: ["firstRow", "settled", "dropped", "worst", "long", "blocking"],
+  hop: ["firstRow", "settled", "empty", "emptyMs", "dropped", "long"],
+  scroll: ["frames", "dropped", "p95", "worst", "long", "blocking", "replaced", "height", "rows"],
+};
+
 if (opt.compare) {
   const [a, b] = process.argv.slice(2).filter((x) => x.endsWith(".json")).map((f) => ({ f, r: JSON.parse(readFileSync(f, "utf8")) }));
   if (!a || !b) throw new Error("--compare needs two result files");
   compare(a, b);
   process.exit(0);
 }
-
-// What each measurement reports, in order (medians over the runs).
-const COLUMNS = {
-  open: ["firstRow", "settled", "dropped", "worst", "long", "blocking", "rows", "nodes", "heapMB"],
-  switch: ["firstRow", "settled", "dropped", "worst", "long", "blocking"],
-  scroll: ["frames", "dropped", "p95", "worst", "long", "blocking", "replaced", "height", "rows"],
-};
 
 const station = new URL(opt.url);
 const runs = Number(opt.runs);
@@ -71,7 +73,7 @@ const browser = await pw.chromium.launch({ headless: opt.headless, executablePat
 const results = { url: base.href, station: station.href, dist: opt.dist ?? null, at: new Date().toISOString(), runs, chats: [] };
 try {
   for (const chat of chats) {
-    const row = { key: chat.key, title: chat.title, messages: chat.messages, open: [], switch: [], scroll: [] };
+    const row = { key: chat.key, title: chat.title, messages: chat.messages, open: [], switch: [], hop: [], scroll: [] };
     for (let i = 0; i < runs; i++) {
       const context = await browser.newContext({ viewport: { width: 1512, height: 900 }, deviceScaleFactor: 2 });
       await context.addInitScript(instrument);
@@ -86,6 +88,8 @@ try {
           row.scroll.push(await scroll(page));
           doing = "switching";
           if (chat.listed) row.switch.push(await switchTo(page, chat));
+          doing = "hopping";
+          if (chat.listed && chat.from) row.hop.push(await hop(page, chat));
         })();
         work.catch(() => {});
         let timer;
@@ -131,6 +135,28 @@ async function switchTo(page, chat) {
   const at = await page.evaluate(() => window.__perf.clicked);
   const t = await settled(page, at);
   return { ...t, ...(await page.evaluate(() => window.__perf.stop())) };
+}
+
+/**
+ * From another chat, a click on this one in the sidebar, once what the sidebar lists is on the device (read in the
+ * background after the page loads). `empty`: frames with no messages on screen between the click and this chat's.
+ */
+async function hop(page, chat) {
+  await page.goto(new URL(`chats/${encodeURIComponent(chat.from)}`, base).href, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await settled(page, 0);
+  await page.waitForTimeout(8000);
+  const link = page.locator(`a[href$="/chats/${encodeURIComponent(chat.key)}"]`).first();
+  await link.waitFor();
+  await page.evaluate(() => window.__perf.start());
+  await link.click();
+  const at = await page.evaluate(() => window.__perf.clicked);
+  const t = await settled(page, at);
+  const empty = await page.evaluate(() => {
+    const s = window.__perf.samples.filter((x) => x.t >= window.__perf.clicked);
+    const blank = s.filter((x) => x.rows === 0);
+    return { empty: blank.length, emptyMs: blank.length ? Math.round(blank.at(-1).t - blank[0].t + 1000 / 60) : 0 };
+  });
+  return { ...t, ...empty, ...(await page.evaluate(() => window.__perf.stop())) };
 }
 
 /** From the latest message up to the first (loading older pages on the way), and back down, by the wheel. */
@@ -182,7 +208,7 @@ async function size(page) {
 /** In the page: frames (rAF), long animation frames, and when the chat's list shows and changes. */
 function instrument() {
   const perf = (window.__perf = {
-    frames: null, loafs: [], firstRow: null, changed: 0, clicked: 0, replaced: 0,
+    frames: null, samples: [], loafs: [], firstRow: null, changed: 0, clicked: 0, replaced: 0,
     list() {
       const row = document.querySelector('[aria-label="对话"] [data-ts]');
       for (let el = row; el; el = el.parentElement) if (el.scrollHeight > el.clientHeight && /auto|scroll/.test(getComputedStyle(el).overflowY)) return el;
@@ -190,11 +216,18 @@ function instrument() {
     },
     start() {
       perf.frames = [performance.now()];
+      perf.samples = [];
       perf.loafs = [];
       perf.replaced = 0;
       perf.firstRow = null;
       perf.changed = performance.now();
-      const tick = (t) => { if (!perf.frames) return; perf.frames.push(t); requestAnimationFrame(tick); };
+      // Each frame, how many messages are on screen.
+      const tick = (t) => {
+        if (!perf.frames) return;
+        perf.frames.push(t);
+        perf.samples.push({ t, rows: document.querySelectorAll('[aria-label="对话"] [data-ts]').length });
+        requestAnimationFrame(tick);
+      };
       requestAnimationFrame(tick);
     },
     stop() {
@@ -238,7 +271,9 @@ function instrument() {
 async function pick() {
   const listed = await (await fetch(new URL("api/chats", station))).json();
   const archived = opt.chat ? await (await fetch(new URL("api/chats?archived=1", station))).json() : [];
-  const describe = (c, inSidebar) => ({ key: c.id, title: c.title ?? "", messages: c.last?.seq ?? 0, listed: inSidebar });
+  // The chat a hop starts from: the sidebar's first other one.
+  const from = (c) => listed.find((x) => x.id !== c.id)?.id ?? null;
+  const describe = (c, inSidebar) => ({ key: c.id, title: c.title ?? "", messages: c.last?.seq ?? 0, listed: inSidebar, from: from(c) });
   if (opt.chat) {
     return opt.chat.map((key) => {
       const c = listed.find((x) => x.id === key) ?? archived.find((x) => x.id === key);
@@ -258,7 +293,7 @@ function median(xs) {
 
 
 function medians(row) {
-  return Object.fromEntries(Object.entries(COLUMNS).map(([k, cols]) => [k, row[k].length ? Object.fromEntries(cols.map((c) => [c, median(row[k].map((r) => r[c]))])) : null]));
+  return Object.fromEntries(Object.entries(COLUMNS).map(([k, cols]) => [k, row[k]?.length ? Object.fromEntries(cols.map((c) => [c, median(row[k].map((r) => r[c]))])) : null]));
 }
 
 function report(row) {

@@ -74,6 +74,9 @@ export const navRow = style({
   selectors: {
     "&:hover": { background: vars.hover },
     '&[aria-current="page"]': { background: vars.selected },
+    // Clicked, its page on the way (Sidebar.tsx setGoing): selected already, and the one it leaves no longer.
+    '&[data-going="here"]': { background: vars.selected },
+    '&[aria-current="page"][data-going="away"]': { background: "none" },
     // Adjacent sidebar items never touch, so a selected or hovered row stays distinct.
     "& + &": { marginTop: 2 },
     // While the list scrolls, rows passing under the pointer do not light up (each would repaint the list).
@@ -97,7 +100,7 @@ export const navSession = style({
   alignItems: "flex-start", paddingTop: 7, paddingBottom: 7, position: "relative",
   selectors: {
     // Pointing at the button is still pointing at the row.
-    [`${navSessionWrap}:hover &:not([aria-current="page"])`]: { background: vars.hover },
+    [`${navSessionWrap}:hover &:not([aria-current="page"]):not([data-going="here"])`]: { background: vars.hover },
   },
 });
 
@@ -107,10 +110,11 @@ export const rowPicture = style({
   vars: { "--mark-around": vars.sidebar },
   selectors: {
     [`${navSession}[data-offline] &`]: { opacity: 0.5 },
-    [`${navSessionWrap}:hover ${navSession}:not([aria-current="page"]) &`]: {
+    [`${navSessionWrap}:hover ${navSession}:not([aria-current="page"]):not([data-going="here"]) &`]: {
       vars: { "--mark-around": vars.hover, "--mark-under": vars.sidebar },
     },
-    [`${navSession}[aria-current="page"] &`]: { vars: { "--mark-around": vars.selected } },
+    [`${navSession}[aria-current="page"] &, ${navSession}[data-going="here"] &`]: { vars: { "--mark-around": vars.selected } },
+    [`${navSession}[aria-current="page"][data-going="away"] &`]: { vars: { "--mark-around": vars.sidebar } },
   },
 });
 export const rowAgent = style({
