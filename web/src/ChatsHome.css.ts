@@ -91,9 +91,11 @@ export const back = style({
     },
   },
 });
-/** One of them: a state's dot and count (or 对话), a pill when pointed at. */
+/** One of them: a state's dot and count (or 对话), shaded when pointed at. */
 export const backItem = style({
-  display: "inline-flex", alignItems: "center", gap: 5, height: 32, padding: "0 6px", borderRadius: 999,
+  display: "inline-flex", alignItems: "center", gap: 5, height: 32, padding: "0 6px",
+  // The bar's buttons' shape (pages.css.ts iconBtn): a smooth rounded rectangle, not a pill.
+  borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums", transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
