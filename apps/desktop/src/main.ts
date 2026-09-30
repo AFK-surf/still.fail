@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { hostname } from "node:os";
+import { hostname, networkInterfaces } from "node:os";
 import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
@@ -719,6 +719,7 @@ if (!app.requestSingleInstanceLock()) {
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
     followSleep();
+    followNetwork();
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {
@@ -732,6 +733,29 @@ if (!app.requestSingleInstanceLock()) {
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
+}
+
+/** How often the addresses are looked at (followNetwork). */
+const NETWORK_EVERY_MS = 3_000;
+
+/**
+ * The computer's network, told to the pages as it becomes another (Wi-Fi to another, to a cable, back after none): the
+ * core's connections were on the old one and may be dead with nothing said (web/src/core/client.ts networkChanged).
+ * A page has no event for it (`online` is only after none at all), so this looks at the machine's addresses.
+ */
+function followNetwork(): void {
+  const addresses = () => Object.values(networkInterfaces()).flat()
+    .filter((a) => a && !a.internal && !(a.family === "IPv6" && a.address.startsWith("fe80:")))
+    .map((a) => a!.address).sort().join(" ");
+  let last = addresses();
+  setInterval(() => {
+    const now = addresses();
+    if (now === last) return;
+    last = now;
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send("network:changed");
+    }
+  }, NETWORK_EVERY_MS).unref();
 }
 
 /**

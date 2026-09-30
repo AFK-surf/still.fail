@@ -13,8 +13,8 @@ type Shown = { tone: "busy" | "trouble" | "back"; text: string; detail?: string 
 
 /**
  * What is not as it should be with the connection to this chat's station, or with what the core waits on (its
- * `status`: what, how long, how fast): nothing while all is well. Down, it offers to try again at once (every
- * connection given up and opened anew: client/core/src/wake.rs); back, it says so a moment.
+ * `status`: what, how long, how fast): nothing while all is well. Down, it offers to try again at once (no more
+ * waiting, the connections tried against new ones: client/core/src/wake.rs `retry`); back, it says so a moment.
  */
 export function ConnectionPill({ link, name, phone }: { link?: Link | undefined; name?: string | undefined; phone?: boolean }) {
   const status = useStatus();
@@ -43,7 +43,7 @@ export function ConnectionPill({ link, name, phone }: { link?: Link | undefined;
       </span>
       <span className={css.connectionText}>{shown.text}</span>
       {shown.detail && <span className={css.connectionDetail}>{shown.detail}</span>}
-      {shown.tone === "trouble" && <button type="button" className={css.connectionRetry} onClick={() => core().networkChanged()}>重试</button>}
+      {shown.tone === "trouble" && <button type="button" className={css.connectionRetry} onClick={() => core().retry()}>重试</button>}
     </div>
   );
   if (!shown.items?.length) return pill;

@@ -14,6 +14,10 @@
 //!
 //! When the network changed, everything under way fails, answered or not: every connection was on the old one.
 //!
+//! A person asking to try again (`retry`: 重试 where a station or still.fail cloud is shown down) is taken as the
+//! connections suspect, not gone: what waits stops waiting, what may be asked twice is asked again beside itself, and the
+//! links are tried against new ones; nothing under way is failed, as nothing says the network under it went.
+//!
 //! [`WakingHost`] does the first two for everything that goes through the host; the mesh's links are the mesh's
 //! (mesh.rs `watch`) and the stations module's (station.rs `follow_events`).
 
@@ -44,12 +48,14 @@ pub const GONE: &str = "页面回到前台，重新连接";
 /// What everything under way fails with when the network changed.
 pub const NETWORK: &str = "网络变了，重新连接";
 
-/// The UI came back at `at` (the host's clock) after `away` milliseconds, or the network changed (`network`).
+/// The UI came back at `at` (the host's clock) after `away` milliseconds, or the network changed (`network`), or a
+/// person asked to try again (`retry`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Wake {
     pub at: f64,
     pub away: f64,
     pub network: bool,
+    pub retry: bool,
 }
 
 impl Wake {
@@ -61,7 +67,7 @@ impl Wake {
     /// A request that may be asked twice (a read, a write the station keeps to once), sent at `sent` and not answered
     /// yet, is asked again beside it: on new connections (the host's were let go), whichever answers first.
     pub fn hedges_request(&self, sent: f64) -> bool {
-        (self.network || self.away >= REQUEST_AWAY_MS) && sent <= self.at
+        (self.network || self.retry || self.away >= REQUEST_AWAY_MS) && sent <= self.at
     }
 
     /// A request sent at `sent` and not answered yet is given up.
@@ -77,7 +83,7 @@ impl Wake {
     /// Long enough away that the connections under the core are taken for gone (the mesh's links are tried, the
     /// host's let go).
     pub fn suspects_connections(&self) -> bool {
-        self.network || self.away >= STREAM_AWAY_MS
+        self.network || self.retry || self.away >= STREAM_AWAY_MS
     }
 
     /// What what it ends fails with.
@@ -328,7 +334,7 @@ mod tests {
     }
 
     fn wake(at: f64, away: f64) -> Wake {
-        Wake { at, away, network: false }
+        Wake { at, away, network: false, retry: false }
     }
 
     #[test]
@@ -373,7 +379,7 @@ mod tests {
             let answer = hedged(wakes.clone(), host.clone(), get, ask);
             pin_mut!(answer);
             assert!(futures::poll!(answer.as_mut()).is_pending());
-            wakes.wake(Wake { at: host.now_ms(), away: 0.0, network: true });
+            wakes.wake(Wake { at: host.now_ms(), away: 0.0, network: true, retry: false });
             assert_eq!(answer.await.unwrap().body, b"second");
             assert_eq!(asked.get(), 1);
         });
@@ -398,8 +404,40 @@ mod tests {
             let request = unless_dropped(wakes.clone(), 1_000.0, never());
             pin_mut!(request);
             assert!(futures::poll!(request.as_mut()).is_pending());
-            wakes.wake(Wake { at: 1_001.0, away: 0.0, network: true });
+            wakes.wake(Wake { at: 1_001.0, away: 0.0, network: true, retry: false });
             assert_eq!(request.await, Err(HostError(NETWORK.into())));
+        });
+    }
+
+    #[test]
+    fn a_retry_fails_nothing_under_way_and_asks_a_read_again_beside_itself() {
+        run(async {
+            let wakes = Rc::new(Wakes::default());
+            let retry = |at: f64| Wake { at, away: 0.0, network: false, retry: true };
+            // A write under way: left to answer.
+            let write = unless_dropped(wakes.clone(), 1_000.0, never());
+            pin_mut!(write);
+            assert!(futures::poll!(write.as_mut()).is_pending());
+            wakes.wake(retry(60_000.0));
+            assert!(futures::poll!(write.as_mut()).is_pending());
+            // A read under way: asked again beside it, the first answer its.
+            let fake = FakeHost::new();
+            fake.on_fetch(|_| Ok(HttpResponse { status: 200, headers: vec![], body: b"again".to_vec() }));
+            let host: Rc<dyn Host> = fake.clone();
+            let first = Rc::new(Cell::new(true));
+            let ask = {
+                let (host, first) = (host.clone(), first.clone());
+                move |r: HttpRequest| if first.replace(false) { never_answers() } else { host.fetch(r) }
+            };
+            let get = HttpRequest { method: "GET".into(), url: "https://x/y".into(), ..Default::default() };
+            let answer = hedged(wakes.clone(), host.clone(), get, ask);
+            pin_mut!(answer);
+            assert!(futures::poll!(answer.as_mut()).is_pending());
+            wakes.wake(retry(host.now_ms()));
+            assert_eq!(answer.await.unwrap().body, b"again");
+            // And the connections are suspect: the links are tried against new ones.
+            assert!(retry(0.0).suspects_connections());
+            assert!(!retry(0.0).drops_stream(0.0));
         });
     }
 

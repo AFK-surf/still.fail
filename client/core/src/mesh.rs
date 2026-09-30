@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
+use futures::channel::oneshot;
 use futures::future::{Either, LocalBoxFuture, Shared};
 use futures::lock::Mutex;
 use futures::{FutureExt, pin_mut};
@@ -50,6 +51,10 @@ pub const PROBE_MS: u64 = 5_000;
 /// How long a link that lost to a new one is kept before it is closed: what is still on it (a write to a station that
 /// does not keep writes to once, which is not asked again) may yet be answered.
 pub const RETIRE_MS: u64 = 10_000;
+/// The endpoint is bound anew (`Mesh::rebind`) at most this often.
+pub const REBIND_MS: u64 = 5_000;
+/// What a link not opened in [`CONNECT_TIMEOUT_MS`] fails with.
+const NO_ANSWER: &str = "连不上这台 station：没有回应";
 
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD: usize = 64 * 1024;
@@ -73,6 +78,18 @@ fn mesh_error(message: String) -> CoreError {
 /// An opening shared by everyone who asks for the same station meanwhile.
 type Opening = Shared<LocalBoxFuture<'static, Result<Rc<Link>>>>;
 
+/// Where a link tried beside an opening goes (`hedge`).
+type HedgeTx = oneshot::Sender<Result<Rc<Link>>>;
+
+/// A link tried beside an opening that is still under way (`hedge`): what it opens is the opening's, if it is first.
+struct Hedge {
+    /// Which opening it goes with (`Mesh::openings`).
+    serial: u64,
+    credentials: CredentialSource,
+    /// Taken when a link is tried beside it; one try per opening.
+    tx: Option<HedgeTx>,
+}
+
 pub struct Mesh {
     host: Rc<dyn Host>,
     tracer: Rc<Tracer>,
@@ -84,6 +101,18 @@ pub struct Mesh {
     changed: RefCell<Vec<futures::channel::oneshot::Sender<()>>>,
     /// Stations whose link is being tried against a new one (`race`).
     racing: RefCell<std::collections::HashSet<String>>,
+    /// The device key, for binding the endpoint anew (`rebind`).
+    secret: Cell<[u8; 32]>,
+    /// The last link tried on this endpoint was not answered: the endpoint itself is suspect (its relay connection
+    /// gone with nothing said, as a phone's after it slept or changed networks). Cleared by a link that opens.
+    stuck: Rc<Cell<bool>>,
+    /// When the endpoint was last bound anew (`REBIND_MS`).
+    rebound_at: Cell<f64>,
+    /// Where stations are known to be without looking them up (tests): told to each endpoint bound.
+    known: RefCell<Vec<EndpointAddr>>,
+    /// The openings under way, by station: a link tried beside each as the UI asks (`hedge`).
+    hedges: Rc<RefCell<HashMap<String, Hedge>>>,
+    serials: Cell<u64>,
 }
 
 impl Mesh {
@@ -102,7 +131,21 @@ impl Mesh {
             }
         };
         let endpoint = bind(&secret, relay_url).await?;
-        let mesh = Rc::new(Mesh { host: host.clone(), tracer, relay_url: relay_url.to_string(), endpoint: RefCell::new(endpoint), links: RefCell::default(), changed: RefCell::default(), racing: RefCell::default() });
+        let mesh = Rc::new(Mesh {
+            host: host.clone(),
+            tracer,
+            relay_url: relay_url.to_string(),
+            endpoint: RefCell::new(endpoint),
+            links: RefCell::default(),
+            changed: RefCell::default(),
+            racing: RefCell::default(),
+            secret: Cell::new(secret),
+            stuck: Rc::default(),
+            rebound_at: Cell::new(f64::NEG_INFINITY),
+            known: RefCell::default(),
+            hedges: Rc::default(),
+            serials: Cell::new(0),
+        });
         host.spawn(watch(host.clone(), Rc::downgrade(&mesh)).boxed_local());
         Ok(mesh)
     }
@@ -189,9 +232,46 @@ impl Mesh {
         hex::encode(self.endpoint.borrow().id().as_bytes())
     }
 
-    /// The iroh endpoint itself, e.g. to tell it where a station is when there is no relay.
+    /// The iroh endpoint itself.
     pub fn endpoint(&self) -> Endpoint {
         self.endpoint.borrow().clone()
+    }
+
+    /// Tells this endpoint, and each bound after it, where a station is (when there is no relay: tests, a LAN).
+    pub fn add_addr(&self, addr: EndpointAddr) {
+        if let Ok(lookup) = self.endpoint().address_lookup() {
+            lookup.add(iroh::address_lookup::MemoryLookup::from_endpoint_info([addr.clone()]));
+        }
+        self.known.borrow_mut().push(addr);
+    }
+
+    /// Whether some station's link is open on the endpoint now: then the endpoint is not what is wrong.
+    fn any_open(&self) -> bool {
+        !self.open_links().is_empty()
+    }
+
+    /// The endpoint bound anew with the same key (new sockets, a new relay connection), the old one closed: for when
+    /// what is tried on it is not answered and nothing on it is open (`stuck`), which iroh does not find out itself
+    /// when its relay connection died with nothing said. At most once in [`REBIND_MS`]; the endpoint then.
+    async fn rebind(&self) -> Endpoint {
+        let now = self.host.now_ms();
+        if now - self.rebound_at.get() < REBIND_MS as f64 {
+            return self.endpoint();
+        }
+        self.rebound_at.set(now);
+        let endpoint = match bind(&self.secret.get(), &self.relay_url).await {
+            Ok(endpoint) => endpoint,
+            Err(_) => return self.endpoint(),
+        };
+        if let Ok(lookup) = endpoint.address_lookup() {
+            lookup.add(iroh::address_lookup::MemoryLookup::from_endpoint_info(self.known.borrow().clone()));
+        }
+        let old = self.endpoint.replace(endpoint.clone());
+        self.stuck.set(false);
+        // Two endpoints of one key on one relay would push each other off it: the old one goes now, and what was still
+        // being tried on it fails (an opening with a link tried beside it waits for that one).
+        self.host.spawn(async move { old.close().await }.boxed_local());
+        endpoint
     }
 
     /// The link to a station, opening it (or reopening a closed one) with a credential from `credentials`.
@@ -211,18 +291,51 @@ impl Mesh {
         // A span of the request that needed the link; the credential it asks still.fail cloud for is part of it.
         let mut span = self.tracer.span("mesh.connect", Kind::Internal);
         span.set("stillfail.station", station_id.to_string());
-        let opening = self.tracer.instrument(Some(span.context()), open(self.host.clone(), self.endpoint(), self.relay_url.clone(), station_id.to_string(), credentials, fresh));
+        // The last try on this endpoint was not answered and nothing is open on it: tried on one bound anew.
+        let endpoint = if self.stuck.get() && !self.any_open() {
+            span.set("stillfail.rebound", true);
+            self.rebind().await
+        } else {
+            self.endpoint()
+        };
+        span.set("stillfail.relay", relay_status(&endpoint));
+        let serial = self.serials.get() + 1;
+        self.serials.set(serial);
+        let (tx, hedged) = oneshot::channel();
+        self.hedges.borrow_mut().insert(station_id.to_string(), Hedge { serial, credentials: credentials.clone(), tx: Some(tx) });
+        let first = self.tracer.instrument(Some(span.context()), open(self.host.clone(), endpoint.clone(), self.relay_url.clone(), station_id.to_string(), credentials, fresh));
+        let (hedges, stuck, id) = (self.hedges.clone(), self.stuck.clone(), station_id.to_string());
         let opening = async move {
-            let link = opening.await;
+            // The first link that opens, of this one and one tried beside it (`hedge`); failing, the other's result.
+            let link = match futures::future::select(first, hedged).await {
+                Either::Left((Ok(link), _)) => Ok(link),
+                Either::Left((Err(error), hedged)) => {
+                    let tried = hedges.borrow_mut().get_mut(&id).is_some_and(|h| h.serial == serial && h.tx.take().is_none());
+                    if tried { hedged.await.unwrap_or(Err(error.clone())).map_err(|_| error) } else { Err(error) }
+                }
+                Either::Right((Ok(Ok(link)), _)) => {
+                    span.set("stillfail.hedged", true);
+                    Ok(link)
+                }
+                Either::Right((_, first)) => first.await,
+            };
+            if hedges.borrow().get(&id).is_some_and(|h| h.serial == serial) {
+                hedges.borrow_mut().remove(&id);
+            }
             match &link {
                 Ok(link) => {
+                    stuck.set(false);
                     if let Some(path) = link.path() {
                         span.set("stillfail.path", path);
                     }
                 }
                 Err(error) => {
+                    if error.message == NO_ANSWER {
+                        stuck.set(true);
+                    }
                     span.fail();
                     span.set("error.type", error.code.clone());
+                    span.set("stillfail.relay", relay_status(&endpoint));
                 }
             }
             span.end();
@@ -258,6 +371,7 @@ impl Mesh {
         }
         let endpoint = bind(&secret, &self.relay_url).await?;
         self.host.storage_set(DEVICE_KEY, secret.to_vec()).await?;
+        self.secret.set(secret);
         let old = self.endpoint.replace(endpoint);
         let links: Vec<Opening> = self.links.borrow_mut().drain().map(|(_, opening)| opening).collect();
         self.notify();
@@ -271,9 +385,10 @@ impl Mesh {
     }
 }
 
-/// What the mesh does as the UI comes back or the network changes (wake.rs): iroh is told (on Android it cannot see
-/// the network change itself, and after a long sleep its relay connection is suspect too), and each open link races a
-/// new one (`race`). Nothing waits to learn whether a link is gone before there is another way to its station.
+/// What the mesh does as the UI comes back or the network changes (wake.rs; also a person's 重试): iroh is told (on
+/// Android it cannot see the network change itself, and after a long sleep its relay connection is suspect too), each
+/// open link races a new one (`race`), and each link still being opened has another tried beside it (`hedge`).
+/// Nothing waits to learn whether a link is gone, or a try unanswered, before there is another way to its station.
 async fn watch(host: Rc<dyn Host>, mesh: Weak<Mesh>) {
     loop {
         let wake = host.woken().await;
@@ -289,7 +404,43 @@ async fn watch(host: Rc<dyn Host>, mesh: Weak<Mesh>) {
             }
             host.spawn(race(host.clone(), mesh.clone(), id, link).boxed_local());
         }
+        let pending: Vec<(String, CredentialSource, HedgeTx)> =
+            this.hedges.borrow_mut().iter_mut().filter_map(|(id, h)| h.tx.take().map(|tx| (id.clone(), h.credentials.clone(), tx))).collect();
+        for (id, credentials, tx) in pending {
+            host.spawn(hedge(host.clone(), mesh.clone(), id, credentials, tx).boxed_local());
+        }
     }
+}
+
+/// A link tried beside an opening still under way: on an endpoint bound anew if nothing is open on this one (then it
+/// is as likely the endpoint as the station that does not answer), else on this one. It is the opening's if it opens
+/// first; opened after, it is let go.
+async fn hedge(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, credentials: CredentialSource, tx: HedgeTx) {
+    let Some(this) = mesh.upgrade() else { return };
+    let endpoint = if this.any_open() { this.endpoint() } else { this.rebind().await };
+    let (relay, tracer) = (this.relay_url.clone(), this.tracer.clone());
+    drop(this);
+    let mut span = tracer.span("mesh.hedge", Kind::Internal);
+    span.set("stillfail.station", id.clone());
+    span.set("stillfail.relay", relay_status(&endpoint));
+    let opened = tracer.instrument(Some(span.context()), open(host, endpoint, relay, id, credentials, false)).await;
+    if opened.is_err() {
+        span.fail();
+    }
+    span.end();
+    if let Err(Ok(late)) = tx.send(opened) {
+        late.close();
+    }
+}
+
+/// The endpoint's home relays and whether it is connected to them, for a span: `<url> up`, `<url> down`, or `none`.
+fn relay_status(endpoint: &Endpoint) -> String {
+    use iroh::Watcher;
+    let status = endpoint.home_relay_status().get();
+    if status.is_empty() {
+        return "none".into();
+    }
+    status.iter().map(|s| format!("{} {}", s.url(), if s.is_connected() { "up" } else { "down" })).collect::<Vec<_>>().join(", ")
 }
 
 /// A link suspect (the UI back after long away, the network changed) against a new one opened beside it at once: the
@@ -345,8 +496,8 @@ async fn race(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, old: Rc<Link>) {
 /// is relay-only like mesh/web, through ember's relay. Natively it also binds
 /// UDP and goes direct, and finds stations without still.fail cloud: on the LAN by
 /// mDNS (no relay needed at all), and which relay a station is on by the
-/// Mainline DHT (a station whose relay is not ember's, ember's being down); the
-/// relays are ember's and iroh's public ones (see `relays`).
+/// Mainline DHT (a station whose relay is not ember's, ember's being down).
+/// Its home relay is ember's everywhere (see `relays`).
 async fn bind(secret: &[u8; 32], relay_url: &str) -> Result<Endpoint> {
     let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relays(relay_url)?).transport_config(transport());
     // No relay (tests on localhost): nothing to look up either.
@@ -364,17 +515,16 @@ async fn bind(secret: &[u8; 32], relay_url: &str) -> Result<Endpoint> {
     builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
 }
 
-/// ember's relay first; natively also iroh's public ones, so a link is made with ember's relay down (the station
-/// then on one of them, as the DHT says). The browser, relay-only, has ember's.
+/// ember's relay only, as the station's and the browser's: with iroh's public ones beside it iroh picks whichever is
+/// nearest as home, and a phone on one of them was seen not to reach its station for minutes at a time (2026-09-30).
+/// A station moved to a public relay (its own down: mesh/station `relay_fallback`) is still reached there, the DHT
+/// saying which: a relay in no map is dialed all the same.
 fn relays(relay_url: &str) -> Result<RelayMode> {
     if relay_url.is_empty() {
         return Ok(RelayMode::Disabled);
     }
     let ours: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
-    let map = iroh::RelayMap::from(ours);
-    #[cfg(not(target_arch = "wasm32"))]
-    map.extend(&iroh::defaults::prod::default_relay_map());
-    Ok(RelayMode::Custom(map))
+    Ok(RelayMode::Custom(iroh::RelayMap::from(ours)))
 }
 
 /// Through a relay a round trip is hundreds of milliseconds, and QUIC's default first window
@@ -421,7 +571,7 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station
             pin_mut!(connecting);
             match futures::future::select(connecting, timeout).await {
                 Either::Left((connected, _)) => connected,
-                Either::Right(_) => Err(mesh_error("连不上这台 station：没有回应".into())),
+                Either::Right(_) => Err(mesh_error(NO_ANSWER.into())),
             }
         }
     };
@@ -718,7 +868,6 @@ mod tests {
     use crate::host::{HostError, HttpRequest, HttpResponse, StreamResponse};
     use crate::protocol::{ClientId, CoreMessage};
     use crate::testing::FakeHost;
-    use iroh::address_lookup::MemoryLookup;
     use iroh::endpoint::Connection;
     use std::time::Duration;
 
@@ -756,6 +905,7 @@ mod tests {
         fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
             self.0.sleep(match ms {
                 RENEW_MS => 150,
+                // Also CONNECT_TIMEOUT_MS (the same 10 s).
                 RETIRE_MS => 200,
                 ms => ms,
             })
@@ -785,6 +935,9 @@ mod tests {
         /// Connections before this one (by the order they came) answer nothing more: a way there that went dead
         /// with nothing said, as a phone's after it slept.
         dead_below: Rc<Cell<usize>>,
+        /// This many connections coming are never answered, not even their handshake: a device whose way there is
+        /// gone (its endpoint's relay connection dead) dialing.
+        unanswered: Rc<Cell<usize>>,
     }
 
     impl Station {
@@ -802,10 +955,16 @@ mod tests {
                 .bind()
                 .await
                 .unwrap();
-            let station = Station { endpoint: endpoint.clone(), grants: Rc::default(), conns: Rc::default(), dead_below: Rc::default() };
-            let (grants, conns, dead_below) = (station.grants.clone(), station.conns.clone(), station.dead_below.clone());
+            let station = Station { endpoint: endpoint.clone(), grants: Rc::default(), conns: Rc::default(), dead_below: Rc::default(), unanswered: Rc::default() };
+            let (grants, conns, dead_below, unanswered) = (station.grants.clone(), station.conns.clone(), station.dead_below.clone(), station.unanswered.clone());
             tokio::task::spawn_local(async move {
+                let mut ignored = Vec::new();
                 while let Some(incoming) = endpoint.accept().await {
+                    if unanswered.get() > 0 {
+                        unanswered.set(unanswered.get() - 1);
+                        ignored.push(incoming);
+                        continue;
+                    }
                     let Ok(conn) = incoming.await else { continue };
                     let index = conns.borrow().len();
                     conns.borrow_mut().push(conn.clone());
@@ -901,7 +1060,7 @@ mod tests {
 
     async fn setup_with(host: Rc<dyn Host>, station: Station) -> (Rc<Mesh>, Station) {
         let mesh = Mesh::new(host.clone(), Tracer::new(host, 1.0), "").await.unwrap();
-        mesh.endpoint().address_lookup().unwrap().add(MemoryLookup::from_endpoint_info([station.addr()]));
+        mesh.add_addr(station.addr());
         (mesh, station)
     }
 
@@ -1072,7 +1231,7 @@ mod tests {
     }
 
     fn network(host: &Rc<dyn Host>) -> crate::wake::Wake {
-        crate::wake::Wake { at: host.now_ms(), away: 0.0, network: true }
+        crate::wake::Wake { at: host.now_ms(), away: 0.0, network: true, retry: false }
     }
 
     #[test]
@@ -1158,6 +1317,48 @@ mod tests {
             // It ends with the old way when that is closed (RETIRE_MS), never asked on the new one.
             let answered = tokio::time::timeout(Duration::from_millis(2_000), asked).await.expect("ends with the old link").unwrap();
             assert!(answered.is_err(), "not sent again");
+        });
+    }
+
+    #[test]
+    fn a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew() {
+        run(async {
+            let (mesh, station) = setup_with(Rc::new(QuickHost(FakeHost::new())), Station::start().await).await;
+            station.unanswered.set(1);
+            let before = mesh.endpoint().bound_sockets();
+            let device = mesh.device_id();
+            let error = mesh.link(&station.id(), grants("ok", Rc::default())).await.err().unwrap();
+            assert_eq!(error.message, NO_ANSWER);
+            let link = mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
+            assert_eq!(link.request(head("/admin/api/overview"), Vec::new()).await.unwrap().status, 200);
+            // Another endpoint (other sockets), the same device.
+            assert_ne!(mesh.endpoint().bound_sockets(), before);
+            assert_eq!(mesh.device_id(), device);
+            // Answered: the next try stays on it.
+            let now = mesh.endpoint().bound_sockets();
+            link.close();
+            mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
+            assert_eq!(mesh.endpoint().bound_sockets(), now);
+        });
+    }
+
+    #[test]
+    fn a_wake_while_a_try_goes_unanswered_opens_one_beside_it() {
+        run(async {
+            let (mesh, station, wakes, host) = waking(Station::start().await).await;
+            station.unanswered.set(1);
+            let id = station.id();
+            let opening = tokio::task::spawn_local({
+                let (mesh, id) = (mesh.clone(), id.clone());
+                async move { mesh.link(&id, grants("ok", Rc::default())).await.map(|_| ()) }
+            });
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            // A person taps 重试 (client.wake, network) while a try that will never be answered is under way: another
+            // beside it opens. (The first alone fails as it runs out, or as its endpoint is bound anew.)
+            wakes.wake(network(&host));
+            opening.await.unwrap().unwrap();
+            let link = mesh.current(&id).unwrap();
+            assert_eq!(link.request(head("/admin/api/overview"), Vec::new()).await.unwrap().status, 200);
         });
     }
 }

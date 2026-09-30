@@ -488,8 +488,8 @@ impl Inner {
                 let (account, return_to) = self.accounts.complete_sign_in(&query).await?;
                 Ok(json!({ "account": account, "return_to": return_to }))
             }
-            Call::Wake { away, network } => {
-                let wake = Wake { at: self.host.now_ms(), away: away.max(0.0), network };
+            Call::Wake { away, network, retry } => {
+                let wake = Wake { at: self.host.now_ms(), away: away.max(0.0), network: network && !retry, retry };
                 // What is asked again as the wake fails what was under way goes on new connections.
                 if wake.suspects_connections() {
                     self.host.reset_connections();
@@ -1435,7 +1435,9 @@ enum Call {
     /// A UI is back after `away` ms (a page hidden, a phone's app in the background): what went out before is
     /// suspect (wake.rs); `network`: the network changed, and all that is under way is. Its answer also tells the UI
     /// the core is alive.
-    Wake { away: f64, network: bool },
+    /// `retry` goes with `network` from a UI that asks to try again: a core from before `retry` takes it for the
+    /// network changed, which also tries everything again.
+    Wake { away: f64, network: bool, retry: bool },
     AuthBegin { redirect_uri: String, return_to: String, device_name: String },
     AuthComplete { query: String },
     SignOut { account: String },
@@ -1639,6 +1641,8 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         away: f64,
         #[serde(default)]
         network: bool,
+        #[serde(default)]
+        retry: bool,
     }
     #[derive(Deserialize)]
     struct Migrate {
@@ -1666,7 +1670,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "client.wake" => {
             let params = read::<WakeParams>(params)?;
-            Call::Wake { away: params.away, network: params.network }
+            Call::Wake { away: params.away, network: params.network, retry: params.retry }
         }
         "push.key" => Call::PushKey,
         "push.register" => {

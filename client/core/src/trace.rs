@@ -205,7 +205,7 @@ impl Tracer {
         }
         let body = json!({
             "resourceSpans": [{
-                "resource": { "attributes": [attribute("service.name", SERVICE.into())] },
+                "resource": { "attributes": [attribute("service.name", SERVICE.into()), attribute("os.type", OS.into())] },
                 "scopeSpans": [{ "scope": { "name": "stillfail-core" }, "spans": spans }],
             }],
         });
@@ -216,6 +216,9 @@ impl Tracer {
 
 /// Which client this core is, for Axiom's `service.name`.
 const SERVICE: &str = if cfg!(target_arch = "wasm32") { "stillfail-web" } else { "stillfail-native" };
+
+/// Which system it runs on, for Axiom's `os.type`: native is both the Android app and the desktop one.
+const OS: &str = if cfg!(target_arch = "wasm32") { "browser" } else { std::env::consts::OS };
 
 /// A future with a context current while it is polled.
 struct Instrumented<'a, T> {

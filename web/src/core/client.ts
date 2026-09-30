@@ -210,6 +210,16 @@ export class CoreClient {
     this.call("client.wake", { away: 0, network: true }).catch(() => undefined);
   }
 
+  /**
+   * A person asked to try again (重试 where a station or still.fail cloud shows down): what waits stops waiting, and
+   * the connections are tried against new ones, but nothing under way is failed (client/core/src/wake.rs). `network`
+   * goes with it for a core from before `retry`, which takes it for the network changed.
+   */
+  retry(): void {
+    if (this.#closed) return;
+    this.call("client.wake", { away: 0, network: true, retry: true }).catch(() => undefined);
+  }
+
   close(): void {
     this.#closed = true;
     this.#rejectCalls("连接已关闭");
@@ -388,6 +398,8 @@ export interface StillFailDesktop {
    * told otherwise); the returned function stops listening. An app from before this has none.
    */
   onResume?(listener: (away: number) => void): () => void;
+  /** The computer's network became another; the returned function stops listening. An app from before this has none. */
+  onNetwork?(listener: () => void): () => void;
 }
 
 /** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */
@@ -471,6 +483,18 @@ export function connectCore(): CoreClient {
     else back();
   });
   addEventListener("online", () => client.networkChanged());
+  // Another network with no time offline between (Wi-Fi to mobile data): only where the browser says which kind it is
+  // on (Chrome on Android); its other changes (speed, round trip) are the same network.
+  const connection = (navigator as { connection?: EventTarget & { type?: string } }).connection;
+  let kind = connection?.type;
+  connection?.addEventListener("change", () => {
+    const now = connection.type;
+    if (now === kind) return;
+    const was = kind;
+    kind = now;
+    if (was !== undefined && now !== undefined && now !== "none") client.networkChanged();
+  });
+  window.stillfailDesktop?.onNetwork?.(() => client.networkChanged());
   // The computer slept with the window open: the page never went hidden, so the app says so.
   window.stillfailDesktop?.onResume?.((away) => client.wake(away));
   return client;

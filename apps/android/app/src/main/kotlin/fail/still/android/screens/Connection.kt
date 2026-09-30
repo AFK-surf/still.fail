@@ -53,8 +53,8 @@ private const val BACK_MS = 1500L
 
 /**
  * What is not as it should be with the link to this chat's station, or with what the core waits on (its `status`: what,
- * how long, how fast): nothing while all is well. Down, it offers to try again at once (every connection given up and
- * opened anew: client/core/src/wake.rs); back, it says so a moment.
+ * how long, how fast): nothing while all is well. Down, it offers to try again at once (no more waiting, the
+ * connections tried against new ones: client/core/src/wake.rs `retry`); back, it says so a moment.
  */
 @Composable
 fun ConnectionPill(name: String, link: Link?, haze: HazeState, modifier: Modifier = Modifier) {
@@ -97,7 +97,8 @@ fun ConnectionPill(name: String, link: Link?, haze: HazeState, modifier: Modifie
                     Modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable {
                         scope.launch {
                             try {
-                                app.core.call("client.wake", buildJsonObject { put("away", 0); put("network", true) })
+                                // A person's retry (client/core/src/wake.rs): `network` for a core from before `retry`.
+                                app.core.call("client.wake", buildJsonObject { put("away", 0); put("network", true); put("retry", true) })
                             } catch (_: CoreException) {
                             }
                         }

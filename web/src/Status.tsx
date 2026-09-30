@@ -33,9 +33,9 @@ export function WaitingItems({ status }: { status: StatusView }) {
   );
 }
 
-/** Every connection given up and opened anew, at once (client/core/src/wake.rs). */
+/** Tried again at once: no more waiting, the connections tried against new ones (client/core/src/wake.rs `retry`). */
 export function Retry() {
-  return <button type="button" className={nav.waitingRetry} onClick={() => core().networkChanged()}>重试</button>;
+  return <button type="button" className={nav.waitingRetry} onClick={() => core().retry()}>重试</button>;
 }
 
 /** Under a page's "loading…": what the core has been waiting on for a while, if anything (the core's `status`). */

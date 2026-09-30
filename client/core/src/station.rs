@@ -1368,7 +1368,20 @@ impl Stations {
             // (A wire that races its links asks again on the new one itself.)
             let sent = self.host.now_ms();
             let races = self.wire.races();
-            let dropped = wake::woken_for(self.host.clone(), move |w| !races && w.drops_request(sent));
+            let dropped = {
+                let this = self.clone();
+                let station = station.clone();
+                async move {
+                    loop {
+                        let wake = wake::woken_for(this.host.clone(), move |w| w.suspects_connections() || w.drops_request(sent)).await;
+                        if !races && wake.drops_request(sent) {
+                            return;
+                        }
+                        // Tried again beside this try (mesh.rs `hedge`), as a person tapped 重试: said at once.
+                        this.retrying(&station);
+                    }
+                }
+            };
             pin_mut!(opening, dropped);
             let opened = match futures::future::select(opening, dropped).await {
                 Either::Left((opened, _)) => opened,
@@ -1460,7 +1473,19 @@ impl Stations {
             // Not reached: less and less often, up to RECONNECT_MAX_MS.
             let wait = RECONNECT_MS.saturating_mul(1u64 << misses.saturating_sub(1).min(8)).min(RECONNECT_MAX_MS);
             // A UI back after being away wants it now: no more waiting.
-            futures::future::select(self.host.sleep(wait), self.host.woken()).await;
+            if let Either::Right(_) = futures::future::select(self.host.sleep(wait), self.host.woken()).await {
+                self.retrying(&station);
+            }
+        }
+    }
+
+    /// Down, and tried again now (a person tapped 重试, the UI came back, the network changed): `reconnecting` until
+    /// the try ends, so what shows the link shows it is being tried rather than still down.
+    fn retrying(&self, station: &str) {
+        let link = self.stations.borrow().get(station).map(|s| s.link.clone());
+        let Some(link) = link else { return };
+        if matches!(link.get("state").and_then(Value::as_str), Some("offline" | "error")) {
+            self.set_link(station, json!({ "state": "reconnecting", "message": link.get("message").cloned().unwrap_or(Value::Null) }));
         }
     }
 
@@ -2293,6 +2318,8 @@ mod tests {
         streams: RefCell<Vec<(String, mpsc::UnboundedSender<Chunk>)>>,
         /// Status for stream requests (200 opens one); None: the wire fails.
         stream_status: RefCell<Option<u16>>,
+        /// Stream requests are never answered.
+        stream_hangs: std::cell::Cell<bool>,
         /// The `traceparent` of every request, in order.
         traceparents: RefCell<Vec<String>>,
     }
@@ -2336,6 +2363,9 @@ mod tests {
             self.calls.borrow_mut().push((station.clone(), head.method.clone(), head.path.clone(), body));
             let traceparent = head.headers.iter().find(|(k, _)| k == "traceparent").map(|(_, v)| v.clone()).unwrap_or_default();
             self.traceparents.borrow_mut().push(traceparent);
+            if wants_stream(&head) && self.stream_hangs.get() {
+                return futures::future::pending().boxed_local();
+            }
             let reply = if wants_stream(&head) {
                 match *self.stream_status.borrow() {
                     Some(200) => {
@@ -2528,6 +2558,27 @@ mod tests {
             assert_eq!(sink.get(&link()).unwrap()["state"], "online");
             assert_eq!(wire.count("GET", "/admin/api/overview"), 1, "back: what it wants is read");
             assert_eq!(host.stored(&format!("{LINK_KEY}/{ST}")).as_deref(), Some(&b"online"[..]));
+        });
+    }
+
+    #[test]
+    fn a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks() {
+        run(async {
+            let fake = FakeHost::new();
+            let wakes = Rc::new(crate::wake::Wakes::default());
+            let host: Rc<dyn Host> = crate::wake::WakingHost::new(fake.clone(), wakes.clone());
+            let sink = Rc::new(FakeSink::default());
+            let wire = FakeWire::new();
+            let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
+            *wire.stream_status.borrow_mut() = None;
+            stations.start(&link());
+            fake.settle().await;
+            assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
+            // 重试 (client.wake, network), and the try it starts takes a while: not "down" meanwhile.
+            wire.stream_hangs.set(true);
+            wakes.wake(crate::wake::Wake { at: host.now_ms(), away: 0.0, network: true, retry: false });
+            fake.settle().await;
+            assert_eq!(sink.get(&link()).unwrap()["state"], "reconnecting");
         });
     }
 

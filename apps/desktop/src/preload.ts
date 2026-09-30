@@ -36,6 +36,12 @@ const desktop = {
     ipcRenderer.on("power:resume", on);
     return () => ipcRenderer.off("power:resume", on);
   },
+  /** The computer's network became another (main.ts followNetwork): the page's core opens its connections anew. */
+  onNetwork: (listener: () => void): (() => void) => {
+    const on = () => listener();
+    ipcRenderer.on("network:changed", on);
+    return () => ipcRenderer.off("network:changed", on);
+  },
 };
 contextBridge.exposeInMainWorld("stillfailDesktop", desktop);
 // Its name before the rename, while pages built before it may still look for it (a dev server's, dev.sh HMR=1).

@@ -109,6 +109,27 @@ fn websocket(tls: Arc<rustls::ClientConfig>, url: String, protocols: Vec<String>
     })
 }
 
+/// Looked at this often while a sleep runs (`sleep`).
+const SLEEP_STEP: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// A sleep that counts the device's own sleep too. tokio's clock (Android's CLOCK_MONOTONIC, macOS's uptime) stands
+/// still while the phone or the laptop is asleep, so a 10 s timeout begun before went on for as long as it slept after
+/// (a link tried for 18 minutes: 2026-09-30); the wall clock does not. It ends at whichever comes first, so the wall
+/// clock set back does not make it longer; set forward it ends early, as a sleep does now and then anyway.
+async fn sleep(duration: std::time::Duration) {
+    if duration <= SLEEP_STEP {
+        return tokio::time::sleep(duration).await;
+    }
+    let (begun, end) = (std::time::SystemTime::now(), tokio::time::Instant::now() + duration);
+    loop {
+        let left = end.saturating_duration_since(tokio::time::Instant::now());
+        if left.is_zero() || begun.elapsed().is_ok_and(|slept| slept >= duration) {
+            return;
+        }
+        tokio::time::sleep(left.min(SLEEP_STEP)).await;
+    }
+}
+
 fn ws_error(error: WsError) -> HostError {
     match error {
         WsError::Http(response) => HostError(format!("websocket refused ({})", response.status().as_u16())),
@@ -231,7 +252,7 @@ impl Host for NativeHost {
     }
 
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
-        Box::pin(tokio::time::sleep(std::time::Duration::from_millis(ms)))
+        Box::pin(sleep(std::time::Duration::from_millis(ms)))
     }
 
     fn spawn(&self, task: LocalBoxFuture<'static, ()>) {
