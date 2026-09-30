@@ -314,8 +314,9 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
         }
         Row(Modifier.padding(horizontal = if (small) 5.dp else 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             val fs = if (small) 10.sp else 11.sp
-            if (mark != null) Text(mark, fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
-            Text("$fill%", fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
+            // On one baseline: a mark in Chinese (内存) sits lower in its line than figures do.
+            if (mark != null) Text(mark, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
+            Text("$fill%", Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
         }
     }
 }
