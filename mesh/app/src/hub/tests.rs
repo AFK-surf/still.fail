@@ -805,15 +805,56 @@ async fn held_turns_start_once_released_with_what_waited_meanwhile() {
     let session = r.claude.last();
     session.complete();
     settle().await;
-    r.hub.hold();
+    r.hub.hold(Hold::Drain);
     r.accept(&reply(&m, "9999.8", "next")).await;
     settle().await;
     assert_eq!(session.prompts().len(), 1, "held: nothing starts");
     assert!(!r.hub.any_running());
-    r.hub.release();
+    r.hub.release(Hold::Drain);
     settle().await;
     assert_eq!(session.prompts().len(), 2);
     assert!(session.prompts()[1].contains("next"));
+}
+
+#[tokio::test]
+async fn a_station_in_no_workspace_starts_no_turn_until_it_joins_one_whatever_a_drain_does() {
+    let r = setup_with(Setup { max_nudges: Some(0), ..Setup::default() });
+    r.hub.hold(Hold::Unbound);
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    assert!(r.claude.sessions.lock().unwrap().is_empty(), "unbound: no runtime session starts");
+    let key = session_key("cl", &m.channel, &m.thread_ts);
+    assert_eq!(r.store.pending_messages(&key).unwrap().len(), 1, "the message waits");
+    // A drain that comes and goes meanwhile does not let it through.
+    r.hub.hold(Hold::Drain);
+    r.hub.release(Hold::Drain);
+    settle().await;
+    assert!(r.claude.sessions.lock().unwrap().is_empty());
+    assert!(r.hub.holds(Hold::Unbound));
+    r.hub.release(Hold::Unbound);
+    settle().await;
+    let session = r.claude.last();
+    assert_eq!(session.prompts().len(), 1, "joined: what waited starts");
+    assert!(session.prompts()[0].contains("hello"));
+}
+
+#[tokio::test]
+async fn leaving_the_workspace_interrupts_running_turns() {
+    let r = setup_with(Setup { max_nudges: Some(0), ..Setup::default() });
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    assert!(r.hub.any_running());
+    r.hub.hold(Hold::Unbound);
+    r.hub.stop_all().await;
+    let session = r.claude.last();
+    assert_eq!(session.aborts.load(Ordering::SeqCst), 1, "the running turn was interrupted");
+    session.end(TurnOutcome::Aborted);
+    settle().await;
+    assert!(!r.hub.any_running());
+    assert!(!r.session(&session_key("cl", "C1", &m.thread_ts)).running, "nothing resumes it later");
+    assert_eq!(session.prompts().len(), 1, "no nudge after it");
 }
 
 #[tokio::test]

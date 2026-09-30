@@ -2,7 +2,7 @@
 name = "stillfail-station"
 version.workspace = true
 edition.workspace = true
-description = "still.fail station: runs the station (stillfail-app, in this process), serves its admin page here, and connects it to still.fail cloud over iroh"
+description = "still.fail station: runs the station (stillfail-app, in this process) and connects it to still.fail cloud over iroh"
 
 [dependencies]
 stillfail-app = { path = "../app" }

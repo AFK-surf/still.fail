@@ -124,7 +124,7 @@ fn owner_of(current: Option<Owner>, requested: Option<&Value>, viewer: &Viewer) 
     if id != "local" && !email {
         bail!("所属用户要写成邮箱");
     }
-    let manager = matches!(viewer, Viewer::Local) || matches!(viewer, Viewer::Mesh { role, .. } if role == "owner" || role == "admin");
+    let manager = viewer.manages();
     if !manager && current.as_ref().is_none_or(|c| c.id != viewer.id()) {
         bail!("只有 workspace 的 owner、管理员或者当前所属用户能改所属用户");
     }

@@ -37,7 +37,7 @@ pub fn next_ts_at(now_ms: i64) -> String {
 }
 
 pub struct InternalChat {
-    /// Display names of page users (the Access email, or "local").
+    /// Display names of page users (an email; "local" in chats written on the page this machine had, before it went).
     names: Box<dyn Fn(&str) -> String + Send + Sync>,
 }
 

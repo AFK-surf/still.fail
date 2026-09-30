@@ -1,8 +1,9 @@
 //! The station as one piece, as stillfail-station runs it in its own process: the settings, store, chat connections, hub
-//! and runtimes, the admin API and page, and the agents' MCP endpoint.
+//! and runtimes, the admin API, and the agents' MCP endpoint.
 //!
-//! stillfail-station hands it requests: its local page's (a browser here: the viewer is this machine, or Cloudflare
-//! Access's through a tunnel) and ember cloud members' through the mesh (the viewer it verified).
+//! stillfail-station hands it the requests of still.fail cloud's members through the mesh (the viewer it verified);
+//! there is no page of its own on this machine any more. It works only while in a workspace (<data>/mesh/cloud.json
+//! says so, `MeshFile`): outside one, no connect connects, no turn starts, no job runs (`App::unbind`).
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -19,9 +20,9 @@ use http_body_util::BodyExt;
 use hyper::{Request, Response};
 use serde_json::{Value, json};
 use tokio::sync::watch;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
-use crate::access::{AccessDenied, AccessGate, Viewer};
+use crate::access::Viewer;
 use crate::admin::{AdminApi, AdminDeps, Body, CheckRequest, Mesh, MeshStatus, full, json_response};
 use crate::agent_home::{link_agent_home, link_transcripts};
 use crate::chat::internal::InternalChat;
@@ -31,7 +32,7 @@ use crate::chat::{ChatEvent, ChatSurface};
 use crate::config::{Config, Profile};
 use crate::connections::{Connection, Connections};
 use crate::handoff::{Door, HandedApp};
-use crate::hub::{Hub, HubOptions};
+use crate::hub::{Hold, Hub, HubOptions};
 use crate::login::{LoginCommands, LoginManager};
 use crate::machine_logins::{MachineLogins, process_env};
 use crate::mcp::McpEndpoint;
@@ -45,7 +46,7 @@ use crate::store::Store;
 pub struct AppOptions {
     pub data: PathBuf,
     pub config: PathBuf,
-    /// The built page (dist/admin).
+    /// The release's dist/admin, where the station page was built: now only what goes with a release (posthog.json).
     pub ui: PathBuf,
     /// What the previous binary handed over (handoff.rs), when it exec'd this one.
     pub handoff: Option<HandedApp>,
@@ -56,7 +57,8 @@ pub struct AppOptions {
 pub const DB_FILE: &str = "ember.db";
 
 /// This station's place in still.fail cloud, as <data>/mesh/cloud.json says (written by `stillfail station enroll`, kept
-/// up to date by the cloud); looked at every couple of seconds, so an enrollment or a rename shows at once.
+/// up to date by the cloud, marked `removed_at` by stillfail-station when the cloud says it was removed); looked at every
+/// couple of seconds, so an enrollment, a removal or a rename shows at once.
 pub struct MeshFile {
     path: PathBuf,
     changes: watch::Sender<u64>,
@@ -89,7 +91,16 @@ impl Mesh for MeshFile {
             return MeshStatus { state: "off".into(), ..MeshStatus::default() };
         };
         let text = |k: &str| state[k].as_str().map(String::from);
-        MeshStatus { state: "running".into(), origin: text("origin"), station: text("station"), workspace: text("workspace_name"), workspace_id: text("workspace"), name: text("name") }
+        let removed_at = state["removed_at"].as_u64();
+        MeshStatus {
+            state: if removed_at.is_some() { "removed" } else { "running" }.into(),
+            origin: text("origin"),
+            station: text("station"),
+            workspace: text("workspace_name"),
+            workspace_id: text("workspace"),
+            name: text("name"),
+            removed_at,
+        }
     }
     fn changes(&self) -> watch::Receiver<u64> {
         self.changes.subscribe()
@@ -122,10 +133,12 @@ pub struct App {
     jobs: Arc<crate::jobs::Jobs>,
     logins: Arc<LoginManager>,
     admin: Arc<AdminApi>,
-    gate: AccessGate,
-    ui: PathBuf,
     up: AtomicBool,
     pub mesh: Arc<MeshFile>,
+    /// In a workspace: doing its work (`bind`, `unbind`).
+    bound: Arc<AtomicBool>,
+    /// Started outside a workspace: cut-off turns not resumed and jobs not taken up yet, owed once it joins one.
+    owed: AtomicBool,
     /// The agents' MCP endpoint.
     mcp: Arc<Door>,
 }
@@ -299,9 +312,10 @@ impl App {
         });
         // What the chats' people hear about while no client of theirs runs (the station process posts it on).
         crate::admin::notify::Notifier::start(&admin);
-        let access = settings.clone();
-        let gate = AccessGate::new(move || access.config().admin_access.clone(), None, || None);
         let mcp_door = serve_mcp(listener, mcp, jobs.clone());
+        // A station does no work outside a workspace: never in one, or removed from it.
+        let status = mesh.status();
+        let bound = Arc::new(AtomicBool::new(status.bound()));
         let app = Arc::new(App {
             settings: settings.clone(),
             connections: connections.clone(),
@@ -309,29 +323,37 @@ impl App {
             jobs: jobs.clone(),
             logins,
             admin,
-            gate,
-            ui: options.ui,
             up: AtomicBool::new(false),
             mesh,
+            bound: bound.clone(),
+            owed: AtomicBool::new(false),
             mcp: mcp_door,
         });
 
-        // Edits apply as they are saved: homes linked, connects (re)connected.
+        // Edits apply as they are saved: homes linked, connects (re)connected while in a workspace.
         let mut edits = settings.subscribe();
-        let reconnect = connections.clone();
+        let (reconnect, reconnecting) = (connections.clone(), bound.clone());
         tokio::spawn(async move {
             while edits.changed().await.is_ok() {
                 let config = edits.borrow_and_update().clone();
                 link_homes(&config);
-                reconnect.reconcile(&config).await;
+                if reconnecting.load(Ordering::SeqCst) {
+                    reconnect.reconcile(&config).await;
+                }
             }
         });
         info!(port, "station listening");
-        connections.reconcile(&config).await;
-        if connections.ids().is_empty() {
-            warn!("no connect is connected; add or enable one on the admin page");
+        if status.bound() {
+            connections.reconcile(&config).await;
+            if connections.ids().is_empty() {
+                warn!("no connect is connected; add or enable one in the workspace's settings");
+            }
+            hub.recover()?;
+        } else {
+            unbound_warning(&status, &config);
+            hub.hold(Hold::Unbound);
+            app.owed.store(true, Ordering::SeqCst);
         }
-        hub.recover()?;
         // Chats idle long enough go to the archive (Hub::auto_archive): looked at now and every hour.
         let archiving = hub.clone();
         tokio::spawn(async move {
@@ -343,82 +365,84 @@ impl App {
                 }
             }
         });
-        jobs.relaunch();
+        if status.bound() {
+            jobs.relaunch();
+        }
+        tokio::spawn(follow_binding(Arc::downgrade(&app)));
         app.up.store(true, Ordering::SeqCst);
         Ok(app)
+    }
+
+    /// Whether the station is in a workspace, and so does its work.
+    pub fn bound(&self) -> bool {
+        self.bound.load(Ordering::SeqCst)
+    }
+
+    /// In a workspace (again): connects connect, what a start outside one left owed is done (cut-off turns resumed,
+    /// jobs taken up), and turns start, what waited meanwhile first.
+    async fn bind(&self) {
+        if self.bound.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        info!("in a workspace: connects, turns and jobs go on");
+        self.connections.reconcile(&self.settings.config()).await;
+        if self.owed.swap(false, Ordering::SeqCst) {
+            // Resumed while still held: a message that waited joins the resumed turn rather than racing it.
+            if let Err(e) = self.hub.recover() {
+                warn!(error = %e, "cut-off turns not resumed");
+            }
+            self.jobs.relaunch();
+        }
+        self.hub.release(Hold::Unbound);
+    }
+
+    /// Out of its workspace (removed, or its cloud.json taken away): no turn starts and those running are interrupted,
+    /// connects disconnect, jobs and services stop (their logs say why). Messages that come meanwhile wait.
+    async fn unbind(&self, status: &MeshStatus) {
+        if !self.bound.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        let why = match (status.state.as_str(), &status.workspace) {
+            ("removed", Some(workspace)) => format!("the station was removed from its workspace ({workspace})"),
+            ("removed", None) => "the station was removed from its workspace".to_string(),
+            _ => "the station is in no workspace".to_string(),
+        };
+        warn!(why, "out of its workspace: stopping connects, turns, jobs and services");
+        self.hub.hold(Hold::Unbound);
+        self.connections.stop_all().await;
+        self.hub.stop_all().await;
+        self.jobs.stop_all(&why).await;
     }
 
     pub fn up(&self) -> bool {
         self.up.load(Ordering::SeqCst)
     }
 
-    /// One request of the station's page or admin API. `viewer`: who stillfail-station verified (the mesh); None for this
-    /// machine's own page, whose viewer the Access gate says.
-    pub async fn handle<B>(&self, req: Request<B>, viewer: Option<Viewer>) -> Response<Body>
+    /// One request of the admin API, from `viewer`: who stillfail-station verified (the mesh). Nothing else is served:
+    /// the page is still.fail cloud's.
+    pub async fn handle<B>(&self, req: Request<B>, viewer: Viewer) -> Response<Body>
     where
         B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
         B::Error: std::error::Error + Send + Sync + 'static,
     {
         let path = req.uri().path().to_string();
-        if path == "/healthz" {
-            return plain(if self.up() { 200 } else { 503 }, "");
-        }
         if !self.up() {
             return plain(503, "still.fail station is starting");
         }
         if path.starts_with("/admin/api/") {
-            let viewer = match viewer {
-                Some(viewer) => viewer,
-                None => {
-                    let headers = req.headers().clone();
-                    match self.gate.check(|name| headers.get(name).and_then(|v| v.to_str().ok()).map(String::from), true).await {
-                        Ok(viewer) => viewer,
-                        Err(e) if e.downcast_ref::<AccessDenied>().is_some() => return json_response(403, &json!({ "error": e.to_string() })),
-                        Err(e) => {
-                            error!(error = %e, "access check failed");
-                            return json_response(500, &json!({ "error": e.to_string() }));
-                        }
-                    }
-                }
-            };
             return self.admin.handle(req, viewer).await;
         }
-        if viewer.is_some() {
-            return json_response(404, &json!({ "error": "only the admin API is reachable over the mesh" }));
-        }
-        if path == "/admin" || path.starts_with("/admin/") {
-            return self.serve_ui(&path).await;
-        }
-        if path == "/" {
-            return Response::builder().status(302).header("location", "/admin").body(full(Bytes::new())).expect("a response");
-        }
-        plain(404, "")
-    }
-
-    /// Files under dist/admin by path; anything else gets index.html, where the client router takes over.
-    async fn serve_ui(&self, path: &str) -> Response<Body> {
-        let relative = clean_relative(path.strip_prefix("/admin").unwrap_or(""));
-        let Some(relative) = relative else { return plain(400, "") };
-        let hashed = relative.starts_with("assets/");
-        let has_extension = Path::new(&relative).extension().is_some();
-        let candidates = if !relative.is_empty() && has_extension { vec![relative.clone(), "index.html".into()] } else { vec!["index.html".to_string()] };
-        for file in candidates {
-            let Ok(content) = tokio::fs::read(self.ui.join(&file)).await else { continue };
-            // Vite fingerprints assets; the shell must always be revalidated.
-            let cache = if hashed && file == relative { "public, max-age=31536000, immutable" } else { "no-cache" };
-            return Response::builder().status(200).header("content-type", ui_type(&file)).header("cache-control", cache).body(full(content)).expect("a response");
-        }
-        plain(503, "admin client not built: run `pnpm build`")
+        json_response(404, &json!({ "error": "only the admin API is reachable over the mesh" }))
     }
 
     /// Holds turns: none starts, messages stay pending (Hub::hold). For a restart: once none runs, nothing is cut off.
     pub fn hold(&self) {
-        self.hub.hold();
+        self.hub.hold(Hold::Drain);
     }
 
-    /// Lets turns start again.
+    /// Lets turns start again (unless the station is in no workspace).
     pub fn release(&self) {
-        self.hub.release();
+        self.hub.release(Hold::Drain);
     }
 
     /// Whether any turn is running.
@@ -460,31 +484,32 @@ impl App {
     }
 }
 
-/// A path under the page's directory, `.` and `..` worked out; None when it would leave it.
-fn clean_relative(path: &str) -> Option<String> {
-    let mut parts: Vec<&str> = vec![];
-    for part in path.split('/') {
-        match part {
-            "" | "." => {}
-            ".." => {
-                parts.pop()?;
-            }
-            p => parts.push(p),
+/// Binds and unbinds the station as its cloud.json changes (enrolled, removed, taken back), for as long as it runs.
+async fn follow_binding(app: std::sync::Weak<App>) {
+    let Some(mut changes) = app.upgrade().map(|app| app.mesh.changes()) else { return };
+    while changes.changed().await.is_ok() {
+        let Some(app) = app.upgrade() else { return };
+        let status = app.mesh.status();
+        if status.bound() {
+            app.bind().await;
+        } else {
+            app.unbind(&status).await;
         }
     }
-    Some(parts.join("/"))
 }
 
-fn ui_type(file: &str) -> &'static str {
-    match Path::new(file).extension().and_then(|e| e.to_str()) {
-        Some("html") => "text/html; charset=utf-8",
-        Some("js") => "text/javascript; charset=utf-8",
-        Some("css") => "text/css; charset=utf-8",
-        Some("svg") => "image/svg+xml",
-        Some("png") => "image/png",
-        Some("webmanifest") => "application/manifest+json",
-        Some("woff2") => "font/woff2",
-        _ => "application/octet-stream",
+/// Said at a start outside a workspace, loudly when it has connects that would have connected: they stay off until the
+/// station joins one (docs/ops-log.md: stations never enrolled stop taking Slack's messages with this release).
+fn unbound_warning(status: &MeshStatus, config: &Config) {
+    let connects = config.connects.iter().filter(|c| c.enabled).count();
+    let state = if status.state == "removed" { "removed from its workspace" } else { "in no workspace" };
+    if connects > 0 {
+        warn!(
+            connects,
+            "this station is {state}: its connects stay disconnected, and no turn or job runs, until it joins one (`stillfail station enroll <cloud> <token>`; `stillfail status` says more)"
+        );
+    } else {
+        warn!("this station is {state}: no turn or job runs until it joins one (`stillfail station enroll <cloud> <token>`)");
     }
 }
 
@@ -554,5 +579,101 @@ async fn answer_mcp(mcp: &McpEndpoint, jobs: &crate::jobs::Jobs, req: Request<hy
             }
         }
         _ => plain(404, ""),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A station of its own in a temporary data directory, gone with the test.
+    struct Rig {
+        dir: PathBuf,
+        app: Arc<App>,
+    }
+
+    impl Rig {
+        async fn start(name: &str, config: Value) -> Rig {
+            let dir = std::env::temp_dir().join(format!("stillfail-server-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(dir.join("mesh")).unwrap();
+            let mut config = config;
+            // Any free port for the MCP endpoint: not a real station's 4750.
+            config["http"] = json!({ "host": "127.0.0.1", "port": 0 });
+            std::fs::write(dir.join("config.json"), config.to_string()).unwrap();
+            let options = AppOptions { data: dir.clone(), config: dir.join("config.json"), ui: dir.join("app").join("dist").join("admin"), handoff: None };
+            let app = App::start(options).await.unwrap();
+            Rig { dir, app }
+        }
+
+        fn enroll(&self, removed_at: Option<u64>) {
+            let mut state = json!({ "origin": "https://app.still.fail", "station": "s1", "workspace": "w1", "workspace_name": "Dev", "name": "mac", "relay_url": "https://app.still.fail", "grant_keys": {} });
+            if let Some(at) = removed_at {
+                (state["removed_at"], state["removed_code"]) = (json!(at), json!(4004));
+            }
+            std::fs::write(self.dir.join("mesh").join("cloud.json"), state.to_string()).unwrap();
+        }
+
+        /// Waits for the station to see its cloud.json (looked at every couple of seconds).
+        async fn until_bound(&self, bound: bool) {
+            for _ in 0..300 {
+                if self.app.bound() == bound && self.app.hub.holds(Hold::Unbound) != bound {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            panic!("never bound = {bound}");
+        }
+    }
+
+    impl Drop for Rig {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_station_in_no_workspace_connects_nothing_and_holds_its_turns() {
+        let connect = json!({ "id": "ds", "bind": { "runtime": "claude" }, "slack": { "appToken": "xapp-test", "botToken": "xoxb-test" } });
+        let r = Rig::start("unbound", json!({ "connects": [connect] })).await;
+        assert!(!r.app.bound());
+        assert!(r.app.hub.holds(Hold::Unbound), "no turn starts");
+        assert!(r.app.connections.ids().is_empty(), "its connect stays disconnected");
+        assert_eq!(r.app.mesh.status().state, "off");
+        r.app.shutdown().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn joining_a_workspace_binds_it_removal_unbinds_it_and_being_taken_back_binds_it_again() {
+        let r = Rig::start("binding", json!({})).await;
+        assert!(!r.app.bound());
+        r.enroll(None);
+        r.until_bound(true).await;
+        assert_eq!(r.app.mesh.status().state, "running");
+        // A drain meanwhile does not undo the removal's hold, nor the other way round.
+        r.enroll(Some(1_790_000_000));
+        r.until_bound(false).await;
+        let status = r.app.mesh.status();
+        assert_eq!((status.state.as_str(), status.removed_at, status.bound(), status.serves("w1")), ("removed", Some(1_790_000_000), false, false));
+        r.app.hold();
+        r.app.release();
+        assert!(r.app.hub.holds(Hold::Unbound));
+        r.enroll(None);
+        r.until_bound(true).await;
+        assert!(r.app.mesh.status().serves("w1"));
+        r.app.shutdown().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_station_removed_before_it_started_stays_unbound_through_the_restart() {
+        let r = Rig::start("removed-before", json!({})).await;
+        r.enroll(Some(1_790_000_000));
+        r.app.shutdown().await;
+        let options = AppOptions { data: r.dir.clone(), config: r.dir.join("config.json"), ui: r.dir.join("app").join("dist").join("admin"), handoff: None };
+        let again = App::start(options).await.unwrap();
+        assert!(!again.bound());
+        assert!(again.hub.holds(Hold::Unbound));
+        assert_eq!(again.mesh.status().state, "removed");
+        again.shutdown().await;
     }
 }

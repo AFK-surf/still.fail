@@ -306,3 +306,18 @@ impl Rig {
         PathBuf::from(self.store.get_job(id).unwrap().unwrap().log)
     }
 }
+
+#[tokio::test]
+async fn leaving_the_workspace_stops_every_job_and_service_and_says_why() {
+    let r = rig();
+    let job = r.jobs.start("s1", "long", "sleep 30", &r.work, None).unwrap();
+    let service = r.jobs.start("s2", "web", "sleep 30", &r.work, Some(47991)).unwrap();
+    let done = r.jobs.start("s1", "done", "exit 0", &r.work, None).unwrap();
+    until("the short one ends", || r.state(&done.id) == "exited").await;
+    r.jobs.stop_all("the station was removed from its workspace").await;
+    until("both are stopped", || r.state(&job.id) == "stopped" && r.state(&service.id) == "stopped").await;
+    assert_eq!(r.state(&done.id), "exited", "what was over stays as it was");
+    let log = std::fs::read_to_string(r.store.get_job(&job.id).unwrap().unwrap().log).unwrap();
+    assert!(log.ends_with("[still.fail] stopped: the station was removed from its workspace\n"), "{log}");
+    assert!(!r.said().iter().any(|t| t.contains("was stopped")), "agents are not woken for it");
+}

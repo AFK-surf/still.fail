@@ -1,12 +1,18 @@
 //! stillfail-station: a still.fail station, as launchd (or the desktop app) runs it (ember-station before the rename,
 //! still a link to this in a release: docs/rename-still-fail.md).
 //!
-//! `run` runs the station: its app (stillfail-app) in this process; the admin page on a loopback port for a browser here
-//! (local.rs); and, once the station is in a workspace, its way into still.fail cloud. It holds a presence socket to
-//! the cloud (connected is online) while the app is up — which also brings what the cloud revokes — accepts iroh
-//! connections from clients that present a member's credential signed by the cloud (checked offline: the cloud need
-//! not be reachable), and hands each stream's request to the app's admin API with the verified identity. `enroll`
-//! redeems a one-time token from a workspace admin, proving this station holds its iroh key.
+//! `run` runs the station: its app (stillfail-app) in this process; a loopback port that sends links to the page it once
+//! had on to still.fail cloud (local.rs); and, once the station is in a workspace, its way into still.fail cloud. It
+//! holds a presence socket to the cloud (connected is online) while the app is up — which also brings what the cloud
+//! revokes — accepts iroh connections from clients that present a member's credential signed by the cloud (checked
+//! offline: the cloud need not be reachable), and hands each stream's request to the app's admin API with the verified
+//! identity. `enroll` redeems a one-time token from a workspace admin, proving this station holds its iroh key.
+//! `status` says where the station is.
+//!
+//! A station works only in a workspace. Removed from it (the cloud closes the presence socket with 4004, or refuses it
+//! with 404), it marks <data>/mesh/cloud.json `removed_at` and keeps the file (the desktop app then does not join it
+//! again by itself); the app sees the mark and stops its work (stillfail_app::server). The cloud is asked again now and
+//! then; should it take the station back, the mark goes. `enroll` writes the file anew, without it.
 //!
 //! Wire format on ALPN `ember/admin/1` (clients from before the rename ask for it; `stillfail/admin/1` is the same): the
 //! first bidirectional stream carries
@@ -84,6 +90,12 @@ struct CloudState {
     /// account (`sub`) or session (`sid`) issued up to `at` are refused. Kept, so it holds with the cloud away.
     #[serde(default)]
     revocations: Vec<Revocation>,
+    /// When the cloud said the station was removed from its workspace (unix seconds), and how (4004: the presence
+    /// socket closed so; 404: refused at connect). Absent while it is in the workspace, and in files of before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    removed_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    removed_code: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -170,6 +182,8 @@ async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
         relay_urls: strings(&body["relay_urls"]),
         grant_keys: body["grant_keys"].clone(),
         revocations: Vec::new(),
+        removed_at: None,
+        removed_code: None,
     };
     save_state(data, &state)?;
     println!("已加入 workspace「{}」，这台 station 叫「{}」（{}）。", state.workspace_name, state.name, &station[..12]);
@@ -285,12 +299,26 @@ struct Station {
     /// Where its requests go, and whether that answers now.
     backend: local::Backend,
     ready: watch::Receiver<bool>,
-    removed: Mutex<bool>,
     telemetry: Arc<Telemetry>,
 }
 
-/// What `run` is given: where the data is, the app directory (the admin page's files in dist/admin), and the admin
-/// page's port.
+impl Station {
+    /// Whether the cloud removed it from its workspace (and has not taken it back).
+    fn removed(&self) -> bool {
+        self.state.lock().unwrap().removed_at.is_some()
+    }
+
+    /// Takes up what cloud.json says now: an enrollment made while this runs (`stillfail station enroll`) wrote it anew.
+    /// What this process learns it writes there at once (`apply_state`, `removed`), so the file is never behind.
+    fn reload(&self) {
+        if let Ok(state) = load_state(&self.data) {
+            *self.state.lock().unwrap() = state;
+        }
+    }
+}
+
+/// What `run` is given: where the data is, the app directory (the release: dist/admin keeps what it built for the
+/// station, posthog.json), and the loopback port.
 struct Run {
     data: PathBuf,
     app: PathBuf,
@@ -306,7 +334,7 @@ struct Run {
 #[derive(Serialize, Deserialize)]
 struct Handoff {
     version: u32,
-    /// The admin page's listening socket.
+    /// The loopback port's listening socket.
     admin: Option<i32>,
     app: stillfail_app::handoff::HandedApp,
 }
@@ -387,13 +415,13 @@ async fn run(options: Run) -> Result<()> {
         });
     }
     let handed_admin = handoff.as_ref().and_then(|h| h.admin).and_then(|fd| {
-        stillfail_app::handoff::claim_listener(fd).map_err(|error| warn!(%error, "the admin page's socket handed over could not be taken up")).ok()
+        stillfail_app::handoff::claim_listener(fd).map_err(|error| warn!(%error, "the loopback port's socket handed over could not be taken up")).ok()
     });
     let listener = match handed_admin {
         Some(listener) => listener,
         None => local::bind(&data, options.port, options.named).await?,
     };
-    let door = local::serve(listener, backend.clone(), ready.clone());
+    let door = local::serve(listener, data.clone(), ready.clone());
     tokio::spawn(mesh(data.clone(), backend.clone(), ready, telemetry));
     write_station_file(&data.join("run"), now() * 1000 + (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_millis() as u64));
     // SIGTERM (launchd, the desktop app) or ^C: the runtimes end first. So does, with --with-parent, the parent's end
@@ -473,7 +501,7 @@ async fn hand_over(options: &Run, door: &stillfail_app::handoff::Door, app: &sti
         bail!("{} does not take this binary's handoff (it reads {:?}, this writes {})", exe.display(), theirs, stillfail_app::handoff::VERSION);
     }
     info!(to = %exe.display(), "handing over to the next binary");
-    // The page's requests under way finish; new ones wait in the backlog for the next binary.
+    // The loopback port's requests under way finish; new ones wait in the backlog for the next binary.
     door.pause(Duration::from_secs(10)).await?;
     let handed = match app.hand_off().await {
         Ok(handed) => handed,
@@ -483,7 +511,7 @@ async fn hand_over(options: &Run, door: &stillfail_app::handoff::Door, app: &sti
         }
     };
     ready_tx.send_replace(false);
-    let admin = door.keep().map_err(|error| warn!(%error, "the admin page's socket is not handed over")).ok();
+    let admin = door.keep().map_err(|error| warn!(%error, "the loopback port's socket is not handed over")).ok();
     let path = options.data.join("run").join("handoff.json");
     let written = serde_json::to_vec(&Handoff { version: stillfail_app::handoff::VERSION, admin, app: handed }).map_err(anyhow::Error::from).and_then(|bytes| write_private(&path, &bytes));
     if let Err(error) = written {
@@ -545,6 +573,7 @@ fn traces_on(data: &Path) -> bool {
 
 /// The station's way into still.fail cloud, once it is in a workspace (enrolled: `stillfail station enroll`).
 async fn mesh(data: PathBuf, backend: local::Backend, ready: watch::Receiver<bool>, telemetry: Arc<Telemetry>) {
+    write_presence(&data, false, Some("not in a workspace"));
     let state = loop {
         match load_state(&data) {
             Ok(state) if load_key(&data).is_ok() => break state,
@@ -581,7 +610,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
         .await?;
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "mesh listening");
     let traces = telemetry.enabled();
-    let station = Arc::new(Station { data, state: Mutex::new(state), backend, ready, removed: Mutex::new(false), telemetry: telemetry.clone() });
+    let station = Arc::new(Station { data, state: Mutex::new(state), backend, ready, telemetry: telemetry.clone() });
     // Online at still.fail cloud only once the relay can reach us: a device that saw "online" and connected before
     // our relay link was up had its first packets dropped and waited out QUIC's retransmits (~3 s).
     if tokio::time::timeout(std::time::Duration::from_secs(15), endpoint.online()).await.is_err() {
@@ -676,7 +705,11 @@ async fn keep_relays(endpoint: Endpoint, station: Arc<Station>) {
     }
 }
 
-/// Keeps the presence socket open, reconnecting with backoff.
+/// How often a station removed from its workspace asks the cloud whether it is taken back.
+const REMOVED_RETRY: Duration = Duration::from_secs(600);
+
+/// Keeps the presence socket open, reconnecting with backoff; removed from its workspace, only now and then
+/// (`REMOVED_RETRY`), or at once when it is enrolled again meanwhile.
 async fn presence(station: Arc<Station>, key: SecretKey) {
     let mut backoff = Duration::from_secs(1);
     let mut ready = station.ready.clone();
@@ -687,8 +720,25 @@ async fn presence(station: Arc<Station>, key: SecretKey) {
             let _ = ready.wait_for(|up| *up).await.map(|_| ());
             backoff = Duration::from_secs(1);
         }
+        station.reload();
+        if station.removed() {
+            write_presence(&station.data, false, Some("removed from its workspace; the cloud is asked again every 10 minutes"));
+            let until = Instant::now() + REMOVED_RETRY;
+            while Instant::now() < until {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                station.reload();
+                if !station.removed() {
+                    break;
+                }
+            }
+        }
         let started = Instant::now();
-        match connect(&station, &key).await {
+        let ended = connect(&station, &key).await;
+        write_presence(&station.data, false, Some(&match &ended {
+            Ok(()) => "still.fail cloud closed the presence socket".to_string(),
+            Err(error) => error.to_string(),
+        }));
+        match ended {
             Ok(()) => info!("still.fail cloud closed the presence socket"),
             Err(error) => warn!(%error, "no presence socket to still.fail cloud"),
         }
@@ -721,12 +771,13 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
     let (mut socket, _) = match tokio::time::timeout(Duration::from_secs(20), tokio_tungstenite::connect_async(request)).await.context("connect timed out")? {
         Ok(connected) => connected,
         Err(tungstenite::Error::Http(response)) if response.status().as_u16() == 404 => {
-            removed(station);
+            removed(station, 404);
             bail!("station removed");
         }
         Err(error) => return Err(error.into()),
     };
-    *station.removed.lock().unwrap() = false;
+    taken_back(station);
+    write_presence(&station.data, true, None);
     info!("online at still.fail cloud");
     let mut ping = tokio::time::interval(PING);
     ping.tick().await;
@@ -745,7 +796,7 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
                 Some(Ok(Message::Text(text))) => apply_state(station, text.as_str()),
                 Some(Ok(Message::Close(frame))) => {
                     if frame.is_some_and(|f| u16::from(f.code) == CLOSE_REMOVED) {
-                        removed(station);
+                        removed(station, CLOSE_REMOVED);
                     }
                     return Ok(());
                 }
@@ -765,9 +816,47 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
     }
 }
 
-fn removed(station: &Station) {
-    warn!("this station was removed from its workspace; refusing connections");
-    *station.removed.lock().unwrap() = true;
+/// The cloud says the station is out of its workspace (`code`: how it said so): marked in cloud.json, kept there
+/// through restarts. The app stops its work on seeing it; clients are refused from now on.
+fn removed(station: &Station, code: u16) {
+    let mut state = station.state.lock().unwrap();
+    if state.removed_at.is_some() {
+        return;
+    }
+    warn!(code, workspace = %state.workspace_name, "this station was removed from its workspace; it stops its work and refuses connections");
+    mark_removed(&mut state, now(), code);
+    if let Err(error) = save_state(&station.data, &state) {
+        warn!(%error, "the removal not written to cloud.json");
+    }
+}
+
+fn mark_removed(state: &mut CloudState, at: u64, code: u16) {
+    state.removed_at = Some(at);
+    state.removed_code = Some(code);
+}
+
+/// The cloud took the presence socket: a station it had removed is in its workspace again, and works.
+fn taken_back(station: &Station) {
+    let mut state = station.state.lock().unwrap();
+    if state.removed_at.is_none() {
+        return;
+    }
+    info!(workspace = %state.workspace_name, "still.fail cloud takes this station again; back to work");
+    state.removed_at = None;
+    state.removed_code = None;
+    if let Err(error) = save_state(&station.data, &state) {
+        warn!(%error, "cloud.json not written");
+    }
+}
+
+/// Whether the station is online at still.fail cloud, and since when or why not: <data>/run/presence.json, for
+/// `stillfail status`.
+fn write_presence(data: &Path, online: bool, error: Option<&str>) {
+    let text = json!({ "online": online, "at": now(), "error": error }).to_string();
+    let _ = std::fs::create_dir_all(data.join("run"));
+    if let Err(error) = std::fs::write(data.join("run").join("presence.json"), format!("{text}\n")) {
+        warn!(%error, "presence.json not written");
+    }
 }
 
 /// still.fail cloud says where the station is and what it is called (on connect and whenever that changes, with every
@@ -811,7 +900,7 @@ fn apply_state(station: &Station, text: &str) {
 }
 
 async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
-    if *station.removed.lock().unwrap() {
+    if station.removed() {
         conn.close(2u32.into(), b"station_removed");
         bail!("station removed");
     }
@@ -862,6 +951,11 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
                     let admitted = current.lock().unwrap();
                     (admitted.exp <= now(), admitted.revoked(&station.state.lock().unwrap().revocations))
                 };
+                // Removed from the workspace meanwhile: its members' connections end too.
+                if station.removed() {
+                    conn.close(2u32.into(), b"station_removed");
+                    break;
+                }
                 if expired || revoked {
                     conn.close(3u32.into(), if revoked { b"credential_revoked".as_slice() } else { b"credential_expired".as_slice() });
                     break;
@@ -878,6 +972,10 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
         };
         let accepted = (SystemTime::now(), Instant::now());
         let via = conn.paths().iter().find(|p| p.is_selected()).map(|p| if p.is_relay() { "relay" } else { "direct" });
+        if station.removed() {
+            conn.close(2u32.into(), b"station_removed");
+            return Ok(());
+        }
         let admitted = current.lock().unwrap().clone();
         if admitted.exp <= now() || admitted.revoked(&station.state.lock().unwrap().revocations) {
             conn.close(3u32.into(), b"credential_expired");
@@ -1015,7 +1113,7 @@ async fn answer(
         workspace: viewer.workspace.clone(),
         device: viewer.device.clone(),
     };
-    let response = if !up { Err(anyhow!("not started")) } else { station.backend.call(request, Some(&seen)).await };
+    let response = if !up { Err(anyhow!("not started")) } else { station.backend.call(request, &seen).await };
     let response = match response {
         Ok(r) => r,
         Err(error) => {
@@ -1099,8 +1197,54 @@ async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut Send
 }
 
 fn usage() -> ! {
-    eprintln!("usage:\n  stillfail-station run --app DIR [--port N] [--data DIR] [--with-parent]\n  stillfail-station enroll <cloud-origin> <token> [--data DIR]\n  stillfail-station id [--data DIR]\n\n--data: default ~/.stillfail ($STILLFAIL_DATA, else $EMBER_DATA); ~/.ember is moved there on the first start.\nrun: --app holds the admin page (dist/admin); --port the admin page's (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
+    eprintln!("usage:\n  stillfail-station run --app DIR [--port N] [--data DIR] [--with-parent]\n  stillfail-station enroll <cloud-origin> <token> [--data DIR]\n  stillfail-station status [--data DIR]\n  stillfail-station id [--data DIR]\n\n--data: default ~/.stillfail ($STILLFAIL_DATA, else $EMBER_DATA); ~/.ember is moved there on the first start.\nrun: --app is the release (bin/, dist/admin/); --port the loopback port's, which sends old page links to still.fail cloud (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
     std::process::exit(2);
+}
+
+/// `status`: where the station is and whether it works, as its files say (mesh/cloud.json; run/station.json and
+/// run/presence.json while it runs), for people.
+fn status(data: &Path) -> String {
+    let when = |at: u64| stillfail_app::transcript::iso(at as i64 * 1000);
+    let read = |path: PathBuf| std::fs::read(path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+    let running = read(data.join("run").join("station.json")).filter(|s| {
+        // SAFETY: kill with signal 0 only asks whether the process is there.
+        s["pid"].as_i64().is_some_and(|pid| pid > 0 && unsafe { libc::kill(pid as i32, 0) } == 0)
+    });
+    let mut out = vec![format!("数据目录：{}", data.display())];
+    out.push(match &running {
+        Some(s) => format!("station：在运行（pid {}，版本 {}）", s["pid"], s["version"].as_str().unwrap_or("?")),
+        None => "station：没有在运行".into(),
+    });
+    let join = "stillfail station enroll <cloud> <token>（token 在 still.fail 的「添加 station」里生成）";
+    let Ok(state) = load_state(data) else {
+        out.push("workspace：没有加入".into());
+        out.push(format!("工作：停着。不在 workspace 里的 station 不接 Slack、不跑 agent 和任务。加入：{join}"));
+        return out.join("\n");
+    };
+    out.push(format!("workspace：{}（{}）", state.workspace_name, state.workspace));
+    out.push(format!("station 名字：{}（{}）", state.name, &state.station[..state.station.len().min(12)]));
+    out.push(format!("cloud：{}", state.origin));
+    if let Some(at) = state.removed_at {
+        let how = match state.removed_code {
+            Some(CLOSE_REMOVED) => "cloud 断开连接时说的（4004）".to_string(),
+            Some(404) => "连接时 cloud 说这台 station 已不在 workspace 里（404）".to_string(),
+            Some(code) => format!("代码 {code}"),
+            None => String::new(),
+        };
+        out.push(format!("已被移出：workspace「{}」，{}，{how}", state.workspace_name, when(at)));
+        out.push(format!("工作：停着。被移出时停下了 Slack 连接、正在跑的 agent 和任务（任务日志末尾写了原因）；每 10 分钟问一次 cloud，重新被接纳就自动恢复。重新加入：{join}"));
+    }
+    let presence = read(data.join("run").join("presence.json")).filter(|_| running.is_some());
+    out.push(match presence {
+        Some(p) if p["online"] == true => format!("在线：是（从 {} 起）", p["at"].as_u64().map(when).unwrap_or_default()),
+        Some(p) => format!("在线：否（{}）", p["error"].as_str().unwrap_or("还没连上")),
+        None if running.is_none() => "在线：否（station 没有在运行）".into(),
+        None => "在线：否".into(),
+    });
+    if state.removed_at.is_none() {
+        out.push("工作：正常（连接 Slack、跑 agent 和任务）".into());
+    }
+    out.join("\n")
 }
 
 #[tokio::main]
@@ -1135,6 +1279,10 @@ async fn main() -> Result<()> {
     let with_parent = args.iter().position(|a| a == "--with-parent").map(|i| args.remove(i)).is_some();
     match args.first().map(String::as_str) {
         Some("enroll") if args.len() == 3 => enroll(&data, args[1].trim_end_matches('/'), &args[2]).await,
+        Some("status") => {
+            println!("{}", status(&data));
+            Ok(())
+        }
         Some("run") => {
             let Some(app) = app else { usage() };
             let named = port.is_some();
@@ -1199,6 +1347,94 @@ mod tests {
 
     fn check(credential: &str, revocations: &[Revocation]) -> Result<Admitted> {
         verify_member(credential, &keys(), WS, DEVICE, revocations)
+    }
+
+    /// A data directory of its own, gone with the test.
+    struct Dir(PathBuf);
+
+    impl Dir {
+        fn new(name: &str) -> Dir {
+            let dir = std::env::temp_dir().join(format!("stillfail-station-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(mesh_dir(&dir)).unwrap();
+            Dir(dir)
+        }
+    }
+
+    impl Drop for Dir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn enrolled(dir: &Path) -> Station {
+        let state: CloudState = serde_json::from_value(json!({ "origin": "https://app.still.fail", "station": "abcdef0123456789", "workspace": "w", "workspace_name": "Dev", "name": "mac", "relay_url": "https://app.still.fail", "grant_keys": {} })).unwrap();
+        save_state(dir, &state).unwrap();
+        Station { data: dir.to_path_buf(), state: Mutex::new(state), backend: local::Backend::default(), ready: watch::channel(true).1, telemetry: Telemetry::new(false) }
+    }
+
+    #[test]
+    fn a_cloud_json_of_before_opens_and_one_without_a_removal_is_written_as_before() {
+        let before = json!({ "origin": "o", "station": "s", "workspace": "w", "workspace_name": "W", "name": "n", "relay_url": "r", "grant_keys": {}, "revocations": [] });
+        let state: CloudState = serde_json::from_value(before.clone()).unwrap();
+        assert_eq!((state.removed_at, state.removed_code), (None, None));
+        let written = serde_json::to_value(&state).unwrap();
+        assert!(written.get("removed_at").is_none() && written.get("removed_code").is_none(), "{written}");
+        let mut removed = state.clone();
+        mark_removed(&mut removed, 1_790_000_000, CLOSE_REMOVED);
+        let written = serde_json::to_value(&removed).unwrap();
+        assert_eq!((written["removed_at"].clone(), written["removed_code"].clone()), (json!(1_790_000_000), json!(4004)));
+        let back: CloudState = serde_json::from_value(written).unwrap();
+        assert_eq!((back.removed_at, back.removed_code), (Some(1_790_000_000), Some(4004)));
+    }
+
+    #[test]
+    fn removed_by_the_cloud_the_mark_is_written_and_stays_through_a_restart() {
+        let dir = Dir::new("removed");
+        let station = enrolled(&dir.0);
+        assert!(!station.removed());
+        removed(&station, CLOSE_REMOVED);
+        assert!(station.removed());
+        // A later removal (the 404 of the next try) keeps the first time and code.
+        let at = station.state.lock().unwrap().removed_at;
+        removed(&station, 404);
+        // The next start reads it from the file.
+        let again = load_state(&dir.0).unwrap();
+        assert_eq!((again.removed_at, again.removed_code), (at, Some(CLOSE_REMOVED)));
+        assert_eq!(again.workspace_name, "Dev", "the rest of the file stays: the desktop app does not join by itself again");
+        let said = status(&dir.0);
+        assert!(said.contains("已被移出：workspace「Dev」") && said.contains("4004") && said.contains("stillfail station enroll"), "{said}");
+        // The app reads the same file (stillfail_app::server::MeshFile): removed, not in a workspace.
+        let raw: Value = serde_json::from_slice(&std::fs::read(mesh_dir(&dir.0).join("cloud.json")).unwrap()).unwrap();
+        assert!(raw["removed_at"].as_u64().is_some());
+    }
+
+    #[test]
+    fn taken_back_by_the_cloud_or_enrolled_again_the_mark_goes() {
+        let dir = Dir::new("back");
+        let station = enrolled(&dir.0);
+        removed(&station, 404);
+        taken_back(&station);
+        assert!(!station.removed());
+        assert_eq!(load_state(&dir.0).unwrap().removed_at, None);
+        // `enroll` writes the file anew while this runs: taken up as it is.
+        removed(&station, CLOSE_REMOVED);
+        let mut fresh = load_state(&dir.0).unwrap();
+        (fresh.removed_at, fresh.removed_code, fresh.workspace_name) = (None, None, "Other".into());
+        save_state(&dir.0, &fresh).unwrap();
+        station.reload();
+        assert!(!station.removed());
+        assert_eq!(station.state.lock().unwrap().workspace_name, "Other");
+    }
+
+    #[test]
+    fn status_says_where_the_station_is() {
+        let dir = Dir::new("status");
+        let said = status(&dir.0);
+        assert!(said.contains("workspace：没有加入") && said.contains("station：没有在运行") && said.contains("stillfail station enroll"), "{said}");
+        enrolled(&dir.0);
+        let said = status(&dir.0);
+        assert!(said.contains("workspace：Dev（w）") && said.contains("cloud：https://app.still.fail") && said.contains("工作：正常") && said.contains("在线：否"), "{said}");
     }
 
     #[test]

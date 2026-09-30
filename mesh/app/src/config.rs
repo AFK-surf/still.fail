@@ -48,8 +48,6 @@ pub struct RawConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_home: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub admin: Option<RawAdmin>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub http: Option<RawHttp>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connects: Option<Vec<RawConnect>>,
@@ -71,24 +69,6 @@ pub struct RawConfig {
     pub telemetry: Option<RawTelemetry>,
     #[serde(flatten)]
     pub rest: Map<String, Value>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct RawAdmin {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub access: Option<RawAccess>,
-    #[serde(flatten)]
-    pub rest: Map<String, Value>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct RawAccess {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub team_domain: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aud: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -365,12 +345,6 @@ impl Connect {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AdminAccess {
-    pub team_domain: String,
-    pub aud: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct Http {
     pub host: String,
     pub port: u16,
@@ -381,8 +355,6 @@ pub struct Http {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     pub data_dir: PathBuf,
-    /// Cloudflare Access application guarding the public admin page; None refuses tunneled requests.
-    pub admin_access: Option<AdminAccess>,
     pub slack_config_tokens: Vec<ConfigToken>,
     /// Slack apps the station made that no connect has taken yet: kept until one does (or someone drops it).
     pub slack_apps: Vec<SlackAppMade>,
@@ -534,16 +506,8 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
     }
     unique("connect", connects.iter().map(|c| c.id.as_str()))?;
 
-    let access = raw.admin.as_ref().and_then(|a| a.access.as_ref());
-    let admin_access = match access {
-        Some(RawAccess { team_domain: Some(domain), aud: Some(aud) }) if !domain.is_empty() && !aud.is_empty() => {
-            Some(AdminAccess { team_domain: domain.clone(), aud: aud.clone() })
-        }
-        _ => None,
-    };
     Ok(Config {
         data_dir: data_dir.to_path_buf(),
-        admin_access,
         slack_config_tokens: raw
             .slack_config_tokens
             .iter()
@@ -638,5 +602,13 @@ mod tests {
         let back = serde_json::to_value(&raw).unwrap();
         assert_eq!(back["future"]["x"], 1);
         assert_eq!(back["connects"][0]["later"], true);
+    }
+
+    #[test]
+    fn the_cloudflare_access_setting_of_before_opens_and_is_kept_as_it_was() {
+        let json = r#"{"admin": {"access": {"teamDomain": "afk", "aud": "a"}}, "connects": []}"#;
+        assert!(parse(json).is_ok());
+        let raw: RawConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(serde_json::to_value(&raw).unwrap()["admin"]["access"]["teamDomain"], "afk");
     }
 }

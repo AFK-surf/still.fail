@@ -2,8 +2,11 @@
 # still.fail's command line, from a clone or from an installed release (~/.stillfail/app, see cloud/src/install.ts).
 # `ember`, its name before the rename, is a link to it (bin/ember, ~/.local/bin/ember).
 #   stillfail start [--port N]                          runs the station (the release's service does this):
-#                                                       stillfail-station, which serves the admin page (4760, or a free
-#                                                       port when that is taken; --port insists on one)
+#                                                       stillfail-station, whose loopback port (4760, or a free one when
+#                                                       that is taken; --port insists on one) sends links to the page it
+#                                                       once had on to still.fail cloud
+#   stillfail status                                    where the station is: its workspace and cloud, whether it is
+#                                                       online, and why it does no work when it does none
 #   stillfail update                                    updates this station to its cloud's latest release
 #   stillfail station enroll <cloud-origin> <token>     joins a workspace in still.fail cloud
 #   stillfail station id
@@ -27,6 +30,7 @@ case "${1:-} ${2:-}" in
     [ -n "$origin" ] || { echo "这台 station 还没有加入 workspace，无从更新" >&2; exit 1; }
     curl -fsSL "$origin/install.sh" | sh ;;
   "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
+  "status "*|"station status") exec "$station" status --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
-  *) echo "usage: stillfail start [--port N] | stillfail update | stillfail station enroll <cloud-origin> <token> | stillfail station id" >&2; exit 2 ;;
+  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update | stillfail station enroll <cloud-origin> <token> | stillfail station id" >&2; exit 2 ;;
 esac

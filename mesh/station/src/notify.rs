@@ -39,7 +39,7 @@ pub async fn forward(station: Arc<Station>, key: SecretKey) {
                 Err(_) => break,
             }
         }
-        if *station.removed.lock().unwrap() {
+        if station.removed() {
             continue;
         }
         let n = batch.len();

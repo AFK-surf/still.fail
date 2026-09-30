@@ -369,6 +369,24 @@ impl Jobs {
         Ok(job)
     }
 
+    /// Stops every job and service that runs or waits to start again, `why` written at the end of each one's log: the
+    /// station left its workspace, and does no work outside one. Agents are not told (no turn runs meanwhile, and
+    /// telling them once it is back would wake them all); a job's state and log say it when one looks.
+    pub async fn stop_all(&self, why: &str) {
+        let jobs = self.store.list_jobs(None).unwrap_or_default();
+        for job in jobs.iter().filter(|j| j.state == "running" || (j.state == "exited" && j.port.is_some())) {
+            warn!(job = job.id, why, "stopping a job");
+            if let Err(e) = self.stop(&job.id).await {
+                warn!(job = job.id, error = %e, "job not stopped");
+                continue;
+            }
+            if let Ok(mut log) = std::fs::OpenOptions::new().append(true).create(true).open(&job.log) {
+                use std::io::Write;
+                let _ = writeln!(log, "\n[still.fail] stopped: {why}");
+            }
+        }
+    }
+
     /// Takes a session's jobs that are over off its record (the pages' 清掉已结束的), their logs with them: the ids gone.
     pub fn clear_ended(&self, session: &str) -> Result<Vec<String>> {
         let gone = self.store.clear_ended_jobs(session)?;

@@ -498,10 +498,8 @@ impl AdminApi {
     /// Whether a person is the viewer: by id, by email, or as a Slack user the viewer said is them.
     fn is_mine(&self, viewer: &Viewer) -> impl Fn(Option<&Value>) -> bool {
         let id = viewer.id();
-        let email = match viewer {
-            Viewer::Local => None,
-            Viewer::Access { email } | Viewer::Mesh { email, .. } => Some(email.to_lowercase()),
-        };
+        let Viewer::Mesh { email, .. } = viewer;
+        let email = Some(email.to_lowercase());
         let slack: HashSet<String> = self.deps.store.slack_identities(&id).unwrap_or_default().into_iter().collect();
         move |person| {
             let Some(p) = person else { return false };

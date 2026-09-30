@@ -11,7 +11,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
@@ -166,8 +165,8 @@ pub struct Hub {
     spent: Mutex<HashMap<String, i64>>,
     /// What running turns are doing, for the pages' live view.
     pub live: Arc<LiveHub>,
-    /// Turns held (SessionDeps::held).
-    held: AtomicBool,
+    /// Why turns are held (SessionDeps::held): held while any reason stands.
+    holds: Mutex<HashSet<Hold>>,
     /// Sessions taken up from the previous binary: their turns run on, not cut off.
     adopted: Mutex<HashSet<String>>,
     /// Chats made lately by session key: the key their client gave them, and when (NewChat::client_key).
@@ -177,6 +176,16 @@ pub struct Hub {
     /// One message at a time per thread: Slack sends a mention twice (app_mention and message), and both would make its session.
     thread_gates: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     me: Weak<Hub>,
+}
+
+/// Why turns are held. Each is taken back on its own: a station drained for a restart while in no workspace takes no
+/// turns once the drain ends either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Hold {
+    /// A restart or handoff is coming (the station's drain, `hand_off`).
+    Drain,
+    /// The station is in no workspace (never joined one, or removed from it): it does no work until it is.
+    Unbound,
 }
 
 /// What the hub hands over to the station's next binary: its drivers' shared processes, then its sessions.
@@ -214,7 +223,7 @@ impl Hub {
             picked: Mutex::default(),
             spent: Mutex::default(),
             live: LiveHub::new(locate, posts),
-            held: AtomicBool::new(false),
+            holds: Mutex::default(),
             adopted: Mutex::default(),
             client_keys: Mutex::default(),
             titles: Mutex::default(),
@@ -223,15 +232,18 @@ impl Hub {
         })
     }
 
-    /// Holds turns: none starts from now on, and messages stay pending. Those running go on.
-    pub fn hold(&self) {
-        self.held.store(true, Ordering::SeqCst);
+    /// Holds turns for `reason`: none starts from now on, and messages stay pending. Those running go on.
+    pub fn hold(&self, reason: Hold) {
+        self.holds.lock().unwrap().insert(reason);
     }
 
-    /// Lets turns start again, and what waited meanwhile go on.
-    pub fn release(&self) {
-        if !self.held.swap(false, Ordering::SeqCst) {
-            return;
+    /// Takes back `reason` to hold turns; once none is left, turns start again and what waited meanwhile goes on.
+    pub fn release(&self, reason: Hold) {
+        {
+            let mut holds = self.holds.lock().unwrap();
+            if !holds.remove(&reason) || !holds.is_empty() {
+                return;
+            }
         }
         let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
         for actor in actors {
@@ -243,6 +255,22 @@ impl Hub {
                     drop(actor.kick());
                 }
             }
+        }
+    }
+
+    /// Whether turns are held for `reason`.
+    pub fn holds(&self, reason: Hold) -> bool {
+        self.holds.lock().unwrap().contains(&reason)
+    }
+
+    /// Interrupts every running turn (the station left its workspace): each as `-stop` would, marked not running, so
+    /// nothing resumes it later.
+    pub async fn stop_all(&self) {
+        let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
+        let running: Vec<Arc<SessionActor>> = actors.into_iter().filter(|a| a.process_state() == "running").collect();
+        for actor in &running {
+            info!(session = actor.key, "interrupting a turn: the station is in no workspace");
+            actor.stop().await;
         }
     }
 
@@ -272,9 +300,9 @@ impl Hub {
     /// runtimes' readers stop it can still fail and be released, after that it cannot (what could not be handed over
     /// ends with this binary, and the next resumes it the usual way).
     pub async fn hand_off(&self) -> Result<HandedHub> {
-        self.hold();
+        self.hold(Hold::Drain);
         if let Err(e) = self.settle(Duration::from_secs(30)).await {
-            self.release();
+            self.release(Hold::Drain);
             return Err(e);
         }
         let mut handed = HandedHub::default();
@@ -287,7 +315,7 @@ impl Hub {
                     handed.drivers.insert(*runtime, state);
                 }
                 Err(e) if handed.drivers.values().all(Value::is_null) => {
-                    self.release();
+                    self.release(Hold::Drain);
                     return Err(e.context(format!("{} would not hand over", crate::config::runtime_name(*runtime))));
                 }
                 Err(e) => warn!(error = %e, "a driver could not hand over"),
@@ -1648,7 +1676,7 @@ impl SessionDeps for Hub {
         self.idle_now(key);
     }
     fn held(&self) -> bool {
-        self.held.load(Ordering::SeqCst)
+        !self.holds.lock().unwrap().is_empty()
     }
 }
 

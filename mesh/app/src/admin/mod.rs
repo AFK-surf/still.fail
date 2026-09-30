@@ -1,6 +1,5 @@
 //! The admin API behind /admin/api. Who asks is decided before it gets here: the station verifies people coming
-//! through still.fail cloud, and the local server lets this machine in and checks Cloudflare Access for the tunnel
-//! (access.rs).
+//! through still.fail cloud (access.rs); nothing else reaches it.
 //!
 //! Clients follow GET /events instead of asking again on a timer: every change to what the API shows is announced
 //! there (see docs/station-storage.md).
@@ -48,7 +47,9 @@ pub type Body = UnsyncBoxBody<Bytes, std::io::Error>;
 #[derive(serde::Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshStatus {
-    /// off: not in a workspace; running: in one, reachable through still.fail cloud while this station runs.
+    /// off: never in a workspace; running: in one, reachable through still.fail cloud while this station runs;
+    /// removed: taken out of the one it was in (`workspace` says which, `removed_at` when). Only running is bound: a
+    /// station does no work outside a workspace.
     pub state: String,
     pub origin: Option<String>,
     pub station: Option<String>,
@@ -56,6 +57,26 @@ pub struct MeshStatus {
     pub workspace: Option<String>,
     pub workspace_id: Option<String>,
     pub name: Option<String>,
+    /// When the cloud said the station was removed (unix seconds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub removed_at: Option<u64>,
+}
+
+impl MeshStatus {
+    /// Whether the station is in a workspace, and so does its work.
+    pub fn bound(&self) -> bool {
+        self.state == "running"
+    }
+
+    /// The workspaces it serves: one at most for now, a list so that callers ask "is it this one" and not "which".
+    pub fn workspaces(&self) -> Vec<String> {
+        self.workspace_id.iter().filter(|_| self.bound()).cloned().collect()
+    }
+
+    /// Whether it serves `workspace`.
+    pub fn serves(&self, workspace: &str) -> bool {
+        self.workspaces().iter().any(|w| w == workspace)
+    }
 }
 
 /// The station's side of still.fail cloud, for the pages: its state, and when it changes.
@@ -361,10 +382,9 @@ impl AdminApi {
         api
     }
 
-    /// The station's updates, for someone who may update what runs on the machine: the station's own page, or a
-    /// workspace's owner or admin.
+    /// The station's updates, for someone who may update what runs on the machine: a workspace's owner or admin.
     fn updates_for(&self, viewer: &Viewer) -> Result<Arc<crate::updates::Updates>> {
-        if matches!(viewer, Viewer::Mesh { role, .. } if role != "owner" && role != "admin") {
+        if !viewer.manages() {
             return Err(http_error(403, "只有 workspace 的 owner 或管理员能更新 station 和它的运行时"));
         }
         self.deps.updates.clone().ok_or_else(|| http_error(404, "这台 station 不能在这里更新"))
@@ -390,16 +410,10 @@ impl AdminApi {
             headers: parts.headers.iter().map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string())).collect(),
             path,
         };
-        if let Viewer::Mesh { email, name, .. } = &viewer {
-            if !name.is_empty() {
-                self.deps.names.lock().unwrap().insert(email.clone(), name.clone());
-            }
+        let Viewer::Mesh { email, name, .. } = &viewer;
+        if !name.is_empty() {
+            self.deps.names.lock().unwrap().insert(email.clone(), name.clone());
         }
-        let who = match &viewer {
-            Viewer::Local => "local",
-            Viewer::Access { .. } => "access",
-            Viewer::Mesh { .. } => "mesh",
-        };
         let answer = async {
             match self.route(&asked, body, &viewer).await {
                 Ok(response) => response,
@@ -420,7 +434,7 @@ impl AdminApi {
         };
         once::mark(&mut response);
         let query = if parts.uri.query().is_some() { format!("?{}", parts.uri.query().unwrap_or("")) } else { String::new() };
-        info!(method = asked.method, path = format!("{}{query}", asked.path), status = response.status().as_u16(), ms = started.elapsed().as_millis() as u64, via = who, "admin request");
+        info!(method = asked.method, path = format!("{}{query}", asked.path), status = response.status().as_u16(), ms = started.elapsed().as_millis() as u64, via = "mesh", "admin request");
         response
     }
 
@@ -571,7 +585,7 @@ impl AdminApi {
             ("POST", "/profiles") => return ok(me.new_keyed_profile(&read_json(body).await?, viewer).await?),
             ("POST", "/logins") => return ok(self.new_login(&read_json(body).await?, viewer)?),
             ("POST", "/slack/verify") => return ok(self.verify_slack(&read_json(body).await?).await),
-            ("POST", "/dev/inject") if self.deps.dev && matches!(viewer, Viewer::Local) => {
+            ("POST", "/dev/inject") if self.deps.dev && viewer.manages() => {
                 // Hand the station a chat message as if the connect had received it.
                 let input = read_json(body).await?;
                 let ts = input.text("ts");

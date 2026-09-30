@@ -326,12 +326,18 @@ impl Drop for Rig {
     }
 }
 
-fn local() -> Viewer {
-    Viewer::Local
+/// The workspace's owner, through still.fail cloud (the only way in).
+fn owner() -> Viewer {
+    viewer("owner@example.com", "Owner", "owner")
 }
 
+/// Another member.
 fn dev() -> Viewer {
-    Viewer::Access { email: "dev@example.com".into() }
+    viewer("dev@example.com", "", "member")
+}
+
+fn viewer(email: &str, name: &str, role: &str) -> Viewer {
+    Viewer::Mesh { sub: format!("sub-{email}"), email: email.into(), name: name.into(), role: role.into(), workspace: "ws".into(), device: "d".into() }
 }
 
 async fn setup() -> Rig {
@@ -421,6 +427,7 @@ async fn setup_with(o: Setup) -> Rig {
             workspace: Some("W".into()),
             workspace_id: Some("ws".into()),
             name: Some("S".into()),
+            removed_at: None,
         };
         Arc::new(FakeMesh(status, watch::channel(0).0)) as Arc<dyn Mesh>
     });
@@ -461,7 +468,7 @@ impl Rig {
     }
 
     async fn call(&self, method: &str, route: &str, body: Option<Value>) -> (u16, Value) {
-        self.call_as(method, route, body, local()).await
+        self.call_as(method, route, body, owner()).await
     }
 
     async fn get(&self, route: &str) -> Value {
@@ -469,7 +476,7 @@ impl Rig {
     }
 
     async fn text(&self, method: &str, route: &str, body: &'static str) -> (u16, String) {
-        let response = self.raw(method, route, body, local()).await;
+        let response = self.raw(method, route, body, owner()).await;
         let status = response.status().as_u16();
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         (status, String::from_utf8_lossy(&bytes).into_owned())
@@ -602,7 +609,7 @@ async fn a_slack_app_made_on_a_station_in_ember_cloud_is_installed_through_slack
     // Someone else's token on this station: not the viewer's to see or use.
     s.settings
         .update(|raw| {
-            raw.slack_config_tokens = Some(vec![token("T1", "Acme", "local"), token("T2", "Other", "local"), token("T3", "Theirs", "bob@example.com")]);
+            raw.slack_config_tokens = Some(vec![token("T1", "Acme", "owner@example.com"), token("T2", "Other", "owner@example.com"), token("T3", "Theirs", "bob@example.com")]);
             Ok(())
         })
         .unwrap();
@@ -616,7 +623,7 @@ async fn a_slack_app_made_on_a_station_in_ember_cloud_is_installed_through_slack
     assert_eq!(s.call("POST", "/slack/apps", Some(json!({ "settings": { "name": "ember" } }))).await.0, 400, "which workspace, when there are several");
     let (_, made) = s.call("POST", "/slack/apps", Some(json!({ "team": "T2", "settings": { "name": "Helper", "description": "Hi", "groups": { "dm": false } } }))).await;
     let sent = s.slack.made.lock().unwrap()[0].clone();
-    assert_eq!((sent.0.as_str(), sent.1.as_str()), ("local", "T2"));
+    assert_eq!((sent.0.as_str(), sent.1.as_str()), ("owner@example.com", "T2"));
     assert_eq!(s.call("POST", "/slack/apps", Some(json!({ "team": "T3", "settings": { "name": "x" } }))).await.0, 400, "not with another's token");
     let manifest = sent.2;
     assert_eq!((manifest["display_information"]["name"].as_str(), manifest["display_information"]["description"].as_str()), (Some("Helper"), Some("Hi")));
@@ -675,11 +682,11 @@ async fn a_slack_app_made_on_a_station_in_ember_cloud_is_installed_through_slack
 }
 
 #[tokio::test]
-async fn local_visits_need_no_sign_in() {
+async fn the_viewer_is_who_the_mesh_verified() {
     let t = setup().await;
     let (status, body) = t.call("GET", "/overview", None).await;
     assert_eq!(status, 200);
-    assert_eq!(body["viewer"], json!({ "via": "local" }));
+    assert_eq!(body["viewer"], json!({ "via": "mesh", "sub": "sub-owner@example.com", "email": "owner@example.com", "name": "Owner", "role": "owner", "workspace": "ws", "device": "d" }));
 }
 
 #[tokio::test]
@@ -812,7 +819,7 @@ async fn session_detail_is_the_session_its_threads_and_turns_its_transcript_come
     assert_eq!(detail["threads"][0]["surface"], "slack:T1");
     assert_eq!(detail["turns"].as_array().unwrap().len(), 1);
     // Its transcript comes on the events stream opened for it, from the entry asked for.
-    let live = t.follow(&format!("/events?live={}&from=1&live=nobody&from=0", enc(&row.key)), local()).await;
+    let live = t.follow(&format!("/events?live={}&from=1&live=nobody&from=0", enc(&row.key)), owner()).await;
     let timeline = live.next("live", |m| m["type"] == "timeline").await;
     assert_eq!((timeline["key"].clone(), timeline["start"].clone()), (json!(row.key), json!(1)));
     assert_eq!(ids(&timeline["entries"], "kind"), vec![json!("tool_call")]);
@@ -914,9 +921,9 @@ async fn connects_sessions_and_chats_remember_who_created_them() {
     let t = setup().await;
     let created = |t: &Rig, id: &str| t.config().connects.iter().find(|c| c.id == id).unwrap().created_by.clone().map(|o| (o.id, o.name));
     t.call("PUT", "/connects/fresh", Some(json!({ "bind": { "runtime": "claude" } }))).await;
-    assert_eq!(created(&t, "fresh"), Some(("local".to_string(), "本机管理页".to_string())));
+    assert_eq!(created(&t, "fresh"), Some(("owner@example.com".to_string(), "Owner".to_string())));
     t.call("PUT", "/connects/fresh", Some(json!({ "mode": "single-session" }))).await;
-    assert_eq!(created(&t, "fresh").map(|c| c.0), Some("local".to_string()), "editing keeps the creator");
+    assert_eq!(created(&t, "fresh").map(|c| c.0), Some("owner@example.com".to_string()), "editing keeps the creator");
     let body = t.get("/overview").await;
     assert_eq!(body["connects"].as_array().unwrap().iter().find(|c| c["id"] == "ds").unwrap()["createdBy"], Value::Null, "older connects have none");
     t.call("PUT", "/connects/ds", Some(json!({ "owner": { "id": "Bob@Example.test", "name": "Bob" } }))).await;
@@ -930,17 +937,17 @@ async fn connects_sessions_and_chats_remember_who_created_them() {
     assert_eq!(ids(&summary["participants"], "id"), vec![json!("slack:ds:U42")]);
     let key = summary["key"].as_str().unwrap().to_string();
     let chat = t.call("POST", "/threads", Some(json!({ "session": key, "title": "排查" }))).await.1;
-    assert_eq!((chat["surface"].clone(), chat["creator"]["via"].clone()), (json!("ember"), json!("local")));
+    assert_eq!((chat["surface"].clone(), chat["creator"]["via"].clone()), (json!("ember"), json!("cloud")));
     let members: Vec<(Value, Value)> = chat["sessions"].as_array().unwrap().iter().map(|m| (m["session"].clone(), m["connect"].clone())).collect();
     assert_eq!(members, vec![(json!(key), json!("ember"))]);
     let chat_id = chat["id"].as_i64().unwrap();
     assert_eq!(t.call("POST", &format!("/threads/{chat_id}/messages"), Some(json!({ "text": "  " }))).await.0, 400);
     t.call("POST", &format!("/threads/{chat_id}/messages"), Some(json!({ "text": "hello from the page" }))).await;
     let after = t.get(&format!("/sessions/{}", enc(&key))).await;
-    assert_eq!(ids(&after["session"]["participants"], "id"), vec![json!("slack:ds:U42"), json!("local")]);
+    assert_eq!(ids(&after["session"]["participants"], "id"), vec![json!("slack:ds:U42"), json!("owner@example.com")]);
     assert_eq!(ids(&after["threads"], "title"), vec![json!("排查"), Value::Null]);
     let firsts: Vec<(Value, Vec<Value>)> = after["threads"].as_array().unwrap().iter().map(|x| (x["firstText"].clone(), ids(&x["people"], "id"))).collect();
-    assert_eq!(firsts, vec![(json!("hello from the page"), vec![json!("local")]), (json!("<@UBOT> hi"), vec![json!("slack:ds:U42")])]);
+    assert_eq!(firsts, vec![(json!("hello from the page"), vec![json!("owner@example.com")]), (json!("<@UBOT> hi"), vec![json!("slack:ds:U42")])]);
     let slack_thread = after["threads"][1]["id"].as_i64().unwrap();
     assert_eq!(t.call("POST", &format!("/threads/{slack_thread}/messages"), Some(json!({ "text": "hi" }))).await.0, 400, "Slack threads are written in Slack");
     // The app a message was sent from is kept with it, for its agent; older apps say none.
@@ -964,7 +971,7 @@ async fn a_write_asked_again_under_its_key_is_done_once() {
             if let Some(key) = key {
                 req = req.header("idempotency-key", key);
             }
-            let response = t.api.handle(req.body(Full::new(Bytes::from(json!({ "text": text }).to_string()))).unwrap(), local()).await;
+            let response = t.api.handle(req.body(Full::new(Bytes::from(json!({ "text": text }).to_string()))).unwrap(), owner()).await;
             assert_eq!(response.headers().get("stillfail-idempotent").map(|v| v.to_str().unwrap()), Some("1"), "every answer says so");
             let status = response.status().as_u16();
             let body: Value = serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
@@ -1008,7 +1015,7 @@ async fn files_wait_in_the_uploads_move_into_the_chats_session_when_a_message_se
         async move { t.call("POST", &format!("/threads/{chat_id}/messages"), Some(input)).await }
     };
     let threads_before = t.get("/threads").await.as_array().unwrap().len();
-    let upload = t.raw("POST", &format!("/uploads?name={}", enc("../../report.txt")), "hello file", local()).await;
+    let upload = t.raw("POST", &format!("/uploads?name={}", enc("../../report.txt")), "hello file", owner()).await;
     assert_eq!(upload.status(), 200);
     let staged: Value = serde_json::from_slice(&upload.into_body().collect().await.unwrap().to_bytes()).unwrap();
     let staged_path = staged["path"].as_str().unwrap().to_string();
@@ -1033,7 +1040,7 @@ async fn files_wait_in_the_uploads_move_into_the_chats_session_when_a_message_se
     let page = t.get(&format!("/threads/{chat_id}/entries")).await;
     assert_eq!(ids(&page["entries"][0]["attachments"], "name"), vec![staged["name"].clone()]);
     assert_eq!(page["entries"][0]["text"], "看看这个", "the words are stored as typed");
-    assert_eq!(page["entries"][0]["authorName"], "管理员");
+    assert_eq!(page["entries"][0]["authorName"], "Owner");
     let name = Path::new(&file_path).file_name().unwrap().to_string_lossy().into_owned();
     assert_eq!(t.text("GET", &format!("/sessions/{}/files?name={}", enc(&key), enc(&name)), "").await, (200, "hello file".to_string()));
     assert_eq!(t.text("GET", &format!("/sessions/{}/files?name={}", enc(&key), enc("../../../config.json")), "").await.0, 404);
@@ -1090,7 +1097,7 @@ async fn a_new_chat_makes_a_session_of_its_own_with_the_chosen_runtime_model_and
     let body = t.get(&format!("/sessions/{}", enc(&key))).await;
     let s = &body["session"];
     assert_eq!((s["connect"].clone(), s["profile"].clone(), s["model"].clone(), s["effort"].clone()), (json!("ember"), json!("cc"), json!("deepseek-flash"), json!("high")));
-    assert_eq!(s["creator"]["via"], "local");
+    assert_eq!(s["creator"]["via"], "cloud");
     assert_eq!(body["threads"][0]["lastMessage"]["text"], "开始吧");
     assert_eq!(t.claude.last().options.model.as_deref(), Some("deepseek-flash"));
     assert!(t.claude.last().prompts.lock().unwrap()[0].contains("开始吧"));
@@ -1134,8 +1141,8 @@ async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_f
 #[tokio::test]
 async fn read_positions_and_unread_counts_are_per_viewer_and_only_move_forward() {
     let t = setup().await;
-    let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
-    let first = t.hub.say(thread.id, "local", "mine", vec![], vec![], None).unwrap();
+    let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "owner@example.com".into(), client_key: None }).unwrap();
+    let first = t.hub.say(thread.id, "owner@example.com", "mine", vec![], vec![], None).unwrap();
     t.hub.say(thread.id, "dev@example.com", "theirs", vec![], vec![], None).unwrap();
     t.store.insert_message(NewMessage::new(thread.id, "9.000001", AuthorKind::Agent, &key, "answer")).unwrap();
     let route = format!("/threads?session={}", enc(&key));
@@ -1143,15 +1150,15 @@ async fn read_positions_and_unread_counts_are_per_viewer_and_only_move_forward()
         let (t, route) = (&t, route.clone());
         async move { t.call_as("GET", &route, None, viewer).await.1[0]["unread"].clone() }
     };
-    assert_eq!(unread(local()).await, 2, "a viewer's own messages are not unread for them");
+    assert_eq!(unread(owner()).await, 2, "a viewer's own messages are not unread for them");
     assert_eq!(unread(dev()).await, 2);
-    let local_events = t.follow("/events", local()).await;
+    let local_events = t.follow("/events", owner()).await;
     let dev_events = t.follow("/events", dev()).await;
     let put = t.call("PUT", &format!("/threads/{}/read", thread.id), Some(json!({ "n": first + 1 }))).await.1;
-    assert_eq!(put, json!({ "viewer": "local", "thread": thread.id, "n": first + 1 }));
-    assert_eq!(unread(local()).await, 1);
+    assert_eq!(put, json!({ "viewer": "owner@example.com", "thread": thread.id, "n": first + 1 }));
+    assert_eq!(unread(owner()).await, 1);
     assert_eq!(unread(dev()).await, 2);
-    assert_eq!(local_events.next("read", |_| true).await, json!({ "viewer": "local", "thread": thread.id, "n": first + 1 }));
+    assert_eq!(local_events.next("read", |_| true).await, json!({ "viewer": "owner@example.com", "thread": thread.id, "n": first + 1 }));
     t.call_as("PUT", &format!("/threads/{}/read", thread.id), Some(json!({ "n": first })), dev()).await;
     dev_events.next("read", |_| true).await;
     settle().await;
@@ -1280,7 +1287,7 @@ async fn events_announce_each_kind_of_change() {
     let t = setup_with(Setup { quota: Some(quotas.clone()), ..Setup::default() }).await;
     t.get("/overview").await;
     assert_eq!(quotas.load(Ordering::SeqCst), 0, "quotas are not asked while nobody follows");
-    let events = t.follow("/events", local()).await;
+    let events = t.follow("/events", owner()).await;
     events.next("overview", |o| o["profiles"].as_array().unwrap().iter().any(|p| p["quota"]["windows"][0]["usedPercent"] == 12.0)).await;
     assert_eq!(quotas.load(Ordering::SeqCst), 2, "following starts a quota round");
     t.hub.accept("ds", at("8.000001", "8.000001", "U1", "<@UBOT> hi", true)).await.unwrap();
@@ -1303,7 +1310,7 @@ async fn events_announce_each_kind_of_change() {
     assert_eq!(events.next("session-removed", |_| true).await, json!({ "key": key }));
     assert_eq!(events.next("thread-removed", |_| true).await, json!({ "id": thread["id"] }));
     assert!(!events.all().iter().any(|(e, _)| e == "host"), "host only for those asking");
-    let host = t.follow("/events?host=1", local()).await;
+    let host = t.follow("/events?host=1", owner()).await;
     assert!(host.next("host", |_| true).await["cpus"].as_u64().unwrap() > 0);
 }
 
@@ -1374,7 +1381,7 @@ async fn the_sidebar_is_one_kind_of_item_an_agent_merged_with_its_internal_chat_
         vec![row["session"].clone(), row["title"].clone(), row["connect"].clone(), row["origin"].clone(), json!(ids(&row["agents"], "key"))],
         vec![json!(slack_key), json!("部署挂了"), json!("ds"), origin.clone(), json!([slack_key])]
     );
-    t.hub.say(chat_id, "local", "看看日志", vec![], vec![], None).unwrap();
+    t.hub.say(chat_id, "owner@example.com", "看看日志", vec![], vec![], None).unwrap();
     let row = find(&rows().await, slack_key);
     assert_eq!(
         vec![row["title"].clone(), row["last"]["text"].clone(), row["last"]["authorKind"].clone(), row["unread"].clone(), row["mine"].clone()],
@@ -1410,12 +1417,12 @@ async fn a_viewer_can_say_a_slack_user_is_them_the_station_then_takes_that_user_
     assert_eq!(mine(dev()).await, false);
     assert_eq!(slack_unread(dev()).await, 2);
     let dev_events = t.follow("/events", dev()).await;
-    let local_events = t.follow("/events", local()).await;
+    let local_events = t.follow("/events", owner()).await;
 
     // "这是我" on the session's creator: the agent's row is now the local viewer's, and only their stream hears of it.
     let bound = t.call("PUT", "/me/slack/U42", None).await.1;
     assert_eq!(bound["slackUsers"], json!(["U42"]));
-    assert_eq!(mine(local()).await, true);
+    assert_eq!(mine(owner()).await, true);
     assert_eq!(mine(dev()).await, false, "bindings are per viewer");
     local_events.next("chat", |r| r["session"] == key && r["mine"] == true).await;
     local_events.next("overview", |o| o["slackUsers"].as_array().unwrap().iter().any(|u| u == "U42")).await;
@@ -1510,14 +1517,14 @@ async fn a_web_service_on_the_machine_is_reached_through_preview_port_as_it_answ
         .header("content-length", "3")
         .body(Full::new(Bytes::from_static(b"x=1")))
         .unwrap();
-    let got = t.api.handle(req, local()).await;
+    let got = t.api.handle(req, owner()).await;
     assert_eq!(got.status(), 200);
     let header = |r: &Response<Body>, k: &str| r.headers().get(k).map(|v| v.to_str().unwrap().to_string());
     assert_eq!(header(&got, "x-seen"), Some(format!("POST /a/b?q=1 localhost:{port} - x=1")), "the path and query as asked, the service's own host, none of the admin call's headers");
     assert_eq!(header(&got, "x-frame-options"), None);
     assert_eq!(header(&got, "content-security-policy"), None);
     assert_eq!(String::from_utf8_lossy(&got.into_body().collect().await.unwrap().to_bytes()), "hello from the service");
-    let moved = t.raw("GET", &format!("/preview/{port}/old"), Bytes::new(), local()).await;
+    let moved = t.raw("GET", &format!("/preview/{port}/old"), Bytes::new(), owner()).await;
     assert_eq!(header(&moved, "location"), Some("/new?x=1".to_string()), "a redirect to the service stays on it");
     task.abort();
     let _ = task.await;
@@ -1705,7 +1712,7 @@ async fn a_jobs_log_asked_for_on_the_events_stream_comes_at_once_and_again_as_it
     let read = t.get("/jobs/j1/log?lines=1").await;
     assert_eq!((read["text"].clone(), read["follows"].clone()), (json!("three"), json!(true)));
     // A job nobody has is left out; the one asked for comes with the lines asked for, then as it grows.
-    let events = t.follow("/events?job=gone&lines=5&job=j1&lines=2", local()).await;
+    let events = t.follow("/events?job=gone&lines=5&job=j1&lines=2", owner()).await;
     let first = events.next("job-log", |_| true).await;
     assert_eq!((first["id"].clone(), first["lines"].clone(), first["text"].clone()), (json!("j1"), json!(2), json!("two\nthree")));
     assert!(first["outputAt"].as_i64().is_some());

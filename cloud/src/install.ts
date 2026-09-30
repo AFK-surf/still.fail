@@ -324,6 +324,7 @@ else
 fi
 echo "  程序：\${app}（命令 stillfail 在 ~/.local/bin，旧名字 ember 也还能用）"
 echo "  数据和日志：$data"
+echo "  状态：stillfail status（在哪个 workspace、在不在线、没在干活的原因）"
 [ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  服务：systemctl --user status $unit"
 [ -n "\${lingering:-}" ] && echo "  没人登录时也要运行的话，执行：sudo loginctl enable-linger $(id -un)"
 [ -n "\${no_service:-}" ] && echo "  这台机器没有 systemd 用户服务，station 现在在后台运行，但重启后不会自动启动：到时执行 stillfail start。"
