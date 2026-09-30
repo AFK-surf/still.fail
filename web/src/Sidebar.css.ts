@@ -173,8 +173,21 @@ export const stationTroubleText = style({
   selectors: { [`${stationTrouble}[data-state="error"] &`]: { color: vars.red } },
 });
 /** What is waited on: quieter than a station down, it is only slow; the row is no link. */
-globalStyle(`${stationTrouble}[data-state="slow"]`, { color: vars.muted, cursor: "default" });
+globalStyle(`${stationTrouble}[data-state="slow"]`, { color: vars.muted });
+globalStyle(`${stationTrouble}[role="status"]`, { cursor: "default" });
 globalStyle(`${stationTrouble}[role="status"]:hover`, { background: "transparent" });
+/** The stations' row and, while down, 重试 at its end (a button, so beside the link, not in it). */
+export const stationRow = style({ position: "relative", marginBottom: 4 });
+globalStyle(`${stationRow} > ${stationTrouble}`, { marginBottom: 0 });
+globalStyle(`${stationRow} > ${stationTrouble}[data-retry]`, { paddingRight: 64 });
+export const waitingRetry = style({
+  flex: "none", height: 22, padding: "0 10px", marginRight: -4, borderRadius: 999, border: 0, cursor: "pointer",
+  background: vars.hover, color: vars.text, fontSize: vars.textSm,
+  selectors: {
+    "&:hover": { background: vars.line },
+    [`${stationRow} > &`]: { position: "absolute", right: 6, top: 5, marginRight: 0 },
+  },
+});
 export const waitingItems = style({ display: "grid", gap: 6, maxWidth: 320 });
 export const waitingItem = style({ display: "grid", gap: 1 });
 export const waitingDetail = style({ opacity: 0.7 });

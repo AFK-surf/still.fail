@@ -7,7 +7,7 @@ import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "
 import { prime } from "./core/react.ts";
 import { leading, useRowPicture } from "./rowLead.ts";
 import { RowAside, RowPicture } from "./RowPicture.tsx";
-import { Waiting } from "./Status.tsx";
+import { Retry, Waiting, WaitingItems } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
@@ -117,24 +117,30 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
 /**
  * The stations at the top of the sidebar's foot, always: their glyph (./StationGlyph.tsx) and a line beside it, how many
  * and who works while all is well, or what is wrong (the core's `trouble`: which, or how many; red while one fails). It
- * leads to the stations. Above it, what the core has been waiting on for a while, or ember cloud not reached (the core's
- * `status`: what, how long, how fast; each thing on hover); that last puts the glyph to sleep.
+ * leads to the stations. Short of a station down, the line says what the core has been waiting on for a while, or ember
+ * cloud not reached (the core's `status`: what, how long, how fast; each thing on hover); that last puts the glyph to
+ * sleep. Down, it offers to try again at once.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const view = useChats(scope, false).value;
   const status = useStatus();
-  const waiting = status?.state ? <Waiting status={status} /> : null;
-  if (!view || view.stations.length === 0) return waiting;
+  if (!view || view.stations.length === 0) return status?.state ? <Waiting status={status} /> : null;
   const counts = glyphCounts(view, status?.state === "trouble");
   const trouble = view.trouble;
+  const waiting = !trouble && status?.state ? status : undefined;
+  const text = trouble?.text ?? waiting?.text ?? glyphSummary(view, counts);
+  const retry = trouble ? trouble.state !== "reconnecting" : waiting?.state === "trouble";
+  const row = (
+    <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state ?? waiting?.state} data-retry={retry || undefined} aria-label={`Station：${trouble?.text ?? waiting?.text ?? glyphLabel(counts)}`}>
+      <span className={nav.stationTroubleMark}><StationGlyph counts={counts} size={18} /></span>
+      <span className={nav.stationTroubleText}>{text}</span>
+    </NavLink>
+  );
   return (
-    <>
-      {!trouble && waiting}
-      <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state} aria-label={`Station：${trouble?.text ?? glyphLabel(counts)}`}>
-        <span className={nav.stationTroubleMark}><StationGlyph counts={counts} size={18} /></span>
-        <span className={nav.stationTroubleText}>{trouble?.text ?? glyphSummary(view, counts)}</span>
-      </NavLink>
-    </>
+    <div className={nav.stationRow}>
+      {waiting?.items.length ? <Tip label={<WaitingItems status={waiting} />} side="top">{row}</Tip> : row}
+      {retry && <Retry />}
+    </div>
   );
 }
 

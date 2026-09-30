@@ -11,7 +11,6 @@ import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
-import { ConnectionPill } from "./Connection.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { shortcutOf, takesKeys, useKeymap, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear } from "./FilePreview.tsx";
@@ -97,7 +96,6 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
     <section className={sessionCss.chat} aria-label="对话" data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
-      <ConnectionPill link={chat.link} name={station.name} />
       {rows.away && (
         <Tip label="跳到最新" shortcut="chat.latest" side="top">
         <button type="button" className={css.chatToBottom} aria-label="跳到最新"
