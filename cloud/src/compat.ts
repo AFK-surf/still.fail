@@ -1,6 +1,6 @@
 // still.fail was called ember (docs/rename-still-fail.md), and stations, apps and pages from before the rename keep
 // running for a long time. So the cloud answers both names: its old hosts (the *_ORIGIN_ALIASES, bound to the same
-// Workers, kept for good and never redirected wholesale), the old request headers (x-ember-*, read when the
+// Workers, kept for good and never redirected wholesale: only the web app's pages move to the new host, src/web.ts), the old request headers (x-ember-*, read when the
 // x-stillfail-* one is missing), the old names inside signed messages and subprotocols, and the preview host's old
 // /_ember/ paths. What it says itself (links, headers it sets) uses the new names.
 

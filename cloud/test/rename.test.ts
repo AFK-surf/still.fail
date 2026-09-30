@@ -20,11 +20,16 @@ async function key() {
 
 const json = { "content-type": "application/json" };
 
-test("each host's old name serves the same: static sites, the API, the relay, the installer", async () => {
+test("each host's old name serves the same: static sites, the API, the relay, the installer; the web app's pages move", async () => {
   const h = await harness();
   try {
     const text = async (response: { status: number; text(): Promise<string> }) => [response.status, await response.text()];
-    assert.deepEqual(await text(await h.fetchOld("main", "/w/some-workspace/chats")), [200, "<title>still.fail</title>"]);
+    // The web app's pages on its old host go to the same path and query on the new one; its notifications' worker stays.
+    for (const path of ["/", "/w/some-workspace/chats?service=job-1", "/assets/app.js", "/invite"]) {
+      const page = await h.fetchOld("main", path, { redirect: "manual" });
+      assert.deepEqual([page.status, page.headers.get("location")], [302, `${h.origin}${path}`], path);
+    }
+    assert.deepEqual(await text(await h.fetchOld("main", "/sw.js")), [200, "// the notifications' worker"]);
     assert.deepEqual(await text(await h.fetchOld("admin", "/codes")), [200, "<title>still.fail 管理后台</title>"]);
     assert.deepEqual(await text(await h.fetchOld("preview", "/_ember/frame")), [200, "<title>still.fail preview (old path)</title>"]);
     assert.equal(((await (await h.fetchOld("main", "/healthz")).json()) as { service: string }).service, "ember-cloud");

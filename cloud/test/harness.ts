@@ -269,6 +269,7 @@ export async function harness(
 export const STAND_IN_FILES: Record<string, string> = {
   "/web/index.html": "<title>still.fail</title>",
   "/web/assets/app.js": "// the web app",
+  "/web/sw.js": "// the notifications' worker",
   "/admin/index.html": "<title>still.fail 管理后台</title>",
   "/admin/assets/console.js": "// the console",
   "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",

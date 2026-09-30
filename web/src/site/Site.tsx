@@ -6,8 +6,8 @@ import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
 import { heroMotion } from "./motion.ts";
 
-const APP = "https://ember.3720.org";
-const INSTALL = "curl -fsSL https://ember.3720.org/install.sh | sh -s -- <token>";
+const APP = "https://app.still.fail";
+const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
 
 /** A picture of web/public and its -dark twin: the one for the page's theme shows (site.css.ts), with no script. */
 function Themed({ name, className, alt = "", life }: { name: string; className?: string; alt?: string; life?: string }) {
