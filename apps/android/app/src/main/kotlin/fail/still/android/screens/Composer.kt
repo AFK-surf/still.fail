@@ -350,8 +350,8 @@ private class RefMarks(private val accent: Color) : VisualTransformation {
     }
 }
 
-/** The address's workspace (the scope of its chats' list), "local" for the local station. */
-private fun scopeOf(address: String) = if (address == "local") "local" else address.substringBefore('/')
+/** The address's workspace (the scope of its chats' list). */
+private fun scopeOf(address: String) = address.substringBefore('/')
 
 /**
  * `@` and a few letters in the text: the chats of this station it finds (another station's agents cannot read them,

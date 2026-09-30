@@ -1324,7 +1324,7 @@ mod tests {
             let source = { let mesh = mesh.clone(); Rc::new(move || { let mesh = mesh.clone(); async move { Ok::<_, CoreError>(mesh) }.boxed_local() }) };
             let count = Rc::new(Cell::new(0));
             let wire = MeshWire::new(source, Rc::new(move |_: &str| grants("ok", count.clone())), crate::status::one(crate::status::Status::new(host.clone())));
-            let addr = StationAddr::Remote { workspace: "w".into(), station: id.clone() };
+            let addr = StationAddr { workspace: "w".into(), station: id.clone() };
             let get = RequestHead { method: "GET".into(), path: "/admin/api/overview".into(), headers: vec![] };
             wire.request(&addr, get.clone(), Vec::new()).await.unwrap();
             station.dead_below.set(station.conns.borrow().len());
@@ -1348,7 +1348,7 @@ mod tests {
             let source = { let mesh = mesh.clone(); Rc::new(move || { let mesh = mesh.clone(); async move { Ok::<_, CoreError>(mesh) }.boxed_local() }) };
             let count = Rc::new(Cell::new(0));
             let wire = MeshWire::new(source, Rc::new(move |_: &str| grants("ok", count.clone())), crate::status::one(crate::status::Status::new(host.clone())));
-            let addr = StationAddr::Remote { workspace: "w".into(), station: id.clone() };
+            let addr = StationAddr { workspace: "w".into(), station: id.clone() };
             let write = RequestHead { method: "POST".into(), path: "/admin/api/threads/1/messages".into(), headers: vec![("idempotency-key".into(), "k1".into())] };
             wire.request(&addr, RequestHead { method: "GET".into(), path: "/admin/api/overview".into(), headers: vec![] }, Vec::new()).await.unwrap();
             station.dead_below.set(station.conns.borrow().len());

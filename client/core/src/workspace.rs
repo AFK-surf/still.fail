@@ -8,8 +8,6 @@
 //! station), the relays, what is kept on the device (the store, the data center, the logs; their keys are as they
 //! were), the notifications' settings and what the device likes. What is an account's (its tokens, its still.fail
 //! cloud socket, its `/v1/me`) is kept by account.
-//!
-//! A station's own page (`local`) is a workspace of its own, [`LOCAL`], with no account.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
@@ -22,17 +20,14 @@ use crate::station::StationState;
 use crate::status::{NameOf, Status};
 use crate::store::Watch;
 
-/// The workspace of a station's own page (its address is `local` too).
-pub const LOCAL: &str = "local";
-
-/// The workspace a station's address (`"<workspace>/<station>"`, `local`) is in.
+/// The workspace a station's address (`"<workspace>/<station>"`) is in.
 pub fn of_address(address: &str) -> &str {
     address.split_once('/').map_or(address, |(workspace, _)| workspace)
 }
 
 pub struct Workspace {
     pub id: String,
-    /// The signed-in account that reaches it, as the latest `/v1/me` answers say; none for `local`, or not known yet.
+    /// The signed-in account that reaches it, as the latest `/v1/me` answers say; none while not known.
     owner: RefCell<Option<String>>,
     /// Its stations while any of their topics is live, by address (station.rs).
     pub(crate) stations: RefCell<HashMap<String, StationState>>,
@@ -144,9 +139,8 @@ mod tests {
     use crate::testing::FakeHost;
 
     #[test]
-    fn a_station_is_in_the_workspace_its_address_names_and_local_is_its_own() {
+    fn a_station_is_in_the_workspace_its_address_names() {
         assert_eq!(of_address("ws/st"), "ws");
-        assert_eq!(of_address("local"), LOCAL);
         let workspaces = Workspaces::new(FakeHost::new());
         assert!(Rc::ptr_eq(&workspaces.of_station("ws/a"), &workspaces.of_station("ws/b")));
         assert!(!Rc::ptr_eq(&workspaces.of_station("ws/a"), &workspaces.of_station("other/a")));

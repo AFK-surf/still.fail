@@ -47,7 +47,7 @@ use crate::sync::Sync;
 use crate::trace::{self, Kind, Span, Tracer};
 use crate::views::{EmailOf, Views};
 use crate::wake::{self, Wake, Wakes, WakingHost};
-use crate::workspace::{self as ws, Workspaces};
+use crate::workspace::Workspaces;
 
 /// The first wait before an events socket is opened again; it doubles up to [`SOCKET_RETRY_MAX_MS`], and starts
 /// over once a socket held for a minute.
@@ -145,6 +145,16 @@ impl Core {
 
     /// A core that records `sample` of its traces (0: none).
     pub async fn traced(host: Rc<dyn Host>, sample: f64) -> Core {
+        Core::built(host, sample, None).await
+    }
+
+    /// One whose stations answer over the wire `wire` makes of its host, not the mesh: tests' stations.
+    #[cfg(test)]
+    pub(crate) async fn with_wire(host: Rc<dyn Host>, sample: f64, wire: impl FnOnce(Rc<dyn Host>) -> Rc<dyn station::StationWire> + 'static) -> Core {
+        Core::built(host, sample, Some(Box::new(wire))).await
+    }
+
+    async fn built(host: Rc<dyn Host>, sample: f64, wire: Option<WireOf>) -> Core {
         // Everything the core asks of the host is given up or opened again when a UI comes back (wake.rs).
         let wakes = Rc::new(Wakes::default());
         let host: Rc<dyn Host> = WakingHost::new(host, wakes.clone());
@@ -174,7 +184,10 @@ impl Core {
                 })
             });
             let center = Rc::new(Center { store: store.clone(), data: data.clone() });
-            let wire = station::wire(host.clone(), mesh_source(me.clone()), credentials(me.clone()), status_of(&workspaces));
+            let wire = match wire {
+                Some(wire) => wire(host.clone()),
+                None => station::wire(mesh_source(me.clone()), credentials(me.clone()), status_of(&workspaces)),
+            };
             // The device's waits show in every workspace's status (what of them does, status.rs `Take`); a
             // workspace's in its own and the plain one.
             status.on_change({
@@ -373,7 +386,10 @@ struct Router {
     opening: RefCell<HashMap<Topic, Span>>,
 }
 
-/// A station's id in its address (`"<workspace>/<station>"`), or `local`.
+/// Makes a core's station wire of its host, in place of the mesh one.
+type WireOf = Box<dyn FnOnce(Rc<dyn Host>) -> Rc<dyn station::StationWire>>;
+
+/// A station's id in its address (`"<workspace>/<station>"`).
 fn station_id(address: &str) -> &str {
     address.rsplit('/').next().unwrap_or(address)
 }
@@ -1271,15 +1287,15 @@ impl Inner {
 
     /// What is kept on the device of stations no signed-in account reaches any more goes (all of it once the last
     /// one signs out) — decided only when every account's `/v1/me` has answered once, since one not heard from
-    /// yet may reach them. The station's own page (`local`) is no account's.
+    /// yet may reach them. What a station's own page (`local`, gone) left goes with them.
     fn forget_unreachable(&self) {
         if self.accounts.list().iter().any(|a| self.data.record("me", &a.sub).is_none()) {
             return;
         }
         let workspaces: HashSet<String> = self.workspaces.owned().into_iter().map(|(id, _)| id).collect();
         let reached = workspaces.clone();
-        self.data.retain(move |station| station == ws::LOCAL || station.split_once('/').is_some_and(|(w, _)| reached.contains(w)), Some(&workspaces));
-        self.host.spawn(self.kept.retain(move |station| station == ws::LOCAL || station.split_once('/').is_some_and(|(w, _)| workspaces.contains(w))));
+        self.data.retain(move |station| station.split_once('/').is_some_and(|(w, _)| reached.contains(w)), Some(&workspaces));
+        self.host.spawn(self.kept.retain(move |station| station.split_once('/').is_some_and(|(w, _)| workspaces.contains(w))));
     }
 
     /// A workspace's stations as it lists them now: what is kept of the others in it goes.
@@ -2215,8 +2231,8 @@ mod tests {
         let subscribe: ClientMessage = serde_json::from_value(json!({"id": 8, "subscribe": {"topic": "session", "station": "ws1/st1", "key": "k"}})).unwrap();
         let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "w", "mine": true}})).unwrap();
         assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "w".into(), mine: true } });
-        let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "local"}})).unwrap();
-        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "local".into(), mine: false } });
+        let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "ws"}})).unwrap();
+        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "ws".into(), mine: false } });
         let chat: ClientMessage = serde_json::from_value(json!({"id": 5, "subscribe": {"topic": "chat", "station": "w/s", "thread": 7}})).unwrap();
         assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), thread: Some(7), session: None } });
         let agent: ClientMessage = serde_json::from_value(json!({"id": 6, "subscribe": {"topic": "chat", "station": "w/s", "session": "ds:C1:1.0"}})).unwrap();
@@ -2265,11 +2281,11 @@ mod tests {
             Call::Op(crate::ops::Request { target: crate::ops::Target::Cloud("a".into()), method: "PATCH", path: "/v1/workspaces/w".into(), body: Some(json!({"name": "n"})), fallback: None })
         );
         assert_eq!(
-            parse_call("job.stop", json!({"station": "local", "id": "j1"})).unwrap(),
-            Call::Op(crate::ops::Request { target: crate::ops::Target::Station("local".into()), method: "POST", path: "/jobs/j1/stop".into(), body: None, fallback: None })
+            parse_call("job.stop", json!({"station": "ws/st", "id": "j1"})).unwrap(),
+            Call::Op(crate::ops::Request { target: crate::ops::Target::Station("ws/st".into()), method: "POST", path: "/jobs/j1/stop".into(), body: None, fallback: None })
         );
         // Requests by method and path are not the UIs' to make.
-        assert_eq!(code(parse_call("station.request", json!({"station": "local", "method": "GET", "path": "/sessions"}))), "unknown_call");
+        assert_eq!(code(parse_call("station.request", json!({"station": "ws/st", "method": "GET", "path": "/sessions"}))), "unknown_call");
         assert_eq!(code(parse_call("cloud.request", json!({"account": "a", "method": "GET", "path": "/v1/me"}))), "unknown_call");
         assert_eq!(
             parse_call("station.upload", json!({"station": "w/s", "name": "a.png", "bytes": "aGVsbG8="})).unwrap(),
@@ -2597,7 +2613,7 @@ mod tests {
     #[test]
     fn a_chats_connection_says_only_what_is_of_its_workspace() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let inner = core.inner.clone();
             let ui = core.connect();
             let mut values = HashMap::new();
@@ -2605,7 +2621,7 @@ mod tests {
                 host.settle().await;
                 host.settle().await;
             };
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Connection { station: "local".into() } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Connection { station: "ws/st".into() } });
             settle().await;
             apply(&host, &mut values);
             assert_eq!(values[&1], json!({ "items": [] }));
@@ -2618,14 +2634,14 @@ mod tests {
             apply(&host, &mut values);
             assert_eq!(values[&1], json!({ "items": [] }));
             // Slow here: said at once (it has lasted a while), then 已连上 a moment once over.
-            let local = inner.workspaces.of("local");
-            let here = local.status.begin(Place::Station("local".into()), "读取对话", false);
-            local.status.skip(3_000.0);
-            local.status.changed();
+            let ws = inner.workspaces.of("ws");
+            let here = ws.status.begin(Place::Station("ws/st".into()), "读取对话", false);
+            ws.status.skip(3_000.0);
+            ws.status.changed();
             settle().await;
             apply(&host, &mut values);
             assert_eq!(values[&1]["tone"], "busy");
-            assert!(values[&1]["text"].as_str().is_some_and(|t| t.starts_with("读取对话 · 3 秒")), "{}", values[&1]);
+            assert!(values[&1]["text"].as_str().is_some_and(|t| t.starts_with("studio 读取对话 · 3 秒")), "{}", values[&1]);
             drop(here);
             settle().await;
             apply(&host, &mut values);
@@ -2721,8 +2737,6 @@ mod tests {
         });
     }
 
-    /// A core signed in as one account, on a station's own page (`local`, plain HTTP), whose admin API has chat 7
-    /// with one agent; `sample` of its traces recorded. Its timers run at their real pace.
     /// A session as the station lists it.
     fn session(key: &str) -> Value {
         json!({
@@ -2733,11 +2747,32 @@ mod tests {
         })
     }
 
-    async fn local_core(sample: f64) -> (Rc<FakeHost>, Core) {
-        let host = FakeHost::new();
+    /// Signs `host` in as one account, whose workspace `ws` has one station, `st`.
+    fn sign_in(host: &FakeHost) {
         let account = StoredAccount { sub: "s1".into(), email: "a@x.com".into(), name: String::new(), picture: String::new(), access: "tok".into(), refresh: "r0".into(), access_expires: now_s() + 3600.0 };
         host.store(STORAGE_KEY, serde_json::to_vec(&vec![account]).unwrap());
-        host.on_fetch(|req| {
+    }
+
+    /// Answers still.fail cloud as [`sign_in`] has it, and the station's admin API (the rest) with `station`.
+    fn station_answers(host: &FakeHost, station: impl Fn(&crate::host::HttpRequest) -> std::result::Result<crate::host::HttpResponse, crate::host::HostError> + 'static) {
+        host.on_fetch(move |req| match req.url.trim_start_matches("https://stillfail.test") {
+            "/v1/me" => json_response(200, json!({"workspaces": [{"id": "ws", "name": "W"}], "invitations": [], "relay_url": "https://relay.test"})),
+            "/v1/workspaces/ws" => json_response(200, json!({"id": "ws", "stations": [{"id": "st", "name": "studio", "last_seen": null}]})),
+            _ => station(req),
+        });
+    }
+
+    /// A core on `host` whose stations answer over its fetch, at `<origin>/admin/api/…` (testing::HostWire).
+    async fn over_fetch(host: &Rc<FakeHost>, sample: f64) -> Core {
+        Core::with_wire(host.clone(), sample, |host| crate::testing::HostWire::new(host)).await
+    }
+
+    /// A core [signed in](sign_in), whose station `ws/st` has chat 7 with one agent; `sample` of its traces recorded.
+    /// Its timers run at their real pace.
+    async fn station_core(sample: f64) -> (Rc<FakeHost>, Core) {
+        let host = FakeHost::new();
+        sign_in(&host);
+        station_answers(&host, |req| {
             let path = req.url.trim_start_matches("https://stillfail.test");
             match path.split('?').next().unwrap() {
                 "/admin/api/threads" => json_response(200, json!([{
@@ -2758,7 +2793,7 @@ mod tests {
             }
         });
         host.on_fetch_stream(|_| Ok(crate::host::StreamResponse { status: 200, headers: vec![], body: futures::stream::pending().boxed_local() }));
-        let core = Core::traced(host.clone(), sample).await;
+        let core = over_fetch(&host, sample).await;
         (host, core)
     }
 
@@ -2773,25 +2808,26 @@ mod tests {
     #[test]
     fn a_streamed_preview_hands_its_answer_on_as_it_comes_until_cancelled_or_its_page_goes() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             // The service's answer: open, its body coming as it is sent here.
             type Body = futures::channel::mpsc::UnboundedSender<std::result::Result<Vec<u8>, crate::host::HostError>>;
             let bodies: Rc<RefCell<Vec<Body>>> = Rc::default();
             let opened = bodies.clone();
-            host.on_fetch_stream(move |_| {
+            host.on_fetch_stream(move |req| {
+                // The station's own event stream, read beside it: open, and nothing on it.
+                if !req.url.contains("/preview/") {
+                    return Ok(crate::host::StreamResponse { status: 200, headers: vec![], body: futures::stream::pending().boxed_local() });
+                }
                 let (tx, rx) = futures::channel::mpsc::unbounded();
                 opened.borrow_mut().push(tx);
                 Ok(crate::host::StreamResponse { status: 200, headers: vec![("content-type".into(), "text/event-stream".into())], body: rx.boxed_local() })
             });
             let ui = core.connect();
-            let preview = |id| ClientMessage::Call { id, call: "station.preview".into(), params: json!({ "station": "local", "port": 5180, "method": "GET", "path": "/events", "stream": true }) };
+            let preview = |id| ClientMessage::Call { id, call: "station.preview".into(), params: json!({ "station": "ws/st", "port": 5180, "method": "GET", "path": "/events", "stream": true }) };
             core.receive(ui, preview(1));
             host.settle().await;
-            let asked = host.requests.borrow().last().cloned().unwrap();
+            let asked = host.requests.borrow().iter().rev().find(|r| r.url.contains("/preview/")).cloned().unwrap();
             assert_eq!(asked.url, "https://stillfail.test/admin/api/preview/5180/events");
-            // Under the old name: a station from before the rename strips x-ember-* only, so the service never sees it.
-            assert_eq!(header(&asked, "x-ember-stream").as_deref(), Some("1"), "asked for as it comes");
-            assert_eq!(header(&asked, "x-stillfail-stream"), None);
             let values = |host: &FakeHost| host.take_emitted().into_iter().map(|(_, m)| serde_json::to_value(m).unwrap()).collect::<Vec<_>>();
             assert_eq!(values(&host), vec![json!({ "id": 1, "value": { "head": { "status": 200, "headers": [["content-type", "text/event-stream"]] } } })]);
             // Nothing is said to be waited on once its head came, however long its body goes on.
@@ -2814,7 +2850,7 @@ mod tests {
             assert!(core.inner.calls.borrow().is_empty());
             // Any other call runs to its end, cancelled or not: a write is not dropped halfway.
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Call { id: 3, call: "memory.get".into(), params: json!({ "station": "local" }) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "memory.get".into(), params: json!({ "station": "ws/st" }) });
             core.receive(ui, ClientMessage::Cancel { id: 3, cancel: true });
             core.disconnect(ui);
             host.settle().await;
@@ -2825,9 +2861,9 @@ mod tests {
     #[test]
     fn a_preview_socket_is_only_carried_by_the_mesh_and_its_messages_are_checked() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Call { id: 1, call: "preview.socket".into(), params: json!({ "station": "local", "port": 5180, "path": "/", "socket": "s1" }) });
+            core.receive(ui, ClientMessage::Call { id: 1, call: "preview.socket".into(), params: json!({ "station": "ws/st", "port": 5180, "path": "/", "socket": "s1" }) });
             core.receive(ui, ClientMessage::Call { id: 2, call: "preview.socket.send".into(), params: json!({ "socket": "s1", "text": "hi" }) });
             host.settle().await;
             let answers: HashMap<u64, Value> = host.take_emitted().into_iter().map(|(_, m)| serde_json::to_value(m).unwrap()).map(|v| (v["id"].as_u64().unwrap(), v)).collect();
@@ -2858,9 +2894,9 @@ mod tests {
     #[test]
     fn a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets() {
         run(async {
-            let (host, core) = local_core(1.0).await;
+            let (host, core) = station_core(1.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "ws/st".into(), thread: Some(7), session: None } });
             host.settle().await;
             assert!(host.take_emitted().iter().any(|(_, m)| matches!(m, CoreMessage::Value { id: 1, .. })));
             let admin: Vec<_> = host.requests.borrow().iter().filter(|r| r.url.contains("/admin/api/")).cloned().collect();
@@ -2905,19 +2941,20 @@ mod tests {
     #[test]
     fn calls_are_traces_and_nothing_goes_out_when_tracing_is_off() {
         run(async {
-            let (host, core) = local_core(1.0).await;
+            let (host, core) = station_core(1.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Call { id: 1, call: "memory.get".into(), params: json!({ "station": "local" }) });
+            core.receive(ui, ClientMessage::Call { id: 1, call: "memory.get".into(), params: json!({ "station": "ws/st" }) });
             host.settle().await;
             pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
             let body: Value = serde_json::from_slice(exports(&host)[0].body.as_deref().unwrap()).unwrap();
             let names: Vec<String> = body["resourceSpans"][0]["scopeSpans"][0]["spans"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect();
-            assert_eq!(names, ["GET /admin/api/memory", "memory.get"]);
+            // Beside what the core reads of the station for its notices.
+            assert!(names.iter().any(|n| n == "GET /admin/api/memory") && names.iter().any(|n| n == "memory.get"), "{names:?}");
 
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
-            core.receive(ui, ClientMessage::Call { id: 2, call: "memory.get".into(), params: json!({ "station": "local" }) });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "ws/st".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "memory.get".into(), params: json!({ "station": "ws/st" }) });
             host.settle().await;
             pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
             assert!(exports(&host).is_empty());
@@ -2930,7 +2967,7 @@ mod tests {
     #[test]
     fn prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Prefs });
             host.settle().await;
@@ -2940,19 +2977,19 @@ mod tests {
             assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone(), values[&1]["rowPicture"].clone()), (json!(false), json!("system"), json!("auto")));
             assert_eq!(values[&1]["device"]["app"], "");
             let set = |id, params: Value| core.receive(ui, ClientMessage::Call { id, call: "prefs.set".into(), params });
-            set(2, json!({ "onlyMine": true, "appearance": "dark", "lastChat": { "local": "/chats/k1", "ws": "/w/ws/new" }, "chatTabs": { "local:t": { "tabs": ["k1"], "active": "k1" } } }));
+            set(2, json!({ "onlyMine": true, "appearance": "dark", "lastChat": { "w1": "/w/w1/s/st/chats/k1", "ws": "/w/ws/new" }, "chatTabs": { "ws/st:t": { "tabs": ["k1"], "active": "k1" } } }));
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone()), (json!(true), json!("dark")));
-            assert_eq!(values[&1]["chatTabs"]["local:t"], json!({ "tabs": ["k1"], "active": "k1" }));
+            assert_eq!(values[&1]["chatTabs"]["ws/st:t"], json!({ "tabs": ["k1"], "active": "k1" }));
             // A map by entry: one gone, the other kept.
             set(3, json!({ "lastChat": { "ws": null } }));
             // What a device kept before, moved in: only what is not chosen here yet.
-            set(4, json!({ "fill": true, "appearance": "light", "rowPicture": "people", "lastChat": { "local": "/chats/old", "other": "/w/other/new" } }));
+            set(4, json!({ "fill": true, "appearance": "light", "rowPicture": "people", "lastChat": { "w1": "/w/w1/s/st/chats/old", "other": "/w/other/new" } }));
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!((values[&1]["appearance"].clone(), values[&1]["rowPicture"].clone()), (json!("dark"), json!("people")));
-            assert_eq!(values[&1]["lastChat"], json!({ "local": "/chats/k1", "other": "/w/other/new" }));
+            assert_eq!(values[&1]["lastChat"], json!({ "w1": "/w/w1/s/st/chats/k1", "other": "/w/other/new" }));
             // Not a pref, or not one of its words: refused, nothing changed.
             set(5, json!({ "appearance": "blue" }));
             set(6, json!({ "device": { "app": "web" } }));
@@ -2976,23 +3013,23 @@ mod tests {
             host.settle().await;
             let mut values = HashMap::new();
             apply(&host, &mut values);
-            assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone(), values[&1]["lastChat"]["local"].clone()), (json!(true), json!("dark"), json!("/chats/k1")));
+            assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone(), values[&1]["lastChat"]["w1"].clone()), (json!(true), json!("dark"), json!("/w/w1/s/st/chats/k1")));
             // The tabs of the latest 200 chats are kept.
             for i in 0..205u64 {
-                core.receive(ui, ClientMessage::Call { id: 10 + i, call: "prefs.set".into(), params: json!({ "chatTabs": { format!("local:{i}"): { "tabs": [], "active": null } } }) });
+                core.receive(ui, ClientMessage::Call { id: 10 + i, call: "prefs.set".into(), params: json!({ "chatTabs": { format!("ws/st:{i}"): { "tabs": [], "active": null } } }) });
                 host.settle().await;
             }
             apply(&host, &mut values);
             let tabs = values[&1]["chatTabs"].as_object().unwrap();
             assert_eq!(tabs.len(), 200);
-            assert!(tabs.contains_key("local:204") && !tabs.contains_key("local:4") && !tabs.contains_key("local:t"));
+            assert!(tabs.contains_key("ws/st:204") && !tabs.contains_key("ws/st:4") && !tabs.contains_key("ws/st:t"));
         });
     }
 
     #[test]
     fn the_device_says_what_it_is_once_and_the_core_decides_what_follows() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Prefs });
             let phone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
@@ -3002,7 +3039,7 @@ mod tests {
             apply(&host, &mut values);
             assert_eq!(values[&1]["device"], json!({ "app": "web", "phone": true, "handoff": false }));
             // A message goes with the app it is sent from, unless the UI says.
-            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({ "station": "local", "thread": 7, "text": "hi" }) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({ "station": "ws/st", "thread": 7, "text": "hi" }) });
             host.settle().await;
             let sent: Vec<Value> = host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.ends_with("/threads/7/messages"))
                 .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap()).collect();
@@ -3037,9 +3074,9 @@ mod tests {
     #[test]
     fn a_draft_is_kept_on_the_device_until_emptied() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
-            let topic = Topic::Draft { station: "local".into(), chat: "new".into() };
+            let topic = Topic::Draft { station: "ws/st".into(), chat: "new".into() };
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: topic.clone() });
             host.settle().await;
             let mut values = HashMap::new();
@@ -3047,7 +3084,7 @@ mod tests {
             // Nothing written: empty, not waiting.
             assert_eq!(values[&1], json!({ "text": "", "quotes": [], "files": [] }));
             core.receive(ui, ClientMessage::Call { id: 2, call: "draft.put".into(), params: json!({
-                "station": "local", "chat": "new", "text": "修一下登录",
+                "station": "ws/st", "chat": "new", "text": "修一下登录",
                 "quotes": [{ "author": "a", "text": "b", "comment": "" }], "files": [{ "name": "x.png", "path": "up/x.png", "size": 3 }],
             }) });
             host.settle().await;
@@ -3067,7 +3104,7 @@ mod tests {
             assert_eq!(values[&1]["text"], "修一下登录");
             assert_eq!(values[&1]["quotes"][0]["author"], "a");
             // Emptied (sent): gone, from the device too.
-            core.receive(ui, ClientMessage::Call { id: 2, call: "draft.put".into(), params: json!({ "station": "local", "chat": "new", "text": " ", "quotes": [], "files": [] }) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "draft.put".into(), params: json!({ "station": "ws/st", "chat": "new", "text": " ", "quotes": [], "files": [] }) });
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!(values[&1], json!({ "text": "", "quotes": [], "files": [] }));
@@ -3080,7 +3117,7 @@ mod tests {
             apply(&host, &mut values);
             assert_eq!(values[&1]["text"], "");
             // What is not a draft is refused.
-            core.receive(ui, ClientMessage::Call { id: 3, call: "draft.put".into(), params: json!({ "station": "local", "chat": "new", "text": 3 }) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "draft.put".into(), params: json!({ "station": "ws/st", "chat": "new", "text": 3 }) });
             core.receive(ui, ClientMessage::Call { id: 4, call: "draft.put".into(), params: json!({ "chat": "new", "text": "x" }) });
             host.settle().await;
             let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 3 | 4, .. })).count();
@@ -3098,10 +3135,10 @@ mod tests {
         })
     }
 
-    /// A local core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex.
+    /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex.
     async fn choosing_core() -> (Rc<FakeHost>, Core) {
-        let (host, core) = local_core(0.0).await;
-        host.on_fetch(|req| {
+        let (host, core) = station_core(0.0).await;
+        station_answers(&host, |req| {
             let path = req.url.trim_start_matches("https://stillfail.test");
             match (req.method.as_str(), path.split('?').next().unwrap()) {
                 ("GET", "/admin/api/overview") => json_response(200, json!({
@@ -3155,21 +3192,21 @@ mod tests {
             let (host, core) = choosing_core().await;
             let ui = core.connect();
             // What the page kept before the core did comes in once.
-            call(&host, &core, ui, 1, "newChat.migrate", json!({ "choices": { "local": { "runtime": "claude", "model": "claude-sonnet-5", "effort": "low", "profile": "" } }, "last": "local" })).await.unwrap();
-            let topic = Topic::NewChat { scope: "local".into() };
+            call(&host, &core, ui, 1, "newChat.migrate", json!({ "choices": { "st": { "runtime": "claude", "model": "claude-sonnet-5", "effort": "low", "profile": "" } }, "last": "st" })).await.unwrap();
+            let topic = Topic::NewChat { scope: "ws".into() };
             core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: topic.clone() });
             host.settle().await;
             let mut values = HashMap::new();
             apply(&host, &mut values);
             let v = &values[&2];
-            assert_eq!((v["kept"].as_str(), v["station"]["id"].as_str()), (Some("local"), Some("local")));
+            assert_eq!((v["kept"].as_str(), v["station"]["id"].as_str()), (Some("st"), Some("st")));
             assert_eq!((v["model"]["model"].as_str(), v["runtime"].as_str(), v["effort"].as_str()), (Some("claude-sonnet-5"), Some("claude"), Some("low")));
             assert_eq!((v["waiting"].clone(), v["blocked"].clone(), v["pickAccount"].clone()), (json!(false), Value::Null, json!(false)));
             // Its unchecked profile is checked, once.
             assert_eq!(posted(&host, "/profiles/p1/check").len(), 1);
             assert!(posted(&host, "/profiles/p2/check").is_empty());
             // An account kept to that does not run the model gives way to the station's pick.
-            call(&host, &core, ui, 3, "newChat.pick", json!({ "scope": "local", "model": "claude-opus-5-5", "profile": "p3" })).await.unwrap();
+            call(&host, &core, ui, 3, "newChat.pick", json!({ "scope": "ws", "model": "claude-opus-5-5", "profile": "p3" })).await.unwrap();
             apply(&host, &mut values);
             let v = &values[&2];
             assert_eq!((v["model"]["model"].as_str(), v["effort"].as_str(), v["profile"].clone()), (Some("claude-opus-5-5"), Some("low"), Value::Null));
@@ -3178,43 +3215,43 @@ mod tests {
             assert_eq!(v["accounts"][0]["quotaLine"], json!({ "text": "5 小时 90%" }));
             assert_eq!(v["accounts"][1]["quotaLine"], json!({ "text": "5 小时只剩 20%", "level": "amber" }));
             // A model on another runtime takes it, and its default depth.
-            call(&host, &core, ui, 4, "newChat.pick", json!({ "scope": "local", "model": "gpt-6-astra" })).await.unwrap();
+            call(&host, &core, ui, 4, "newChat.pick", json!({ "scope": "ws", "model": "gpt-6-astra" })).await.unwrap();
             apply(&host, &mut values);
             assert_eq!((values[&2]["runtime"].as_str(), values[&2]["effort"].clone()), (Some("codex"), Value::Null));
             // Kept across a restart; what an older page kept does not come in over it.
             drop(core);
             host.take_emitted();
-            let core = Core::new(host.clone()).await;
+            let core = over_fetch(&host, 0.0).await;
             let ui = core.connect();
-            call(&host, &core, ui, 1, "newChat.migrate", json!({ "choices": { "local": { "runtime": "claude", "model": "claude-sonnet-5", "effort": "", "profile": "" } } })).await.unwrap();
+            call(&host, &core, ui, 1, "newChat.migrate", json!({ "choices": { "st": { "runtime": "claude", "model": "claude-sonnet-5", "effort": "", "profile": "" } } })).await.unwrap();
             core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: topic });
             host.settle().await;
             let mut values = HashMap::new();
             apply(&host, &mut values);
             assert_eq!(values[&2]["model"]["model"], "gpt-6-astra");
             // The model control of a new chat there: picked in its panel, then saved as what it runs on.
-            let pick = Topic::Pick { station: "local".into(), of: "new".into() };
+            let pick = Topic::Pick { station: "ws/st".into(), of: "new".into() };
             core.receive(ui, ClientMessage::Subscribe { id: 5, subscribe: pick });
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!((values[&5]["changed"].clone(), values[&5]["value"]["runtime"].clone(), values[&5]["account"].clone()), (json!(false), json!("codex"), Value::Null));
-            call(&host, &core, ui, 6, "pick.set", json!({ "station": "local", "of": "new", "model": "claude-opus-5-5", "profile": "p2" })).await.unwrap();
+            call(&host, &core, ui, 6, "pick.set", json!({ "station": "ws/st", "of": "new", "model": "claude-opus-5-5", "profile": "p2" })).await.unwrap();
             apply(&host, &mut values);
             let p = &values[&5];
             assert_eq!((p["changed"].clone(), p["draft"]["runtime"].clone(), p["draft"]["profile"].clone(), p["who"].clone()), (json!(true), json!("claude"), json!("p2"), json!("p2")));
             assert_eq!(values[&2]["model"]["model"], "gpt-6-astra", "only a draft until saved");
-            assert_eq!(call(&host, &core, ui, 7, "pick.save", json!({ "station": "local", "of": "new" })).await.unwrap()["saved"], true);
+            assert_eq!(call(&host, &core, ui, 7, "pick.save", json!({ "station": "ws/st", "of": "new" })).await.unwrap()["saved"], true);
             apply(&host, &mut values);
             assert_eq!((values[&2]["model"]["model"].as_str(), values[&2]["profile"].as_str()), (Some("claude-opus-5-5"), Some("p2")));
             // Kept to an account running low: the control names it, amber.
             assert_eq!(values[&5]["account"], json!({ "text": "p2@x.com", "auto": false, "level": "amber" }));
             // A chat made there is asked for with it, and the scope's next new chat starts there too.
-            let made = call(&host, &core, ui, 8, "newChat.create", json!({ "station": "local" })).await.unwrap();
+            let made = call(&host, &core, ui, 8, "newChat.create", json!({ "station": "ws/st" })).await.unwrap();
             assert!(made["key"].as_str().is_some_and(|k| k.starts_with(crate::views::PENDING_PREFIX)));
             assert_eq!(posted(&host, "/sessions").last().map(|b| (b["model"].clone(), b["profile"].clone())), Some((json!("claude-opus-5-5"), json!("p2"))));
             // Refused: no scope, no station.
             assert!(call(&host, &core, ui, 9, "newChat.pick", json!({ "model": "x" })).await.is_err());
-            assert!(call(&host, &core, ui, 10, "pick.set", json!({ "station": "local", "of": "nothing" })).await.is_err());
+            assert!(call(&host, &core, ui, 10, "pick.set", json!({ "station": "ws/st", "of": "nothing" })).await.is_err());
         });
     }
 
@@ -3223,7 +3260,7 @@ mod tests {
         run(async {
             let (host, core) = choosing_core().await;
             let ui = core.connect();
-            let pick = Topic::Pick { station: "local".into(), of: "session:k1".into() };
+            let pick = Topic::Pick { station: "ws/st".into(), of: "session:k1".into() };
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: pick });
             host.settle().await;
             let mut values = HashMap::new();
@@ -3233,8 +3270,8 @@ mod tests {
             assert_eq!((p["runtimeFixed"].clone(), p["value"]["model"].clone(), p["account"]["text"].clone()), (json!(true), Value::Null, json!("自动 · p1@x.com")));
             assert_eq!(p["saveText"], "不变");
             // Kept to p2 and moved to Sonnet, which p2 does not run: back to the station's pick, said so.
-            call(&host, &core, ui, 2, "pick.set", json!({ "station": "local", "of": "session:k1", "profile": "p2" })).await.unwrap();
-            call(&host, &core, ui, 3, "pick.set", json!({ "station": "local", "of": "session:k1", "model": "claude-sonnet-5", "effort": "high" })).await.unwrap();
+            call(&host, &core, ui, 2, "pick.set", json!({ "station": "ws/st", "of": "session:k1", "profile": "p2" })).await.unwrap();
+            call(&host, &core, ui, 3, "pick.set", json!({ "station": "ws/st", "of": "session:k1", "model": "claude-sonnet-5", "effort": "high" })).await.unwrap();
             apply(&host, &mut values);
             let p = &values[&1];
             assert_eq!(p["draft"]["profile"], Value::Null);
@@ -3243,14 +3280,14 @@ mod tests {
             assert_eq!(p["whoLevel"], "amber");
             assert_eq!(p["becomes"][1], "high");
             assert_eq!(p["changed"], true);
-            call(&host, &core, ui, 4, "pick.save", json!({ "station": "local", "of": "session:k1" })).await.unwrap();
+            call(&host, &core, ui, 4, "pick.save", json!({ "station": "ws/st", "of": "session:k1" })).await.unwrap();
             assert_eq!(posted(&host, "/sessions/k1/settings"), [json!({ "model": "claude-sonnet-5", "effort": "high", "profile": null })]);
             // Opened again: from what it runs on.
-            call(&host, &core, ui, 5, "pick.set", json!({ "station": "local", "of": "session:k1", "open": true })).await.unwrap();
+            call(&host, &core, ui, 5, "pick.set", json!({ "station": "ws/st", "of": "session:k1", "open": true })).await.unwrap();
             apply(&host, &mut values);
             assert_eq!(values[&1]["draft"]["effort"], Value::Null);
             // The machine's own sessions come each with its line.
-            let listed = call(&host, &core, ui, 6, "machineSessions.list", json!({ "station": "local" })).await.unwrap();
+            let listed = call(&host, &core, ui, 6, "machineSessions.list", json!({ "station": "ws/st" })).await.unwrap();
             assert!(listed["sessions"][0]["meta"].as_str().is_some_and(|m| m.starts_with("Codex · ~/src/x · ")), "{listed}");
         });
     }
@@ -3258,9 +3295,9 @@ mod tests {
     #[test]
     fn a_draft_written_as_it_is_typed_is_one_write_and_read_by_its_key() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
-            let put = |id, text: &str| ClientMessage::Call { id, call: "draft.put".into(), params: json!({ "key": "local:thread:7", "text": text, "quotes": [], "files": [] }) };
+            let put = |id, text: &str| ClientMessage::Call { id, call: "draft.put".into(), params: json!({ "key": "ws/st:thread:7", "text": text, "quotes": [], "files": [] }) };
             for (id, text) in [(1, "修"), (2, "修一"), (3, "修一下")] {
                 core.receive(ui, put(id, text));
             }
@@ -3268,7 +3305,7 @@ mod tests {
             let kept = |host: &FakeHost| host.db.borrow().iter().filter(|((t, _), _)| t == "draft").map(|(_, v)| serde_json::from_slice::<Value>(v).unwrap()["text"].clone()).collect::<Vec<_>>();
             // There at once; on the device a moment after the last change, as it is then.
             assert!(kept(&host).is_empty());
-            core.receive(ui, ClientMessage::Call { id: 4, call: "draft.get".into(), params: json!({ "key": "local:thread:7" }) });
+            core.receive(ui, ClientMessage::Call { id: 4, call: "draft.get".into(), params: json!({ "key": "ws/st:thread:7" }) });
             host.settle().await;
             let answer = |host: &FakeHost, want| host.take_emitted().into_iter().find_map(|(_, m)| match m { CoreMessage::Ok { id, ok } if id == want => Some(ok), _ => None });
             assert_eq!(answer(&host, 4).unwrap()["text"], "修一下");
@@ -3276,12 +3313,12 @@ mod tests {
             host.settle().await;
             assert_eq!(kept(&host), [json!("修一下")]);
             // Emptied before it was written: nothing is written after all.
-            core.receive(ui, ClientMessage::Call { id: 5, call: "draft.put".into(), params: json!({ "key": "new:local", "text": "新的" }) });
-            core.receive(ui, ClientMessage::Call { id: 6, call: "draft.put".into(), params: json!({ "key": "new:local", "text": "" }) });
+            core.receive(ui, ClientMessage::Call { id: 5, call: "draft.put".into(), params: json!({ "key": "new:ws/st", "text": "新的" }) });
+            core.receive(ui, ClientMessage::Call { id: 6, call: "draft.put".into(), params: json!({ "key": "new:ws/st", "text": "" }) });
             host.sleep(crate::data::SOON_MS + 50).await;
             host.settle().await;
             assert_eq!(kept(&host), [json!("修一下")]);
-            core.receive(ui, ClientMessage::Call { id: 7, call: "draft.get".into(), params: json!({ "key": "new:local" }) });
+            core.receive(ui, ClientMessage::Call { id: 7, call: "draft.get".into(), params: json!({ "key": "new:ws/st" }) });
             host.settle().await;
             assert_eq!(answer(&host, 7).unwrap(), json!({ "text": "", "quotes": [], "files": [] }));
         });
@@ -3290,29 +3327,43 @@ mod tests {
     #[test]
     fn a_chat_referred_to_goes_out_as_a_link_to_it() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Call { id: 1, call: "chat.ref".into(), params: json!({ "station": "local", "id": "ember:c 1", "title": "排查 [登录]", "base": "/admin" }) });
-            core.receive(ui, ClientMessage::Call { id: 2, call: "chat.ref".into(), params: json!({ "station": "ws/st", "id": "k2", "title": "云上的" }) });
-            // Kept by a page before the core kept them.
-            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.refs".into(), params: json!({ "links": [["旧的", "https://x/chats/a"]] }) });
+            core.receive(ui, ClientMessage::Call { id: 1, call: "chat.ref".into(), params: json!({ "station": "ws/st", "id": "ember:c 1", "title": "排查 [登录]", "base": "https://x" }) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "chat.ref".into(), params: json!({ "station": "w2/st", "id": "k2", "title": "云上的", "base": "https://x" }) });
+            // Kept by a page before the core kept them: one to a station's own page (gone) is no workspace's.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.refs".into(), params: json!({ "links": [["旧的", "https://x/w/ws/s/st/chats/a"], ["本机", "/admin/chats/b"]] }) });
             host.settle().await;
             let answers: HashMap<RequestId, Value> = host.take_emitted().into_iter().filter_map(|(_, m)| match m { CoreMessage::Ok { id, ok } => Some((id, ok)), _ => None }).collect();
             assert_eq!(answers[&1], json!({ "mark": "@[排查 登录]" }));
             assert_eq!(answers[&2], json!({ "mark": "@[云上的]" }));
-            core.receive(ui, ClientMessage::Call { id: 4, call: "chat.send".into(), params: json!({ "station": "local", "thread": 7, "text": "看 @[排查 登录]、@[云上的]、@[旧的] 和 @[不知道]" }) });
+            core.receive(ui, ClientMessage::Call { id: 4, call: "chat.send".into(), params: json!({ "station": "ws/st", "thread": 7, "text": "看 @[排查 登录]、@[云上的]、@[旧的]、@[本机] 和 @[不知道]" }) });
             host.settle().await;
             let sent = host.requests.borrow().iter().rev().find(|r| r.method == "POST" && r.url.ends_with("/admin/api/threads/7/messages")).map(|r| serde_json::from_slice::<Value>(r.body.as_deref().unwrap()).unwrap()).expect("sent");
             // Another workspace's chat is none of this one's: its mark stays as written.
-            assert_eq!(sent["text"], "看 [排查 登录](/admin/chats/ember%3Ac%201)、@[云上的]、[旧的](https://x/chats/a) 和 @[不知道]");
+            assert_eq!(sent["text"], "看 [排查 登录](https://x/w/ws/s/st/chats/ember%3Ac%201)、@[云上的]、[旧的](https://x/w/ws/s/st/chats/a)、@[本机] 和 @[不知道]");
+        });
+    }
+
+    #[test]
+    fn an_address_of_a_stations_own_page_kept_from_before_is_said_gone() {
+        run(async {
+            let (host, core) = station_core(0.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Overview { station: "local".into() } });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({ "station": "local", "thread": 7, "text": "hi" }) });
+            host.settle().await;
+            let errors: HashMap<RequestId, String> = host.take_emitted().into_iter().filter_map(|(_, m)| match m { CoreMessage::Error { id, error } => Some((id, error.code)), _ => None }).collect();
+            assert_eq!((errors.get(&1).map(String::as_str), errors.get(&2).map(String::as_str), errors.get(&3).map(String::as_str)), (Some("gone"), Some("gone"), Some("gone")), "{errors:?}");
         });
     }
 
     #[test]
     fn the_chats_a_few_words_find_are_a_view_of_the_list() {
         run(async {
-            let (host, core) = local_core(0.0).await;
-            host.on_fetch(|req| {
+            let (host, core) = station_core(0.0).await;
+            station_answers(&host, |req| {
                 let path = req.url.trim_start_matches("https://stillfail.test");
                 let row = |id: &str, title: &str, at: i64| json!({
                     "id": id, "session": id, "thread": null, "title": title, "agents": [], "last": null, "unread": false, "mine": true,
@@ -3328,21 +3379,21 @@ mod tests {
                 }
             });
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: serde_json::from_value(json!({ "topic": "chatSearch", "scope": "local", "query": "登录", "exclude": "c" })).unwrap() });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: serde_json::from_value(json!({ "topic": "chatSearch", "scope": "ws", "query": "登录", "exclude": "c" })).unwrap() });
             host.settle().await;
             let mut values = HashMap::new();
             apply(&host, &mut values);
             let ids: Vec<&str> = values[&1]["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap()).collect();
             assert_eq!(ids, ["b"]);
-            assert_eq!(values[&1]["items"][0]["station"], "local");
+            assert_eq!(values[&1]["items"][0]["station"], "ws/st");
         });
     }
 
     #[test]
     fn a_chat_shown_has_its_unread_line_and_is_read_while_its_end_is_in_view() {
         run(async {
-            let (host, core) = local_core(0.0).await;
-            host.on_fetch(|req| {
+            let (host, core) = station_core(0.0).await;
+            station_answers(&host, |req| {
                 let path = req.url.trim_start_matches("https://stillfail.test");
                 let said = |n: u64| json!({ "thread": 7, "n": n, "kind": "message", "ts": format!("{n}.0"), "authorKind": "agent", "author": "k1", "authorName": null, "text": "好", "at": n });
                 match (req.method.as_str(), path.split('?').next().unwrap()) {
@@ -3360,21 +3411,21 @@ mod tests {
             });
             let ui = core.connect();
             let mut values = HashMap::new();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "ws/st".into(), thread: Some(7), session: None } });
             host.settle().await;
             apply(&host, &mut values);
             // Not shown by any page yet: no line.
             assert_eq!(values[&1]["messages"].as_array().unwrap().len(), 3);
             assert_eq!(values[&1].get("unreadLine"), None);
             // Shown: the line over the first not read when it was opened; not read while its end is out of view.
-            core.receive(ui, ClientMessage::Call { id: 2, call: "client.focus".into(), params: json!({ "visible": true, "focused": true, "chat": { "station": "local", "thread": 7, "end": false } }) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "client.focus".into(), params: json!({ "visible": true, "focused": true, "chat": { "station": "ws/st", "thread": 7, "end": false } }) });
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!(values[&1]["unreadLine"], 2);
             let reads = |host: &FakeHost| host.requests.borrow().iter().filter(|r| r.method == "PUT" && r.url.ends_with("/threads/7/read")).count();
             assert_eq!(reads(&host), 0);
             // Its end in view: read up to the newest, once; the line stays for the visit.
-            core.receive(ui, ClientMessage::Call { id: 3, call: "client.focus".into(), params: json!({ "chat": { "station": "local", "thread": 7, "end": true } }) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "client.focus".into(), params: json!({ "chat": { "station": "ws/st", "thread": 7, "end": true } }) });
             host.settle().await;
             core.receive(ui, ClientMessage::Call { id: 4, call: "client.focus".into(), params: json!({ "visible": true }) });
             host.settle().await;
@@ -3384,8 +3435,8 @@ mod tests {
             // The page gone: the visit ends with it; opened again, nothing unread.
             core.disconnect(ui);
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
-            core.receive(ui, ClientMessage::Call { id: 2, call: "client.focus".into(), params: json!({ "visible": true, "chat": { "station": "local", "thread": 7 } }) });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "ws/st".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "client.focus".into(), params: json!({ "visible": true, "chat": { "station": "ws/st", "thread": 7 } }) });
             host.settle().await;
             let mut values = HashMap::new();
             apply(&host, &mut values);
@@ -3396,7 +3447,7 @@ mod tests {
     #[test]
     fn notifications_are_on_until_turned_off_and_kept_so_with_no_pushes() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let ui = core.connect();
             let mut values = HashMap::new();
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Notify { workspace: None } });
@@ -3431,10 +3482,11 @@ mod tests {
         run(async {
             let host = FakeHost::new();
             host.speed_up(SPEEDUP);
+            sign_in(&host);
             let now = (now_s() * 1000.0) as i64;
             let reads = Rc::new(std::cell::Cell::new(0));
             let counted = reads.clone();
-            host.on_fetch(move |req| {
+            station_answers(&host, move |req| {
                 let path = req.url.trim_start_matches("https://stillfail.test");
                 let job = |id: &str, patch: Value| {
                     let mut j = json!({ "id": id, "session": "k1", "name": id, "state": "running", "port": null, "startedAt": now - 60_000, "command": "watch" });
@@ -3466,10 +3518,10 @@ mod tests {
                 }
             });
             host.on_fetch_stream(|_| Ok(crate::host::StreamResponse { status: 200, headers: vec![], body: futures::stream::pending().boxed_local() }));
-            let core = Core::new(host.clone()).await;
+            let core = over_fetch(&host, 0.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::ChatJobs { station: "local".into(), thread: Some(7), session: None } });
-            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::JobLog { station: "local".into(), job: "w".into(), lines: 1 } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::ChatJobs { station: "ws/st".into(), thread: Some(7), session: None } });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::JobLog { station: "ws/st".into(), job: "w".into(), lines: 1 } });
             host.settle().await;
             host.settle().await;
             let mut values = HashMap::new();
@@ -3494,15 +3546,15 @@ mod tests {
     #[test]
     fn a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_station_has_made_it() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let up = Rc::new(Cell::new(false));
             let station_up = up.clone();
-            host.on_fetch(move |req| {
+            station_answers(&host, move |req| {
                 let path = req.url.trim_start_matches("https://stillfail.test");
                 match (req.method.as_str(), path) {
                     ("POST", "/admin/api/sessions") if !station_up.get() => json_response(400, json!({"error": "no claude profile configured"})),
                     ("POST", "/admin/api/sessions") => json_response(200, json!({"key": "ember:c-1", "thread": {
-                        "id": 9, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": "9.0", "title": null, "createdBy": "local",
+                        "id": 9, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": "9.0", "title": null, "createdBy": "a@x.com",
                         "creator": null, "createdAt": 1, "sessions": [{ "thread": 9, "session": "ember:c-1", "connect": "ember", "joinedAt": 1 }],
                         "last": 0, "lastMessage": null, "read": 0, "unread": 0, "people": [], "firstText": null,
                     }})),
@@ -3511,19 +3563,19 @@ mod tests {
                 }
             });
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Call { id: 1, call: "chat.create".into(), params: json!({"station": "local", "runtime": "claude", "model": "opus"}) });
+            core.receive(ui, ClientMessage::Call { id: 1, call: "chat.create".into(), params: json!({"station": "ws/st", "runtime": "claude", "model": "opus"}) });
             host.settle().await;
             let answers = host.take_emitted();
             let key = answers.iter().find_map(|(_, m)| match m { CoreMessage::Ok { id: 1, ok } => ok["key"].as_str().map(str::to_string), _ => None }).expect("answered at once");
             assert!(key.starts_with(crate::views::PENDING_PREFIX), "{key}");
             // The station could not make it: what is sent waits, and has it tried again.
-            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Chat { station: "local".into(), thread: None, session: Some(key.clone()) } });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Chat { station: "ws/st".into(), thread: None, session: Some(key.clone()) } });
             host.settle().await;
             let mut values = HashMap::new();
             apply(&host, &mut values);
             assert_eq!(values[&2]["pending"], true);
             up.set(true);
-            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({"station": "local", "session": key, "text": "修一下登录", "client": "android 0.1.1123"}) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({"station": "ws/st", "session": key, "text": "修一下登录", "client": "android 0.1.1123"}) });
             host.settle().await;
             let asked: Vec<(String, String)> = host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.contains("/admin/api/"))
                 .map(|r| (r.url.trim_start_matches("https://stillfail.test/admin/api").to_string(), String::from_utf8(r.body.clone().unwrap_or_default()).unwrap())).collect();
@@ -3562,10 +3614,10 @@ mod tests {
     #[test]
     fn a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_not_be() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let (archived, refused) = (Rc::new(Cell::new(false)), Rc::new(Cell::new(true)));
             let (a, r) = (archived.clone(), refused.clone());
-            host.on_fetch(move |req| {
+            station_answers(&host, move |req| {
                 let row = |id: &str, thread: u64| json!({ "id": id, "session": id, "thread": thread, "title": id, "agents": [], "last": null,
                     "unread": false, "mine": true, "lastActiveAt": 1, "connect": null, "origin": null });
                 match (req.method.as_str(), req.url.trim_start_matches("https://stillfail.test/admin/api")) {
@@ -3579,7 +3631,7 @@ mod tests {
                 }
             });
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chats { scope: "local".into(), mine: false } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chats { scope: "ws".into(), mine: false } });
             host.settle().await;
             let mut values = HashMap::new();
             answers(&host, &mut values);
@@ -3587,7 +3639,7 @@ mod tests {
                 values[&1]["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string())).collect()
             };
             assert_eq!(ids(&values), ["k1", "k2"]);
-            let archive = |id| ClientMessage::Call { id, call: "chat.archive".into(), params: json!({ "station": "local", "thread": 7, "session": "k1", "archived": true }) };
+            let archive = |id| ClientMessage::Call { id, call: "chat.archive".into(), params: json!({ "station": "ws/st", "thread": 7, "session": "k1", "archived": true }) };
             // Gone at once, while the station has not answered.
             let held = host.hold("/threads/7/archive");
             core.receive(ui, archive(2));
@@ -3617,11 +3669,11 @@ mod tests {
     #[test]
     fn the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_restored_or_deleted_leaves_it() {
         run(async {
-            let (host, core) = local_core(0.0).await;
+            let (host, core) = station_core(0.0).await;
             let now = host.now_ms().round();
             let gone = Rc::new(RefCell::new(Vec::<&str>::new()));
             let g = gone.clone();
-            host.on_fetch(move |req| {
+            station_answers(&host, move |req| {
                 let chat = |id: &str, thread: u64, archived: Value| json!({ "id": id, "session": id, "thread": thread, "title": format!("聊 {id}"),
                     "last": { "text": "好了" }, "lastActiveAt": now - 9e8, "archived": archived });
                 match (req.method.as_str(), req.url.trim_start_matches("https://stillfail.test/admin/api")) {
@@ -3646,7 +3698,7 @@ mod tests {
                 }
             });
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Archive { scope: "local".into() } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Archive { scope: "ws".into() } });
             host.settle().await;
             let mut values = HashMap::new();
             answers(&host, &mut values);
@@ -3658,20 +3710,20 @@ mod tests {
             let first = &days[0]["items"][0];
             assert_eq!(
                 (first["station"].clone(), first["session"].clone(), first["thread"].clone(), first["title"].clone(), first["last"].clone(), first["how"].clone(), first["deletable"].clone()),
-                (json!("local"), json!("k1"), json!(7), json!("聊 k1"), json!("好了"), json!("手动归档"), json!(true))
+                (json!("ws/st"), json!("k1"), json!(7), json!("聊 k1"), json!("好了"), json!("手动归档"), json!(true))
             );
             assert_eq!(first["clock"].as_str().unwrap().len(), 5);
             // One station: which one is not said.
             assert!(first.get("place").is_none());
             assert_eq!((days[1]["items"][0]["how"].clone(), days[1]["items"][0]["deletable"].clone()), (json!("空闲后自动归档"), json!(false)));
             // Put back in the list: it leaves the archive before the call answers.
-            core.receive(ui, ClientMessage::Call { id: 2, call: "chat.archive".into(), params: json!({ "station": "local", "thread": 7, "session": "k1", "archived": false }) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "chat.archive".into(), params: json!({ "station": "ws/st", "thread": 7, "session": "k1", "archived": false }) });
             host.settle().await;
             assert!(answers(&host, &mut values)[&2].is_ok());
             let sessions = |v: &Value| -> Vec<String> { v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["session"].as_str().unwrap().to_string())).collect() };
             assert_eq!(sessions(&values[&1]), ["k2"]);
             // Deleted: the same, and with nothing left the page says so.
-            core.receive(ui, ClientMessage::Call { id: 3, call: "session.delete".into(), params: json!({ "station": "local", "key": "k2" }) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "session.delete".into(), params: json!({ "station": "ws/st", "key": "k2" }) });
             host.settle().await;
             assert!(answers(&host, &mut values)[&3].is_ok());
             assert_eq!((values[&1]["days"].clone(), values[&1]["note"].clone()), (json!([]), json!("没有归档的对话。")));

@@ -110,8 +110,8 @@ pub fn bot_of(connect: &Value) -> Option<(String, String)> {
 }
 
 /// A person (`{ id, email, name }`: someone who made or takes part in a chat, or owns a connect) as the clients show
-/// them: `shown: { name, display, picture, mine }`, `name` as the workspace knows them (本机管理页 for this machine's
-/// page), `display` the same but 你 for the viewer.
+/// them: `shown: { name, display, picture, mine }`, `name` as the workspace knows them (本机管理页 for one on a
+/// station's own page, in chats from before it went), `display` the same but 你 for the viewer.
 pub fn person(p: &mut Value, me: &Value, members: &[Value]) {
     if !p.is_object() {
         return;

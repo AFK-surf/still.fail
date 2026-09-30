@@ -165,7 +165,8 @@ data class PersonShown (
 	val mine: Boolean
 )
 
-/// Who started a session or chat, or added a connect: "local", an email, or "slack:<connect>:<user>".
+/// Who started a session or chat, or added a connect: an email, or "slack:<connect>:<user>"; "local" in records from
+/// a station's own page, before it went.
 @Serializable
 data class Creator (
 	val id: String,
@@ -858,7 +859,7 @@ data class ChatSearchView (
 	val items: List<ChatItem>
 )
 
-/// Who is looking: an account's email, or "local".
+/// Who is looking: the account that reaches the workspace, by its email.
 @Serializable
 data class Me (
 	val id: String? = null,
@@ -993,7 +994,7 @@ data class ChatsView (
 	/// The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
 	/// corner of the list; absent while all are (a station first connecting is not one).
 	val trouble: StationTrouble? = null,
-	/// How many people the scope has (one on a station's own page), for how rows are pictured; absent until known.
+	/// How many people the scope has, for how rows are pictured; absent until known.
 	val members: Long? = null,
 	/// Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone).
 	val leading: Lead? = null,
@@ -1747,7 +1748,7 @@ data class PrefsView (
 	val keys: Map<String, List<String>>? = null,
 	/// The workspace last open (the Android app's).
 	val workspace: String? = null,
-	/// The chat page last open, by scope (a workspace, or `local`).
+	/// The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went).
 	val lastChat: Map<String, String>? = null,
 	/// Each chat's history tabs, by `<station>:<chat>` (the latest 200).
 	val chatTabs: Map<String, KeptTabs>? = null,

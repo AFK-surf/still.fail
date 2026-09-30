@@ -20,8 +20,11 @@ use std::rc::Rc;
 use futures::future::LocalBoxFuture;
 use futures::{FutureExt, StreamExt};
 
+use crate::error::CoreError;
 use crate::host::{Host, HostError, HttpRequest, HttpResponse, StreamResponse};
+use crate::mesh::RequestHead;
 use crate::protocol::{ClientId, CoreMessage};
+use crate::station::{StationAddr, StationWire, WireReply};
 
 type Responder = Box<dyn Fn(&HttpRequest) -> Result<HttpResponse, HostError>>;
 type StreamResponder = Box<dyn Fn(&HttpRequest) -> Result<StreamResponse, HostError>>;
@@ -275,4 +278,43 @@ impl Host for FakeHost {
 /// A streamed body from fixed chunks, for `on_fetch_stream`.
 pub fn chunks(parts: Vec<Vec<u8>>) -> futures::stream::LocalBoxStream<'static, Result<Vec<u8>, HostError>> {
     futures::stream::iter(parts.into_iter().map(Ok)).boxed_local()
+}
+
+/// Stations for tests, in place of the mesh: every one answers over the host's fetch, at `<cloud origin><path>`. An
+/// event stream (`accept: text/event-stream`) and a preview's answer come as they are sent, the rest whole.
+pub struct HostWire {
+    host: Rc<dyn Host>,
+}
+
+impl HostWire {
+    pub fn new(host: Rc<dyn Host>) -> Rc<HostWire> {
+        Rc::new(HostWire { host })
+    }
+}
+
+impl StationWire for HostWire {
+    fn request(&self, _station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply, CoreError>> {
+        let stream = head.path.starts_with("/admin/api/preview/") || head.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("accept") && v.contains("text/event-stream"));
+        let request = HttpRequest {
+            url: format!("{}{}", self.host.cloud_origin(), head.path),
+            body: if body.is_empty() && head.method.eq_ignore_ascii_case("GET") { None } else { Some(body) },
+            method: head.method,
+            headers: head.headers,
+        };
+        if stream {
+            let answer = self.host.fetch_stream(request);
+            async move {
+                let r = answer.await?;
+                Ok(WireReply { status: r.status, headers: r.headers, body: r.body.map(|c| c.map_err(CoreError::from)).boxed_local(), via: None })
+            }
+            .boxed_local()
+        } else {
+            let answer = self.host.fetch(request);
+            async move {
+                let r = answer.await?;
+                Ok(WireReply { status: r.status, headers: r.headers, body: futures::stream::iter([Ok(r.body)]).boxed_local(), via: None })
+            }
+            .boxed_local()
+        }
+    }
 }

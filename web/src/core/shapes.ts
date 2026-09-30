@@ -154,7 +154,10 @@ export interface PersonShown {
 	mine: boolean;
 }
 
-/** Who started a session or chat, or added a connect: "local", an email, or "slack:<connect>:<user>". */
+/**
+ * Who started a session or chat, or added a connect: an email, or "slack:<connect>:<user>"; "local" in records from
+ * a station's own page, before it went.
+ */
 export interface Creator {
 	id: string;
 	name: string;
@@ -837,7 +840,7 @@ export interface ChatSearchView {
 	items: ChatItem[];
 }
 
-/** Who is looking: an account's email, or "local". */
+/** Who is looking: the account that reaches the workspace, by its email. */
 export interface Me {
 	id?: string;
 	email?: string;
@@ -975,7 +978,7 @@ export interface ChatsView {
 	 * corner of the list; absent while all are (a station first connecting is not one).
 	 */
 	trouble?: StationTrouble;
-	/** How many people the scope has (one on a station's own page), for how rows are pictured; absent until known. */
+	/** How many people the scope has, for how rows are pictured; absent until known. */
 	members?: number;
 	/** Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone). */
 	leading?: Lead;
@@ -1694,7 +1697,7 @@ export interface PrefsView {
 	keys?: Record<string, string[]>;
 	/** The workspace last open (the Android app's). */
 	workspace?: string;
-	/** The chat page last open, by scope (a workspace, or `local`). */
+	/** The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went). */
 	lastChat?: Record<string, string>;
 	/** Each chat's history tabs, by `<station>:<chat>` (the latest 200). */
 	chatTabs?: Record<string, KeptTabs>;

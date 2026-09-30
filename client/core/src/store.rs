@@ -680,7 +680,7 @@ mod tests {
     fn update_changes_in_place_and_skips_topics_without_a_value() {
         run(async {
             let (host, store, _) = setup();
-            let session = Topic::Session { station: "local".into(), key: "k".into() };
+            let session = Topic::Session { station: "ws/st".into(), key: "k".into() };
             store.subscribe(1, 1, session.clone());
             store.update(&session, &mut |_| panic!("no value yet"));
             store.set(&session, Err(CoreError::new("x", "出错了")));
@@ -728,7 +728,7 @@ mod tests {
     fn sends_what_changed_after_the_first_value() {
         run(async {
             let (host, store, _) = setup();
-            let session = Topic::Session { station: "local".into(), key: "k".into() };
+            let session = Topic::Session { station: "ws/st".into(), key: "k".into() };
             store.subscribe(1, 1, session.clone());
             store.set(&session, Ok(long(50)));
             pass(COALESCE_MS * 2).await;
@@ -836,8 +836,8 @@ mod tests {
     fn topics_changed_together_go_out_together_in_order() {
         run(async {
             let (host, store, _) = setup();
-            let session = Topic::Session { station: "local".into(), key: "k".into() };
-            let live = Topic::Live { station: "local".into(), key: "k".into() };
+            let session = Topic::Session { station: "ws/st".into(), key: "k".into() };
+            let live = Topic::Live { station: "ws/st".into(), key: "k".into() };
             store.subscribe(1, 1, overview());
             store.subscribe(1, 2, session.clone());
             store.subscribe(1, 3, live.clone());
@@ -863,7 +863,7 @@ mod tests {
     fn a_first_value_goes_out_without_waiting_the_window() {
         run(async {
             let (host, store, _) = setup();
-            let session = Topic::Session { station: "local".into(), key: "k".into() };
+            let session = Topic::Session { station: "ws/st".into(), key: "k".into() };
             store.subscribe(1, 1, overview());
             store.set(&overview(), Ok(json!("o0")));
             pass(COALESCE_MS * 2).await;

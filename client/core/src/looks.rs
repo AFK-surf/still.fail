@@ -19,9 +19,8 @@ pub fn glyph(stations: &[Value], days: &[Value]) -> Value {
     let failing = stations.iter().filter(|s| state(s) == "error").count();
     let working = online.iter().filter(|s| s.get("station").and_then(Value::as_str).is_some_and(|a| running.contains(&a))).count();
     let n = online.len() + dim + failing;
-    // The one station of a station's own page goes unnamed: it is this machine.
     let summary = if n == 1 {
-        let one = stations[0].get("name").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or("这台机器");
+        let one = stations[0].get("name").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or("1 台 station");
         if working > 0 { format!("{one} · 在干活") } else { one.to_string() }
     } else if working > 0 {
         format!("{n} 台 station · {working} 台在干活")
@@ -42,15 +41,14 @@ pub fn glyph(stations: &[Value], days: &[Value]) -> Value {
 }
 
 /// What a list says with no rows to show, in their place: that it is still reading (a station loading or its link
-/// coming back), the stations it cannot reach (each tried again), or that there is nothing. A station's own page
-/// (`local`) is only ever reading or empty: its one station's state is the page's.
-pub fn list_note(local: bool, stations: &[Value], days: &[Value], loading: bool) -> Value {
+/// coming back), the stations it cannot reach (each tried again), or that there is nothing.
+pub fn list_note(stations: &[Value], days: &[Value], loading: bool) -> Value {
     let is = |s: &Value, w: &str| s.get("state").and_then(Value::as_str) == Some(w);
     if !days.is_empty() {
         return json!({ "reading": false, "failing": [], "empty": false });
     }
-    let connecting = !local && stations.iter().any(|s| is(s, "connecting"));
-    let failing: Vec<Value> = if local || loading { Vec::new() } else {
+    let connecting = stations.iter().any(|s| is(s, "connecting"));
+    let failing: Vec<Value> = if loading { Vec::new() } else {
         stations.iter().filter(|s| is(s, "error")).map(|s| {
             let name = s.get("name").and_then(Value::as_str).unwrap_or("");
             json!({ "station": s["station"], "text": format!("连不上「{name}」，正在重试…"), "message": s["message"] })
@@ -125,26 +123,22 @@ mod tests {
         assert_eq!((g["online"].as_u64(), g["dim"].as_u64(), g["failing"].as_u64(), g["working"].as_u64()), (Some(2), Some(1), Some(1), Some(1)));
         assert_eq!(g["summary"], "4 台 station · 1 台在干活");
         assert_eq!(g["label"], "4 台 station，2 台在线，1 台在干活，1 台离线，1 台出错");
-        // One station goes by its name; a station's own page's (no name) is this machine.
+        // One station goes by its name.
         assert_eq!(glyph(&[station("w/a", "Studio", "online")], &days)["summary"], "Studio · 在干活");
-        assert_eq!(glyph(&[station("local", "", "online")], &[])["summary"], "这台机器");
         assert_eq!(glyph(&[], &[])["label"], "0 台 station，0 台在线");
     }
 
     #[test]
     fn a_list_with_no_rows_says_it_reads_fails_or_has_none() {
         let days = [json!({ "items": [{}] })];
-        assert_eq!(list_note(false, &[station("w/a", "A", "error")], &days, false), json!({ "reading": false, "failing": [], "empty": false }));
-        assert_eq!(list_note(false, &[station("w/a", "A", "online")], &[], true)["reading"], true);
-        assert_eq!(list_note(false, &[station("w/a", "A", "connecting")], &[], false)["reading"], true);
-        let failing = list_note(false, &[station("w/a", "A", "error"), station("w/b", "B", "online")], &[], false);
+        assert_eq!(list_note(&[station("w/a", "A", "error")], &days, false), json!({ "reading": false, "failing": [], "empty": false }));
+        assert_eq!(list_note(&[station("w/a", "A", "online")], &[], true)["reading"], true);
+        assert_eq!(list_note(&[station("w/a", "A", "connecting")], &[], false)["reading"], true);
+        let failing = list_note(&[station("w/a", "A", "error"), station("w/b", "B", "online")], &[], false);
         assert_eq!(failing["failing"][0]["text"], "连不上「A」，正在重试…");
         assert_eq!(failing["empty"], false);
-        assert_eq!(list_note(false, &[station("w/b", "B", "online")], &[], false)["empty"], true);
-        assert_eq!(list_note(false, &[], &[], false)["empty"], true);
-        // A station's own page says only that it reads, or that there is nothing.
-        let local = list_note(true, &[station("local", "", "error")], &[], false);
-        assert_eq!((local["reading"].as_bool(), local["failing"].as_array().map(Vec::len), local["empty"].as_bool()), (Some(false), Some(0), Some(true)));
+        assert_eq!(list_note(&[station("w/b", "B", "online")], &[], false)["empty"], true);
+        assert_eq!(list_note(&[], &[], false)["empty"], true);
     }
 
     #[test]

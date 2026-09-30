@@ -36,7 +36,7 @@ pub enum CoreMessage {
     Delta { id: RequestId, delta: Vec<Op> },
 }
 
-/// What a UI can subscribe to. `station` is `"<workspace>/<station>"` or `"local"`.
+/// What a UI can subscribe to. `station` is `"<workspace>/<station>"`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(tag = "topic", rename_all = "camelCase")]
 pub enum Topic {
@@ -70,7 +70,7 @@ pub enum Topic {
     LoginSessions { account: String },
     /// still.fail cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
     Admin { account: String, list: String },
-    // Views: put together from the topics above (see views.rs). `scope` is a workspace id or "local".
+    // Views: put together from the topics above (see views.rs). `scope` is a workspace id.
     Chats { scope: String, #[serde(default)] mine: bool },
     Stations { scope: String },
     Connects { scope: String, #[serde(default)] mine: bool },
@@ -80,7 +80,7 @@ pub enum Topic {
     /// An agent's execution history, as people read it (history.rs): its transcript in items, what streams now.
     History { station: String, key: String },
     /// What the core is waiting on, when it is worth saying (status.rs): something slow, a connection down. Of a
-    /// `workspace` (an id, or `local`): its stations' waits, its account's still.fail cloud socket and the relay; with
+    /// `workspace`: its stations' waits, its account's still.fail cloud socket and the relay; with
     /// none, all of it.
     Status {
         #[serde(default, skip_serializing_if = "Option::is_none")]

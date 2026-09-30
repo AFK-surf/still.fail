@@ -439,7 +439,7 @@ impl Views {
         self.chat_view(view)
     }
 
-    /// A station's name as its workspace has it (none on a station's own page), else its id.
+    /// A station's name as its workspace has it, else its id.
     pub(crate) fn station_name(&self, station: &str) -> String {
         let Some((scope, id)) = station.split_once('/') else { return String::new() };
         match self.stations(scope) {
@@ -613,9 +613,7 @@ impl Views {
         if let Topic::Chats { .. } = view {
             topics.insert(Topic::Prefs);
         }
-        if scope != "local" {
-            topics.insert(Topic::Workspace { workspace: scope.to_string() });
-        }
+        topics.insert(Topic::Workspace { workspace: scope.to_string() });
         if let Some(Ok(stations)) = self.stations(scope) {
             for s in stations {
                 // Whether it is up is watched for every one (a station found down comes back); what else it has, for
@@ -631,11 +629,6 @@ impl Views {
 
     /// The scope's stations; `None` until the workspace has been read.
     fn stations(&self, scope: &str) -> Option<Result<Vec<StationInfo>>> {
-        if scope == "local" {
-            // A station's own page: the web shows no name for it.
-            let local = StationInfo { address: "local".into(), id: "local".into(), name: String::new(), online: true, last_seen: Value::Null, version: Value::Null };
-            return Some(Ok(vec![local]));
-        }
         let workspace = match self.store.value(&Topic::Workspace { workspace: scope.to_string() })? {
             Ok(workspace) => workspace,
             Err(error) => return Some(Err(error)),
@@ -658,11 +651,8 @@ impl Views {
         Some(Ok(stations.collect()))
     }
 
-    /// Who is looking: the account that reaches the workspace, or "local" on a station's own page.
+    /// Who is looking: the account that reaches the workspace.
     fn me(&self, scope: &str) -> Value {
-        if scope == "local" {
-            return json!({ "id": "local", "email": null });
-        }
         let email = (self.email_of)(scope);
         json!({ "id": email, "email": email })
     }
@@ -712,9 +702,7 @@ impl Views {
         };
         let me = self.me(scope);
         // The workspace's people, by email: a row's last speaker is named and pictured as they are here.
-        let members: Vec<Value> = if scope == "local" { Vec::new() } else {
-            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default()
-        };
+        let members: Vec<Value> = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
         let mut states = Vec::new();
         let mut troubles: Vec<(&str, String)> = Vec::new();
         let mut rows = Vec::new();
@@ -832,11 +820,9 @@ impl Views {
         };
         // The glyph, and what the list says with no rows (looks.rs).
         let glyph = crate::looks::glyph(&states, &days);
-        let note = crate::looks::list_note(scope == "local", &states, &days, loading);
-        // How many people the scope has: one on a station's own page; a workspace's members, once known.
-        let members = if scope == "local" { Some(1) } else {
-            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).map(Vec::len))
-        };
+        let note = crate::looks::list_note(&states, &days, loading);
+        // How many people the scope has: its members, once known.
+        let members = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).map(Vec::len));
         // Whose pictures lead, by the device's setting (prefs.rs).
         let leading = crate::prefs::leading(self.ok(Topic::Prefs).as_ref(), members);
         Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members, "leading": leading, "glyph": glyph, "note": note })))
@@ -927,9 +913,7 @@ impl Views {
             Err(error) => return Some(Err(error)),
         };
         let me = self.me(scope);
-        let members: Vec<Value> = if scope == "local" { Vec::new() } else {
-            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default()
-        };
+        let members: Vec<Value> = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
         let mut items = Vec::new();
         let mut loading = false;
         for s in stations.iter().filter(|s| s.online) {
@@ -941,7 +925,7 @@ impl Views {
                     let threads: Vec<Value> = self.ok(Topic::Threads { station: s.address.clone() }).and_then(|v| v.as_array().cloned()).unwrap_or_default();
                     let connects = overview.get("connects").and_then(Value::as_array).cloned().unwrap_or_default();
                     for connect in &connects {
-                        // Who added it is an email, or "local" (as the web's Connects page read it).
+                        // Who added it is an email, or "local" (one added on a station's own page, before it went).
                         let creator = connect.get("createdBy").and_then(|c| c.get("id")).map(|id| json!({ "id": id, "email": id }));
                         if mine && !is_mine(&me, creator.as_ref()) {
                             continue;
@@ -961,7 +945,7 @@ impl Views {
         Some(Ok(json!({ "me": me, "items": items, "loading": loading })))
     }
 
-    /// Whether a station is offline, as its workspace says (a station's own page is always online): its chats are read
+    /// Whether a station is offline, as its workspace says: its chats are read
     /// from what was kept, and nothing can be sent to them.
     fn offline(&self, station: &str) -> bool {
         let Some((scope, _)) = station.split_once('/') else { return false };
@@ -994,9 +978,7 @@ impl Views {
             .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
             .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
         let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
-        let members: Vec<Value> = if scope == "local" { Vec::new() } else {
-            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default()
-        };
+        let members: Vec<Value> = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
         // Mentions of its agents' bots read as their connects' names.
         let bots: Vec<(String, String)> = agents.iter().filter_map(|a| crate::present::bot_of(a.get("connect")?)).collect();
         // The messages its agents have not taken yet are the last people wrote: they wait.
@@ -1030,6 +1012,7 @@ impl Views {
                 _ => {
                     let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
                     let name = crate::present::member_name(&members, &author).map(str::to_string).or(said_name)
+                        // "local": written on a station's own page, in chats from before it went.
                         .unwrap_or_else(|| if author == "local" { "本机".into() } else { author.clone() });
                     json!({ "name": name, "picture": member.and_then(|x| x.get("picture")).filter(|p| p.as_str().is_some_and(|p| !p.is_empty())) })
                 }
@@ -1761,6 +1744,11 @@ mod tests {
         ]})
     }
 
+    /// A workspace with one station, `st`.
+    fn one_station() -> Value {
+        json!({"id": "ws", "stations": [{"id": "st", "name": "studio", "last_seen": null, "version": null}]})
+    }
+
     fn session(key: &str) -> Value {
         json!({"key": key, "connect": "c1", "profile": "p1", "runtime": "claude", "model": "opus", "effort": null, "process": "cold", "pending": 0, "lastTurn": null})
     }
@@ -2039,8 +2027,10 @@ mod tests {
             let midnight = ((now + offset) / DAY_MS).floor() * DAY_MS - offset;
             let today = midnight + (now - midnight) / 2.0;
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
-            t.set(rows("local"), json!([
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.set(workspace(), one_station());
+            t.host.settle().await;
+            t.set(rows("ws/st"), json!([
                 row("1", midnight - 1000.0),
                 row("2", midnight - 2.0 * DAY_MS - 1000.0),
                 row("3", today),
@@ -2058,8 +2048,8 @@ mod tests {
             let day = |ago: i64, ids: &[&str]| (ago, ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
             assert_eq!(days, vec![day(0, &["3"]), day(1, &["1", "4"]), day(3, &["2"]), day(4, &["a"])]);
             assert_eq!(v["days"][1]["at"], json!(midnight - 1000.0));
-            assert_eq!(v["me"], json!({"id": "local"}));
-            assert_eq!(v["stations"], json!([{"station": "local", "id": "local", "name": "", "state": "online"}]));
+            assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
+            assert_eq!(v["stations"], json!([{"station": "ws/st", "id": "st", "name": "studio", "state": "online"}]));
         });
     }
 
@@ -2069,13 +2059,15 @@ mod tests {
             let t = setup();
             let now = t.host.now_ms();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.set(workspace(), one_station());
+            t.host.settle().await;
             let pinned = |id: &str, at: f64, pinned: Value| {
                 let mut r = row(id, at);
                 r["pinned"] = pinned;
                 r
             };
-            t.set(rows("local"), json!([
+            t.set(rows("ws/st"), json!([
                 pinned("1", now, Value::Null),
                 pinned("2", now - 3.0 * DAY_MS, json!(5)),
                 pinned("3", now - 1000.0, json!(9)),
@@ -2096,10 +2088,12 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
-            t.set(rows("local"), json!([]));
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.set(workspace(), one_station());
+            t.host.settle().await;
+            t.set(rows("ws/st"), json!([]));
             t.read(&mut ui, 1).await;
-            // A station's own page is one person's: its agents lead.
+            // How many people the workspace has not known yet: as if alone, its agents lead.
             assert_eq!(ui.value.as_ref().unwrap()["leading"], "agents");
             t.set(Topic::Prefs, json!({ "rowPicture": "people" }));
             t.read(&mut ui, 1).await;
@@ -2142,7 +2136,9 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.set(workspace(), one_station());
+            t.host.settle().await;
             let now = t.host.now_ms();
             // The station says what a row is called and whether it is unread; the view shows it as it is.
             let mut named = row("1", now - 1.0);
@@ -2151,7 +2147,7 @@ mod tests {
             named["last"] = json!({"seq": 7, "authorKind": "agent", "author": "a", "authorName": null, "text": "好的", "createdAt": now as i64 - 1});
             let mut said = row("2", now - 2.0);
             said["title"] = json!("看看 这个");
-            t.set(rows("local"), json!([named, said]));
+            t.set(rows("ws/st"), json!([named, said]));
             t.read(&mut ui, 1).await;
             let rows_of = |ui: &Ui| -> Vec<(String, String, bool)> {
                 ui.value.as_ref().unwrap()["days"][0]["items"].as_array().unwrap().iter()
@@ -2160,7 +2156,7 @@ mod tests {
             };
             assert_eq!(rows_of(&ui), vec![("1".into(), "排查".into(), true), ("2".into(), "看看 这个".into(), false)]);
             // Read: the mark follows the station's rows.
-            t.store.update(&rows("local"), &mut |list| list[0]["unread"] = json!(false));
+            t.store.update(&rows("ws/st"), &mut |list| list[0]["unread"] = json!(false));
             t.read(&mut ui, 1).await;
             assert_eq!(rows_of(&ui)[0].2, false);
         });
@@ -2318,14 +2314,16 @@ mod tests {
             t.host.set_utc_offset_min(480);
             t.store.set_clock();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.set(workspace(), one_station());
+            t.host.settle().await;
             t.read(&mut ui, 1).await;
             // One clock, set for a second past the next minute (and again each minute), shared by everything shown.
             let clock = |ms: &u64| *ms > 1000 && *ms <= 61_000 && *ms != EVICT_AFTER_MS;
             let count = || t.host.sleeps.borrow().iter().filter(|ms| clock(ms)).count();
             let before = count();
             assert!(before >= 1, "{:?}", t.host.sleeps.borrow());
-            t.subscribe(2, Topic::Chats { scope: "local".into(), mine: true });
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
             assert_eq!(count(), before, "a second view shares it");
         });
     }
@@ -2535,23 +2533,25 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, chat_topic("local", 3));
+            t.subscribe(1, chat_topic("ws/st", 3));
+            t.set(workspace(), one_station());
+            t.host.settle().await;
             let mut slack = thread(3, &["k"], t.host.now_ms());
             slack["surface"] = json!("slack:T1");
             slack["channel"] = json!("C1");
             slack["channelName"] = json!("ops");
             slack["firstText"] = json!("<@U0BOT> 部署挂了");
             slack["sessions"] = json!([member(3, "k", "c1")]);
-            t.set(threads("local"), json!([slack]));
-            t.set(page_of("local", 3), page(1, &["<@U0BOT> 部署挂了", "在看"], Value::Null));
+            t.set(threads("ws/st"), json!([slack]));
+            t.set(page_of("ws/st", 3), page(1, &["<@U0BOT> 部署挂了", "在看"], Value::Null));
             t.read(&mut ui, 1).await;
-            t.set(session_of("local", "k"), json!({"session": full_session("k", json!({})), "threads": [], "turns": []}));
+            t.set(session_of("ws/st", "k"), json!({"session": full_session("k", json!({})), "threads": [], "turns": []}));
             t.read(&mut ui, 1).await;
             let v = ui.value.unwrap();
             assert_eq!(v["title"], "部署挂了");
             assert_eq!(v["thread"]["surface"], "slack:T1");
             assert_eq!(v["messages"].as_array().unwrap().len(), 2);
-            assert_eq!(v["me"], json!({"id": "local"}));
+            assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
         });
     }
 
@@ -2639,11 +2639,13 @@ mod tests {
         run(async {
             let t = setup();
             let views = t.router.views();
-            let key = views.pending_new("local", json!({"runtime": "claude"}));
+            let key = views.pending_new("ws/st", json!({"runtime": "claude"}));
             let (mut screen, mut list) = (Ui::default(), Ui::default());
-            t.subscribe(1, agent_page("local", &key));
-            t.subscribe(2, Topic::Chats { scope: "local".into(), mine: true });
-            t.set(rows("local"), json!([row("7", t.host.now_ms() - 1000.0)]));
+            t.subscribe(1, agent_page("ws/st", &key));
+            t.set(workspace(), one_station());
+            t.host.settle().await;
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
+            t.set(rows("ws/st"), json!([row("7", t.host.now_ms() - 1000.0)]));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let v = screen.value.clone().unwrap();
             assert_eq!((v["pending"].clone(), v["key"].clone(), v["outbox"].clone(), v["title"].clone()), (json!(true), Value::Null, json!([]), json!("新对话")));
@@ -2662,7 +2664,7 @@ mod tests {
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let out = screen.value.clone().unwrap()["outbox"].clone();
             assert_eq!((out[0]["state"].as_str(), out[0]["error"].as_str()), (Some("failed"), Some("no claude profile configured")));
-            assert_eq!(views.pending_try(&key).map(|(station, _)| station), Some("local".to_string()));
+            assert_eq!(views.pending_try(&key).map(|(station, _)| station), Some("ws/st".to_string()));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             assert_eq!(screen.value.clone().unwrap()["outbox"][0]["state"], "sending");
 
@@ -2670,14 +2672,14 @@ mod tests {
             // with the key the station gave it.
             let sends = views.pending_made(&key, "ember:c-1", 9);
             assert_eq!(sends.iter().map(|(id, m)| (id.clone(), m["text"].clone())).collect::<Vec<_>>(), vec![(first.clone(), json!("修一下登录\n细节…"))]);
-            assert_eq!(views.pending_thread("local", &key), Some(Some(9)));
+            assert_eq!(views.pending_thread("ws/st", &key), Some(Some(9)));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let v = screen.value.clone().unwrap();
             assert_eq!((v["pending"].clone(), v["key"].clone(), v["outbox"][0]["id"].as_str()), (json!(false), json!("ember:c-1"), Some(first.as_str())));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             assert_eq!(list.value.clone().unwrap()["days"][0]["items"][0]["id"], "ember:c-1");
-            t.set(threads("local"), json!([thread(9, &["ember:c-1"], t.host.now_ms())]));
-            t.set(page_of("local", 9), page(1, &["修一下登录\n细节…"], Value::Null));
+            t.set(threads("ws/st"), json!([thread(9, &["ember:c-1"], t.host.now_ms())]));
+            t.set(page_of("ws/st", 9), page(1, &["修一下登录\n细节…"], Value::Null));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let v = screen.value.clone().unwrap();
             assert_eq!((v["key"].as_str(), v["thread"]["id"].as_u64(), v["messages"].as_array().map(Vec::len)), (Some("ember:c-1"), Some(9), Some(1)));
@@ -2685,12 +2687,12 @@ mod tests {
             let mut made = row("ember:c-1", t.host.now_ms());
             made["thread"] = json!(9);
             made["mine"] = json!(true);
-            t.set(rows("local"), json!([made]));
+            t.set(rows("ws/st"), json!([made]));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let items = list.value.clone().unwrap()["days"][0]["items"].clone();
             assert_eq!((items.as_array().map(Vec::len), items[0]["pending"].clone()), (Some(1), Value::Null));
             // Archived elsewhere, it leaves the station's rows: it is not listed again from what was asked here.
-            t.set(rows("local"), json!([]));
+            t.set(rows("ws/st"), json!([]));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             assert_eq!(list.value.clone().unwrap()["days"].as_array().map(Vec::len), Some(0));
         });
@@ -2702,13 +2704,15 @@ mod tests {
             let t = setup();
             let views = t.router.views();
             let mut list = Ui::default();
-            t.subscribe(2, Topic::Chats { scope: "local".into(), mine: true });
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
+            t.set(workspace(), one_station());
+            t.host.settle().await;
             let mut old = row("ember:c-0", t.host.now_ms() - 5000.0);
             old["mine"] = json!(true);
             old["thread"] = json!(3);
-            t.set(rows("local"), json!([old.clone()]));
+            t.set(rows("ws/st"), json!([old.clone()]));
             t.read(&mut list, 2).await;
-            let key = views.pending_new("local", json!({"runtime": "claude"}));
+            let key = views.pending_new("ws/st", json!({"runtime": "claude"}));
             views.pending_queue(&key, json!({"text": "修一下登录", "attachments": [], "quotes": []})).unwrap();
             views.pending_try(&key);
             let ids = |list: &Ui| -> Vec<(String, String)> {
@@ -2723,7 +2727,7 @@ mod tests {
             theirs["mine"] = json!(true);
             theirs["thread"] = json!(8);
             theirs["title"] = json!("（还没有消息）");
-            t.set(rows("local"), json!([old.clone(), theirs.clone()]));
+            t.set(rows("ws/st"), json!([old.clone(), theirs.clone()]));
             t.read(&mut list, 2).await;
             let mut got = ids(&list);
             got.sort();
@@ -2736,7 +2740,7 @@ mod tests {
             made["thread"] = json!(9);
             made["title"] = json!("（还没有消息）");
             made["clientKey"] = json!(key);
-            t.set(rows("local"), json!([old.clone(), theirs.clone(), made.clone()]));
+            t.set(rows("ws/st"), json!([old.clone(), theirs.clone(), made.clone()]));
             t.read(&mut list, 2).await;
             let mut got = ids(&list);
             got.sort();
@@ -2748,9 +2752,9 @@ mod tests {
             got.sort();
             assert_eq!(got, vec![("ember:c-0".into(), "ember:c-0 的标题".into()), ("ember:c-1".into(), "修一下登录".into()), ("ember:c-2".into(), "（还没有消息）".into())]);
             // Its message in, the row is the station's as it is.
-            made["last"] = json!({"seq": 1, "text": "修一下登录", "authorKind": "person", "author": "local", "createdAt": t.host.now_ms() as i64});
+            made["last"] = json!({"seq": 1, "text": "修一下登录", "authorKind": "person", "author": "Me@x.com", "createdAt": t.host.now_ms() as i64});
             made["title"] = json!("修一下登录（站上的）");
-            t.set(rows("local"), json!([old, theirs, made]));
+            t.set(rows("ws/st"), json!([old, theirs, made]));
             t.read(&mut list, 2).await;
             assert!(ids(&list).contains(&("ember:c-1".into(), "修一下登录（站上的）".into())));
         });
@@ -2761,19 +2765,21 @@ mod tests {
         run(async {
             let t = setup();
             let views = t.router.views();
-            let key = views.pending_new("local", json!({"runtime": "claude"}));
+            let key = views.pending_new("ws/st", json!({"runtime": "claude"}));
             let first = views.pending_queue(&key, json!({"text": "修一下登录", "attachments": [], "quotes": []})).unwrap();
             // Made and delivered before its page looks: the message stays, as sent.
             views.pending_made(&key, "ember:c-1", 9);
-            views.outbox_sent("local", 9, &first, 1);
+            views.outbox_sent("ws/st", 9, &first, 1);
             let mut screen = Ui::default();
-            t.subscribe(1, agent_page("local", &key));
+            t.subscribe(1, agent_page("ws/st", &key));
+            t.set(workspace(), one_station());
+            t.host.settle().await;
             t.read(&mut screen, 1).await;
             let v = screen.value.clone().unwrap();
             assert_eq!((v["messages"].as_array().map(Vec::len), v["outbox"][0]["id"].as_str()), (Some(0), Some(first.as_str())));
             // Its entry in: it is a message of the chat, and the outbox lets it go.
-            t.set(threads("local"), json!([thread(9, &["ember:c-1"], t.host.now_ms())]));
-            t.set(page_of("local", 9), page(1, &["修一下登录"], Value::Null));
+            t.set(threads("ws/st"), json!([thread(9, &["ember:c-1"], t.host.now_ms())]));
+            t.set(page_of("ws/st", 9), page(1, &["修一下登录"], Value::Null));
             t.read(&mut screen, 1).await;
             let v = screen.value.clone().unwrap();
             assert_eq!((v["messages"].as_array().map(Vec::len), v["outbox"].as_array().map(Vec::len)), (Some(1), Some(0)));

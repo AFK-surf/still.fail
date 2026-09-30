@@ -66,13 +66,13 @@ fn of(of: &str) -> Result<Of<'_>> {
     })
 }
 
-/// A station's id in its address (`"<workspace>/<station>"`), or `local`.
+/// A station's id in its address (`"<workspace>/<station>"`).
 fn station_id(address: &str) -> &str {
     address.rsplit('/').next().unwrap_or(address)
 }
 
 fn address(scope: &str, id: &str) -> String {
-    if scope == "local" { "local".into() } else { format!("{scope}/{id}") }
+    format!("{scope}/{id}")
 }
 
 fn text(v: Option<&Value>) -> Option<String> {
@@ -393,7 +393,7 @@ impl Choose {
         if let Some(profile) = &r.profile {
             ask["profile"] = json!(profile);
         }
-        let scope = station.split_once('/').map_or("local", |(scope, _)| scope);
+        let scope = crate::workspace::of_address(station);
         self.keep_station(scope, station_id(station));
         self.changed();
         Ok(ask)
@@ -617,7 +617,7 @@ impl Choose {
         let text_of = |field: &str| json!(next[field].as_str().unwrap_or(""));
         let saved = match o_parsed {
             Of::New => {
-                let scope = station.split_once('/').map_or("local", |(scope, _)| scope);
+                let scope = crate::workspace::of_address(station);
                 self.pick_new(scope, &json!({ "station": station_id(station), "model": next["model"], "runtime": next["runtime"], "effort": text_of("effort"), "profile": text_of("profile") }))?;
                 Saved::Done(json!({ "saved": true }))
             }

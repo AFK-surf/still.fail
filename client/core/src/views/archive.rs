@@ -52,7 +52,7 @@ impl Views {
         };
         let online: Vec<_> = stations.iter().filter(|s| s.online).collect();
         // Which station a chat is on is said only where there is more than one to tell apart.
-        let named = scope != "local" && online.len() > 1;
+        let named = online.len() > 1;
         let (mut items, mut errors, mut loading) = (Vec::new(), Vec::new(), false);
         for s in online.iter() {
             let place = named.then(|| s.name.clone());

@@ -492,15 +492,15 @@ mod tests {
         run(async {
             let host = FakeHost::new();
             let kept = Kept::new(host.clone());
-            let log = Log::transcript("local", "ember:c-1");
+            let log = Log::transcript("ws/st", "ember:c-1");
             let lines = |from: u64, to: u64| (from..=to).map(|i| json!(format!("e{i}"))).collect::<Vec<_>>();
             kept.write(&log, 0, lines(0, 299), true, None).await;
-            assert_eq!(serde_json::from_slice::<Vec<Value>>(&host.stored("transcript/local/ember:c-1/0").unwrap()).unwrap().len(), 256);
+            assert_eq!(serde_json::from_slice::<Vec<Value>>(&host.stored("transcript/ws/st/ember:c-1/0").unwrap()).unwrap().len(), 256);
             // Written anew from 100: what came after is gone.
             kept.write(&log, 100, lines(100, 101), true, None).await;
             let (held, all) = kept.open(&log, u64::MAX).await.unwrap();
             assert_eq!((held.first, held.last, all.len(), all[101].clone()), (0, 101, 102, json!("e101")));
-            assert_eq!(host.stored("transcript/local/ember:c-1/1"), None);
+            assert_eq!(host.stored("transcript/ws/st/ember:c-1/1"), None);
             kept.write(&log, 50, Vec::new(), true, None).await;
             assert_eq!(kept.open(&log, u64::MAX).await.unwrap().1.len(), 50);
             kept.write(&log, 0, Vec::new(), true, None).await;
@@ -537,7 +537,7 @@ mod tests {
             kept.write(&Log::thread("ws/st", 1), 1, entries(1, 2), false, None).await;
             kept.write(&Log::transcript("ws/st", "k"), 0, vec![json!("x")], true, None).await;
             kept.write(&Log::thread("other/st", 1), 1, entries(1, 2), false, None).await;
-            kept.write(&Log::thread("local", 1), 1, entries(1, 2), false, None).await;
+            kept.write(&Log::thread("third/st", 1), 1, entries(1, 2), false, None).await;
             kept.retain(|station| station != "ws/st").await;
             assert!(kept.open(&Log::thread("ws/st", 1), 50).await.is_none());
             assert!(kept.open(&Log::transcript("ws/st", "k"), 50).await.is_none());
@@ -545,7 +545,7 @@ mod tests {
             assert!(kept.open(&Log::thread("other/st", 1), 50).await.is_some());
             kept.forget(&Log::thread("other/st", 1)).await;
             assert!(kept.open(&Log::thread("other/st", 1), 50).await.is_none());
-            assert!(kept.open(&Log::thread("local", 1), 50).await.is_some());
+            assert!(kept.open(&Log::thread("third/st", 1), 50).await.is_some());
         });
     }
 

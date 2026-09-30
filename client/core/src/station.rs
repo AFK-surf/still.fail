@@ -1,4 +1,4 @@
-//! Stations' admin API, over a mesh link (or plain HTTP for `local`), and the
+//! Stations' admin API, over mesh links, and the
 //! station topics: overview, sessions, threads, chat rows, session, thread, live, host, link, job log.
 //!
 //! While any topic of a station is live, its `/admin/api/events` stream is held
@@ -37,7 +37,7 @@ use serde_json::{Value, json};
 
 use crate::entries::n_of;
 use crate::error::{CoreError, Result};
-use crate::host::{Host, HttpRequest};
+use crate::host::Host;
 use crate::kept::{Kept, Log};
 use crate::mesh::{CredentialSource, Link, LinkNet, Mesh, RequestHead};
 use crate::protocol::Topic;
@@ -95,21 +95,22 @@ fn may_repeat(head: &RequestHead, idempotent: bool) -> bool {
     head.method.eq_ignore_ascii_case("GET") || (idempotent && head.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENCY_KEY)))
 }
 
-/// `"<workspace>/<station>"` or `"local"`.
+/// `"<workspace>/<station>"`: every station is in a workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum StationAddr {
-    Local,
-    Remote { workspace: String, station: String },
+pub struct StationAddr {
+    pub workspace: String,
+    pub station: String,
 }
 
 impl StationAddr {
     pub fn parse(text: &str) -> Result<StationAddr> {
+        // What a station's own page (gone) was: still in UIs' kept links and prefs.
         if text == "local" {
-            return Ok(StationAddr::Local);
+            return Err(CoreError::new("gone", "本机页面已经不再提供"));
         }
         match text.split_once('/') {
             Some((workspace, station)) if !workspace.is_empty() && !station.is_empty() && !station.contains('/') => {
-                Ok(StationAddr::Remote { workspace: workspace.into(), station: station.into() })
+                Ok(StationAddr { workspace: workspace.into(), station: station.into() })
             }
             _ => Err(CoreError::invalid(format!("不认识的站点地址：{text}"))),
         }
@@ -118,10 +119,7 @@ impl StationAddr {
 
 impl std::fmt::Display for StationAddr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StationAddr::Local => f.write_str("local"),
-            StationAddr::Remote { workspace, station } => write!(f, "{workspace}/{station}"),
-        }
+        write!(f, "{}/{}", self.workspace, self.station)
     }
 }
 
@@ -132,7 +130,7 @@ pub struct WireReply {
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: LocalBoxStream<'static, Result<Vec<u8>>>,
-    /// How it came, when the wire knows: `relay` or `direct` over the mesh, `local` over the page's HTTP.
+    /// How it came, when the wire knows: `relay` or `direct`.
     pub via: Option<&'static str>,
 }
 
@@ -250,73 +248,6 @@ impl SocketFrame {
     }
 }
 
-/// Asks the page's HTTP wire for the body as it comes, not whole (a preview's answer, which may never end). It goes on
-/// to the station, whose HTTP passes on no `x-stillfail-` or `x-ember-` header to the service; stations from before
-/// the rename strip only `x-ember-` ones, so it is sent under the old name (docs/rename-still-fail.md).
-const STREAM_HEADER: &str = "x-ember-stream";
-/// The name it had between the rename and this: read too.
-const STREAM_HEADER_RENAMED: &str = "x-stillfail-stream";
-
-fn wants_stream(head: &RequestHead) -> bool {
-    head.headers.iter().any(|(k, v)| {
-        (k.eq_ignore_ascii_case("accept") && v.contains(EVENT_STREAM)) || k.eq_ignore_ascii_case(STREAM_HEADER) || k.eq_ignore_ascii_case(STREAM_HEADER_RENAMED)
-    })
-}
-
-/// The page's own station, over the host's HTTP (the origin is the station's).
-pub struct HttpWire {
-    host: Rc<dyn Host>,
-    /// The station said it keeps writes with a key to once ([`IDEMPOTENT`]).
-    idempotent: Rc<std::cell::Cell<bool>>,
-}
-
-impl HttpWire {
-    pub fn new(host: Rc<dyn Host>) -> Rc<HttpWire> {
-        Rc::new(HttpWire { host, idempotent: Rc::default() })
-    }
-}
-
-impl StationWire for HttpWire {
-    fn request(&self, _station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply>> {
-        let stream = wants_stream(&head);
-        let mut head = head;
-        // The host sends it again beside itself when a wake suspects its connection (wake.rs): a write only to a
-        // station that does it once.
-        if !head.method.eq_ignore_ascii_case("GET") && may_repeat(&head, self.idempotent.get()) {
-            head.headers.push((crate::wake::HEDGE.into(), "1".into()));
-        }
-        let idempotent = self.idempotent.clone();
-        let learn = move |headers: &[(String, String)]| {
-            if headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENT)) {
-                idempotent.set(true);
-            }
-        };
-        let request = HttpRequest {
-            url: format!("{}{}", self.host.cloud_origin(), head.path),
-            body: if body.is_empty() && head.method.eq_ignore_ascii_case("GET") { None } else { Some(body) },
-            method: head.method,
-            headers: head.headers,
-        };
-        if stream {
-            let answer = self.host.fetch_stream(request);
-            async move {
-                let r = answer.await?;
-                learn(&r.headers);
-                Ok(WireReply { status: r.status, headers: r.headers, body: r.body.map(|c| c.map_err(CoreError::from)).boxed_local(), via: Some("local") })
-            }
-            .boxed_local()
-        } else {
-            let answer = self.host.fetch(request);
-            async move {
-                let r = answer.await?;
-                learn(&r.headers);
-                Ok(WireReply { status: r.status, headers: r.headers, body: futures::stream::iter([Ok(r.body)]).boxed_local(), via: Some("local") })
-            }
-            .boxed_local()
-        }
-    }
-}
-
 /// This device's endpoint, bound when first needed.
 pub type MeshSource = Rc<dyn Fn() -> LocalBoxFuture<'static, Result<Rc<Mesh>>>>;
 /// Grants for one station, given (workspace, station): the caller decides which account asks.
@@ -349,9 +280,7 @@ async fn first_answer<T>(a: LocalBoxFuture<'static, Result<T>>, b: LocalBoxFutur
 
 impl StationWire for MeshWire {
     fn request(&self, station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply>> {
-        let StationAddr::Remote { workspace, station } = station.clone() else {
-            return async { Err(CoreError::invalid("本地站点不走 mesh")) }.boxed_local();
-        };
+        let StationAddr { workspace, station } = station.clone();
         let mesh = (self.mesh)();
         let credentials = (self.credentials)(&workspace);
         let (status, address) = ((self.status)(&workspace), Place::Station(format!("{workspace}/{station}")));
@@ -407,7 +336,7 @@ impl StationWire for MeshWire {
     }
 
     fn reset(&self, station: &StationAddr) {
-        let StationAddr::Remote { station, .. } = station else { return };
+        let station = &station.station;
         // Only a link already made: nothing to close before the endpoint is up.
         if let Some(Ok(mesh)) = (self.mesh)().now_or_never() {
             mesh.drop_link(station);
@@ -419,22 +348,18 @@ impl StationWire for MeshWire {
     }
 
     fn replaced(&self, station: &StationAddr) -> LocalBoxFuture<'static, ()> {
-        let StationAddr::Remote { station, .. } = station else { return futures::future::pending().boxed_local() };
-        let (Some(Ok(mesh)), station) = ((self.mesh)().now_or_never(), station.clone()) else { return futures::future::pending().boxed_local() };
+        let (Some(Ok(mesh)), station) = ((self.mesh)().now_or_never(), station.station.clone()) else { return futures::future::pending().boxed_local() };
         let Some(link) = mesh.current(&station) else { return futures::future::pending().boxed_local() };
         mesh.replaced(&station, &link)
     }
 
     fn net(&self, station: &StationAddr) -> Option<LinkNet> {
-        let StationAddr::Remote { station, .. } = station else { return None };
         let Some(Ok(mesh)) = (self.mesh)().now_or_never() else { return None };
-        mesh.current(station).map(|link| link.net())
+        mesh.current(&station.station).map(|link| link.net())
     }
 
     fn socket(&self, station: &StationAddr, head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
-        let StationAddr::Remote { workspace, station } = station.clone() else {
-            return async { Err(CoreError::invalid("本地站点不走 mesh")) }.boxed_local();
-        };
+        let StationAddr { workspace, station } = station.clone();
         let mesh = (self.mesh)();
         let credentials = (self.credentials)(&workspace);
         let (status, address) = ((self.status)(&workspace), Place::Station(format!("{workspace}/{station}")));
@@ -456,51 +381,9 @@ impl StationWire for MeshWire {
     }
 }
 
-/// `local` over one wire, every other station over another.
-pub struct RoutedWire {
-    local: Rc<dyn StationWire>,
-    remote: Rc<dyn StationWire>,
-}
-
-impl RoutedWire {
-    pub fn new(local: Rc<dyn StationWire>, remote: Rc<dyn StationWire>) -> Rc<RoutedWire> {
-        Rc::new(RoutedWire { local, remote })
-    }
-}
-
-impl StationWire for RoutedWire {
-    fn request(&self, station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply>> {
-        match station {
-            StationAddr::Local => self.local.request(station, head, body),
-            StationAddr::Remote { .. } => self.remote.request(station, head, body),
-        }
-    }
-
-    fn reset(&self, station: &StationAddr) {
-        match station {
-            StationAddr::Local => self.local.reset(station),
-            StationAddr::Remote { .. } => self.remote.reset(station),
-        }
-    }
-
-    fn net(&self, station: &StationAddr) -> Option<LinkNet> {
-        match station {
-            StationAddr::Local => self.local.net(station),
-            StationAddr::Remote { .. } => self.remote.net(station),
-        }
-    }
-
-    fn socket(&self, station: &StationAddr, head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
-        match station {
-            StationAddr::Local => self.local.socket(station, head),
-            StationAddr::Remote { .. } => self.remote.socket(station, head),
-        }
-    }
-}
-
-/// The real wire: HTTP for `local`, mesh links for the rest.
-pub fn wire(host: Rc<dyn Host>, mesh: MeshSource, credentials: StationCredentials, status: StatusOf) -> Rc<dyn StationWire> {
-    RoutedWire::new(HttpWire::new(host), MeshWire::new(mesh, credentials, status))
+/// The real wire: mesh links.
+pub fn wire(mesh: MeshSource, credentials: StationCredentials, status: StatusOf) -> Rc<dyn StationWire> {
+    MeshWire::new(mesh, credentials, status)
 }
 
 // ── where topic values go ───────────────────────────────────────────────────
@@ -866,9 +749,8 @@ impl Stations {
     /// A preview request whose answer is handed on as it comes (an event stream, a long poll, a page still loading):
     /// its status and headers once they are there, then its body. It is waited on (status.rs) only until then; its
     /// body is dropped to stop it, and the station then stops asking the service.
-    pub async fn preview_stream(&self, station: &StationAddr, port: u16, method: &str, path: &str, mut headers: Vec<(String, String)>, body: Vec<u8>) -> Result<(u16, Vec<(String, String)>, LocalBoxStream<'static, Result<Vec<u8>>>)> {
+    pub async fn preview_stream(&self, station: &StationAddr, port: u16, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>) -> Result<(u16, Vec<(String, String)>, LocalBoxStream<'static, Result<Vec<u8>>>)> {
         let path = format!("/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
-        headers.push((STREAM_HEADER.into(), "1".into()));
         let (mut span, waiting, reply) = self.send(station, method, &path, headers, body, false);
         span.set("stillfail.stream", true);
         let reply = match reply.await {
@@ -934,10 +816,7 @@ impl Stations {
         let mut span = self.tracer.span(format!("{method} {}", route(&path)), Kind::Client);
         span.set("http.request.method", method.to_string());
         span.set("url.path", route(&path));
-        span.set("stillfail.station", match station {
-            StationAddr::Local => "local".to_string(),
-            StationAddr::Remote { station, .. } => station.clone(),
-        });
+        span.set("stillfail.station", station.station.clone());
         if !body.is_empty() {
             span.set("http.request.body.size", body.len());
         }
@@ -2445,21 +2324,15 @@ impl Source for Stations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{FakeHost, chunks, json_response, run};
-    use crate::host::{HostError, StreamResponse};
+    use crate::testing::{FakeHost, run};
     use futures::channel::mpsc;
     use std::time::Duration;
 
-    #[test]
-    fn a_body_is_asked_for_as_it_comes_by_either_name_of_the_stream_header() {
-        let head = |headers: &[(&str, &str)]| RequestHead { method: "GET".into(), path: "/admin/api/preview/5180/".into(), headers: headers.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect() };
-        assert!(wants_stream(&head(&[("x-ember-stream", "1")])));
-        assert!(wants_stream(&head(&[("X-Stillfail-Stream", "1")])));
-        assert!(wants_stream(&head(&[("accept", "text/event-stream")])));
-        assert!(!wants_stream(&head(&[("accept", "text/html")])));
-    }
-
     // ── fakes ──
+
+    fn wants_stream(head: &RequestHead) -> bool {
+        head.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("accept") && v.contains(EVENT_STREAM))
+    }
 
     #[derive(Default)]
     struct FakeSink {
@@ -2640,12 +2513,13 @@ mod tests {
 
     #[test]
     fn parses_addresses() {
-        assert_eq!(StationAddr::parse("local").unwrap(), StationAddr::Local);
-        assert_eq!(StationAddr::parse("ws/st").unwrap(), StationAddr::Remote { workspace: "ws".into(), station: "st".into() });
+        assert_eq!(StationAddr::parse("ws/st").unwrap(), StationAddr { workspace: "ws".into(), station: "st".into() });
         assert_eq!(StationAddr::parse("ws/st").unwrap().to_string(), "ws/st");
         for bad in ["", "ws", "/st", "ws/", "a/b/c", "Local"] {
             assert_eq!(StationAddr::parse(bad).unwrap_err().code, "invalid_params", "{bad}");
         }
+        // A station's own page, still in kept links and prefs: gone, said so.
+        assert_eq!(StationAddr::parse("local").unwrap_err().code, "gone");
     }
 
     #[test]
@@ -3540,43 +3414,6 @@ mod tests {
             wait(RETRY_MS + 50).await;
             host.settle().await;
             assert_eq!(sink.values.borrow()[&threads()].as_ref().unwrap(), &json!([]));
-        });
-    }
-
-    #[test]
-    fn routes_local_and_remote() {
-        run(async {
-            let (host, sink) = (FakeHost::new(), Rc::new(FakeSink::default()));
-            let (local, far) = (FakeWire::new(), FakeWire::new());
-            let stations = Stations::new(host.clone(), sink, RoutedWire::new(local.clone(), far.clone()), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Workspaces::new(host.clone()));
-            stations.request(&StationAddr::Local, "GET", "/overview", None).await.unwrap();
-            stations.request(&remote(), "GET", "/host", None).await.unwrap();
-            assert_eq!(local.paths(), vec!["GET /admin/api/overview"]);
-            assert_eq!(far.paths(), vec!["GET /admin/api/host"]);
-            assert_eq!(far.calls.borrow()[0].0, remote());
-        });
-    }
-
-    #[test]
-    fn http_wire_uses_the_hosts_fetch() {
-        run(async {
-            let host = FakeHost::new();
-            host.on_fetch(|_| json_response(200, json!({"ok": true})));
-            host.on_fetch_stream(|_| Ok(StreamResponse { status: 200, headers: vec![], body: chunks(vec![b"event: config\ndata: {}\n\n".to_vec()]) }));
-            let wire = HttpWire::new(host.clone());
-            let head = RequestHead { method: "GET".into(), path: "/admin/api/overview".into(), headers: vec![] };
-            let reply = wire.request(&StationAddr::Local, head, vec![]).await.unwrap();
-            assert_eq!(reply.bytes().await.unwrap(), br#"{"ok":true}"#.to_vec());
-            let head = RequestHead { method: "GET".into(), path: "/admin/api/events".into(), headers: vec![("accept".into(), EVENT_STREAM.into())] };
-            let reply = wire.request(&StationAddr::Local, head, vec![]).await.unwrap();
-            let mut parser = SseParser::default();
-            assert_eq!(parser.feed(&reply.bytes().await.unwrap()), vec![("config".to_string(), "{}".to_string())]);
-            let urls: Vec<String> = host.requests.borrow().iter().map(|r| r.url.clone()).collect();
-            assert_eq!(urls, vec!["https://stillfail.test/admin/api/overview", "https://stillfail.test/admin/api/events"]);
-            assert!(host.requests.borrow()[0].body.is_none());
-            host.on_fetch(|_| Err(HostError("down".into())));
-            let head = RequestHead { method: "GET".into(), path: "/admin/api/host".into(), headers: vec![] };
-            assert_eq!(wire.request(&StationAddr::Local, head, vec![]).await.err().unwrap().code, "host");
         });
     }
 

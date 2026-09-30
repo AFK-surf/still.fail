@@ -29,7 +29,7 @@ const RATE_WINDOW_MS: f64 = 3_000.0;
 /// How often what is shown is computed again while anything is waited on.
 const TICK_MS: u64 = 1_000;
 
-/// Where a wait is: still.fail cloud, or a station by its address (`"<workspace>/<station>"`, `local`).
+/// Where a wait is: still.fail cloud, or a station by its address (`"<workspace>/<station>"`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Place {
     Cloud,
@@ -487,7 +487,7 @@ mod tests {
         assert_eq!(texts(&of_w2), ["连不上 still.fail cloud，2 秒后重试", "正在连接 relay"]);
         let of_w1 = value(&[(&*w1, Take::All), (&*device, Take::For(&a1))]);
         assert_eq!(texts(&of_w1), ["连不上 still.fail cloud，7 秒后重试", "正在连接 relay", "读取对话"]);
-        // No account (a station's own page): no socket.
+        // No account known to reach it yet: no socket.
         assert_eq!(texts(&value(&[(&*w2, Take::All), (&*device, Take::For(&[]))])), ["正在连接 relay"]);
         // The plain status: all of it.
         let all = value(&[(&*w1, Take::All), (&*w2, Take::All), (&*device, Take::All)]);

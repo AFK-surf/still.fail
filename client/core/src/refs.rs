@@ -27,7 +27,7 @@ pub fn title(title: &str) -> String {
     if shown.is_empty() { "对话".into() } else { shown }
 }
 
-/// A chat's page: under `base` (the page's own root, or still.fail cloud), its station's pages, then the chat.
+/// A chat's page: under `base` (still.fail cloud), its station's pages, then the chat.
 pub fn link(base: &str, station: &str, id: &str) -> String {
     let under = match station.split_once('/') {
         Some((workspace, station)) => format!("/w/{workspace}/s/{station}"),
@@ -36,10 +36,11 @@ pub fn link(base: &str, station: &str, id: &str) -> String {
     format!("{}{under}/chats/{}", base.trim_end_matches('/'), crate::core::encode(id))
 }
 
-/// The workspace a chat's link (as [`link`] makes it) is in: `/w/<workspace>/s/…`, else a station's own page's.
-fn workspace_of(link: &str) -> String {
+/// The workspace a chat's link (as [`link`] makes it) is in: `/w/<workspace>/s/…`. None for one to a station's own
+/// page (gone), which is then of no workspace's.
+fn workspace_of(link: &str) -> Option<String> {
     let parts: Vec<&str> = link.split('/').collect();
-    parts.windows(3).find(|w| w[0] == "w" && w[2] == "s").map(|w| w[1].to_string()).unwrap_or_else(|| crate::workspace::LOCAL.to_string())
+    parts.windows(3).find(|w| w[0] == "w" && w[2] == "s").map(|w| w[1].to_string())
 }
 
 fn record(data: &Data, key: &str) -> Vec<(String, String)> {
@@ -49,7 +50,7 @@ fn record(data: &Data, key: &str) -> Vec<(String, String)> {
 
 /// A workspace's links: those kept before workspaces kept their own (of it only), then its own, the latest last.
 fn links(data: &Data, workspace: &str) -> Vec<(String, String)> {
-    let mut all: Vec<(String, String)> = record(data, KEY).into_iter().filter(|(_, l)| workspace_of(l) == workspace).collect();
+    let mut all: Vec<(String, String)> = record(data, KEY).into_iter().filter(|(_, l)| workspace_of(l).as_deref() == Some(workspace)).collect();
     all.extend(record(data, &format!("{KEY}:{workspace}")));
     all
 }
@@ -58,10 +59,7 @@ fn links(data: &Data, workspace: &str) -> Vec<(String, String)> {
 pub fn keep(data: &Data, added: impl IntoIterator<Item = (String, String)>) {
     let mut by: std::collections::BTreeMap<String, Vec<(String, String)>> = Default::default();
     for (title, link) in added {
-        if title.is_empty() || link.is_empty() {
-            continue;
-        }
-        let workspace = workspace_of(&link);
+        let Some(workspace) = workspace_of(&link).filter(|_| !title.is_empty()) else { continue };
         let all = by.entry(workspace.clone()).or_insert_with(|| record(data, &format!("{KEY}:{workspace}")));
         all.retain(|(t, _)| *t != title);
         all.push((title, link));
@@ -153,9 +151,8 @@ mod tests {
         assert_eq!(title("一二三四五六七八九十一二三四五六七八九十一二三 四五"), "一二三四五六七八九十一二三四五六七八九十一二三…");
         assert_eq!(title(" \n "), "对话");
         assert_eq!(link("https://app.still.fail/", "ws/st", "a b/c"), "https://app.still.fail/w/ws/s/st/chats/a%20b%2Fc");
-        assert_eq!(link("/admin", "local", "k1"), "/admin/chats/k1");
         assert_eq!(draft_at("new:ws/st"), Some(("ws/st".into(), "new".into())));
-        assert_eq!(draft_at("local:thread:7"), Some(("local".into(), "thread:7".into())));
+        assert_eq!(draft_at("ws/st:thread:7"), Some(("ws/st".into(), "thread:7".into())));
         assert_eq!(draft_at("nothing"), None);
     }
 
@@ -184,7 +181,9 @@ mod tests {
             let text = "@[排查登录] @[看看] @[旧的] @[本机]";
             assert_eq!(expand(&data, "w1/st", text), "[排查登录](https://x/w/w1/s/st/chats/k1) @[看看] [旧的](https://x/w/w1/s/st/chats/k0) @[本机]");
             assert_eq!(expand(&data, "w2/a", text), "@[排查登录] [看看](https://x/w/w2/s/st/chats/k2) @[旧的] @[本机]");
-            assert_eq!(expand(&data, "local", text), "@[排查登录] @[看看] @[旧的] [本机](/admin/chats/k9)");
+            // One to a station's own page (gone) is no workspace's, and not kept.
+            keep(&data, [("本机".to_string(), "/admin/chats/k9".to_string())]);
+            assert_eq!(expand(&data, "w1/st", "@[本机]"), "@[本机]");
         });
     }
 

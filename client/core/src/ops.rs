@@ -206,9 +206,9 @@ mod tests {
     fn operations_make_their_requests() {
         let r = req("job.stop", json!({ "station": "w/s", "id": "job 1" }));
         assert_eq!((r.target, r.method, r.path.as_str(), r.body), (Target::Station("w/s".into()), "POST", "/jobs/job%201/stop", None));
-        let r = req("job.clearEnded", json!({ "station": "local", "session": "ember:c-1" }));
+        let r = req("job.clearEnded", json!({ "station": "ws/st", "session": "ember:c-1" }));
         assert_eq!((r.method, r.path.as_str()), ("DELETE", "/sessions/ember%3Ac-1/jobs"));
-        let r = req("session.settings", json!({ "station": "local", "key": "k", "model": "m", "profile": null }));
+        let r = req("session.settings", json!({ "station": "ws/st", "key": "k", "model": "m", "profile": null }));
         assert_eq!(r.body, Some(json!({ "model": "m", "profile": null })));
         let r = req("workspace.setRole", json!({ "account": "a", "workspace": "w1", "member": "x@y.z", "role": "admin" }));
         assert_eq!((r.target, r.method, r.path.as_str()), (Target::Cloud("a".into()), "PATCH", "/v1/workspaces/w1/members/x%40y.z"));
@@ -217,24 +217,24 @@ mod tests {
 
     #[test]
     fn pinning_a_chat_goes_by_its_session() {
-        let r = req("chat.pin", json!({ "station": "local", "session": "ember:c-1", "pinned": true }));
+        let r = req("chat.pin", json!({ "station": "ws/st", "session": "ember:c-1", "pinned": true }));
         assert_eq!((r.method, r.path.as_str()), ("PUT", "/sessions/ember%3Ac-1/pin"));
-        assert_eq!(req("chat.pin", json!({ "station": "local", "session": "k", "pinned": false })).method, "DELETE");
+        assert_eq!(req("chat.pin", json!({ "station": "ws/st", "session": "k", "pinned": false })).method, "DELETE");
     }
 
     #[test]
     fn archiving_a_chat_falls_back_to_its_session() {
-        let r = req("chat.archive", json!({ "station": "local", "thread": 7, "session": "k", "archived": true }));
+        let r = req("chat.archive", json!({ "station": "ws/st", "thread": 7, "session": "k", "archived": true }));
         assert_eq!((r.method, r.path.as_str(), r.fallback), ("POST", "/threads/7/archive", Some(("POST", "/sessions/k/archive".to_string()))));
-        let r = req("chat.archive", json!({ "station": "local", "session": "k", "archived": false }));
+        let r = req("chat.archive", json!({ "station": "ws/st", "session": "k", "archived": false }));
         assert_eq!((r.method, r.path.as_str(), r.fallback), ("DELETE", "/sessions/k/archive", None));
     }
 
     #[test]
     fn renaming_a_chat_names_its_thread_or_its_session() {
-        let r = req("chat.rename", json!({ "station": "local", "thread": 7, "session": "k", "title": "值班" }));
+        let r = req("chat.rename", json!({ "station": "ws/st", "thread": 7, "session": "k", "title": "值班" }));
         assert_eq!((r.method, r.path.as_str(), r.body), ("PUT", "/threads/7/title", Some(json!({ "title": "值班" }))));
-        let r = req("chat.rename", json!({ "station": "local", "session": "k", "title": "" }));
+        let r = req("chat.rename", json!({ "station": "ws/st", "session": "k", "title": "" }));
         assert_eq!((r.method, r.path.as_str(), r.body), ("POST", "/sessions/k/title", Some(json!({ "title": "" }))));
     }
 
@@ -242,6 +242,6 @@ mod tests {
     fn unknown_names_and_missing_params() {
         assert!(request("nothing.here", &json!({})).is_none());
         assert!(request("station.request", &json!({})).is_none());
-        assert!(request("job.stop", &json!({ "station": "local" })).unwrap().is_err());
+        assert!(request("job.stop", &json!({ "station": "ws/st" })).unwrap().is_err());
     }
 }

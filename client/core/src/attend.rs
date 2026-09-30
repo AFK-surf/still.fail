@@ -70,7 +70,7 @@ struct Focus {
     visible: bool,
     focused: bool,
     chat: Option<ChatOf>,
-    /// The workspace it is in (a workspace id, or `local`), as it said.
+    /// The workspace it is in (a workspace id), as it said.
     workspace: Option<String>,
 }
 
@@ -108,7 +108,7 @@ pub struct FocusCall {
     chat: Option<Option<ChatOf>>,
     #[serde(default)]
     left: Option<ChatOf>,
-    /// The workspace it is in now (a workspace id, or `local`).
+    /// The workspace it is in now (a workspace id).
     #[serde(default)]
     workspace: Option<String>,
 }
@@ -446,35 +446,35 @@ mod tests {
             let attend = Attend::load(host.clone()).await;
             // Not shown anywhere: no line, nothing due.
             let mut v = chat(2, false, &[(1, 0.0, false), (2, 0.0, false), (3, 0.0, true), (4, 0.0, false)]);
-            assert!(attend.chat("local", None, &mut v).is_empty());
+            assert!(attend.chat("ws/st", None, &mut v).is_empty());
             assert!(v.get("unreadLine").is_none());
             // Opened: over the first unread not mine (3 is mine).
-            attend.focus(1, focus(json!({ "visible": true, "focused": true, "chat": { "station": "local", "thread": 7 } })));
-            attend.chat("local", None, &mut v);
+            attend.focus(1, focus(json!({ "visible": true, "focused": true, "chat": { "station": "ws/st", "thread": 7 } })));
+            attend.chat("ws/st", None, &mut v);
             assert_eq!(v["unreadLine"], 4);
             // Read meanwhile: the line stays for the visit; a message said after it opened gets none.
             let later = host.now_ms() + 1.0;
             let mut v = chat(4, false, &[(1, 0.0, false), (2, 0.0, false), (3, 0.0, true), (4, 0.0, false), (5, later, false)]);
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert_eq!(v["unreadLine"], 4);
             // Left and opened again: read up to 4 now, 5 said before this visit.
-            attend.focus(1, focus(json!({ "left": { "station": "local", "thread": 7 } })));
-            attend.focus(1, focus(json!({ "chat": { "station": "local", "session": "k1", "thread": 7 } })));
+            attend.focus(1, focus(json!({ "left": { "station": "ws/st", "thread": 7 } })));
+            attend.focus(1, focus(json!({ "chat": { "station": "ws/st", "session": "k1", "thread": 7 } })));
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-            attend.chat("local", Some("k1"), &mut v);
+            attend.chat("ws/st", Some("k1"), &mut v);
             assert_eq!(v["unreadLine"], 5);
             // A page of the chat another leaves does not end the visit.
-            attend.focus(1, focus(json!({ "left": { "station": "local", "thread": 8 } })));
+            attend.focus(1, focus(json!({ "left": { "station": "ws/st", "thread": 8 } })));
             assert_eq!(attend.visits.borrow().len(), 1);
             // Unread above what is loaded: the older page first, asked once per page.
             attend.focus(1, focus(json!({ "chat": null })));
-            attend.focus(2, focus(json!({ "chat": { "station": "local", "thread": 7 } })));
+            attend.focus(2, focus(json!({ "chat": { "station": "ws/st", "thread": 7 } })));
             let mut v = chat(1, true, &[(10, 0.0, false), (11, 0.0, false)]);
-            assert_eq!(attend.chat("local", None, &mut v), [Due::Older { thread: 7 }]);
+            assert_eq!(attend.chat("ws/st", None, &mut v), [Due::Older { thread: 7 }]);
             assert_eq!((v["unreadLine"].clone(), v["unreadAbove"].clone()), (Value::Null, json!(true)));
-            assert!(attend.chat("local", None, &mut v).is_empty());
+            assert!(attend.chat("ws/st", None, &mut v).is_empty());
             let mut v = chat(1, false, &[(1, 0.0, false), (2, 0.0, false), (10, 0.0, false)]);
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert_eq!(v["unreadLine"], 2);
         });
     }
@@ -538,19 +538,19 @@ mod tests {
             let host = FakeHost::new();
             let attend = Attend::load(host.clone()).await;
             let mut v = chat(1, false, &[(1, 0.0, false), (2, 0.0, false)]);
-            attend.focus(1, focus(json!({ "visible": false, "chat": { "station": "local", "thread": 7, "end": true } })));
-            assert!(attend.chat("local", None, &mut v).is_empty());
-            attend.focus(1, focus(json!({ "visible": true, "chat": { "station": "local", "thread": 7, "end": false } })));
-            assert!(attend.chat("local", None, &mut v).is_empty());
-            attend.focus(1, focus(json!({ "chat": { "station": "local", "thread": 7, "end": true } })));
-            assert_eq!(attend.chat("local", None, &mut v), [Due::Read { thread: 7, seq: 2 }]);
+            attend.focus(1, focus(json!({ "visible": false, "chat": { "station": "ws/st", "thread": 7, "end": true } })));
+            assert!(attend.chat("ws/st", None, &mut v).is_empty());
+            attend.focus(1, focus(json!({ "visible": true, "chat": { "station": "ws/st", "thread": 7, "end": false } })));
+            assert!(attend.chat("ws/st", None, &mut v).is_empty());
+            attend.focus(1, focus(json!({ "chat": { "station": "ws/st", "thread": 7, "end": true } })));
+            assert_eq!(attend.chat("ws/st", None, &mut v), [Due::Read { thread: 7, seq: 2 }]);
             // Once; again if it failed.
-            assert!(attend.chat("local", None, &mut v).is_empty());
-            attend.failed("local", &Due::Read { thread: 7, seq: 2 });
-            assert_eq!(attend.chat("local", None, &mut v), [Due::Read { thread: 7, seq: 2 }]);
+            assert!(attend.chat("ws/st", None, &mut v).is_empty());
+            attend.failed("ws/st", &Due::Read { thread: 7, seq: 2 });
+            assert_eq!(attend.chat("ws/st", None, &mut v), [Due::Read { thread: 7, seq: 2 }]);
             // Read already: nothing.
             let mut v = chat(2, false, &[(1, 0.0, false), (2, 0.0, false)]);
-            assert!(attend.chat("local", None, &mut v).is_empty());
+            assert!(attend.chat("ws/st", None, &mut v).is_empty());
         });
     }
 
