@@ -12,7 +12,6 @@ export const colorSwatch = style({
     "&::-webkit-color-swatch": { border: "0", borderRadius: `calc(7px * ${vars.cornerScale})`, cornerShape: vars.cornerShape },
   },
 });
-export const switchList = style({ display: "grid", gap: "14px", padding: "4px 0" });
 export const tokenGuide = style({
   margin: "0", padding: "0", listStyle: "none", counterReset: "guide", display: "grid", gap: "18px",
 });
@@ -61,6 +60,13 @@ export const avatarTile = style({
 });
 export const appDesc = style({ height: "34px", fontSize: vars.textSm });
 export const appPerms = style({ fontSize: vars.textSm });
+export const permSections = style({ display: "grid", gap: "4px", marginTop: "8px" });
+export const permAll = style({ marginLeft: "8px" });
+/** Names only, three to a line; what each allows shows on hover. */
+export const permGrid = style({
+  display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0 8px", margin: "0", padding: "0", listStyle: "none",
+  "@media": { "(max-width: 720px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
+});
 export const appFold = style({ marginTop: "28px" });
 export const appFoldTitle = style({ fontWeight: "600" });
 export const appFoldBody = style({ display: "grid", gap: "10px", marginTop: "8px" });
@@ -76,7 +82,6 @@ globalStyle(`${appColour} ${colorSwatch}`, { width: "28px", height: "28px" });
 globalStyle(`${avatarTile} img`, { width: "100%", height: "100%", transform: "scale(1.18)" });
 globalStyle(`${avatarTile} img[data-mono]`, { filter: "brightness(0) invert(1)" });
 globalStyle(`${appPerms} summary`, { cursor: "pointer", color: vars.muted, padding: "6px 0" });
-globalStyle(`${appPerms} ${switchList}`, { marginTop: "6px" });
 /** Here rather than with its class: it comes after .app-avatar img, and wins over it. */
 globalStyle(`${sidebarBuddy} img`, { display: "block", width: "28px", height: "28px" });
 globalStyle(`${appFold} > summary`, {
@@ -87,3 +92,4 @@ globalStyle(`${appFold} > summary::before`, {
   content: "\"›\"", color: vars.muted, transition: `transform 160ms ${vars.easeOut}`, display: "inline-block",
 });
 globalStyle(`${appFold}[open] > summary::before`, { transform: "rotate(90deg)" });
+globalStyle(`${permGrid} input`, { accentColor: vars.accent, margin: "0" });

@@ -113,6 +113,22 @@ internal val SLACK_GROUP_WORDS = listOf(
     "channels" to ("创建和管理频道" to "建频道、邀请成员，知道有人加入或新建频道。"),
     "people" to ("查看成员资料" to "读取邮箱、个人资料、用户组、工作区信息和自定义表情。"),
     "extras" to ("链接预览、提醒和状态" to "展开链接、设置提醒、读取勿扰和通话状态。"),
+    "canvases" to ("读写 canvas" to "新建、编辑和读取 canvas 文档，比如把方案、报告写成频道里的 canvas。"),
+    "lists" to ("读写列表" to "新建、编辑和读取 Slack 列表（Lists），比如维护任务清单。"),
+    "topics" to ("改频道话题和邀请成员" to "设置频道和私信的话题、用途，把人邀请进频道。"),
+    "usergroups" to ("管理用户组和发起通话" to "建用户组、改成员，发起和更新 Slack 通话。"),
+    "search" to ("搜索消息、文件和成员" to "在公开频道里搜消息和文件、按名字找人，回答问题时自己找上下文。"),
+    "connect" to ("Slack Connect 跨组织频道" to "查看、发出和接受和别的公司共享频道的邀请。"),
+    "more" to ("状态、元数据和斜杠命令" to "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。"),
+)
+
+/** The groups in sections, as the form shows them (web/src/pages/SlackApp.tsx → SECTIONS). */
+internal val SLACK_SECTIONS = listOf(
+    "消息" to listOf("base", "public", "dm", "customize", "reactions"),
+    "频道和群" to listOf("channels", "topics", "connect"),
+    "文件和文档" to listOf("files", "canvases", "lists"),
+    "成员和搜索" to listOf("people", "usergroups", "search"),
+    "其他" to listOf("extras", "more"),
 )
 
 /** A Slack app's settings being edited: what its form shows, and what it started as. */
@@ -439,18 +455,30 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     val on = draft.groups.count { it.value }
     Row(Modifier.fillMaxWidth().clickable { perms = !perms }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         IconIn(if (perms) Icons.ChevronDown else Icons.ChevronRight, 14.dp, C.muted)
-        Text("权限 · 开了 $on / ${SLACK_GROUP_WORDS.size} 项", fontSize = 14.sp, color = C.muted)
+        Text("权限 · 开了 $on / ${SLACK_GROUP_WORDS.size} 项", fontSize = 14.sp, color = C.muted, modifier = Modifier.weight(1f))
+        if (on < SLACK_GROUP_WORDS.size) Text("全部打开", fontSize = 14.sp, color = C.accent,
+            modifier = Modifier.clickable { draft.groups = SLACK_GROUP_WORDS.associate { (g, _) -> g to true } })
     }
-    if (perms) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
-        SLACK_GROUP_WORDS.forEach { (g, words) ->
-            val (label, about) = words
+    val words = SLACK_GROUP_WORDS.toMap()
+    // Names only, as the models of a profile are picked (Profiles.kt ModelsSection): what each allows is on the web's hover.
+    if (perms) SLACK_SECTIONS.forEach { (title, groups) ->
+        val all = groups.all { draft.groups[it] == true }
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, fontSize = 13.sp, color = C.muted)
+            Text(if (all) "全不选" else "全选", fontSize = 13.sp, color = C.accent,
+                modifier = Modifier.clickable { draft.groups = draft.groups + groups.associateWith { it == "base" || !all } })
+        }
+        groups.forEach { g ->
             val checked = draft.groups[g] ?: false
-            ListRow(onClick = if (g == "base") null else ({ draft.groups = draft.groups + (g to !checked) })) {
-                Column(Modifier.weight(1f)) {
-                    Text(label, fontSize = 15.sp, color = C.ink)
-                    Text(about, fontSize = 13.sp, color = C.muted)
+            val fixed = g == "base"
+            Row(
+                Modifier.fillMaxWidth().clickable(enabled = !fixed) { draft.groups = draft.groups + (g to !checked) }.padding(vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (!checked) C.chip else if (fixed) C.muted else C.accent), contentAlignment = Alignment.Center) {
+                    if (checked) IconIn(Icons.Check, 13.dp, C.bg)
                 }
-                Switch(checked)
+                Text(words.getValue(g).first, fontSize = 14.sp, color = if (checked) C.ink else C.muted)
             }
         }
     }

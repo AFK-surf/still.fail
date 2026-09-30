@@ -22,6 +22,7 @@
 - 分享卡片改名（og-image-still-fail）：`web/public/og-image.png` 换成 still.fail 的图，官网 `site/index.html` 的标题和 og:title 换成「还是不行！干的什么 JB！」，og:image 改成绝对地址。app 那边跟着 web 上线；官网不在默认部署里，要单独 `python3 cloud/deploy.py site`。上线后验：`curl https://still.fail/` 看 og:title，打开 https://still.fail/og-image.png 和 https://app.still.fail/og-image.png 是新图；Slack 等会缓存旧卡片，要过一阵才换。
 - Slack 同一个 thread 的消息排队处理（slack-duplicate-session-race）：只改 station（mesh/app/src/hub.rs），要重新发 station 包，各台 station 更新后才生效；接口和 db 都没动。修的是新 thread 里第一条 @ 偶尔多出一条「⚠️ 无法创建会话：UNIQUE constraint failed: sessions.key」（Slack 为一次 @ 发 app_mention 和 message 两个事件，两个同时去建会话）。上线后验：在新 thread 里 @ 几次机器人，不再出现这条报错。
 - Slack thread 里直接发文件（slack-file-upload）：只改 station（mesh），要重新发 station 包，各台 station 更新后才生效。以前 agent 用 chat_post 附的文件，在 Slack 里只附一个 still.fail 链接；现在走 getUploadURLExternal → 上传 → files.completeUploadExternal，文件挂在 thread 里、文字下面，HTML 也一样上传。Slack app 没有 `files:write`（老 app，或在设置里关了 files 组）时报 missing_scope，这时照旧发链接，什么都没发出去之前就会发现。db 和接口都没动。上线后验：在 Slack thread 里让 bot 发一张图、一个 pdf 和一个 html，三个文件都出现在 thread 里；关了 files 组的 app 仍然发 still.fail 链接。
+- Slack app 权限补全和分组（slack-scopes）：station（mesh）的 SLACK_GROUPS 加了 7 组（canvas、列表、频道话题和邀请、用户组和通话、搜索、Slack Connect、状态元数据和斜杠命令），每个 scope 都在 Slack 文档里核对过支持 bot token；web 和安卓的权限表单改成按五段分组的 checkbox，只显示名字，说明在悬停时显示。新建的 app 默认全开；已装好的 app 新组显示为没勾，要在设置里勾上（或点「全部打开」）、应用，再点 Slack 给的重新安装链接。新旧混跑：旧页面只提交它认识的组，新组保持原样；新页面配旧 station，新组读不到按没勾显示，勾了旧 station 也会忽略。安卓要发新版才有新表单。上线后验：在一个老 app 的设置里点「全部打开」→ 应用到 Slack，提示要同意新权限，点链接重新安装后，bot 建 canvas 不再报 missing_scope。
 
 ## 2026-09-30
 

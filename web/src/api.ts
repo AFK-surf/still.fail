@@ -62,7 +62,9 @@ export interface ProfileInput {
 }
 
 /** The groups of scopes and events a Slack app made here asks for (mesh/app/src/chat/slack_apps.rs). */
-export type SlackGroup = "base" | "public" | "dm" | "customize" | "files" | "reactions" | "channels" | "people" | "extras";
+export type SlackGroup =
+  | "base" | "public" | "dm" | "customize" | "files" | "reactions" | "channels" | "people" | "extras"
+  | "canvases" | "lists" | "topics" | "usergroups" | "search" | "connect" | "more";
 
 /** A Slack app as its settings form shows it. */
 export interface SlackAppSettings {

@@ -413,7 +413,7 @@ data class InvitationPreview(val workspace: String, val name: String, val role: 
 class Enrollment(val install: String, val command: String)
 
 /** The permission groups a new Slack app is made with (web/src/pages/SlackApp.tsx → GROUPS), all on. */
-private val SLACK_GROUPS = listOf("base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras")
+private val SLACK_GROUPS = listOf("base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras", "canvases", "lists", "topics", "usergroups", "search", "connect", "more")
 
 // still.fail cloud's invite-code errors in Chinese; the core passes their codes through.
 private val INVITE_ERRORS = mapOf(

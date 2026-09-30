@@ -97,6 +97,50 @@ pub const SLACK_GROUPS: &[SlackGroup] = &[
         scopes: &["links:read", "links:write", "reminders:read", "reminders:write", "dnd:read", "calls:read"],
         events: &[],
     },
+    SlackGroup {
+        id: "canvases",
+        label: "读写 canvas",
+        description: "新建、编辑和读取 canvas 文档，比如把方案、报告写成频道里的 canvas。",
+        scopes: &["canvases:read", "canvases:write"],
+        events: &[],
+    },
+    SlackGroup { id: "lists", label: "读写列表", description: "新建、编辑和读取 Slack 列表（Lists），比如维护任务清单。", scopes: &["lists:read", "lists:write"], events: &[] },
+    SlackGroup {
+        id: "topics",
+        label: "改频道话题和邀请成员",
+        description: "设置频道和私信的话题、用途，把人邀请进频道。",
+        scopes: &["channels:write.invites", "channels:write.topic", "groups:write.invites", "groups:write.topic", "im:write.topic", "mpim:write.topic"],
+        events: &[],
+    },
+    SlackGroup {
+        id: "usergroups",
+        label: "管理用户组和发起通话",
+        description: "建用户组、改成员，发起和更新 Slack 通话。",
+        scopes: &["usergroups:write", "calls:write"],
+        events: &[],
+    },
+    // Real-time search: of its kinds only these three take a bot token (private channels and DMs need a person's).
+    SlackGroup {
+        id: "search",
+        label: "搜索消息、文件和成员",
+        description: "在公开频道里搜消息和文件、按名字找人，回答问题时自己找上下文。",
+        scopes: &["search:read.public", "search:read.files", "search:read.users"],
+        events: &[],
+    },
+    SlackGroup {
+        id: "connect",
+        label: "Slack Connect 跨组织频道",
+        description: "查看、发出和接受和别的公司共享频道的邀请。",
+        scopes: &["conversations.connect:read", "conversations.connect:write", "conversations.connect:manage"],
+        events: &[],
+    },
+    SlackGroup {
+        id: "more",
+        label: "状态、元数据和斜杠命令",
+        description: "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。",
+        scopes: &["users:write", "metadata.message:read", "team.preferences:read", "links.embed:write", "commands"],
+        events: &[],
+    },
 ];
 
 /// The app as the settings form shows it.

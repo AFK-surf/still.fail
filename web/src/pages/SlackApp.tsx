@@ -8,12 +8,13 @@ import { useEffect, useRef, useState } from "react";
 import { useTopic } from "../core/react.ts";
 import { useAction, useApi, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Dialog, Field, ICON, Section, SwitchRow, Tip } from "../ui.tsx";
+import { Button, Dialog, Field, ICON, Section, Tip } from "../ui.tsx";
 import * as css from "./SlackApp.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
+import * as modelCss from "../ModelTriple.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 
 /** Permission groups in plain words; mirrors SLACK_GROUPS on the server. */
@@ -27,7 +28,23 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
   channels: { label: "创建和管理频道", description: "建频道、邀请成员，知道有人加入或新建频道。" },
   people: { label: "查看成员资料", description: "读取邮箱、个人资料、用户组、工作区信息和自定义表情。" },
   extras: { label: "链接预览、提醒和状态", description: "展开链接、设置提醒、读取勿扰和通话状态。" },
+  canvases: { label: "读写 canvas", description: "新建、编辑和读取 canvas 文档，比如把方案、报告写成频道里的 canvas。" },
+  lists: { label: "读写列表", description: "新建、编辑和读取 Slack 列表（Lists），比如维护任务清单。" },
+  topics: { label: "改频道话题和邀请成员", description: "设置频道和私信的话题、用途，把人邀请进频道。" },
+  usergroups: { label: "管理用户组和发起通话", description: "建用户组、改成员，发起和更新 Slack 通话。" },
+  search: { label: "搜索消息、文件和成员", description: "在公开频道里搜消息和文件、按名字找人，回答问题时自己找上下文。" },
+  connect: { label: "Slack Connect 跨组织频道", description: "查看、发出和接受和别的公司共享频道的邀请。" },
+  more: { label: "状态、元数据和斜杠命令", description: "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。" },
 };
+
+/** The groups in sections, as the form shows them. */
+const SECTIONS: { title: string; groups: SlackGroup[] }[] = [
+  { title: "消息", groups: ["base", "public", "dm", "customize", "reactions"] },
+  { title: "频道和群", groups: ["channels", "topics", "connect"] },
+  { title: "文件和文档", groups: ["files", "canvases", "lists"] },
+  { title: "成员和搜索", groups: ["people", "usergroups", "search"] },
+  { title: "其他", groups: ["extras", "more"] },
+];
 
 /**
  * The connect's Slack app, folded (it is changed now and then): its name, icon and permissions, edited here and written
@@ -338,12 +355,41 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
         {MAKERS.map((a) => tile(a, true))}
       </div>
       <details className={css.appPerms}>
-        <summary>权限 · 开了 {on} / {Object.keys(GROUPS).length} 项</summary>
-        <div className={css.switchList}>
-          {(Object.keys(GROUPS) as SlackGroup[]).map((g) => (
-            <SwitchRow key={g} title={GROUPS[g].label} description={GROUPS[g].description} disabled={g === "base"}
-              checked={settings.groups[g] ?? false} onChange={(v) => set("groups", { ...settings.groups, [g]: v })} />
-          ))}
+        <summary>
+          权限 · 开了 {on} / {Object.keys(GROUPS).length} 项
+          {on < Object.keys(GROUPS).length && (
+            <button type="button" className={`${controlsCss.textToggle} ${css.permAll}`}
+              onClick={(e) => { e.preventDefault(); set("groups", Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) as Record<SlackGroup, boolean>); }}>
+              全部打开
+            </button>
+          )}
+        </summary>
+        <div className={css.permSections}>
+          {SECTIONS.map(({ title, groups }) => {
+            const all = groups.every((g) => settings.groups[g]);
+            return (
+              <div key={title} className={modelCss.poolSeries}>
+                <div className={modelCss.poolSeriesHead}>
+                  <h4>{title}</h4>
+                  <button type="button" className={controlsCss.textToggle}
+                    onClick={() => set("groups", { ...settings.groups, ...Object.fromEntries(groups.map((g) => [g, g === "base" || !all])) })}>
+                    {all ? "全不选" : "全选"}
+                  </button>
+                </div>
+                <ul className={css.permGrid}>
+                  {groups.map((g) => (
+                    <li key={g}>
+                      <Tip label={GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
+                        <input type="checkbox" checked={settings.groups[g] ?? false} disabled={g === "base"}
+                          onChange={(e) => set("groups", { ...settings.groups, [g]: e.target.checked })} />
+                        <span>{GROUPS[g].label}</span>
+                      </label></Tip>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </details>
     </>

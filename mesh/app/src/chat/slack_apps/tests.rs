@@ -18,7 +18,7 @@ fn a_new_app_has_every_permission_group_on() {
 #[test]
 fn turning_a_group_off_removes_its_scopes_and_events_but_keeps_unknown_ones() {
     let mut manifest = slack_manifest("ember", None, None);
-    manifest["oauth_config"]["scopes"]["bot"].as_array_mut().unwrap().push(json!("commands"));
+    manifest["oauth_config"]["scopes"]["bot"].as_array_mut().unwrap().push(json!("workflow.steps:execute"));
     let edit = SlackAppEdit {
         groups: Some(BTreeMap::from([("files".to_string(), false)])),
         description: Some(String::new()),
@@ -31,7 +31,7 @@ fn turning_a_group_off_removes_its_scopes_and_events_but_keeps_unknown_ones() {
     for s in files.scopes {
         assert!(!scopes.iter().any(|x| x == s), "{s}");
     }
-    assert!(scopes.iter().any(|x| x == "commands"));
+    assert!(scopes.iter().any(|x| x == "workflow.steps:execute"));
     assert!(!strings(at(&next, &["settings", "event_subscriptions", "bot_events"])).iter().any(|e| e == "file_shared"));
     assert_eq!(next["display_information"].get("description"), None);
     assert_eq!(next["display_information"]["background_color"], "#112233");
