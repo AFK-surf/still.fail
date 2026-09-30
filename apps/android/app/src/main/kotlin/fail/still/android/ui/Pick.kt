@@ -63,15 +63,15 @@ class PickedWords {
     /** The text of a passage. */
     fun textOf(span: Span): String = text().let { it.substring(span.start.coerceIn(0, it.length), span.end.coerceIn(0, it.length)) }
 
-    /** The boxes of a passage's lines, in the words' place. */
+    /** The boxes of a passage's lines, in the words' place (the words may be drawn scaled there: taken through it). */
     fun rects(span: Span): List<Rect> {
         val b = base ?: return emptyList()
         return order().flatMap { (p, start) ->
             val l = p.layout!!
             val s = (span.start - start).coerceIn(0, p.text.length)
             val e = (span.end - start).coerceIn(0, p.text.length)
-            val at = b.localPositionOf(p.coords!!, Offset.Zero)
-            lineRects(l, s, e).map { it.translate(at) }
+            val c = p.coords!!
+            lineRects(l, s, e).map { Rect(b.localPositionOf(c, it.topLeft), b.localPositionOf(c, it.bottomRight)) }
         }
     }
 
@@ -81,15 +81,15 @@ class PickedWords {
         val order = order()
         if (order.isEmpty()) return null
         // The text whose lines hold the point's height (the nearest across, beside a table's cell); else the next one down.
-        val boxes = order.map { (p, start) -> Triple(p, start, b.localPositionOf(p.coords!!, Offset.Zero)) }
-        val row = boxes.filter { (p, _, at) -> point.y >= at.y && point.y < at.y + p.layout!!.size.height }
-        val hit = row.minByOrNull { (p, _, at) -> if (point.x < at.x) at.x - point.x else if (point.x > at.x + p.layout!!.size.width) point.x - at.x - p.layout!!.size.width else 0f }
+        val boxes = order.map { (p, start) -> Triple(p, start, b.localBoundingBoxOf(p.coords!!, clipBounds = false)) }
+        val row = boxes.filter { (_, _, box) -> point.y >= box.top && point.y < box.bottom }
+        val hit = row.minByOrNull { (_, _, box) -> if (point.x < box.left) box.left - point.x else if (point.x > box.right) point.x - box.right else 0f }
         if (hit == null) {
-            val below = boxes.firstOrNull { (_, _, at) -> point.y < at.y } ?: return text().length
+            val below = boxes.firstOrNull { (_, _, box) -> point.y < box.top } ?: return text().length
             return below.second
         }
-        val (p, start, at) = hit
-        return start + p.layout!!.getOffsetForPosition(point - at).coerceIn(0, p.text.length)
+        val (p, start, _) = hit
+        return start + p.layout!!.getOffsetForPosition(p.coords!!.localPositionOf(b, point)).coerceIn(0, p.text.length)
     }
 
     /** The word at an offset (as a phone picks one: a word as it is; a space or a mark, only that character). */

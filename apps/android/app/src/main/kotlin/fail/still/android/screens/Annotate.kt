@@ -296,15 +296,20 @@ private fun Annotating(station: String, of: ChatOf, m: ChatMessage, author: Stri
                                 }
                             }
                         }
-                        .padding(start = 32.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
+                        .padding(start = 32.dp, end = 14.dp, top = 12.dp, bottom = 24.dp),
                 ) {
-                    // From where they were in the chat to here, and back (by the page's way in and out).
-                    Box(Modifier.flown("$station/${m.ts}", p)) { CompositionLocalProvider(LocalPickedWords provides words) {
+                    // From where they were in the chat to here, and back (by the page's way in and out). Laid out as they are
+                    // there (its size of type, its width: the same lines), drawn smaller only where the page is narrower, so
+                    // what flies is one picture from end to end, its lines never broken again.
+                    val key = "$station/${m.ts}"
+                    val chatWidth = remember(key) { AnnotateFlight.sources[key]?.width } ?: (width - with(density) { 28.dp.toPx() })
+                    val room = width - with(density) { (32 + 14).dp.toPx() }
+                    Box(Modifier.flown(key, p).scaledFrom(chatWidth.roundToInt(), (room / chatWidth).coerceAtMost(1f))) { CompositionLocalProvider(LocalPickedWords provides words) {
                         if (m.authorKind == "person") {
                             val text = withRefs(m.text)
                             val (pick, picking) = pickable(text.text)
-                            Text(text, pick, fontSize = 16.sp, lineHeight = 25.6.sp, color = C.ink, onTextLayout = picking)
-                        } else Markdown(m.text, size = 16)
+                            Text(text, pick, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink, onTextLayout = picking)
+                        } else Markdown(m.text)
                     } }
                 }
                 // What is placed over the words follows where they are laid out, and comes and goes with the page.
@@ -433,6 +438,14 @@ private fun Modifier.flown(key: String, p: () -> Float): Modifier {
         translationY = (from.top - to.y) * k
         val s = scale + (1f - scale) * t
         scaleX = s; scaleY = s
+    }
+}
+
+/** Laid out `width` wide (in px) and drawn at `scale` of that from its top left; as big as it is drawn. */
+private fun Modifier.scaledFrom(width: Int, scale: Float) = layout { measurable, constraints ->
+    val p = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+    layout((p.width * scale).roundToInt(), (p.height * scale).roundToInt()) {
+        p.placeWithLayer(0, 0) { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0f) }
     }
 }
 
