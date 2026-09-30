@@ -144,10 +144,24 @@ async fn cpu_busy() -> Option<f64> {
     let busy = match last.and_then(|last| share(last, now)) {
         Some(busy) => busy,
         None => {
-            // A real half second, even where tokio's clock is paused (the station's tests).
-            let _ = tokio::task::spawn_blocking(|| std::thread::sleep(Duration::from_millis(500))).await;
+            // A real half second, even where tokio's clock is paused (the station's tests). macOS updates the ticks
+            // only now and then (seen unchanged after a real 505 ms, 2026-09-30), so it looks again, up to 2 s, until
+            // they have moved.
             let then = now;
-            now = cpu_ticks()?;
+            now = tokio::task::spawn_blocking(move || {
+                let start = std::time::Instant::now();
+                std::thread::sleep(Duration::from_millis(500));
+                loop {
+                    let now = cpu_ticks();
+                    if now.is_none_or(|(_, total)| total > then.1) || start.elapsed() >= Duration::from_secs(2) {
+                        return now;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            })
+            .await
+            .ok()
+            .flatten()?;
             share(then, now)?
         }
     };
