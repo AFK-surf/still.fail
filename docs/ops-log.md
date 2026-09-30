@@ -17,6 +17,11 @@
 
 ## 2026-09-30
 
+### 13:10 部署 6b6782f，发安卓 0.1.1141
+
+- 部署：`ember-deploy` 从 98aad7f 到 6b6782f，共 3 个提交：安卓和 web 手机版互补、b050b46 消息性能、82135e2 ops-log。完整检查 7 项通过，部署了 web 和 admin；这次没改 cloud 的 api，也没改 mesh，所以 station 只重建了页面。
+- 安卓：`release.sh android`，事先在 `cloud/` 里装好了依赖，这次正常上传。两个域名的 `latest.json` 都是 1141，apk 返回 200。
+
 ### 05:00 部署 98aad7f，发安卓 0.1.1138
 
 - 部署：`ember-deploy` 从 d9b03e1 到 98aad7f（15 个提交：安卓补齐到 web 手机版，chat 列表动效、系统消息胶囊、整页 HTML 16:9、预览流式请求头改回旧名、Slack app 默认名、cloud 提供 `android/stillfail-<n>.apk` 等）。完整检查 10 项通过；部署了 api、web、admin，重启 studio 的 station，station 发布包在后台上传。
