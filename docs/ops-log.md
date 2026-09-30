@@ -23,6 +23,11 @@
 
 ## 2026-10-01
 
+### 03:45 发安卓和桌面 0.1.1212
+
+- 从 main 91ab09f 打包 0.1.1212（含 76afc23 station 卡片的网络行、86b8edb 多 relay），在 studio 的图形会话里用 `~/bin/ember-gui rel-1212` 跑 `release.sh android` 和 `release.sh desktop`。两个域名上的 `android/latest.json` 和 `desktop/stillfail-mac.yml` 都是 1212，apk 和 zip 用 Range GET 都返回 206。
+- 另外：claude-mac（ccvm）原来连不上北京 relay。mini2 的 Surge 把 ccvm 发往真实 IP 的流量挡掉了，用户在 mini2 上打通了；我之前在 Surge profile 里加的那条 DIRECT 规则，备份是 `…bak-before-ccvm-bjrelay-20261001-013613`。
+
 ### 02:32 各台 station 更新到 0.1.1209，studio 和 mini 换成正式安装
 
 - bft、claude-mac（macvm）：`stillfail update` 原地交接到 0.1.1209，pid 不变。claude-mac 是从这台机器上的会话里起的，更新放在后台等轮次结束后再跑。
