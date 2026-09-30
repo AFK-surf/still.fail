@@ -5,6 +5,22 @@
 package fail.still.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -173,7 +189,30 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine:
     val status by rememberTopic<StatusView>(app.core, Topics.status)
     // "Reading", and what the core has been waiting on for a while if anything (the core's `status`).
     val reading = status.value?.text?.let { "正在读取会话… $it" } ?: "正在读取会话…"
-    LazyColumn(modifier.fillMaxHeight(), state = list, contentPadding = padding) {
+    // The rows move as the list changes (ListMotion.kt); while a finger is on the list or it scrolls, they keep their
+    // places (the web holds them while the mouse is over the list), and move when it is let go.
+    val still = reducedMotion()
+    val motion = remember(current.workspace.id) { ListMotion() }
+    val order = remember(current.workspace.id) { HeldOrder() }
+    var pressed by remember { mutableStateOf(false) }
+    val hold = pressed || list.isScrollInProgress
+    val days = view?.days?.let { raw ->
+        for (day in raw) for (item in day.items) MarksSeen.note(rowKey(item), rowTone(item))
+        order.of(raw, hold)
+    }.orEmpty()
+    motion.update(days, Snapshot.withoutReadObservation { list.layoutInfo.visibleItemsInfo.mapNotNullTo(HashSet()) { it.key as? String } }, still)
+    Box(modifier.fillMaxHeight().pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            pressed = true
+            try {
+                do { val e = awaitPointerEvent(PointerEventPass.Initial) } while (e.changes.any { it.pressed })
+            } finally { pressed = false }
+        }
+    }) {
+        // Rows gone, each drawn where it was as it goes, under the rows closing over it.
+        if (view != null) for (g in motion.ghosts) key(g.key, g.at) { Leaving(g, view, motion) }
+    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = padding) {
         if (view == null) {
             item(key = "wait") { Note(chats.error?.message ?: reading, error = chats.error != null) }
         } else {
@@ -181,16 +220,66 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine:
             val connecting = stations.filter { it.state == "connecting" }
             val failed = stations.filter { it.state == "error" }
             // A station's link coming back is said on its rows; only with no rows to show does the list say it.
-            if (view.days.isEmpty() && (view.loading || connecting.isNotEmpty())) item(key = "loading") { Note(reading) }
-            if (view.days.isEmpty() && !view.loading) failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
-            if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(current, view, onlyMine) }
+            if (days.isEmpty() && (view.loading || connecting.isNotEmpty())) item(key = "loading") { Note(reading) }
+            if (days.isEmpty() && !view.loading) failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
+            if (days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(current, view, onlyMine) }
             // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
             item(key = "open-jobs") { OpenJobs(stations) }
-            for (day in view.days) {
-                item(key = "h/${day.daysAgo}") { SectionHeader(day.label) }
-                items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
+            for (day in days) {
+                item(key = dayKey(day)) { Moving(motion, dayKey(day), still) { SectionHeader(day.label) } }
+                items(day.items, key = ::rowKey) { Moving(motion, rowKey(it), still) { ChatRow(it, view) } }
             }
         }
+    }
+    }
+}
+
+/**
+ * A row (or day heading) of the list as it moves: from where it was to where it is (the web's MOVE spring, a little
+ * late when closing over one gone), growing in when new, and on a ground of its own over the rest when it overtakes
+ * them on its way up (web: listMotion.ts).
+ */
+@Composable
+private fun LazyItemScope.Moving(motion: ListMotion, key: String, still: Boolean, content: @Composable () -> Unit) {
+    val arrive = remember { if (!still && motion.arriving(key)) Animatable(0f) else null }
+    if (arrive != null) LaunchedEffect(Unit) { delay(100); arrive.animateTo(1f, tween(240, easing = ArriveEasing)) }
+    val lift = motion.liftedAt(key)
+    val raise = remember { Animatable(1f) }
+    LaunchedEffect(lift) {
+        if (lift == null) return@LaunchedEffect
+        try { raise.snapTo(0f); raise.animateTo(1f, tween(480, easing = LinearEasing)) } finally { if (motion.lifted[key] == lift) motion.lifted.remove(key) }
+    }
+    val lifting = lift != null && !still
+    val ground = lerp(C.bg, C.ink, 0.06f)
+    val placement = remember(key) { motion.placement(key) }
+    Box(
+        Modifier.animateItem(fadeInSpec = null, placementSpec = if (still) null else placement, fadeOutSpec = null)
+            .zIndex(if (lifting) 1f else 0f)
+            .onGloballyPositioned { motion.placed[key] = it.positionInParent().y }
+            .graphicsLayer { arrive?.value?.let { alpha = it; scaleX = 0.9f + 0.1f * it; scaleY = scaleX } }
+            .drawBehind {
+                if (!lifting) return@drawBehind
+                // Held to 60 %, then fading as it arrives (the web's keyframes: ground, ground at 0.6, transparent).
+                val p = raise.value
+                val a = if (p < 0.6f) 1f else 1f - (p - 0.6f) / 0.4f
+                if (a > 0f) drawRect(ground.copy(alpha = a))
+            },
+    ) { content() }
+}
+
+/** A row gone from the list: a copy of it where it was shrinks and fades (200 ms, ease-out), then is dropped. */
+@Composable
+private fun Leaving(g: Ghost, view: ChatsView, motion: ListMotion) {
+    val p = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        try { p.animateTo(1f, tween(LEAVE_MS, easing = CssEaseOut)) } finally { motion.ghosts.remove(g) }
+    }
+    Box(
+        Modifier.fillMaxWidth().offset { IntOffset(0, g.y.roundToInt()) }
+            .graphicsLayer { alpha = 1f - p.value; scaleX = 1f - 0.1f * p.value; scaleY = scaleX }
+            .semantics { hideFromAccessibility() },
+    ) {
+        if (g.item != null) ChatRow(g.item, view, live = false) else if (g.label != null) SectionHeader(g.label)
     }
 }
 
@@ -219,18 +308,18 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
  * time shows only while the row is held.
  */
 @Composable
-private fun ChatRow(item: ChatItem, view: ChatsView) {
+private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     val app = LocalApp.current
     var held by remember { mutableStateOf(false) }
     Box(
         Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
-            .pointerInput(item.station, item.id) {
+            .then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id) {
                 detectTapGestures(
                     onPress = { tryAwaitRelease(); held = false },
                     onLongPress = { held = true },
                     onTap = { app.push(Screen.Chat(item.station, item.page)) },
                 )
-            },
+            }),
     ) {
         // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
         val offline = item.offline
@@ -281,9 +370,9 @@ private fun AgentsPicture(item: ChatItem, modifier: Modifier) {
 }
 
 /** What a chat's row says of it (web/src/ChatMark.tsx): red when it wants someone now, yellow at work, blue ended well and unread. */
-private enum class RowTone { Busy, Done, Alert }
+internal enum class RowTone { Busy, Done, Alert }
 
-private fun rowTone(item: ChatItem): RowTone? = when (item.state) {
+internal fun rowTone(item: ChatItem): RowTone? = when (item.state) {
     "block", "failed" -> RowTone.Alert
     "run" -> RowTone.Busy
     else -> if (item.unread) RowTone.Done else null
@@ -302,9 +391,16 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
     val tone = rowTone(item) ?: return
     val label = when (tone) { RowTone.Busy -> "工作中"; RowTone.Done -> "做完了，有新消息"; RowTone.Alert -> "需要处理" }
     val ground = C.bg
-    val turn = if (tone == RowTone.Busy && !reducedMotion()) rememberInfiniteTransition(label = "mark")
+    // A mark that comes while the chat is in view pops in (web: ChatMark.tsx, 320 ms ease-out, 0 → 1.3 at 60 % → 1);
+    // ones there when the list is first drawn do not.
+    val still = reducedMotion()
+    val pop = remember(tone) { if (!still && MarksSeen.fresh(rowKey(item))) Animatable(0f) else null }
+    if (pop != null) LaunchedEffect(pop) { pop.animateTo(1f, tween(320, easing = CssEaseOut)) }
+    val turn = if (tone == RowTone.Busy && !still) rememberInfiniteTransition(label = "mark")
         .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "turn").value else 0f
-    Canvas(modifier.size(14.dp).semantics { contentDescription = label }) {
+    Canvas(modifier.size(14.dp).graphicsLayer {
+        pop?.value?.let { p -> val k = if (p < 0.6f) 1.3f * p / 0.6f else 1.3f - 0.3f * (p - 0.6f) / 0.4f; scaleX = k; scaleY = k }
+    }.semantics { contentDescription = label }) {
         val r = size.minDimension / 2
         val ring = 2.dp.toPx()
         if (tone == RowTone.Alert) drawCircle(MarkRed.copy(alpha = 0.25f), r + 5.dp.toPx())

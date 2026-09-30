@@ -15,17 +15,19 @@ import * as controlsCss from "../styles/controls.css.ts";
 
 type Api = ReturnType<typeof stationApi>;
 /** An archived chat and the station it is on. */
-interface Row { chat: ArchivedChat; view: StationView; api: Api }
+export interface ArchiveRow { chat: ArchivedChat; view: StationView; api: Api }
+type Row = ArchiveRow;
 type Loaded = { rows: Row[] } | { error: string };
 
-export function ArchivePage({ scope, back }: { scope: string; back: string }) {
+/**
+ * The archive of a scope's stations online, as both screens show it (the phone's in ../mobile/Archive.tsx): its rows
+ * newest first, what could not be read, and putting one back or deleting it. `readers` go in the page, one to a
+ * station (each reads its archive). `restore` says how it went in `toast`; `remove` throws what went wrong.
+ */
+export function useArchive(scope: string, toast: (text: string) => void) {
   const stations = useStations(scope);
   const online = (stations.value ?? []).filter((s) => s.online);
   const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
-  const toast = useToast();
-  const [deleting, setDeleting] = useState<Row | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const onLoad = useCallback((station: string, got: Loaded) => setLoaded((all) => ({ ...all, [station]: got })), []);
   const gone = (row: Row) => setLoaded((all) => {
     const of = all[row.view.station];
@@ -40,39 +42,55 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
       toast(`没能恢复：${e instanceof Error ? e.message : String(e)}`);
     }
   };
+  const remove = async (row: Row) => {
+    await row.api.deleteSession(row.chat.session);
+    gone(row);
+    toast("已删除");
+  };
+  const of = online.map((view) => loaded[view.station]);
+  const rows = of.flatMap((got) => got && "rows" in got ? got.rows : [])
+    .sort((a, b) => archivedAt(b.chat) - archivedAt(a.chat));
+  const errors = online.flatMap((view, i) => { const got = of[i]; return got && "error" in got ? [{ view, error: got.error }] : []; });
+  // What the page says in place of rows, if anything.
+  const note = !stations.value ? (stations.error?.message ?? "正在读取 station…")
+    : online.length === 0 ? "没有在线的 station。"
+    : rows.length === 0 && of.some((got) => !got) ? "正在读取…"
+    : rows.length === 0 && errors.length === 0 ? "没有归档的对话。"
+    : null;
+  return {
+    rows, errors, note, restore, remove,
+    // Which station a chat is on is said only where there is more than one to tell apart.
+    named: scope !== "local" && online.length > 1,
+    readers: online.map((view) => <Fetch key={view.station} view={view} onLoad={onLoad} />),
+  };
+}
+
+export function ArchivePage({ scope, back }: { scope: string; back: string }) {
+  const toast = useToast();
+  const { rows, errors, note, named, restore, remove: removeRow, readers } = useArchive(scope, toast);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const remove = async () => {
     if (!deleting) return;
     setBusy(true);
     setDeleteError(null);
     try {
-      await deleting.api.deleteSession(deleting.chat.session);
-      gone(deleting);
+      await removeRow(deleting);
       setDeleting(null);
-      toast("已删除");
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
-  const of = online.map((view) => loaded[view.station]);
-  const rows = of.flatMap((got) => got && "rows" in got ? got.rows : [])
-    .sort((a, b) => archivedAt(b.chat) - archivedAt(a.chat));
-  const errors = online.flatMap((view, i) => { const got = of[i]; return got && "error" in got ? [{ view, error: got.error }] : []; });
-  const reading = of.some((got) => !got);
-  // Which station a chat is on is said only where there is more than one to tell apart.
-  const named = scope !== "local" && online.length > 1;
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label="对话" />
-      <header className={pagesCss.pageHead}><div><h1>已归档<About>手动归档的对话，和空闲超过一天、已经做完的对话（没在跑、没停在 block、没有未读）。对话里有新消息时会自动回到列表。</About></h1></div></header>
-      {online.map((view) => <Fetch key={view.station} view={view} onLoad={onLoad} />)}
-      {!stations.value && <p className={shellCss.muted}>正在读取 station…</p>}
-      {stations.value && online.length === 0 && <p className={shellCss.muted}>没有在线的 station。</p>}
+      <header className={pagesCss.pageHead}><div><h1>已归档<About>{ABOUT}</About></h1></div></header>
+      {readers}
       {errors.map(({ view, error }) => <p key={view.station} className={controlsCss.fieldError}>{named ? `${view.name}：` : ""}{error}</p>)}
-      {rows.length === 0 && online.length > 0 && (reading
-        ? <p className={shellCss.muted}>正在读取…</p>
-        : errors.length === 0 && <p className={shellCss.muted}>没有归档的对话。</p>)}
+      {note && <p className={shellCss.muted}>{note}</p>}
       {days(rows).map(([label, items]) => (
         <section key={label} aria-label={label}>
           <div className={css.archiveHeading}>{label}</div>
@@ -80,13 +98,12 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
             <div key={`${row.view.station}/${row.chat.thread ?? row.chat.session}`} className={css.archiveRow}>
               <div className={css.archiveHead}>
                 <span className={css.archiveTitle}>{row.chat.title}</span>
-                <Tip label={row.chat.archived?.by === "auto" ? "空闲后自动归档" : "手动归档"}><span className={css.archiveWhen}>
+                <Tip label={archivedHow(row.chat)}><span className={css.archiveWhen}>
                   {named && <span>{row.view.name}</span>}{clock(archivedAt(row.chat))}
                 </span></Tip>
                 <div className={css.archiveActions}>
                   <Tip label="恢复到列表"><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction}`} aria-label={`恢复「${row.chat.title}」`} onClick={() => void restore(row)}><Retry size={14} /></button></Tip>
-                  {/* A chat archived alone has agents still at work elsewhere: nothing of theirs is deleted from here. */}
-                  {!row.chat.archived?.alone && (
+                  {deletable(row.chat) && (
                     <Tip label="删除"><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction} ${css.archiveDelete}`} aria-label={`删除「${row.chat.title}」`} onClick={() => { setDeleteError(null); setDeleting(row); }}><Trash size={14} /></button></Tip>
                   )}
                 </div>
@@ -97,11 +114,18 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
         </section>
       ))}
       <Confirm open={deleting !== null} title={`删除「${deleting?.chat.title ?? ""}」？`}
-        description="它的会话、对话记录和 workspace 目录都会删掉，不能恢复。" action="删除"
+        description={DELETE_TEXT} action="删除"
         onConfirm={() => void remove()} onClose={() => setDeleting(null)} busy={busy} error={deleteError} />
     </div>
   );
 }
+
+/** What the archive is (the wide screen's tip; the phone says it at the top). */
+export const ABOUT = "手动归档的对话，和空闲超过一天、已经做完的对话（没在跑、没停在 block、没有未读）。对话里有新消息时会自动回到列表。";
+export const DELETE_TEXT = "它的会话、对话记录和 workspace 目录都会删掉，不能恢复。";
+export const archivedHow = (chat: ArchivedChat) => chat.archived?.by === "auto" ? "空闲后自动归档" : "手动归档";
+/** A chat archived alone has agents still at work elsewhere: nothing of theirs is deleted from here. */
+export const deletable = (chat: ArchivedChat) => !chat.archived?.alone;
 
 /** Reads one station's archive into the page. */
 function Fetch({ view, onLoad }: { view: StationView; onLoad: (station: string, got: Loaded) => void }) {
@@ -116,12 +140,12 @@ function Fetch({ view, onLoad }: { view: StationView; onLoad: (station: string, 
   return null;
 }
 
-const archivedAt = (chat: ArchivedChat) => chat.archived?.at ?? chat.lastActiveAt;
-const clock = (at: number) => new Date(at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+export const archivedAt = (chat: ArchivedChat) => chat.archived?.at ?? chat.lastActiveAt;
+export const clock = (at: number) => new Date(at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 const WEEKDAY = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 
 /** Rows (newest first) by the day they were archived, as the chat list has its days: 今天, 昨天, 星期三, 9月20日. */
-function days(rows: Row[]): [string, Row[]][] {
+export function days(rows: Row[]): [string, Row[]][] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const out: [string, Row[]][] = [];

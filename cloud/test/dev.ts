@@ -26,7 +26,7 @@ const adminOrigin = `http://127.0.0.1:${adminPort}`;
 const previewPort = port + 3;
 const previewOrigin = `http://127.0.0.1:${previewPort}`;
 const dist = join(import.meta.dirname, "..", "..", "dist");
-const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
+const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 
 /** The static sites' files as the stand-in static Worker asks for them (/web/…, /admin/…, /preview/…); 404 for anything else. */
 async function assets(request: Request): Promise<Response> {

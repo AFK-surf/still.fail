@@ -59,6 +59,14 @@ export default defineConfig(({ mode }) => {
       outDir: here(consoleBuild ? "../dist/cloud-admin" : mode === "cloud" ? "../dist/cloud-web" : "../dist/admin"),
       emptyOutDir: true,
       target: "es2022",
+      rollupOptions: {
+        output: {
+          // Scripts that come in as files (pdf.js's worker, `pdf.worker.min.mjs?url`) keep their .mjs, and a module
+          // loaded from a file served as application/octet-stream fails (strict MIME). The station's page server, the
+          // dev cloud and older hosts only know .js as JavaScript, so name them .js.
+          assetFileNames: (asset) => (asset.names.some((n) => n.endsWith(".mjs")) ? "assets/[name]-[hash].js" : "assets/[name]-[hash][extname]"),
+        },
+      },
     },
     server: { proxy: { "/admin/api": { target: `http://127.0.0.1:${process.env.STILLFAIL_ADMIN_PORT ?? process.env.EMBER_ADMIN_PORT ?? 4760}`, changeOrigin: false } } },
   };

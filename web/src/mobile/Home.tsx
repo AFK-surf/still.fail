@@ -4,12 +4,13 @@
 import { useRef, useState } from "react";
 import { useChats, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { ChevronDown, Edit, Server, Unplug } from "../icons.tsx";
+import { Archive, ChevronDown, Edit, Server, Unplug } from "../icons.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { Avatar, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
 import { FirstStation } from "./Stations.tsx";
+import { OpenJobs } from "./OpenJobs.tsx";
 import { openWorkspaces } from "./Workspaces.tsx";
 import * as css from "./Home.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -47,6 +48,8 @@ export function Home() {
           {invited && <span className={css.mDot} aria-label="有邀请" />}
           <ChevronDown size={16} />
         </button>
+        {/* The archive: chats put away by hand or by the station once idle (the wide screen has it in the list's filter menu). */}
+        {(all.value?.stations.length ?? 0) > 0 && <NavButton icon={Archive} iconSize={20} label="已归档" onClick={() => app.push(app.at("/archive"))} />}
         {/* A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which. */}
         <span className="m-home-station">
           <NavButton icon={Server} iconSize={20} label={all.value?.trouble ? `Station：${all.value.trouble.text}` : "Station"} onClick={() => app.push(app.at("/settings/stations"))} />
@@ -82,6 +85,8 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
           {view.days.length === 0 && (view.loading || view.stations.some((s) => s.state === "connecting")) && <Note text={reading(status)} />}
           {view.days.length === 0 && !view.loading && view.stations.filter((s) => s.state === "error").map((s) => <Note key={`e/${s.station}`} text={`连不上「${s.name}」，正在重试…`} error />)}
           {view.days.length === 0 && !view.loading && !view.stations.some((s) => s.state === "error" || s.state === "connecting") && <Empty view={view} onlyMine={onlyMine} />}
+          {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
+          <OpenJobs stations={view.stations} />
           {view.days.map((day) => (
             <section key={day.daysAgo}>
               <SectionHeader title={day.label} />

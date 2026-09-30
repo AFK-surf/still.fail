@@ -49,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -314,7 +316,7 @@ private fun Modifier.passVerticalDrags(dispatcher: NestedScrollDispatcher): Modi
 }
 
 /** A visualization's page and what its widget kept (on the station, by the session that sent it and its path), loaded together. */
-private sealed interface Loaded {
+internal sealed interface Loaded {
     data object Waiting : Loaded
     data object Failed : Loaded
     data class Ready(val html: String, val state: JsonElement?) : Loaded
@@ -324,8 +326,8 @@ private sealed interface Loaded {
 private val pages = android.util.LruCache<String, String>(12)
 
 /**
- * A placed HTML file, drawn in its message, with a way to open it on its own under it (an icon, as the web has it):
- * the whole screen. `failed`: what shows instead when the file cannot be read (its card).
+ * A placed HTML file, drawn in its message, with ways to open it on its own under it (icons, as the web has them):
+ * the whole screen, or a page of its own in the preview (web mobile's 在侧边打开). `failed`: what shows instead when the file cannot be read (its card).
  */
 @Composable
 fun VizFile(station: String, key: String, file: Attachment, failed: @Composable () -> Unit) {
@@ -342,9 +344,13 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
             Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                 VizFrame(l.html, l.state, onState = keep)
                 // Under the page, out of its way: the way to open it on its own, an icon in the chat's grey.
-                Row(Modifier.fillMaxWidth().padding(top = 2.dp).height(22.dp), horizontalArrangement = Arrangement.End) {
-                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).clickable { full = true }, contentAlignment = Alignment.Center) {
+                Row(Modifier.fillMaxWidth().padding(top = 2.dp).height(22.dp), horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End)) {
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = "全屏打开" }.clickable { full = true }, contentAlignment = Alignment.Center) {
                         IconIn(Icons.Expand, 14.dp, webSubtle)
+                    }
+                    // 在侧边打开: on a phone, as web mobile has it, the file as a page of its own in the preview.
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = "在侧边打开" }.clickable { app.push(fail.still.android.Screen.PreviewFile(station, key, file.path, file.name)) }, contentAlignment = Alignment.Center) {
+                        IconIn(Icons.PanelOpen, 14.dp, webSubtle)
                     }
                 }
             }
@@ -355,7 +361,7 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
 
 /** A visualization's page and what it kept, fetched once per file. */
 @Composable
-private fun rememberViz(station: String, key: String, file: Attachment): Loaded {
+internal fun rememberViz(station: String, key: String, file: Attachment): Loaded {
     val app = LocalApp.current
     val id = "$station/$key/${file.path}"
     val loaded by produceState<Loaded>(Loaded.Waiting, id) {
@@ -442,4 +448,27 @@ fun Mermaid(code: String) {
     if (failed) return CodeBlock(code, "mermaid")
     val html = remember(code) { mermaidDocument(code) }
     Box(Modifier.fillMaxWidth()) { VizFrame(html, onError = { unmade += code; failed = true }) }
+}
+
+/**
+ * A visualization's document as a page of the preview serves it (web Preview.tsx FileFrame → vizDocument): the file in
+ * the stylesheet with what its widget kept (a whole page as written), and `script` (the preview's own page script)
+ * inline ahead of the rest, as the page's CSP lets no script of the page's host in.
+ */
+internal fun vizServed(context: Context, html: String, state: JsonElement?, dark: Boolean, script: String): String {
+    val doc = if (isFragment(html)) documentOf(context, html, state, dark) else pageDocument(context, html)
+    val tag = "<script>" + script.replace("</script", "<\\/script") + "</script>"
+    val at = Regex("<head[^>]*>", RegexOption.IGNORE_CASE).find(doc) ?: Regex("<html[^>]*>", RegexOption.IGNORE_CASE).find(doc)
+    return if (at != null) doc.substring(0, at.range.last + 1) + tag + doc.substring(at.range.last + 1) else tag + doc
+}
+
+/** What a visualization's page says to the app (its bridge's relay, StillFailViz): here only what its widget keeps. */
+internal class VizKeeper(private val keep: (JsonElement) -> Unit) {
+    @JavascriptInterface
+    fun post(json: String) {
+        val m = try { StillFailJson.parseToJsonElement(json).jsonObject } catch (_: Exception) { return }
+        if ((m["type"] as? JsonPrimitive)?.content != "state") return
+        val state = m["state"] ?: JsonNull
+        if (state.toString().length <= MAX_STATE) keep(state)
+    }
 }

@@ -17,7 +17,8 @@ export type Tone = "up" | "live" | "restart" | "fail" | "off";
 /** A job that ended by itself or failed this long ago is no longer news: it stays in the tab, out of the popover. */
 const NEWS = 24 * 3600_000;
 
-export const isService = (job: Job) => job.port !== undefined;
+// A background job comes with `port: null` from the station (not left out), so either means none.
+export const isService = (job: Job) => job.port != null;
 
 export function toneOf(job: Job): Tone {
   if (job.state === "failed") return "fail";

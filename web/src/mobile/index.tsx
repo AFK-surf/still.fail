@@ -5,11 +5,13 @@ import { Navigate, Route, Routes, useParams, type Location } from "react-router"
 import { useStations } from "../api.ts";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { MobileShell, type Entry } from "./app.tsx";
+import { ArchiveScreen } from "./Archive.tsx";
 import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, NewConnectScreen } from "./Connects.tsx";
 import { RunSettingsScreen } from "./History.tsx";
 import { Home } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
+import { MemoryScreen } from "./Memory.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
@@ -26,6 +28,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route index element={<Home />} />
       {/* A new chat and a chat are one page (ChatHost.tsx): as one becomes the other, its composer stays. */}
       <Route path="new" element={<ChatHost stations={stations} />} />
+      <Route path="archive" element={<ArchiveScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
       {/* The desktop's 通用, 成员 and 退出与删除 are one page here. */}
@@ -36,6 +39,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
+      <Route path="s/:station/memory" element={<InStation stations={stations}><MemoryScreen /></InStation>} />
       <Route path="s/:station/connects/new" element={<InStation stations={stations}><NewConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id" element={<InStation stations={stations}><ConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id/run" element={<InStation stations={stations}><ConnectRunScreen /></InStation>} />

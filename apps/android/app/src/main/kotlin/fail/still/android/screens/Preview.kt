@@ -124,6 +124,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -165,6 +166,36 @@ fun PreviewScreen(station: String, service: String) {
         }
     }
 }
+
+/**
+ * A visualization an agent posted, as a page of its own (web mobile's Preview.tsx for a `file:` service): the file
+ * served to the preview's page from here, with what its widget kept (and keeps from now on); its bar has only its name.
+ */
+@Composable
+fun PreviewFileScreen(station: String, session: String, path: String, name: String) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val file = remember(path, name) { fail.still.android.data.Attachment(name = name, path = path, size = 0) }
+    val loaded = fail.still.android.ui.rememberViz(station, session, file)
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+        NavBar("对话", app::pop, name, sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
+        when (val l = loaded) {
+            fail.still.android.ui.Loaded.Failed -> PreviewNote("读不到「$name」。")
+            fail.still.android.ui.Loaded.Waiting -> Unit
+            is fail.still.android.ui.Loaded.Ready -> {
+                val kept = remember(l) { arrayOf(l.state) }
+                val page = FilePage(l.html, { kept[0] }) { s ->
+                    kept[0] = s
+                    scope.launch { try { app.api(station).setWidgetState(session, path, s) } catch (_: CoreException) {} }
+                }
+                ServicePage(station, "file:$session\n$path", 0, name, restarting = false, restarts = 0, session = session, file = page)
+            }
+        }
+    }
+}
+
+/** A visualization's page for [ServicePage]: its file, what its widget keeps now, and keeping what it keeps next. */
+private class FilePage(val html: String, val state: () -> JsonElement?, val keep: (JsonElement) -> Unit)
 
 @Composable
 private fun PreviewNote(text: String) =
@@ -231,7 +262,7 @@ private class PageState {
 
 /** The service's page under its bar; `restarting`: it ended and the station starts it again (`restarts` so far). */
 @Composable
-private fun ColumnScope.ServicePage(station: String, service: String, port: Int, name: String, restarting: Boolean, restarts: Long, session: String?) {
+private fun ColumnScope.ServicePage(station: String, service: String, port: Int, name: String, restarting: Boolean, restarts: Long, session: String?, file: FilePage? = null) {
     val app = LocalApp.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
@@ -241,6 +272,17 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
         PreviewLink(app.core, station, port, script)
     }
     DisposableEffect(link) { onDispose { link.close() } }
+    // A visualization: its page is served from here (reloaded, with what it kept since), anything else it asks is not
+    // there (as the web's FileFrame answers).
+    val dark = C.dark
+    if (file != null) link.serve = { method, path ->
+        val served = method == "GET" && !Regex("\\.[a-z0-9]+$", RegexOption.IGNORE_CASE).containsMatchIn(path.substringBefore('?'))
+        if (!served) android.webkit.WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), java.io.ByteArrayInputStream("Not found".toByteArray()))
+        else {
+            val doc = fail.still.android.ui.vizServed(context, file.html, file.state(), dark, String(context.assets.open("preview/page.js").use { it.readBytes() }))
+            android.webkit.WebResourceResponse("text/html", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"), java.io.ByteArrayInputStream(doc.toByteArray()))
+        }
+    }
     // The system's back steps the page back first; at its first page it leaves.
     BackHandler(enabled = state.canBack) { link.web?.goBack() }
     // Up again after a restart: the page loads anew.
@@ -295,7 +337,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
     PreviewBar(
         name, state.at, go = { path -> link.web?.loadUrl("https://$PREVIEW_HOST$path") }, reload = { link.web?.reload() },
         back = { link.web?.goBack() }, forward = { link.web?.goForward() }, canBack = state.canBack, canForward = state.canForward,
-        size = if (folded) ({ SizeButton(viewport) { fold(false) } }) else null,
+        size = if (folded) ({ SizeButton(viewport) { fold(false) } }) else null, fixed = file != null,
         extra = if (markable) ({
             BarIcon(Icons.Edit, true, pressed = state.marking) {
                 state.marking = !state.marking
@@ -317,6 +359,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
                     settings.domStorageEnabled = true
                     setBackgroundColor(android.graphics.Color.WHITE)
                     addJavascriptInterface(link, "StillFailPreviewNative")
+                    if (file != null) addJavascriptInterface(fail.still.android.ui.VizKeeper { s -> post { file.keep(s) } }, "StillFailViz")
                     webViewClient = PreviewClient(link, moved = { v ->
                         state.at = v.url?.let { url ->
                             val uri = android.net.Uri.parse(url)
@@ -355,7 +398,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
 @Composable
 private fun PreviewBar(
     name: String, at: String?, go: (String) -> Unit, reload: () -> Unit, back: () -> Unit, forward: () -> Unit, canBack: Boolean, canForward: Boolean,
-    size: (@Composable () -> Unit)?, extra: (@Composable () -> Unit)?, instead: (@Composable () -> Unit)?,
+    size: (@Composable () -> Unit)?, extra: (@Composable () -> Unit)?, instead: (@Composable () -> Unit)?, fixed: Boolean = false,
 ) {
     val focus = LocalFocusManager.current
     var typed by remember { mutableStateOf(at ?: "/") }
@@ -375,8 +418,9 @@ private fun PreviewBar(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             IconIn(Icons.Web, 14.dp, C.muted)
-            Text(name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, softWrap = false)
-            BasicTextField(
+            Text(name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = if (fixed) Modifier.weight(1f, fill = false) else Modifier)
+            // Nowhere else to go (a visualization): the address is only its name.
+            if (!fixed) BasicTextField(
                 typed, { typed = it }, singleLine = true,
                 textStyle = TextStyle(fontSize = 16.sp, color = if (editing) C.ink else C.muted),
                 cursorBrush = SolidColor(C.accent),

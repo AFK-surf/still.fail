@@ -12,8 +12,8 @@ import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 
-interface SkillFile { name: string; description: string; project: boolean; builtin: boolean; text: string }
-interface Memory { global: { path: string; text: string }; skills: SkillFile[] }
+export interface SkillFile { name: string; description: string; project: boolean; builtin: boolean; text: string }
+export interface Memory { global: { path: string; text: string }; skills: SkillFile[] }
 
 /** A SKILL.md without its frontmatter: what people read. */
 function body(text: string): string {
@@ -22,7 +22,7 @@ function body(text: string): string {
 }
 
 /** A skill as a row that opens to its text, rendered. */
-function SkillRow({ skill }: { skill: SkillFile }) {
+export function SkillRow({ skill }: { skill: SkillFile }) {
   const [open, setOpen] = useState(false);
   const about = skill.project ? skill.description.replace(/^项目记忆：/, "") : skill.description;
   return (
@@ -39,27 +39,42 @@ function SkillRow({ skill }: { skill: SkillFile }) {
   );
 }
 
-/** A station's memory: global, projects', and its other skills. */
-export function MemoryView({ station }: { station: string }) {
+/** What each part of the memory is, as both screens say it (the phone's page is ./mobile/Memory.tsx). */
+export const MEMORY_TEXT = {
+  global: "每个会话开始时都会读。只放跨项目都适用的：团队怎么协作、怎么回复。",
+  projects: "每个项目一份，是一个 skill：会话开始时只读「什么时候用」那句，做到相关的事才读全文。项目不一定是代码仓库。",
+  none: "还没有项目记忆。agent 学到只跟某个项目有关的东西时，会自己建一个。",
+  others: "团队共用的技能说明，agent 做到相关的事时读。",
+  failed: (error: string) => `读不到这台 station 的记忆：${error}。更早的 station 还没有这一页，更新后就有。`,
+};
+
+/** A station's memory, read once (it changes as agents write it, not while it is looked at), or why it could not be. */
+export function useMemory(station: string): { memory: Memory | null; error: string | null } {
   const call = useStationCall(station);
   const [memory, setMemory] = useState<Memory | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { stationApi(call).memory<Memory>().then(setMemory, (e: Error) => setError(e.message)); }, [call]);
-  if (error) return <p className={shellCss.muted}>读不到这台 station 的记忆：{error}。更早的 station 还没有这一页，更新后就有。</p>;
+  return { memory, error };
+}
+
+/** A station's memory: global, projects', and its other skills. */
+export function MemoryView({ station }: { station: string }) {
+  const { memory, error } = useMemory(station);
+  if (error) return <p className={shellCss.muted}>{MEMORY_TEXT.failed(error)}</p>;
   if (!memory) return <p className={shellCss.muted}>正在读取…</p>;
   const projects = memory.skills.filter((s) => s.project);
   const others = memory.skills.filter((s) => !s.project);
   return (
     <>
-      <Section title="全局记忆" description="每个会话开始时都会读。只放跨项目都适用的：团队怎么协作、怎么回复。">
+      <Section title="全局记忆" description={MEMORY_TEXT.global}>
         <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{memory.global.text.trim() || "（空的）"}</Prose></div>
       </Section>
-      <Section title="项目记忆" description="每个项目一份，是一个 skill：会话开始时只读「什么时候用」那句，做到相关的事才读全文。项目不一定是代码仓库。">
-        {projects.length === 0 && <p className={`${shellCss.muted} ${css.memoryNone}`}>还没有项目记忆。agent 学到只跟某个项目有关的东西时，会自己建一个。</p>}
+      <Section title="项目记忆" description={MEMORY_TEXT.projects}>
+        {projects.length === 0 && <p className={`${shellCss.muted} ${css.memoryNone}`}>{MEMORY_TEXT.none}</p>}
         {projects.map((s) => <SkillRow key={s.name} skill={s} />)}
       </Section>
       {others.length > 0 && (
-        <Section title="其他 skill" description="团队共用的技能说明，agent 做到相关的事时读。">
+        <Section title="其他 skill" description={MEMORY_TEXT.others}>
           {others.map((s) => <SkillRow key={s.name} skill={s} />)}
         </Section>
       )}

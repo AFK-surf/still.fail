@@ -76,6 +76,11 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
     var web: WebView? = null
     /** What the page's marking says (its JSON), on the main thread. */
     var onMarked: (JsonObject) -> Unit = {}
+    /**
+     * Answers the page's requests here instead of the station (a visualization's page, which is a file, not a service:
+     * web Preview.tsx FileFrame's `serve`): its method and path in, the answer out.
+     */
+    var serve: ((method: String, path: String) -> WebResourceResponse)? = null
 
     /** Requests' bodies the page left here, by the id its request carries. */
     private class Body(val bytes: ByteArray, val type: String?)
@@ -226,6 +231,7 @@ internal class PreviewLink(private val core: StillFailCore, private val station:
         if (url.encodedPath == PAGE_JS) {
             return WebResourceResponse("text/javascript", "utf-8", 200, "OK", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(script))
         }
+        serve?.let { return it(request.method, pathOf(url)) }
         val asked = request.requestHeaders.toMutableMap()
         val bodyKey = asked.keys.firstOrNull { it.equals(BODY_HEADER, ignoreCase = true) }
         val body = bodyKey?.let { asked.remove(it) }?.let { bodies.remove(it) }

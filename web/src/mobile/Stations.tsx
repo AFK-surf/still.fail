@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { stationApi, useStationCall, useStations, type Profile, type StationView } from "../api.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { Check, ChevronRight, More } from "../icons.tsx";
+import { Brain, Check, ChevronRight, More } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";
@@ -13,6 +13,7 @@ import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { ConnectRow, Presence, WaitingAppRow } from "./Connects.tsx";
 import { accessLabel, MachineLoginOffers, quotaTrouble, toneDot } from "./Profiles.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
+import { Versions } from "./Versions.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -172,6 +173,19 @@ export function StationScreen() {
                   <ListCard>{s.overview.slackApps!.map((a) => <WaitingAppRow key={a.appId} made={a} online={s.online} />)}</ListCard>
                 </>
               )}
+              {/* The agents' memory on this machine, and its software's versions (none from a station older than them). */}
+              <SectionHeader title="记忆" start={24} />
+              <ListCard>
+                <ListRow onClick={() => app.push(app.at(`/s/${s.id}/memory`))}>
+                  <Brain size={18} className={partsCss.mMuted} />
+                  <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                    <span className={listsCss.mRowTitle}>agent 的记忆</span>
+                    <span className={listsCss.mRowNote}>全局记忆和每个项目的记忆，由 agent 自己维护</span>
+                  </span>
+                  <ChevronRight size={14} className={partsCss.mSubtle} />
+                </ListRow>
+              </ListCard>
+              {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} />}
             </>
           )}
           <div style={{ height: 30 }} />

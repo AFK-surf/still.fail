@@ -178,17 +178,28 @@ fun VideoViewer(file: File, name: String, awake: Boolean, wake: () -> Unit, onTa
         }
     }
     // The picture where the zoom puts it.
+    // The transform is by the view's own size, set again as it is laid out: turned sideways, the stage's size changes
+    // before the view is laid out anew, and a transform made for the old size squashed the picture into a strip.
     LaunchedEffect(texture.value) {
-        snapshotFlow { Triple(zoom.rect(), zoom.box, texture.value) }.collect { (r, box, view) ->
-            if (r == null || view == null || box.width == 0) return@collect
+        val view = texture.value ?: return@LaunchedEffect
+        fun place() {
+            val r = zoom.rect() ?: return
+            if (view.width == 0 || view.height == 0) return
             val m = Matrix()
-            m.setScale(r.width / box.width, r.height / box.height)
+            m.setScale(r.width / view.width, r.height / view.height)
             m.postTranslate(r.left, r.top)
             view.setTransform(m)
         }
+        val laid = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
+        view.addOnLayoutChangeListener(laid)
+        try {
+            snapshotFlow { zoom.rect() to zoom.box }.collect { place() }
+        } finally {
+            view.removeOnLayoutChangeListener(laid)
+        }
     }
     DisposableEffect(Unit) {
-        onDispose { if (turned) (context as? Activity)?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+        onDispose { if (turned) context.activity()?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     }
 
     val starts = frames
@@ -280,7 +291,7 @@ fun VideoViewer(file: File, name: String, awake: Boolean, wake: () -> Unit, onTa
                         }
                     }
                     PictureButton(Icons.Landscape, if (turned) "退出横屏" else "横屏", pressed = turned) {
-                        val activity = context as? Activity
+                        val activity = context.activity()
                         turned = !turned
                         activity?.requestedOrientation = if (turned) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                         wake()
@@ -349,4 +360,14 @@ fun AudioViewer(file: File, name: String) {
             Text(if (failed) "没能播放" else "${short(time)} / ${short(duration)}", fontSize = 12.sp, color = C.muted, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(end = 10.dp))
         }
     }
+}
+
+/**
+ * The activity a context belongs to. The viewers sit in a Dialog, whose context wraps the activity's (a theme wrapper):
+ * `context as? Activity` is null there, and the landscape button did nothing.
+ */
+internal tailrec fun android.content.Context.activity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.activity()
+    else -> null
 }

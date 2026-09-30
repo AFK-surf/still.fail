@@ -86,6 +86,8 @@ sealed interface Screen {
     data object Me : Screen { override val id = "me" }
     /** A web service an agent started, full screen: by its job (people know it by its name, never its port). */
     data class Preview(val station: String, val job: String) : Screen { override val id = "preview/$station/$job" }
+    /** A visualization an agent posted, as a page of its own in the preview (web mobile's 在侧边打开 on a phone). */
+    data class PreviewFile(val station: String, val session: String, val path: String, val name: String) : Screen { override val id = "preview-file/$station/$session/$path" }
     /** The workspace itself: its name, its people, leaving it. */
     data object Workspace : Screen { override val id = "workspace" }
     /** A connect of a station; how it runs; a new one on a station. */
@@ -274,6 +276,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Me -> MeScreen(current)
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
+                    is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)
                     is Screen.Connect -> fail.still.android.screens.ConnectScreen(screen.station, screen.connect)
                     is Screen.ConnectRun -> fail.still.android.screens.ConnectRunScreen(screen.station, screen.connect)
                     is Screen.NewConnect -> fail.still.android.screens.NewConnectScreen(screen.station)

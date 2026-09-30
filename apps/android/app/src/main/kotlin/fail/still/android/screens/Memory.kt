@@ -4,7 +4,9 @@
 // station's other skills are listed too. Read only.
 package fail.still.android.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -104,9 +108,12 @@ private fun Note(text: String) = Text(text, fontSize = 13.sp, color = C.muted, m
 private fun SkillRow(skill: SkillFile) {
     var open by rememberSaveable(skill.name) { mutableStateOf(false) }
     val about = if (skill.project) skill.description.removePrefix("项目记忆：") else skill.description
-    Column(Modifier.fillMaxWidth()) {
+    // As the web's row (Memory.tsx, shared by its phone and PC): inset in the card, tinted while open (the web's --hover).
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)) {
         Row(
-            Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(if (open) C.ink.copy(alpha = if (C.dark) 0.05f else 0.065f) else Color.Transparent)
+                .clickable { open = !open }.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             IconIn(if (open) Icons.ChevronDown else Icons.ChevronRight, 16.dp, C.subtle, Modifier.padding(top = 2.dp))
@@ -118,6 +125,6 @@ private fun SkillRow(skill: SkillFile) {
                 Text(about.ifEmpty { "（没写什么时候用）" }, fontSize = 13.sp, color = C.muted)
             }
         }
-        if (open) Markdown(body(skill.text).ifEmpty { "（空的）" }, Modifier.padding(start = 42.dp, end = 16.dp, bottom = 16.dp), size = 14)
+        if (open) Markdown(body(skill.text).ifEmpty { "（空的）" }, Modifier.padding(start = 38.dp, end = 12.dp, top = 12.dp, bottom = 18.dp), size = 14)
     }
 }
