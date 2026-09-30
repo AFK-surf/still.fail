@@ -452,7 +452,9 @@ private fun Table(table: TableBlock, ctx: Ctx) {
                             val cell = row.getOrNull(c)
                             // Middle-aligned, as the browser's cells are.
                             Box(Modifier.border(0.5.dp, line).padding(horizontal = 8.dp, vertical = 4.dp), contentAlignment = Alignment.CenterStart) {
-                                if (cell != null) Words(cell, ctx, 13f, if (cell.isHeader) FontWeight.Bold else null)
+                                val images = cell?.let { cellImages(it, ctx) }
+                                if (images != null) CellImageRow(images, ctx.placing!!)
+                                else if (cell != null) Words(cell, ctx, 13f, if (cell.isHeader) FontWeight.Bold else null)
                             }
                         }
                     }
@@ -484,6 +486,29 @@ private fun Table(table: TableBlock, ctx: Ctx) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * A cell of only the message's images (`| ![](before.png) | ![](after.png) |`): them, side by side, each 160 wide at
+ * most (the web's cell has the image fill it, as the table lets it); null for any other cell, drawn as words.
+ */
+private fun cellImages(cell: TableCell, ctx: Ctx): List<Attachment>? {
+    val placing = ctx.placing ?: return null
+    val parts = cell.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak }
+    val files = parts.map { n -> if (n is Image) placing.files[fileNameOf(n.destination)] else null }
+    return files.takeIf { it.isNotEmpty() && it.all { f -> f != null } }?.filterNotNull()
+}
+
+@Composable
+private fun CellImageRow(files: List<Attachment>, placing: Placing) {
+    Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        files.forEach { f ->
+            val r = if (f.width != null && f.height != null && f.height > 0) (f.width.toFloat() / f.height).coerceIn(0.25f, 4f) else 1.5f
+            // As wide as 160 for a wide image, as tall as 240 for a tall one.
+            val w = minOf(160f, 240f * r)
+            placing.row(f, Modifier.width(w.dp).height((w / r).dp))
         }
     }
 }
@@ -548,7 +573,10 @@ private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString
                 // An image the app cannot fetch (only the message's own files are fetched, through the station): its words, leading to it.
                 is Image -> {
                     val words = buildAnnotatedString { n.children().forEach { c -> append(inlineText(c)) } }.ifEmpty { AnnotatedString(fileNameOf(n.destination)) }
-                    withLink(LinkAnnotation.Url(n.destination, link)) { append(words) }
+                    // One of the message's files (drawn as words only where it cannot be drawn itself): opens it.
+                    val file = placing?.files?.get(fileNameOf(n.destination))
+                    if (file != null) withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { append(words) }
+                    else withLink(LinkAnnotation.Url(n.destination, link)) { append(words) }
                 }
                 is SoftLineBreak -> append(' ')
                 is HardLineBreak -> append('\n')

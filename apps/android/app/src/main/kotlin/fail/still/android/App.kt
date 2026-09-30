@@ -380,7 +380,10 @@ fun StillFailApp(app: AppState) {
     val workspaces by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     // Links in what agents write go through here: still.fail's own open in the app (AppState.openLink), the rest as before.
     val system = LocalUriHandler.current
-    val links = remember(system) { object : UriHandler { override fun openUri(uri: String) { app.openLink(uri) { system.openUri(uri) } } } }
+    // Nothing on the phone opens it (a bare file name, an unknown scheme): said, not a crash.
+    val links = remember(system) { object : UriHandler { override fun openUri(uri: String) { app.openLink(uri) {
+        try { system.openUri(uri) } catch (_: Exception) { app.toast = "打不开这个链接" }
+    } } } }
     CompositionLocalProvider(LocalUriHandler provides links) { Box(Modifier.fillMaxSize().background(C.bg)) {
         val signedIn = accounts.value
         Box(Modifier.fillMaxSize().hazeSource(app.haze).background(C.bg)) { when {
