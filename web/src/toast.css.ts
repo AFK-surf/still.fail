@@ -137,11 +137,14 @@ globalStyle(fileCardOpen, {
   font: "inherit", textAlign: "left", cursor: "pointer", borderRadius: `calc(8px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape,
 });
-/** Room around it for the avatar's ring: the line clips (to fold away) at its padding's edge, not the ring's. */
+/**
+ * Room around it for the avatar's ring (3px out, its edge smoothed over a pixel more on a phone's fractional scale): the
+ * line clips (to fold away) at its padding's edge, not the ring's.
+ */
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(activityLine, {
-  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: "0", overflow: "hidden", padding: "4px",
-  margin: "-4px", border: "0", background: "none", font: "inherit", fontSize: vars.textSm, textAlign: "left",
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: "0", overflow: "hidden", padding: "6px",
+  margin: "-6px", border: "0", background: "none", font: "inherit", fontSize: vars.textSm, textAlign: "left",
   color: vars.muted, cursor: "pointer",
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */

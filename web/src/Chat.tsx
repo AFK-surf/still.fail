@@ -366,8 +366,11 @@ export function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
   return away;
 }
 
-/** Where each chat was left: the message at the top of its pane, and how far below the pane's top it sat. */
-const leftAt = new Map<string, { ts: string; offset: number }>();
+/**
+ * Where each chat was left: the message at the top of its pane, and how far below the pane's top it sat; and, if it
+ * was left at its bottom, the last message then (`bottom`).
+ */
+const leftAt = new Map<string, { ts: string; offset: number; bottom: string | null }>();
 
 /**
  * Remembers where the reader was in a chat and takes them back there when
@@ -384,7 +387,8 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     const record = () => {
       const top = pane.getBoundingClientRect().top;
       const first = [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].find((m) => m.getBoundingClientRect().bottom > top);
-      if (first) leftAt.set(key, { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top });
+      const bottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2 ? lastTs(pane) : null;
+      if (first) leftAt.set(key, { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom });
     };
     pane.addEventListener("scroll", record, { passive: true });
     return () => {
@@ -396,12 +400,20 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     if (!saved || !ready || restored.current) return;
     restored.current = true;
     const pane = ref.current;
+    // Left at the bottom with nothing new since: it opens at the bottom, following it (the top message's offset would
+    // not land there once what is below it is laid out otherwise: images still loading, an activity come or gone).
+    if (pane && saved.bottom !== null && lastTs(pane) === saved.bottom) return;
     const at = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${saved.ts}"]`);
     if (!pane || !at) return;
     // A reader's move: the pane keeps it rather than holding its bottom.
     pane.dispatchEvent(new WheelEvent("wheel"));
     pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
   }, [ref, saved, ready]);
+}
+
+/** The last message's `ts` in a pane. */
+function lastTs(pane: HTMLElement): string | null {
+  return [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].at(-1)?.dataset.ts ?? null;
 }
 
 /**

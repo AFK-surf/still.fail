@@ -300,13 +300,13 @@ export const quotePop = style({
 });
 export const activityLine = style({
   selectors: {
-    [`${chatList} &`]: { marginLeft: "-29px" },
+    [`${chatList} &`]: { marginLeft: "-31px" },
     "&:hover": { color: vars.text },
   },
   "@media": {
     "(max-width: 700px)": {
       selectors: {
-        [`${chatList} &`]: { marginLeft: "-7px" },
+        [`${chatList} &`]: { marginLeft: "-9px" },
       },
     },
   },
