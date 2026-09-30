@@ -76,7 +76,8 @@ function arcPath(from: number, to: number) {
 }
 
 export function StationGlyph({ counts, size = 24 }: { counts: GlyphCounts; size?: number }) {
-  const mask = useId();
+  // Only characters a url(#…) takes as they are: CSS.escape is not there when the site is rendered ahead (SSR).
+  const mask = `station-glyph-${useId().replace(/[^\w-]/g, "")}`;
   const { arcs, dots } = glyphLayout(counts);
   const blinking = counts.asleep ? 0 : counts.working;
   return (
@@ -94,7 +95,7 @@ export function StationGlyph({ counts, size = 24 }: { counts: GlyphCounts; size?
         {arcs.map((a, i) => <path key={i} className={css.glyphPart} d={arcPath(a.from, a.to)} fill="none" stroke="currentColor"
           strokeWidth={W} strokeLinecap="round" strokeOpacity={a.lit ? 1 : TRACK} />)}
         {dots.map((d) => { const [x, y] = at(d); return <circle key={d} cx={n(x)} cy={n(y)} r="1.25" className={css.glyphDot} />; })}
-        <rect x="7.1" y="7.9" width="9.8" height="8.2" rx="3" fill="currentColor" mask={`url(#${CSS.escape(mask)})`} />
+        <rect x="7.1" y="7.9" width="9.8" height="8.2" rx="3" fill="currentColor" mask={`url(#${mask})`} />
       </g>
     </svg>
   );
