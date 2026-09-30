@@ -596,7 +596,10 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 // own way, and a message out of an avatar comes out of it instead.
                 val flies = host.takes(row.id, row is Entry.Out || (row is Entry.Said && row.m.mine && !row.m.system))
                 val f = if (flies) host.flight else null
-                val eases = fresh && !flies && row !is Entry.Working && !(row is Entry.Said && motion.emits(row.m.seq))
+                // Flown in, it is where it came to once it lands: it does not rise in again as the flight lets it go.
+                val flew = remember(row.id) { booleanArrayOf(false) }
+                if (flies) flew[0] = true
+                val eases = fresh && !flew[0] && row !is Entry.Working && !(row is Entry.Said && motion.emits(row.m.seq))
                 Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = tween(200)).rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
