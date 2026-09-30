@@ -2111,7 +2111,7 @@ pub struct StationView {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct StationNet {
-    /// 直连, 经中继北京 (the relay's name, or 经中继（host）), or 正在选路.
+    /// 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路.
     pub path: String,
     pub rtt: Option<NetFigure>,
     /// Round trips over the last minute, oldest first, in milliseconds.
@@ -2121,6 +2121,9 @@ pub struct StationNet {
     pub up: String,
     /// What went over it since it opened: 本次共 ↓ 212 MB · ↑ 9.6 MB.
     pub total: String,
+    /// The same each way: 212 MB. Missing from a core from before.
+    pub down_total: Option<String>,
+    pub up_total: Option<String>,
     /// Packets lost over the last minute, when some were.
     pub loss: Option<NetFigure>,
 }

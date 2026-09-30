@@ -3,17 +3,10 @@
 // connections.
 package fail.still.android.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -229,56 +222,38 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
 
 
 /**
- * This device's connection to a station: how it goes (and packets lost, when some were) over its round trip (with the
- * last minute's as a small line) on the left; the speed each way stacked on the right, ↑ over ↓, the figures in a
- * column of their own; what went over it below. Grey, but for what the core says is off. Every line is one line,
- * the figures in fixed-width digits with room kept for them: nothing wraps or moves as the figures change.
+ * This device's connection to a station: how it goes (and packets lost, when some were) over its round trip on the
+ * left; on the right, ↑ over ↓, the speed each way and what went that way since it opened, each in a column of its own.
+ * Grey, but for what the core says is off. Every line is one line, the figures in fixed-width digits with room kept for
+ * them: nothing wraps or moves as the figures change.
  */
 @Composable
 internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
     val c = C
     val tone = { f: NetFigure -> when (f.level) { "red" -> c.red; "amber" -> c.warn; else -> c.ink } }
     val figure = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(net.path, Modifier.weight(1f, fill = false), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    net.loss?.let { Text(it.text, style = figure, color = tone(it), maxLines = 1) }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(net.path, Modifier.weight(1f, fill = false), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                net.loss?.let { Text(it.text, style = figure, color = tone(it), maxLines = 1) }
+            }
+            net.rtt?.let { rtt ->
+                Row {
+                    Text("延时 ", fontSize = 13.sp, color = C.muted, maxLines = 1)
+                    Text(rtt.text, style = figure, color = tone(rtt), maxLines = 1)
                 }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            listOf(Triple("↑", net.up, net.upTotal), Triple("↓", net.down, net.downTotal)).forEach { (arrow, rate, total) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    net.rtt?.let { rtt ->
-                        Text("延时 ", fontSize = 13.sp, color = C.muted, maxLines = 1)
-                        Text(rtt.text, Modifier.widthIn(min = 52.dp), style = figure, color = tone(rtt), maxLines = 1)
-                        if (net.rttHistory.size > 1) Spark(net.rttHistory, if (rtt.level == "ok") c.subtle else tone(rtt), Modifier.padding(start = 6.dp))
-                    }
-                }
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                listOf("↑" to net.up, "↓" to net.down).forEach { (arrow, rate) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(arrow, fontSize = 13.sp, color = C.muted)
-                        Text(rate, Modifier.padding(start = 6.dp).width(72.dp), style = figure, color = C.ink, maxLines = 1)
-                    }
+                    Text(arrow, fontSize = 13.sp, color = C.muted)
+                    Text(rate, Modifier.padding(start = 6.dp).width(72.dp), style = figure, color = C.ink, maxLines = 1)
+                    total?.let { Text("共 $it", Modifier.width(64.dp), fontSize = 13.sp, fontFeatureSettings = "tnum", color = C.muted, maxLines = 1) }
                 }
             }
         }
-        Text(net.total, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** A minute's round trips as a small line, drawn on twice the highest: a steady one runs across the middle, a spike rises from it. */
-@Composable
-private fun Spark(points: List<Double>, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.width(48.dp).height(14.dp)) {
-        val top = (points.max() * 2).coerceAtLeast(1.0)
-        val w = 1.3.dp.toPx()
-        val path = Path()
-        points.forEachIndexed { i, v ->
-            val o = Offset(size.width * i / (points.size - 1), (size.height - w) * (1 - (v / top).toFloat()) + w / 2)
-            if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
-        }
-        drawPath(path, color, style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 

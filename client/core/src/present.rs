@@ -454,7 +454,7 @@ pub fn host(h: &mut Value) {
 
 /// A station's connection as its card shows it (shapes `StationNet`), from what `Topic::Net` read of it; None
 /// while there is none. Only what is off is coloured: a slow round trip, packets lost. A relay is said by the name
-/// still.fail gives it (`relay_name`, by host), or its host.
+/// still.fail gives it (`relay_name`, by host: 北京中继), or its host.
 pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<Value> {
     if !raw.is_object() {
         return None;
@@ -463,10 +463,10 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
         Some("direct") => "直连".to_string(),
         Some("relay") => match raw.get("relay").and_then(Value::as_str).filter(|h| !h.is_empty()) {
             Some(host) => match relay_name(host) {
-                Some(name) => format!("经中继{name}"),
-                None => format!("经中继（{host}）"),
+                Some(name) => format!("{name}中继"),
+                None => format!("中继 {host}"),
             },
-            None => "经中继".to_string(),
+            None => "中继".to_string(),
         },
         _ => "正在选路".to_string(),
     };
@@ -490,6 +490,8 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
         "path": path, "rtt": rtt, "rttHistory": history,
         "down": rate("rxBps"), "up": rate("txBps"),
         "total": format!("本次共 ↓ {} · ↑ {}", format::bytes(n("rxBytes")), format::bytes(n("txBytes"))),
+        "downTotal": format::bytes(n("rxBytes")),
+        "upTotal": format::bytes(n("txBytes")),
         "loss": loss,
     }))
 }
@@ -596,13 +598,14 @@ mod tests {
         assert_eq!(shown["rttHistory"], json!([40.0, 38.4]));
         assert_eq!((shown["down"].as_str(), shown["up"].as_str()), (Some("1.4 MB/s"), Some("82 KB/s")));
         assert_eq!(shown["total"], "本次共 ↓ 212 MB · ↑ 9.6 MB");
+        assert_eq!((shown["downTotal"].as_str(), shown["upTotal"].as_str()), (Some("212 MB"), Some("9.6 MB")));
         assert_eq!(shown["loss"], Value::Null);
 
         let raw = json!({ "path": "relay", "relay": "relay.still.fail", "rttMs": 286.0, "rxBytes": 0, "txBytes": 0, "samples": [sample(1200.0, 40, 2)] });
         let shown = net(&raw, &unnamed).unwrap();
-        assert_eq!(shown["path"], "经中继（relay.still.fail）");
+        assert_eq!(shown["path"], "中继 relay.still.fail");
         let named = |host: &str| (host == "relay.still.fail").then(|| "北京".to_string());
-        assert_eq!(net(&raw, &named).unwrap()["path"], "经中继北京");
+        assert_eq!(net(&raw, &named).unwrap()["path"], "北京中继");
         assert_eq!(shown["rtt"]["level"], "ok");
         assert_eq!(shown["loss"], json!({ "text": "丢包 5.0%", "level": "amber" }));
         // Not yet two readings: nothing to say of speed.
