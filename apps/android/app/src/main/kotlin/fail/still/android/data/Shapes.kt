@@ -1019,6 +1019,26 @@ data class ConnectItem (
 	val running: Long
 )
 
+/// One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble.
+@Serializable
+data class StatusItem (
+	val state: String,
+	val text: String,
+	val detail: String
+)
+
+/// What a chat says of its connection (the `connection` topic; client/core/src/pill.rs), all decided in the core:
+/// `tone` busy (its link coming back, or something of its workspace waited on a while) | trouble (down) | back (up
+/// again, for a moment after a busy or trouble was shown), absent while there is nothing to say; `text` the line,
+/// `detail` beside it, `items` each thing waited on (on hover).
+@Serializable
+data class ConnectionView (
+	val tone: String? = null,
+	val text: String? = null,
+	val detail: String? = null,
+	val items: List<StatusItem>
+)
+
 @Serializable
 data class ConnectsView (
 	val me: Me,
@@ -1759,14 +1779,6 @@ data class SkillFile (
 data class StationMemory (
 	val global: MemoryFile,
 	val skills: List<SkillFile>
-)
-
-/// One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble.
-@Serializable
-data class StatusItem (
-	val state: String,
-	val text: String,
-	val detail: String
 )
 
 /// What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a

@@ -1218,6 +1218,21 @@ pub struct StatusView {
     pub items: Vec<StatusItem>,
 }
 
+/// What a chat says of its connection (the `connection` topic; client/core/src/pill.rs), all decided in the core:
+/// `tone` busy (its link coming back, or something of its workspace waited on a while) | trouble (down) | back (up
+/// again, for a moment after a busy or trouble was shown), absent while there is nothing to say; `text` the line,
+/// `detail` beside it, `items` each thing waited on (on hover).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionView {
+    pub tone: Option<String>,
+    pub text: Option<String>,
+    pub detail: Option<String>,
+    pub items: Vec<StatusItem>,
+}
+
 /// What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first.
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

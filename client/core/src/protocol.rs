@@ -92,6 +92,9 @@ pub enum Topic {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         workspace: Option<String>,
     },
+    /// What a chat on `station` says of its connection (pill.rs): its link down or coming back, else what its
+    /// workspace's `status` says; coming back only once that has lasted a moment, and back again only after.
+    Connection { station: String },
     /// What is being written to a chat on this device (its text, quotes, and files already up), kept until sent
     /// (`draft.put`). `chat`: its session key, `thread:<id>`, or `new` for a new chat on the station; empty until
     /// something is written.
@@ -147,6 +150,8 @@ impl Topic {
             Topic::ArchivedRows { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
+            // The core's own (pill.rs).
+            Topic::Connection { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
             // The core's own (jobs.rs), not the station module's.

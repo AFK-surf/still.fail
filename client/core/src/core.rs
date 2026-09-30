@@ -203,8 +203,9 @@ impl Core {
             let choose = Choose::new(host.clone(), store.clone(), data.clone(), views.clone(), check_profile(me.clone()));
             let sync = Sync::new(store.clone(), host.clone(), workspaces.clone());
             let notices = Notices::new(store.clone(), host.clone(), workspaces.clone(), email_of(me.clone()));
+            let pills = crate::pill::Pills::new(host.clone(), store.clone(), views.clone());
             let jobs = crate::jobs::Polls::new(host.clone(), Rc::downgrade(&store), Rc::downgrade(&stations));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), workspaces: workspaces.clone(), notices: notices.clone(), attend: attend.clone(), jobs, tracer: tracer.clone(), opening: RefCell::default() }));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), workspaces: workspaces.clone(), notices: notices.clone(), attend: attend.clone(), pills, jobs, tracer: tracer.clone(), opening: RefCell::default() }));
             sync.on_look({
                 let notices = Rc::downgrade(&notices);
                 let (attend, store) = (Rc::downgrade(&attend), Rc::downgrade(&store));
@@ -363,6 +364,8 @@ struct Router {
     workspaces: Rc<Workspaces>,
     notices: Rc<Notices>,
     attend: Rc<Attend>,
+    /// What each chat says of its connection (pill.rs).
+    pills: Rc<crate::pill::Pills>,
     /// A job and its output, read again while shown (jobs.rs).
     jobs: Rc<crate::jobs::Polls>,
     tracer: Rc<Tracer>,
@@ -383,6 +386,9 @@ impl Source for Router {
                 core.store.invalidate(topic);
             }
             return;
+        }
+        if let Topic::Connection { .. } = topic {
+            return self.pills.start(topic);
         }
         if Choose::handles(topic) {
             return self.choose.start(topic);
@@ -432,6 +438,9 @@ impl Source for Router {
         if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs) {
             return;
         }
+        if let Topic::Connection { .. } = topic {
+            return self.pills.stop(topic);
+        }
         if Choose::handles(topic) {
             return self.choose.stop(topic);
         }
@@ -464,6 +473,9 @@ impl Source for Router {
         }
         if let Topic::Notify { workspace } = topic {
             return Some(Ok(self.attend.value(workspace.as_deref())));
+        }
+        if let Topic::Connection { .. } = topic {
+            return self.pills.compute(topic).map(Ok);
         }
         if Choose::handles(topic) {
             return self.choose.compute(topic);
@@ -2579,6 +2591,45 @@ mod tests {
             pass(10).await;
             assert_eq!((inner.workspaces.owner("w1"), inner.workspaces.owner("w2").as_deref()), (None, Some("s2")));
             assert!(inner.data.record("overview", "w2/b").is_some());
+        });
+    }
+
+    #[test]
+    fn a_chats_connection_says_only_what_is_of_its_workspace() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let inner = core.inner.clone();
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            let settle = || async {
+                host.settle().await;
+                host.settle().await;
+            };
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Connection { station: "local".into() } });
+            settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!({ "items": [] }));
+            // Slow in another workspace: nothing of it here.
+            let other = inner.workspaces.of("w9");
+            let _there = other.status.begin(Place::Station("w9/s".into()), "读取对话", false);
+            other.status.skip(3_000.0);
+            other.status.changed();
+            settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!({ "items": [] }));
+            // Slow here: said at once (it has lasted a while), then 已连上 a moment once over.
+            let local = inner.workspaces.of("local");
+            let here = local.status.begin(Place::Station("local".into()), "读取对话", false);
+            local.status.skip(3_000.0);
+            local.status.changed();
+            settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["tone"], "busy");
+            assert!(values[&1]["text"].as_str().is_some_and(|t| t.starts_with("读取对话 · 3 秒")), "{}", values[&1]);
+            drop(here);
+            settle().await;
+            apply(&host, &mut values);
+            assert_eq!((values[&1]["tone"].as_str(), values[&1]["text"].as_str()), (Some("back"), Some("已连上")));
         });
     }
 

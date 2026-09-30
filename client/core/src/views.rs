@@ -440,7 +440,7 @@ impl Views {
     }
 
     /// A station's name as its workspace has it (none on a station's own page), else its id.
-    fn station_name(&self, station: &str) -> String {
+    pub(crate) fn station_name(&self, station: &str) -> String {
         let Some((scope, id)) = station.split_once('/') else { return String::new() };
         match self.stations(scope) {
             Some(Ok(stations)) => stations.into_iter().find(|s| s.address == station).map(|s| s.name).unwrap_or_else(|| id.to_string()),

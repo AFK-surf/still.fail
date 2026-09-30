@@ -23,6 +23,7 @@ pub mod looks;
 pub mod mesh;
 pub mod notices;
 pub mod ops;
+pub mod pill;
 pub mod prefs;
 pub mod present;
 pub mod protocol;

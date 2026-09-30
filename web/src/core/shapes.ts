@@ -997,6 +997,26 @@ export interface ConnectItem {
 	running: number;
 }
 
+/** One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble. */
+export interface StatusItem {
+	state: string;
+	text: string;
+	detail: string;
+}
+
+/**
+ * What a chat says of its connection (the `connection` topic; client/core/src/pill.rs), all decided in the core:
+ * `tone` busy (its link coming back, or something of its workspace waited on a while) | trouble (down) | back (up
+ * again, for a moment after a busy or trouble was shown), absent while there is nothing to say; `text` the line,
+ * `detail` beside it, `items` each thing waited on (on hover).
+ */
+export interface ConnectionView {
+	tone?: string;
+	text?: string;
+	detail?: string;
+	items: StatusItem[];
+}
+
 export interface ConnectsView {
 	me: Me;
 	items: ConnectItem[];
@@ -1703,13 +1723,6 @@ export interface SkillFile {
 export interface StationMemory {
 	global: MemoryFile;
 	skills: SkillFile[];
-}
-
-/** One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble. */
-export interface StatusItem {
-	state: string;
-	text: string;
-	detail: string;
 }
 
 /**
