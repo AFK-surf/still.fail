@@ -1459,3 +1459,21 @@ fn titles_are_one_short_line() {
     assert_eq!(super::titles::clean_title(&"长".repeat(40)).chars().count(), 30);
     assert_eq!(super::titles::clean_title(" 。 "), "");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_mention_slack_sends_twice_at_once_makes_one_session_without_an_error() {
+    let r = Arc::new(setup());
+    for i in 0..20 {
+        let m = InboundMessage { ts: format!("{}.000001", 100 + i), thread_ts: format!("{}.000001", 100 + i), ..say("<@UBOT> fix the build") };
+        // app_mention and message for the same post, handled side by side as the Slack socket does.
+        let (a, b) = (r.clone(), r.clone());
+        let (ma, mb) = (m.clone(), m.clone());
+        let (x, y) = tokio::join!(tokio::spawn(async move { a.accept(&ma).await }), tokio::spawn(async move { b.accept(&mb).await }));
+        x.unwrap();
+        y.unwrap();
+    }
+    settle().await;
+    let texts = r.chat.texts();
+    assert!(!texts.iter().any(|t| t.contains("无法创建会话")), "{texts:?}");
+    assert!(r.hub.thread_gates.lock().unwrap().is_empty());
+}

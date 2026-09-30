@@ -169,6 +169,8 @@ pub struct Hub {
     client_keys: Mutex<HashMap<String, (String, i64)>>,
     /// Titles agents gave chats someone has open, waiting until they leave (titles.rs), by thread.
     titles: Mutex<HashMap<i64, String>>,
+    /// One message at a time per thread: Slack sends a mention twice (app_mention and message), and both would make its session.
+    thread_gates: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     me: Weak<Hub>,
 }
 
@@ -210,6 +212,7 @@ impl Hub {
             adopted: Mutex::default(),
             client_keys: Mutex::default(),
             titles: Mutex::default(),
+            thread_gates: Mutex::default(),
             me: me.clone(),
         })
     }
@@ -371,6 +374,21 @@ impl Hub {
 
     /// Accepts one message seen by a connect. Resolves once it is durably recorded (or deliberately ignored).
     pub async fn accept(&self, connect_id: &str, message: InboundMessage) -> Result<()> {
+        let at = format!("{}\0{}\0{}", self.surface(connect_id), message.channel, message.thread_ts);
+        let gate = self.thread_gates.lock().unwrap().entry(at.clone()).or_default().clone();
+        let accepted = {
+            let _turn = gate.lock().await;
+            self.accept_in_turn(connect_id, message).await
+        };
+        let mut gates = self.thread_gates.lock().unwrap();
+        // Only the map and this call hold it: no one waits on it.
+        if Arc::strong_count(&gate) == 2 {
+            gates.remove(&at);
+        }
+        accepted
+    }
+
+    async fn accept_in_turn(&self, connect_id: &str, message: InboundMessage) -> Result<()> {
         let config = self.config();
         // What a bot of this station posted is its agent's, recorded and handed to the thread as it was posted: Slack's
         // copy of it, seen through another connect, is not a message of its own.
