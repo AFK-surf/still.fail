@@ -17,13 +17,15 @@
 
 ## 待部署
 
-- relay 预算不再逐帧转发（relay-direct-websocket）：要部署 relay，所有 relay 连接会断一次，客户端会自己重连。DO 类没变，不用迁移，旧的额度数据直接能读。上线后验：`POST /v1/admin/relay/where` 能返回；浏览器连得上 station；过几个小时用 GraphQL 的 `durableObjectsPeriodicGroups` 查 RelayBudget 所在 namespace（`2bb98e53…`）的 activeTime，应该从每天约 86,000 秒降到很少，inboundWebsocketMsgCount 接近 0。当天流量超额时，budget 会在下一次读 metrics（最多 1 分钟后）重启容器。
-
-- 「正在发送」按消息发出的时间算 0.8 秒（sending-shown-once）：web 随部署生效，安卓要等下次发版。只改客户端，新旧 station 都行。上线后验：新建对话、发第一条，station 慢时「正在发送」只出现一次，不消失再出现。
-
-- 额度用完自动换账号（profile-quota-reselect）：只改 station，页面和安卓都没动，新旧版本混着跑没问题；要重新构建并重启 station，别的 station 要各自 `stillfail update` 才有这个改动。「用完」的标记只存在内存里，重启后就没了。上线后验：自动分配的会话撞到额度时，station 日志里有 `allowance ran out; going on on another profile`，chat 里不发提示，在新账号上接着做；指定了账号的会话仍然发「⚠️ 触发额度或限流…」，改账号或模型后自动继续。
-
 ## 2026-09-30
+
+### 21:13 部署 d00630c（relay 预算不再逐帧转发）
+
+- 部署：c4f4561 → d00630c，包括 18f45dd（内嵌 HTML 记住高度）和 d00630c（relay-direct-websocket）。完整检查 4 项通过；部署了 relay、api、web、admin，studio 的 station 只重建了页面。所有 relay 连接断了一次，之后自动重连。
+- 起因：CF 出了按量账单。查 9 月用量发现，RelayBudget 的 DO（namespace `d73f80fb…`）被每条 relay 连接占着，每天 active 86,300 秒，每天约 465 万条入站消息；容器的 DO（`2bb98e53…`）也收同样多的消息。现在 RelayBudget 只在建连接时放行，每分钟读一次 iroh-relay 的 metrics 来统计流量。
+- 验证：`/relay` 的 WebSocket 升级请求返回 101。GraphQL 按分钟查：部署后 RelayBudget 每分钟 active 0.2–0.8 秒（每分钟一次的 alarm），入站消息 0；容器的 DO 照常每分钟收几千条。alarm 一直在续，说明从容器 9090 端口读到了打开的连接。
+- 容器的 DO 仍然全天在线，并逐帧转发（@cloudflare/containers 的 containerFetch 就是这么转发的），这部分省不掉。按 9 月底的流量，relay 每月从约 $8–9 降到约 $4–5。
+- 别的按量开销（R2 `zork-kache` 50 GB、sokoban/benchmark 等旧资源）没动，等人决定要不要删。
 
 ### 21:03 部署 c4f4561（桌面端差量更新）
 
