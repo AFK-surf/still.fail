@@ -24,6 +24,12 @@
 
 ## 2026-09-30
 
+### 20:20 桌面版 0.1.1169（586404e）
+
+- 发了桌面版 0.1.1169：菜单栏 still.fail 菜单里的「检查更新…」、设置里的「版本」页（desktop-check-updates）。两个域名上的 `desktop/stillfail-mac.yml` 都是 1169，zip 用 GET 下载是 200。上一版是 0.1.1123，改名以后桌面版就没再发过。
+- 签名不用非得在 studio 本机终端跑：`~/bin/ember-gui <名字> "<命令>"` 会在图形会话里跑命令（登录钥匙串在那里是解锁的），ssh 里 codesign 报的 errSecInternalComponent 就没了。这次的命令是 `~/bin/ember-gui desktop-release "export PATH=…; cd <新 worktree> && sh scripts/release.sh desktop"`，worktree 从 github/main 开，根目录、apps/desktop、cloud 三处都要 `pnpm install`。日志在 `/tmp/ember-gui-<名字>.log`，跑完退出码写进 `.done`。从头编译到上传完大约 50 分钟，其中签名占了大半。
+- 上线后验：已经装好的 1123 会在启动时或 4 小时内查到新版，侧栏顶上出现「更新」。更新以后，菜单里点「检查更新…」应该弹出「已是最新版本」。
+
 ### 18:19 部署 7fb7463 → 6614ba8 → 8652e08，官网
 
 - 部署：`ember-deploy` 从 6b6782f 起分三次上线。7fb7463：cloud api/web/admin、studio 的 station 重启、station 发布包上传。第一次跑在完整检查的「Rust: station」挂了，报 `iroh-mainline-address-lookup` 里 `iroh_dns` 有两个版本，Cargo.lock 其实只有一份。原因是在 studio 上给别的 worktree 跑测试时用了 `CARGO_TARGET_DIR=~/WebstormProjects/ember/mesh/target`，缓存被弄乱了；重跑就过了。以后在 worktree 里测试别共用主检出的 target。6614ba8、8652e08 只有 web/admin 变化。部署时 `ember.3720.org/healthz` 报过一次 SSL EOF，本机和 studio 重查都是 200。
