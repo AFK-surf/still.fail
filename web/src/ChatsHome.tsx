@@ -1,8 +1,9 @@
-// The chats as a page of their own (the 搜索列表 layout, layout.ts): no sidebar; the search on top, typed into at once,
-// narrowing the list in place (the core's `chatSearch`); under it 全部 / 我参与的, the archive and a new chat, then the
-// chats as the sidebar lists them, by day. ↑/↓ pick a row from the search, from the chat last open, ↩ opens it. Each chat's bar leads back here
+// The chats as a page of their own (the 搜索列表 layout, layout.ts), laid out as a chat: no sidebar; the chats as the
+// sidebar lists them, by day, in the chat's column (where the chat left was, pushed aside or not), 全部 / 我参与的, the
+// archive and a new chat above them, and the search where the composer is, typed into at once, narrowing the list in
+// place (the core's `chatSearch`). ↑/↓ pick a row from the chat last open, ↩ opens it, Esc goes back to that chat. Each chat's bar leads back here
 // (ListBack), with how the others are doing.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { useChatSearch, useChats, type ChatItem } from "./api.ts";
 import { chatTone, type ChatTone } from "./ChatMark.tsx";
@@ -18,6 +19,8 @@ import * as markCss from "./ChatMark.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
+import * as composerCss from "./styles/composer.css.ts";
+import * as shellCss from "./styles/shell.css.ts";
 
 export function ChatsHome({ scope, newChat, settings, archive }: { scope: string; newChat: string; settings: string; archive: string }) {
   const navigate = useNavigate();
@@ -56,41 +59,30 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
     if (item) navigate(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`);
   };
   const keys = shortcutOf("chat.switch");
+  // Where the chat left was (its column, pushed aside by a panel or a preview), if the window is as it was.
+  const main = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<CSSProperties | undefined>(undefined);
+  useLayoutEffect(() => {
+    const width = main.current?.getBoundingClientRect().width;
+    if (column && width !== undefined && Math.abs(width - column.main) < 1) setPlace({ marginLeft: column.left, marginRight: 0, width: column.width });
+  }, []);
   let n = 0;
   return (
-    <div className={css.home}>
+    <div ref={main} className={css.home} data-avoid-previews="">
       <header className={`${sidebarCss.pageBar} ${css.bar}`}>
-        <div />
-        <div />
+        <div className={css.tools} style={place}>
+          <Segmented label="对话" value={onlyMine ? "mine" : "all"} onChange={(v) => setOnlyMine(v === "mine")}
+            options={[{ value: "all", label: "全部" }, { value: "mine", label: "我参与的" }]} />
+          <Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={archive}><Archive size={15} />已归档</Link>
+          <Link className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.newChat}`} to={newChat}><Compose size={15} />新建对话</Link>
+        </div>
         <div className={css.barActions}>
           <div className={css.station}><StationTrouble scope={scope} to={settings} /></div>
           <Tip label="设置"><Link className={pagesCss.iconBtn} to={settings} aria-label="设置"><Settings {...ICON} /></Link></Tip>
         </div>
       </header>
       <div className={css.scroll}>
-        <div className={css.column}>
-          {/* The search and what is beside it stay put; the list scrolls under them. */}
-          <div className={css.head}>
-          <label className={css.searchBox}>
-            <Search size={18} />
-            <input className={css.searchInput} autoFocus placeholder="搜索对话" aria-label="搜索对话" value={query} spellCheck={false}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing) return;
-                const step = e.key === "ArrowDown" || e.ctrlKey && e.key === "n" ? 1 : e.key === "ArrowUp" || e.ctrlKey && e.key === "p" ? -1 : 0;
-                if (step) { e.preventDefault(); pick(at < 0 ? (step > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, at + step))); }
-                else if (e.key === "Enter") { e.preventDefault(); open(rows[Math.max(at, 0)]); }
-                else if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); }
-              }} />
-            {keys && !query && <kbd className={css.searchKeys}>{keys}</kbd>}
-          </label>
-          <div className={css.tools}>
-            <Segmented label="对话" value={onlyMine ? "mine" : "all"} onChange={(v) => setOnlyMine(v === "mine")}
-              options={[{ value: "all", label: "全部" }, { value: "mine", label: "我参与的" }]} />
-            <Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={archive}><Archive size={15} />已归档</Link>
-            <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.newChat}`} to={newChat}><Compose size={15} />新建对话</Link>
-          </div>
-          </div>
+        <div className={css.column} style={place}>
           {!typed && <div className={css.jobs}><OpenJobs scope={scope} /></div>}
           <div ref={list} className={css.list}>
             {!typed && !view && !chats.error && <SkeletonRows />}
@@ -110,8 +102,39 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
           </div>
         </div>
       </div>
+      {/* The search where a chat's composer is, and as it looks. */}
+      <div className={css.bottom}>
+        <label className={css.searchBox} style={place}>
+          <Search size={16} />
+          <input className={css.searchInput} autoFocus placeholder="搜索对话" aria-label="搜索对话" value={query} spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              const step = e.key === "ArrowDown" || e.ctrlKey && e.key === "n" ? 1 : e.key === "ArrowUp" || e.ctrlKey && e.key === "p" ? -1 : 0;
+              if (step) { e.preventDefault(); pick(at < 0 ? (step > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, at + step))); }
+              else if (e.key === "Enter") { e.preventDefault(); open(rows[Math.max(at, 0)]); }
+              // Esc: what was typed goes; with nothing typed, back to the chat last open.
+              else if (e.key === "Escape") {
+                e.preventDefault();
+                if (query) setQuery("");
+                else if (lastChat(scope, "")) navigate(lastChat(scope, ""));
+              }
+            }} />
+          {keys && !query && <kbd className={css.searchKeys}>{keys}</kbd>}
+        </label>
+      </div>
     </div>
   );
+}
+
+/** Where the chat's column was as it was left for the list (in the page's main area), for the list to take its place. */
+let column: { left: number; width: number; main: number } | null = null;
+
+/** Notes where the chat in view has its column (its composer's width): called on the way to the list. */
+export function rememberColumn(): void {
+  const box = document.querySelector(`.${composerCss.composerBox}`)?.getBoundingClientRect();
+  const main = document.querySelector(`.${shellCss.main}`)?.getBoundingClientRect();
+  column = box && main && box.width > 0 ? { left: box.left - main.left, width: box.width, main: main.width } : null;
 }
 
 const ORDER: ChatTone[] = ["alert", "busy", "done"];
@@ -134,7 +157,7 @@ export function ListBack({ scope, to }: { scope: string; to: string }) {
   const said = ORDER.filter((t) => counts.get(t)).map((t) => `${counts.get(t)} 个${SAID[t]}`).join("，");
   return (
     <Tip label={said ? `对话列表：${said}` : "对话列表"}>
-      <NavLink className={css.back} to={to} aria-label={said ? `对话列表，${said}` : "对话列表"}>
+      <NavLink className={css.back} to={to} onClick={rememberColumn} aria-label={said ? `对话列表，${said}` : "对话列表"}>
         {!said && "对话"}
         {ORDER.filter((t) => counts.get(t)).map((t) => (
           <span key={t} className={css.backCount}><span className={markCss.chatMarkInline} data-tone={t} />{counts.get(t)}</span>

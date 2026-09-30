@@ -7,31 +7,38 @@ import { pageBarTitle } from "./styles/conversation.css.ts";
 import { sessionPage } from "./styles/session.css.ts";
 import { pageBarActions } from "./pages/ChatPage.css.ts";
 
-export const home = style({ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" });
-export const bar = style({ borderBottom: 0 });
-export const barActions = style({ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, minWidth: 0 });
+export const home = style({ position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" });
+export const bar = style({ display: "flex", gap: 12, paddingRight: "calc(12px + var(--avoid-previews, 0px))" });
+// The tools line up with the column below them: no padding of the bar's own at the left.
+globalStyle(`:root [data-layout="list"] ${bar}`, { paddingLeft: 0 });
+/** A column as a chat's: 760px at most, 32px in from each side, clear of previews at the right (or where it was left). */
+const columned = { width: "min(760px, calc(100% - 64px))", margin: "0 auto" } as const;
+export const tools = style({ ...columned, display: "flex", alignItems: "center", gap: 8 });
+export const barActions = style({
+  position: "absolute", right: "calc(12px + var(--avoid-previews, 0px))", top: 0, height: 44, display: "flex", alignItems: "center", gap: 4, minWidth: 0,
+});
 export const station = style({ minWidth: 0 });
 globalStyle(`${station} > *`, { margin: 0 });
 globalStyle(`${station} a`, { marginBottom: 0 });
-export const scroll = style({ flex: 1, minHeight: 0, overflowY: "auto" });
-export const column = style({ width: "min(720px, calc(100% - 48px))", margin: "0 auto", padding: "0 0 80px" });
-/** The search and its tools, held at the top while the list scrolls under them. */
-export const head = style({ position: "sticky", top: "calc(16px - 8vh)", zIndex: 1, paddingTop: "8vh", paddingBottom: 6, background: vars.canvas });
+export const scroll = style({ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "var(--avoid-previews, 0px)" });
+export const column = style({ ...columned, paddingBottom: 96 });
 
+/** The search, where a chat's composer is and as it looks: a frosted pill 16px over the bottom. */
+export const bottom = style({
+  position: "absolute", left: 0, right: "var(--avoid-previews, 0px)", bottom: 16, display: "flex", pointerEvents: "none",
+});
 export const searchBox = style({
-  display: "flex", alignItems: "center", gap: 10, height: 52, padding: "0 16px", borderRadius: vars.rCard,
-  background: `color-mix(in srgb, ${vars.text} 5%, transparent)`, color: vars.subtle, cursor: "text",
-  cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&:focus-within": { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },
+  ...columned, display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 16px", borderRadius: 999,
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+  boxShadow: "0 1px 3px rgb(0 0 0 / .04)", color: vars.subtle, cursor: "text", pointerEvents: "auto",
 });
 export const searchInput = style({
   flex: 1, minWidth: 0, height: "100%", padding: 0, border: 0, outline: "none", background: "none", color: vars.text,
-  font: "inherit", fontSize: vars.textMd,
+  font: "inherit", fontSize: vars.textSm,
   selectors: { "&::placeholder": { color: vars.subtle } },
 });
 export const searchKeys = style({ flex: "none", fontFamily: "inherit", fontSize: vars.textXs, color: vars.subtle });
 
-export const tools = style({ display: "flex", alignItems: "center", gap: 8, marginTop: 14 });
 globalStyle(`${tools} [role="radio"]`, { whiteSpace: "nowrap", minWidth: "5em" });
 export const newChat = style({ marginLeft: "auto" });
 export const jobs = style({ margin: "6px 0 0" });

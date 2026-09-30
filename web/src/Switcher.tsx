@@ -7,6 +7,7 @@ import { useChatSearch, type ChatItem } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { useShortcut } from "./keymap.ts";
 import { useLayout } from "./layout.ts";
+import { rememberColumn } from "./ChatsHome.tsx";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
@@ -19,7 +20,7 @@ export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; n
   const [listing, setListing] = useState(false);
   // 搜索列表 (layout.ts): the list's page is the search, focused as it opens.
   const list = useLayout()[0] === "list";
-  useShortcut("chat.switch", () => list ? navigate(scope === "local" ? "/chats" : `/w/${scope}`) : setSwitching((s) => !s));
+  useShortcut("chat.switch", () => list ? (rememberColumn(), navigate(scope === "local" ? "/chats" : `/w/${scope}`)) : setSwitching((s) => !s));
   useShortcut("shortcuts", () => setListing((s) => !s));
   useShortcut("chat.new", () => navigate(newChat));
   useShortcut("settings", () => navigate(settings));
