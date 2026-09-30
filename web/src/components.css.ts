@@ -53,7 +53,7 @@ export const quotaChip = style({
 export const quotaChipEdge = style({
   position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none",
 });
-export const quotaChipTrack = style({ stroke: vars.lineStrong });
+export const quotaChipTrack = style({ stroke: vars.line });
 export const quotaChipLeft = style({ stroke: "currentColor", strokeLinecap: "round" });
 /** Its number quiet while there is plenty; in its colour once it runs low. */
 export const quotaChipText = style({
@@ -137,8 +137,11 @@ export const ringFill = style({
   },
 });
 globalStyle(`${quotaChipEdge} rect`, {
-  x: "0.75px", y: "0.75px", width: "calc(100% - 1.5px)", height: "calc(100% - 1.5px)",
-  rx: `calc(6px * ${vars.cornerScale} - 0.75px)`, fill: "none", strokeWidth: "1.5px",
+  x: "1.25px", y: "1.25px", width: "calc(100% - 2.5px)", height: "calc(100% - 2.5px)",
+  rx: `calc(6px * ${vars.cornerScale} - 1.25px)`, fill: "none", strokeWidth: "2.5px",
+});
+globalStyle(`${quotaChip}[data-small] ${quotaChipEdge} rect`, {
+  x: "1px", y: "1px", width: "calc(100% - 2px)", height: "calc(100% - 2px)", rx: `calc(6px * ${vars.cornerScale} - 1px)`, strokeWidth: "2px",
 });
 globalStyle(`${quotaRing} svg`, { position: "absolute", inset: "0" });
 globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500", marginLeft: "1px", color: vars.muted });

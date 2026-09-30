@@ -249,9 +249,6 @@ fun QuotaRing(left: Long, level: String, size: Dp = 20.dp) {
 @Composable
 fun QuotaRings(quota: fail.still.android.data.Quota?) = QuotaChips(quota)
 
-/** The grey of a chip's edge where the allowance is used (the web's --line-strong). */
-private fun lineStrong(c: StillFailColors): Color = if (c.dark) Color(0xFF3D3F44) else Color(0xFFCBCED3)
-
 /**
  * A profile's allowance, compact, as the web's QuotaBars draws it: a rounded box per window (shortest first) with what
  * is left written in it (its mark too when there is more than one), its edge drawn as far as is left, clockwise from
@@ -287,7 +284,7 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
     val low = level == "amber" || level == "red"
     Box(Modifier.height(if (small) 16.dp else 20.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
-            val sw = 1.5.dp.toPx()
+            val sw = (if (small) 2.dp else 2.5.dp).toPx()
             val inset = sw / 2
             val r = 6.dp.toPx() - inset
             val x0 = inset; val y0 = inset; val x1 = size.width - inset; val y1 = size.height - inset
@@ -303,7 +300,7 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
                 arcTo(androidx.compose.ui.geometry.Rect(x0, y0, x0 + 2 * r, y0 + 2 * r), 180f, 90f, false)
                 close()
             }
-            drawPath(path, lineStrong(c), style = Stroke(sw))
+            drawPath(path, c.line, style = Stroke(sw))
             val p = fill.coerceIn(0L, 100L)
             if (p > 0) {
                 val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
