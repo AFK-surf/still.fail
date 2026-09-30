@@ -222,26 +222,6 @@ fun PeopleStack(people: List<Person>, size: Dp = 18.dp, ring: Color = C.bg) {
 
 // ── rings ──────────────────────────────────────────────────────────────
 
-/** A percentage as a ring, coloured by the core's level. */
-@Composable
-fun Ring(percent: Long, label: String, level: String, size: Dp = 46.dp) {
-    val c = C
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val w = 5.dp.toPx() * size.value / 46f
-                val inset = w / 2 + 1.dp.toPx()
-                val box = Size(this.size.width - inset * 2, this.size.height - inset * 2)
-                drawArc(c.line, 0f, 360f, false, Offset(inset, inset), box, style = Stroke(w))
-                val p = percent.coerceIn(0L, 100L)
-                if (p > 0) drawArc(levelColor(c, level), -90f, 360f * p / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
-            }
-            Text("$percent", fontSize = if (size < 44.dp) 12.sp else 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        }
-        Text(label, fontSize = 12.sp, color = C.muted)
-    }
-}
-
 /** How full, as a colour: the core's level (ok | amber | red). */
 private fun levelColor(c: StillFailColors, level: String): Color = when (level) { "red" -> c.red; "amber" -> c.warn; else -> c.green }
 
@@ -281,44 +261,61 @@ private fun lineStrong(c: StillFailColors): Color = if (c.dark) Color(0xFF3D3F44
 fun QuotaChips(quota: fail.still.android.data.Quota?, small: Boolean = false) {
     val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     if (windows.isEmpty()) return
-    val c = C
     val lone = windows.size == 1
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        windows.forEach { w ->
-            val tone = levelColor(c, w.level)
-            val low = w.level == "amber" || w.level == "red"
-            Box(Modifier.height(if (small) 16.dp else 20.dp), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.matchParentSize()) {
-                    val sw = 1.5.dp.toPx()
-                    val inset = sw / 2
-                    val r = 6.dp.toPx() - inset
-                    val x0 = inset; val y0 = inset; val x1 = size.width - inset; val y1 = size.height - inset
-                    // As an SVG <rect> is stroked: from the top edge's start, clockwise.
-                    val path = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(x0 + r, y0); lineTo(x1 - r, y0)
-                        arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y0, x1, y0 + 2 * r), -90f, 90f, false)
-                        lineTo(x1, y1 - r)
-                        arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y1 - 2 * r, x1, y1), 0f, 90f, false)
-                        lineTo(x0 + r, y1)
-                        arcTo(androidx.compose.ui.geometry.Rect(x0, y1 - 2 * r, x0 + 2 * r, y1), 90f, 90f, false)
-                        lineTo(x0, y0 + r)
-                        arcTo(androidx.compose.ui.geometry.Rect(x0, y0, x0 + 2 * r, y0 + 2 * r), 180f, 90f, false)
-                        close()
-                    }
-                    drawPath(path, lineStrong(c), style = Stroke(sw))
-                    if (w.left > 0) {
-                        val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
-                        val part = androidx.compose.ui.graphics.Path()
-                        measure.getSegment(0f, measure.length * w.left.coerceAtMost(100) / 100f, part, true)
-                        drawPath(part, tone, style = Stroke(sw, cap = StrokeCap.Round))
-                    }
-                }
-                Row(Modifier.padding(horizontal = if (small) 5.dp else 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    val fs = if (small) 10.sp else 11.sp
-                    if (!lone) Text(w.mark, fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
-                    Text("${w.left}%", fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
-                }
+        windows.forEach { w -> EdgeChip(w.left, w.level, if (lone) null else w.mark, small) }
+    }
+}
+
+/** A machine's CPU, memory and disk as an allowance's boxes are drawn (QuotaChips): each its name and how full, its edge drawn as far as that. */
+@Composable
+fun MeterChips(meters: List<fail.still.android.data.Meter>, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        meters.forEach { m -> EdgeChip(m.percent, m.level, m.short) }
+    }
+}
+
+/**
+ * A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
+ * clockwise from the top left, in the colour of the core's level; the figure grey while it is ok, in that colour once
+ * it is not. As the web's EdgeChip (components.tsx).
+ */
+@Composable
+private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = false) {
+    val c = C
+    val tone = levelColor(c, level)
+    val low = level == "amber" || level == "red"
+    Box(Modifier.height(if (small) 16.dp else 20.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.matchParentSize()) {
+            val sw = 1.5.dp.toPx()
+            val inset = sw / 2
+            val r = 6.dp.toPx() - inset
+            val x0 = inset; val y0 = inset; val x1 = size.width - inset; val y1 = size.height - inset
+            // As an SVG <rect> is stroked: from the top edge's start, clockwise.
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(x0 + r, y0); lineTo(x1 - r, y0)
+                arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y0, x1, y0 + 2 * r), -90f, 90f, false)
+                lineTo(x1, y1 - r)
+                arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y1 - 2 * r, x1, y1), 0f, 90f, false)
+                lineTo(x0 + r, y1)
+                arcTo(androidx.compose.ui.geometry.Rect(x0, y1 - 2 * r, x0 + 2 * r, y1), 90f, 90f, false)
+                lineTo(x0, y0 + r)
+                arcTo(androidx.compose.ui.geometry.Rect(x0, y0, x0 + 2 * r, y0 + 2 * r), 180f, 90f, false)
+                close()
             }
+            drawPath(path, lineStrong(c), style = Stroke(sw))
+            val p = fill.coerceIn(0L, 100L)
+            if (p > 0) {
+                val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+                val part = androidx.compose.ui.graphics.Path()
+                measure.getSegment(0f, measure.length * p / 100f, part, true)
+                drawPath(part, tone, style = Stroke(sw, cap = StrokeCap.Round))
+            }
+        }
+        Row(Modifier.padding(horizontal = if (small) 5.dp else 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            val fs = if (small) 10.sp else 11.sp
+            if (mark != null) Text(mark, fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
+            Text("$fill%", fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
         }
     }
 }

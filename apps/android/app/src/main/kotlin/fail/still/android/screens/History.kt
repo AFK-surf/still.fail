@@ -95,7 +95,7 @@ import fail.still.android.ui.MenuSpec
 import fail.still.android.ui.ModelMark
 import fail.still.android.ui.Mono
 import fail.still.android.ui.ReaderSpec
-import fail.still.android.ui.Ring
+import fail.still.android.ui.MeterChips
 import fail.still.android.ui.Seg
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetSpec
@@ -473,9 +473,7 @@ private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: Hist
             Detail("名字", rememberStationName(station))
             if (host != null) Detail("机器", "${host.hostname} · ${host.summary}")
         }
-        if (host != null) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            host.meters.forEach { Ring(it.percent, it.short, it.level) }
-        }
+        if (host != null) MeterChips(host.meters, Modifier.padding(vertical = 10.dp))
     }
 }
 

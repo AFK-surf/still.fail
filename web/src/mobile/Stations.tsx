@@ -16,7 +16,8 @@ import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
 import { Net } from "../cloud/StationCards.tsx";
 import { RetryPill } from "../Connection.tsx";
-import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { MeterChips } from "../components.tsx";
+import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -63,7 +64,7 @@ export function StationsScreen() {
           </span>
           {s.online && s.host ? (
             <>
-              <span className={css.mStationRings}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} size={40} />)}</span>
+              <span className={css.mStationRings}><MeterChips meters={s.host.meters} bare /></span>
               {s.net && <Net net={s.net} stacked />}
             </>
           ) : !s.online ? (
@@ -140,7 +141,7 @@ export function StationScreen() {
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
           {s.online && s.host ? (
             <Card>
-              <span className={`${css.mStationRings} ${css.mRings18}`}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} />)}</span>
+              <span className={css.mStationRings}><MeterChips meters={s.host.meters} /></span>
               <span className={css.mStationLine}>{s.host.line}</span>
               {s.net && <Net net={s.net} stacked />}
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}

@@ -1,8 +1,9 @@
 // Small pieces the station client and ember cloud share.
 import { useAppearance } from "./theme.ts";
 import { useRowPicture } from "./rowLead.ts";
-import { useRef, type ReactNode } from "react";
+import { useRef, type ComponentProps, type ReactNode } from "react";
 import type { Host, Level, PersonShown, Quota } from "./api.ts";
+import type { Meter } from "./core/shapes.ts";
 import { useOnlyMine } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { Archive, Check, Filter } from "./icons.tsx";
@@ -84,19 +85,12 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
     const lone = quota.windows.length === 1;
     return (
       <span className={css.quotaChips}>
-        {quota.windows.map((w) => {
-          const chip = (
-            <span key={w.label} className={css.quotaChip} data-level={w.level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={`${w.label}剩余 ${w.left}%`}>
-              <svg className={css.quotaChipEdge} aria-hidden="true">
-                <rect className={css.quotaChipTrack} pathLength={100} />
-                {w.left > 0 && <rect className={css.quotaChipLeft} pathLength={100} strokeDasharray={`${w.left} 100`} />}
-              </svg>
-              <span className={css.quotaChipText}>{!lone && <span className={css.quotaChipMark}>{w.mark}</span>}{w.left}%</span>
-            </span>
-          );
+        {quota.windows.map((w) => (
           // Bare: inside a control, so not a stop of their own for the keyboard; the tip still shows on hover.
-          return <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>{chip}</Tip>;
-        })}
+          <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>
+            <EdgeChip fill={w.left} level={w.level} mark={lone ? null : w.mark} label={`${w.label}剩余 ${w.left}%`} small={small} bare={bare} />
+          </Tip>
+        ))}
       </span>
     );
   }
@@ -114,6 +108,36 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
         </div>
       ))}
     </div>
+  );
+}
+
+/** A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
+ * clockwise from the top left, in the colour of the core's `level`: an allowance's window, a machine's meter. What else
+ * it is given (a tip's trigger props and ref) goes on the box. */
+function EdgeChip({ fill, level, mark, label, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
+  const p = Math.max(0, Math.min(100, fill));
+  return (
+    <span {...rest} className={css.quotaChip} data-level={level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={label}>
+      <svg className={css.quotaChipEdge} aria-hidden="true">
+        <rect className={css.quotaChipTrack} pathLength={100} />
+        {p > 0 && <rect className={css.quotaChipLeft} pathLength={100} strokeDasharray={`${p} 100`} />}
+      </svg>
+      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}{fill}%</span>
+    </span>
+  );
+}
+
+/** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and how full, its edge drawn as
+ * far as that; what it is in the tip. */
+export function MeterChips({ meters, bare }: { meters: Meter[]; bare?: boolean }) {
+  return (
+    <span className={css.quotaChips}>
+      {meters.map((m) => (
+        <Tip key={m.label} label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}>
+          <EdgeChip fill={m.percent} level={m.level} mark={m.short} label={`${m.label} ${m.percent}%`} bare={bare} />
+        </Tip>
+      ))}
+    </span>
   );
 }
 

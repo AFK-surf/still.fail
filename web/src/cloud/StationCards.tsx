@@ -1,12 +1,13 @@
 // A workspace's stations, in its settings (cloud/settings.tsx): a card each, made so what may be wrong with one is
-// seen at a glance. What is wrong (it is away, a meter running out) is said in words under its name, in colour; the
-// rest (its meters as dials, what the machine is) stays grey.
+// seen at a glance. What is wrong (it is away, a meter running out) is said in words under its name, in colour; its
+// meters are boxes as an allowance's are (components.tsx MeterChips); what the machine is stays grey.
 import { useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
 import type { Host, Level, NetFigure, StationNet } from "../core/shapes.ts";
-import { StatusDot, Time, Tip } from "../ui.tsx";
+import { StatusDot, Time } from "../ui.tsx";
 import { Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
+import { MeterChips } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
 
 type Meter = Host["meters"][number];
@@ -45,20 +46,6 @@ function problems(s: StationView, silent: boolean): { key: string; level: Level;
 function machine(host: Host | undefined): string {
   if (!host) return "";
   return [host.cpuModel, host.line].filter(Boolean).join(" · ");
-}
-
-function Dial({ m }: { m: Meter }) {
-  const size = 34, r = (size - 4) / 2, c = 2 * Math.PI * r;
-  return (
-    <Tip label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}><span className={css.dial} data-level={m.level}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle className={css.dialTrack} cx={size / 2} cy={size / 2} r={r} />
-        <circle className={css.dialFill} cx={size / 2} cy={size / 2} r={r} strokeDasharray={`${(c * m.percent) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{m.percent}</text>
-      </svg>
-      <span>{m.short}</span>
-    </span></Tip>
-  );
 }
 
 function Figure({ f }: { f: NetFigure }) {
@@ -109,7 +96,7 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
           <span className={css.name}>{s.name}</span>
           <span className={css.state}>{state(s)}</span>
         </span>
-        {s.online && s.host && <span className={css.dials}>{s.host.meters.map((m) => <Dial key={m.label} m={m} />)}</span>}
+        {s.online && s.host && <MeterChips meters={s.host.meters} />}
         {/* Away or silent, it is tried again here (not beside the sidebar's line: a station may stay down for long). */}
         {(!s.online || silent) && <RetryPill />}
         <span className={css.menu}>{menu}</span>

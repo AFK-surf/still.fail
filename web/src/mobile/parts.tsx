@@ -98,42 +98,6 @@ export function Avatar({ id, name, size, picture }: { id: string; name: string; 
   );
 }
 
-// ── rings ──────────────────────────────────────────────────────────────
-
-/** How full, as a colour: the core's level (ok | amber | red). */
-function levelColor(level: string): string {
-  return level === "red" ? "var(--m-red)" : level === "amber" ? "var(--m-warn)" : "var(--m-green)";
-}
-
-/** An arc from the top, clockwise, `from` and `sweep` in degrees. */
-function arc(c: number, r: number, from: number, sweep: number): string {
-  if (sweep >= 359.99) return `M ${c} ${c - r} A ${r} ${r} 0 1 1 ${c - 0.01} ${c - r}`;
-  const at = (deg: number) => {
-    const rad = ((deg - 90) * Math.PI) / 180;
-    return `${c + r * Math.cos(rad)} ${c + r * Math.sin(rad)}`;
-  };
-  return `M ${at(from)} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${at(from + sweep)}`;
-}
-
-/** A percentage as a ring, coloured by the core's level, with its label under it. */
-export function Ring({ percent, label, level, size = 46 }: { percent: number; label: string; level: string; size?: number }) {
-  const w = (5 * size) / 46;
-  const r = size / 2 - w / 2 - 1;
-  const p = Math.max(0, Math.min(100, percent));
-  return (
-    <span className={css.mRing}>
-      <span className={css.mRingDisc} style={{ width: size, height: size }}>
-        <svg width={size} height={size} aria-hidden="true">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-line)" strokeWidth={w} />
-          {p > 0 && <path d={arc(size / 2, r, 0, (360 * p) / 100)} fill="none" stroke={levelColor(level)} strokeWidth={w} strokeLinecap="round" />}
-        </svg>
-        <b style={{ fontSize: size < 44 ? 12 : 13 }}>{percent}</b>
-      </span>
-      <span className={css.mRingLabel}>{label}</span>
-    </span>
-  );
-}
-
 /** A profile's allowance in a line: the PC's chips (QuotaBars), without their own tips (the row is what is tapped). */
 export function QuotaRings({ quota }: { quota?: Quota | undefined }) {
   return <QuotaBars quota={quota} compact bare />;

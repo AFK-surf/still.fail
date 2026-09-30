@@ -21,21 +21,6 @@ export const card = style({
 });
 export const cardHead = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
 export const cardTitle = style({ flex: "1", display: "flex", alignItems: "baseline", gap: "10px", minWidth: "0" });
-export const dials = style({ display: "inline-flex", gap: "14px" });
-export const dial = style({
-  display: "inline-flex", alignItems: "center", gap: "5px", fontSize: vars.textXs, color: vars.muted,
-});
-export const dialTrack = style({ fill: "none", strokeWidth: "3", stroke: vars.neutralBg });
-export const dialFill = style({
-  fill: "none", strokeWidth: "3", stroke: vars.subtle, strokeLinecap: "round",
-  selectors: {
-    [`${dial}[data-level="amber"] &`]: { stroke: vars.amber },
-    [`${dial}[data-level="red"] &`]: { stroke: vars.red },
-  },
-});
-globalStyle(`${dial} text`, { fontSize: "10px", fontWeight: "600", fill: vars.text, fontVariantNumeric: "tabular-nums" });
-globalStyle(`${dial}[data-level="amber"] text`, { fill: vars.amber });
-globalStyle(`${dial}[data-level="red"] text`, { fill: vars.red });
 export const warn = style({
   display: "grid", gap: "4px", marginLeft: "17px", fontSize: vars.textSm, fontWeight: "500",
 });

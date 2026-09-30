@@ -71,7 +71,7 @@ import fail.still.android.ui.Mark
 import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
-import fail.still.android.ui.Ring
+import fail.still.android.ui.MeterChips
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SlackMark
 import fail.still.core.CoreException
@@ -121,9 +121,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                     }
                     val host = s.host
                     if (s.online && host != null) {
-                        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            host.meters.forEach { Ring(it.percent, it.short, it.level, 40.dp) }
-                        }
+                        MeterChips(host.meters, Modifier.padding(top = 10.dp))
                         s.net?.let { NetLine(it, Modifier.padding(top = 10.dp)) }
                     } else if (!s.online) {
                         Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -156,9 +154,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             val host = s.host
             if (s.online && host != null) {
                 Card {
-                    Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        host.meters.forEach { Ring(it.percent, it.short, it.level) }
-                    }
+                    MeterChips(host.meters, Modifier.padding(vertical = 4.dp))
                     Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
                     s.net?.let { NetLine(it, Modifier.padding(top = 6.dp)) }
                     s.overview?.processesText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp)) }

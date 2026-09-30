@@ -13,7 +13,7 @@ import { useStickToBottom } from "../scroll.ts";
 import { useOlderOnScroll, Waited } from "../Chat.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
-import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRings, Ring, Seg, SlackMark, Spinner, stateOf, type Icon } from "./parts.tsx";
+import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, type Icon } from "./parts.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./History.css.ts";
 import { ToolCall, ToolResult } from "../ToolStep.tsx";
@@ -26,7 +26,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import { Tip } from "../ui.tsx";
-import { QuotaRing } from "../components.tsx";
+import { MeterChips, QuotaRing } from "../components.tsx";
 import * as chatPageCss from "../pages/ChatPage.css.ts";
 
 /** Opens an agent's execution history over the item's page it belongs to; `entry`: the transcript entry to open at. */
@@ -314,7 +314,7 @@ function Details({ station, chat, agent, history }: { station: string; chat: str
         <Detail label="名字" value={name} />
         {host && <Detail label="机器" value={`${host.hostname} · ${host.summary}`} />}
       </div>
-      {host && <div className={css.mHRings}>{host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} />)}</div>}
+      {host && <div className={css.mHRings}><MeterChips meters={host.meters} /></div>}
     </div>
   );
 }
