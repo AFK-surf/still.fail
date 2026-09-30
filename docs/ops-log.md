@@ -6,7 +6,7 @@
 
 - **合并**：GitHub `zzj3720/ember` 的 main 是唯一的 main。commit / push 时 git hook 跑快速检查（`scripts/check.sh`，几秒）。
 - **部署前 review**：部署的 agent 先把上次部署以来合进来的提交和 PR 过一遍（数据格式、新旧混跑的兼容、station 的启动和更新流程、删除数据或碰外部服务和密钥的改动），有风险先说；还没合的分支和开着的 PR 列出来给人决定。
-- **部署**：在 studio 上 `~/bin/ember-job deploy "~/bin/ember-deploy"`（不直接 ssh 跑，ssh 会断）。它从 GitHub 拉 main，对上次部署以来改到的部分跑完整检查（测试、真实 wasm 核心、shapes、Rust、安卓），不过就不部署；再部署改到的 cloud Worker，重启 studio 的 station，后台上传 station 发布包（`/tmp/ember-release.log`）。上次部署到哪：studio `~/.ember/deployed-commit`。
+- **部署**：在 studio 上 `~/bin/ember-job deploy "~/bin/ember-deploy"`（不直接 ssh 跑，ssh 会断）。它从 GitHub 拉 main，对上次部署以来改到的部分跑完整检查（测试、真实 wasm 核心、shapes、Rust、安卓），不过就不部署；再部署改到的 cloud Worker，后台上传 station 发布包（`/tmp/ember-release.log`），传完 studio 的 station 自己 `stillfail update` 到它（`/tmp/ember-station-update.log`，原地交接）。2026-10-01 起 studio 跑的是正式安装的 station（LaunchAgent `fail.still.station`，程序在 `~/.stillfail/app`），不再从检出跑；`mesh/target` 里的 stillfail-station 只给测试 station 用。上次部署到哪：studio `~/.stillfail/deployed-commit`。
 - **更新 station**：不自动更新。发布包上传完后在那台机器上 `ember update`；支持交接的 station（`~/.ember/run/station.json` 里有 `"handoff"`）原地换版本，pid 不变，正在跑的轮次、agent 进程和 job 都接着跑。
 
 ## 卡住了怎么办
@@ -18,6 +18,13 @@
 ## 待部署
 
 ## 2026-10-01
+
+### 02:32 各台 station 更新到 0.1.1209，studio 和 mini 换成正式安装
+
+- bft、claude-mac（macvm）：`stillfail update` 原地交接到 0.1.1209，pid 不变。claude-mac 是从这台机器上的会话里起的，更新放在后台等轮次结束后再跑。
+- studio：原来是 `~/bin/stillfail-restart-station.sh` 从 `~/WebstormProjects/ember` 起的开发版（0.1.0）。先发 USR1 等轮次结束，停掉它，再跑 install.sh 装成正式版（LaunchAgent，0.1.1209），数据还是 `~/.stillfail`，之前的 ember.db 备份在 `ember.db.pre-official`。`~/bin/ember-deploy` 改成不重启 station、不重建 station 页面，改为发布包传完后执行 `stillfail update`（旧脚本备份在 `~/bin/ember-deploy.bak-1001`）。
+- mini（mini1，zuozijian的Mac mini）：原来是很旧的开发版桌面 app（`~/ember-dev/Electron.app`，带着 node 的 station）用 `--with-parent` 起的。退出这个 app 之后跑 install.sh，数据从 `~/.ember` 搬到 `~/.stillfail`（旧位置留了链接），ember.db 备份在 `~/ember.db.pre-official-1001`。别再打开 `~/ember-dev` 的那个 app，它会自己再起一个 station。
+- 四台都已经 online at still.fail cloud。更新后应该都会选北京 relay，station 卡片上的网络行能看到。
 
 ### 02:20 部署 76afc23（station 卡片的网络行）
 
