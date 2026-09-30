@@ -475,7 +475,9 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
                 Modifier.fillMaxWidth().clickable(enabled = !fixed) { draft.groups = draft.groups + (g to !checked) }.padding(vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (!checked) C.chip else if (fixed) C.muted else C.accent), contentAlignment = Alignment.Center) {
+                // Always on, no choice: a tick without a box.
+                if (fixed) Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { IconIn(Icons.Check, 16.dp, C.accent) }
+                else Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (checked) C.accent else C.chip), contentAlignment = Alignment.Center) {
                     if (checked) IconIn(Icons.Check, 13.dp, C.bg)
                 }
                 Text(words.getValue(g).first, fontSize = 14.sp, color = if (checked) C.ink else C.muted)

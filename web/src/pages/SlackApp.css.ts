@@ -93,3 +93,6 @@ globalStyle(`${appFold} > summary::before`, {
 });
 globalStyle(`${appFold}[open] > summary::before`, { transform: "rotate(90deg)" });
 globalStyle(`${permGrid} input`, { accentColor: vars.accent, margin: "0" });
+/** The permission that is always on: its tick where a box would be, not pressable. */
+export const permFixed = style({ cursor: "default", selectors: { "&:hover": { background: "none" } } });
+globalStyle(`${permFixed} svg`, { flex: "none", color: vars.accent });

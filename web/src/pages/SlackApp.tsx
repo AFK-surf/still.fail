@@ -3,7 +3,7 @@
 // configuration token. When permissions change, Slack asks a person to approve
 // them; that is the only step left in Slack.
 import { useStation } from "../station.tsx";
-import { External, ImageUpload, ShieldCheck } from "../icons.tsx";
+import { Check, External, ImageUpload, ShieldCheck } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { useTopic } from "../core/react.ts";
 import { useAction, useApi, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
@@ -379,11 +379,19 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
                 <ul className={css.permGrid}>
                   {groups.map((g) => (
                     <li key={g}>
-                      <Tip label={GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
-                        <input type="checkbox" checked={settings.groups[g] ?? false} disabled={g === "base"}
-                          onChange={(e) => set("groups", { ...settings.groups, [g]: e.target.checked })} />
-                        <span>{GROUPS[g].label}</span>
-                      </label></Tip>
+                      {g === "base" ? (
+                        // Always on, no choice: a tick without a box.
+                        <Tip label={GROUPS[g].description}><span className={`${chatCss.modelPoolItem} ${css.permFixed}`} data-on>
+                          <Check size={13} strokeWidth={2.4} />
+                          <span>{GROUPS[g].label}</span>
+                        </span></Tip>
+                      ) : (
+                        <Tip label={GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
+                          <input type="checkbox" checked={settings.groups[g] ?? false}
+                            onChange={(e) => set("groups", { ...settings.groups, [g]: e.target.checked })} />
+                          <span>{GROUPS[g].label}</span>
+                        </label></Tip>
+                      )}
                     </li>
                   ))}
                 </ul>
