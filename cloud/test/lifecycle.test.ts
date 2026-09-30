@@ -62,7 +62,7 @@ test("logout does not cancel a pending native relay upgrade", { timeout: 10000 }
   }
 });
 
-test("empty-frame flooding is limited even when it consumes no payload bytes", { timeout: 10000 }, async () => {
+test("the daily frame budget drops connections and refuses new ones even when frames carry no bytes", { timeout: 10000 }, async () => {
   const h = await harness();
   try {
     const session = await h.login();
@@ -81,8 +81,8 @@ test("empty-frame flooding is limited even when it consumes no payload bytes", {
     const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
     await budgets.get(budgets.idFromName("primary")).exhaustBudget("frames");
     const closed = new Promise<number>((resolve) => socket.addEventListener("close", (event) => resolve(event.code), { once: true }));
-    socket.send(new Uint8Array(0));
-    assert.equal(await closed, 4008);
+    await budgets.get(budgets.idFromName("primary")).poll();
+    assert.equal(await closed, 1012);
     const anotherSession = await h.login();
     assert.equal((await upgrade(anotherSession.access_token)).status, 429);
   } finally {
@@ -286,8 +286,8 @@ test("relay budgets span anonymous and account sessions; account idle expiry sti
         once: true,
       }),
     );
-    (sockets[0] as any).send(new Uint8Array([1]));
-    assert.equal(await close, 4008);
+    await budgets.get(budgets.idFromName("primary")).poll();
+    assert.equal(await close, 1012, "over the budget, the relay process restarts and every connection drops");
     assert.equal((await upgrade(second.access_token)).status, 429, "reconnecting does not reset bytes");
     const other = await h.login("different-account");
     const response = await upgrade(other.access_token);

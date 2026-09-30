@@ -3,12 +3,8 @@ export const LIMITS = {
   // Every open web page holds one relay connection, and every station one; sized for a few teams.
   connections: 64,
   connectsPerMinute: 120,
-  bytesPerSecond: 4 * 1024 * 1024,
-  burstBytes: 8 * 1024 * 1024,
+  // Per-client rates and frame sizes are the relay process's own (relay-entrypoint.sh); these are all clients together.
   bytesPerDay: 5 * 1024 * 1024 * 1024,
-  frameBytes: 128 * 1024,
-  framesPerSecond: 4096,
-  burstFrames: 8192,
   framesPerDay: 20_000_000,
 };
 

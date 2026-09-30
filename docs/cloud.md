@@ -75,7 +75,7 @@ station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它
 
 ## relay 与发现
 
-relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`ember-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket 帧并做总量限制。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 平时只以 still.fail 的 relay 为家（浏览器只认它）；still.fail 的 relay 连不上时才临时加入 iroh 官方的公共 relay，恢复后撤掉（`relay_fallback`）。
+relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`ember-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket。总量限制（RelayBudget）只在建连接时放行，不在帧的路径上：流量按 iroh-relay 自己的 metrics 每分钟读一次，当天超额就重启容器、拒绝新连接；单个客户端的速率由 iroh-relay 自己限。以前每一帧都经过 RelayBudget，它被连接一直占着、每条消息多算一次 DO 请求（2026-09-30 改掉）。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 平时只以 still.fail 的 relay 为家（浏览器只认它）；still.fail 的 relay 连不上时才临时加入 iroh 官方的公共 relay，恢复后撤掉（`relay_fallback`）。
 
 station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 

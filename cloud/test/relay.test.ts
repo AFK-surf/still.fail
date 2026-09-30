@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { harness } from "./harness.ts";
 import { LIMITS } from "../src/limits.ts";
+import { relayCounters } from "../src/relay-metrics.ts";
 
 const upgrade = { upgrade: "websocket", "sec-websocket-protocol": "iroh-relay" };
 
@@ -46,21 +47,33 @@ test("pending upgrades consume capacity before the backend replies", { timeout: 
   }
 });
 
-test("text and oversized frames close the offending connection", { timeout: 10000 }, async () => {
+test("closed connections free capacity, counted by the relay process", { timeout: 10000 }, async () => {
   const h = await harness({ noGoogle: true });
   try {
-    for (const payload of ["text", new Uint8Array(128 * 1024 + 1)]) {
+    const sockets: NonNullable<Awaited<ReturnType<typeof h.fetch>>["webSocket"]>[] = [];
+    for (let i = 0; i < LIMITS.connections; i++) {
       const response = await h.fetch("/relay", { headers: upgrade });
       assert.equal(response.status, 101);
-      const socket = response.webSocket!;
-      socket.accept();
-      const closed = new Promise<number>((resolve) => socket.addEventListener("close", (e) => resolve(e.code), { once: true }));
-      socket.send(payload);
-      assert.equal(await closed, 1009);
+      response.webSocket!.accept();
+      sockets.push(response.webSocket!);
     }
+    assert.equal((await h.fetch("/relay", { headers: upgrade })).status, 429);
+    const closed = new Promise((resolve) => sockets[0].addEventListener("close", resolve, { once: true }));
+    sockets[0].close();
+    await closed;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const response = await h.fetch("/relay", { headers: upgrade });
+    assert.equal(response.status, 101);
+    response.webSocket!.accept();
+    for (const socket of [...sockets.slice(1), response.webSocket!]) socket.close();
   } finally {
     await h.close();
   }
+});
+
+test("the relay parses iroh-relay's counters", () => {
+  const text = "# HELP x\nrelayserver_bytes_sent_total 10\nrelayserver_bytes_recv_total 5\nrelayserver_send_packets_recv_total 3\nrelayserver_got_ping_total 1\nrelayserver_accepts_total 7\nrelayserver_disconnects_total 2\n";
+  assert.deepEqual(relayCounters(text), { bytes: 15, frames: 4, accepts: 7, disconnects: 2 });
 });
 
 test("a Worker restart cannot reset the anonymous relay byte budget", { timeout: 10000 }, async () => {

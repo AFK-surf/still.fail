@@ -17,6 +17,8 @@
 
 ## 待部署
 
+- relay 预算不再逐帧转发（relay-direct-websocket）：要部署 relay，所有 relay 连接会断一次，客户端会自己重连。DO 类没变，不用迁移，旧的额度数据直接能读。上线后验：`POST /v1/admin/relay/where` 能返回；浏览器连得上 station；过几个小时用 GraphQL 的 `durableObjectsPeriodicGroups` 查 RelayBudget 所在 namespace（`2bb98e53…`）的 activeTime，应该从每天约 86,000 秒降到很少，inboundWebsocketMsgCount 接近 0。当天流量超额时，budget 会在下一次读 metrics（最多 1 分钟后）重启容器。
+
 ## 2026-09-30
 
 ### 21:03 部署 c4f4561（桌面端差量更新）

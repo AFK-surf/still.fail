@@ -1,49 +1,46 @@
 import { DurableObject } from "cloudflare:workers";
 import type { RelayEnv as Env } from "./relay-worker";
-import { limited, nowSeconds, reply } from "./auth";
+import { nowSeconds } from "./auth";
 
 // A bounded shared service budget, never a Mesh membership authority.
 import { LIMITS } from "./limits";
 export { LIMITS };
+import { relayCounters, type Counters } from "./relay-metrics";
 export type Quota = {
   minute: number;
   connects: number;
   day: number;
   bytes: number;
   at: number;
-  balance: number;
+  /** Unused since traffic is read from the relay process; kept so budgets written before still read. */
+  balance?: number;
   frameBalance?: number;
   frames?: number;
+  /** The relay process's own counters when last read (relayCounters): traffic since then is what they grew by. */
+  seen?: Counters;
 };
-type Connection = { close: (code: number, reason: string) => void };
 
-/** How long counted traffic may stay in memory only; a restart forgets at most this much of it. */
-const FLUSH_MS = 30_000;
+/** How often traffic is read from the relay process while connections are open; the daily budget may overshoot by what flows in this time. */
+const POLL_MS = 60_000;
+/** An admitted connection may take this long to reach the relay process (the Worker's dial timeout plus the handshake). */
+const DIAL_MS = 20_000;
 
+/**
+ * Admits relay connections; it is not in their path. Frames go straight between the Worker and the relay process,
+ * so this object sleeps between connects instead of being held (and billed) by every open socket and every frame.
+ * Traffic is counted by the relay process and read here when a connection is admitted and every POLL_MS while any
+ * are open; over the daily budget, the process is restarted (every connection drops) and connects are refused.
+ */
 export class RelayBudget extends DurableObject<Env> {
-  private connections = new Set<Connection>();
-  /** The budget as counted; read once, written when a connection is admitted and within FLUSH_MS of traffic, never per frame. */
   protected quota: Quota | undefined;
-  private flushing = false;
+  /** Connections admitted in the last DIAL_MS, with the relay's accept count then: those not yet accepted still count. */
+  private pending: { at: number; accepts: number }[] = [];
 
-  /**
-   * Frames are counted in memory: a storage write per frame would hold each
-   * frame back until the write is confirmed (the output gate), on every hop.
-   */
-  private charge(kind: "connect" | "bytes", amount = 0): boolean {
+  private load(): Quota {
     const now = nowSeconds();
+    const q = (this.quota ??= this.ctx.storage.kv.get<Quota>("quota") ?? { minute: Math.floor(now / 60), connects: 0, day: Math.floor(now / 86400), bytes: 0, at: now, frames: 0 });
     const minute = Math.floor(now / 60),
       day = Math.floor(now / 86400);
-    const q = (this.quota ??= this.ctx.storage.kv.get<Quota>("quota") ?? {
-      minute,
-      connects: 0,
-      day,
-      bytes: 0,
-      at: now,
-      balance: LIMITS.burstBytes,
-      frameBalance: LIMITS.burstFrames,
-      frames: 0,
-    });
     if (q.minute !== minute) {
       q.minute = minute;
       q.connects = 0;
@@ -54,31 +51,63 @@ export class RelayBudget extends DurableObject<Env> {
       q.frames = 0;
     }
     q.frames ??= 0;
-    q.frameBalance = Math.min(LIMITS.burstFrames, (q.frameBalance ?? LIMITS.burstFrames) + Math.max(0, now - q.at) * LIMITS.framesPerSecond);
-    q.balance = Math.min(LIMITS.burstBytes, q.balance + Math.max(0, now - q.at) * LIMITS.bytesPerSecond);
     q.at = now;
-    if (kind === "connect") {
-      if (q.connects >= LIMITS.connectsPerMinute || q.bytes >= LIMITS.bytesPerDay || q.frames >= LIMITS.framesPerDay) return false;
+    return q;
+  }
+
+  private exhausted(q: Quota): boolean {
+    return q.bytes >= LIMITS.bytesPerDay || (q.frames ?? 0) >= LIMITS.framesPerDay;
+  }
+
+  /** Reads the relay process's counters and adds what grew since the last read to today's traffic; null while it is not running. */
+  private async read(): Promise<Counters | null> {
+    let counters: Counters | null = null;
+    try {
+      const text = await this.env.RELAY.getByName("primary").metrics();
+      counters = text === null ? null : relayCounters(text);
+    } catch {
+      /* not running, or starting: nothing to add */
+    }
+    const q = this.load();
+    if (counters) {
+      // A restarted process counts from zero again.
+      const seen = q.seen && counters.bytes >= q.seen.bytes && counters.frames >= q.seen.frames ? q.seen : { bytes: 0, frames: 0 };
+      q.bytes += counters.bytes - seen.bytes;
+      q.frames = (q.frames ?? 0) + counters.frames - seen.frames;
+    }
+    q.seen = counters ?? undefined;
+    return counters;
+  }
+
+  /** Whether one more relay connection may be opened now. */
+  async admit(): Promise<boolean> {
+    const counters = await this.read();
+    const q = this.load();
+    const now = Date.now();
+    this.pending = this.pending.filter((p) => now - p.at < DIAL_MS);
+    const accepts = counters?.accepts ?? 0;
+    const open = counters ? Math.max(0, counters.accepts - counters.disconnects) : 0;
+    const dialing = this.pending.length ? Math.min(this.pending.length, Math.max(0, this.pending.length - (accepts - this.pending[0].accepts))) : 0;
+    const admitted = open + dialing < LIMITS.connections && q.connects < LIMITS.connectsPerMinute && !this.exhausted(q);
+    if (admitted) {
       q.connects++;
-    } else {
-      // Tiny/empty frames consume CPU and billable events too.
-      if (amount > q.balance || q.bytes + amount > LIMITS.bytesPerDay || q.frameBalance < 1 || q.frames >= LIMITS.framesPerDay) return false;
-      q.frameBalance--;
-      q.frames++;
-      q.bytes += amount;
-      q.balance -= amount;
+      this.pending.push({ at: now, accepts });
     }
-    if (kind === "connect") this.ctx.storage.kv.put("quota", q);
-    else if (!this.flushing) {
-      this.flushing = true;
-      void this.ctx.storage.setAlarm(Date.now() + FLUSH_MS);
-    }
-    return true;
+    this.ctx.storage.kv.put("quota", q);
+    if (admitted && (await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(now + POLL_MS);
+    return admitted;
   }
 
   override async alarm(): Promise<void> {
-    this.flushing = false;
-    if (this.quota) this.ctx.storage.kv.put("quota", this.quota);
+    const counters = await this.read();
+    const q = this.load();
+    this.ctx.storage.kv.put("quota", q);
+    if (this.exhausted(q)) {
+      // Dropping every connection keeps reconnects from spending past the budget; admit() refuses them until tomorrow.
+      await this.env.RELAY.getByName("primary").destroy();
+      return;
+    }
+    if (counters && counters.accepts > counters.disconnects) await this.ctx.storage.setAlarm(Date.now() + POLL_MS);
   }
 
   /** For operators: where this object runs, and the round trip from here to the relay process. */
@@ -93,96 +122,5 @@ export class RelayBudget extends DurableObject<Env> {
       containerMs.push(Date.now() - start);
     }
     return { colo, containerMs };
-  }
-
-  async fetch(request: Request): Promise<Response> {
-    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return reply({ error: "websocket_required" }, 426);
-    if (this.connections.size >= LIMITS.connections || !this.charge("connect")) return limited();
-    let server: WebSocket | undefined, upstream: WebSocket | undefined;
-    let dialTimer: ReturnType<typeof setTimeout> | undefined;
-    let dialAbort: AbortController | undefined;
-    let closed = false;
-    const connection: Connection = {
-      close: (code, reason) => {
-        if (closed) return;
-        closed = true;
-        if (dialTimer !== undefined) clearTimeout(dialTimer);
-        dialAbort?.abort();
-        for (const socket of [server, upstream]) {
-          try {
-            socket?.close(code, reason);
-          } catch {
-            /* already closed */
-          }
-        }
-        this.connections.delete(connection);
-      },
-    };
-    // Reserve before awaiting the container, including in-flight upgrades in
-    // the service budget. Cloud account state does not govern transport.
-    this.connections.add(connection);
-    try {
-      const headers = new Headers({ upgrade: "websocket" });
-      const protocol = request.headers.get("sec-websocket-protocol");
-      if (protocol) headers.set("sec-websocket-protocol", protocol);
-      // Fixed routing and a fresh URL prevent credentials/cookies/query values
-      // reaching the relay process, its logs, or an arbitrary backend.
-      const dial = new AbortController();
-      dialAbort = dial;
-      dialTimer = setTimeout(() => dial.abort(), 15_000);
-      const response = await this.env.RELAY.getByName("primary").fetch(new Request("http://relay/relay", { headers, signal: dial.signal }));
-      clearTimeout(dialTimer);
-      dialTimer = undefined;
-      dialAbort = undefined;
-      upstream = response.webSocket ?? undefined;
-      if (!upstream || response.status !== 101) {
-        connection.close(1011, "relay_unavailable");
-        return reply({ error: "relay_unavailable" }, 502);
-      }
-      upstream.binaryType = "arraybuffer";
-      upstream.accept();
-      if (closed) {
-        upstream.close(1011, "relay_unavailable");
-        connection.close(1011, "relay_unavailable");
-        return reply({ error: "relay_unavailable" }, 502);
-      }
-      const pair = new WebSocketPair();
-      server = pair[1];
-      server.binaryType = "arraybuffer";
-      server.accept();
-      const forward = (from: WebSocket, to: WebSocket) => {
-        from.addEventListener("message", (event) => {
-          if (closed) return;
-          if (!(event.data instanceof ArrayBuffer) || event.data.byteLength > LIMITS.frameBytes) {
-            connection.close(1009, "invalid_frame");
-            return;
-          }
-          if (!this.charge("bytes", event.data.byteLength)) {
-            // Closing all sockets prevents reconnecting to bypass
-            // a shared byte budget. The persistent budget also gates reconnects.
-            for (const c of [...this.connections]) c.close(4008, "relay_quota");
-            return;
-          }
-          try {
-            to.send(event.data);
-          } catch {
-            connection.close(1011, "relay_send_failed");
-          }
-        });
-        from.addEventListener("close", () => connection.close(1000, "relay_closed"));
-        from.addEventListener("error", () => connection.close(1011, "relay_error"));
-      };
-      forward(server, upstream);
-      forward(upstream, server);
-      const selected = response.headers.get("sec-websocket-protocol");
-      return new Response(null, {
-        status: 101,
-        webSocket: pair[0],
-        headers: selected ? { "sec-websocket-protocol": selected } : undefined,
-      });
-    } catch {
-      connection.close(1011, "relay_unavailable");
-      return reply({ error: "relay_unavailable" }, 502);
-    }
   }
 }

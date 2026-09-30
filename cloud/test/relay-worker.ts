@@ -1,5 +1,5 @@
 // Only the test bundler imports this entry: the relay Worker (src/relay-worker.ts) with a stand-in for the relay
-// process (an echo, or TEST_RELAY) and ways to look into its budget.
+// process (an echo, or TEST_RELAY, counting like iroh-relay's metrics) and ways to look into its budget.
 import { DurableObject } from "cloudflare:workers";
 import worker, { RelayBudget as ProductionRelayBudget } from "../src/relay-worker";
 import { nowSeconds } from "../src/auth";
@@ -16,9 +16,12 @@ export class RelayBudget extends ProductionRelayBudget {
       connects: 0,
       bytes: kind === "bytes" ? 5 * 1024 * 1024 * 1024 : 0,
       frames: kind === "frames" ? 20_000_000 : 0,
-      balance: 0,
     };
     this.ctx.storage.kv.put("quota", this.quota);
+  }
+  /** What the alarm does every minute while connections are open. */
+  poll() {
+    return this.alarm();
   }
   statistics() {
     return this.quota ?? this.ctx.storage.kv.get("quota");
@@ -28,8 +31,18 @@ export class RelayBudget extends ProductionRelayBudget {
 export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
   private delayMs = 0;
   private destroyed = 0;
+  private accepts = 0;
+  private disconnects = 0;
+  private sockets = new Set<WebSocket>();
   destroy() {
     this.destroyed++;
+    // Like the process going away: every connection drops.
+    for (const socket of this.sockets) socket.close(1012, "restarted");
+    this.disconnects += this.sockets.size;
+    this.sockets.clear();
+  }
+  metrics() {
+    return `relayserver_bytes_sent_total 0\nrelayserver_accepts_total ${this.accepts}\nrelayserver_disconnects_total ${this.disconnects}\n`;
   }
   destroyCount() {
     return this.destroyed;
@@ -46,10 +59,16 @@ export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
       return this.env.TEST_RELAY.fetch(request);
     }
     const pair = new WebSocketPair();
-    pair[1].binaryType = "arraybuffer";
-    pair[1].accept();
-    pair[1].addEventListener("message", (event) => pair[1].send(event.data));
-    pair[1].addEventListener("close", () => pair[1].close(1000, "closed"));
+    const server = pair[1];
+    server.binaryType = "arraybuffer";
+    server.accept();
+    this.accepts++;
+    this.sockets.add(server);
+    server.addEventListener("message", (event) => server.send(event.data));
+    server.addEventListener("close", () => {
+      if (this.sockets.delete(server)) this.disconnects++;
+      server.close(1000, "closed");
+    });
     return new Response(null, {
       status: 101,
       webSocket: pair[0],
