@@ -35,6 +35,8 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -107,6 +109,10 @@ sealed interface Screen {
     /** An item's page: its chat, or its agent before it has one. */
     data class Chat(val station: String, val of: ChatOf) : Screen {
         override val id = "chat/$station/" + when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }
+    }
+    /** One message of a chat on a page of its own, to pick passages of and say something about (a long press on it). */
+    data class Annotate(val station: String, val of: ChatOf, val ts: String) : Screen {
+        override val id = "annotate/$station/" + (when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }) + "/$ts"
     }
     /** Rises from the bottom rather than coming in from the side. */
     data object NewChat : Screen { override val id = "new" }
@@ -421,7 +427,7 @@ fun StillFailApp(app: AppState) {
         // not shown then (client/core/src/attend.rs).
         val lookedAt = app.inFront && top is Screen.Chat
         LaunchedEffect(app.inFront, lookedAt) { app.core.focus(buildJsonObject { put("visible", app.inFront); put("focused", lookedAt) }) }
-        if (top !is Screen.Home && top !is Screen.Chat) Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
+        if (top !is Screen.Home && top !is Screen.Chat && top !is Screen.Annotate) Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
         // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.
         fail.still.android.screens.ViewerHost()
         SheetHost(app)
@@ -482,14 +488,21 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     }
     val saved = rememberSaveableStateHolder()
     transition.AnimatedContent(
-        transitionSpec = { if (swiped) swipe() else transition(initialState, targetState, app.forward) },
+        transitionSpec = {
+            // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
+            if (targetState is Screen.Annotate || initialState is Screen.Annotate) (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished)
+                .apply { targetContentZIndex = if (targetState is Screen.Annotate) 1f else -1f }
+            else if (swiped) swipe() else transition(initialState, targetState, app.forward)
+        },
         // A new chat and the chat it becomes are one page (ChatHost.kt): it stays, rather than slide in again.
         contentKey = { app.pageOf(it) },
     ) { screen ->
+        val pageScope = this
         // The page swiped away casts a little shadow on the one it uncovers (web: -8px 0 24px rgba(0,0,0,.12)).
         val lifted = swiped && screen == pages.currentState
         saved.SaveableStateProvider(app.pageOf(screen)) {
-            Box(Modifier.fillMaxSize().then(if (lifted) Modifier.drawBehind { swipeShadow(((1f - pages.fraction) / 0.15f).coerceIn(0f, 1f)) } else Modifier).background(C.bg)) {
+            // A message's page draws its own ground, coming in over its chat (Annotate.kt).
+            Box(Modifier.fillMaxSize().then(if (lifted) Modifier.drawBehind { swipeShadow(((1f - pages.fraction) / 0.15f).coerceIn(0f, 1f)) } else Modifier).then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
@@ -508,6 +521,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Archive -> fail.still.android.screens.ArchiveScreen(current)
                     is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
                     is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
+                    is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {
+                        fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)
+                    }
                 }
             }
         }

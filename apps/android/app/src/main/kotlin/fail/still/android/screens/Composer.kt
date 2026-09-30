@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.contentDescription
@@ -519,7 +520,11 @@ fun DraftExtras(draft: Draft) {
     if (draft.quotes.isNotEmpty()) Column(Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.quotes.forEach { q ->
             // In the composer's capsule: corners concentric with it.
-            Box(Modifier.fillMaxWidth().clip(InComposer).background(quoteGround())) {
+            // One coming from a message's page (Annotate.kt) shows once it has landed here; till then it is on its way.
+            Box(
+                Modifier.fillMaxWidth().onGloballyPositioned { AnnotateFlight.quotes[q.id] = it.boundsInRoot() }
+                    .graphicsLayer { alpha = if (q.id in AnnotateFlight.landing) 0f else 1f }.clip(InComposer).background(quoteGround()),
+            ) {
                 Column(Modifier.fillMaxWidth()) {
                     Text(
                         quoteLine(q.author, q.text), inlineContent = quoteMark(), fontSize = 13.sp, lineHeight = 19.5.sp, color = chatMuted(), maxLines = 2, overflow = TextOverflow.Ellipsis,

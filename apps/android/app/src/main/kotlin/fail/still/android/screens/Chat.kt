@@ -694,29 +694,36 @@ private fun AgentAvatar(maker: Maker?, runtime: String?) {
     }
 }
 
-/** Long-press on a message: quote it, or copy it; while its menu is open its words are marked. */
+/**
+ * Long-press on a message: its page, to pick passages of it to say something about or to copy (Annotate.kt; web
+ * mobile/Chat.tsx → useHold). Its words are marked for a moment as the page comes over them.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun holdMenu(text: String, who: String, ts: String?, role: String, draft: Draft): Pair<Modifier, Color> {
+private fun holdMenu(ctx: Here, text: String, ts: String, inset: androidx.compose.ui.unit.DpOffset = androidx.compose.ui.unit.DpOffset.Zero): Pair<Modifier, Color> {
     val app = LocalApp.current
-    val context = LocalContext.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     var pressed by remember { mutableStateOf(false) }
-    var bounds by remember { mutableStateOf(Rect.Zero) }
-    if (app.menu == null && pressed) pressed = false
-    val modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.combinedClickable(
+    LaunchedEffect(pressed) { if (pressed) { kotlinx.coroutines.delay(600); pressed = false } }
+    if (text.isBlank()) return Modifier to Color.Transparent
+    val key = "${ctx.station}/$ts"
+    val density = LocalDensity.current
+    // Where its words are, for them to fly to its page and back (Annotate.kt); away there, not here.
+    val modifier = Modifier.onGloballyPositioned { c ->
+        val box = c.boundsInRoot()
+        val (x, y) = with(density) { inset.x.toPx() to inset.y.toPx() }
+        if (!box.isEmpty) AnnotateFlight.sources[key] = Rect(box.left + x, box.top + y, box.right - x, box.bottom - y)
+    }
+        .graphicsLayer { alpha = if (AnnotateFlight.away == key) 0f else 1f }
+        .combinedClickable(
         interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {},
         onLongClick = {
             pressed = true
-            app.menu = MenuSpec(bounds, listOf(
-                MenuItem("引用", Icons.Quote) { draft.quote(who, plain(text), ts, role) },
-                MenuItem("拷贝", Icons.Copy) {
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", text))
-                    app.toast = "已拷贝"
-                },
-            ), onDismiss = { pressed = false })
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            app.push(Screen.Annotate(ctx.station, ctx.of, ts))
         },
     )
-    return modifier to if (pressed && app.menu != null) C.accent.copy(alpha = 0.12f) else Color.Transparent
+    return modifier to if (pressed) C.accent.copy(alpha = 0.12f) else Color.Transparent
 }
 
 /** A message's words as read, without markdown's marks: what a quote carries. */
@@ -740,7 +747,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.comp
     val motion = LocalChatMotion.current
     val flash = accentBg()
     if (ctx.mine(m)) {
-        val (hold, press) = holdMenu(m.text, "你", m.ts, "person", draft)
+        val (hold, press) = holdMenu(ctx, m.text, m.ts, androidx.compose.ui.unit.DpOffset(14.dp, 8.dp))
         Column(Modifier.fillMaxWidth().flashed(motion, m.ts, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             QuoteCards(m.quotes, jump, Alignment.End)
             if (m.text.isNotEmpty()) Bubble(m.text, hold, press)
@@ -756,7 +763,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.comp
     // agent's opens its history.
     val agent = m.by.agent?.let { ctx.agent(it) }
     val who = m.by.name
-    val (hold, press) = holdMenu(m.text, who, m.ts, if (m.authorKind == "agent") "agent" else "person", draft)
+    val (hold, press) = holdMenu(ctx, m.text, m.ts)
     Box(Modifier.fillMaxWidth().flashed(motion, m.ts, flash)) {
         // Where a message out of an agent's avatar lands: its own avatar, hidden while the flying one is over it.
         Box(

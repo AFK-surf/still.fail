@@ -603,5 +603,7 @@ private fun inlineText(n: Node): String = when (n) {
 private fun MdText(text: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
     // A passage a quote led to, marked in these words (TextMark.kt).
     val (mark, laid) = passageMark(text.text)
-    Text(text, mark, color = LocalMdInk.current ?: C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, inlineContent = inline, onTextLayout = laid)
+    // On the annotate page, a passage picked from them or noted (Pick.kt).
+    val (pick, picking) = pickable(text.text)
+    Text(text, mark.then(pick), color = LocalMdInk.current ?: C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, inlineContent = inline, onTextLayout = { laid(it); picking(it) })
 }
