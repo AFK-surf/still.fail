@@ -439,13 +439,17 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     }
 
     val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
+    // Left at its end with nothing new since: it opens at its end, following it, as if new to it (web Chat.tsx →
+    // useRememberPlace); the top message's offset would not land there once what is below it lays out otherwise
+    // (images still loading, an activity come or gone).
+    val place = app.places[placeKey]?.takeUnless { it.bottom != null && it.bottom == messages.lastOrNull()?.ts }
     // A long chat opened at its newest: the newest few first, at the bottom, and the rest rising in above them a
     // few a frame, rather than one frame building a screenful. (Opened elsewhere, at a place or the unread line,
     // it is all there at once, to be put in place.)
     val reveal = remember { Reveal() }
     if (!reveal.decided && messages.isNotEmpty()) {
         reveal.decided = true
-        if (all.size > 8 && app.places[placeKey] == null && all.none { it is Entry.Line }) reveal.count = 3
+        if (all.size > 8 && place == null && all.none { it is Entry.Line }) reveal.count = 3
     }
     val allSize by rememberUpdatedState(all.size)
     LaunchedEffect(reveal.decided) {
@@ -491,7 +495,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // composing its top only to jump away from it.
     val list = rememberLazyListState(
         initialFirstVisibleItemIndex = rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 }
-            ?: app.places[placeKey]?.let { (id, _) -> rows.indexOfFirst { it.place == id } }?.takeIf { it >= 0 } ?: rows.lastIndex.coerceAtLeast(0),
+            ?: place?.let { p -> rows.indexOfFirst { it.place == p.id } }?.takeIf { it >= 0 } ?: rows.lastIndex.coerceAtLeast(0),
     )
     val follow = rememberFollow(list)
     motion.follow = follow
@@ -501,12 +505,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val lineShown = remember { mutableStateOf(false) }
     LaunchedEffect(above, messages.isNotEmpty()) {
         if (follow.placed || above) return@LaunchedEffect
-        val saved = app.places[placeKey]
-        val back = saved?.let { (id, _) -> rows.indexOfFirst { it.place == id } }?.takeIf { it >= 0 }
+        val saved = place
+        val back = saved?.let { p -> rows.indexOfFirst { it.place == p.id } }?.takeIf { it >= 0 }
         val line = rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 }
         when {
             line != null -> list.scrollToItem(line, lineOffset)
-            back != null -> list.scrollToItem(back, -saved.second)
+            back != null -> list.scrollToItem(back, -saved.offset)
             else -> follow.toEnd()
         }
         lineShown.value = line != null
@@ -531,11 +535,14 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         if (knownNewest.value != null && newestKey != knownNewest.value && follow.on) follow.anchor = newestKey
         knownNewest.value = newestKey
     }
-    // Remember where the chat is left: the message at the top and its offset, so what arrives below does not move it.
+    // Remember where the chat is left: the message at the top and its offset, so what arrives below does not move it;
+    // and whether it was left at its end.
     val rowsNow by rememberUpdatedState(rows)
+    val newestNow by rememberUpdatedState(messages.lastOrNull()?.ts)
     DisposableEffect(placeKey) {
         onDispose {
-            list.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item -> rowsNow.firstOrNull { it.id == item.key && it is Entry.Said }?.let { it.place to item.offset } }?.let { app.places[placeKey] = it }
+            val bottom = if (follow.on || !list.canScrollForward) newestNow else null
+            list.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item -> rowsNow.firstOrNull { it.id == item.key && it is Entry.Said }?.let { AppState.Place(it.place, item.offset, bottom) } }?.let { app.places[placeKey] = it }
         }
     }
     // Near the top: the page before comes in (once per page); what is on screen stays put.

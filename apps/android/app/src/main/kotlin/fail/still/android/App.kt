@@ -333,8 +333,12 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     /** For what outlives the page that started it (a message sent as the page moves to its new chat). */
     val scope = MainScope()
 
-    /** Where each chat was left: the message at the top of the list and how far below the top it sat. */
-    val places = HashMap<String, Pair<String, Int>>()
+    /**
+     * Where each chat was left: the message at the top of the list and how far below the top it sat; and, if it was
+     * left at its end, the newest message then (`bottom`).
+     */
+    val places = HashMap<String, Place>()
+    data class Place(val id: String, val offset: Int, val bottom: String?)
     /** The pages, as what a sheet over them frosts. */
     val haze = HazeState()
 
