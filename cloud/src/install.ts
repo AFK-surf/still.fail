@@ -40,6 +40,8 @@ const APP_FILES: [RegExp, string][] = [
   [/^station\.json$/, "application/json"],
   [/^desktop\/stillfail-mac\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/stillfail-[0-9.]+-arm64-mac\.zip$/, "application/zip"],
+  // Its blockmap, for the updater to download only what changed since the zip it has (releases.ts).
+  [/^desktop\/stillfail-[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],

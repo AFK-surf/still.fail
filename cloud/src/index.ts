@@ -5,6 +5,7 @@
 // connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
 // *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
 import { installScript, releaseType } from "./install.ts";
+import { serveRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import { adminOrigins, publicOrigins } from "./compat";
@@ -53,9 +54,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const release = /^\/releases\/(.+)$/.exec(path)?.[1];
     const type = release ? releaseType(release) : null;
     if (release && type) {
-      const object = await env.RELEASES?.get(release);
-      if (!object) return reply({ error: "release_not_found" }, 404);
-      return new Response(object.body, { headers: { "content-type": type, "content-length": String(object.size), "cache-control": "no-store" } });
+      return serveRelease(request, env.RELEASES, release, type);
     }
   }
   const onConsole = adminOrigins(env).includes(url.origin);

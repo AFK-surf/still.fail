@@ -2,7 +2,7 @@
 # Builds the still.fail station's releases (the layout of scripts/station-bundle.sh) and puts them in the cloud's releases
 # bucket, where install.sh (cloud/src/install.ts) gets them: this Mac's (darwin-arm64), and Linux's (linux-x64,
 # linux-arm64, built from here: scripts/linux-station.sh).
-# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip and stillfail-mac.yml, in desktop/) and
+# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/) and
 # `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
 #   release.sh [PLATFORM…]   (default: the station's three; desktop and android only when named)
@@ -34,6 +34,7 @@ for platform in $platforms; do
       sh "$root/apps/desktop/build.sh"
       zip="stillfail-0.1.$build-arm64-mac.zip"
       put "$root/apps/desktop/out/$zip" "desktop/$zip" application/zip
+      put "$root/apps/desktop/out/$zip.blockmap" "desktop/$zip.blockmap" application/octet-stream
       put "$root/apps/desktop/out/stillfail-mac.yml" desktop/stillfail-mac.yml "text/yaml; charset=utf-8"
       ;;
     android)

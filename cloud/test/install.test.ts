@@ -46,6 +46,7 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("other-station-linux-x64.tar.gz"), null);
   assert.equal(releaseType("desktop/stillfail-mac.yml"), "text/yaml; charset=utf-8");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip"), "application/zip");
+  assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip.blockmap"), "application/octet-stream");
   // The old app's feed is not served: it is replaced by hand.
   assert.equal(releaseType("desktop/latest-mac.yml"), null);
   assert.equal(releaseType("desktop/ember-0.1.1092-arm64-mac.zip"), null);
