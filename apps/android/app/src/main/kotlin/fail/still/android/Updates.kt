@@ -38,15 +38,27 @@ class Updates(context: Context, private val origin: String, private val core: St
     var progress by mutableStateOf<String?>(null); private set
 
     /** Asks the core for a newer build (it asks still.fail cloud at most once an hour unless `now`); the one it finds, if any. */
-    suspend fun check(now: Boolean = false): AppRelease? {
-        val latest = try {
-            core.call("app.update", buildJsonObject { put("platform", "android"); put("versionCode", BuildConfig.VERSION_CODE.toLong()); put("now", now) })
-                .takeIf { it !is JsonNull }?.let { StillFailJson.decodeFromJsonElement(AppRelease.serializer(), it) }
-        } catch (_: CoreException) {
-            null
-        } ?: return null
-        available = latest
-        return latest
+    suspend fun check(now: Boolean = false): AppRelease? = try { ask(now) } catch (_: CoreException) { null }
+
+    private suspend fun ask(now: Boolean): AppRelease? =
+        core.call("app.update", buildJsonObject { put("platform", "android"); put("versionCode", BuildConfig.VERSION_CODE.toLong()); put("now", now) })
+            .takeIf { it !is JsonNull }?.let { StillFailJson.decodeFromJsonElement(AppRelease.serializer(), it) }
+            ?.also { available = it }
+
+    /** Whether a check the person asked for is under way. */
+    var checking by mutableStateOf(false); private set
+
+    /** Asks still.fail cloud now, as the person tapped for; what to tell them when no newer build turned up. */
+    suspend fun checkNow(): String? {
+        if (checking || progress != null) return null
+        checking = true
+        return try {
+            if (ask(true) == null) "已是最新" else null
+        } catch (e: CoreException) {
+            "没能检查更新：${e.message}"
+        } finally {
+            checking = false
+        }
     }
 
     /**

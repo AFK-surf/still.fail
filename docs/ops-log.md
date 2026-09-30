@@ -17,6 +17,8 @@
 
 ## 待部署
 
+- 安卓「我」页的版本行点一下就马上检查更新（android-check-update）：只改了 app，不用部署 cloud 或 station。要发一版安卓（`release.sh android`）才能用上。发了以后，在旧版上点版本行，应该出现「正在检查…」，然后显示「更新到 …」。
+
 ## 2026-10-01
 
 ### 02:32 各台 station 更新到 0.1.1209，studio 和 mini 换成正式安装

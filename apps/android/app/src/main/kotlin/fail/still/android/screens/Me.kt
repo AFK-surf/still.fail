@@ -124,15 +124,17 @@ fun MeScreen(current: WorkspaceEntry) {
                 Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent)
             }
         }
-        // This build, and a newer one when still.fail cloud has it: tapped, it is downloaded and installed.
+        // This build, and a newer one when still.fail cloud has it: tapped, it is downloaded and installed; with none
+        // known yet, tapping asks still.fail cloud again right away.
         SectionHeader("版本", start = 24.dp)
         val updates = app.updates
         val newer = updates.available
         LaunchedEffect(Unit) { app.checkUpdates() }
         ListCard {
-            ListRow(onClick = if (newer == null || updates.progress != null) null else ({ scope.launch { updates.install()?.let { app.toast = it } } })) {
+            val busy = updates.progress != null || updates.checking
+            ListRow(onClick = if (busy) null else ({ scope.launch { (if (newer == null) updates.checkNow() else updates.install())?.let { app.toast = it } } })) {
                 Text("still.fail ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                Text(updates.progress ?: newer?.let { "更新到 ${it.versionName}" } ?: "已是最新", fontSize = 15.sp, color = if (newer != null && updates.progress == null) C.accent else C.muted)
+                Text(updates.progress ?: (if (updates.checking) "正在检查…" else null) ?: newer?.let { "更新到 ${it.versionName}" } ?: "检查更新", fontSize = 15.sp, color = if (newer != null && !busy) C.accent else C.muted)
             }
         }
         Spacer(Modifier.height(30.dp))
