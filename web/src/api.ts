@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { Attachment, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { Attachment, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 
@@ -93,6 +93,17 @@ export function stamp(of: object, field: string): Stamp | undefined {
 
 export function useChats(scope: string, mine: boolean): TopicState<ChatsView> {
   return useTopic<ChatsView>({ topic: "chats", scope, mine });
+}
+
+/**
+ * The chats of `scope` a few words find, titles first (the `chatSearch` topic): only `station`'s if given, not
+ * `exclude`, `limit` at most. While the next words are looked up, what the last ones found stays.
+ */
+export function useChatSearch({ scope, query, station, exclude, limit }: { scope: string; query: string; station?: string; exclude?: string | null; limit?: number }): TopicState<ChatSearchView> {
+  const state = useTopic<ChatSearchView>({ topic: "chatSearch", scope, query, ...(station ? { station } : {}), ...(exclude ? { exclude } : {}), ...(limit ? { limit } : {}) });
+  const last = useRef<ChatSearchView | undefined>(undefined);
+  if (state.value) last.current = state.value;
+  return state.value || !last.current || state.error ? state : { ...state, value: last.current };
 }
 
 /** What the core is waiting on, when it is worth saying: something slow, a connection down (`state` absent: nothing). */

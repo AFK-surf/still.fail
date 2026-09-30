@@ -105,6 +105,11 @@ object Topics {
     val notify = buildJsonObject { put("topic", "notify") }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
+    /** The chats of a scope a few words find, titles first: only `station`'s, not `exclude` (a chat's id or agent), `limit` at most (ChatRefMenu). */
+    fun chatSearch(scope: String, query: String, station: String? = null, exclude: String? = null, limit: Int? = null) = buildJsonObject {
+        put("topic", "chatSearch"); put("scope", scope); put("query", query)
+        station?.let { put("station", it) }; exclude?.let { put("exclude", it) }; limit?.let { put("limit", it) }
+    }
 
     /** A connect's Slack app as Slack has it (read through the station; again after a write to the connect). */
     fun slackApp(station: String, connect: String) = buildJsonObject { put("topic", "slackApp"); put("station", station); put("connect", connect) }

@@ -675,6 +675,14 @@ export interface ChatMessage {
 	time?: Record<string, Stamp>;
 }
 
+/**
+ * The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words
+ * first. What the composer's `@` menu and the switcher list.
+ */
+export interface ChatSearchView {
+	items: ChatItem[];
+}
+
 /** Who is looking: an account's email, or "local". */
 export interface Me {
 	id?: string;

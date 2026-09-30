@@ -2,14 +2,13 @@
 // its text, the passages it quotes, and files on their way to the station. Each chat has its own (a `key`): moving to
 // another chat, or leaving the page, puts it away, and coming back brings it back. Sending empties it at once (the
 // message waits in the chat's outbox until the station has it); if the chat it goes to cannot be made, it comes back.
-// The core keeps each on the device (its `draft` topic, `draft.put`), so it outlives the page; what is on its way up
-// stays with the page.
+// The core keeps each on the device by its key (`draft.put` as it changes, `draft.get`), so it outlives the page; what
+// is on its way up stays with the page. A reference's mark goes as written: the core makes it a link as it is sent.
 import { createContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { core } from "./core/react.ts";
 import type { DraftView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
-import { expandRefs } from "./chatRefs.ts";
 
 export const MAX_FILE = 50 * 1024 * 1024;
 
@@ -85,65 +84,20 @@ const kept = new Map<string, { text: string; files: Pending[]; quotes: DraftQuot
 
 let nextId = 1;
 
-/** The chat a draft's key names, as the core keeps it: `new:<station>` a new chat there, else `<station>:<chat>`. */
-function keptAt(key: string): { station: string; chat: string } | null {
-  if (key.startsWith("new:")) return { station: key.slice(4), chat: "new" };
-  const at = key.indexOf(":");
-  return at > 0 ? { station: key.slice(0, at), chat: key.slice(at + 1) } : null;
-}
-
-/** Writes waiting, by key: the latest of each goes to the core a moment after the last change. */
-const writes = new Map<string, { draft: DraftView; timer: ReturnType<typeof setTimeout> }>();
-
-/** Has the core keep `key`'s draft as it is now (`now`: at once rather than a moment later). */
-function persist(key: string, draft: { text: string; files: Pending[]; quotes: DraftQuote[] } | undefined, now = false): void {
-  const at = keptAt(key);
-  if (!at) return;
+/** Has the core keep `key`'s draft as it is now (it writes it down a moment after the last change). */
+function persist(key: string, draft: { text: string; files: Pending[]; quotes: DraftQuote[] } | undefined): void {
   const view: DraftView = {
     text: draft?.text ?? "",
     quotes: (draft?.quotes ?? []).map(({ id: _, ...q }) => q),
     files: (draft?.files ?? []).flatMap((f) => (f.done ? [f.done] : [])),
   };
-  const before = writes.get(key);
-  if (before) clearTimeout(before.timer);
-  const write = () => {
-    writes.delete(key);
-    // A core from before drafts refuses it: the draft is then the page's only, as it was.
-    core().call("draft.put", { ...at, ...view }).catch(() => undefined);
-  };
-  if (now) write();
-  else writes.set(key, { draft: view, timer: setTimeout(write, 300) });
-}
-
-/** Leaving the page: what waits goes now. */
-if (typeof window !== "undefined") {
-  window.addEventListener("pagehide", () => {
-    for (const [key, { draft, timer }] of writes) {
-      clearTimeout(timer);
-      writes.delete(key);
-      const at = keptAt(key);
-      if (at) core().call("draft.put", { ...at, ...draft }).catch(() => undefined);
-    }
-  });
+  // A core from before drafts refuses it: the draft is then the page's only, as it was.
+  core().call("draft.put", { key, ...view }).catch(() => undefined);
 }
 
 /** `key`'s draft as the core keeps it (null: none, or a core that keeps none). */
 function readKept(key: string): Promise<DraftView | null> {
-  const at = keptAt(key);
-  if (!at) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    let stop: (() => void) | null = null;
-    let done = false;
-    const finish = (value: DraftView | null) => {
-      if (done) return;
-      done = true;
-      resolve(value);
-      // Unsubscribed on the next turn: the answer may come while subscribing.
-      queueMicrotask(() => stop?.());
-    };
-    stop = core().subscribe({ topic: "draft", ...at }, (value) => finish(value as DraftView), () => finish(null));
-    if (done) stop();
-  });
+  return core().call("draft.get", { key }).then((value) => value as DraftView, () => null);
 }
 
 export function useDraft({ key, station, carry, upload, quotes: held }: {
@@ -181,7 +135,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   const loaded = useRef<string | undefined>(undefined);
   /** Has the core keep what `at` has now, if what it kept was read (else it stays as it was). */
   const leave = (at: string) => {
-    if (loaded.current === at) persist(at, kept.get(at), true);
+    if (loaded.current === at) persist(at, kept.get(at));
   };
   /** Brings back what the core kept for `at`, unless something has been written here meanwhile. */
   const fromCore = (at: string) => {
@@ -206,7 +160,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     if (carry && key !== undefined && carry.current === key) {
       carry.current = null;
       // What it has now is the chat's; the new chat's is empty.
-      if (before !== undefined && loaded.current === before) persist(before, undefined, true);
+      if (before !== undefined && loaded.current === before) persist(before, undefined);
       loaded.current = key;
       return;
     }
@@ -295,7 +249,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   const uploading = files.some((f) => !f.done && !f.error);
   const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting;
   const take = () => {
-    const taken = { text: expandRefs(text.trim()), files, quotes };
+    const taken = { text: text.trim(), files, quotes };
     setText(""); setFiles([]); setQuotes(() => []); setError(null);
     return taken;
   };

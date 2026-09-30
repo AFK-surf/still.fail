@@ -1115,6 +1115,15 @@ pub struct NotifyView {
     pub show: Vec<Notice>,
 }
 
+/// The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words
+/// first. What the composer's `@` menu and the switcher list.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSearchView {
+    pub items: Vec<ChatItem>,
+}
+
 /// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
 /// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
 /// `url` opens it.

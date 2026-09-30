@@ -369,6 +369,7 @@ impl Source for Router {
             let (name, station) = match topic {
                 Topic::Chat { station, .. } => ("chat.open", Some(station)),
                 Topic::Chats { .. } => ("chats.open", None),
+                Topic::ChatSearch { .. } => ("chats.search", None),
                 Topic::Stations { .. } => ("stations.open", None),
                 _ => ("connects.open", None),
             };
@@ -629,7 +630,7 @@ impl Inner {
                 }
             },
             Call::ChatSend { station, thread, text, attachments, quotes, client } => {
-                let message = outgoing(text, attachments, quotes, client);
+                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client);
                 let id = self.views.outbox_add(&station, thread, message.clone());
                 self.deliver(&station, thread, &id, message).await
             }
@@ -640,7 +641,7 @@ impl Inner {
                 Ok(json!({ "key": key }))
             }
             Call::ChatSendTo { station, session, text, attachments, quotes, client } => {
-                let message = outgoing(text, attachments, quotes, client);
+                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client);
                 match self.views.pending_thread(&station, &session) {
                     Some(Some(thread)) => {
                         let id = self.views.outbox_add(&station, thread, message.clone());
@@ -721,8 +722,17 @@ impl Inner {
                 if empty("text") && empty("quotes") && empty("files") {
                     self.data.forget_topic(&topic);
                 } else {
-                    self.data.set(&topic, draft);
+                    self.data.set_soon(&topic, draft);
                 }
+                Ok(Value::Null)
+            }
+            Call::DraftGet { station, chat } => Ok(self.data.get(&Topic::Draft { station, chat }).unwrap_or_else(|| json!({ "text": "", "quotes": [], "files": [] }))),
+            Call::ChatRef { station, id, title, base } => {
+                let base = base.unwrap_or_else(|| self.host.cloud_origin());
+                Ok(json!({ "mark": crate::refs::mark(&self.data, &base, &station, &id, &title) }))
+            }
+            Call::ChatRefsKeep { links } => {
+                crate::refs::keep(&self.data, links);
                 Ok(Value::Null)
             }
             Call::StationUpload { station, name, bytes } => {
@@ -1443,7 +1453,7 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
 }
 
 /// A path segment, percent-encoded like `encodeURIComponent`.
-fn encode(segment: &str) -> String {
+pub(crate) fn encode(segment: &str) -> String {
     let mut out = String::new();
     for byte in segment.bytes() {
         match byte {
@@ -1566,6 +1576,13 @@ enum Call {
     DraftPut { station: String, chat: String, draft: Value },
     /// Where a UI's attention is, notifications' settings, a notice taken to show (attend.rs).
     Attend(crate::attend::Call),
+    /// What is written to a chat on this device, once (empty: nothing).
+    DraftGet { station: String, chat: String },
+    /// A chat picked to refer to from the composer (refs.rs): answers its mark, `{ mark }`, its link kept until sent.
+    /// `base`: where the page's own links start (still.fail cloud when not given).
+    ChatRef { station: String, id: String, title: String, base: Option<String> },
+    /// Links of references kept by a client before the core kept them (title, link), the latest last.
+    ChatRefsKeep { links: Vec<(String, String)> },
 }
 
 impl Call {
@@ -1587,8 +1604,8 @@ impl Call {
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
-            Call::DraftPut { station, .. } => Some(station),
-            Call::Attend(_) => None,
+            Call::DraftPut { station, .. } | Call::DraftGet { station, .. } | Call::ChatRef { station, .. } => Some(station),
+            Call::Attend(_) | Call::ChatRefsKeep { .. } => None,
         }
     }
 }
@@ -1833,16 +1850,41 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             let p: Read = read(params)?;
             Call::ChatRead { station: p.station, thread: p.thread, seq: p.seq }
         }
-        "draft.put" => {
+        "draft.put" | "draft.get" => {
             let mut p = params_or_empty(params);
+            // By the page's key for it (refs.rs, draft_at), or by its station and chat.
             let at = |field: &str| p.get(field).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
-            let (Some(station), Some(chat)) = (at("station"), at("chat")) else { return Err(CoreError::invalid("参数不对：要有 station 和 chat")) };
+            let (Some(station), Some(chat)) = at("key").and_then(|k| crate::refs::draft_at(&k)).map_or((at("station"), at("chat")), |(s, c)| (Some(s), Some(c))) else {
+                return Err(CoreError::invalid("参数不对：要有 key，或 station 和 chat"));
+            };
+            if name == "draft.get" {
+                return Ok(Call::DraftGet { station, chat });
+            }
             if let Some(o) = p.as_object_mut() {
                 o.remove("station");
                 o.remove("chat");
+                o.remove("key");
             }
             let draft = stillfail_shapes::conform::<stillfail_shapes::DraftView>(p).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
             Call::DraftPut { station, chat, draft }
+        }
+        "chat.ref" => {
+            #[derive(Deserialize)]
+            struct Ref {
+                station: String,
+                id: String,
+                title: String,
+                base: Option<String>,
+            }
+            let p: Ref = read(params)?;
+            Call::ChatRef { station: p.station, id: p.id, title: p.title, base: p.base }
+        }
+        "chat.refs" => {
+            #[derive(Deserialize)]
+            struct Links {
+                links: Vec<(String, String)>,
+            }
+            Call::ChatRefsKeep { links: read::<Links>(params)?.links }
         }
         "station.upload" => {
             let p: Upload = read(params)?;
@@ -2543,7 +2585,8 @@ mod tests {
             apply(&host, &mut values);
             assert_eq!(values[&1]["text"], "修一下登录");
             assert_eq!(values[&1]["files"][0]["path"], "up/x.png");
-            // Kept across a restart, with no station to ask.
+            // Kept across a restart, with no station to ask (written a moment after the last change).
+            host.sleep(crate::data::SOON_MS + 50).await;
             drop(core);
             host.take_emitted();
             let core = Core::new(host.clone()).await;
@@ -2573,6 +2616,88 @@ mod tests {
             host.settle().await;
             let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 3 | 4, .. })).count();
             assert_eq!(refused, 2);
+        });
+    }
+
+    #[test]
+    fn a_draft_written_as_it_is_typed_is_one_write_and_read_by_its_key() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            let put = |id, text: &str| ClientMessage::Call { id, call: "draft.put".into(), params: json!({ "key": "local:thread:7", "text": text, "quotes": [], "files": [] }) };
+            for (id, text) in [(1, "修"), (2, "修一"), (3, "修一下")] {
+                core.receive(ui, put(id, text));
+            }
+            host.settle().await;
+            let kept = |host: &FakeHost| host.db.borrow().iter().filter(|((t, _), _)| t == "draft").map(|(_, v)| serde_json::from_slice::<Value>(v).unwrap()["text"].clone()).collect::<Vec<_>>();
+            // There at once; on the device a moment after the last change, as it is then.
+            assert!(kept(&host).is_empty());
+            core.receive(ui, ClientMessage::Call { id: 4, call: "draft.get".into(), params: json!({ "key": "local:thread:7" }) });
+            host.settle().await;
+            let answer = |host: &FakeHost, want| host.take_emitted().into_iter().find_map(|(_, m)| match m { CoreMessage::Ok { id, ok } if id == want => Some(ok), _ => None });
+            assert_eq!(answer(&host, 4).unwrap()["text"], "修一下");
+            host.sleep(crate::data::SOON_MS + 50).await;
+            host.settle().await;
+            assert_eq!(kept(&host), [json!("修一下")]);
+            // Emptied before it was written: nothing is written after all.
+            core.receive(ui, ClientMessage::Call { id: 5, call: "draft.put".into(), params: json!({ "key": "new:local", "text": "新的" }) });
+            core.receive(ui, ClientMessage::Call { id: 6, call: "draft.put".into(), params: json!({ "key": "new:local", "text": "" }) });
+            host.sleep(crate::data::SOON_MS + 50).await;
+            host.settle().await;
+            assert_eq!(kept(&host), [json!("修一下")]);
+            core.receive(ui, ClientMessage::Call { id: 7, call: "draft.get".into(), params: json!({ "key": "new:local" }) });
+            host.settle().await;
+            assert_eq!(answer(&host, 7).unwrap(), json!({ "text": "", "quotes": [], "files": [] }));
+        });
+    }
+
+    #[test]
+    fn a_chat_referred_to_goes_out_as_a_link_to_it() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Call { id: 1, call: "chat.ref".into(), params: json!({ "station": "local", "id": "ember:c 1", "title": "排查 [登录]", "base": "/admin" }) });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "chat.ref".into(), params: json!({ "station": "ws/st", "id": "k2", "title": "云上的" }) });
+            // Kept by a page before the core kept them.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.refs".into(), params: json!({ "links": [["旧的", "https://x/chats/a"]] }) });
+            host.settle().await;
+            let answers: HashMap<RequestId, Value> = host.take_emitted().into_iter().filter_map(|(_, m)| match m { CoreMessage::Ok { id, ok } => Some((id, ok)), _ => None }).collect();
+            assert_eq!(answers[&1], json!({ "mark": "@[排查 登录]" }));
+            assert_eq!(answers[&2], json!({ "mark": "@[云上的]" }));
+            core.receive(ui, ClientMessage::Call { id: 4, call: "chat.send".into(), params: json!({ "station": "local", "thread": 7, "text": "看 @[排查 登录]、@[云上的]、@[旧的] 和 @[不知道]" }) });
+            host.settle().await;
+            let sent = host.requests.borrow().iter().rev().find(|r| r.method == "POST" && r.url.ends_with("/admin/api/threads/7/messages")).map(|r| serde_json::from_slice::<Value>(r.body.as_deref().unwrap()).unwrap()).expect("sent");
+            assert_eq!(sent["text"], "看 [排查 登录](/admin/chats/ember%3Ac%201)、[云上的](https://stillfail.test/w/ws/s/st/chats/k2)、[旧的](https://x/chats/a) 和 @[不知道]");
+        });
+    }
+
+    #[test]
+    fn the_chats_a_few_words_find_are_a_view_of_the_list() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            host.on_fetch(|req| {
+                let path = req.url.trim_start_matches("https://stillfail.test");
+                let row = |id: &str, title: &str, at: i64| json!({
+                    "id": id, "session": id, "thread": null, "title": title, "agents": [], "last": null, "unread": false, "mine": true,
+                    "lastActiveAt": at, "connect": null, "origin": null,
+                });
+                match path.split('?').next().unwrap() {
+                    "/admin/api/chats" => json_response(200, json!([row("a", "别的", 3), row("b", "登录页", 2), row("c", "修登录", 1)])),
+                    "/admin/api/overview" => json_response(200, json!({
+                        "viewer": { "via": "local" }, "connects": [], "profiles": [], "processes": [], "counts": { "sessions": 0, "running": 0, "warm": 0 },
+                        "mesh": null, "slackUsers": [], "slackTeams": [], "slackApps": [], "disk": null, "logins": [],
+                    })),
+                    _ => json_response(404, json!({})),
+                }
+            });
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: serde_json::from_value(json!({ "topic": "chatSearch", "scope": "local", "query": "登录", "exclude": "c" })).unwrap() });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            let ids: Vec<&str> = values[&1]["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap()).collect();
+            assert_eq!(ids, ["b"]);
+            assert_eq!(values[&1]["items"][0]["station"], "local");
         });
     }
 

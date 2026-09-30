@@ -100,7 +100,7 @@ import fail.still.android.LocalApp
 import fail.still.android.data.Attachment
 import fail.still.android.data.ChatOf
 import fail.still.android.data.ChatView
-import fail.still.android.data.ChatsView
+import fail.still.android.data.ChatSearchView
 import fail.still.android.data.Quote
 import fail.still.android.data.StillFailJson
 import fail.still.android.data.Topics
@@ -117,13 +117,13 @@ import fail.still.core.CoreException
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -197,9 +197,9 @@ class Draft {
         focusQuote = q.id
     }
 
-    /** Empties it, for what is sent: the text (its references made links), the files up, the quotes. */
+    /** Empties it, for what is sent: the text (its references' marks, which the core makes links), the files up, the quotes. */
     fun take(): Taken {
-        val taken = Taken(ChatRefs.expand(text.trim()), files.toList(), quotes.toList(), text)
+        val taken = Taken(text.trim(), files.toList(), quotes.toList(), text)
         text = ""; files.clear(); quotes.clear(); error = null; refClosed = null
         save()
         return taken
@@ -209,7 +209,7 @@ class Draft {
     fun restore(t: Taken) { text = t.written; files.addAll(t.files); quotes.addAll(t.quotes); save() }
 }
 
-/** What a draft held when it was sent: `text` as it goes, `written` as it was typed. */
+/** What a draft held when it was sent: `text` as it goes (trimmed), `written` as it was typed. */
 class Taken(val text: String, val files: List<Pending>, val quotes: List<DraftQuote>, val written: String)
 
 @Serializable
@@ -233,13 +233,9 @@ object Drafts {
 
     private fun prefs(context: Context) = prefs ?: context.applicationContext.getSharedPreferences("drafts", Context.MODE_PRIVATE).also { prefs = it }
 
-    /** The chat a key names, as the core keeps it. */
-    private fun at(key: String): Pair<String, String>? =
-        if (key.startsWith("new:")) key.removePrefix("new:") to "new"
-        else key.indexOf(':').takeIf { it > 0 }?.let { key.substring(0, it) to key.substring(it + 1) }
-
     fun of(context: Context, core: StillFailCore, key: String): Draft = open.getOrPut(key) {
         this.core = core
+        ChatRefs.migrate(context, core)
         Draft().apply {
             keptAs = key
             // Kept by the app before the core kept drafts: into the core, once.
@@ -252,10 +248,10 @@ object Drafts {
                 save()
                 return@apply
             }
-            val (station, chat) = at(key) ?: run { loaded = true; return@apply }
             scope.launch {
-                val state = core.topic(Topics.draft(station, chat)).first { it.value != null || it.error != null }
-                val kept = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(DraftView.serializer(), it) }.getOrNull() }
+                // A core that keeps none (or refuses the key): nothing kept.
+                val kept = try { core.call("draft.get", buildJsonObject { put("key", key) }) } catch (_: CoreException) { null }
+                    ?.takeIf { it !is JsonNull }?.let { runCatching { decode(DraftView.serializer(), it) }.getOrNull() }
                 // Written here meanwhile: that is what is kept now.
                 if (kept != null && empty) fill(kept)
                 loaded = true
@@ -266,10 +262,9 @@ object Drafts {
 
     internal fun save(key: String, d: Draft) {
         val core = core ?: return
-        val (station, chat) = at(key) ?: return
         val view = DraftView(d.text, d.quotes.map { it.sent().copy(comment = it.comment) }, d.files.mapNotNull { it.done })
         val params = buildJsonObject {
-            put("station", station); put("chat", chat)
+            put("key", key)
             StillFailJson.encodeToJsonElement(DraftView.serializer(), view).jsonObject.forEach { (k, v) -> put(k, v) }
         }
         // A core that refuses it keeps nothing: the draft lives while the app does.
@@ -277,7 +272,7 @@ object Drafts {
     }
 }
 
-/** A chat's draft (Drafts), kept on the device as it changes and when the page goes. */
+/** A chat's draft (Drafts), kept on the device as it changes (the core writes it down a moment after) and when the page goes. */
 @Composable
 fun rememberDraft(station: String, of: ChatOf): Draft =
     rememberDraft("$station:" + when (of) { is ChatOf.Session -> of.key; is ChatOf.Thread -> "thread:${of.id}" })
@@ -290,7 +285,7 @@ fun rememberDraft(key: String): Draft {
     val draft = remember(key) { Drafts.of(context, core, key) }
     LaunchedEffect(draft) {
         snapshotFlow { Triple(draft.text, draft.quotes.map { it.id to it.comment }, draft.files.map { it.id to it.done }) }
-            .drop(1).collectLatest { delay(400); draft.save() }
+            .drop(1).collect { draft.save() }
     }
     DisposableEffect(draft) { onDispose { draft.save() } }
     return draft
@@ -301,41 +296,26 @@ fun rememberDraft(key: String): Draft {
 /**
  * References to other chats in what is written: in the composer a short mark, `@[its title]`, drawn in the accent; sent,
  * a link, `[its title](<cloud>/w/<workspace>/s/<station>/chats/<key>)`, which the agent reads the chat by and a message
- * draws as a chip. The link of each title is kept on the device until the mark is sent (a draft outlives the app).
+ * draws as a chip. The core makes the mark of a chat picked and keeps its link until the mark is sent (`chat.ref`,
+ * client/core/src/refs.rs).
  */
 object ChatRefs {
     val MARK = Regex("@\\[([^\\]\\n]{1,120})\\]")
-    private const val KEPT = 200
-    private const val TITLE = 24
-    private var prefs: SharedPreferences? = null
-    private val map = MapSerializer(String.serializer(), String.serializer())
+    private var migrated = false
 
-    private fun links(): Map<String, String> =
-        prefs?.getString("links", null)?.let { runCatching { StillFailJson.decodeFromString(map, it) }.getOrNull() } ?: emptyMap()
-
-    /** A chat's title as a reference shows it: its start, on one line. */
-    fun title(title: String): String {
-        val words = title.replace(Regex("[\\[\\]\\n]"), " ").replace(Regex("\\s+"), " ").trim()
-        val points = words.codePoints().toArray()
-        return (if (points.size > TITLE) String(points, 0, TITLE).trimEnd() + "…" else words).ifEmpty { "对话" }
-    }
-
-    /** The mark for a chat, its link kept. */
-    fun mark(context: Context, title: String, link: String): String {
-        val p = prefs ?: context.applicationContext.getSharedPreferences("chatRefs", Context.MODE_PRIVATE).also { prefs = it }
-        val all = LinkedHashMap(links())
-        all.remove(title)
-        all[title] = link
-        val kept = all.entries.toList().takeLast(KEPT).associate { it.key to it.value }
-        p.edit().putString("links", StillFailJson.encodeToString(map, kept)).apply()
-        return "@[$title]"
-    }
-
-    /** What is written, its marks made links (one whose link is gone stays as written). */
-    fun expand(text: String): String {
-        if (!MARK.containsMatchIn(text)) return text
-        val all = links()
-        return MARK.replace(text) { m -> all[m.groupValues[1]]?.let { "[${m.groupValues[1]}]($it)" } ?: m.value }
+    /** Links the app kept before the core did (its "chatRefs" preferences): into the core, once. */
+    fun migrate(context: Context, core: StillFailCore) {
+        if (migrated) return
+        migrated = true
+        val prefs = context.applicationContext.getSharedPreferences("chatRefs", Context.MODE_PRIVATE)
+        val stored = prefs.getString("links", null) ?: return
+        val links = runCatching { StillFailJson.decodeFromString(MapSerializer(String.serializer(), String.serializer()), stored) }.getOrNull().orEmpty()
+        MainScope().launch {
+            try {
+                core.call("chat.refs", buildJsonObject { put("links", JsonArray(links.map { (t, l) -> JsonArray(listOf(JsonPrimitive(t), JsonPrimitive(l))) })) })
+                prefs.edit().remove("links").apply()
+            } catch (_: CoreException) {}
+        }
     }
 
     /** The `@words` the caret is at the end of, and where the `@` is; null when it is not in one. */
@@ -372,35 +352,36 @@ private class RefMarks(private val accent: Color) : VisualTransformation {
 /** The address's workspace (the scope of its chats' list), "local" for the local station. */
 private fun scopeOf(address: String) = if (address == "local") "local" else address.substringBefore('/')
 
-/** A station's pages under the cloud (web/src/station.tsx → stationBase). */
-private fun stationBase(address: String): String = if (address == "local") "" else "/w/${address.substringBefore('/')}/s/${address.substringAfter('/')}"
-
 /**
- * `@` and a few letters in the text: the chats of this station it finds (another station's agents cannot read them),
- * the latest first, but not `here` (the chat written in); the one picked goes in as a mark. Over the composer, in its glass.
+ * `@` and a few letters in the text: the chats of this station it finds (another station's agents cannot read them,
+ * the core's `chatSearch`), titles first, but not `here` (the chat written in); the one picked goes in as the mark the
+ * core makes of it. Over the composer, in its glass.
  */
 @Composable
 fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, modifier: Modifier = Modifier) {
     val app = LocalApp.current
-    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val field = draft.input
     val found = if (field.selection.collapsed && draft.focused && !draft.locked) ChatRefs.at(field.text, field.selection.start) else null
     val ref = found?.takeIf { it.first != draft.refClosed }
     if (found == null && draft.refClosed != null) draft.refClosed = null
     if (ref == null) return
     val (start, query) = ref
-    val chats by rememberTopic<ChatsView>(app.core, Topics.chats(scopeOf(station), false))
-    val words = query.lowercase()
-    val items = (chats.value?.days ?: emptyList()).flatMap { it.items }
-        .filter { it.station == station && it.id != here && it.session != here }
-        .filter { words.isEmpty() || it.title.lowercase().contains(words) || it.agents.any { a -> a.agentText.lowercase().contains(words) } }
-        .take(8)
+    val search by rememberTopic<ChatSearchView>(app.core, Topics.chatSearch(scopeOf(station), query, station, here, 8))
+    val items = search.value?.items ?: emptyList()
     val pick = { item: fail.still.android.data.ChatItem ->
-        val link = "${app.cloudOrigin.trimEnd('/')}${stationBase(item.station)}/chats/${Uri.encode(item.id)}"
-        val mark = ChatRefs.mark(context, ChatRefs.title(item.title), link)
         val caret = field.selection.start
-        val next = field.text.substring(0, start) + mark + " " + field.text.substring(caret)
-        draft.input = TextFieldValue(next, TextRange(start + mark.length + 1))
+        draft.refClosed = start
+        scope.launch {
+            // Its mark, from the core, which keeps its link until it is sent; in its place if the `@words` are still there.
+            val mark = try {
+                app.core.call("chat.ref", buildJsonObject { put("station", item.station); put("id", item.id); put("title", item.title); put("base", app.cloudOrigin) })
+                    .jsonObject["mark"]?.jsonPrimitive?.content
+            } catch (_: CoreException) { null } ?: return@launch
+            val now = draft.input.text
+            if (now.getOrNull(start) != '@' || caret > now.length) return@launch
+            draft.input = TextFieldValue(now.substring(0, start) + mark + " " + now.substring(caret), TextRange(start + mark.length + 1))
+        }
     }
     Column(
         modifier.fillMaxWidth().padding(bottom = 8.dp).floating(haze, RoundedCornerShape(ComposerCorner)).heightIn(max = 320.dp)
@@ -411,7 +392,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
             if (query.isNotEmpty()) Text(query, fontSize = 13.sp, color = C.ink)
         }
         when {
-            chats.value == null -> Text("正在读取…", fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
+            search.value == null -> Text(if (search.error != null) "更新 still.fail 后才能引用对话" else "正在读取…", fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             items.isEmpty() -> Text(if (query.isNotEmpty()) "没有标题里带这些字的对话" else "这台 station 上没有别的对话", fontSize = 15.sp, color = C.muted,
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             else -> items.forEach { item ->

@@ -1,9 +1,9 @@
 // The shortcuts that belong to no page (keymap.ts), and ⌘K's switcher: a chat found by typing part of its title (↑/↓
 // pick, ↩ opens, Esc closes, as everywhere; nothing says so).
 import { Dialog as RDialog } from "radix-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useChats, type ChatItem } from "./api.ts";
+import { useChatSearch, type ChatItem } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { useShortcut } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
@@ -44,23 +44,16 @@ function ChatSwitcher({ scope, open, onClose }: { scope: string; open: boolean; 
   );
 }
 
-/** Its chats as the sidebar lists them, newest first; typing narrows them to those whose title (or else where they are, or what was said last) has it. */
+/** Its chats as the sidebar lists them, newest first; typing narrows them to those whose title (or else where they are, or what was said last) has it (the core's `chatSearch`). */
 function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
   const navigate = useNavigate();
-  const view = useChats(scope, false).value;
   const [query, setQuery] = useState("");
+  const search = useChatSearch({ scope, query });
+  const view = search.value;
+  const found = view?.items ?? [];
   const [at, setAt] = useState(0);
   const list = useRef<HTMLDivElement>(null);
   const several = scope !== "local";
-  const found = useMemo(() => {
-    const all = (view?.days ?? []).flatMap((d) => d.items).filter((i) => !i.pending);
-    const q = query.trim().toLowerCase();
-    if (!q) return all;
-    const has = (s: string | undefined) => !!s && s.toLowerCase().includes(q);
-    const titled = all.filter((i) => has(i.title));
-    const rest = all.filter((i) => !has(i.title) && (has(i.stationName) || has(i.originText) || has(i.last?.preview)));
-    return [...titled, ...rest];
-  }, [view, query]);
   useEffect(() => setAt(0), [query]);
   useEffect(() => {
     list.current?.querySelector(`[data-at="${at}"]`)?.scrollIntoView({ block: "nearest" });
@@ -81,6 +74,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
           else if (e.key === "Enter") { e.preventDefault(); go(found[at]); }
         }} />
       <div className={css.results} ref={list} role="listbox" aria-label="对话">
+        {search.error && !view && <p className={css.none}>更新 still.fail 后才能搜索对话</p>}
         {view && found.length === 0 && <p className={css.none}>{query ? "没有找到对话" : "还没有对话"}</p>}
         {found.map((item, i) => (
           <div key={`${item.station}/${item.id}`} className={css.row} role="option" aria-selected={i === at} data-at={i}

@@ -703,6 +703,13 @@ data class ChatMessage (
 	val time: Map<String, Stamp>? = null
 )
 
+/// The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words
+/// first. What the composer's `@` menu and the switcher list.
+@Serializable
+data class ChatSearchView (
+	val items: List<ChatItem>
+)
+
 /// Who is looking: an account's email, or "local".
 @Serializable
 data class Me (

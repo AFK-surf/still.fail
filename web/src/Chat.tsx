@@ -5,8 +5,8 @@
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
-import { useSearchParams } from "react-router";
-import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
+import { useHref, useSearchParams } from "react-router";
+import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
@@ -24,10 +24,9 @@ import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
-import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs, type ChatRef } from "./ChatRef.tsx";
-import { refMark } from "./chatRefs.ts";
-import { useMorph } from "./morph.ts";
 import { core } from "./core/react.ts";
+import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
+import { useMorph } from "./morph.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
@@ -1023,7 +1022,9 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
   // `@` and a few letters: a menu of the station's other chats, the one chosen put in as a link (ChatRef.tsx).
   const [reference, setReference] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
-  const refItems = useRef<{ ref: ChatRef }[]>([]);
+  const refItems = useRef<ChatItem[]>([]);
+  // Where this page's links start: a reference is a link to the chat's page here.
+  const base = `${/^https?:$/.test(location.protocol) ? location.origin : ""}${useHref("/").replace(/\/$/, "")}`;
   // A reference in the text shows as a chip: a mirror of the text under it (see-through then) draws it.
   const mirror = useRef<HTMLDivElement>(null);
   const marked = /@\[[^\]\n]{1,120}\]/.test(text);
@@ -1035,16 +1036,20 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     setReference((now) => (now?.start === next?.start && now?.query === next?.query ? now : next));
     if (next?.query !== reference?.query) setActive(0);
   };
-  const pickReference = (ref: ChatRef) => {
+  const pickReference = (item: ChatItem) => {
     const el = input.current;
     if (!el || !reference) return;
-    const link = refMark(ref.title, ref.link);
+    const { start } = reference;
     const end = el.selectionStart;
-    const next = `${text.slice(0, reference.start)}${link} ${text.slice(end)}`;
-    const caret = reference.start + link.length + 1;
-    caretAt.current = caret;
-    setText(next);
     setReference(null);
+    // Its mark, from the core, which keeps its link until it is sent; in its place if the `@words` are still there.
+    void core().call("chat.ref", { station: item.station, id: item.id, title: item.title, base }).then((answer) => {
+      const { mark } = answer as { mark: string };
+      const now = input.current?.value ?? "";
+      if (now[start] !== "@") return;
+      caretAt.current = start + mark.length + 1;
+      setText(`${now.slice(0, start)}${mark} ${now.slice(end)}`);
+    }, () => undefined);
   };
   // Where the caret goes once the text changed by hand is drawn (before anything more is typed).
   const caretAt = useRef<number | null>(null);
@@ -1134,7 +1139,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
             const n = refItems.current.length;
             if (e.key === "Escape") { e.preventDefault(); closedAt.current = reference.start; setReference(null); return; }
             if (n && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); setActive((i) => (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n); return; }
-            if (n && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) { e.preventDefault(); pickReference(refItems.current[Math.min(active, n - 1)]!.ref); return; }
+            if (n && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) { e.preventDefault(); pickReference(refItems.current[Math.min(active, n - 1)]!); return; }
           }
           // A reference goes whole.
           const caret = e.currentTarget.selectionStart;

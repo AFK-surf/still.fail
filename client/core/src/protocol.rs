@@ -87,6 +87,20 @@ pub enum Topic {
     /// Notifications on this device (attend.rs): whether they are on, whether the system was asked to allow them,
     /// whether it should hold a push registration, and the notices a page is to show now (`notice.claim` each).
     Notify,
+    /// The chats of a scope `query` finds (refs.rs): those whose title has it first, then those whose agent, station,
+    /// origin or last message does; only `station`'s if given, not `exclude` (a chat's id or agent key), `limit` at
+    /// most. A view of `chats`: the composer's `@` menu and the switcher.
+    ChatSearch {
+        scope: String,
+        #[serde(default)]
+        query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        station: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exclude: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<u32>,
+    },
 }
 
 impl Topic {
@@ -96,11 +110,11 @@ impl Topic {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } => None,
-            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } => None,
+            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } => None,
         }
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. })
     }
 }

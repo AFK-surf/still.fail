@@ -445,6 +445,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
     use stillfail_shapes as s;
     match topic {
         Topic::Chats { .. } => s::conform::<s::ChatsView>(value),
+        Topic::ChatSearch { .. } => s::conform::<s::ChatSearchView>(value),
         Topic::Chat { .. } => s::conform::<s::ChatView>(value),
         Topic::Stations { .. } => s::conform::<Vec<s::StationView>>(value),
         Topic::Connects { .. } => s::conform::<s::ConnectsView>(value),

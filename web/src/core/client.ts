@@ -43,7 +43,10 @@ export type Topic =
   // What is written to a chat on this device, until sent: `chat` its key, `thread:<id>`, or `new` (a new chat there).
   | { topic: "draft"; station: string; chat: string }
   // Notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (`notice.claim`).
-  | { topic: "notify" };
+  | { topic: "notify" }
+  // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
+  // composer's `@` menu and the switcher. A core from before it answers an error.
+  | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

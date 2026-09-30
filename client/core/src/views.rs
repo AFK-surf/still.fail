@@ -210,7 +210,7 @@ impl Views {
         for view in views {
             let shows = match &view {
                 Topic::Chat { thread: None, session: Some(k), .. } => k == key,
-                Topic::Chats { .. } => true,
+                Topic::Chats { .. } | Topic::ChatSearch { .. } => true,
                 _ => false,
             };
             if shows {
@@ -417,6 +417,9 @@ impl Views {
         self.sync(view);
         match view {
             Topic::Chats { scope, mine } => self.chats(scope, *mine),
+            Topic::ChatSearch { scope, query, station, exclude, limit } => {
+                self.chats(scope, false).map(|chats| chats.map(|c| crate::refs::search(&c, query, station.as_deref(), exclude.as_deref(), *limit)))
+            }
             Topic::Stations { scope } => self.stations_view(scope),
             Topic::Connects { scope, mine } => self.connects(scope, *mine),
             Topic::Chat { station, thread: Some(thread), .. } => self.chat(station, *thread),
@@ -461,7 +464,7 @@ impl Views {
         let mut topics = HashSet::new();
         let (scope, per_station): (&str, fn(String) -> Vec<Topic>) = match view {
             // Its overview says which Slack users are the viewer (a row's last thing said by one is "你").
-            Topic::Chats { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
+            Topic::Chats { scope, .. } | Topic::ChatSearch { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             // Its sessions (the recent ones, the one it delivers into) and the chats they were last talked to in.
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station: station.clone() }, Topic::Sessions { station: station.clone() }, Topic::Threads { station }]),

@@ -14,7 +14,7 @@
 //! summaries and details), threads and overview. Thread entries and
 //! transcripts are still in `kept.rs`.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashSet};
 use std::rc::{Rc, Weak};
 
@@ -29,7 +29,7 @@ use crate::protocol::Topic;
 const SEP: char = '\u{1}';
 
 /// Every table, to load them all at start.
-const TABLES: &[&str] = &["me", "workspace", "overview", "session", "row", "session_summary", "thread", "list", "draft"];
+const TABLES: &[&str] = &["me", "workspace", "overview", "session", "row", "session_summary", "thread", "list", "draft", "chat_ref"];
 
 /// How a topic's value is held.
 enum Shape {
@@ -72,11 +72,25 @@ pub struct Data {
     changed: RefCell<Option<Rc<dyn Fn(&Topic)>>>,
     /// Resolves when the last write asked for is done; writes go in order.
     tail: RefCell<Option<Shared<LocalBoxFuture<'static, ()>>>>,
+    /// Records changing as they are typed (drafts), written a moment after their last change: the latest of each.
+    soon: RefCell<BTreeMap<(String, String), Vec<u8>>>,
+    flushing: Cell<bool>,
 }
+
+/// How long a record changing as it is typed waits before it is written.
+pub const SOON_MS: u64 = 300;
 
 impl Data {
     pub fn new(host: Rc<dyn Host>) -> Rc<Data> {
-        Rc::new_cyclic(|me| Data { host, me: me.clone(), records: RefCell::default(), changed: RefCell::default(), tail: RefCell::default() })
+        Rc::new_cyclic(|me| Data {
+            host,
+            me: me.clone(),
+            records: RefCell::default(),
+            changed: RefCell::default(),
+            tail: RefCell::default(),
+            soon: RefCell::default(),
+            flushing: Cell::new(false),
+        })
     }
 
     pub fn on_change(&self, listener: Rc<dyn Fn(&Topic)>) {
@@ -167,6 +181,35 @@ impl Data {
         }
     }
 
+    /// A held topic's new value, as it is typed (a draft): there at once, written to the database a moment after its
+    /// last change (one write for many keystrokes).
+    pub fn set_soon(&self, topic: &Topic, value: Value) {
+        let Some(Shape::One { table, key }) = shape(topic) else { return self.set(topic, value) };
+        let at = (table.to_string(), key);
+        if self.records.borrow().get(&at) == Some(&value) {
+            return;
+        }
+        self.soon.borrow_mut().insert(at.clone(), serde_json::to_vec(&value).unwrap_or_default());
+        self.records.borrow_mut().insert(at, value);
+        self.tell(topic);
+        if self.flushing.replace(true) {
+            return;
+        }
+        // Held until then: written even if the core has gone meanwhile.
+        let (sleep, Some(this)) = (self.host.sleep(SOON_MS), self.me.upgrade()) else { return };
+        self.host.spawn(
+            async move {
+                sleep.await;
+                this.flushing.set(false);
+                let ops: Vec<DbOp> = std::mem::take(&mut *this.soon.borrow_mut()).into_iter().map(|((table, key), value)| DbOp::Put { table, key, value }).collect();
+                if !ops.is_empty() {
+                    this.write(ops);
+                }
+            }
+            .boxed_local(),
+        );
+    }
+
     /// Changes a held topic's value in place; does nothing while nothing is known of it.
     pub fn update(&self, topic: &Topic, change: &mut dyn FnMut(&mut Value)) {
         let Some(mut value) = self.get(topic) else { return };
@@ -215,6 +258,8 @@ impl Data {
     /// A held topic known no more (a draft sent or emptied): its record goes, and the topic hears it.
     pub fn forget_topic(&self, topic: &Topic) {
         let Some(Shape::One { table, key }) = shape(topic) else { return };
+        // Not written after all, if it was about to be.
+        self.soon.borrow_mut().remove(&(table.to_string(), key.clone()));
         let gone = self.records.borrow_mut().remove(&(table.to_string(), key.clone())).is_some();
         if gone {
             self.write(vec![DbOp::Delete { table: table.into(), key }]);
