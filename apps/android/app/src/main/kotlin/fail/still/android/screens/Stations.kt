@@ -1,6 +1,7 @@
 // The workspace's stations: each with the buddy's face for its state and its
-// load as rings; one station's profiles (which models may be used) and
-// connections.
+// load as rings; one station's page is the machine (its load, network,
+// versions), with how many connects and profiles run on it (settings' lists
+// have them, SettingsHome.kt).
 package fail.still.android.screens
 
 import androidx.compose.foundation.Image
@@ -49,9 +50,6 @@ import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
 import fail.still.android.R
 import fail.still.android.Screen
-import fail.still.android.data.ACCESS_LABEL
-import fail.still.android.data.Profile
-import fail.still.android.ui.QuotaRings
 import fail.still.android.data.StationView
 import fail.still.android.data.StationNet
 import fail.still.android.data.NetFigure
@@ -65,9 +63,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
-import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
-import fail.still.android.ui.Mark
 import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
@@ -89,10 +85,16 @@ internal fun Buddy(s: StationView, size: Int = 40) {
     Image(painterResource(face), null, Modifier.size(size.dp))
 }
 
-/** Back to the chats, at the top of a large-title page. */
+/** Back, at the top of a large-title page; `trailing`, an action at its other end (a ＋). */
 @Composable
-fun TopBack(label: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 10.dp, top = 6.dp, bottom = 4.dp)) { NavBack(label, onBack) }
+fun TopBack(label: String, onBack: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        NavBack(label, onBack)
+        trailing?.invoke()
+    }
 }
 
 @Composable
@@ -102,7 +104,7 @@ fun StationsScreen(current: WorkspaceEntry) {
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(ws.id))
     val list = stations.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("会话", app::pop)
+        TopBack("设置", app::pop, trailing = if (list != null && list.isNotEmpty() && isManager(current)) ({ NavButton(Icons.Plus, { openAddStation(app, current, list.map { it.id }) }, 20.dp) }) else null)
         // No station yet: adding the first one is the page.
         if (list != null && list.isEmpty()) { FirstStation(current); return@Column }
         LargeTitle(if (list != null) "${ws.name} · ${list.count { it.online }}/${list.size} 在线" else ws.name, "Station")
@@ -131,9 +133,6 @@ fun StationsScreen(current: WorkspaceEntry) {
                     }
                 }
             }
-        }
-        if (!list.isNullOrEmpty() && isManager(current)) ListCard {
-            ListRow(onClick = { openAddStation(app, current, list.map { it.id }) }) { Text("＋ 添加 station", fontSize = 15.sp, color = C.accent) }
         }
         Spacer(Modifier.height(30.dp))
     }
@@ -170,43 +169,12 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             }
             val overview = s.overview
             if (overview != null) {
-                SectionHeader("Profile", start = 24.dp)
+                // What runs on it is in settings' lists, every station's together; here, how much of it there is.
+                SectionHeader("在这台上", start = 24.dp)
                 ListCard {
-                    if (overview.profiles.isEmpty()) ListRow { Text("这台机器还没有 Profile。", fontSize = 15.sp, color = C.muted) }
-                    overview.profiles.forEach { ProfileRow(address, it) }
-                    if (s.online) ListRow(onClick = { app.push(Screen.NewProfile(address)) }) { Text("＋ 添加 Profile", fontSize = 15.sp, color = C.accent) }
-                }
-                // The machine's own logins not used yet: each one offered as the first ones were.
-                if (s.online) MachineLoginOffers(address, overview)
-                SectionHeader("连接", start = 24.dp)
-                ListCard {
-                    overview.connects.forEach { c -> ConnectRow(address, c) }
-                    ListRow {
-                        Mark(14.dp)
-                        Text("still.fail 对话", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                        Text("内置", fontSize = 13.sp, color = C.muted)
-                    }
-                    // A connect runs a profile's model: with none, its page says to add one first.
-                    if (s.online) ListRow(onClick = { openNewConnect(app, address) }) {
-                        Column(Modifier.weight(1f)) {
-                            Text("＋ 添加连接", fontSize = 15.sp, color = C.accent)
-                            if (overview.profiles.isEmpty()) Text("连接要用 Profile 来跑模型，先添加一个 Profile", fontSize = 13.sp, color = C.muted)
-                        }
-                    }
-                }
-                // Slack apps made here and not connected yet: to be finished any time.
-                WaitingApps(address, overview, s.online)
-                // The agents' memory on this machine, and its software's versions (none from a station older than them).
-                SectionHeader("记忆", start = 24.dp)
-                ListCard {
-                    ListRow(onClick = { app.push(Screen.Memory(address)) }) {
-                        IconIn(Icons.Brain, 18.dp, C.muted)
-                        Column(Modifier.weight(1f)) {
-                            Text("agent 的记忆", fontSize = 15.sp, color = C.ink)
-                            Text("全局记忆和每个项目的记忆，由 agent 自己维护", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-                    }
+                    GoRow("连接", "${overview.connects.size} 个") { app.push(Screen.Connects) }
+                    GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles) }
+                    GoRow("记忆") { app.push(Screen.Memory(address)) }
                 }
                 if (s.online) Versions(address, overview.updates, manager)
             }
@@ -250,29 +218,6 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
                 }
             }
         }
-    }
-}
-
-/**
- * A profile on its station's page: whether it works (a dot before its name, its state in words, why when its provider
- * refuses it), what it is, how many of its models are enabled, and its allowance; its page picks them.
- */
-@Composable
-private fun ProfileRow(station: String, p: Profile) {
-    val app = LocalApp.current
-    val trouble = quotaTrouble(p.quota)
-    ListRow(onClick = { app.push(Screen.Profile(station, p.id)) }) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                PresenceDot(toneDot(p.checkTone))
-                Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text(listOf(p.checkText, if (p.machine == true) "本机登录" else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
-                fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
-        }
-        QuotaRings(p.quota)
-        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
     }
 }
 

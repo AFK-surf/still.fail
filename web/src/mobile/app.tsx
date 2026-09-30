@@ -1,7 +1,7 @@
 // The app on a narrow screen, as the Android app is (apps/android/…/App.kt): the chats of one workspace are home, and
 // everything else is a page pushed over it (no tab bar), or a sheet from the bottom. Pages move side by side: the new
-// one pushes in whole from the right and the old goes out to the left (and back the other way); the viewer's own page
-// comes from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
+// one pushes in whole from the right and the old goes out to the left (and back the other way); settings (from the
+// gear at the top left) come from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
 // link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed). What
 // lies over a page (a sheet, the menu, the reader) is closed by back first.
 import { transitionTo } from "../ui.tsx";
@@ -48,11 +48,11 @@ export function useApp(): MobileApp {
   return app;
 }
 
-/** How a page comes in and goes: side by side, from the left (the viewer's own page), or rising (a new chat). */
+/** How a page comes in and goes: side by side, from the left (settings, from the gear at the top left), or rising (a new chat). */
 type Way = "side" | "left" | "rise";
 function wayOf(path: string): Way {
   if (/\/new$/.test(path)) return "rise";
-  if (/\/settings\/account$/.test(path)) return "left";
+  if (/\/settings$/.test(path)) return "left";
   return "side";
 }
 

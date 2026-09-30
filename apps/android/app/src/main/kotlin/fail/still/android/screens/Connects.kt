@@ -1,5 +1,5 @@
 // Connects (as the narrow web's web/src/mobile/Connects.tsx, from the desktop's Connects.tsx and Connect.tsx): the
-// list, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its Slack link, what
+// list of every station's, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its Slack link, what
 // is done to it less often under "…"); how it runs, picked on a page of its own; a new one, a step a screen.
 package fail.still.android.screens
 
@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -133,6 +134,48 @@ private fun rememberConnect(station: String, id: String): Pair<ConnectItem?, Str
     val item = connects.value?.items?.firstOrNull { it.station == station && it.connect.id == id }
     val note = if (item != null) null else connects.error?.message ?: if (connects.value == null || connects.value!!.loading) "正在读取连接…" else "没有这个连接。"
     return item to note
+}
+
+/**
+ * Every station's connects on one page, from settings (SettingsHome.kt), as the narrow web's ConnectsScreen: all or those
+ * the viewer made, each station's under its name with the Slack apps made there and not connected yet; a station offline
+ * says so. A new one is added on a station picked (the only one online, without asking).
+ */
+@Composable
+fun ConnectsScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    var mine by rememberSaveable { mutableStateOf(false) }
+    val connects by rememberTopic<ConnectsView>(app.core, Topics.connects(current.workspace.id, mine))
+    val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    val stations = topic.value
+    val online = stations.orEmpty().filter { it.online }
+    val view = connects.value
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack("设置", app::pop, trailing = if (online.isNotEmpty()) ({
+            NavButton(Icons.Plus, {
+                if (online.size == 1) openNewConnect(app, online[0].station)
+                else openPickStation(app, "添加连接", online) { openNewConnect(app, it.station) }
+            }, 20.dp)
+        }) else null)
+        LargeTitle("", "连接")
+        PageNote("连接是人找到 still.fail 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。")
+        Seg(listOf("全部", "我建的"), if (mine) 1 else 0, { mine = it == 1 }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
+        if (stations == null || view == null) Text(connects.error?.message ?: "正在读取连接…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        else stations.forEach { s ->
+            val here = view.items.filter { it.station == s.station }
+            val waiting = s.overview?.slackApps.orEmpty()
+            if (s.online && here.isEmpty() && waiting.isEmpty() && mine) return@forEach
+            SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
+            ListCard {
+                if (!s.online && here.isEmpty()) ListRow { Text("station 离线，读不到它的连接", fontSize = 15.sp, color = C.muted) }
+                else if (here.isEmpty() && waiting.isEmpty()) ListRow { Text(if (view.loading) "正在读取…" else "这台机器上还没有连接", fontSize = 15.sp, color = C.muted) }
+                here.forEach { ConnectRow(it.station, it.connect) }
+                // The Slack apps made here that no connect has taken yet: to be finished any time.
+                waiting.forEach { a -> WaitingApp(app, s.station, a, s.online) }
+            }
+        }
+        Spacer(Modifier.height(30.dp))
+    }
 }
 
 @Composable
@@ -694,22 +737,11 @@ fun openNewConnect(app: AppState, station: String, resume: String? = null) {
 }
 
 /**
- * The Slack apps made on a station that no connect has taken yet (the viewer's): where each stands (to install, or only
- * its app-level token left), going on from there while the station is online, or dropping it (it stays in Slack).
+ * A Slack app made on a station that no connect has taken yet (the viewer's): where it stands (to install, or only its
+ * app-level token left), going on from there while the station is online, or dropping it (it stays in Slack).
  */
 @Composable
-fun WaitingApps(station: String, overview: Overview, online: Boolean) {
-    val app = LocalApp.current
-    val waiting = overview.slackApps.orEmpty()
-    if (waiting.isEmpty()) return
-    SectionHeader("还没连上的 Slack app", start = 24.dp)
-    ListCard {
-        waiting.forEach { a -> WaitingApp(app, station, a, online) }
-    }
-}
-
-@Composable
-private fun WaitingApp(app: AppState, station: String, a: MadeSlackApp, online: Boolean) {
+internal fun WaitingApp(app: AppState, station: String, a: MadeSlackApp, online: Boolean) {
     val where = if (a.installed) "已装进「${a.installedTeam ?: a.team ?: "工作区"}」，还差 App-Level Token" else if (a.install != null) "还没安装到工作区" else "还差 token"
     ListRow(onClick = if (online) ({ openWaitingMenu(app, station, a) }) else null) {
         Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { SlackMark(16.dp) }

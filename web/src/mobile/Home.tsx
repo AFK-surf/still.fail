@@ -1,14 +1,14 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
-// and grouped by day. A fixed head (you → settings · workspace · the filter · stations) and the new-chat button floating
+// and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
 import { useRef, useState } from "react";
 import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, ChevronDown, Edit, Filter, Pin, Unplug } from "../icons.tsx";
+import { Archive, Check, ChevronDown, Edit, Filter, Pin, Settings, Unplug } from "../icons.tsx";
 import { ask } from "./sheets.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { Avatar, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
+import { Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
@@ -28,7 +28,6 @@ export function Home() {
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
   const [onlyMine, setOnlyMine] = useOnlyMine();
-  const account = app.entry.account;
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
   // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
   const none = useStations(scope).value?.length === 0;
@@ -44,8 +43,8 @@ export function Home() {
       )}
       {/* The lists run under both bars, which are frosted glass over them. */}
       <header className={`${css.mHomeBar} ${pagesCss.mGlass}`}>
-        <button type="button" className={css.mHomeMe} onClick={() => app.push(app.at("/settings/account"))} aria-label="我">
-          <Avatar id={account.email} name={account.name || account.email} size={34} picture={account.picture} />
+        <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label="设置">
+          <Settings size={22} />
         </button>
         <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
           <b>{app.entry.name}</b>

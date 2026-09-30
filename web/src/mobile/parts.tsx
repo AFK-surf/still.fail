@@ -176,8 +176,8 @@ export function NavBar({ back, onBack, title, sub, trailing }: { back: string; o
 }
 
 /** Back to the chats, at the top of a large-title page. */
-export function TopBack({ label, onBack }: { label: string; onBack: () => void }) {
-  return <div className={css.mTopBack}><NavBack label={label} onClick={onBack} /></div>;
+export function TopBack({ label, onBack, trailing }: { label: string; onBack: () => void; trailing?: ReactNode }) {
+  return <div className={`${css.mTopBack} ${trailing !== undefined ? css.mTopBackRow : ""}`}><NavBack label={label} onClick={onBack} />{trailing}</div>;
 }
 
 /** A page's large title (stations, settings): a small line over a big word. */

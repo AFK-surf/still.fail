@@ -105,7 +105,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
           <Chooser leading={<Server size={14} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
           {!runtime || !model ? (
             // Nothing to choose from: the chooser leads to where models are enabled.
-            <Chooser label="没有可用模型 · 去勾选" onClick={() => app.push(app.at(`/s/${view.id}/overview`))} />
+            <Chooser label="没有可用模型 · 去勾选" onClick={() => app.push(app.at("/settings/profiles"))} />
           ) : (
             <>
               <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}

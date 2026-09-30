@@ -212,9 +212,10 @@ fun openWorkspaces(app: AppState) {
 }
 
 /**
- * The workspace sheet, opened from its name on Home (web/src/mobile/Workspaces.tsx): the one in use on top as a card (its
- * settings open from it), the invitations waiting, the others to switch to (with more than one account signed in, whose
- * each is under its name; what it holds at the row's end), a new one, and joining by an invitation's link.
+ * The workspace sheet, opened from its name on Home (web/src/mobile/Workspaces.tsx): the invitations waiting, the one in
+ * use (checked) and the others to switch to (with more than one account signed in, whose each is under its name; what it
+ * holds at the row's end), a new one, and joining by an invitation's link. The workspace's settings are in 设置
+ * (SettingsHome.kt).
  */
 @Composable
 private fun ColumnScope.WorkspacesSheet(app: AppState) {
@@ -228,22 +229,6 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     SheetGrab()
     SheetHead("Workspace")
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        // The workspace in use first, as what the sheet is about: its settings open from it, not from a row among the others.
-        if (current != null) Row(
-            Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.ink.copy(alpha = 0.05f))
-                .clickable { openWorkspacePage(app) }.padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(current.name, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("你是${ROLE_LABEL[current.role] ?: current.role} · ${current.stations} 台 station · ${current.members} 人", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (byAccount.size > 1) Text(currentOf.account.email, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("设置", fontSize = 14.sp, color = C.muted)
-                IconIn(Icons.ChevronRight, 14.dp, C.muted)
-            }
-        }
         if (pending.isNotEmpty()) {
             Label("邀请")
             pending.forEach { (account, invite) ->
@@ -262,7 +247,9 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
             }
             respond.error?.let { Box(Modifier.padding(horizontal = 20.dp)) { Error(it.message) } }
         }
-        if (others.isNotEmpty()) Label("切换到")
+        Label("切换到")
+        // The one in use first, checked; its settings are in 设置 (the gear on Home), not here.
+        if (current != null) AsideRow(current.name, if (byAccount.size > 1) currentOf.account.email else null, "${current.stations} 台 station", "${current.members} 人", checked = true) { app.sheet = null }
         others.forEach { (account, w) ->
             AsideRow(w.name, if (byAccount.size > 1) account.email else null, "${w.stations} 台 station", "${w.members} 人") { app.pickWorkspace(w.id); app.home() }
         }
@@ -271,18 +258,22 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     }
 }
 
-/** A row of the sheet with two short notes at its end, each by one of its lines (the name, and whose it is). */
+/** A row of the sheet with two short notes at its end, each by one of its lines (the name, and whose it is); a check on the one in use. */
 @Composable
-private fun AsideRow(label: String, sub: String?, first: String, second: String, onClick: () -> Unit) {
-    Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
-            Text(first, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
+private fun AsideRow(label: String, sub: String?, first: String, second: String, checked: Boolean = false, onClick: () -> Unit) {
+    Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
+                Text(first, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(sub ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
+                Text(second, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(sub ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
-            Text(second, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
-        }
+        if (checked) IconIn(Icons.Check, 14.dp, C.accent)
     }
 }
 

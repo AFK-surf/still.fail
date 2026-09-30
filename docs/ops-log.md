@@ -17,6 +17,7 @@
 
 ## 待部署
 
+- 手机设置重构（mobile-settings-workspace-redesign）：首页左上角头像换成设置齿轮，进一个设置总页（账号、Workspace、Station、连接、Profile、记忆、外观、通知；安卓还有版本）；连接、Profile、记忆改成跨 station 的一张表，单台 station 页只留机器和版本；Workspace 页成员、未登录、邀请合成一张表，点名字改名；切换面板不再带设置入口。只改了手机 web 和安卓的界面，core、cloud、station 都没动，旧地址（`settings/general`、`s/…/overview` 等）照样能开。手机 web 跟部署走；安卓要发一版才有。验证：手机上点首页左上角齿轮进设置，行尾显示在线台数、出错的连接；设置 → 连接，按 station 分组列出所有连接。
 - 安卓「我」页的版本行点一下就马上检查更新（android-check-update）：只改了 app，不用部署 cloud 或 station。要发一版安卓（`release.sh android`）才能用上。发了以后，在旧版上点版本行，应该出现「正在检查…」，然后显示「更新到 …」。
 - 安卓 chat 停在底部离开、没有新消息时再进，直接开在底部（android-back-at-bottom）：只改了 app，要发一版安卓才能用上。发了以后，停在一个有图片或活动行的 chat 底部，退出再进，应该还在底部。
 - 离线 station 不在左下角给重试，改在 station 页给（offline-station-no-retry）：改了 core（wasm 和安卓 ffi 都要带上）、web 和安卓。新页面接旧 core 时，左下角也不会出重试。安卓要发一版才会在单台 station 页上有重试。验证：停掉一台 station，左下角只显示「xx 离线」；设置里的 Station 页，那张卡片上有「重试」。

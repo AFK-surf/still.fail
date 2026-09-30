@@ -1,18 +1,19 @@
-// Profiles on a narrow screen (what the desktop's ../pages/Accounts.tsx does, in the Android app's manner): a profile's
+// Profiles on a narrow screen (what the desktop's ../pages/Accounts.tsx does, in the Android app's manner): every
+// station's in one list, a profile's
 // page (whether it works, signing a subscription in, its allowance, which of its models may be used, who uses it, its
 // key or variables; renaming, checking and deleting under "…"), and a new one.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useOverview, useStationCall, type LoginJob, type Profile, type ProfileInput, type Quota, type Tone } from "../api.ts";
+import { stationApi, useOverview, useStationCall, useStations, type LoginJob, type Profile, type ProfileInput, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
-import { Check, More } from "../icons.tsx";
+import { Check, ChevronRight, More, Plus } from "../icons.tsx";
 import { CHOICES } from "../pages/Accounts.tsx";
 import { QuotaBars } from "../components.tsx";
-import { stationBase, useStation } from "../station.tsx";
+import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, Field, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
+import { Button, Field, LargeTitle, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
@@ -29,6 +30,74 @@ function useApi() {
   const station = useStation();
   const call = useStationCall(station.address);
   return useMemo(() => stationApi(call), [call]);
+}
+
+/**
+ * Every station's profiles on one page, from settings (./Settings.tsx), as the desktop's settings have them: each
+ * station under its name, what can be added there (a profile, the machine's own logins) with it; one offline says so.
+ */
+export function ProfilesScreen() {
+  const app = useApp();
+  const stations = useStations(app.entry.id).value;
+  const online = stations?.filter((s) => s.online) ?? [];
+  const add = () => online.length === 1
+    ? app.push(app.at(`/s/${online[0]!.id}/profiles/new`))
+    : app.sheet({ height: 0.5, content: () => <PickStation title="添加 Profile" stations={online} to={(s) => `/s/${s.id}/profiles/new`} /> });
+  return (
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+      <TopBack label="设置" onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加 Profile" onClick={add} /> : undefined} />
+      <LargeTitle small="" big="Profile" />
+      <p className={settingsCss.mPageNote}>agent 跑模型用的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行。</p>
+      {!stations ? <Loading text="正在读取 station…" /> : stations.map((s) => (
+        <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
+          <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />
+          <ListCard>
+            {!s.overview ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.online ? "正在读取…" : "station 离线，读不到它的 Profile"}</span></ListRow>
+              : s.overview.profiles.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>这台机器还没有 Profile</span></ListRow>
+              : s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
+          </ListCard>
+          {/* The machine's own logins not used yet, each offered as a profile. */}
+          {s.online && s.overview && <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
+        </StationContext.Provider>
+      ))}
+      <div style={{ height: 30 }} />
+    </div>
+  );
+}
+
+/** Where something is added: one of the stations online, in a sheet. */
+export function PickStation({ title, stations, to }: { title: string; stations: StationView[]; to: (s: StationView) => string }) {
+  const app = useApp();
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={title} />
+      <div className={sheetsCss.mSheetScroll}>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>加在哪台 station 上</p>
+        {stations.map((s) => <PickRow key={s.id} label={s.name} onClick={() => { app.sheet(null); app.push(app.at(to(s))); }} />)}
+      </div>
+    </>
+  );
+}
+
+/**
+ * A profile in the list of profiles: whether it works (a dot before its name, its state in words, why when its provider
+ * refuses it), what it is, how many of its models are enabled, and its allowance; its page picks them.
+ */
+export function ProfileRow({ station, p }: { station: StationView; p: Profile }) {
+  const app = useApp();
+  const trouble = quotaTrouble(p.quota);
+  return (
+    <ListRow onClick={() => app.push(app.at(`/s/${station.id}/settings/accounts/${encodeURIComponent(p.id)}`))}>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
+        <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
+        {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
+      </span>
+      <QuotaRings quota={p.quota} />
+      <ChevronRight size={14} className={partsCss.mSubtle} />
+    </ListRow>
+  );
 }
 
 /** A check's tone as a presence dot (./Connects.tsx): green up, red failing, the rest on its way or unknown. */

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
+import fail.still.android.Screen
 import fail.still.android.data.StationView
 import fail.still.android.data.SkillFile
 import fail.still.android.data.StationMemory
@@ -47,7 +48,9 @@ import fail.still.android.ui.C
 import fail.still.android.ui.Card
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
+import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
+import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.NavBar
@@ -88,6 +91,35 @@ fun MemoryScreen(current: WorkspaceEntry, address: String) {
             }
             Spacer(Modifier.height(30.dp))
         }
+    }
+}
+
+/**
+ * The memory of every station, from settings (SettingsHome.kt), as the narrow web's MemoriesScreen: a row for each,
+ * opening its memory (above); memory is kept on each station and not shared between them.
+ */
+@Composable
+fun MemoriesScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    val stations = topic.value
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack("设置", app::pop)
+        LargeTitle("", "记忆")
+        PageNote("每台 station 上所有会话共用的记忆，由 agent 自己维护，各台 station 之间不同步。")
+        if (stations == null) Text(topic.error?.message ?: "正在读取 station…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        else ListCard {
+            stations.forEach { s ->
+                if (s.online) GoRow(s.name, "全局记忆 · 项目记忆") { app.push(Screen.Memory(s.station)) }
+                else ListRow {
+                    Column(Modifier.weight(1f)) {
+                        Text(s.name, fontSize = 15.sp, color = C.ink)
+                        Text("离线，读不到它的记忆", fontSize = 13.sp, color = C.muted)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(30.dp))
     }
 }
 

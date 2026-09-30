@@ -1,6 +1,6 @@
 // Home is the `chats` view as the web's sidebar lists it: one kind of item (an
 // agent with its chat, or an agent with no chat yet), newest first and grouped
-// by day. A fixed head (you → settings · workspace · the filter · stations) and
+// by day. A fixed head (settings · workspace · the filter · stations) and
 // the new-chat button floating at the bottom.
 package fail.still.android.screens
 
@@ -115,7 +115,6 @@ import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.page
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.state
-import fail.still.android.ui.Avatar
 import fail.still.android.ui.Badge
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
@@ -157,7 +156,8 @@ fun HomeScreen(current: WorkspaceEntry) {
                 .windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Avatar(current.account.email, current.account.name.ifEmpty { current.account.email }, 34.dp, Modifier.clip(CircleShape).clickable { app.push(Screen.Me) }, picture = current.account.picture)
+            // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
+            Box(Modifier.semantics { contentDescription = "设置" }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })

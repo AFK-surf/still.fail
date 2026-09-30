@@ -1,27 +1,25 @@
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
-// with the buddy's face for its state and its load as rings; one station's profiles (which models may be used) and
-// connections.
-import { useEffect, useMemo, useRef, useState } from "react";
+// with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
+// versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { stationApi, useStationCall, useStations, type Profile, type StationView } from "../api.ts";
+import { useStations, type StationView } from "../api.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { Brain, Check, ChevronRight, More } from "../icons.tsx";
+import { ChevronRight, More, Plus } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
-import { ConnectRow, Presence, WaitingAppRow } from "./Connects.tsx";
-import { accessLabel, MachineLoginOffers, quotaTrouble, toneDot } from "./Profiles.tsx";
+import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
 import { Net } from "../cloud/StationCards.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { Button, Card, Field, Illustration, LargeTitle, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Spinner, TopBack } from "./parts.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
-import * as listsCss from "./styles/lists.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
@@ -53,7 +51,7 @@ export function StationsScreen() {
   }
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="会话" onBack={app.pop} />
+      <TopBack label="设置" onBack={app.pop} trailing={manager && list ? <NavButton icon={Plus} iconSize={20} label="添加 station" onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })} /> : undefined} />
       <LargeTitle small={list ? `${app.entry.name} · ${list.filter((s) => s.online).length}/${list.length} 在线` : app.entry.name} big="Station" />
       {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? "正在读取 station…"}</p> : list.map((s) => (
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
@@ -72,13 +70,6 @@ export function StationsScreen() {
           ) : null}
         </Card>
       ))}
-      <ListCard>
-        {manager && list && (
-          <ListRow onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })}>
-            <span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加 station</span>
-          </ListRow>
-        )}
-      </ListCard>
       <div style={{ height: 30 }} />
     </div>
   );
@@ -149,48 +140,14 @@ export function StationScreen() {
           ) : !s.online ? (
             <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 still.fail 就会重新连上</span><RetryPill /></span></Card>
           ) : null}
+          {/* What runs on it is in settings' lists, every station's together; here, how much of it there is, and its versions. */}
           {s.overview && (
             <>
-              <SectionHeader title="Profile" start={24} />
+              <SectionHeader title="在这台上" start={24} />
               <ListCard>
-                {s.overview.profiles.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>这台机器还没有 Profile。</span></ListRow>}
-                {s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
-                {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/profiles/new`))}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加 Profile</span></ListRow>}
-              </ListCard>
-              {/* The machine's own logins not used yet, each offered as a profile. */}
-              {s.online && <MachineLoginOffers logins={s.overview.machineLogins}
-                onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
-              <SectionHeader title="连接" start={24} />
-              <ListCard>
-                {s.overview.connects.map((c) => <ConnectRow key={c.id} connect={c} onClick={() => app.push(app.at(`/s/${s.id}/connects/${encodeURIComponent(c.id)}`))} />)}
-                <ListRow><Mark size={14} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>still.fail 对话</span><span className={listsCss.mRowNote}>内置</span></ListRow>
-                {s.online && (
-                  <ListRow onClick={() => app.push(app.at(`/s/${s.id}/connects/new`))}>
-                    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                      <span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加连接</span>
-                      {s.overview.profiles.length === 0 && <span className={listsCss.mRowNote}>连接要用 Profile 来跑模型，先添加一个 Profile</span>}
-                    </span>
-                  </ListRow>
-                )}
-              </ListCard>
-              {/* The Slack apps made here that no connect has taken yet: to be finished any time. */}
-              {(s.overview.slackApps?.length ?? 0) > 0 && (
-                <>
-                  <SectionHeader title="还没连上的 Slack app" start={24} />
-                  <ListCard>{s.overview.slackApps!.map((a) => <WaitingAppRow key={a.appId} made={a} online={s.online} />)}</ListCard>
-                </>
-              )}
-              {/* The agents' memory on this machine, and its software's versions (none from a station older than them). */}
-              <SectionHeader title="记忆" start={24} />
-              <ListCard>
-                <ListRow onClick={() => app.push(app.at(`/s/${s.id}/memory`))}>
-                  <Brain size={18} className={partsCss.mMuted} />
-                  <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                    <span className={listsCss.mRowTitle}>agent 的记忆</span>
-                    <span className={listsCss.mRowNote}>全局记忆和每个项目的记忆，由 agent 自己维护</span>
-                  </span>
-                  <ChevronRight size={14} className={partsCss.mSubtle} />
-                </ListRow>
+                <GoRow title="连接" value={`${s.overview.connects.length} 个`} onClick={() => app.push(app.at("/settings/connects"))} />
+                <GoRow title="Profile" value={`${s.overview.profiles.length} 个`} onClick={() => app.push(app.at("/settings/profiles"))} />
+                <GoRow title="记忆" onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
               </ListCard>
               {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} />}
             </>
@@ -280,25 +237,5 @@ function StationMenu({ s }: { s: StationView }) {
         })} />
       </div>
     </>
-  );
-}
-
-/**
- * A profile on its station's page: whether it works (a dot before its name, its state in words, why when its provider
- * refuses it), what it is, how many of its models are enabled, and its allowance; its page picks them.
- */
-function ProfileRow({ station, p }: { station: StationView; p: Profile }) {
-  const app = useApp();
-  const trouble = quotaTrouble(p.quota);
-  return (
-    <ListRow onClick={() => app.push(app.at(`/s/${station.id}/settings/accounts/${encodeURIComponent(p.id)}`))}>
-      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-        <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
-        <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
-        {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
-      </span>
-      <QuotaRings quota={p.quota} />
-      <ChevronRight size={14} className={partsCss.mSubtle} />
-    </ListRow>
   );
 }

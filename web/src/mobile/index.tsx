@@ -8,15 +8,16 @@ import { MobileShell, type Entry } from "./app.tsx";
 import { AnnotateScreen } from "./Annotate.tsx";
 import { ArchiveScreen } from "./Archive.tsx";
 import { ChatHost } from "./ChatHost.tsx";
-import { ConnectRunScreen, ConnectScreen, NewConnectScreen } from "./Connects.tsx";
+import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
 import { RunSettingsScreen } from "./History.tsx";
 import { Home } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
-import { MemoryScreen } from "./Memory.tsx";
+import { MemoriesScreen, MemoryScreen } from "./Memory.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
-import { NewProfileScreen, ProfileScreen } from "./Profiles.tsx";
+import { NewProfileScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
+import { AppearanceScreen, SettingsScreen } from "./Settings.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
 
 export function MobileWorkspace({ entry }: { entry: Entry }) {
@@ -30,9 +31,16 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       {/* A new chat and a chat are one page (ChatHost.tsx): as one becomes the other, its composer stays. */}
       <Route path="new" element={<ChatHost stations={stations} />} />
       <Route path="archive" element={<ArchiveScreen />} />
-      <Route path="settings/stations" element={<StationsScreen />} />
+      {/* Settings: one page from the gear on Home, and a page for each of its rows, at the desktop's addresses. */}
+      <Route path="settings" element={<SettingsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
-      {/* The desktop's 通用, 成员 and 退出与删除 are one page here. */}
+      <Route path="settings/appearance" element={<AppearanceScreen />} />
+      <Route path="settings/workspace" element={<WorkspaceScreen />} />
+      <Route path="settings/stations" element={<StationsScreen />} />
+      <Route path="settings/connects" element={<ConnectsScreen />} />
+      <Route path="settings/profiles" element={<ProfilesScreen />} />
+      <Route path="settings/memory" element={<MemoriesScreen />} />
+      {/* The workspace's page at the addresses it had before (links sent keep working). */}
       <Route path="settings/general" element={<WorkspaceScreen />} />
       <Route path="settings/members" element={<WorkspaceScreen />} />
       <Route path="settings/leave" element={<WorkspaceScreen />} />

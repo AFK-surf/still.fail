@@ -86,6 +86,7 @@ import "../mobile/Archive.css.ts";
 import "../mobile/Memory.css.ts";
 import "../mobile/Versions.css.ts";
 import "../mobile/OpenJobs.css.ts";
+import "../mobile/Settings.css.ts";
 import "../cloud/StationCards.css.ts";
 import "../Versions.css.ts";
 import "../RowPicture.css.ts";

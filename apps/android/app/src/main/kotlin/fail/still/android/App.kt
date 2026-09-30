@@ -122,7 +122,16 @@ sealed interface Screen {
     data class RunSettings(val station: String, val of: ChatOf, val key: String) : Screen { override val id = "run/$station/$key" }
     /** A profile's models, to pick which may be used. */
     data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
+    /** Settings, one page from the gear on Home (screens/SettingsHome.kt); it comes from the left. */
+    data object Settings : Screen { override val id = "settings" }
+    /** The account: who is signed in, where, and the other accounts on this device. */
     data object Me : Screen { override val id = "me" }
+    /** How this device shows still.fail: its theme, whose pictures lead a chat's row. */
+    data object Appearance : Screen { override val id = "appearance" }
+    /** Every station's connects, profiles and memory, from settings. */
+    data object Connects : Screen { override val id = "connects" }
+    data object Profiles : Screen { override val id = "profiles" }
+    data object Memories : Screen { override val id = "memories" }
     /** A web service an agent started, full screen: by its job (people know it by its name, never its port). */
     data class Preview(val station: String, val job: String) : Screen { override val id = "preview/$station/$job" }
     /** A visualization an agent posted, as a page of its own in the preview (web mobile's 在侧边打开 on a phone). */
@@ -511,6 +520,11 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
                     is Screen.RunSettings -> fail.still.android.screens.RunSettingsScreen(screen.station, screen.of, screen.key)
                     Screen.Me -> MeScreen(current)
+                    Screen.Settings -> fail.still.android.screens.SettingsScreen(current)
+                    Screen.Appearance -> fail.still.android.screens.AppearanceScreen()
+                    Screen.Connects -> fail.still.android.screens.ConnectsScreen(current)
+                    Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current)
+                    Screen.Memories -> fail.still.android.screens.MemoriesScreen(current)
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)
@@ -563,8 +577,8 @@ private fun DrawScope.swipeShadow(alpha: Float) {
 
 /**
  * Pages move side by side, as the list's two panes do when switched: the new one pushes in whole from the right and
- * the old goes out whole to the left (and back the other way), nothing fading. The viewer's own page is on the left
- * instead; a new chat rises from the bottom.
+ * the old goes out whole to the left (and back the other way), nothing fading. Settings (from the gear at the top left)
+ * come from the left instead; a new chat rises from the bottom.
  */
 private fun transition(from: Screen, to: Screen, forward: Boolean): ContentTransform {
     val time = 380
@@ -572,9 +586,9 @@ private fun transition(from: Screen, to: Screen, forward: Boolean): ContentTrans
     return when {
         forward && to == Screen.NewChat -> slideInVertically(tween(time, easing = Ease)) { it } togetherWith fadeOut(tween(time), 0.99f)
         !forward && from == Screen.NewChat -> fadeIn(tween(1), 0.99f) togetherWith slideOutVertically(tween(time, easing = Ease)) { it }
-        // The viewer's own page is to the left of the list (its avatar is at the list's left): it comes and goes that way.
-        forward && to == Screen.Me -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
-        !forward && from == Screen.Me -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
+        // Settings are to the left of the list (the gear is at the list's left): they come and go that way.
+        forward && to == Screen.Settings -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
+        !forward && from == Screen.Settings -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
         forward -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
         else -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
     }.apply { targetContentZIndex = if (forward) 1f else -1f }

@@ -52,3 +52,5 @@ globalStyle(`${mJobHead} b`, { fontSize: "16px", fontWeight: "600", lineHeight: 
 globalStyle(`${mJobsEmpty} b`, { fontSize: "15px", fontWeight: "600", color: "var(--m-ink)" });
 /** Here rather than with its class: it comes after .m-choice span, and wins over it. */
 globalStyle(`${mJobsAll} span`, { fontSize: "12px", color: "var(--m-muted)" });
+/** 全部 or 我建的, over the list of every station's connects. */
+export const mListSeg = style({ padding: "4px 16px 2px" });

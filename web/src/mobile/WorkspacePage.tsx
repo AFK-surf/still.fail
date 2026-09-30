@@ -1,5 +1,6 @@
-// The workspace itself on a narrow screen: its name, its people (invited, their roles, moved out), and leaving or
-// deleting it. What the desktop's 通用, 成员 and 退出与删除 settings do, on one page in the Android app's manner.
+// The workspace itself on a narrow screen, from settings (./Settings.tsx): its name as the title (a tap renames it), its
+// people in one list (those in it, those added who have not signed in, the invitations out), adding them from the ＋
+// at the top, and leaving or deleting it at the bottom. What the desktop's workspace settings do, in the Android app's manner.
 import { parseEmails, useSlackPeople } from "../cloud/adding.ts";
 import { useEffect, useState } from "react";
 import { stamp } from "../api.ts";
@@ -7,8 +8,8 @@ import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, typ
 import { useTopic } from "../core/react.ts";
 import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { Check } from "../icons.tsx";
-import { Avatar, Button, Field, LargeTitle, ListCard, ListRow, Loading, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Check, UserPlus } from "../icons.tsx";
+import { Avatar, Button, Field, LargeTitle, ListCard, ListRow, Loading, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -22,7 +23,7 @@ export function WorkspaceScreen() {
   const app = useApp();
   const view = useWorkspace(app.entry.id).value;
   const me = app.entry.account;
-  if (!view) return <div className={pagesCss.mScreen}><TopBack label="会话" onBack={app.pop} /><Loading text="正在读取 workspace…" /></div>;
+  if (!view) return <div className={pagesCss.mScreen}><TopBack label="设置" onBack={app.pop} /><Loading text="正在读取 workspace…" /></div>;
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
     title: `退出「${view.name}」？`, text: "退出后你就不能再访问里面的 station，需要重新被邀请才能回来。", action: "退出", danger: true,
@@ -33,50 +34,38 @@ export function WorkspaceScreen() {
     text: `所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 still.fail cloud 的连接（station 本机上的数据不受影响）。`,
     run: () => cloud.deleteWorkspace(me.sub, view.id).then(() => { app.toast("已删除 workspace"); app.replace("/"); }),
   });
+  const rename = () => ask(app, { title: "Workspace 名字", value: view.name, placeholder: "例如：产品团队", action: "保存",
+    run: (name) => cloud.renameWorkspace(me.sub, view.id, name).then(() => app.toast("已改名")) });
+  const add = () => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> });
+  const waiting = manager ? view.added.length + view.invitations.length : 0;
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="会话" onBack={app.pop} />
-      <LargeTitle small={`你是${ROLE_LABEL[view.role]} · ${me.email}`} big={view.name} />
-      {manager && (
-        <ListCard>
-          <ListRow onClick={() => ask(app, { title: "Workspace 名字", value: view.name, placeholder: "例如：产品团队", action: "保存",
-            run: (name) => cloud.renameWorkspace(me.sub, view.id, name).then(() => app.toast("已改名")) })}>
-            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>改名</span>
-          </ListRow>
-        </ListCard>
-      )}
-      <SectionHeader title={`成员 · ${view.members.length} 人`} start={24} />
+      <TopBack label="设置" onBack={app.pop} trailing={manager ? <NavButton icon={UserPlus} iconSize={20} label="添加成员" onClick={add} /> : undefined} />
+      {/* Its name is the title, renamed by a tap on it (by its owner and admins). */}
+      <div className={manager ? css.mRename : undefined} role={manager ? "button" : undefined} tabIndex={manager ? 0 : undefined} onClick={manager ? rename : undefined}>
+        <LargeTitle small="" big={view.name} />
+      </div>
+      <p className={css.mLead}>你是{ROLE_LABEL[view.role]} · {view.members.length} 人 · {view.stations.length} 台 station{manager ? " · 点名字改名" : ""}</p>
+      {/* Its people in one list: those in it, then those added who have not signed in yet, then the invitations out; which is which on each row's second line. */}
+      <SectionHeader title="成员" trailing={`${view.members.length} 人${waiting ? ` · ${waiting} 人待加入` : ""}`} start={24} />
       <ListCard>
         {view.members.map((m) => <MemberRow key={m.sub} view={view} m={m} me={me.sub} />)}
-        {manager && <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加成员</span></ListRow>}
+        {manager && view.added.map((a) => (
+          <ListRow key={a.email}>
+            <Avatar id={a.email} name={a.email} size={28} />
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{a.email}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[a.role]} · 还没登录过，第一次登录时自动加入</span></span>
+            <button type="button" className={partsCss.mLink} onClick={() => void cloud.removeAdded(me.sub, view.id, a.email).then(() => app.toast("已移除"), (e: Error) => app.toast(e.message))}>移除</button>
+          </ListRow>
+        ))}
+        {manager && view.invitations.map((i) => (
+          <ListRow key={i.id}>
+            <Avatar id={i.email ?? i.id} name={i.email ?? "?"} size={28} />
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{i.email ?? "任何拿到链接的人"}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[i.role]} · 邀请 · {stamp(i, "expires_at")?.until}过期</span></span>
+            <button type="button" className={partsCss.mLink} onClick={() => void cloud.revokeInvitation(me.sub, view.id, i.id).then(() => app.toast("已撤回邀请"), (e: Error) => app.toast(e.message))}>撤回</button>
+          </ListRow>
+        ))}
       </ListCard>
-      {manager && view.added.length > 0 && (
-        <>
-          <SectionHeader title="还没登录过" trailing={`${view.added.length} 人`} start={24} />
-          <ListCard>
-            {view.added.map((a) => (
-              <ListRow key={a.email}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{a.email}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[a.role]} · 第一次登录时自动加入</span></span>
-                <button type="button" className={partsCss.mLink} onClick={() => void cloud.removeAdded(me.sub, view.id, a.email).then(() => app.toast("已移除"), (e: Error) => app.toast(e.message))}>移除</button>
-              </ListRow>
-            ))}
-          </ListCard>
-        </>
-      )}
-      {manager && view.invitations.length > 0 && (
-        <>
-          <SectionHeader title="未接受的邀请" trailing={`${view.invitations.length} 个`} start={24} />
-          <ListCard>
-            {view.invitations.map((i) => (
-              <ListRow key={i.id}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{i.email ?? "任何拿到链接的人"}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span></span>
-                <button type="button" className={partsCss.mLink} onClick={() => void cloud.revokeInvitation(me.sub, view.id, i.id).then(() => app.toast("已撤回邀请"), (e: Error) => app.toast(e.message))}>撤回</button>
-              </ListRow>
-            ))}
-          </ListCard>
-        </>
-      )}
-      <SectionHeader title="离开" start={24} />
+      <div className={css.mGap} />
       <ListCard>
         <ListRow onClick={leave}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>退出这个 workspace</span></ListRow>
         {view.role === "owner" && <ListRow onClick={remove}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>删除 workspace</span></ListRow>}

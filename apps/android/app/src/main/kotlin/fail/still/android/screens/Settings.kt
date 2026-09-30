@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import fail.still.android.AppState
 import fail.still.android.LocalApp
 import fail.still.android.R
-import fail.still.android.Screen
 import fail.still.android.data.Cloud
 import fail.still.android.data.Enrollment
 import fail.still.android.data.LoginSession
@@ -66,6 +65,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
+import fail.still.android.ui.NavButton
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
@@ -146,6 +146,11 @@ fun CommandBox(text: String) {
 
 // ── the workspace ──────────────────────────────────────────────────────
 
+/**
+ * The workspace itself, from settings (SettingsHome.kt), as the narrow web's WorkspacePage.tsx: its name as the title (a
+ * tap renames it), its people in one list (those in it, those added who have not signed in, the invitations out), adding
+ * them from the ＋ at the top, and leaving or deleting it at the bottom.
+ */
 @Composable
 fun WorkspaceScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
@@ -153,56 +158,50 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
     val view = topic.value
     val me = current.account
     val cloud = Cloud(app.core, me.sub)
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("会话", app::pop)
+        TopBack("设置", app::pop, trailing = if (view?.manager == true) ({
+            NavButton(Icons.UserPlus, { app.sheet = SheetSpec(0.8f, draggable = true) { AddSheet(current, view, cloud) } }, 20.dp)
+        }) else null)
         if (view == null) return Loading(topic.error?.message ?: "正在读取 workspace…")
-        LargeTitle("你是${ROLE_LABEL[view.role] ?: view.role} · ${me.email}", view.name)
-        if (view.manager) ListCard {
-            ListRow(onClick = { ask(app, "Workspace 名字", view.name, "例如：产品团队", "保存") { cloud.renameWorkspace(view.id, it); app.toast = "已改名" } }) {
-                Text("改名", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-            }
+        val waiting = if (view.manager) view.added.size + view.invitations.size else 0
+        // Its name is the title, renamed by a tap on it (by its owner and admins).
+        Box(if (view.manager) Modifier.clickable { ask(app, "Workspace 名字", view.name, "例如：产品团队", "保存") { cloud.renameWorkspace(view.id, it); app.toast = "已改名" } } else Modifier) {
+            LargeTitle("", view.name)
         }
-        SectionHeader("成员 · ${view.members.size} 人", start = 24.dp)
+        Text("你是${ROLE_LABEL[view.role] ?: view.role} · ${view.members.size} 人 · ${view.stations.size} 台 station" + if (view.manager) " · 点名字改名" else "",
+            fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp))
+        // Its people in one list: those in it, then those added who have not signed in yet, then the invitations out;
+        // which is which on each row's second line.
+        SectionHeader("成员", "${view.members.size} 人" + if (waiting > 0) " · $waiting 人待加入" else "", start = 24.dp)
         ListCard {
             view.members.forEach { m -> MemberRow(view, m, me.sub, cloud) }
-            if (view.manager) ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { AddSheet(current, view, cloud) } }) { Text("＋ 添加成员", fontSize = 15.sp, color = C.accent) }
-        }
-        // Emails added whose accounts have not signed in yet: members from their first sign-in, or taken off before it.
-        if (view.manager && view.added.isNotEmpty()) {
-            SectionHeader("还没登录过", "${view.added.size} 人", start = 24.dp)
-            ListCard {
-                view.added.forEach { a ->
-                    ListRow {
-                        Column(Modifier.weight(1f)) {
-                            Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1)
-                            Text("${ROLE_LABEL[a.role] ?: a.role} · 第一次登录时自动加入", fontSize = 13.sp, color = C.muted)
-                        }
-                        val scope = rememberCoroutineScope()
-                        Text("移除", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable {
-                            scope.launch { try { cloud.removeAdded(view.id, a.email); app.toast = "已移除" } catch (e: CoreException) { app.toast = e.message } }
-                        })
+            if (view.manager) view.added.forEach { a ->
+                ListRow {
+                    Avatar(a.email, a.email, 28.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1)
+                        Text("${ROLE_LABEL[a.role] ?: a.role} · 还没登录过，第一次登录时自动加入", fontSize = 13.sp, color = C.muted)
                     }
+                    Text("移除", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable {
+                        scope.launch { try { cloud.removeAdded(view.id, a.email); app.toast = "已移除" } catch (e: CoreException) { app.toast = e.message } }
+                    })
+                }
+            }
+            if (view.manager) view.invitations.forEach { i ->
+                ListRow {
+                    Avatar(i.email ?: i.id, i.email ?: "?", 28.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(i.email ?: "任何拿到链接的人", fontSize = 15.sp, color = C.ink)
+                        Text("${ROLE_LABEL[i.role] ?: i.role} · 邀请 · ${i.time?.get("expires_at")?.until ?: ""}过期", fontSize = 13.sp, color = C.muted)
+                    }
+                    Text("撤回", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable {
+                        scope.launch { try { cloud.revokeInvitation(view.id, i.id); app.toast = "已撤回邀请" } catch (e: CoreException) { app.toast = e.message } }
+                    })
                 }
             }
         }
-        if (view.manager && view.invitations.isNotEmpty()) {
-            SectionHeader("未接受的邀请", "${view.invitations.size} 个", start = 24.dp)
-            ListCard {
-                view.invitations.forEach { i ->
-                    ListRow {
-                        Column(Modifier.weight(1f)) {
-                            Text(i.email ?: "任何拿到链接的人", fontSize = 15.sp, color = C.ink)
-                            Text("${ROLE_LABEL[i.role] ?: i.role} · ${i.time?.get("expires_at")?.until ?: ""}过期", fontSize = 13.sp, color = C.muted)
-                        }
-                        val scope = rememberCoroutineScope()
-                        Text("撤回", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable {
-                            scope.launch { try { cloud.revokeInvitation(view.id, i.id); app.toast = "已撤回邀请" } catch (e: CoreException) { app.toast = e.message } }
-                        })
-                    }
-                }
-            }
-        }
-        SectionHeader("离开", start = 24.dp)
+        Spacer(Modifier.height(18.dp))
         ListCard {
             ListRow(onClick = {
                 confirm(app, "退出「${view.name}」？", "退出后你就不能再访问里面的 station，需要重新被邀请才能回来。", "退出", danger = true) {
@@ -505,9 +504,4 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
             }
         }
     }
-}
-
-/** The workspace's own page, from the switcher. */
-fun openWorkspacePage(app: AppState) {
-    app.push(Screen.Workspace)
 }

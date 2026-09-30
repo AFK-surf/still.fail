@@ -1,4 +1,5 @@
-// Profiles (as the narrow web's web/src/mobile/Profiles.tsx, from the desktop's pages/Accounts.tsx): a profile's page
+// Profiles (as the narrow web's web/src/mobile/Profiles.tsx, from the desktop's pages/Accounts.tsx): every station's in
+// one list, a profile's page
 // (whether it works, signing a subscription in, its allowance, which of its models may be used, who uses it, its key or
 // variables; renaming, checking and deleting under "…"), and a new one.
 package fail.still.android.screens
@@ -66,6 +67,7 @@ import fail.still.android.ui.C
 import fail.still.android.ui.Card
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
+import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
@@ -105,6 +107,76 @@ internal fun quotaTrouble(quota: Quota?): String? = quota?.takeIf { it.state == 
 
 /** The runtime a machine login is of, by name. */
 private val MACHINE_RUNTIME = mapOf("claude" to "Claude Code", "codex" to "Codex")
+
+/**
+ * Every station's profiles on one page, from settings (SettingsHome.kt), as the narrow web's ProfilesScreen: each station
+ * under its name, what can be added there (a profile, the machine's own logins) with it; one offline says so.
+ */
+@Composable
+fun ProfilesScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    val stations = topic.value
+    val online = stations.orEmpty().filter { it.online }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack("设置", app::pop, trailing = if (online.isNotEmpty()) ({
+            NavButton(Icons.Plus, {
+                if (online.size == 1) app.push(Screen.NewProfile(online[0].station))
+                else openPickStation(app, "添加 Profile", online) { app.push(Screen.NewProfile(it.station)) }
+            }, 20.dp)
+        }) else null)
+        LargeTitle("", "Profile")
+        PageNote("agent 跑模型用的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行。")
+        if (stations == null) Text(topic.error?.message ?: "正在读取 station…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        else stations.forEach { s ->
+            SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
+            val overview = s.overview
+            ListCard {
+                if (overview == null) ListRow { Text(if (s.online) "正在读取…" else "station 离线，读不到它的 Profile", fontSize = 15.sp, color = C.muted) }
+                else if (overview.profiles.isEmpty()) ListRow { Text("这台机器还没有 Profile", fontSize = 15.sp, color = C.muted) }
+                else overview.profiles.forEach { ProfileRow(s.station, it) }
+            }
+            // The machine's own logins not used yet, each offered as a profile.
+            if (s.online && overview != null) MachineLoginOffers(s.station, overview)
+        }
+        Spacer(Modifier.height(30.dp))
+    }
+}
+
+/** Where something is added: one of the stations online, picked in a sheet. */
+fun openPickStation(app: AppState, title: String, stations: List<StationView>, go: (StationView) -> Unit) {
+    app.sheet = SheetSpec(0.5f) {
+        SheetGrab()
+        SheetHead(title)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Text("加在哪台 station 上", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+            stations.forEach { s -> PickRow(s.name) { app.sheet = null; go(s) } }
+        }
+    }
+}
+
+/**
+ * A profile in the list of profiles: whether it works (a dot before its name, its state in words, why when its provider
+ * refuses it), what it is, how many of its models are enabled, and its allowance; its page picks them.
+ */
+@Composable
+internal fun ProfileRow(station: String, p: Profile) {
+    val app = LocalApp.current
+    val trouble = quotaTrouble(p.quota)
+    ListRow(onClick = { app.push(Screen.Profile(station, p.id)) }) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PresenceDot(toneDot(p.checkTone))
+                Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(listOf(p.checkText, if (p.machine == true) "本机登录" else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
+                fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
+        }
+        QuotaRings(p.quota)
+        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+    }
+}
 
 @Composable
 fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {

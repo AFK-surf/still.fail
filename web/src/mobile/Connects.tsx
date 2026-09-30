@@ -7,16 +7,17 @@ import { stationApi, useConnects, useOverview, useStationCall, useStations, type
 import { useWorkspace } from "../cloud/api.ts";
 import { MODE, RUNTIME_LABEL } from "../format.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { ChevronRight, More } from "../icons.tsx";
+import { ChevronRight, More, Plus } from "../icons.tsx";
 import { modelName, optionOf } from "../ModelTriple.tsx";
 import { consequences } from "../pages/Connect.tsx";
 import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
 import { useTokenCheck, type TokenCheck } from "../slack.tsx";
-import { stationBase, useOnlyMine, useStation } from "../station.tsx";
+import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
 import { Button, Field, GroupLabel, LargeTitle, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, SectionHeader, Seg, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
+import { PickStation } from "./Profiles.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -110,6 +111,50 @@ function useItem(): { item: ConnectItem | undefined; loading: boolean; error: Er
   const connects = useConnects(station.address.split("/")[0]!);
   const item = connects.value?.items.find((i) => i.station === station.address && i.connect.id === id);
   return { item, loading: !connects.value || connects.value.loading, error: connects.error };
+}
+
+/**
+ * Every station's connects on one page, from settings (./Settings.tsx), as the desktop's settings have them: all or
+ * those the viewer made, each station's under its name with the Slack apps made there and not connected yet; a
+ * station offline says so. A new one is added on a station picked (the only one online, without asking).
+ */
+export function ConnectsScreen() {
+  const app = useApp();
+  const [mine, setMine] = useState(false);
+  const connects = useConnects(app.entry.id, mine);
+  const stations = useStations(app.entry.id).value;
+  const online = stations?.filter((s) => s.online) ?? [];
+  const items = connects.value?.items ?? [];
+  const add = () => online.length === 1
+    ? app.push(app.at(`/s/${online[0]!.id}/connects/new`))
+    : app.sheet({ height: 0.5, content: () => <PickStation title="添加连接" stations={online} to={(s) => `/s/${s.id}/connects/new`} /> });
+  return (
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+      <TopBack label="设置" onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加连接" onClick={add} /> : undefined} />
+      <LargeTitle small="" big="连接" />
+      <p className={settingsCss.mPageNote}>连接是人找到 still.fail 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</p>
+      <div className={css.mListSeg}><Seg options={["全部", "我建的"]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>
+      {!stations || !connects.value ? <Loading text={connects.error?.message ?? "正在读取连接…"} /> : stations.map((s) => {
+        const here = items.filter((i) => i.station === s.station);
+        const waiting = s.overview?.slackApps ?? [];
+        if (s.online && here.length === 0 && waiting.length === 0 && mine) return null;
+        return (
+          <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
+            <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />
+            <ListCard>
+              {!s.online && here.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>station 离线，读不到它的连接</span></ListRow>
+                : here.length === 0 && waiting.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{connects.value!.loading ? "正在读取…" : "这台机器上还没有连接"}</span></ListRow>
+                : null}
+              {here.map((i) => <ConnectRow key={i.connect.id} connect={i.connect} onClick={() => app.push(`${stationBase(i.station)}/connects/${encodeURIComponent(i.connect.id)}`)} />)}
+              {/* The Slack apps made here that no connect has taken yet: to be finished any time. */}
+              {waiting.map((a) => <WaitingAppRow key={a.appId} made={a} online={s.online} />)}
+            </ListCard>
+          </StationContext.Provider>
+        );
+      })}
+      <div style={{ height: 30 }} />
+    </div>
+  );
 }
 
 export function ConnectScreen() {

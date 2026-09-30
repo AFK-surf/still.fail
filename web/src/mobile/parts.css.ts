@@ -88,6 +88,8 @@ export const mNavbarTitle = style({
 export const mNavbarSub = style({ display: "flex", alignItems: "center", gap: "5px", maxWidth: "100%", marginTop: "-4px" });
 export const mNavbarTrailing = style({ gridColumn: "3", justifySelf: "end", display: "flex", alignItems: "center", height: "32px" });
 export const mTopBack = style({ padding: "calc(var(--m-top) + 6px) 0 4px 10px" });
+/** A top bar with a button at its end as well (a page's ＋). */
+export const mTopBackRow = style({ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: "10px" });
 export const mLargeTitle = style({ padding: "0 16px 6px" });
 export const mSection = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px" });
 export const mListCard = style({
