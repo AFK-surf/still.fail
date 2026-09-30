@@ -1,9 +1,10 @@
 //! What a person hears about while a client runs (the `notices` topic; docs/notifications.md): a chat of theirs
 //! whose agent is blocked on them, went wrong (the station's ⚠️ in it), or finished with something new to read, or where someone else said
 //! something. Noticed from the chat rows the core keeps in sync anyway (sync.rs), by how each row changed; a
-//! station's first rows are where it starts from.
+//! station's first rows are where it starts from. Each workspace hears of its own (workspace.rs): a workspace's
+//! `notices` are its chats', the plain topic every workspace's.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
@@ -13,8 +14,9 @@ use crate::host::Host;
 use crate::protocol::Topic;
 use crate::store::Store;
 use crate::views::EmailOf;
+use crate::workspace::{Workspace, Workspaces};
 
-/// How many notices the topic holds.
+/// How many notices a workspace holds, and the plain topic.
 const KEEP: usize = 20;
 /// How long a notice's body may be, in characters.
 const BODY: usize = 140;
@@ -27,36 +29,58 @@ struct Seen {
     seq: i64,
 }
 
+/// What a workspace has heard of its chats: how each of its stations' rows stood when last looked at, by id, and
+/// its notices, oldest first.
+#[derive(Default)]
+pub struct Heard {
+    seen: HashMap<String, HashMap<String, Seen>>,
+    items: VecDeque<Value>,
+}
+
 pub struct Notices {
     store: Rc<Store>,
     host: Rc<dyn Host>,
     email_of: EmailOf,
-    /// Each station's rows by id, as they were.
-    seen: RefCell<HashMap<String, HashMap<String, Seen>>>,
-    items: RefCell<VecDeque<Value>>,
+    /// Where each workspace's are kept.
+    workspaces: Rc<Workspaces>,
+    /// Numbers every workspace's notices: one's id is the device's own (`notice.claim`).
     next: Cell<u64>,
 }
 
 impl Notices {
-    pub fn new(store: Rc<Store>, host: Rc<dyn Host>, email_of: EmailOf) -> Rc<Notices> {
-        Rc::new(Notices { store, host, email_of, seen: RefCell::default(), items: RefCell::default(), next: Cell::new(1) })
+    pub fn new(store: Rc<Store>, host: Rc<dyn Host>, workspaces: Rc<Workspaces>, email_of: EmailOf) -> Rc<Notices> {
+        Rc::new(Notices { store, host, email_of, workspaces, next: Cell::new(1) })
     }
 
-    /// Shown anew: its value is computed again.
+    /// Shown anew: their values are computed again.
     pub fn changed(&self) {
-        self.store.invalidate(&Topic::Notices);
+        self.store.invalidate_all(|t| matches!(t, Topic::Notices { .. }));
     }
 
-    pub fn value(&self) -> Value {
-        json!({ "items": self.items.borrow().iter().cloned().collect::<Vec<_>>() })
+    /// A workspace's notices; with none given, every workspace's, the latest [`KEEP`].
+    pub fn value(&self, workspace: Option<&str>) -> Value {
+        let items: Vec<Value> = match workspace {
+            Some(id) => self.workspaces.get(id).map(|w| w.heard.borrow().items.iter().cloned().collect()).unwrap_or_default(),
+            None => {
+                let mut all: Vec<Value> = self.workspaces.all().iter().flat_map(|w| w.heard.borrow().items.iter().cloned().collect::<Vec<_>>()).collect();
+                let n = |v: &Value| v.get("id").and_then(Value::as_str).and_then(|id| id.trim_start_matches('n').parse::<u64>().ok()).unwrap_or(0);
+                all.sort_by_key(n);
+                let from = all.len().saturating_sub(KEEP);
+                all.split_off(from)
+            }
+        };
+        json!({ "items": items })
     }
 
     /// Looks at the stations' rows as they are now (`stations`: the addresses kept in sync); what changed since the
-    /// last look is noticed, and answered.
+    /// last look is noticed, each in its workspace, and answered.
     pub fn look(&self, stations: &[String]) -> Vec<Value> {
         let mut added = Vec::new();
-        self.seen.borrow_mut().retain(|station, _| stations.contains(station));
+        for workspace in self.workspaces.all() {
+            workspace.heard.borrow_mut().seen.retain(|station, _| stations.contains(station));
+        }
         for station in stations {
+            let its = self.workspaces.of_station(station);
             let Some(Ok(rows)) = self.store.value(&Topic::ChatRows { station: station.clone() }) else { continue };
             let rows = rows.as_array().cloned().unwrap_or_default();
             let workspace = station.split_once('/').map(|(w, _)| w).unwrap_or("");
@@ -68,14 +92,14 @@ impl Notices {
                 .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned()).unwrap_or_default()
                 .iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
             let now: HashMap<String, Seen> = rows.iter().filter_map(|row| Some((row.get("id")?.as_str()?.to_string(), seen(row)))).collect();
-            let before = self.seen.borrow_mut().insert(station.clone(), now);
+            let before = its.heard.borrow_mut().seen.insert(station.clone(), now);
             // Its first rows are where it starts from.
             let Some(before) = before else { continue };
             for row in &rows {
                 let Some(id) = row.get("id").and_then(Value::as_str) else { continue };
                 let then = before.get(id);
                 if let Some((kind, body)) = noticed(row, then, &me, &slack_users, &members) {
-                    added.push(self.add(station, row, kind, body));
+                    added.push(self.add(&its, station, row, kind, body));
                 }
             }
         }
@@ -85,7 +109,7 @@ impl Notices {
         added
     }
 
-    fn add(&self, station: &str, row: &Value, kind: &str, body: String) -> Value {
+    fn add(&self, into: &Workspace, station: &str, row: &Value, kind: &str, body: String) -> Value {
         let (workspace, id) = station.split_once('/').unwrap_or(("", station));
         let session = row.get("id").and_then(Value::as_str).unwrap_or("");
         let n = self.next.replace(self.next.get() + 1);
@@ -100,7 +124,8 @@ impl Notices {
             "url": format!("/o/{workspace}/{id}/{}", encode(session)),
             "at": self.host.now_ms() as i64,
         });
-        let mut items = self.items.borrow_mut();
+        let mut heard = into.heard.borrow_mut();
+        let items = &mut heard.items;
         items.push_back(notice.clone());
         while items.len() > KEEP {
             items.pop_front();
@@ -199,6 +224,7 @@ mod tests {
     use crate::error::CoreError;
     use crate::store::Source;
     use crate::testing::{FakeHost, run};
+    use std::cell::RefCell;
 
     struct Quiet(RefCell<Option<Rc<Notices>>>);
 
@@ -206,7 +232,8 @@ mod tests {
         fn start(&self, _topic: &Topic) {}
         fn stop(&self, _topic: &Topic) {}
         fn compute(&self, topic: &Topic) -> Option<Result<Value, CoreError>> {
-            (*topic == Topic::Notices).then(|| Ok(self.0.borrow().as_ref().unwrap().value()))
+            let Topic::Notices { workspace } = topic else { return None };
+            Some(Ok(self.0.borrow().as_ref().unwrap().value(workspace.as_deref())))
         }
     }
 
@@ -228,13 +255,13 @@ mod tests {
     fn setup() -> (Rc<FakeHost>, Rc<Store>, Rc<Notices>) {
         let host = FakeHost::new();
         let store = Store::new(host.clone());
-        let notices = Notices::new(store.clone(), host.clone(), Rc::new(|_: &str| Some("me@x.y".to_string())));
+        let notices = Notices::new(store.clone(), host.clone(), Workspaces::new(host.clone()), Rc::new(|_: &str| Some("me@x.y".to_string())));
         store.set_source(Rc::new(Quiet(RefCell::new(Some(notices.clone())))));
         (host, store, notices)
     }
 
     fn kinds(notices: &Notices) -> Vec<String> {
-        notices.value()["items"].as_array().unwrap().iter().map(|n| n["kind"].as_str().unwrap().to_string()).collect()
+        notices.value(None)["items"].as_array().unwrap().iter().map(|n| n["kind"].as_str().unwrap().to_string()).collect()
     }
 
     #[test]
@@ -256,7 +283,7 @@ mod tests {
             store.set(&rows, Ok(json!([row(None, 5, true, ("agent", "ds:C1:1.2"))])));
             notices.look(&stations);
             assert_eq!(kinds(&notices), ["done"]);
-            let n = &notices.value()["items"][0];
+            let n = &notices.value(None)["items"][0];
             assert_eq!(n["body"], "Opus 5.5: 修好了 再看看");
             assert_eq!(n["tag"], "ws/st/ds:C1:1.2");
             assert_eq!(n["url"], "/o/ws/st/ds%3AC1%3A1.2");
@@ -270,7 +297,7 @@ mod tests {
             store.set(&rows, Ok(json!([row(Some("block"), 7, true, ("agent", "ds:C1:1.2"))])));
             notices.look(&stations);
             assert_eq!(kinds(&notices), ["done", "block"]);
-            assert!(notices.value()["items"][1]["body"].as_str().unwrap().starts_with("需要处理 · 修好了"));
+            assert!(notices.value(None)["items"][1]["body"].as_str().unwrap().starts_with("需要处理 · 修好了"));
             // Someone else says something.
             store.set(&rows, Ok(json!([row(None, 8, true, ("person", "you@x.y"))])));
             notices.look(&stations);
@@ -281,7 +308,7 @@ mod tests {
             store.set(&rows, Ok(json!([failed])));
             notices.look(&stations);
             assert_eq!(kinds(&notices), ["done", "block", "message", "failed"]);
-            assert_eq!(notices.value()["items"][3]["body"], "出错了 · 无法启动 agent：没有 claude");
+            assert_eq!(notices.value(None)["items"][3]["body"], "出错了 · 无法启动 agent：没有 claude");
         });
     }
 
@@ -302,6 +329,30 @@ mod tests {
             store.set(&rows, Ok(json!([theirs, slack])));
             notices.look(&stations);
             assert!(kinds(&notices).is_empty());
+        });
+    }
+
+    #[test]
+    fn a_workspace_hears_of_its_own_chats_only() {
+        run(async {
+            let (_host, store, notices) = setup();
+            let (one, two) = (Topic::ChatRows { station: "w1/st".into() }, Topic::ChatRows { station: "w2/st".into() });
+            let stations = ["w1/st".to_string(), "w2/st".to_string()];
+            let _watch = (store.watch(&one, Rc::new(|| {})), store.watch(&two, Rc::new(|| {})));
+            store.set(&one, Ok(json!([row(Some("run"), 3, true, ("agent", "ds:C1:1.2"))])));
+            store.set(&two, Ok(json!([row(Some("run"), 3, true, ("agent", "ds:C1:1.2"))])));
+            notices.look(&stations);
+            store.set(&one, Ok(json!([row(None, 4, true, ("agent", "ds:C1:1.2"))])));
+            let added = notices.look(&stations);
+            assert_eq!(added.len(), 1);
+            assert_eq!(notices.value(Some("w1"))["items"][0]["workspace"], "w1");
+            assert_eq!(notices.value(Some("w2"))["items"], json!([]));
+            // W2 no longer kept in sync: what it had seen goes, W1's stays.
+            store.set(&two, Ok(json!([row(Some("block"), 5, true, ("agent", "ds:C1:1.2"))])));
+            notices.look(&stations[..1]);
+            notices.look(&stations);
+            assert_eq!(notices.value(Some("w2"))["items"], json!([]), "found blocked when it came back: where it starts from");
+            assert_eq!(kinds(&notices), ["done"]);
         });
     }
 

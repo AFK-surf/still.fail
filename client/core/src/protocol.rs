@@ -79,17 +79,30 @@ pub enum Topic {
     Chat { station: String, #[serde(default)] thread: Option<u64>, #[serde(default)] session: Option<String> },
     /// An agent's execution history, as people read it (history.rs): its transcript in items, what streams now.
     History { station: String, key: String },
-    /// What the core is waiting on, when it is worth saying (status.rs): something slow, a connection down.
-    Status,
-    /// What a person hears about while the client runs (notices.rs): chats of theirs that want them, newest last.
-    Notices,
+    /// What the core is waiting on, when it is worth saying (status.rs): something slow, a connection down. Of a
+    /// `workspace` (an id, or `local`): its stations' waits, its account's still.fail cloud socket and the relay; with
+    /// none, all of it.
+    Status {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
+    /// What a person hears about while the client runs (notices.rs): chats of theirs that want them, newest last; a
+    /// `workspace`'s only, or every workspace's.
+    Notices {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
     /// What is being written to a chat on this device (its text, quotes, and files already up), kept until sent
     /// (`draft.put`). `chat`: its session key, `thread:<id>`, or `new` for a new chat on the station; empty until
     /// something is written.
     Draft { station: String, chat: String },
     /// Notifications on this device (attend.rs): whether they are on, whether the system was asked to allow them,
-    /// whether it should hold a push registration, and the notices a page is to show now (`notice.claim` each).
-    Notify,
+    /// whether it should hold a push registration, and the notices a page is to show now (`notice.claim` each): a page
+    /// in a `workspace` shows only its own.
+    Notify {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
     /// The chats of a scope `query` finds (refs.rs): those whose title has it first, then those whose agent, station,
     /// origin or last message does; only `station`'s if given, not `exclude` (a chat's id or agent key), `limit` at
     /// most. A view of `chats`: the composer's `@` menu and the switcher.
@@ -133,7 +146,7 @@ impl Topic {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Net { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
             Topic::ArchivedRows { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
-            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::Prefs => None,
+            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
             // The core's own (jobs.rs), not the station module's.

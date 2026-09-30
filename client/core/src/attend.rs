@@ -7,12 +7,16 @@
 //!   are loaded first when it lies above them (`unreadAbove`);
 //! - what is read: a chat is read up to its newest message while a UI shows its end on a page in view;
 //! - which notices a page shows now (`notify`): none while notifications are off, none for a chat a UI is looking
-//!   at, none while this device has pushes and no page is in view (the push tells then); each once (`notice.claim`).
+//!   at, none while this device has pushes and no page is in view (the push tells then); each once (`notice.claim`);
+//! - the workspace the viewer is in: where each UI is (the workspace it says, else its chat's). Notices are only of
+//!   the workspace the viewer is in (workspace.rs): those of the UIs in view, or, with none in view, of every UI's
+//!   (a phone's app in the background is still in its workspace). With no UI saying where it is (none, or ones from
+//!   before they said it), nothing tells which is current, and every workspace's are.
 //!
 //! Whether notifications are on, and whether the system was asked to allow them, are kept on the device here.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
@@ -21,6 +25,7 @@ use serde_json::{Value, json};
 use crate::error::{CoreError, Result};
 use crate::host::Host;
 use crate::protocol::ClientId;
+use crate::workspace::of_address;
 
 /// Where the settings are kept (host storage).
 const KEY: &str = "notify";
@@ -60,6 +65,15 @@ struct Focus {
     visible: bool,
     focused: bool,
     chat: Option<ChatOf>,
+    /// The workspace it is in (a workspace id, or `local`), as it said.
+    workspace: Option<String>,
+}
+
+impl Focus {
+    /// The workspace it is in: as it said, else its chat's.
+    fn workspace(&self) -> Option<String> {
+        self.workspace.clone().or_else(|| self.chat.as_ref().map(|c| of_address(&c.station).to_string()))
+    }
 }
 
 /// A chat shown: from when, and up to where it had been read then.
@@ -83,6 +97,9 @@ pub struct FocusCall {
     chat: Option<Option<ChatOf>>,
     #[serde(default)]
     left: Option<ChatOf>,
+    /// The workspace it is in now (a workspace id, or `local`).
+    #[serde(default)]
+    workspace: Option<String>,
 }
 
 fn some<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<Option<ChatOf>>, D::Error> {
@@ -96,8 +113,9 @@ pub enum Call {
     Set { on: Option<bool>, asked: Option<bool> },
     /// A page takes a notice to show: only the first one does.
     Claim { id: String },
-    /// A push came while no page may be open (Android's FCM service): whether to show it.
-    Pushed,
+    /// A push came while no page may be open (Android's FCM service): whether to show it; `workspace`, the one it is
+    /// of (none from a UI before it said).
+    Pushed { workspace: Option<String> },
 }
 
 /// The calls of this module, by name; `None`: not one of them.
@@ -116,7 +134,11 @@ pub fn parse(name: &str, params: &Value) -> Option<Result<Call>> {
             struct P { id: String }
             serde_json::from_value::<P>(params).map(|p| Call::Claim { id: p.id }).map_err(bad)
         }
-        "notice.pushed" => Ok(Call::Pushed),
+        "notice.pushed" => {
+            #[derive(Deserialize)]
+            struct P { #[serde(default)] workspace: Option<String> }
+            serde_json::from_value::<P>(params).map(|p| Call::Pushed { workspace: p.workspace }).map_err(bad)
+        }
         _ => return None,
     })
 }
@@ -159,11 +181,14 @@ impl Attend {
         self.settings.get().on
     }
 
-    /// The `notify` topic: the settings, whether this device should hold a push registration, and what to show now.
-    pub fn value(&self) -> Value {
+    /// The `notify` topic: the settings, whether this device should hold a push registration, and what to show now
+    /// (a page in `workspace` shows only its own).
+    pub fn value(&self, workspace: Option<&str>) -> Value {
         let now = self.host.now_ms();
         let Settings { on, asked } = self.settings.get();
-        let show: Vec<Value> = self.show.borrow().iter().filter(|(_, at)| now - at < SHOW_FOR_MS).map(|(n, _)| n.clone()).collect();
+        let show: Vec<Value> = self.show.borrow().iter()
+            .filter(|(n, at)| now - at < SHOW_FOR_MS && workspace.is_none_or(|w| of(n) == w))
+            .map(|(n, _)| n.clone()).collect();
         json!({ "on": on, "asked": asked, "push": on, "show": show })
     }
 
@@ -188,6 +213,21 @@ impl Attend {
         self.focus.borrow().values().any(|f| f.visible)
     }
 
+    /// The workspaces the viewer is in: the UIs' in view, or with none in view every UI's; `None` while no UI says
+    /// (then no workspace is the current one, and none is left out).
+    pub fn current(&self) -> Option<HashSet<String>> {
+        let focus = self.focus.borrow();
+        let of_uis = |in_view: bool| -> HashSet<String> { focus.values().filter(|f| f.visible || !in_view).filter_map(Focus::workspace).collect() };
+        let shown = of_uis(true);
+        let all = if shown.is_empty() { of_uis(false) } else { shown };
+        (!all.is_empty()).then_some(all)
+    }
+
+    /// Whether a notice (or a push) of `workspace` is the current workspace's.
+    fn current_has(&self, workspace: &str) -> bool {
+        self.current().is_none_or(|c| c.contains(workspace))
+    }
+
     /// A UI's focus changed.
     pub fn focus(&self, client: ClientId, call: FocusCall) {
         let mut all = self.focus.borrow_mut();
@@ -205,6 +245,9 @@ impl Attend {
         }
         if let Some(chat) = call.chat {
             f.chat = chat;
+        }
+        if let Some(workspace) = call.workspace {
+            f.workspace = Some(workspace);
         }
         drop(all);
         self.end_visits();
@@ -303,6 +346,10 @@ impl Attend {
         show.retain(|(_, at)| now - at < SHOW_FOR_MS);
         let before = show.len();
         for n in added {
+            // Another workspace's: not the viewer's now.
+            if !self.current_has(of(n)) {
+                continue;
+            }
             let station = n.get("station").and_then(Value::as_str).unwrap_or("");
             let looking = self.showing(station, n.get("thread").and_then(Value::as_u64), n.get("session").and_then(Value::as_str))
                 .iter().any(|f| f.visible && f.focused);
@@ -321,10 +368,16 @@ impl Attend {
         show.len() < before
     }
 
-    /// A push came: shown unless notifications are off or a page is in view (it shows its own).
-    pub fn pushed(&self) -> bool {
-        self.on() && !self.seen()
+    /// A push came: shown unless notifications are off, a page is in view (it shows its own), or it is of another
+    /// workspace than the viewer's.
+    pub fn pushed(&self, workspace: Option<&str>) -> bool {
+        self.on() && !self.seen() && workspace.is_none_or(|w| self.current_has(w))
     }
+}
+
+/// The workspace a notice is of (its station's, where it does not say).
+fn of(notice: &Value) -> &str {
+    notice.get("workspace").and_then(Value::as_str).unwrap_or_else(|| of_address(notice.get("station").and_then(Value::as_str).unwrap_or("")))
 }
 
 #[cfg(test)]
@@ -412,7 +465,7 @@ mod tests {
             let host = FakeHost::new();
             let attend = Attend::load(host.clone()).await;
             let n = |id: &str| json!({ "id": id, "station": "ws/st", "session": "k1", "thread": 7 });
-            let shown = |a: &Attend| a.value()["show"].as_array().unwrap().iter().map(|n| n["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+            let shown = |a: &Attend| a.value(None)["show"].as_array().unwrap().iter().map(|n| n["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
             // Nobody listening: nothing waits.
             assert!(!attend.noticed(&[n("n1")], false));
             attend.focus(1, focus(json!({ "visible": true, "focused": false, "chat": { "station": "ws/st", "thread": 7 } })));
@@ -430,19 +483,55 @@ mod tests {
             attend.set_pushing(true);
             attend.focus(1, focus(json!({ "visible": false, "focused": false })));
             assert!(!attend.noticed(&[n("n4")], true));
-            assert!(attend.pushed());
+            assert!(attend.pushed(None));
             attend.focus(2, focus(json!({ "visible": true })));
             assert!(attend.noticed(&[n("n5")], true));
-            assert!(!attend.pushed());
+            assert!(!attend.pushed(None));
             // Off: none, and it is kept.
             attend.set(Some(false), Some(true)).await;
             assert!(!attend.noticed(&[n("n6")], true));
             assert!(shown(&attend).is_empty());
             let again = Attend::load(host.clone()).await;
-            assert_eq!(again.value(), json!({ "on": false, "asked": true, "push": false, "show": [] }));
+            assert_eq!(again.value(None), json!({ "on": false, "asked": true, "push": false, "show": [] }));
             // A page gone is in view no more.
             attend.gone(2);
             assert!(!attend.seen());
+        });
+    }
+
+    #[test]
+    fn only_the_workspace_the_viewer_is_in_is_heard_of() {
+        run(async {
+            let host = FakeHost::new();
+            let attend = Attend::load(host.clone()).await;
+            let n = |id: &str, workspace: &str| json!({ "id": id, "station": format!("{workspace}/st"), "workspace": workspace, "session": "k1", "thread": 7 });
+            let shown = |a: &Attend, w: Option<&str>| a.value(w)["show"].as_array().unwrap().iter().map(|n| n["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+            // Nobody says where they are: every workspace's.
+            attend.focus(1, focus(json!({ "visible": true })));
+            assert!(attend.noticed(&[n("n1", "w1"), n("n2", "w2")], true));
+            assert_eq!(shown(&attend, None), ["n1", "n2"]);
+            attend.claim("n1");
+            attend.claim("n2");
+            // In W1 (as said, or by the chat shown): W2's is not.
+            attend.focus(1, focus(json!({ "workspace": "w1" })));
+            assert!(!attend.noticed(&[n("n3", "w2")], true));
+            attend.focus(1, focus(json!({ "chat": { "station": "w1/st", "thread": 9 } })));
+            assert!(attend.noticed(&[n("n4", "w1"), n("n5", "w2")], true));
+            assert_eq!(shown(&attend, None), ["n4"]);
+            // A page in W2 beside it, in view: each page shows its workspace's.
+            attend.focus(2, focus(json!({ "visible": true, "workspace": "w2" })));
+            assert!(attend.noticed(&[n("n6", "w2")], true));
+            assert_eq!(shown(&attend, Some("w2")), ["n6"]);
+            assert_eq!(shown(&attend, Some("w1")), ["n4"]);
+            // None in view: where they were. A push of W3 is none of theirs.
+            attend.focus(1, focus(json!({ "visible": false })));
+            attend.focus(2, focus(json!({ "visible": false })));
+            assert!(attend.pushed(Some("w2")));
+            assert!(!attend.pushed(Some("w3")));
+            assert!(attend.pushed(None));
+            attend.gone(1);
+            attend.gone(2);
+            assert!(attend.pushed(Some("w3")), "no UI: nothing says which workspace is current");
         });
     }
 }

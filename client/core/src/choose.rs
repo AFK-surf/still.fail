@@ -1,6 +1,7 @@
 //! What a chat runs on, chosen. A new chat's page (`newChat`): the station it starts on and the model, runtime,
 //! depth and account it runs there, as last picked on this device (kept per station, and the station per scope, in
-//! the data center's `choice` table), each given way to the first the station has once it no longer has it; its
+//! the data center's `choice` table, each workspace's apart: `ws:<workspace>:station:<id>`, `ws:<workspace>:last`;
+//! what was kept before that, `station:<id>`, `scope:<scope>` and `last`, is read where there is none yet), each given way to the first the station has once it no longer has it; its
 //! profiles not checked since their station started are checked, once. A model control (`pick`): what a chat, a
 //! connect or a new chat runs on now, what is picked in its panel until saved, and what that means (an account kept
 //! to that does not run the model picked gives way to the station's pick, said so). Both screens and both phones
@@ -233,24 +234,27 @@ impl Choose {
         self.data.record(TABLE, key)
     }
 
-    /// What was last picked on a station (by its id): `{ runtime, model, effort, profile }`, "" for none.
-    fn choice(&self, id: &str) -> Value {
-        self.record(&format!("station:{id}")).unwrap_or_else(|| json!({}))
+    /// What was last picked on a station of a workspace (by its id): `{ runtime, model, effort, profile }`, "" for
+    /// none.
+    fn choice(&self, scope: &str, id: &str) -> Value {
+        self.record(&format!("ws:{scope}:station:{id}")).or_else(|| self.record(&format!("station:{id}"))).unwrap_or_else(|| json!({}))
     }
 
-    fn keep_choice(&self, id: &str, choice: &Value) {
+    fn keep_choice(&self, scope: &str, id: &str, choice: &Value) {
         let kept: Map<String, Value> = FIELDS.iter().map(|f| (f.to_string(), json!(choice[*f].as_str().unwrap_or("")))).collect();
-        self.data.put(TABLE, &format!("station:{id}"), Value::Object(kept));
+        self.data.put(TABLE, &format!("ws:{scope}:station:{id}"), Value::Object(kept));
     }
 
-    /// The station a scope's last chat was started on (or last picked there), its id; `last`: in any scope.
+    /// The station a scope's last chat was started on (or last picked there), its id. Before workspaces kept their
+    /// own: the scope's, else the last in any scope (a station of another is none of this one's, and gives way to
+    /// the first up).
     fn kept(&self, scope: &str) -> String {
-        self.record(&format!("scope:{scope}")).or_else(|| self.record("last")).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+        self.record(&format!("ws:{scope}:last")).or_else(|| self.record(&format!("scope:{scope}"))).or_else(|| self.record("last"))
+            .and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
     }
 
     fn keep_station(&self, scope: &str, id: &str) {
-        self.data.put(TABLE, &format!("scope:{scope}"), json!(id));
-        self.data.put(TABLE, "last", json!(id));
+        self.data.put(TABLE, &format!("ws:{scope}:last"), json!(id));
     }
 
     /// The scope's stations up now (as the `stations` view has them); `Err` while not known, with why when it failed.
@@ -283,7 +287,7 @@ impl Choose {
         let id = station["id"].as_str().unwrap_or("");
         let name = station["name"].as_str().unwrap_or("");
         let options = list(&station["models"]);
-        let r = resolve(&options, &self.choice(id));
+        let r = resolve(&options, &self.choice(scope, id));
         let overview = station.get("overview").filter(|o| o.is_object());
         let profiles = overview.map(|o| list(&o["profiles"])).unwrap_or_default();
         // The model list is what a profile's check found: those not checked since the station started are, now.
@@ -328,7 +332,7 @@ impl Choose {
     fn on_station(&self, address: &str) -> (Vec<Value>, Resolved) {
         let overview = self.store.get(&Topic::Overview { station: address.to_string() });
         let options = list(&models(overview.as_ref(), self.host.now_ms()));
-        let r = resolve(&options, &self.choice(station_id(address)));
+        let r = resolve(&options, &self.choice(crate::workspace::of_address(address), station_id(address)));
         (options, r)
     }
 
@@ -371,7 +375,7 @@ impl Choose {
                     next[field] = v.clone();
                 }
             }
-            self.keep_choice(&id, &next);
+            self.keep_choice(scope, &id, &next);
         }
         self.changed();
         Ok(())
@@ -400,7 +404,8 @@ impl Choose {
     pub fn migrate(&self, params: &Value) {
         for (id, choice) in params["choices"].as_object().into_iter().flatten() {
             if choice.is_object() && self.record(&format!("station:{id}")).is_none() {
-                self.keep_choice(id, choice);
+                let kept: Map<String, Value> = FIELDS.iter().map(|f| (f.to_string(), json!(choice[*f].as_str().unwrap_or("")))).collect();
+                self.data.put(TABLE, &format!("station:{id}"), Value::Object(kept));
             }
         }
         for (scope, id) in params["lastIn"].as_object().into_iter().flatten() {

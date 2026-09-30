@@ -325,6 +325,13 @@ impl Store {
         }
     }
 
+    /// Invalidates every live topic `pick` chooses (a topic of each workspace, and the one of all of them).
+    pub fn invalidate_all(&self, pick: impl Fn(&Topic) -> bool) {
+        for topic in self.live_topics().into_iter().filter(|t| pick(t)) {
+            self.invalidate(&topic);
+        }
+    }
+
     /// The topic's value or error; `None` while it has neither. A data center topic's value is read there (its
     /// error, while it has nothing, is kept here).
     pub fn value(&self, topic: &Topic) -> Option<Result<Value, CoreError>> {

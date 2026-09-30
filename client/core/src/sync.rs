@@ -10,9 +10,12 @@
 //!
 //! Messages are kept by the stations module itself: the latest chats' pages
 //! (`warm`), and a page ahead of what a chat shows (`prefetch_before`).
+//!
+//! What is kept of a workspace is its own (workspace.rs): a workspace no
+//! account reaches any more lets go of its topics, and only of its.
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use futures::FutureExt;
@@ -21,21 +24,24 @@ use serde_json::Value;
 use crate::host::Host;
 use crate::protocol::Topic;
 use crate::store::{Store, Watch};
+use crate::workspace::Workspaces;
 
 pub struct Sync {
     store: Rc<Store>,
     host: Rc<dyn Host>,
     me: Weak<Sync>,
-    /// What is kept, each held by a watch; dropping one lets the topic go.
+    /// What is kept of no workspace (the accounts' workspaces), each held by a watch; dropping one lets the topic go.
+    /// Each workspace holds what is kept of it.
     kept: RefCell<HashMap<Topic, Watch>>,
+    workspaces: Rc<Workspaces>,
     scheduled: Cell<bool>,
     /// Told the stations kept, each time it looks (what changed has settled): notices.rs looks at their rows.
     on_look: RefCell<Option<Rc<dyn Fn(&[String])>>>,
 }
 
 impl Sync {
-    pub fn new(store: Rc<Store>, host: Rc<dyn Host>) -> Rc<Sync> {
-        Rc::new_cyclic(|me| Sync { store, host, me: me.clone(), kept: RefCell::default(), scheduled: Cell::new(false), on_look: RefCell::default() })
+    pub fn new(store: Rc<Store>, host: Rc<dyn Host>, workspaces: Rc<Workspaces>) -> Rc<Sync> {
+        Rc::new_cyclic(|me| Sync { store, host, me: me.clone(), kept: RefCell::default(), workspaces, scheduled: Cell::new(false), on_look: RefCell::default() })
     }
 
     /// Starts keeping things in sync (again: it is idempotent).
@@ -47,15 +53,16 @@ impl Sync {
         *self.on_look.borrow_mut() = Some(look);
     }
 
-    /// What should be kept, from what is known now.
-    fn wanted(&self) -> HashSet<Topic> {
-        let mut want = HashSet::from([Topic::Workspaces]);
+    /// What should be kept, from what is known now: of no workspace, and of each.
+    fn wanted(&self) -> (HashSet<Topic>, BTreeMap<String, HashSet<Topic>>) {
+        let mut of = BTreeMap::new();
         let ok = |topic: &Topic| self.store.value(topic).and_then(Result::ok);
         let workspaces: Vec<String> = ok(&Topic::Workspaces).as_ref().and_then(Value::as_array).into_iter().flatten()
             .flat_map(|entry| entry.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default())
             .filter_map(|w| w.get("id").and_then(Value::as_str).map(str::to_string))
             .collect();
         for workspace in workspaces {
+            let want = of.entry(workspace.clone()).or_insert_with(HashSet::new);
             let topic = Topic::Workspace { workspace: workspace.clone() };
             let stations: Vec<String> = ok(&topic).as_ref().and_then(|w| w.get("stations")).and_then(Value::as_array).into_iter().flatten()
                 .filter_map(|s| s.get("id").and_then(Value::as_str).map(|id| format!("{workspace}/{id}")))
@@ -80,23 +87,38 @@ impl Sync {
                 want.insert(Topic::Threads { station });
             }
         }
-        want
+        (HashSet::from([Topic::Workspaces]), of)
     }
 
     fn recompute(&self) {
         self.scheduled.set(false);
-        let want = self.wanted();
+        let (want, of) = self.wanted();
         let look = self.on_look.borrow().clone();
         if let Some(look) = look {
-            let stations: Vec<String> = want.iter().filter_map(|t| match t { Topic::ChatRows { station } => Some(station.clone()), _ => None }).collect();
+            let stations: Vec<String> = of.values().flatten().filter_map(|t| match t { Topic::ChatRows { station } => Some(station.clone()), _ => None }).collect();
             look(&stations);
         }
-        let fresh: Vec<Topic> = {
+        let mut fresh: Vec<(Option<String>, Topic)> = {
             let mut kept = self.kept.borrow_mut();
             kept.retain(|topic, _| want.contains(topic));
-            want.into_iter().filter(|t| !kept.contains_key(t)).collect()
+            want.into_iter().filter(|t| !kept.contains_key(t)).map(|t| (None, t)).collect()
         };
-        for topic in fresh {
+        // Each workspace lets go of what it no longer wants (all of it, one no account reaches), with nothing borrowed.
+        for workspace in self.workspaces.all() {
+            let wanted = of.get(&workspace.id);
+            let gone: Vec<Watch> = {
+                let mut synced = workspace.synced.borrow_mut();
+                let gone: Vec<Topic> = synced.keys().filter(|t| wanted.is_none_or(|w| !w.contains(*t))).cloned().collect();
+                gone.iter().filter_map(|t| synced.remove(t)).collect()
+            };
+            drop(gone);
+        }
+        for (id, wanted) in of {
+            let workspace = self.workspaces.of(&id);
+            let synced = workspace.synced.borrow();
+            fresh.extend(wanted.into_iter().filter(|t| !synced.contains_key(t)).map(|t| (Some(id.clone()), t)));
+        }
+        for (workspace, topic) in fresh {
             let me = self.me.clone();
             // What is kept depends on what these say (a new workspace, a station, an agent at work): look again.
             let watch = self.store.watch(&topic, Rc::new(move || {
@@ -104,7 +126,14 @@ impl Sync {
                     sync.schedule();
                 }
             }));
-            self.kept.borrow_mut().insert(topic, watch);
+            match workspace {
+                Some(id) => {
+                    self.workspaces.of(&id).synced.borrow_mut().insert(topic, watch);
+                }
+                None => {
+                    self.kept.borrow_mut().insert(topic, watch);
+                }
+            }
         }
     }
 
@@ -150,7 +179,7 @@ mod tests {
             let store = Store::new(host.clone());
             let started = Rc::new(Started::default());
             store.set_source(started.clone());
-            let sync = Sync::new(store.clone(), host.clone());
+            let sync = Sync::new(store.clone(), host.clone(), Workspaces::new(host.clone()));
             sync.start();
             host.settle().await;
             assert_eq!(started.0.borrow().as_slice(), &[Topic::Workspaces]);

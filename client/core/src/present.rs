@@ -498,7 +498,7 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
 
 /// Whether what goes out of a topic shows times in words (sent again each minute).
 pub fn ticks(topic: &Topic) -> bool {
-    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Net { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } | Topic::Prefs)
+    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Net { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs)
 }
 
 /// A topic's value through the shape the clients are generated from (client/shapes): what it does not declare is
@@ -519,10 +519,10 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Session { .. } => s::conform::<s::SessionDetail>(value),
         Topic::Threads { .. } => s::conform::<Vec<s::ChatThread>>(value),
         Topic::Host { .. } => s::conform::<s::Host>(value),
-        Topic::Status => s::conform::<s::StatusView>(value),
-        Topic::Notices => s::conform::<s::NoticesView>(value),
+        Topic::Status { .. } => s::conform::<s::StatusView>(value),
+        Topic::Notices { .. } => s::conform::<s::NoticesView>(value),
         Topic::Draft { .. } => s::conform::<s::DraftView>(value),
-        Topic::Notify => s::conform::<s::NotifyView>(value),
+        Topic::Notify { .. } => s::conform::<s::NotifyView>(value),
         Topic::Archive { .. } => s::conform::<s::ArchiveView>(value),
         Topic::NewChat { .. } => s::conform::<s::NewChatView>(value),
         Topic::Pick { .. } => s::conform::<s::PickView>(value),

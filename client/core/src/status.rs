@@ -3,6 +3,11 @@
 //! sockets that are down, and how fast bytes come in. Only what has taken a while ([`SLOW_MS`]) or is down is worth a
 //! word: while all goes as it should the topic says nothing, so a UI shows nothing.
 //!
+//! Each workspace has its own waits (workspace.rs): its stations' requests, and the relay and links opened for them.
+//! The device's are apart: still.fail cloud's requests, the accounts' sockets, the relay opened for no station. A
+//! workspace's `status` is its own waits, its account's socket down and the device's relay; the plain `status` all of
+//! them ([`value`]).
+//!
 //! Requests are registered where they leave (station.rs `send`, cloud.rs `request`, the mesh's connects) and let go
 //! when their [`Waiting`] is dropped. While anything is waited on, the topic is computed again each second (the
 //! seconds waited, the rate); what the rest of the time changes it (a slow wait ending, a socket going down or
@@ -34,6 +39,22 @@ pub enum Place {
 
 /// Station names by address, for what is said (the workspace as last read); `None` says "station".
 pub type NameOf = Rc<dyn Fn(&str) -> Option<String>>;
+
+/// The waits of a workspace, by its id (the station wire registers a link's waits with its workspace's).
+pub type StatusOf = Rc<dyn Fn(&str) -> Rc<Status>>;
+
+/// Every workspace's waits in one (tests, and a wire for one workspace).
+pub fn one(status: Rc<Status>) -> StatusOf {
+    Rc::new(move |_: &str| status.clone())
+}
+
+/// What of a set of waits a status value takes: all of it, or, of the device's in a workspace's, the sockets of the
+/// accounts given (the one that reaches it) and the relay opened for no station.
+#[derive(Clone, Copy)]
+pub enum Take<'a> {
+    All,
+    For(&'a [String]),
+}
 
 pub struct Status {
     host: Rc<dyn Host>,
@@ -229,65 +250,119 @@ impl Status {
         }
     }
 
-    /// The `status` topic's value (StatusView): `state` null while all goes as it should, else `slow` (something
-    /// waited on for a while) or `trouble` (a connection down); `text` the one line that says it, `items` each thing.
+    /// The `status` topic's value of these waits alone (StatusView; see [`value`]).
     pub fn value(&self) -> Value {
+        value(&[(self, Take::All)])
+    }
+
+    /// What of these waits is worth a word now, as `take` says, onto `into`.
+    fn gather(&self, take: Take, into: &mut Gathered) {
         let now = self.now();
         let inner = self.inner.borrow();
-        let mut items: Vec<Value> = Vec::new();
-        // still.fail cloud's socket, once down for a while (a socket dropped and open again at once is how things go): one
-        // line whatever the number of accounts, by the one tried again first.
-        let down = inner.sockets.values().filter(|d| now - d.since >= SLOW_MS).min_by(|a, b| a.retry_at.total_cmp(&b.retry_at));
-        if let Some(d) = down {
-            let wait = ((d.retry_at - now) / 1000.0).ceil().max(0.0) as u64;
-            let when = if wait > 0 { format!("{wait} 秒后重试") } else { "正在重试".to_string() };
-            let tries = if d.tries > 1 { format!("（第 {} 次）", d.tries) } else { String::new() };
-            let why = if d.message.is_empty() { String::new() } else { format!("：{}", d.message) };
-            items.push(json!({ "state": "trouble", "text": format!("连不上 still.fail cloud，{when}{tries}"), "detail": format!("实时更新暂停{why}") }));
+        let wanted = |sub: &String| match take {
+            Take::All => true,
+            Take::For(accounts) => accounts.contains(sub),
+        };
+        // still.fail cloud's socket, once down for a while (a socket dropped and open again at once is how things go).
+        for (_, d) in inner.sockets.iter().filter(|(sub, d)| wanted(sub) && now - d.since >= SLOW_MS) {
+            into.downs.push(Shown { retry_in: d.retry_at - now, message: d.message.clone(), tries: d.tries });
         }
-        // What has been waited on for a while: the connections first (the requests wait on them), the oldest first.
-        let mut slow: Vec<&Wait> = inner.waits.values().filter(|w| now - w.since >= SLOW_MS).collect();
-        slow.sort_by(|a, b| b.connecting.cmp(&a.connecting).then(a.since.total_cmp(&b.since)));
-        for w in &slow {
-            let secs = ((now - w.since) / 1000.0).floor() as u64;
-            let place = self.place_name(&w.place);
-            let text = match (w.connecting, place) {
-                (true, place) => format!("正在连接 {}", place.as_deref().unwrap_or("station")),
-                (false, Some(place)) => format!("{place} {}", w.what),
-                (false, None) => w.what.clone(),
-            };
-            let detail = if w.connecting {
-                format!("已等 {secs} 秒")
-            } else if w.bytes == 0 {
-                format!("已等 {secs} 秒，还没收到数据")
-            } else {
-                format!("已收 {}，{secs} 秒", size(w.bytes))
-            };
-            items.push(json!({ "state": "slow", "text": text, "detail": detail }));
+        for w in inner.waits.values().filter(|w| now - w.since >= SLOW_MS) {
+            if let (Take::For(_), false) = (take, w.place == Place::Relay) {
+                continue;
+            }
+            into.slow.push(Slow { place: self.place_name(&w.place), what: w.what.clone(), connecting: w.connecting, age: now - w.since, bytes: w.bytes });
         }
-        if items.is_empty() {
-            return json!({ "state": null, "text": null, "items": [] });
+        if let Some((t, _)) = inner.received.front() {
+            into.window = into.window.max((now - t).clamp(1_000.0, RATE_WINDOW_MS));
         }
-        let window = inner.received.front().map(|(t, _)| (now - t).clamp(1_000.0, RATE_WINDOW_MS)).unwrap_or(RATE_WINDOW_MS);
-        let recent: u64 = inner.received.iter().filter(|(t, _)| now - t <= RATE_WINDOW_MS).map(|(_, n)| n).sum();
-        let rate = (recent as f64 / (window / 1000.0)) as u64;
-        // The line: the first thing, how long (or how much), the others counted, and the rate while bytes come.
-        let first = &items[0];
-        let state = if down.is_some() { "trouble" } else { "slow" };
-        let mut text = first["text"].as_str().unwrap_or("").to_string();
-        if let Some(w) = slow.first().filter(|_| down.is_none()) {
-            let secs = ((now - w.since) / 1000.0).floor() as u64;
-            text.push_str(&format!(" · {secs} 秒"));
-        }
-        if items.len() > 1 {
-            text.push_str(&format!(" · 共 {} 项", items.len()));
-        }
-        // How much of each came is on hover: the line stays short enough for a sidebar.
-        if !slow.is_empty() && rate > 0 {
-            text.push_str(&format!(" · {}/s", size(rate)));
-        }
-        json!({ "state": state, "text": text, "items": items })
+        into.recent += inner.received.iter().filter(|(t, _)| now - t <= RATE_WINDOW_MS).map(|(_, n)| n).sum::<u64>();
     }
+}
+
+/// A socket down, as a status says it.
+struct Shown {
+    retry_in: f64,
+    message: String,
+    tries: u32,
+}
+
+/// A slow wait, as a status says it.
+struct Slow {
+    place: Option<String>,
+    what: String,
+    connecting: bool,
+    age: f64,
+    bytes: u64,
+}
+
+#[derive(Default)]
+struct Gathered {
+    downs: Vec<Shown>,
+    slow: Vec<Slow>,
+    /// The bytes of the last RATE_WINDOW_MS, and how long that window has been (the oldest of them).
+    recent: u64,
+    window: f64,
+}
+
+/// The `status` topic's value (StatusView) of these sets of waits: `state` null while all goes as it should, else
+/// `slow` (something waited on for a while) or `trouble` (a connection down); `text` the one line that says it,
+/// `items` each thing.
+pub fn value(parts: &[(&Status, Take)]) -> Value {
+    let mut all = Gathered::default();
+    for (status, take) in parts {
+        status.gather(*take, &mut all);
+    }
+    let mut items: Vec<Value> = Vec::new();
+    // still.fail cloud's socket: one line whatever the number of accounts, by the one tried again first.
+    let down = all.downs.iter().min_by(|a, b| a.retry_in.total_cmp(&b.retry_in));
+    if let Some(d) = down {
+        let wait = (d.retry_in / 1000.0).ceil().max(0.0) as u64;
+        let when = if wait > 0 { format!("{wait} 秒后重试") } else { "正在重试".to_string() };
+        let tries = if d.tries > 1 { format!("（第 {} 次）", d.tries) } else { String::new() };
+        let why = if d.message.is_empty() { String::new() } else { format!("：{}", d.message) };
+        items.push(json!({ "state": "trouble", "text": format!("连不上 still.fail cloud，{when}{tries}"), "detail": format!("实时更新暂停{why}") }));
+    }
+    // What has been waited on for a while: the connections first (the requests wait on them), the oldest first.
+    let mut slow: Vec<&Slow> = all.slow.iter().collect();
+    slow.sort_by(|a, b| b.connecting.cmp(&a.connecting).then(b.age.total_cmp(&a.age)));
+    for w in &slow {
+        let secs = (w.age / 1000.0).floor() as u64;
+        let text = match (w.connecting, &w.place) {
+            (true, place) => format!("正在连接 {}", place.as_deref().unwrap_or("station")),
+            (false, Some(place)) => format!("{place} {}", w.what),
+            (false, None) => w.what.clone(),
+        };
+        let detail = if w.connecting {
+            format!("已等 {secs} 秒")
+        } else if w.bytes == 0 {
+            format!("已等 {secs} 秒，还没收到数据")
+        } else {
+            format!("已收 {}，{secs} 秒", size(w.bytes))
+        };
+        items.push(json!({ "state": "slow", "text": text, "detail": detail }));
+    }
+    if items.is_empty() {
+        return json!({ "state": null, "text": null, "items": [] });
+    }
+    let window = if all.window > 0.0 { all.window } else { RATE_WINDOW_MS };
+    let rate = (all.recent as f64 / (window / 1000.0)) as u64;
+    // The line: the first thing, how long (or how much), the others counted, and the rate while bytes come.
+    let first = &items[0];
+    let state = if down.is_some() { "trouble" } else { "slow" };
+    let mut text = first["text"].as_str().unwrap_or("").to_string();
+    if let Some(w) = slow.first().filter(|_| down.is_none()) {
+        let secs = (w.age / 1000.0).floor() as u64;
+        text.push_str(&format!(" · {secs} 秒"));
+    }
+    if items.len() > 1 {
+        text.push_str(&format!(" · 共 {} 项", items.len()));
+    }
+    // How much of each came is on hover: the line stays short enough for a sidebar.
+    if !slow.is_empty() && rate > 0 {
+        text.push_str(&format!(" · {}/s", size(rate)));
+    }
+    json!({ "state": state, "text": text, "items": items })
 }
 
 /// Bytes in words: "820 B", "12 KB", "1.4 MB".
@@ -388,6 +463,35 @@ mod tests {
         assert_eq!(status.value()["items"][0]["text"], "连不上 still.fail cloud，6 秒后重试（第 2 次）");
         status.socket_up("a");
         assert_eq!(status.value()["state"], "slow");
+        });
+    }
+
+    #[test]
+    fn a_workspaces_status_is_its_own_waits_its_accounts_socket_and_the_relay() {
+        run(async {
+        let host = FakeHost::new();
+        let (w1, w2, device) = (Status::new(host.clone()), Status::new(host.clone()), Status::new(host.clone()));
+        let _read = w1.begin(Place::Station("w1/s".into()), "读取对话", false);
+        let _cloud = device.begin(Place::Cloud, "读取 workspace", false);
+        let _relay = device.begin(Place::Relay, "连接", true);
+        let now = device.now();
+        device.socket_down("a1", "网络错误", now + 9_000.0);
+        device.socket_down("a2", "网络错误", now + 4_000.0);
+        for s in [&w1, &w2, &device] {
+            s.skip(2_500.0);
+        }
+        let texts = |v: &Value| v["items"].as_array().unwrap().iter().map(|i| i["text"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+        let (a1, a2) = (["a1".to_string()], ["a2".to_string()]);
+        // W1's slow read is not W2's; the relay opened for no station and W2's account's socket are.
+        let of_w2 = value(&[(&*w2, Take::All), (&*device, Take::For(&a2))]);
+        assert_eq!(texts(&of_w2), ["连不上 still.fail cloud，2 秒后重试", "正在连接 relay"]);
+        let of_w1 = value(&[(&*w1, Take::All), (&*device, Take::For(&a1))]);
+        assert_eq!(texts(&of_w1), ["连不上 still.fail cloud，7 秒后重试", "正在连接 relay", "读取对话"]);
+        // No account (a station's own page): no socket.
+        assert_eq!(texts(&value(&[(&*w2, Take::All), (&*device, Take::For(&[]))])), ["正在连接 relay"]);
+        // The plain status: all of it.
+        let all = value(&[(&*w1, Take::All), (&*w2, Take::All), (&*device, Take::All)]);
+        assert_eq!(texts(&all), ["连不上 still.fail cloud，2 秒后重试", "正在连接 relay", "读取对话", "still.fail cloud 读取 workspace"]);
         });
     }
 }

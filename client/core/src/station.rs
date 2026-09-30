@@ -41,10 +41,11 @@ use crate::host::{Host, HttpRequest};
 use crate::kept::{Kept, Log};
 use crate::mesh::{CredentialSource, Link, LinkNet, Mesh, RequestHead};
 use crate::protocol::Topic;
-use crate::status::{Place, Status, Waiting, station_what};
+use crate::status::{Place, StatusOf, Waiting, station_what};
 use crate::store::{Source, Store};
 use crate::trace::{Kind, Span, SpanContext, Tracer, route};
 use crate::wake;
+use crate::workspace::{Workspace, Workspaces};
 
 /// How long a failed or ended stream waits before it is opened again.
 pub const RECONNECT_MS: u64 = 2_000;
@@ -326,13 +327,14 @@ pub type StationCredentials = Rc<dyn Fn(&str) -> CredentialSource>;
 pub struct MeshWire {
     mesh: MeshSource,
     credentials: StationCredentials,
-    status: Rc<Status>,
+    /// Each workspace's waits: a link's are its workspace's, the relay brought up for it too.
+    status: StatusOf,
     /// Stations that said they keep writes with a key to once ([`IDEMPOTENT`]), by id.
     idempotent: Rc<RefCell<HashSet<String>>>,
 }
 
 impl MeshWire {
-    pub fn new(mesh: MeshSource, credentials: StationCredentials, status: Rc<Status>) -> Rc<MeshWire> {
+    pub fn new(mesh: MeshSource, credentials: StationCredentials, status: StatusOf) -> Rc<MeshWire> {
         Rc::new(MeshWire { mesh, credentials, status, idempotent: Rc::default() })
     }
 }
@@ -352,7 +354,7 @@ impl StationWire for MeshWire {
         };
         let mesh = (self.mesh)();
         let credentials = (self.credentials)(&workspace);
-        let (status, address) = (self.status.clone(), Place::Station(format!("{workspace}/{station}")));
+        let (status, address) = ((self.status)(&workspace), Place::Station(format!("{workspace}/{station}")));
         let (idempotent, reply_station) = (self.idempotent.clone(), station.clone());
         async move {
             // Bringing up the endpoint (the relay) and opening the link are waits of their own: a request slow for
@@ -435,7 +437,7 @@ impl StationWire for MeshWire {
         };
         let mesh = (self.mesh)();
         let credentials = (self.credentials)(&workspace);
-        let (status, address) = (self.status.clone(), Place::Station(format!("{workspace}/{station}")));
+        let (status, address) = ((self.status)(&workspace), Place::Station(format!("{workspace}/{station}")));
         async move {
             let mesh = {
                 let _waiting = status.begin(Place::Relay, "连接", true);
@@ -497,7 +499,7 @@ impl StationWire for RoutedWire {
 }
 
 /// The real wire: HTTP for `local`, mesh links for the rest.
-pub fn wire(host: Rc<dyn Host>, mesh: MeshSource, credentials: StationCredentials, status: Rc<Status>) -> Rc<dyn StationWire> {
+pub fn wire(host: Rc<dyn Host>, mesh: MeshSource, credentials: StationCredentials, status: StatusOf) -> Rc<dyn StationWire> {
     RoutedWire::new(HttpWire::new(host), MeshWire::new(mesh, credentials, status))
 }
 
@@ -598,8 +600,8 @@ fn http_error(status: u16, data: &Value) -> CoreError {
 
 // ── stations ────────────────────────────────────────────────────────────────
 
-/// What is kept per station while any of its topics is live.
-struct StationState {
+/// What is kept per station while any of its topics is live: its workspace's (workspace.rs).
+pub(crate) struct StationState {
     addr: StationAddr,
     topics: HashSet<Topic>,
     /// The `/events` stream, and what it was opened for.
@@ -754,10 +756,9 @@ pub struct Stations {
     wire: Rc<dyn StationWire>,
     tracer: Rc<Tracer>,
     kept: Rc<Kept>,
-    /// What is waited on, for the `status` topic.
-    status: Rc<Status>,
+    /// Where each station's state is kept, and what is waited on for it (the `status` topic): its workspace.
+    workspaces: Rc<Workspaces>,
     me: Weak<Stations>,
-    stations: RefCell<HashMap<String, StationState>>,
 }
 
 /// A failed request's span.
@@ -778,8 +779,13 @@ fn answered(span: &mut Span, reply: &WireReply) {
 }
 
 impl Stations {
-    pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>, status: Rc<Status>) -> Rc<Stations> {
-        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, status, me: me.clone(), stations: RefCell::default() })
+    pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>, workspaces: Rc<Workspaces>) -> Rc<Stations> {
+        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, workspaces, me: me.clone() })
+    }
+
+    /// The workspace a station is in: where its state is kept and its waits go.
+    fn of(&self, station: &str) -> Rc<Workspace> {
+        self.workspaces.of_station(station)
     }
 
     /// One JSON call to the admin API (path without the `/admin/api` prefix); a write answers once the live topics
@@ -830,7 +836,7 @@ impl Stations {
                 let chunk = chunk?;
                 match &waiting {
                     Some(waiting) => waiting.received(chunk.len()),
-                    None => self.status.received(None, chunk.len()),
+                    None => self.of(&station.to_string()).status.received(None, chunk.len()),
                 }
                 bytes.extend(chunk);
                 let loaded = bytes.len() as u64;
@@ -876,7 +882,7 @@ impl Stations {
         drop(waiting);
         answered(&mut span, &reply);
         span.end();
-        let status = Rc::downgrade(&self.status);
+        let status = Rc::downgrade(&self.of(&station.to_string()).status);
         let body = reply.body.inspect(move |chunk| {
             if let (Ok(chunk), Some(status)) = (chunk, status.upgrade()) {
                 status.received(None, chunk.len());
@@ -889,7 +895,7 @@ impl Stations {
     /// station's reason, as an error with its status).
     pub async fn preview_socket(&self, station: &StationAddr, port: u16, path: &str, headers: Vec<(String, String)>) -> Result<WireSocket> {
         let path = format!("/admin/api/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
-        let _waiting = self.status.begin(Place::Station(station.to_string()), "打开网页服务的 WebSocket", false);
+        let _waiting = self.of(&station.to_string()).status.begin(Place::Station(station.to_string()), "打开网页服务的 WebSocket", false);
         let mut span = self.tracer.span(format!("SOCKET {}", route(&path)), Kind::Client);
         span.set("url.path", route(&path));
         span.set("stillfail.stream", true);
@@ -923,7 +929,7 @@ impl Stations {
     /// Starts a request: its span (under the current trace, or a trace of its own), whose `traceparent` the
     /// request carries, what it is waited on as (none for one in the background, `quiet`), and the reply's head.
     fn send(&self, station: &StationAddr, method: &str, path: &str, mut headers: Vec<(String, String)>, body: Vec<u8>, quiet: bool) -> (Span, Option<Waiting>, LocalBoxFuture<'static, Result<WireReply>>) {
-        let waiting = (!quiet).then(|| self.status.begin(Place::Station(station.to_string()), station_what(method, path), false));
+        let waiting = (!quiet).then(|| self.of(&station.to_string()).status.begin(Place::Station(station.to_string()), station_what(method, path), false));
         let path = format!("/admin/api{path}");
         let mut span = self.tracer.span(format!("{method} {}", route(&path)), Kind::Client);
         span.set("http.request.method", method.to_string());
@@ -950,14 +956,14 @@ impl Stations {
     }
 
     /// A reply's whole body, its bytes counted as they come (status.rs).
-    async fn read_body(&self, reply: WireReply, waiting: Option<&Waiting>) -> Result<Vec<u8>> {
+    async fn read_body(&self, station: &StationAddr, reply: WireReply, waiting: Option<&Waiting>) -> Result<Vec<u8>> {
         let mut body = reply.body;
         let mut out = Vec::new();
         while let Some(chunk) = body.next().await {
             let chunk = chunk?;
             match waiting {
                 Some(waiting) => waiting.received(chunk.len()),
-                None => self.status.received(None, chunk.len()),
+                None => self.of(&station.to_string()).status.received(None, chunk.len()),
             }
             out.extend(chunk);
         }
@@ -971,7 +977,7 @@ impl Stations {
             let reply = reply.await?;
             answered(&mut span, &reply);
             let (status, taken) = (reply.status, head(&reply));
-            let bytes = self.read_body(reply, waiting.as_ref()).await?;
+            let bytes = self.read_body(station, reply, waiting.as_ref()).await?;
             span.set("http.response.body.size", bytes.len());
             Ok((status, taken, bytes))
         }
@@ -1019,7 +1025,7 @@ impl Stations {
             let data: Value = serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({}));
             return Err(http_error(status, &data));
         }
-        let status = Rc::downgrade(&self.status);
+        let status = Rc::downgrade(&self.of(&station.to_string()).status);
         let body = reply.body.inspect(move |chunk| {
             if let (Ok(chunk), Some(status)) = (chunk, status.upgrade()) {
                 status.received(None, chunk.len());
@@ -1119,16 +1125,16 @@ impl Stations {
 
     fn is_live(&self, topic: &Topic) -> bool {
         let Some(station) = topic.station() else { return false };
-        self.stations.borrow().get(station).is_some_and(|s| s.topics.contains(topic))
+        self.of(station).stations.borrow().get(station).is_some_and(|s| s.topics.contains(topic))
     }
 
     fn addr(&self, station: &str) -> Option<StationAddr> {
-        self.stations.borrow().get(station).map(|s| s.addr.clone())
+        self.of(station).stations.borrow().get(station).map(|s| s.addr.clone())
     }
 
     /// The station's live topics that `pick` chooses.
     fn live_topics(&self, station: &str, pick: impl Fn(&Topic) -> bool) -> Vec<Topic> {
-        self.stations.borrow().get(station).map(|s| s.topics.iter().filter(|t| pick(t)).cloned().collect()).unwrap_or_default()
+        self.of(station).stations.borrow().get(station).map(|s| s.topics.iter().filter(|t| pick(t)).cloned().collect()).unwrap_or_default()
     }
 
     /// Sets a topic from an event, if it is live.
@@ -1182,7 +1188,7 @@ impl Stations {
             }
             (Topic::JobLog { station, .. }, Ok(answer)) => {
                 let follows = answer.get("follows").and_then(Value::as_bool) == Some(true);
-                if let Some(s) = self.stations.borrow_mut().get_mut(station) {
+                if let Some(s) = self.of(station).stations.borrow_mut().get_mut(station) {
                     s.follows_logs = Some(follows);
                 }
                 self.sink.set(topic, Ok(job_log(&answer)));
@@ -1216,7 +1222,7 @@ impl Stations {
             self.keep_summaries(station);
         }
         if let Topic::ChatRows { station } = topic {
-            let first = self.stations.borrow_mut().get_mut(station).is_some_and(|s| !std::mem::replace(&mut s.warmed, true));
+            let first = self.of(station).stations.borrow_mut().get_mut(station).is_some_and(|s| !std::mem::replace(&mut s.warmed, true));
             if first && self.sink.get(topic).is_some() {
                 let (this, station) = (self.rc(), station.clone());
                 self.spawn_in(None, async move { this.warm(&station).await });
@@ -1287,13 +1293,13 @@ impl Stations {
     /// served from what was kept (the data center, the device's logs) and read again when the link is back. Whether it
     /// is up is this device's own finding, by reaching it (the events stream), not anyone else's say.
     fn reachable(&self, station: &str) -> bool {
-        self.stations.borrow().get(station).is_none_or(|s| s.link.get("state").and_then(Value::as_str) != Some("offline"))
+        self.of(station).stations.borrow().get(station).is_none_or(|s| s.link.get("state").and_then(Value::as_str) != Some("offline"))
     }
 
     fn set_link(&self, station: &str, value: Value) {
         // What it settled on (up, or down) is kept, so the next start shows it until the link finds out anew.
         if let Some(state @ ("online" | "offline")) = value.get("state").and_then(Value::as_str) {
-            let was = self.stations.borrow().get(station).and_then(|s| s.link.get("state").and_then(Value::as_str).map(str::to_string));
+            let was = self.of(station).stations.borrow().get(station).and_then(|s| s.link.get("state").and_then(Value::as_str).map(str::to_string));
             if was.as_deref() != Some(state) {
                 let (host, key, state) = (self.host.clone(), format!("{LINK_KEY}/{station}"), state.to_string());
                 self.spawn(async move {
@@ -1302,7 +1308,8 @@ impl Stations {
             }
         }
         let live = {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(station);
+            let mut stations = workspace.stations.borrow_mut();
             let Some(s) = stations.get_mut(station) else { return };
             s.link = value.clone();
             s.topics.contains(&Topic::Link { station: station.into() })
@@ -1399,7 +1406,8 @@ impl Stations {
             .collect();
         logs.sort();
         let (addr, wants, generation) = {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(station);
+            let mut stations = workspace.stations.borrow_mut();
             let Some(s) = stations.get_mut(station) else { return };
             let wants = EventsFor { host: s.wants_host(), live, logs };
             if !anew && s.events.as_ref().is_some_and(|(_, asks)| *asks == wants) {
@@ -1415,7 +1423,7 @@ impl Stations {
         };
         // The first try belongs to whoever asked for the stream (a chat opening); later ones are traces of their own.
         let task = self.spawn_in(None, self.rc().follow_events(station.to_string(), addr, wants.clone(), generation, self.tracer.current()));
-        if let Some(s) = self.stations.borrow_mut().get_mut(station) {
+        if let Some(s) = self.of(station).stations.borrow_mut().get_mut(station) {
             s.events = Some((task, wants));
         }
     }
@@ -1441,7 +1449,8 @@ impl Stations {
 
     /// Whether this stream is the station's newest; if so, the one it replaces goes now.
     fn took_over(&self, station: &str, generation: u64) -> bool {
-        let mut stations = self.stations.borrow_mut();
+        let workspace = self.of(station);
+        let mut stations = workspace.stations.borrow_mut();
         let Some(s) = stations.get_mut(station) else { return false };
         if s.generation != generation {
             return false;
@@ -1453,11 +1462,11 @@ impl Stations {
     }
 
     fn is_current(&self, station: &str, generation: u64) -> bool {
-        self.stations.borrow().get(station).is_some_and(|s| s.generation == generation)
+        self.of(station).stations.borrow().get(station).is_some_and(|s| s.generation == generation)
     }
 
     fn set_stale(&self, station: &str, stale: bool) -> bool {
-        self.stations.borrow_mut().get_mut(station).map(|s| std::mem::replace(&mut s.stale, stale)).unwrap_or(false)
+        self.of(station).stations.borrow_mut().get_mut(station).map(|s| std::mem::replace(&mut s.stale, stale)).unwrap_or(false)
     }
 
     /// Holds the station's `/events` open while any of its topics is live; its events keep the topics current.
@@ -1602,7 +1611,7 @@ impl Stations {
     /// Down, and tried again now (a person tapped 重试, the UI came back, the network changed): `reconnecting` until
     /// the try ends, so what shows the link shows it is being tried rather than still down.
     fn retrying(&self, station: &str) {
-        let link = self.stations.borrow().get(station).map(|s| s.link.clone());
+        let link = self.of(station).stations.borrow().get(station).map(|s| s.link.clone());
         let Some(link) = link else { return };
         if matches!(link.get("state").and_then(Value::as_str), Some("offline" | "error")) {
             self.set_link(station, json!({ "state": "reconnecting", "message": link.get("message").cloned().unwrap_or(Value::Null) }));
@@ -1645,7 +1654,7 @@ impl Stations {
                 if !self.on_live(station, key, &data) {
                     // Entries with no timeline to go in: that session from its latest page, on a stream opened anew.
                     let topic = Topic::Live { station: station.into(), key: key.into() };
-                    if let Some(s) = self.stations.borrow_mut().get_mut(station).and_then(|s| s.lives.get_mut(key)) {
+                    if let Some(s) = self.of(station).stations.borrow_mut().get_mut(station).and_then(|s| s.lives.get_mut(key)) {
                         *s = LiveView::default();
                     }
                     self.host.spawn(self.kept.forget(&Log::transcript(station, key)));
@@ -1783,7 +1792,7 @@ impl Stations {
         loop {
             let before = self.sink.get(&topic);
             self.reload(&topic).await;
-            let follows = self.stations.borrow().get(&station).and_then(|s| s.follows_logs);
+            let follows = self.of(&station).stations.borrow().get(&station).and_then(|s| s.follows_logs);
             if !self.is_live(&topic) || follows == Some(true) {
                 return;
             }
@@ -1836,7 +1845,8 @@ impl Stations {
         let fresh: Vec<Value> = entries.into_iter().filter(|e| n_of(e).is_some_and(|n| n > last)).collect();
         let Some(first) = fresh.first().and_then(n_of) else { return };
         {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(station);
+            let mut stations = workspace.stations.borrow_mut();
             let Some(state) = stations.get_mut(station) else { return };
             if let Some(waiting) = state.gaps.get_mut(&id) {
                 waiting.extend(fresh);
@@ -1885,7 +1895,7 @@ impl Stations {
             Some(addr) => self.call(&addr, "GET", &format!("/threads/{id}/entries?from={from}&to={to}"), Vec::new(), Vec::new()).await.ok(),
             None => None,
         };
-        let waiting = self.stations.borrow_mut().get_mut(station).and_then(|s| s.gaps.remove(&id)).unwrap_or_default();
+        let waiting = self.of(station).stations.borrow_mut().get_mut(station).and_then(|s| s.gaps.remove(&id)).unwrap_or_default();
         let mut entries = answer.and_then(|a| a.get("entries").and_then(Value::as_array).cloned()).unwrap_or_default();
         entries.extend(waiting);
         entries.sort_by_key(|e| n_of(e).unwrap_or(0));
@@ -2031,7 +2041,8 @@ impl Stations {
     /// Reads a thread's summary again once the burst of events is over, if a live topic lists threads.
     fn mark_dirty(&self, station: &str, thread: u64) {
         let schedule = {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(station);
+            let mut stations = workspace.stations.borrow_mut();
             let Some(s) = stations.get_mut(station) else { return };
             if !s.topics.iter().any(|t| matches!(t, Topic::Threads { .. } | Topic::Session { .. })) {
                 return;
@@ -2052,7 +2063,8 @@ impl Stations {
 
     async fn flush_threads(&self, station: &str) {
         let (dirty, addr) = {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(station);
+            let mut stations = workspace.stations.borrow_mut();
             let Some(s) = stations.get_mut(station) else { return };
             s.flushing = false;
             (std::mem::take(&mut s.dirty), s.addr.clone())
@@ -2233,7 +2245,8 @@ impl Stations {
             entries_came = !entries.is_empty();
         }
         let view = {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(station);
+            let mut stations = workspace.stations.borrow_mut();
             let Some(view) = stations.get_mut(station).and_then(|s| s.lives.get_mut(key)) else { return true };
             match kind {
                 // Ended steps stay until the entries that record them arrive.
@@ -2327,7 +2340,8 @@ impl Source for Stations {
             }
         };
         let fresh = {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(&station);
+            let mut stations = workspace.stations.borrow_mut();
             let state = stations.entry(station.clone()).or_insert_with(|| StationState::new(addr.clone()));
             state.topics.insert(topic.clone())
         };
@@ -2341,7 +2355,7 @@ impl Source for Stations {
                 let (this, station) = (self.rc(), station.clone());
                 self.spawn(async move {
                     let last = this.host.storage_get(&format!("{LINK_KEY}/{station}")).await.ok().flatten().and_then(|b| String::from_utf8(b).ok());
-                    let link = this.stations.borrow().get(&station).map(|s| s.link.clone());
+                    let link = this.of(&station).stations.borrow().get(&station).map(|s| s.link.clone());
                     let Some(mut link) = link else { return };
                     if link.get("state").and_then(Value::as_str) == Some("connecting") && let Some(last) = last {
                         link["last"] = json!(last);
@@ -2360,20 +2374,20 @@ impl Source for Stations {
             Topic::Host { .. } => {}
             Topic::Net { .. } => {
                 let task = self.spawn(self.rc().sample_net(topic.clone(), addr.clone()));
-                if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
+                if let Some(s) = self.of(&station).stations.borrow_mut().get_mut(&station) {
                     s.tasks.insert(topic.clone(), task);
                 }
                 return;
             }
             Topic::JobLog { .. } => {
                 let task = self.spawn(self.rc().follow_log(topic.clone()));
-                if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
+                if let Some(s) = self.of(&station).stations.borrow_mut().get_mut(&station) {
                     s.tasks.insert(topic.clone(), task);
                 }
             }
             // What was kept of its transcript first; then the station's stream asks for it from there (see open_events).
             Topic::Live { key, .. } => {
-                if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
+                if let Some(s) = self.of(&station).stations.borrow_mut().get_mut(&station) {
                     s.lives.insert(key.clone(), LiveView::default());
                 }
                 let (this, station, key, topic) = (self.rc(), station.clone(), key.clone(), topic.clone());
@@ -2403,7 +2417,8 @@ impl Source for Stations {
     fn stop(&self, topic: &Topic) {
         let Some(station) = topic.station() else { return };
         {
-            let mut stations = self.stations.borrow_mut();
+            let workspace = self.of(station);
+            let mut stations = workspace.stations.borrow_mut();
             let Some(state) = stations.get_mut(station) else { return };
             state.topics.remove(topic);
             if let Some(task) = state.tasks.remove(topic) {
@@ -2551,7 +2566,7 @@ mod tests {
         let host = FakeHost::new();
         let sink = Rc::new(FakeSink::default());
         let wire = FakeWire::new();
-        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
+        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Workspaces::new(host.clone()));
         (host, sink, wire, stations)
     }
 
@@ -2728,7 +2743,7 @@ mod tests {
             let host: Rc<dyn Host> = crate::wake::WakingHost::new(fake.clone(), wakes.clone());
             let sink = Rc::new(FakeSink::default());
             let wire = FakeWire::new();
-            let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
+            let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Workspaces::new(host.clone()));
             *wire.stream_status.borrow_mut() = None;
             stations.start(&link());
             fake.settle().await;
@@ -3074,7 +3089,7 @@ mod tests {
     fn reopened(host: &Rc<FakeHost>) -> (Rc<FakeSink>, Rc<FakeWire>, Rc<Stations>) {
         let sink = Rc::new(FakeSink::default());
         let wire = FakeWire::new();
-        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
+        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Workspaces::new(host.clone()));
         (sink, wire, stations)
     }
 
@@ -3533,7 +3548,7 @@ mod tests {
         run(async {
             let (host, sink) = (FakeHost::new(), Rc::new(FakeSink::default()));
             let (local, far) = (FakeWire::new(), FakeWire::new());
-            let stations = Stations::new(host.clone(), sink, RoutedWire::new(local.clone(), far.clone()), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
+            let stations = Stations::new(host.clone(), sink, RoutedWire::new(local.clone(), far.clone()), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Workspaces::new(host.clone()));
             stations.request(&StationAddr::Local, "GET", "/overview", None).await.unwrap();
             stations.request(&remote(), "GET", "/host", None).await.unwrap();
             assert_eq!(local.paths(), vec!["GET /admin/api/overview"]);

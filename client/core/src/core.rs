@@ -3,6 +3,9 @@
 //! mesh links (member credentials come from cloud as the account that reaches the
 //! workspace) → stations; the store routes topics to accounts (accounts,
 //! workspaces, workspace), stations (everything with a station) or the views.
+//! What the core has of each workspace is that workspace's (workspace.rs): the
+//! account that reaches it, its stations, its waits, its notices, what is kept
+//! in sync of it.
 //!
 //! The account topics live here: `accounts` is the list itself, `workspaces`
 //! every account's `/v1/me`, `workspace` one `GET /v1/workspaces/:id`. While
@@ -37,13 +40,14 @@ use crate::kept::Kept;
 use crate::mesh::{CredentialSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationCredentials, Stations, TopicSink};
-use crate::status::{Place, Status};
+use crate::status::{Place, Status, StatusOf, Take};
 use crate::store::{Source, Store};
 use crate::notices::Notices;
 use crate::sync::Sync;
 use crate::trace::{self, Kind, Span, Tracer};
 use crate::views::{EmailOf, Views};
 use crate::wake::{self, Wake, Wakes, WakingHost};
+use crate::workspace::{self as ws, Workspaces};
 
 /// The first wait before an events socket is opened again; it doubles up to [`SOCKET_RETRY_MAX_MS`], and starts
 /// over once a socket held for a minute.
@@ -85,8 +89,8 @@ struct Inner {
     mesh: RefCell<Option<Shared<LocalBoxFuture<'static, Result<Rc<Mesh>>>>>>,
     /// still.fail's relays, its own first, as the first `/v1/me` of this run or the kept one said (`relays`).
     relays: RefCell<Option<Vec<String>>>,
-    /// Which account reaches each workspace, from the latest `/v1/me` answers.
-    owners: RefCell<HashMap<String, String>>,
+    /// Every workspace, each with the account that reaches it (from the latest `/v1/me` answers) and what is its own.
+    workspaces: Rc<Workspaces>,
     /// Whether each account's latest `/v1/me` answered this run, or why it failed. What it said is the data
     /// center's `me` record (kept from run to run): whom the account reaches.
     mes: RefCell<HashMap<String, Result<()>>>,
@@ -100,7 +104,7 @@ struct Inner {
     live: RefCell<HashMap<Topic, u64>>,
     /// Per account, its still.fail cloud events socket while an account topic is live.
     sockets: RefCell<HashMap<String, Socket>>,
-    /// What is waited on, for the `status` topic.
+    /// What the device waits on, for the `status` topic: still.fail cloud, its sockets, the relay for no station.
     status: Rc<Status>,
     /// Where each UI's attention is, and what follows (attend.rs).
     attend: Rc<Attend>,
@@ -152,6 +156,7 @@ impl Core {
         let data = Data::new(host.clone());
         data.load().await;
         let attend = Attend::load(host.clone()).await;
+        let workspaces = Workspaces::new(host.clone());
         let inner = Rc::new_cyclic(|me: &Weak<Inner>| {
             let store = Store::new(host.clone());
             // What goes out is what the clients' types say (client/shapes).
@@ -169,32 +174,46 @@ impl Core {
                 })
             });
             let center = Rc::new(Center { store: store.clone(), data: data.clone() });
-            let wire = station::wire(host.clone(), mesh_source(me.clone()), credentials(me.clone()), status.clone());
+            let wire = station::wire(host.clone(), mesh_source(me.clone()), credentials(me.clone()), status_of(&workspaces));
+            // The device's waits show in every workspace's status (what of them does, status.rs `Take`); a
+            // workspace's in its own and the plain one.
             status.on_change({
                 let store = Rc::downgrade(&store);
                 Rc::new(move || {
                     if let Some(store) = store.upgrade() {
-                        store.invalidate(&Topic::Status);
+                        store.invalidate_all(|t| matches!(t, Topic::Status { .. }));
                     }
                 })
             });
             status.set_names(name_of(me.clone()));
+            workspaces.wire_status(
+                {
+                    let store = Rc::downgrade(&store);
+                    Rc::new(move |id: &str| {
+                        if let Some(store) = store.upgrade() {
+                            store.invalidate_all(|t| matches!(t, Topic::Status { workspace } if workspace.as_deref().is_none_or(|w| w == id)));
+                        }
+                    })
+                },
+                name_of(me.clone()),
+            );
             let kept = Kept::new(host.clone());
-            let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone(), status.clone());
+            let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone(), workspaces.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()), relay_name(me.clone()));
             let choose = Choose::new(host.clone(), store.clone(), data.clone(), views.clone(), check_profile(me.clone()));
-            let sync = Sync::new(store.clone(), host.clone());
-            let notices = Notices::new(store.clone(), host.clone(), email_of(me.clone()));
+            let sync = Sync::new(store.clone(), host.clone(), workspaces.clone());
+            let notices = Notices::new(store.clone(), host.clone(), workspaces.clone(), email_of(me.clone()));
             let jobs = crate::jobs::Polls::new(host.clone(), Rc::downgrade(&store), Rc::downgrade(&stations));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), notices: notices.clone(), attend: attend.clone(), jobs, tracer: tracer.clone(), opening: RefCell::default() }));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), workspaces: workspaces.clone(), notices: notices.clone(), attend: attend.clone(), jobs, tracer: tracer.clone(), opening: RefCell::default() }));
             sync.on_look({
                 let notices = Rc::downgrade(&notices);
                 let (attend, store) = (Rc::downgrade(&attend), Rc::downgrade(&store));
                 Rc::new(move |stations: &[String]| {
                     let (Some(notices), Some(attend), Some(store)) = (notices.upgrade(), attend.upgrade(), store.upgrade()) else { return };
                     let added = notices.look(stations);
-                    if attend.noticed(&added, store.subscribed(&Topic::Notify)) {
-                        store.invalidate(&Topic::Notify);
+                    let listened = store.live_topics().iter().any(|t| matches!(t, Topic::Notify { .. }) && store.subscribed(t));
+                    if attend.noticed(&added, listened) {
+                        store.invalidate_all(|t| matches!(t, Topic::Notify { .. }));
                     }
                 })
             });
@@ -215,7 +234,7 @@ impl Core {
                 stations,
                 mesh: RefCell::default(),
                 relays: RefCell::default(),
-                owners: RefCell::default(),
+                workspaces: workspaces.clone(),
                 mes: RefCell::default(),
                 me_loading: RefCell::default(),
                 shown_accounts: RefCell::new(accounts.list()),
@@ -339,7 +358,9 @@ struct Router {
     stations: Rc<Stations>,
     views: Rc<Views>,
     choose: Rc<Choose>,
+    /// The device's waits; each workspace has its own.
     status: Rc<Status>,
+    workspaces: Rc<Workspaces>,
     notices: Rc<Notices>,
     attend: Rc<Attend>,
     /// A job and its output, read again while shown (jobs.rs).
@@ -357,15 +378,7 @@ fn station_id(address: &str) -> &str {
 impl Source for Router {
     fn start(&self, topic: &Topic) {
         // Always kept (status.rs): only computed while shown.
-        if *topic == Topic::Status {
-            self.status.changed();
-            return;
-        }
-        if *topic == Topic::Notices {
-            self.notices.changed();
-            return;
-        }
-        if *topic == Topic::Notify {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. }) {
             if let Some(core) = self.core.upgrade() {
                 core.store.invalidate(topic);
             }
@@ -416,7 +429,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if *topic == Topic::Status || *topic == Topic::Notices || *topic == Topic::Notify || matches!(topic, Topic::Draft { .. } | Topic::Prefs) {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs) {
             return;
         }
         if Choose::handles(topic) {
@@ -443,14 +456,14 @@ impl Source for Router {
     }
 
     fn compute(&self, topic: &Topic) -> Option<Result<Value>> {
-        if *topic == Topic::Status {
-            return Some(Ok(self.status.value()));
+        if let Topic::Status { workspace } = topic {
+            return Some(Ok(self.status_value(workspace.as_deref())));
         }
-        if *topic == Topic::Notices {
-            return Some(Ok(self.notices.value()));
+        if let Topic::Notices { workspace } = topic {
+            return Some(Ok(self.notices.value(workspace.as_deref())));
         }
-        if *topic == Topic::Notify {
-            return Some(Ok(self.attend.value()));
+        if let Topic::Notify { workspace } = topic {
+            return Some(Ok(self.attend.value(workspace.as_deref())));
         }
         if Choose::handles(topic) {
             return self.choose.compute(topic);
@@ -479,6 +492,24 @@ impl Source for Router {
 }
 
 impl Router {
+    /// What is waited on: of a workspace, its own waits, its account's socket and the relay opened for no station
+    /// (status.rs `Take`); of none, every workspace's and all the device's.
+    fn status_value(&self, workspace: Option<&str>) -> Value {
+        match workspace {
+            Some(id) => {
+                let of = self.workspaces.of(id);
+                let owner: Vec<String> = of.owner().into_iter().collect();
+                crate::status::value(&[(&*of.status, Take::All), (&*self.status, Take::For(&owner))])
+            }
+            None => {
+                let all = self.workspaces.all();
+                let mut parts: Vec<(&Status, Take)> = all.iter().map(|w| (&*w.status, Take::All)).collect();
+                parts.push((&*self.status, Take::All));
+                crate::status::value(&parts)
+            }
+        }
+    }
+
     /// A chat as its UIs attend to it (attend.rs): its unread line; its older page loaded, or it read, when due.
     fn attended(&self, topic: &Topic, value: Result<Value>) -> Result<Value> {
         let Topic::Chat { station, session, .. } = topic else { return value };
@@ -530,11 +561,17 @@ fn name_of(core: Weak<Inner>) -> crate::status::NameOf {
     })
 }
 
+/// Each workspace's waits, for the station wire: a link's waits are its workspace's.
+fn status_of(workspaces: &Rc<Workspaces>) -> StatusOf {
+    let workspaces = workspaces.clone();
+    Rc::new(move |workspace: &str| workspaces.of(workspace).status.clone())
+}
+
 /// Who a workspace's views take as "me": the account that reaches it, as far as `/v1/me` has told.
 fn email_of(core: Weak<Inner>) -> EmailOf {
     Rc::new(move |workspace: &str| {
         let core = core.upgrade()?;
-        let sub = core.owners.borrow().get(workspace).cloned()?;
+        let sub = core.workspaces.owner(workspace)?;
         core.accounts.list().into_iter().find(|a| a.sub == sub).map(|a| a.email)
     })
 }
@@ -751,7 +788,7 @@ impl Inner {
                 result
             }
             Call::ChatSend { station, thread, text, attachments, quotes, client } => {
-                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client.or_else(|| crate::prefs::sent_from(&self.data)));
+                let message = outgoing(crate::refs::expand(&self.data, &station, &text), attachments, quotes, client.or_else(|| crate::prefs::sent_from(&self.data)));
                 let id = self.views.outbox_add(&station, thread, message.clone());
                 self.deliver(&station, thread, &id, message).await
             }
@@ -762,7 +799,7 @@ impl Inner {
                 Ok(json!({ "key": key }))
             }
             Call::ChatSendTo { station, session, text, attachments, quotes, client } => {
-                let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client.or_else(|| crate::prefs::sent_from(&self.data)));
+                let message = outgoing(crate::refs::expand(&self.data, &station, &text), attachments, quotes, client.or_else(|| crate::prefs::sent_from(&self.data)));
                 match self.views.pending_thread(&station, &session) {
                     Some(Some(thread)) => {
                         let id = self.views.outbox_add(&station, thread, message.clone());
@@ -817,25 +854,27 @@ impl Inner {
                 crate::attend::Call::Focus(focus) => {
                     self.attend.focus(at.0, focus);
                     self.attended();
+                    // Another workspace now: what a page is to show is the new one's.
+                    self.store.invalidate_all(|t| matches!(t, Topic::Notify { .. }));
                     Ok(Value::Null)
                 }
                 crate::attend::Call::Set { on, asked } => {
                     self.attend.set(on, asked).await;
-                    self.store.invalidate(&Topic::Notify);
+                    self.store.invalidate_all(|t| matches!(t, Topic::Notify { .. }));
                     // Off: this device's pushes go too.
                     if on == Some(false) {
                         Box::pin(self.execute(Call::PushUnregister, progress, at)).await?;
                     }
-                    Ok(self.attend.value())
+                    Ok(self.attend.value(None))
                 }
                 crate::attend::Call::Claim { id } => {
                     let show = self.attend.claim(&id);
                     if show {
-                        self.store.invalidate(&Topic::Notify);
+                        self.store.invalidate_all(|t| matches!(t, Topic::Notify { .. }));
                     }
                     Ok(json!({ "show": show }))
                 }
-                crate::attend::Call::Pushed => Ok(json!({ "show": self.attend.pushed() })),
+                crate::attend::Call::Pushed { workspace } => Ok(json!({ "show": self.attend.pushed(workspace.as_deref()) })),
             },
             Call::Choose { name, params } => {
                 let at = |field: &str| params.get(field).and_then(Value::as_str).unwrap_or("").to_string();
@@ -1105,7 +1144,7 @@ impl Inner {
     /// The signed-in account that reaches `workspace`, asking every account's `/v1/me` if it is not known yet.
     async fn owner(&self, workspace: &str) -> Result<String> {
         let known = |core: &Inner| {
-            let sub = core.owners.borrow().get(workspace).cloned()?;
+            let sub = core.workspaces.owner(workspace)?;
             core.accounts.list().iter().any(|a| a.sub == sub).then_some(sub)
         };
         if let Some(sub) = known(self) {
@@ -1204,8 +1243,7 @@ impl Inner {
                 self.data.forget_record("me", &sub);
             }
         }
-        let mut owners = self.owners.borrow_mut();
-        owners.clear();
+        let mut owners: HashMap<String, String> = HashMap::new();
         for account in &accounts {
             let Some(me) = self.data.record("me", &account.sub) else { continue };
             for workspace in me.get("workspaces").and_then(Value::as_array).into_iter().flatten() {
@@ -1214,6 +1252,9 @@ impl Inner {
                 }
             }
         }
+        self.workspaces.set_owners(&owners);
+        // A workspace's status shows its account's socket.
+        self.store.invalidate_all(|t| matches!(t, Topic::Status { workspace: Some(_) }));
     }
 
     /// What is kept on the device of stations no signed-in account reaches any more goes (all of it once the last
@@ -1223,10 +1264,10 @@ impl Inner {
         if self.accounts.list().iter().any(|a| self.data.record("me", &a.sub).is_none()) {
             return;
         }
-        let workspaces: HashSet<String> = self.owners.borrow().keys().cloned().collect();
+        let workspaces: HashSet<String> = self.workspaces.owned().into_iter().map(|(id, _)| id).collect();
         let reached = workspaces.clone();
-        self.data.retain(move |station| station == "local" || station.split_once('/').is_some_and(|(w, _)| reached.contains(w)), Some(&workspaces));
-        self.host.spawn(self.kept.retain(move |station| station == "local" || station.split_once('/').is_some_and(|(w, _)| workspaces.contains(w))));
+        self.data.retain(move |station| station == ws::LOCAL || station.split_once('/').is_some_and(|(w, _)| reached.contains(w)), Some(&workspaces));
+        self.host.spawn(self.kept.retain(move |station| station == ws::LOCAL || station.split_once('/').is_some_and(|(w, _)| workspaces.contains(w))));
     }
 
     /// A workspace's stations as it lists them now: what is kept of the others in it goes.
@@ -2479,6 +2520,69 @@ mod tests {
     }
 
     #[test]
+    fn two_workspaces_are_kept_apart() {
+        run(async {
+            let host = FakeHost::new();
+            host.speed_up(SPEEDUP);
+            // Two accounts, each reaching a workspace of one station.
+            let account = |sub: &str, access: &str| StoredAccount { sub: sub.into(), email: format!("{sub}@x.com"), name: sub.into(), picture: String::new(), access: access.into(), refresh: "r".into(), access_expires: now_s() + 3600.0 };
+            host.store(STORAGE_KEY, serde_json::to_vec(&vec![account("s1", "a1"), account("s2", "a2")]).unwrap());
+            let w1_stations = Rc::new(Cell::new(true));
+            let listed = w1_stations.clone();
+            host.on_fetch(move |req| {
+                let path = req.url.trim_start_matches("https://stillfail.test");
+                let of_s1 = req.headers.iter().any(|(k, v)| k == "authorization" && v == "Bearer a1");
+                match path {
+                    "/v1/me" => json_response(200, json!({"workspaces": [{"id": if of_s1 { "w1" } else { "w2" }, "name": "W"}], "invitations": [], "relay_url": "https://relay.test"})),
+                    "/v1/workspaces/w1" => json_response(200, json!({"id": "w1", "stations": if listed.get() { json!([{"id": "a", "name": "一号", "online": false}]) } else { json!([]) }})),
+                    "/v1/workspaces/w2" => json_response(200, json!({"id": "w2", "stations": [{"id": "b", "name": "二号", "online": false}]})),
+                    _ => json_response(404, json!({"error": "not_found"})),
+                }
+            });
+            let core = Core::new(host.clone()).await;
+            let inner = core.inner.clone();
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspace { workspace: "w1".into() } });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Workspace { workspace: "w2".into() } });
+            host.settle().await;
+            assert_eq!((inner.workspaces.owner("w1").as_deref(), inner.workspaces.owner("w2").as_deref()), (Some("s1"), Some("s2")));
+            for station in ["w1/a", "w2/b"] {
+                inner.data.put("overview", station, json!({ "profiles": [] }));
+            }
+            // A station slow in W1: W1's status and the plain one say so, W2's does not.
+            let _slow = inner.workspaces.of("w1").status.begin(Place::Station("w1/a".into()), "读取对话", false);
+            inner.workspaces.of("w1").status.skip(3_000.0);
+            for (id, workspace) in [(3, Some("w1")), (4, Some("w2")), (5, None)] {
+                core.receive(ui, ClientMessage::Subscribe { id, subscribe: Topic::Status { workspace: workspace.map(str::to_string) } });
+            }
+            host.settle().await;
+            apply(&host, &mut values);
+            assert!(values[&3]["text"].as_str().is_some_and(|t| t.starts_with("一号 读取对话 · 3 秒")), "{}", values[&3]);
+            assert_eq!(values[&4]["state"], Value::Null, "{}", values[&4]);
+            assert_eq!(values[&5]["items"].as_array().map(Vec::len), Some(1));
+            // What a new chat was last started on: each workspace's own.
+            call(&host, &core, ui, 6, "newChat.pick", json!({ "scope": "w1", "station": "a" })).await.unwrap();
+            core.receive(ui, ClientMessage::Subscribe { id: 7, subscribe: Topic::NewChat { scope: "w1".into() } });
+            core.receive(ui, ClientMessage::Subscribe { id: 8, subscribe: Topic::NewChat { scope: "w2".into() } });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!((values[&7]["kept"].as_str(), values[&8]["kept"].as_str()), (Some("a"), Some("")));
+            // W1 read again without its station: what was kept of it goes, W2's stays.
+            w1_stations.set(false);
+            inner.refresh(&Topic::Workspace { workspace: "w1".into() }).await;
+            host.settle().await;
+            assert!(inner.data.record("overview", "w1/a").is_none());
+            assert!(inner.data.record("overview", "w2/b").is_some());
+            // W1's account signs out: W1 is no one's, W2 is as it was.
+            inner.accounts.sign_out("s1").await.unwrap();
+            pass(10).await;
+            assert_eq!((inner.workspaces.owner("w1"), inner.workspaces.owner("w2").as_deref()), (None, Some("s2")));
+            assert!(inner.data.record("overview", "w2/b").is_some());
+        });
+    }
+
+    #[test]
     fn a_refused_socket_still_reads_the_topics_and_retries_with_backoff() {
         run(async {
             let (host, core) = cloud_core().await;
@@ -3148,7 +3252,8 @@ mod tests {
             core.receive(ui, ClientMessage::Call { id: 4, call: "chat.send".into(), params: json!({ "station": "local", "thread": 7, "text": "看 @[排查 登录]、@[云上的]、@[旧的] 和 @[不知道]" }) });
             host.settle().await;
             let sent = host.requests.borrow().iter().rev().find(|r| r.method == "POST" && r.url.ends_with("/admin/api/threads/7/messages")).map(|r| serde_json::from_slice::<Value>(r.body.as_deref().unwrap()).unwrap()).expect("sent");
-            assert_eq!(sent["text"], "看 [排查 登录](/admin/chats/ember%3Ac%201)、[云上的](https://stillfail.test/w/ws/s/st/chats/k2)、[旧的](https://x/chats/a) 和 @[不知道]");
+            // Another workspace's chat is none of this one's: its mark stays as written.
+            assert_eq!(sent["text"], "看 [排查 登录](/admin/chats/ember%3Ac%201)、@[云上的]、[旧的](https://x/chats/a) 和 @[不知道]");
         });
     }
 
@@ -3243,7 +3348,7 @@ mod tests {
             let (host, core) = local_core(0.0).await;
             let ui = core.connect();
             let mut values = HashMap::new();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Notify });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Notify { workspace: None } });
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!(values[&1], json!({ "on": true, "asked": false, "push": true, "show": [] }));
@@ -3258,7 +3363,7 @@ mod tests {
             drop(core);
             let core = Core::new(host.clone()).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Notify });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Notify { workspace: None } });
             core.receive(ui, ClientMessage::Call { id: 2, call: "notice.pushed".into(), params: json!({}) });
             core.receive(ui, ClientMessage::Call { id: 3, call: "notice.claim".into(), params: json!({ "id": "n1" }) });
             host.settle().await;
