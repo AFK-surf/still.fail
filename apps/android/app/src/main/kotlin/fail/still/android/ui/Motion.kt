@@ -17,6 +17,8 @@ object Ease {
     val Out = CubicBezierEasing(0.2f, 0.7f, 0.2f, 1f)
     /** --m-ease (.2, .8, .2, 1): sheets, pages rising, a new chat's first words arriving. */
     val Arrive = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
+    /** (.6, 0, .2, 1): words sent in an open chat on their way to their row, each way (web madeChat.ts FLIGHT). */
+    val Flight = CubicBezierEasing(0.6f, 0f, 0.2f, 1f)
     /** --m-standard (.4, 0, .2, 1): pages pushed, the jump-to-latest button, the two lists' switch. */
     val Standard = FastOutSlowInEasing
     /** CSS's keyword ease-out. */

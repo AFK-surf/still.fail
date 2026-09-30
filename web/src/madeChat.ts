@@ -9,6 +9,7 @@
 // element taken away ends a view transition at once, and the chat's rows are (the message sent is drawn anew once its
 // station has it, maybe while it moves).
 import { pageChanging, transitionTo } from "./ui.tsx";
+import { cubicBezier } from "motion";
 import { reducedMotion } from "./motion.ts";
 import * as msgCss from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
@@ -181,8 +182,18 @@ function showAt(el: HTMLElement): void {
 
 /** How long the words sent wait at the composer for their row before they are given back to it. */
 const WAIT_FOR_ROW = 2000;
-/** How long the words take to their row (as a new chat's first message's). */
-const ARRIVE = 480;
+/** How long the words take to their row. */
+const ARRIVE = 520;
+/** How each way of it goes: slow to leave, quick between, gently into place. */
+const FLIGHT = cubicBezier(0.6, 0, 0.2, 1);
+
+/**
+ * Where the words are on their way at `t` (0..1 of ARRIVE), each way apart: across first, and up a little after it, so
+ * they rise on a curve rather than slide.
+ */
+function flight(t: number): { up: number; across: number } {
+  return { across: FLIGHT(Math.min(1, t / 0.88)), up: FLIGHT(Math.max(0, (t - 0.12) / 0.88)) };
+}
 
 /** Words sent in an open chat, waiting for their row or on their way to it; `done` lets them go (at once). */
 let flying: { done(): void } | null = null;
@@ -271,12 +282,13 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     const to = textAt(words);
     const at = row.getBoundingClientRect();
     const box = layer.getBoundingClientRect();
-    const e = clock.effect?.getComputedTiming().progress ?? 1;
-    const s = from.size / to.size + (1 - from.size / to.size) * e;
+    const { up, across } = flight(clock.effect?.getComputedTiming().progress ?? 1);
+    const e = Math.min(1, across);
+    const s = from.size / to.size + (1 - from.size / to.size) * up;
     Object.assign(copy.style, {
       position: "absolute", left: `${at.left - box.left}px`, top: `${at.top - box.top}px`, width: `${at.width}px`, margin: "0",
       transformOrigin: `${to.x - at.left}px ${to.y - at.top}px`,
-      transform: `translate(${(from.x - to.x) * (1 - e)}px, ${(from.y - to.y) * (1 - e)}px) scale(${s})`,
+      transform: `translate(${(from.x - to.x) * (1 - across)}px, ${(from.y - to.y) * (1 - up)}px) scale(${s})`,
     });
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
     if (bubble && ground) bubble.style.backgroundColor = `color-mix(in srgb, ${ground} ${e * 100}%, transparent)`;
@@ -302,7 +314,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     layer.append(ghost);
     stand.remove();
     // The one timeline all of it follows (what it moves is read anew each frame): paused and stepped, so is it.
-    clock = ghost.animate([{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: EASE });
+    clock = ghost.animate([{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: "linear" });
     place();
     frame = requestAnimationFrame(tick);
     void clock.finished.then(done, () => {});

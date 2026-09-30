@@ -96,8 +96,12 @@ class Flight internal constructor(val text: String, val from: Offset, val fromSi
     /** How far above its place the list starts (a new chat's: the words' way up), once the row is laid out. */
     internal var rise: Float? = null
     internal val progress = Animatable(0f)
-    /** How far it has come (eased). */
-    fun e(): Float = Ease.Arrive.transform(progress.value)
+    /**
+     * How far it has come (eased): across, and up. In an open chat across first and up a little after, so the words
+     * rise on a curve (web madeChat.ts flight()); a new chat's first words both at once.
+     */
+    fun e(): Float = if (carried) Ease.Arrive.transform(progress.value) else Ease.Flight.transform((progress.value / 0.88f).coerceAtMost(1f))
+    fun up(): Float = if (carried) e() else Ease.Flight.transform(((progress.value - 0.12f) / 0.88f).coerceAtLeast(0f))
     /** Where the list is drawn now, off its place. */
     fun shift(): Float = if (carried) (rise ?: 0f) * (1f - e()) else 0f
 }
@@ -266,11 +270,12 @@ private fun FlightLayer(host: Host) {
         val overlay = host.overlay?.takeIf { it.isAttached } ?: return@drawWithContent
         val layer = host.layer ?: return@drawWithContent
         val e = flight.e()
+        val up = flight.up()
         // Where its letters are now (the list carrying them, a new chat's), and where they would be in place.
         val now = overlay.localPositionOf(bubble, Offset.Zero) + flight.inBubble
         val to = now - Offset(0f, flight.shift())
-        val at = flight.from + (to - flight.from) * e
-        val s = flight.fromSize / flight.toSize + (1f - flight.fromSize / flight.toSize) * e
+        val at = Offset(flight.from.x + (to.x - flight.from.x) * e, flight.from.y + (to.y - flight.from.y) * up)
+        val s = flight.fromSize / flight.toSize + (1f - flight.fromSize / flight.toSize) * up
         val inRow = now - overlay.localPositionOf(row, Offset.Zero)
         translate(at.x, at.y) {
             scale(s, s, pivot = Offset.Zero) {
@@ -299,10 +304,12 @@ private fun FlightLayer(host: Host) {
     LaunchedEffect(f, bound) {
         if (f == null || bound == null) return@LaunchedEffect
         // A new chat's: once its choices have faded (web: 90 ms after what leaves has begun to).
-        f.progress.animateTo(1f, tween(ARRIVE_MS, delayMillis = if (f.carried) 90 else 0, easing = LinearEasing))
+        f.progress.animateTo(1f, tween(if (f.carried) ARRIVE_MS else FLIGHT_MS, delayMillis = if (f.carried) 90 else 0, easing = LinearEasing))
         host.landed(f)
     }
 }
 
-/** How long the words take to their place (web madeChat.ts: 480 ms, Ease.Arrive). */
+/** How long a new chat's first words take to their place (web madeChat.ts: 480 ms, Ease.Arrive). */
 internal const val ARRIVE_MS = 480
+/** How long words sent in an open chat take to their row (web madeChat.ts ARRIVE). */
+internal const val FLIGHT_MS = 520
