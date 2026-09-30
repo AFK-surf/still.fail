@@ -308,6 +308,13 @@ impl Updates {
                 warn!(runtime = kind.id(), failed, "the runtime not updated");
             }
             let read = me.read_runtime(kind).await;
+            // Done without an error but not newer: installed somewhere the station's PATH does not find.
+            let failed = failed.or_else(|| match (&read.version, &read.latest) {
+                (Some(version), Some(latest)) if newer(version, latest) => {
+                    Some(format!("{} 跑完了，但 {} 还是 {version}（最新 {latest}）：可能装到了别处，PATH 上的不是它", how.program.display(), kind.command()))
+                }
+                _ => None,
+            });
             me.set(kind, |i| *i = Item { failed, ..read });
         });
         Ok(())
@@ -411,9 +418,11 @@ fn how_to_update(kind: Kind, found: &Found, env: &Env) -> Result<How, String> {
     let real = found.real.to_string_lossy();
     let brew = || find_command("brew", env).map(|b| b.on_path).ok_or_else(|| format!("{} 是用 Homebrew 装的，但 station 找不到 brew", kind.name()));
     let npm = || {
-        // The npm beside the command (the same Node's), else the one on PATH.
-        let beside = found.on_path.parent().map(|d| d.join("npm")).filter(|p| p.exists());
-        beside.or_else(|| find_command("npm", env).map(|n| n.on_path)).ok_or_else(|| format!("{} 是用 npm 装的，但 station 找不到 npm", kind.name()))
+        // The npm of the Node the command is installed in (…/lib/node_modules/… → …/bin/npm): the link on PATH can sit
+        // beside another Node's npm (~/.local/bin with links into two Nodes), which installs where PATH does not look.
+        let own = real.split_once("/lib/node_modules/").map(|(prefix, _)| Path::new(prefix).join("bin/npm")).filter(|p| p.exists());
+        let beside = || found.on_path.parent().map(|d| d.join("npm")).filter(|p| p.exists());
+        own.or_else(beside).or_else(|| find_command("npm", env).map(|n| n.on_path)).ok_or_else(|| format!("{} 是用 npm 装的，但 station 找不到 npm", kind.name()))
     };
     let package = format!("{}@latest", kind.package());
     match kind {
@@ -505,6 +514,12 @@ mod tests {
         assert_eq!(how_to_update(Kind::Codex, &found("/opt/homebrew/Cellar/codex/0.46.0/bin/codex"), &env).unwrap(), How::new(&brew, &["upgrade", "codex"]));
         let by_npm = how_to_update(Kind::Codex, &found("/Users/a/.nvm/versions/node/v24/lib/node_modules/@openai/codex/bin/codex.js"), &env).unwrap();
         assert_eq!(by_npm, How::new(&npm, &["install", "-g", "@openai/codex@latest"]));
+        // Linked from a directory beside another Node's npm: its own Node's npm, not that one.
+        let node = dir.path().join("node/v24.3.0");
+        std::fs::create_dir_all(node.join("bin")).unwrap();
+        std::fs::write(node.join("bin/npm"), "").unwrap();
+        let linked = Found { on_path: dir.path().join("codex"), real: node.join("lib/node_modules/@openai/codex/bin/codex.js") };
+        assert_eq!(how_to_update(Kind::Codex, &linked, &env).unwrap(), How::new(node.join("bin/npm"), &["install", "-g", "@openai/codex@latest"]));
         assert!(how_to_update(Kind::Codex, &found("/usr/local/bin/codex"), &env).unwrap_err().contains("自己更新"));
         assert_eq!(how_to_install(Kind::Codex, &env).unwrap(), How::new(&npm, &["install", "-g", "@openai/codex@latest"]));
         let bare: Env = [("PATH".to_string(), "/nowhere".to_string())].into();
