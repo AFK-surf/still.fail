@@ -210,11 +210,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     /** A background job (a web service's page finds its port by it). */
     suspend fun job(id: String): Job = decode(Job.serializer(), op("job.get") { put("id", id) })
-    /** A job's last `lines` lines of output, and when it last grew. */
-    suspend fun jobLog(id: String, lines: Int): JobLog {
-        val r = op("job.log") { put("id", id); put("lines", lines) }.jsonObject
-        return JobLog(id, r["text"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: "", r["outputAt"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong())
-    }
     /** Stops a job from the app (its agent is told who did). */
     suspend fun stopJob(id: String) { op("job.stop") { put("id", id) } }
     /** Clears a session's ended jobs (stopped, failed, ended by itself) off its pages, as the station keeps them. */
@@ -344,8 +339,9 @@ data class ArchivedLast(val text: String? = null)
 @kotlinx.serialization.Serializable
 data class ArchivedMark(val at: Long, val by: String, val alone: Boolean = false)
 
-/** A job's output as last read: whose, its last lines, when it last grew. */
-class JobLog(val job: String, val text: String, val outputAt: Long?)
+/** A job's output as its `jobLog` topic has it: its last lines, when it last grew. */
+@kotlinx.serialization.Serializable
+data class JobLog(val text: String = "", val outputAt: Long? = null)
 
 object Auth {
     // stillfail:// since the rename; the app still accepts ember:// coming back (MainActivity), and the cloud both.

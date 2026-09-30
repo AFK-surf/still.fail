@@ -459,7 +459,19 @@ impl AdminApi {
                         (key.to_string(), from, last)
                     })
                     .collect();
-                return Ok(self.events.open(viewer.clone(), asked.param("host") == Some("1"), live));
+                // `job=<id>&lines=<n>`, repeated: those jobs' last `n` lines of output, now and as they grow.
+                let lines = asked.params("lines");
+                let logs = asked
+                    .params("job")
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(i, id)| {
+                        let job = self.deps.store.get_job(id).ok().flatten()?;
+                        let lines = lines.get(i).and_then(|l| l.parse::<usize>().ok()).unwrap_or(200).clamp(1, 1000);
+                        Some((job.id, lines, std::path::PathBuf::from(job.log)))
+                    })
+                    .collect();
+                return Ok(self.events.open(viewer.clone(), asked.param("host") == Some("1"), live, logs));
             }
             ("GET", "/sessions") => return ok(Value::Array(self.sessions(asked.param("connect"), asked.param("archived") == Some("1"))?)),
             ("POST", "/sessions") => {
@@ -621,12 +633,13 @@ impl AdminApi {
                 let (start, entries) = tokio::task::spawn_blocking(move || live.before(&key, before, limit)).await?.unwrap_or((0, vec![]));
                 return ok(json!({ "start": start, "entries": entries }));
             }
-            // A background job's last output, for the pages (`lines`, default 200).
+            // A background job's last output, for the pages (`lines`, default 200). `follows`: `/events` follows it too
+            // (`job=<id>&lines=<n>`), so a client need not read it again to keep it current.
             (Some("jobs"), Some(id), Some("log"), "GET") => {
                 let job = self.deps.store.get_job(id)?.ok_or_else(|| http_error(404, format!("no job {id}")))?;
                 let lines = asked.param("lines").and_then(|l| l.parse::<usize>().ok()).unwrap_or(200).clamp(1, 1000);
                 let log = std::path::Path::new(&job.log);
-                return ok(json!({ "text": crate::jobs::tail(log, lines), "outputAt": crate::jobs::output_at(log) }));
+                return ok(json!({ "text": crate::jobs::tail(log, lines), "outputAt": crate::jobs::output_at(log), "follows": true }));
             }
             // A background job (a web service's own page finds its port by it).
             (Some("jobs"), Some(id), None, "GET") => return ok(crate::jobs::shown(&self.deps.store, &self.deps.store.get_job(id)?.ok_or_else(|| http_error(404, format!("no job {id}")))?)),

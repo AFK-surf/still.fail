@@ -61,6 +61,8 @@ pub enum Topic {
     /// The station's background jobs still up (running, or a service being started again), newest first, each with
     /// the chat it is in as the viewer's sidebar has it (`/jobs`).
     Jobs { station: String },
+    /// A job's last `lines` lines of output and when it last grew (`{ text, outputAt }`), current as it grows.
+    JobLog { station: String, job: String, lines: u64 },
     /// An account's signed-in devices (`/v1/auth/sessions`).
     LoginSessions { account: String },
     /// still.fail cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
@@ -89,7 +91,7 @@ impl Topic {
     pub fn station(&self) -> Option<&str> {
         match self {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
-            Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } => Some(station),
+            Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Draft { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } => None,
         }

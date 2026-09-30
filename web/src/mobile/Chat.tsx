@@ -470,8 +470,8 @@ function JobSheet({ station, sessionKey, jobId, view: first }: { station: string
   const service = !!job && isService(job);
   const tab = service ? 1 : picked;
   const running = job?.state === "running";
-  // Its last line: read again while it runs, once when it is over.
-  const last = useJobLog(station, job && tab === 0 ? job.id : null, 1, running ? 3000 : 600_000);
+  // Its last line, as it grows.
+  const last = useJobLog(station, job && tab === 0 ? job.id : null, 1);
   if (!job) return <><SheetGrab /><SheetHead title="任务" /><p className={homeCss.mNote}>这个任务已经不在了。</p></>;
   const lastAt = last?.outputAt ?? job.outputAt;
   return (
@@ -501,7 +501,7 @@ function JobSheet({ station, sessionKey, jobId, view: first }: { station: string
 
 /** A job's output, following its end while it is scrolled there (as the desktop's 任务 tab has it). */
 function JobOutput({ station, job }: { station: string; job: Job }) {
-  const log = useJobLog(station, job.id, 300, job.state === "running" ? 2000 : 60_000);
+  const log = useJobLog(station, job.id, 300);
   const box = useRef<HTMLPreElement>(null);
   const atEnd = useRef(true);
   useEffect(() => {

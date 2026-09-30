@@ -308,8 +308,6 @@ export function stationApi(t: StationCall) {
     createAppUrl: (name: string) => op<{ url: string }>("slack.createAppUrl", { name }),
     /** A background job (a web service's page finds its port by it). */
     job: (id: string) => op<Job>("job.get", { id }),
-    /** A job's last `lines` lines of output, and when it last grew. */
-    jobLog: (id: string, lines: number) => op<{ text: string; outputAt?: number }>("job.log", { id, lines }),
     /** Stops a job from the page (its agent is told who did); the core puts it in place as it is now. */
     stopJob: (id: string) => op<Job>("job.stop", { id }),
     /** Takes a session's jobs that are over off its record; the core reads the session again. */

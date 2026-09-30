@@ -95,6 +95,8 @@ object Topics {
     fun history(station: String, key: String) = buildJsonObject { put("topic", "history"); put("station", station); put("key", key) }
     /** A station's background jobs still up, newest first, each with the chat it is in (`/jobs`). */
     fun jobs(station: String) = buildJsonObject { put("topic", "jobs"); put("station", station) }
+    /** A job's last `lines` lines of output and when it last grew, current as it grows. */
+    fun jobLog(station: String, job: String, lines: Int) = buildJsonObject { put("topic", "jobLog"); put("station", station); put("job", job); put("lines", lines) }
     /** What the core has been waiting on for a while (a slow request, a link down), said under a page's "loading…". */
     val status = buildJsonObject { put("topic", "status") }
     /** What wants the viewer in the chats they take part in, the last 20 (docs/notifications.md; Notices.kt). */

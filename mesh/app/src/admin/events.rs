@@ -1,9 +1,10 @@
 //! GET /events: what changed, as it changes. Changes that come in a burst go out
 //! as one event per session, one overview and one round of sidebar rows; a thread's entries go out as they are
-//! written. `host` adds host samples; `live`, sessions as they run. Quotas are asked again, host info sampled and
+//! written. `host` adds host samples; `live`, sessions as they run; `job`, a job's output as it grows. Quotas are asked again, host info sampled and
 //! keepalives sent only while someone follows.
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
@@ -26,6 +27,8 @@ use crate::store::StoreChange;
 const QUOTA_EVERY: Duration = Duration::from_secs(5 * 60);
 const HOST_EVERY: Duration = Duration::from_secs(10);
 const PING_EVERY: Duration = Duration::from_secs(25);
+/// How often a followed job's log is looked at (its size and time) while the stream that asked for it is open.
+const LOG_EVERY: Duration = Duration::from_secs(1);
 
 struct Client {
     id: u64,
@@ -131,7 +134,7 @@ impl Events {
     }
 
     /// Opens a stream for `viewer`: the sidebar as it is now is remembered, so later changes are told against it.
-    pub fn open(self: &Arc<Self>, viewer: Viewer, host: bool, live: Vec<(String, usize, Option<usize>)>) -> Response<Body> {
+    pub fn open(self: &Arc<Self>, viewer: Viewer, host: bool, live: Vec<(String, usize, Option<usize>)>, logs: Vec<(String, usize, PathBuf)>) -> Response<Body> {
         let (out, rx) = mpsc::unbounded_channel::<Bytes>();
         let _ = out.send(Bytes::from_static(b"retry: 3000\n\n"));
         let id = self.next.fetch_add(1, Ordering::SeqCst);
@@ -153,6 +156,10 @@ impl Events {
                         }
                     }
                 });
+            }
+            // Those jobs' last lines: a `job-log` event now, and again each time the log grows, until the stream goes.
+            for (id, lines, path) in logs {
+                tokio::spawn(follow_log(out.clone(), id, lines, path));
             }
             if host {
                 let (me, out) = (self.clone(), out.clone());
@@ -465,6 +472,29 @@ impl Events {
                     client.rows = now.clone();
                 }
             }
+        }
+    }
+}
+
+/// A job's last `lines` of output on a stream (`job-log`: `id`, `lines`, `text`, `outputAt`): at once, then whenever
+/// its log's size or time changes, until the stream is gone.
+async fn follow_log(out: mpsc::UnboundedSender<Bytes>, id: String, lines: usize, path: PathBuf) {
+    let mut tick = tokio::time::interval(LOG_EVERY);
+    let mut seen = None;
+    loop {
+        tick.tick().await;
+        if out.is_closed() {
+            return;
+        }
+        let now = tokio::fs::metadata(&path).await.ok().map(|m| (m.len(), m.modified().ok()));
+        if seen.as_ref() == Some(&now) {
+            continue;
+        }
+        seen = Some(now);
+        let read = path.clone();
+        let Ok((text, at)) = tokio::task::spawn_blocking(move || (crate::jobs::tail(&read, lines), crate::jobs::output_at(&read))).await else { return };
+        if out.send(frame("job-log", &json!({ "id": id, "lines": lines, "text": text, "outputAt": at }))).is_err() {
+            return;
         }
     }
 }

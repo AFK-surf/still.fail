@@ -1678,3 +1678,42 @@ async fn a_widgets_state_is_kept_for_its_session_and_its_model_rides_along_with_
     assert!(t.claude.last().told().contains("还有"));
     assert_eq!(t.claude.last().told().matches("A widget you posted").count(), 1, "told once");
 }
+
+#[tokio::test]
+async fn a_jobs_log_asked_for_on_the_events_stream_comes_at_once_and_again_as_it_grows() {
+    let t = setup().await;
+    let log = t.data.join("j1.log");
+    std::fs::write(&log, "one\ntwo\nthree\n").unwrap();
+    let job = crate::store::JobRow {
+        id: "j1".into(),
+        session_key: "nobody".into(),
+        name: "build".into(),
+        command: "make".into(),
+        cwd: "/".into(),
+        port: None,
+        token: "t".into(),
+        state: "running".into(),
+        pgid: None,
+        exit_code: None,
+        started_at: now_ms(),
+        ended_at: None,
+        restarts: 0,
+        log: log.to_string_lossy().into_owned(),
+    };
+    t.store.insert_job(&job).unwrap();
+    // Read by itself, it says the stream follows it (a client that knows needs no reading again).
+    let read = t.get("/jobs/j1/log?lines=1").await;
+    assert_eq!((read["text"].clone(), read["follows"].clone()), (json!("three"), json!(true)));
+    // A job nobody has is left out; the one asked for comes with the lines asked for, then as it grows.
+    let events = t.follow("/events?job=gone&lines=5&job=j1&lines=2", local()).await;
+    let first = events.next("job-log", |_| true).await;
+    assert_eq!((first["id"].clone(), first["lines"].clone(), first["text"].clone()), (json!("j1"), json!(2), json!("two\nthree")));
+    assert!(first["outputAt"].as_i64().is_some());
+    let from = events.len();
+    std::io::Write::write_all(&mut std::fs::OpenOptions::new().append(true).open(&log).unwrap(), b"four\n").unwrap();
+    let grown = events.next_from("job-log", from, |_| true).await;
+    assert_eq!(grown["text"], "three\nfour");
+    // Nothing new: nothing sent.
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(events.all().iter().filter(|(e, _)| e == "job-log").count(), 2);
+}

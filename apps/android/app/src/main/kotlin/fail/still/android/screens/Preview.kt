@@ -145,14 +145,6 @@ fun PreviewScreen(station: String, service: String) {
     val session = read?.session
     val chat by rememberTopic<ChatView>(app.core, session?.let { Topics.chat(station, ChatOf.Session(it)) })
     val live = chat.value?.agents?.flatMap { it.jobs }?.firstOrNull { it.id == service }
-    // A station too old to say whose it is: read again now and then instead.
-    LaunchedEffect(station, service, read != null && session == null) {
-        if (read == null || session != null) return@LaunchedEffect
-        while (true) {
-            delay(4000)
-            try { read = app.api(station).job(service) } catch (_: CoreException) {}
-        }
-    }
     val job = live ?: read
     val port = job?.port
     val up = port != null && (job.state == "running" || job.state == "exited")

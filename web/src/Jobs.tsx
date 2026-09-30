@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Job } from "./core/shapes.ts";
 import { stationApi, useStationCall } from "./api.ts";
+import { useTopic } from "./core/react.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "./icons.tsx";
 import { Empty, Segmented, Tip } from "./ui.tsx";
 import { useToast } from "./toast.tsx";
@@ -141,20 +142,9 @@ export function JobRow({ job, now, onClick, end, selected, expanded }:
   );
 }
 
-/** A job's output (its last `lines`), read again every `every` ms while shown. */
-export function useJobLog(station: string, id: string | null, lines: number, every = 2000): { text: string; outputAt?: number } | null {
-  const call = useStationCall(station);
-  const [log, setLog] = useState<{ id: string; text: string; outputAt?: number } | null>(null);
-  useEffect(() => {
-    if (!id) return;
-    let live = true;
-    const read = () => void stationApi(call).jobLog(id, lines)
-      .then((r) => { if (live) setLog({ id, text: r.text, ...(r.outputAt ? { outputAt: r.outputAt } : {}) }); }, () => {});
-    read();
-    const timer = setInterval(read, every);
-    return () => { live = false; clearInterval(timer); };
-  }, [call, id, lines, every]);
-  return log && log.id === id ? log : null;
+/** A job's output (its last `lines`) as the core keeps it, current as it grows; `id` null reads nothing. */
+export function useJobLog(station: string, id: string | null, lines: number): { text: string; outputAt?: number | null } | null {
+  return useTopic<{ text: string; outputAt?: number | null }>(id ? { topic: "jobLog", station, job: id, lines } : null).value ?? null;
 }
 
 /** Stops a job from the page (its agent is told who did). */
@@ -181,7 +171,7 @@ export function useClearEnded(station: string): (jobs: Job[]) => void {
 
 /** The last line a job wrote, and when. */
 function LastOutput({ station, job, now }: { station: string; job: Job; now: number }) {
-  const log = useJobLog(station, job.id, 1, job.state === "running" ? 3000 : 600_000);
+  const log = useJobLog(station, job.id, 1);
   const at = log?.outputAt ?? job.outputAt;
   const line = log?.text.trim();
   if (!at && !line) return null;
@@ -325,7 +315,7 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
 
 /** A job's output, following its end while it is scrolled there. */
 function Output({ station, job }: { station: string; job: Job }) {
-  const log = useJobLog(station, job.id, 400, job.state === "running" ? 2000 : 60_000);
+  const log = useJobLog(station, job.id, 400);
   const box = useRef<HTMLPreElement>(null);
   const atEnd = useRef(true);
   useEffect(() => {

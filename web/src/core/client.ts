@@ -23,6 +23,8 @@ export type Topic =
   | { topic: "slackApp"; station: string; connect: string }
   // A station's background jobs still up, each with the chat it is in.
   | { topic: "jobs"; station: string }
+  // A job's last `lines` lines of output and when it last grew, current as it grows.
+  | { topic: "jobLog"; station: string; job: string; lines: number }
   | { topic: "loginSessions"; account: string }
   | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" }
   // Views: put together by the core from the topics above.

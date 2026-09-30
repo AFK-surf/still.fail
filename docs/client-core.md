@@ -113,6 +113,7 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
 | `jobs` | `station` | `/jobs`: its background jobs still up (running, or a service being started again), newest first, each with the `chat` it is in as the viewer's sidebar has it |
+| `jobLog` | `station`, `job` (id), `lines` | `{ text, outputAt }`: the job's last `lines` lines of output and when it last grew (below) |
 | `thread` | `station`, `thread` (id) | `{ first, last, entries, thread }`: the thread's entries `first ..= last` (`EntryView`s, never changed once read): its latest page, older pages in front as `chat.older` loads them; `thread` is its summary as kept on the device (null when read from the station) |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
@@ -186,6 +187,13 @@ that only notifications change it:
   a timeline message past what it has (or before it: the transcript written
   anew) starts the timeline there. `history.older` brings the pages before, from
   what is kept, else `GET /sessions/:key/timeline?before=&limit=`.
+- `jobLog` reads `GET /jobs/:id/log?lines=<n>` once and follows it on
+  `/events?job=<id>&lines=<n>`: the station sends `job-log` (`id`, `lines`,
+  `text`, `outputAt`) at once and whenever the log's size or time changes
+  (looked at each second while the stream is open). A station that does so
+  says `follows: true` in the log it answers; one that does not (older) passes
+  over `job=`, and the log is read again instead: after 2 s, doubling while it
+  stays the same up to a minute, back to 2 s when it changed.
 
 A topic nobody subscribes to is dropped after a minute.
 

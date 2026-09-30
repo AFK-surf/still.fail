@@ -1,5 +1,5 @@
 //! Stations' admin API, over a mesh link (or plain HTTP for `local`), and the
-//! station topics: overview, sessions, threads, chat rows, session, thread, live, host, link.
+//! station topics: overview, sessions, threads, chat rows, session, thread, live, host, link, job log.
 //!
 //! While any topic of a station is live, its `/admin/api/events` stream is held
 //! open and is all that keeps the topics current: each topic is read once when
@@ -12,8 +12,11 @@
 //! `live` topic is followed on the station's `/events`
 //! (`?live=<key>&from=<entries known>&last=<TRANSCRIPT_PAGE>`): the transcript's
 //! latest page (`first` says where it starts; `history.older` loads the pages
-//! before it) and then as it grows, the steps in flight and the phase. Nothing
-//! here runs on a timer but reconnects.
+//! before it) and then as it grows, the steps in flight and the phase. A
+//! `jobLog` topic is followed there too (`?job=<id>&lines=<n>`): the station
+//! sends the lines again as the log grows. Nothing here runs on a timer but
+//! reconnects, and reading a job's log again for a station that does not follow
+//! it (one that does says so, `follows`, in the log it answers).
 //!
 //! A thread's entries and a session's transcript never change once written, so
 //! they are kept on the device ([`Kept`]): a `thread` topic shows what is kept
@@ -56,6 +59,10 @@ pub const RETRY_MS: u64 = 3_000;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone though nothing
 /// said so, and is read again (from where it was).
 pub const STREAM_IDLE_MS: u64 = 40_000;
+/// A job's log on a station that does not follow it is read again after this, doubling while it stays the same, up
+/// to LOG_READ_MAX_MS.
+pub const LOG_READ_MS: u64 = 2_000;
+pub const LOG_READ_MAX_MS: u64 = 60_000;
 /// How long a preview's WebSocket may take to open: longer than the station gives the service (20 s), so this only
 /// ends one nothing answers (an older station takes the socket for a request and waits for its body).
 pub const SOCKET_OPEN_MS: u64 = 30_000;
@@ -594,6 +601,8 @@ struct StationState {
     link: Value,
     /// Its chats were brought onto the device once (see `warm`).
     warmed: bool,
+    /// Whether it follows jobs' logs on `/events` (as its answer to reading one says); None until one is read.
+    follows_logs: Option<bool>,
 }
 
 impl StationState {
@@ -612,6 +621,7 @@ impl StationState {
             flushing: false,
             link: json!({ "state": "connecting" }),
             warmed: false,
+            follows_logs: None,
         }
     }
 
@@ -620,13 +630,14 @@ impl StationState {
     }
 }
 
-/// What a station's `/events` stream is opened for, besides what every stream carries: host samples, and the
+/// What a station's `/events` stream is opened for, besides what every stream carries: host samples, the
 /// sessions followed as they run (their transcript, steps and phase come on the same stream, in the one order with
-/// the messages).
+/// the messages), and the jobs' logs followed (id, lines).
 #[derive(Clone, Debug, Default, PartialEq)]
 struct EventsFor {
     host: bool,
     live: Vec<String>,
+    logs: Vec<(String, u64)>,
 }
 
 /// The steps in flight and the phase of a `live` topic (`LiveMessage` semantics as useLiveSession applied them).
@@ -640,6 +651,11 @@ struct LiveView {
 /// follow the transcript entries it already has.
 fn live_start() -> Value {
     json!({ "loaded": false, "first": 0, "timeline": [], "usage": null, "steps": [], "phase": null })
+}
+
+/// A job's log as its topic has it: what the station answers or sends of it, without the rest.
+fn job_log(answer: &Value) -> Value {
+    json!({ "text": answer.get("text").cloned().unwrap_or(json!("")), "outputAt": answer.get("outputAt").cloned().unwrap_or(Value::Null) })
 }
 
 /// Where a `live` topic's timeline starts in the transcript.
@@ -1112,6 +1128,7 @@ impl Stations {
             Topic::SlackApp { connect, .. } => format!("/connects/{}/slack-app", encode(connect)),
             Topic::Jobs { .. } => "/jobs".to_string(),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
+            Topic::JobLog { job, lines, .. } => format!("/jobs/{}/log?lines={lines}", encode(job)),
             // A thread already read only asks for what came after it.
             Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("last")?.as_u64()) {
                 Some(last) => format!("/threads/{thread}/entries?after={last}"),
@@ -1131,6 +1148,13 @@ impl Stations {
                 } else {
                     self.first_page(station, *thread, entries, answer.get("last").and_then(Value::as_u64).unwrap_or(0));
                 }
+            }
+            (Topic::JobLog { station, .. }, Ok(answer)) => {
+                let follows = answer.get("follows").and_then(Value::as_bool) == Some(true);
+                if let Some(s) = self.stations.borrow_mut().get_mut(station) {
+                    s.follows_logs = Some(follows);
+                }
+                self.sink.set(topic, Ok(job_log(&answer)));
             }
             (_, Ok(value)) => self.sink.set(topic, Ok(value)),
             (_, Err(error)) => {
@@ -1282,10 +1306,19 @@ impl Stations {
             })
             .collect();
         live.sort();
+        let mut logs: Vec<(String, u64)> = self
+            .live_topics(station, |t| matches!(t, Topic::JobLog { .. }))
+            .into_iter()
+            .filter_map(|t| match t {
+                Topic::JobLog { job, lines, .. } => Some((job, lines)),
+                _ => None,
+            })
+            .collect();
+        logs.sort();
         let (addr, wants, generation) = {
             let mut stations = self.stations.borrow_mut();
             let Some(s) = stations.get_mut(station) else { return };
-            let wants = EventsFor { host: s.wants_host(), live };
+            let wants = EventsFor { host: s.wants_host(), live, logs };
             if !anew && s.events.as_ref().is_some_and(|(_, asks)| *asks == wants) {
                 return;
             }
@@ -1315,6 +1348,10 @@ impl Stations {
             let from = self.sink.get(&topic).and_then(|v| Some(first_of(&v) + v.get("timeline")?.as_array()?.len() as u64)).unwrap_or(0);
             // No more than the latest page: a station older than `last` sends all from `from`.
             query.push(format!("live={}&from={from}&last={TRANSCRIPT_PAGE}", encode(key)));
+        }
+        // A station older than `job` leaves it out (and its log is read again instead, see `follow_log`).
+        for (job, lines) in &wants.logs {
+            query.push(format!("job={}&lines={lines}", encode(job)));
         }
         if query.is_empty() { "/events".into() } else { format!("/events?{}", query.join("&")) }
     }
@@ -1551,6 +1588,11 @@ impl Stations {
                     }
                 });
             }
+            // A followed job's log, at first and as it grows.
+            "job-log" => {
+                let (Some(id), Some(lines)) = (data.get("id").and_then(Value::as_str), data.get("lines").and_then(Value::as_u64)) else { return };
+                self.set_live(Topic::JobLog { station: station.into(), job: id.into(), lines }, job_log(&data));
+            }
             "overview" => self.set_live(Topic::Overview { station: station.into() }, data),
             "host" => self.set_live(Topic::Host { station: station.into() }, data),
             _ => {}
@@ -1646,6 +1688,23 @@ impl Stations {
             }
             list.retain(|t| t.get("sessions").and_then(Value::as_array).is_some_and(|m| !m.is_empty()));
         });
+    }
+
+    /// A `jobLog` topic: read once; after that the station's events keep it current, or, for a station that does not
+    /// follow jobs' logs (nor has said yet), it is read again now and then: soon while it grows, less often while not.
+    async fn follow_log(self: Rc<Self>, topic: Topic) {
+        let Some(station) = topic.station().map(str::to_string) else { return };
+        let mut wait = LOG_READ_MS;
+        loop {
+            let before = self.sink.get(&topic);
+            self.reload(&topic).await;
+            let follows = self.stations.borrow().get(&station).and_then(|s| s.follows_logs);
+            if !self.is_live(&topic) || follows == Some(true) {
+                return;
+            }
+            wait = if self.sink.get(&topic) == before { (wait * 2).min(LOG_READ_MAX_MS) } else { LOG_READ_MS };
+            self.host.sleep(wait).await;
+        }
     }
 
     // ── threads ──
@@ -2212,6 +2271,12 @@ impl Source for Stations {
             }
             // Samples come on the events stream, which asks for them now.
             Topic::Host { .. } => {}
+            Topic::JobLog { .. } => {
+                let task = self.spawn(self.rc().follow_log(topic.clone()));
+                if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
+                    s.tasks.insert(topic.clone(), task);
+                }
+            }
             // What was kept of its transcript first; then the station's stream asks for it from there (see open_events).
             Topic::Live { key, .. } => {
                 if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
@@ -2671,6 +2736,64 @@ mod tests {
             host.settle().await;
             let ids: Vec<Value> = sink.get(&session("a")).unwrap()["jobs"].as_array().unwrap().iter().map(|j| j["id"].clone()).collect();
             assert_eq!(ids, [json!("j1")]);
+        });
+    }
+
+    #[test]
+    fn a_jobs_log_is_read_once_and_then_kept_current_by_the_stations_events() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            let log = |lines| Topic::JobLog { station: ST.into(), job: "j1".into(), lines };
+            wire.answer("GET /admin/api/jobs/j1/log?lines=400", 200, json!({"text": "a\nb", "outputAt": 5, "follows": true}));
+            wire.answer("GET /admin/api/jobs/j1/log?lines=1", 200, json!({"text": "b", "outputAt": 5, "follows": true}));
+            stations.start(&log(400));
+            host.settle().await;
+            assert_eq!(sink.get(&log(400)).unwrap(), json!({"text": "a\nb", "outputAt": 5}));
+            assert_eq!(wire.open(), vec!["/admin/api/events?job=j1&lines=400"]);
+            // As it grows the station says so, each topic its own lines; nothing is read again, and nothing waits to.
+            stations.start(&log(1));
+            host.settle().await;
+            assert_eq!(wire.open(), vec!["/admin/api/events?job=j1&lines=1&job=j1&lines=400"]);
+            host.sleeps.borrow_mut().clear();
+            wire.event("job-log", json!({"id": "j1", "lines": 400, "text": "a\nb\nc", "outputAt": 9}));
+            wire.event("job-log", json!({"id": "j1", "lines": 1, "text": "c", "outputAt": 9}));
+            host.settle().await;
+            assert_eq!(sink.get(&log(400)).unwrap(), json!({"text": "a\nb\nc", "outputAt": 9}));
+            assert_eq!(sink.get(&log(1)).unwrap(), json!({"text": "c", "outputAt": 9}));
+            wait(LOG_READ_MS + 200).await;
+            assert_eq!((wire.count("GET", "/admin/api/jobs/j1/log?lines=400"), wire.count("GET", "/admin/api/jobs/j1/log?lines=1")), (1, 1));
+            assert!(!host.sleeps.borrow().contains(&LOG_READ_MS), "{:?}", host.sleeps.borrow());
+            // Given up: the stream no longer asks for it.
+            stations.stop(&log(400));
+            host.settle().await;
+            assert_eq!(wire.open(), vec!["/admin/api/events?job=j1&lines=1"]);
+        });
+    }
+
+    #[test]
+    fn a_jobs_log_on_a_station_that_does_not_follow_it_is_read_again_less_often_while_it_stays_the_same() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            host.speed_up(100);
+            let topic = Topic::JobLog { station: ST.into(), job: "j1".into(), lines: 1 };
+            let path = "/admin/api/jobs/j1/log?lines=1";
+            // An older station: no `follows`, and `job=` on its stream passed over.
+            wire.answer(&format!("GET {path}"), 200, json!({"text": "a", "outputAt": 5}));
+            stations.start(&topic);
+            host.settle().await;
+            assert_eq!(sink.get(&topic).unwrap(), json!({"text": "a", "outputAt": 5}));
+            wire.answer(&format!("GET {path}"), 200, json!({"text": "b", "outputAt": 6}));
+            wait(80).await;
+            assert_eq!(sink.get(&topic).unwrap(), json!({"text": "b", "outputAt": 6}));
+            wait(200).await;
+            let waits: Vec<u64> = host.sleeps.borrow().iter().copied().filter(|ms| [LOG_READ_MS, LOG_READ_MS * 2, LOG_READ_MS * 4].contains(ms)).collect();
+            assert!(waits.contains(&(LOG_READ_MS * 2)) && waits.contains(&(LOG_READ_MS * 4)), "{waits:?}");
+            // Given up: no more reading.
+            stations.stop(&topic);
+            host.settle().await;
+            let reads = wire.count("GET", path);
+            wait(200).await;
+            assert_eq!(wire.count("GET", path), reads);
         });
     }
 

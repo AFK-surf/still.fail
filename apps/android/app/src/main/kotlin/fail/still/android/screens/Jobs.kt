@@ -33,7 +33,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -197,18 +196,12 @@ fun JobDot(tone: Tone, modifier: Modifier = Modifier) {
     Box(modifier.size(8.dp).alpha(breath).clip(CircleShape).background(toneTint(tone) ?: C.subtle))
 }
 
-/** A job's output as it grows: its last `lines`, read again every `every` ms while shown; `id` null reads nothing. */
+/** A job's output as it grows: its last `lines`, as the core keeps it; `id` null reads nothing. */
 @Composable
-fun rememberJobLog(station: String, id: String?, lines: Int, every: Long): JobLog? {
+fun rememberJobLog(station: String, id: String?, lines: Int): JobLog? {
     val app = LocalApp.current
-    val log by produceState<JobLog?>(null, station, id, lines, every) {
-        if (id == null) return@produceState
-        while (true) {
-            try { value = app.api(station).jobLog(id, lines) } catch (_: CoreException) {}
-            delay(every)
-        }
-    }
-    return log?.takeIf { it.job == id }
+    val log by rememberTopic<JobLog>(app.core, id?.let { Topics.jobLog(station, it, lines) })
+    return log.value
 }
 
 /** Stops a job from the app; a failure is said in a toast. */
@@ -322,10 +315,9 @@ fun openJob(app: AppState, station: String, of: ChatOf, id: String) {
         val now = rememberNow()
         var picked by remember { mutableIntStateOf(0) }
         val tab = if (job?.isService == true) 1 else picked
-        val running = job?.state == "running"
-        val log = rememberJobLog(station, if (job != null && tab == 1) id else null, 300, if (running) 2000 else 60_000)
-        // The last line it wrote: again and again while it runs, once when it is over.
-        val last = rememberJobLog(station, if (job != null && tab == 0) id else null, 1, if (running) 3000 else 600_000)
+        val log = rememberJobLog(station, if (job != null && tab == 1) id else null, 300)
+        // The last line it wrote, as it grows.
+        val last = rememberJobLog(station, if (job != null && tab == 0) id else null, 1)
         SheetGrab()
         if (job == null) {
             SheetHead("任务")
