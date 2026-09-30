@@ -5,12 +5,11 @@
 import { useEffect, useState } from "react";
 import { stationApi, useStationCall, type SkillFile, type StationMemory as Memory } from "./api.ts";
 import { Prose } from "./Prose.tsx";
-import { About, MobileBack, Section } from "./ui.tsx";
+import { Section } from "./ui.tsx";
 import { ChevronDown, ChevronRight } from "./icons.tsx";
 import * as css from "./Memory.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
 
 export type { SkillFile, StationMemory as Memory } from "./api.ts";
 
@@ -73,16 +72,5 @@ export function MemoryView({ station }: { station: string }) {
         </Section>
       )}
     </>
-  );
-}
-
-/** This station's memory, among its settings. */
-export function MemoryPage() {
-  return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to="/settings" label="设置" />
-      <header className={pagesCss.pageHead}><div><h1>记忆<About>这台 station 上所有会话共用的记忆，Claude Code 和 Codex 都读，由 agent 自己维护。</About></h1></div></header>
-      <MemoryView station="local" />
-    </div>
   );
 }

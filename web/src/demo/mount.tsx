@@ -1,4 +1,4 @@
-// The official site's demo: the real App, in a part of the page (site/Site.tsx's demo box), on a made-up core — no
+// The official site's demo: the real app (a workspace's pages), in a part of the page (site/Site.tsx's demo box), on a made-up core — no
 // worker, no station. story.ts plays a few chats in it; the visitor can click around and send messages too.
 import "./demo.css.ts";
 import { startScrollbars } from "../scrollbars.ts";
@@ -6,12 +6,11 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import "@fontsource-variable/inter";
-import { App } from "../App.tsx";
 import { setPageRoot } from "../brand.tsx";
 import { Tooltip } from "radix-ui";
 import { ToastProvider } from "../toast.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
-import type { Entry } from "../mobile/app.tsx";
+import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
@@ -196,27 +195,29 @@ const story = makeStory({
     navigate?.(key);
   },
 });
-/** Lets the story open chats: the desktop's address of a chat, or the phone's. */
-function Director({ phone }: { phone: boolean }) {
+/** Lets the story open chats: a chat's address, the same in the desktop's app and the phone's. */
+function Director() {
   const go = useNavigate();
   const here = useLocation().pathname;
   useEffect(() => {
     navigate = (key) => {
-      const to = phone ? `/w/${ENTRY.id}/s/local/chats/${encodeURIComponent(key)}` : `/chats/${encodeURIComponent(key)}`;
+      const to = chatPath(key);
       // Already there (the chat either app opens on): not again, or going back would land on it once more.
       if (decodeURIComponent(to) !== decodeURIComponent(here)) void go(to);
     };
     return () => {
       navigate = null;
     };
-  }, [go, phone, here]);
+  }, [go, here]);
   return null;
 }
 
 // ---- Wide and narrow ----
 
-/** The made-up workspace, as the phone's pages take it. */
-const ENTRY: Entry = { id: station.WORKSPACE, name: "Acme", account: station.ACCOUNT };
+/** The made-up workspace, as the workspace's pages take it. */
+const ENTRY: WorkspaceEntry = { id: station.WORKSPACE, name: "Acme", account: station.ACCOUNT };
+/** A chat's page, by its key. */
+const chatPath = (key: string) => `/w/${ENTRY.id}/s/local/chats/${encodeURIComponent(key)}`;
 /** The demo's own width (not the window's) says which app it is: the phone's below this, as mobile/ is for phones. */
 const PHONE_BELOW = 700;
 
@@ -236,27 +237,19 @@ function Demo() {
 
 /** The demo as the phone's app or the desktop's, opened on the chat in view (so switching between them keeps it). */
 export function DemoApp({ phone }: { phone: boolean }) {
-  const key = encodeURIComponent(navigateTarget());
-  return phone
-    ? (
-      // As still.fail cloud's app has the phone's pages (cloud/CloudApp.tsx).
-      <ToastProvider>
-        <Tooltip.Provider delayDuration={400}>
-          <MemoryRouter key="phone" initialEntries={[`/w/${ENTRY.id}`, `/w/${ENTRY.id}/s/local/chats/${key}`]} initialIndex={1}>
-            <Director phone />
-            <Routes><Route path="/w/:ws/*" element={<MobileWorkspace entry={ENTRY} />} /></Routes>
-            <RealStillFail />
-          </MemoryRouter>
-        </Tooltip.Provider>
-      </ToastProvider>
-    )
-    : (
-      <MemoryRouter key="wide" initialEntries={[`/chats/${key}`]}>
-        <Director phone={false} />
-        <App />
-        <RealStillFail />
-      </MemoryRouter>
-    );
+  const key = navigateTarget();
+  // As still.fail cloud's app has them (cloud/CloudApp.tsx): the phone's pages, or the desktop's.
+  return (
+    <ToastProvider>
+      <Tooltip.Provider delayDuration={400}>
+        <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={[`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={1}>
+          <Director />
+          <Routes><Route path="/w/:ws/*" element={phone ? <MobileWorkspace entry={ENTRY} /> : <WorkspaceShell entry={ENTRY} />} /></Routes>
+          <RealStillFail />
+        </MemoryRouter>
+      </Tooltip.Provider>
+    </ToastProvider>
+  );
 }
 
 /** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */

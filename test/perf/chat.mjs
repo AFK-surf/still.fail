@@ -1,3 +1,9 @@
+// NOT WORKING AS IT STANDS: it was written for a station's own page (http://127.0.0.1:4760/admin/ and its /admin/api),
+// and a station serves no page any more (its loopback port only sends old /admin links to still.fail cloud). To use it
+// again it has to be pointed (--url) at the cloud web app's pages of a workspace on a dev cloud (/w/<ws>/s/<station>/…,
+// signed in, cloud/test/dev.ts), pick its chats from the page or the core rather than /admin/api/chats, and --dist has
+// to serve dist/cloud-web at / against that dev cloud instead of <dir>/admin under /admin/. Until then it stops at once.
+//
 // How a chat page performs on a station's real chats: opening one (a fresh page load, a switch to it from the new
 // chat page through the sidebar, the way people do, and a hop to it from another chat once the sidebar's chats are on
 // the device: how many frames show no messages between the two), and scrolling it from the latest message to the first and
@@ -50,6 +56,9 @@ if (opt.compare) {
 
 const station = new URL(opt.url);
 const runs = Number(opt.runs);
+// Comparing results kept from before (above) still works; measuring does not (the note at the top).
+console.error("test/perf/chat.mjs measures a station's own page, which stations no longer serve: see the note at its top");
+process.exit(1);
 
 // A build's pages, served here, with everything else (its API, the core's socket) passed on to the station.
 let server;

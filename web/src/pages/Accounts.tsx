@@ -1,16 +1,15 @@
-import { Illustration } from "../brand.tsx";
 import type { MachineLogin } from "../core/shapes.ts";
 import { profilesPage, useStation, useLink } from "../station.tsx";
-import { ChevronRight, Edit, External, Key, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
+import { Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
-import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
+import { KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
-import { MachineLoginCard, ProfileCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, SwitchRow, Time, Tip } from "../ui.tsx";
+import { MachineLoginCard } from "../ProfileCard.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, SwitchRow, Time, Tip } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
@@ -20,49 +19,6 @@ import * as waitingCss from "../styles/waiting.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
-
-
-export function AccountsPage() {
-  const link = useLink();
-  const overview = useOverview(useStation().address);
-  const [adding, setAdding] = useState(false);
-  const [initial, setInitial] = useState<Choice>("claude-sub");
-  const profiles = overview.value?.profiles ?? [];
-  return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={link("/chats")} label="对话" />
-      <header className={pagesCss.pageHead}>
-        <div>
-          <h1>Profile<About>Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。一个账号能跑哪些运行时，still.fail 会自己配好。</About></h1>
-        </div>
-        {(profiles.length > 0 || !overview.value) && <Button icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>}
-      </header>
-      {overview.value && profiles.length === 0 && (
-        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={PROFILE_LEAD}>
-          <Button variant="primary" icon={Plus} onClick={() => { setInitial("claude-sub"); setAdding(true); }}>添加 Profile</Button>
-          <MachineLoginOffers logins={overview.value.machineLogins} onAdd={(c) => { setInitial(c); setAdding(true); }} />
-        </FirstOne>
-      )}
-      {profiles.length > 0 && (
-        <section className={pagesCss.section} aria-label="Profile">
-        <ul className={pagesCss.list}>
-          {profiles.map((p) => {
-            return (
-              <li key={p.id}>
-                <ProfileCard profile={p} to={link(`/settings/accounts/${p.id}`)}
-                  uses={p.usedBy.length ? `被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : "没有连接使用"} />
-              </li>
-            );
-          })}
-        </ul>
-        {/* The machine's own logins not used yet: each one offered as the first ones were. */}
-        <MachineLoginOffers logins={overview.value?.machineLogins} onAdd={(c) => { setInitial(c); setAdding(true); }} />
-        </section>
-      )}
-      <AddAccountDialog key={initial} initial={initial} open={adding} onClose={() => setAdding(false)} />
-    </div>
-  );
-}
 
 /** What can be added, by whose account it is; `runtime` only where the account is for one (a subscription, variables). */
 export const CHOICES = {

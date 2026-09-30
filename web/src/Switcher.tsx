@@ -11,7 +11,7 @@ import { stationBase } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
 import * as css from "./Switcher.css.ts";
 
-/** Mounted once under a scope's pages (this station's, or a workspace's): its new chat and settings are at these paths. */
+/** Mounted once under a scope's pages (a workspace's): its new chat and settings are at these paths. */
 export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; newChat: string; settings: string }) {
   const navigate = useNavigate();
   const [switching, setSwitching] = useState(false);
@@ -53,7 +53,6 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
   const found = view?.items ?? [];
   const [at, setAt] = useState(0);
   const list = useRef<HTMLDivElement>(null);
-  const several = scope !== "local";
   useEffect(() => setAt(0), [query]);
   useEffect(() => {
     list.current?.querySelector(`[data-at="${at}"]`)?.scrollIntoView({ block: "nearest" });
@@ -84,7 +83,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
             </span>
             <span className={css.title} data-unread={item.unread || undefined}>{item.title}</span>
             <span className={css.meta}>
-              {several && <span>{item.stationName}</span>}
+              <span>{item.stationName}</span>
               <Time stamp={item.time?.lastActiveAt} fixed />
             </span>
           </div>

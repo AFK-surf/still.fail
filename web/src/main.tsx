@@ -4,29 +4,14 @@ import { followAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router";
 import "@fontsource-variable/inter";
-import { App } from "./App.tsx";
-import { PageViews, startTelemetry } from "./telemetry.ts";
+import { CloudApp } from "./cloud/CloudApp.tsx";
+import { startTelemetry } from "./telemetry.ts";
 
 followAppearance();
 startScrollbars();
-const root = createRoot(document.getElementById("app")!);
 
-// Built twice: served by a station at /admin (talks to it directly), and as
-// ember cloud's web app at / (sign-in, workspaces; stations over iroh). Either way the
-// data comes from the client core (core/)..
-startTelemetry(import.meta.env.MODE === "cloud" ? "cloud" : "station");
-if (import.meta.env.MODE === "cloud") {
-  const { CloudApp } = await import("./cloud/CloudApp.tsx");
-  root.render(<StrictMode><CloudApp /></StrictMode>);
-} else {
-  root.render(
-    <StrictMode>
-      <BrowserRouter basename="/admin">
-        <PageViews />
-        <App />
-      </BrowserRouter>
-    </StrictMode>,
-  );
-}
+// ember cloud's web app (sign-in, workspaces; stations over iroh). The data comes from the client core (core/); a
+// station serves no page of its own.
+startTelemetry("cloud");
+createRoot(document.getElementById("app")!).render(<StrictMode><CloudApp /></StrictMode>);

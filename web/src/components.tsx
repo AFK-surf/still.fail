@@ -1,8 +1,8 @@
-// Small pieces the station client and ember cloud share.
+// Small pieces the pages share.
 import { useAppearance } from "./theme.ts";
 import { useRowPicture } from "./rowLead.ts";
 import { useRef, type ComponentProps, type ReactNode } from "react";
-import type { Host, Level, PersonShown, Quota } from "./api.ts";
+import type { Level, PersonShown, Quota } from "./api.ts";
 import type { Meter } from "./core/shapes.ts";
 import { useOnlyMine } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
@@ -170,53 +170,6 @@ export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: 
         : <span key={p.id} className={`${cloudCss.person} ${cloudCss.personLetter}`} aria-hidden="true">{([...p.shown.display][0] ?? "?").toUpperCase()}</span>)}
       {people.length > max && <span className={css.peopleMore}>+{people.length - max}</span>}
     </span></Tip>
-  );
-}
-
-function Meter({ meter }: { meter: Host["meters"][number] }) {
-  return (
-    <div className={css.deviceRow}>
-      <span className={css.quotaLabel}>{meter.label}</span>
-      <span className={css.quotaTrack}><span className={css.quotaFill} data-level={meter.level} style={{ width: `${meter.percent}%` }} /></span>
-      <span className={css.deviceValue}>{meter.value}</span>
-      <span className={css.deviceNote}>{meter.note ?? ""}</span>
-    </div>
-  );
-}
-
-const METER_LABELS = ["CPU", "内存", "磁盘"];
-
-/**
- * The machine a station runs on: how loaded (the core's words), then what it is and what ember takes, quieter
- * (`processes`: its agents', in a line; `extra`: more to say of it at the end of that line). The meters share one grid,
- * so their bars are as long as each other and their values in one column.
- */
-export function DeviceCard({ host, processes, extra }: { host: Host | null | undefined; processes: string | undefined; extra?: ReactNode }) {
-  if (!host) {
-    return (
-      <div className={css.device} aria-busy="true" aria-label="正在读取设备信息">
-        <div className={css.deviceMeters}>
-          {METER_LABELS.map((l) => (
-            <div key={l} className={css.deviceRow}>
-              <span className={css.quotaLabel}>{l}</span><span className={`${css.quotaTrack} ${css.deviceWaiting}`} />
-              <span className={css.deviceValue} /><span />
-            </div>
-          ))}
-        </div>
-        <div className={css.deviceFacts}><span>正在读取设备信息…</span></div>
-      </div>
-    );
-  }
-  return (
-    <div className={css.device}>
-      <div className={css.deviceMeters}>{host.meters.map((m) => <Meter key={m.label} meter={m} />)}</div>
-      <div className={css.deviceFacts}>
-        {host.facts.map((f) => <span key={f}>{f}</span>)}
-        <span>{host.emberText}</span>
-        {processes && <span>{processes}</span>}
-        {extra}
-      </div>
-    </div>
   );
 }
 

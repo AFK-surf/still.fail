@@ -16,9 +16,4 @@ export const ACCESS: Record<AccessKind, { label: string; description: string }> 
   "env": { label: "自定义环境变量", description: "手动填写运行时需要的环境变量。" },
 };
 
-export const ACCESS_KINDS: Record<RuntimeKind, AccessKind[]> = {
-  claude: ["subscription", "opencode-go", "anthropic-api", "env"],
-  codex: ["subscription", "opencode-go", "env"],
-};
-
 export const KEYED = new Set<AccessKind>(["opencode-go", "anthropic-api"]);

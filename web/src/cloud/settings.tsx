@@ -6,7 +6,7 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Check, Info, Key, LogOut, Plug, Plus, Server, Settings, Sliders, Command, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
@@ -29,6 +29,7 @@ import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type Lo
 import { Avatar } from "./gate.tsx";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
+import type { CarriedStation } from "../core/client.ts";
 import * as nav from "../Sidebar.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
@@ -308,7 +309,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id), () => setRemoving(null));
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   return (
-    <Section title={`${stations.length} 台`} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button>}>
+    <Section title={`${stations.length} 台`} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button></>}>
       <StationList stations={stations} manager={manager} menu={(s) => manager && <Menu items={[
         { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
         { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
@@ -351,6 +352,35 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
   );
 }
 
+/**
+ * 「添加这台 Mac」, in the desktop app: the station it carries joined to this workspace at a click, while it is in none
+ * (never joined, or removed from its workspace: the app joins a removed one again only when asked). Nothing in a
+ * browser, or in an app from before it. Once joined, the station shows in the list by itself, as one added by command.
+ */
+function JoinThisMac({ account, workspace, className }: { account: Account; workspace: string; className?: string }) {
+  const desktop = typeof window !== "undefined" ? window.stillfailDesktop?.station : undefined;
+  const toast = useToast();
+  const [here, setHere] = useState<CarriedStation | null>(null);
+  // Read again every few seconds: a station removed from its workspace marks itself so only once the cloud has told it.
+  useEffect(() => {
+    if (!desktop) return;
+    let live = true;
+    const read = () => void desktop.state().then((s) => { if (live) setHere(s); }, () => undefined);
+    read();
+    const timer = setInterval(read, 3000);
+    return () => { live = false; clearInterval(timer); };
+  }, [desktop]);
+  const join = useAction(async () => {
+    const done = await desktop!.join(account.sub, workspace);
+    if (!done) throw new Error("app 没有回应");
+    if ("error" in done) throw new Error(done.error);
+    return done.station;
+  }, (s) => { setHere(s); toast("这台 Mac 已加入，稍等它出现在列表里"); });
+  useEffect(() => { if (join.error) toast(`没能添加这台 Mac：${join.error.message}`); }, [join.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!desktop || !here?.carried || here.state === "running") return null;
+  return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>添加这台 Mac</Button>;
+}
+
 /** An enrollment's command, and that the station is awaited. */
 function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
   return (
@@ -390,6 +420,7 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
         </div>
       </Field>
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
+      <JoinThisMac account={entry.account} workspace={entry.id} className={css.firstThisMac} />
     </div>
   );
 }

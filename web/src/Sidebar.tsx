@@ -1,6 +1,5 @@
-import { Archive, ArrowLeft, Edit, Brain, Command, Compose, Key, Monitor, Pin, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
-import { stationBase, useLink, useOnlyMine } from "./station.tsx";
-import { lastChat } from "./lastChat.ts";
+import { Archive, Edit, Compose, Pin, Unplug } from "./icons.tsx";
+import { stationBase, useOnlyMine } from "./station.tsx";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
@@ -8,18 +7,16 @@ import { prime } from "./core/react.ts";
 import { RowAside } from "./RowPicture.tsx";
 import { Retry, Waiting, WaitingItems } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
-import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
-import { SidebarBrand, Mark } from "./brand.tsx";
+import { ConnectKindIcon, ICON, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
-import { CHANGEABLE, useShortcut } from "./keymap.ts";
+import { useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename } from "./Rename.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
-import { OpenJobs } from "./OpenJobs.tsx";
 import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -27,49 +24,8 @@ import * as waitingCss from "./styles/waiting.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 
-export function Sidebar() {
-  const path = useLocation().pathname;
-  const settings = path.startsWith("/settings") || path.startsWith("/connects");
-  return (
-    <nav className={nav.sidebar} aria-label="导航">
-      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
-      <div className={nav.brand}>
-        <SidebarBrand />
-      </div>
-      {settings ? <SettingsNav /> : (
-        <>
-          <ChatList scope="local" newChat="/new" stationsPage="/settings" archive="/archive" />
-          <div className={nav.navFoot}>
-            <StationTrouble scope="local" to="/settings" />
-            <OpenJobs scope="local" />
-            <NavLink className={nav.navRow} to="/settings"><Settings {...ICON} />设置</NavLink>
-          </div>
-        </>
-      )}
-    </nav>
-  );
-}
-
-function SettingsNav() {
-  const link = useLink();
-  const connectOpen = useLocation().pathname.startsWith("/connects");
-  return (
-    <div className={nav.navScroll}>
-      <NavLink className={nav.navRow} to={link(lastChat("local", "/chats"))}><ArrowLeft {...ICON} />返回会话</NavLink>
-      <div className={nav.navHeading}>客户端</div>
-      <NavLink className={nav.navRow} to={link("/settings/appearance")}><Sliders {...ICON} />外观</NavLink>
-      {CHANGEABLE && <NavLink className={nav.navRow} to={link("/settings/shortcuts")}><Command {...ICON} />快捷键</NavLink>}
-      <div className={nav.navHeading}>Station</div>
-      <NavLink className={nav.navRow} to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
-      <NavLink className={nav.navRow} to={link("/settings/accounts")}><Key {...ICON} />Profile</NavLink>
-      <NavLink className={nav.navRow} to={link("/settings/memory")}><Brain {...ICON} />记忆</NavLink>
-      <NavLink className={nav.navRow} to={link("/settings/device")}><Monitor {...ICON} />设备</NavLink>
-    </div>
-  );
-}
-
 /**
- * The chats of a scope (a workspace, or this station), newest first and
+ * The chats of a workspace, newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
  * ones the viewer started, with `newChat` above them and the way to the `archive` in the filter's menu beside it. With no station its empty
  * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
@@ -139,7 +95,7 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
   const days = useHeldOrder(view?.days ?? [], rowKey, over, pinMoved);
-  // What the list says with no rows, the core's (a station's own page is only ever reading or empty).
+  // What the list says with no rows, the core's.
   const note = view?.note ?? { reading: !view || view.loading, failing: [], empty: false };
   const scroller = useScrolling();
   const list = useRef<HTMLDivElement | null>(null);

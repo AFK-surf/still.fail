@@ -1,47 +1,41 @@
-// Which station a piece of the client talks to. On a station's own admin page
-// there is one, "local"; in ember cloud a workspace has several, and one page
-// shows them together. Components read the station from context: its address
-// (how the client core names it) and its base path (which prefixes links).
+// Which station a piece of the client talks to. A workspace has several, and
+// one page shows them together. Components read the station from context: its
+// address (how the client core names it) and its base path (which prefixes links).
 import { createContext, useContext } from "react";
 import { setPrefs, usePrefs } from "./prefs.ts";
 
 export interface Station {
-  /** "local" on a station's own page; the station's key in ember cloud. */
+  /** The station's key in its workspace. */
   id: string;
   name: string;
-  /** Path prefix of this station's pages: "" locally, /w/<ws>/s/<id> in ember cloud. */
+  /** Path prefix of this station's pages: /w/<ws>/s/<id>. */
   base: string;
-  /** How the client core names it: "local", or "<workspace>/<station>". */
+  /** How the client core names it: "<workspace>/<station>". */
   address: string;
   /** False when ember cloud has not heard from it lately. */
   online: boolean;
-  /** Where settings live: /settings locally, the workspace's settings in ember cloud. */
+  /** Where settings live: the workspace's settings. */
   settings: string;
 }
 
-export const LOCAL_STATION: Station = { id: "local", name: "", base: "", address: "local", online: true, settings: "/settings" };
-
-/**
- * Where a station's profiles are listed: in ember cloud, the workspace's one Profile page (every station's, each with
- * its own add button); on a station's own page, its list.
- */
+/** Where a station's profiles are listed: the workspace's one Profile page (every station's, each with its own add button). */
 export function profilesPage(station: Station): string {
-  return station.address === "local" ? "/settings/accounts" : `${station.settings}/profiles`;
+  return `${station.settings}/profiles`;
 }
 
 /** Path prefix of a station's pages, from its address. */
 export function stationBase(address: string): string {
-  if (address === "local") return "";
   const [workspace, station] = address.split("/");
   return `/w/${workspace}/s/${station}`;
 }
 
-/** The scope a station belongs to: its workspace, or "local". */
+/** The scope a station belongs to: its workspace. */
 export function scopeOf(address: string): string {
-  return address === "local" ? "local" : address.split("/")[0]!;
+  return address.split("/")[0]!;
 }
 
-export const StationContext = createContext<Station>(LOCAL_STATION);
+// Every page that talks to a station is under one's provider (cloud/workspace.tsx); this is only a placeholder.
+export const StationContext = createContext<Station>({ id: "", name: "", base: "", address: "", online: false, settings: "" });
 
 export function useStation(): Station {
   return useContext(StationContext);
@@ -53,7 +47,7 @@ export function useLink(): (path: string) => string {
   return (path) => `${base}${path}`;
 }
 
-/** Who is looking: on a station's own page "local"; in ember cloud the account's email. */
+/** Who is looking: the account's email. */
 export interface Me { id: string; email: string | null }
 
 /** The "only mine" filter, kept on this device (prefs.ts). */
@@ -61,7 +55,7 @@ export function useOnlyMine(): [boolean, (value: boolean) => void] {
   return [usePrefs().onlyMine, (onlyMine) => setPrefs({ onlyMine })];
 }
 
-/** People by email, from ember cloud's member list; empty on a station's own page. */
+/** People by email, from ember cloud's member list. */
 export interface Person { name: string; email: string; picture: string }
 export const PeopleContext = createContext<ReadonlyMap<string, Person>>(new Map());
 

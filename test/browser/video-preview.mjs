@@ -35,7 +35,7 @@ try {
   const bytes=readFileSync(join(temp,'sample.mp4')).toString('base64');
   await page.addInitScript(({bytes})=>{window.calls=[];window.__videoTestCall=async(name,params)=>{window.calls.push(params);return {type:'application/octet-stream',bytes:params.name==='broken.webm'?'YmFk':bytes};};},{bytes});
   await page.route('**/src/core/react.ts', async route=>{const response=await route.fetch();const text=await response.text();assert(text.includes('core().call(name, params)'));await route.fulfill({response,body:text.replace('core().call(name, params)','window.__videoTestCall(name, params)')});});
-  await page.goto('http://127.0.0.1:5187/admin/video-check.html');
+  await page.goto('http://127.0.0.1:5187/video-check.html');
   await page.waitForFunction(()=>document.querySelector('button video')?.readyState>=2);
   assert(await page.getByRole('button',{name:'播放 sample.mp4'}).isVisible());
   await page.getByRole('button',{name:'查看 broken.webm'}).waitFor();

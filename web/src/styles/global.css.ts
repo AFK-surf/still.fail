@@ -201,7 +201,7 @@ globalStyle("[data-floating-scrollbars] *", { scrollbarWidth: "none" });
 globalStyle("[data-floating-scrollbars] ::-webkit-scrollbar", { display: "none" });
 /**
  * A new chat's first message sent, its page becomes the chat: the box it was written in moves down to where the chat's
- * is, and the rest crossfades (App.tsx and cloud/workspace.tsx navigate with a view transition).
+ * is, and the rest crossfades (cloud/workspace.tsx navigates with a view transition).
  */
 globalStyle("::view-transition-group(composer)", { animationDuration: "340ms", animationTimingFunction: vars.easeOut });
 globalStyle("::view-transition-old(composer), ::view-transition-new(composer)", { height: "100%", objectFit: "none", objectPosition: "left top" });

@@ -1,4 +1,4 @@
-import { globalStyle, keyframes, style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { muted } from "./styles/shell.css.ts";
 import { personLetter } from "./styles/cloud.css.ts";
@@ -24,19 +24,7 @@ export const quotaRow = style({
   display: "grid", gridTemplateColumns: "5.5em minmax(80px, 1fr) 3.2em minmax(7em, auto)", alignItems: "center",
   gap: "10px", fontSize: vars.textSm,
 });
-export const quotaLabel = style({ color: vars.muted });
 export const quotaReset = style({ fontSize: vars.textXs, color: vars.subtle });
-export const quotaTrack = style({
-  position: "relative", display: "block", height: "6px", borderRadius: "999px", background: vars.neutralBg,
-  overflow: "hidden",
-});
-export const quotaFill = style({
-  position: "absolute", inset: "0 auto 0 0", borderRadius: "999px", background: vars.green,
-  selectors: {
-    "&[data-level=\"amber\"]": { background: vars.amber },
-    "&[data-level=\"red\"]": { background: vars.red },
-  },
-});
 /** A window of an allowance, compact: a rounded box, what is left written in it and its edge drawn as far as is left. */
 export const quotaChips = style({ display: "inline-flex", alignItems: "center", gap: "4px", flex: "none" });
 export const quotaChip = style({
@@ -99,31 +87,6 @@ export const quotaNote = style({});
 export const peopleStack = style({ display: "inline-flex", alignItems: "center", flex: "none" });
 export const peopleMore = style({
   fontSize: "10px", color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
-});
-export const device = style({ display: "grid", gap: "14px", containerType: "inline-size" });
-/** What the machine is, quieter than how loaded it is: one wrapping line, under the meters. */
-export const deviceFacts = style({
-  display: "flex", flexWrap: "wrap", gap: "2px 14px", fontSize: vars.textXs, color: vars.muted,
-});
-/** Its meters in one grid, each row a subgrid of it: bars as long as each other, values in one column. The bars stop
- * growing at a readable length, so the value stays near its label on a wide page. */
-export const deviceMeters = style({
-  display: "grid", gridTemplateColumns: "auto minmax(80px, 320px) auto minmax(0, auto)", columnGap: "14px", rowGap: "10px",
-  justifyContent: "start", alignItems: "center", fontSize: vars.textSm,
-});
-export const deviceRow = style({ display: "grid", gridColumn: "1 / -1", gridTemplateColumns: "subgrid", alignItems: "center" });
-export const deviceValue = style({
-  textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: "600", fontSize: vars.textSm,
-  whiteSpace: "nowrap",
-});
-/** What a meter is of (the CPU's model, the swap in use), after its value; where the card is narrow, left out. */
-export const deviceNote = style({
-  fontSize: vars.textXs, color: vars.subtle, whiteSpace: "nowrap",
-  "@container": { "(max-width: 520px)": { display: "none" } },
-});
-/** A meter not read yet: its track, breathing. */
-export const deviceWaiting = style({
-  animation: `${keyframes({ "50%": { opacity: "0.45" } })} 1.4s ease-in-out infinite`,
 });
 export const ring = style({
   display: "inline-flex", alignItems: "center", gap: "4px", fontSize: vars.textXs, color: vars.muted,

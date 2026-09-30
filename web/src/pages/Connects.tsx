@@ -1,6 +1,5 @@
-// Connects, as a settings page: on a station's own page its connects; in
-// ember cloud every station's connects in the workspace. Each shows who added
-// it, and the list can be narrowed to the viewer's own.
+// Connects, as a settings page: every station's connects in the workspace.
+// Each shows who added it, and the list can be narrowed to the viewer's own.
 import { Illustration } from "../brand.tsx";
 import { Key, Plug, Plus } from "../icons.tsx";
 import { DropdownMenu } from "radix-ui";
@@ -17,7 +16,7 @@ import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./Connects.css.ts";
 import * as cloudCss from "../styles/cloud.css.ts";
 
-/** The connects of a scope (a workspace, or "local"), from the core's `connects` view; `settings` is where the scope's settings live. */
+/** The connects of a workspace, from the core's `connects` view; `settings` is where the scope's settings live. */
 export function ConnectList({ scope, settings }: { scope: string; settings: string }) {
   const [onlyMine] = useOnlyMine();
   const connects = useConnects(scope, onlyMine);
@@ -26,7 +25,6 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
   const [adding, setAdding] = useState<{ station: Station; resume?: string } | null>(null);
   const shown = connects.value?.items ?? [];
   const loading = !connects.value || connects.value.loading;
-  const showStation = scope !== "local";
   const targets: Station[] = (stations.value ?? []).filter((s) => s.online).map((s) => ({
     id: s.id, name: s.name, base: stationBase(s.station), address: s.station, online: true, settings,
   }));
@@ -37,7 +35,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
   // A connect runs a profile's model: with none on any station (each read), the first step is a profile.
   const listed = stations.value ?? [];
   const noProfile = listed.length > 0 && listed.every((s) => s.overview && s.overview.profiles.length === 0);
-  const profiles = profilesPage({ id: "", name: "", base: "", address: scope === "local" ? "local" : "", online: true, settings });
+  const profiles = profilesPage({ id: "", name: "", base: "", address: "", online: true, settings });
   // Adding one: on the one station there is, or on one picked.
   const add = (label: string, primary = false) => targets.length === 1 ? <Button variant={primary ? "primary" : "secondary"} icon={Plus} onClick={() => setAdding({ station: targets[0]! })}>{label}</Button> : targets.length > 1 && (
     <DropdownMenu.Root modal={false}>
@@ -78,9 +76,9 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
               <li key={`${stationName}/${app.appId}`}>
                 {station ? (
                   <StationContext.Provider value={station}>
-                    <WaitingApp app={app} stationName={showStation ? stationName : null} onGo={() => setAdding({ station, resume: app.appId })} />
+                    <WaitingApp app={app} stationName={stationName} onGo={() => setAdding({ station, resume: app.appId })} />
                   </StationContext.Provider>
-                ) : <WaitingApp app={app} stationName={showStation ? stationName : null} onGo={null} />}
+                ) : <WaitingApp app={app} stationName={stationName} onGo={null} />}
               </li>
             ))}
           </ul>
@@ -99,7 +97,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
                   <span className={shellCss.muted}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
                 </span>
                 <span className={css.connectFacts}>
-                  {showStation && <span className={cloudCss.stationTag}>{stationName}</span>}
+                  <span className={cloudCss.stationTag}>{stationName}</span>
                   <OwnerLabel owner={c.createdBy} />
                 </span>
                 <span className={css.navNote}>{c.statusText}</span>
@@ -142,10 +140,5 @@ function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName
         title={`移除「${app.name}」？`} action="移除" description="只从 still.fail 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。" />
     </div>
   );
-}
-
-/** A station's own page: its connects. */
-export function ConnectsPage() {
-  return <ConnectList scope="local" settings="/settings" />;
 }
 

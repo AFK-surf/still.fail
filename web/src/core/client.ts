@@ -428,6 +428,12 @@ export interface StillFailDesktop {
   previewHost(station: string, port: number): Promise<string | null>;
   /** The page is in a workspace, reached as `account`: the app's station joins it when it is in none yet. */
   inWorkspace(account: string, workspace: string): void;
+  /** The station the app carries, and joining it to a workspace when asked to; an app from before this has none. */
+  station?: {
+    state(): Promise<CarriedStation | null>;
+    /** Joins it to `workspace` as `account`, even if it joined one before (not over one it is in): its state after, or why not. */
+    join(account: string, workspace: string): Promise<{ station: CarriedStation } | { error: string } | null>;
+  };
   /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */
   cloudOrigin?: string;
   /** The app's version (0.1.<commits>); an app from before it has none. */
@@ -454,6 +460,16 @@ export interface StillFailDesktop {
   onResume?(listener: (away: number) => void): () => void;
   /** The computer's network became another; the returned function stops listening. An app from before this has none. */
   onNetwork?(listener: () => void): () => void;
+}
+
+/**
+ * The station the desktop app carries (apps/desktop/src/station.ts): `carried` false in a build without one; in no
+ * workspace (off), in one (running), or removed from the one it was in (`workspace`: the one it is or was in).
+ */
+export interface CarriedStation {
+  carried: boolean;
+  state: "off" | "running" | "removed";
+  workspace?: string;
 }
 
 /** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */

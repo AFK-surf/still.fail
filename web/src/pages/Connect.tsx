@@ -545,7 +545,7 @@ function MadeAppSteps({ made }: { made: MadeSlackApp }) {
   );
 }
 
-/** Hands a connect to another person: a workspace member in ember cloud, any email on the station's own page. */
+/** Hands a connect to another person: a workspace member (any email, while the members are not read yet). */
 function OwnerDialog({ connect, onClose }: { connect: Connect; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);

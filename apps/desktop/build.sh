@@ -21,8 +21,9 @@ target=${CARGO_TARGET_DIR:-$root/client/target}
 deploy="$HOME/stillfail-deploy"; [ -d "$deploy" ] || deploy="$HOME/ember-deploy"
 posthog="$deploy/posthog.json"
 [ -n "${SKIP_WEB:-}" ] || (cd "$root" && if [ -f "$posthog" ]; then STILLFAIL_POSTHOG="$posthog" pnpm run build:cloud; else pnpm run build:cloud; fi)
-# The station's own page (dist/admin) and stillfail-station, which keeps its target in mesh/.
-[ -n "${SKIP_WEB:-}${SKIP_STATION:-}" ] || (cd "$root" && pnpm build)
+# The station's dist/admin (only the PostHog key its error reports use: `pnpm build` without building the core again)
+# and stillfail-station, which keeps its target in mesh/.
+[ -n "${SKIP_WEB:-}${SKIP_STATION:-}" ] || (cd "$root" && if [ -f "$posthog" ]; then STILLFAIL_POSTHOG="$posthog" node scripts/posthog-key.ts; else node scripts/posthog-key.ts; fi)
 [ -n "${SKIP_STATION:-}" ] || (cd "$root/mesh" && env -u CARGO_TARGET_DIR cargo build --release -p stillfail-station)
 rm -rf "$here/build" "$here/out"
 mkdir -p "$here/build/station"

@@ -9,7 +9,7 @@ import type { NewChatView } from "./core/shapes.ts";
 import { useReady } from "./core/react.ts";
 import { useNewChat, usePick } from "./pick.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
-import { LOCAL_STATION, profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
+import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
@@ -25,7 +25,7 @@ import { composerText } from "./Chat.css.ts";
 import { notSent, sendingFirst } from "./madeChat.ts";
 import { OVER_DOCK } from "./Chat.tsx";
 
-/** A new chat in a scope (a workspace, or "local"); `onCreated` gets the station's address and the new item's session (its address). */
+/** A new chat in a workspace; `onCreated` gets the station's address and the new item's session (its address). */
 export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, session: string): void }) {
   // What the core keeps of it (../pick.ts): held back a moment for its first value, so the page comes as it will be.
   useReady({ topic: "newChat", scope }, 250);
@@ -37,8 +37,8 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
     // The station it will most likely be, by the one last written to (its draft comes with it).
     const stationId = choice?.kept ?? "";
     const error = choice?.error ?? chat.error?.message;
-    const address = scope === "local" ? "local" : `${scope}/${stationId}`;
-    const held: Station = scope === "local" ? LOCAL_STATION : { id: stationId, name: "", base: stationBase(address), address, online: true, settings: `/w/${scope}/settings` };
+    const address = `${scope}/${stationId}`;
+    const held: Station = { id: stationId, name: "", base: stationBase(address), address, online: true, settings: `/w/${scope}/settings` };
     // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
     return (
       <div className={css.newChat}><div className={css.newChatInner}>
@@ -54,7 +54,7 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
     return <div className={css.newChat}><div className={css.newChatInner}><Illustration name="station-offline" /><h1 className={css.newChatTitle}>新对话</h1><p className={shellCss.muted}>没有在线的 station。到设置里添加一台，或者启动已添加的 station。</p></div></div>;
   }
   // The composer's files and links belong to the station the chat goes to.
-  const station: Station = { id: view.id, name: scope === "local" ? "" : view.name, base: stationBase(view.station), address: view.station, online: true, settings: scope === "local" ? "/settings" : `/w/${scope}/settings` };
+  const station: Station = { id: view.id, name: view.name, base: stationBase(view.station), address: view.station, online: true, settings: `/w/${scope}/settings` };
   return (
     <StationContext.Provider value={station}>
       <NewChatOn key={view.station} choice={choice} view={view} station={station} stations={choice.stations} onStation={onStation} create={chat.create} onCreated={onCreated} />

@@ -1,4 +1,4 @@
-// The chat last open, per place (a workspace, or this station), so leaving for settings and coming back returns to it.
+// The chat last open, per workspace, so leaving for settings and coming back returns to it.
 // Kept on this device (prefs.ts).
 import { useEffect } from "react";
 import { useLocation } from "react-router";

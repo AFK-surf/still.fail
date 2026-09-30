@@ -3,7 +3,7 @@
 // station.json holds the station's views, shaped as a real station's (every value made up), its times counted from
 // 0: they are moved to now here.
 import data from "./station.json";
-import { CHEN, LIN, stamp, ZHOU, type Runs } from "./fixtures.ts";
+import { CHEN, LIN, stamp, STATION, ZHOU, type Runs } from "./fixtures.ts";
 import type { ArchiveDay, ArchiveView, Connect, ConnectsView, Person } from "../core/shapes.ts";
 
 const TIME = /^(at|checkedAt|resetsAt|startedAt|createdAt|endedAt|lastActiveAt|updatedAt)$/;
@@ -41,7 +41,7 @@ export const overview = () => {
 export const host = () => now(data.host);
 export const stationView = () => {
   const base = now(data.station);
-  return { ...base, overview: overview() };
+  return { ...base, station: STATION, overview: overview() };
 };
 /** What a Claude agent's model control offers and the account it runs on. */
 export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as unknown as Runs["profile"] });
@@ -62,7 +62,7 @@ function slack(): Connect {
 
 export const connects = (): ConnectsView => ({
   me: { id: "local" }, loading: false,
-  items: [{ station: "local", stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0 }],
+  items: [{ station: STATION, stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0 }],
 });
 
 /**
@@ -99,7 +99,7 @@ export function archive(): ArchiveView {
     const ago = Math.round((today - new Date(at).setHours(0, 0, 0, 0)) / 86_400_000);
     const label = ago <= 0 ? "今天" : ago === 1 ? "昨天" : ago < 7 ? `星期${"日一二三四五六"[at.getDay()]}` : `${at.getMonth() + 1}月${at.getDate()}日`;
     const item = {
-      station: "local", session: chat.session, thread: chat.thread, title: chat.title, last: chat.last?.text ?? "", at: chat.archived.at,
+      station: STATION, session: chat.session, thread: chat.thread, title: chat.title, last: chat.last?.text ?? "", at: chat.archived.at,
       clock: at.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }), how: "手动归档", deletable: !chat.archived.alone,
     };
     const last = days.at(-1);
@@ -114,6 +114,7 @@ const user = (p: Person) => ({ sub: p.id, email: p.email ?? p.id, name: p.name, 
 
 /** The visitor, signed in as a member of Acme. */
 export const ACCOUNT = { sub: "demo-you", email: "you@acme.dev", name: "你", picture: "" };
+/** Its workspace: the first part of STATION (fixtures.ts). */
 export const WORKSPACE = "demo";
 
 export function workspaces() {

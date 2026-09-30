@@ -15,7 +15,7 @@ import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
-import { LocalStation } from "./station";
+import { LocalStation, type Place } from "./station";
 import { moveUserData } from "./moves.mts";
 
 const CLOUD_ORIGIN = (process.env.STILLFAIL_CLOUD_ORIGIN ?? process.env.EMBER_CLOUD_ORIGIN ?? "https://app.still.fail").replace(/\/+$/, "");
@@ -382,26 +382,56 @@ async function preview(request: Request): Promise<Response> {
 
 // This machine as a station: the one the app runs (station.ts), or one installed here. A page in a workspace says so
 // (web/src/cloud/workspace.tsx); a station in no workspace yet joins it, once: one removed from its workspace later is
-// not joined again by itself. Only the workspace's owner and admins can add stations: for others the cloud says no,
-// and it is tried again in the next workspace they open.
+// not joined again by itself (its cloud.json says removed, and the join-once file is there). Only the workspace's
+// owner and admins can add stations: for others the cloud says no, and it is tried again in the next workspace they
+// open. Joining it again is the user's own doing: 「添加这台 Mac」 in the page's station settings (station:join).
 const joinedOnce = join(app.getPath("userData"), "station-joined");
 let joining = false;
 
 ipcMain.on("station:workspace", (event, account: unknown, workspace: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof account !== "string" || typeof workspace !== "string") return;
-  void joinHere(account, workspace);
+  void joinOnce(account, workspace);
 });
 
+/** What the page is told of this machine's station (web/src/core/client.ts, CarriedStation). */
+function carriedStation(): { carried: boolean } & Place {
+  return { carried: station.carried, ...station.place };
+}
+
+ipcMain.handle("station:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? carriedStation() : null);
+
+// Asked for (「添加这台 Mac」): joins whether or not it joined a workspace before, but not over one it is in.
+ipcMain.handle("station:join", async (event, account: unknown, workspace: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof account !== "string" || typeof workspace !== "string") return null;
+  if (!station.carried) return { error: "这个版本的 app 没有带 station" };
+  if (station.enrolled) return { error: "这台 Mac 已经在一个 workspace 里" };
+  if (joining) return { error: "正在加入，稍等" };
+  try {
+    await joinHere(account, workspace);
+    return { station: carriedStation() };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+});
+
+/** The first workspace opened, for a station in none: never one removed from its workspace, and only once. */
+async function joinOnce(account: string, workspace: string): Promise<void> {
+  if (joining || !station.carried || station.place.state !== "off" || existsSync(joinedOnce)) return;
+  try {
+    await joinHere(account, workspace);
+  } catch (error) {
+    console.warn("this machine did not join the workspace as a station", workspace, error instanceof Error ? error.message : error);
+  }
+}
+
+/** Joins this machine's station to `workspace` as `account` (a one-time token from the cloud, given to enroll). */
 async function joinHere(account: string, workspace: string): Promise<void> {
-  if (joining || !station.carried || station.enrolled || existsSync(joinedOnce)) return;
   joining = true;
   try {
     const made = await coreCall("workspace.enroll", { account, workspace, name: machineName() }) as { token: string };
     await station.enroll(CLOUD_ORIGIN, made.token);
     writeFileSync(joinedOnce, workspace);
     console.info("this machine joined the workspace as a station", workspace);
-  } catch (error) {
-    console.warn("this machine did not join the workspace as a station", workspace, error instanceof Error ? error.message : error);
   } finally {
     joining = false;
   }

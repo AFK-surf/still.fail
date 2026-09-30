@@ -9,7 +9,7 @@ import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
-import { lastChat, PENDING } from "../lastChat.ts";
+import { PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { ChatJobsView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
@@ -46,8 +46,8 @@ import * as shellCss from "../styles/shell.css.ts";
 export function ChatPage() {
   const { chat } = useParams();
   const station = useStation();
-  // There is always a chat in view: the one last open, or a new one. In ember cloud the workspace decides which.
-  if (!chat) return <Navigate to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : lastChat("local", "/new")} replace />;
+  // There is always a chat in view: the one last open, or a new one; the workspace's page decides which.
+  if (!chat) return <Navigate to={station.base.replace(/\/s\/[^/]+$/, "")} replace />;
   // An item is its agent's: the address is the session, whether or not it has a chat yet (the core shows the chat
   // once there is one, at the same address). A chat made here keeps the page it opened with under the core's key
   // when its address becomes its station's.

@@ -14,6 +14,8 @@ export const onboardingCard = style({
   borderRadius: `calc(${vars.rField} + 20px)`, cornerShape: vars.cornerShape, background: vars.canvas,
 });
 export const onboardingRow = style({ display: "flex", alignItems: "stretch", gap: "8px" });
+/** 「添加这台 Mac」 under the first station's form (the desktop app's). */
+export const firstThisMac = style({ marginTop: "12px" });
 export const enrollWait = style({
   display: "flex", alignItems: "center", gap: "12px", marginTop: "16px", padding: "12px 14px",
   borderRadius: vars.rField, cornerShape: vars.cornerShape,

@@ -4,7 +4,7 @@
 // and running already (stillfail-station exits with HELD), the app leaves it be. A machine that ran it before the
 // rename has it in ~/.ember: the station moves it to ~/.stillfail as it starts (mesh/app/src/former.rs).
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, openSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -18,6 +18,12 @@ function inUse(path: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Where this machine's station stands (LocalStation.place): `workspace` is the one it is, or was, in. */
+export interface Place {
+  state: "off" | "running" | "removed";
+  workspace?: string;
 }
 
 export class LocalStation {
@@ -48,9 +54,31 @@ export class LocalStation {
     return existsSync(this.#bin);
   }
 
-  /** Whether this machine's station is in a workspace. */
+  /**
+   * Where this machine's station stands, by <data>/mesh/cloud.json (what `stillfail station enroll` writes): in no
+   * workspace (off: no file), in one (running), or taken out of the one it was in (removed: the station keeps the file
+   * and marks it `removed_at`, and the app never joins it again by itself). A file that cannot be read or parsed is
+   * taken for one in a workspace, so that nothing joins this machine over whatever it says.
+   */
+  get place(): Place {
+    let text: string;
+    try {
+      text = readFileSync(join(this.data, "mesh", "cloud.json"), "utf8");
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ENOENT" ? { state: "off" } : { state: "running" };
+    }
+    try {
+      const state = JSON.parse(text) as { workspace?: unknown; removed_at?: unknown };
+      const workspace = typeof state.workspace === "string" && state.workspace ? { workspace: state.workspace } : {};
+      return { state: state.removed_at == null ? "running" : "removed", ...workspace };
+    } catch {
+      return { state: "running" };
+    }
+  }
+
+  /** Whether this machine's station is in a workspace (not removed from it). */
   get enrolled(): boolean {
-    return existsSync(join(this.data, "mesh", "cloud.json"));
+    return this.place.state === "running";
   }
 
   start(): void {

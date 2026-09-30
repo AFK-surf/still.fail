@@ -9,6 +9,11 @@ const desktop = {
   previewHost: (station: string, port: number): Promise<string | null> => ipcRenderer.invoke("preview:host", station, port),
   /** The page is in a workspace, reached as `account`: this machine's station may join it (see main.ts). */
   inWorkspace: (account: string, workspace: string) => ipcRenderer.send("station:workspace", account, workspace),
+  /** The station the app carries: where it stands, and joining it to a workspace when asked to (main.ts, station:join). */
+  station: {
+    state: (): Promise<unknown> => ipcRenderer.invoke("station:state"),
+    join: (account: string, workspace: string): Promise<unknown> => ipcRenderer.invoke("station:join", account, workspace),
+  },
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
   /** This build's version (0.1.<commits>). */
