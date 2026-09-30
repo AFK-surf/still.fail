@@ -63,7 +63,10 @@ export const day = style({ margin: "18px 10px 4px", fontSize: vars.textXs, lineH
 export const none = style({ margin: "20px 10px", fontSize: vars.textSm, color: vars.muted });
 
 // The sidebar's rows, a little larger on a page of their own, on the page's ground; the time always shown.
-export const row = style({});
+export const row = style({
+  // Apart as the sidebar's rows are (each here in a wrapper of its own, which the sidebar's `& + &` does not see).
+  selectors: { "& + &": { marginTop: 2 } },
+});
 globalStyle(`${row} .${navSession}`, { padding: "9px 12px", gap: 12, vars: { "--mark-around": vars.canvas } });
 globalStyle(`${row} .${rowPicture}`, { width: 34, height: 34, marginTop: 3 });
 globalStyle(`${row} .${navTime}`, { display: "inline" });
