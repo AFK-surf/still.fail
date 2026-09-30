@@ -18,12 +18,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import fail.still.android.data.Notice
 import fail.still.android.data.NotifyView
 import fail.still.android.data.Topics
 import fail.still.android.data.decode
 import fail.still.core.CoreException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -73,11 +76,12 @@ object Notifier {
 
 /**
  * While the app is in front: the notices the core's `notify` says to show now (not while off, not for the chat looked
- * at; client/core/src/attend.rs), each shown once it is taken (`notice.claim`).
+ * at, only of the workspace the app is in; client/core/src/attend.rs), each shown once it is taken (`notice.claim`).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 suspend fun showNotices(context: Context, app: AppState) {
     val taken = HashSet<String>()
-    app.core.topic(Topics.notify).collect { state ->
+    snapshotFlow { app.workspace }.flatMapLatest { app.core.topic(Topics.notify(it)) }.collect { state ->
         val json = state.value?.takeIf { it !is JsonNull } ?: return@collect
         val show = try { decode(NotifyView.serializer(), json).show } catch (_: Exception) { return@collect }
         show.filter { taken.add(it.id) }.forEach { notice ->

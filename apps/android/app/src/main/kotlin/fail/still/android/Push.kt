@@ -55,7 +55,7 @@ object Push {
     @Suppress("DEPRECATION")
     suspend fun sync(context: Context, core: StillFailCore, wanted: Boolean? = null) {
         try {
-            val push = wanted ?: core.topic(Topics.notify).first { it.value != null || it.error != null }.value?.takeIf { it !is JsonNull }
+            val push = wanted ?: core.topic(Topics.notify()).first { it.value != null || it.error != null }.value?.takeIf { it !is JsonNull }
                 ?.let { runCatching { decode(NotifyView.serializer(), it).push }.getOrNull() } ?: return
             if (!push) { core.call("push.unregister"); return }
             if (!init(context)) return
@@ -97,17 +97,20 @@ class PushService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        if (data["type"] != "notice" || !shown()) return
+        if (data["type"] != "notice" || !shown(data["workspace"])) return
         val tag = data["tag"] ?: return
         val url = data["url"] ?: return
         Notifier.show(this, tag, data["title"].orEmpty(), data["body"].orEmpty(), url)
     }
 
-    /** Whether the core has a push shown: not with notifications off, nor with the app in front (it shows its own). */
-    private fun shown(): Boolean = runBlocking {
+    /**
+     * Whether the core has a push shown: not with notifications off, nor with the app in front (it shows its own), nor
+     * of another workspace than the one the app is in.
+     */
+    private fun shown(workspace: String?): Boolean = runBlocking {
         withTimeoutOrNull(5_000) {
             try {
-                val answer = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN).call("notice.pushed")
+                val answer = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN).call("notice.pushed", buildJsonObject { workspace?.let { put("workspace", it) } })
                 (answer as? JsonObject)?.get("show")?.jsonPrimitive?.booleanOrNull
             } catch (_: CoreException) {
                 null

@@ -106,12 +106,20 @@ object Topics {
     fun job(station: String, id: String) = buildJsonObject { put("topic", "job"); put("station", station); put("id", id) }
     /** A job's last `lines` lines of output and when it last grew, current as it grows. */
     fun jobLog(station: String, job: String, lines: Int) = buildJsonObject { put("topic", "jobLog"); put("station", station); put("job", job); put("lines", lines) }
-    /** What the core has been waiting on for a while (a slow request, a link down), said under a page's "loading…". */
-    val status = buildJsonObject { put("topic", "status") }
+    /**
+     * What the core has been waiting on for a while (a slow request, a link down), said under a page's "loading…": a
+     * workspace's (its stations, its account's socket, the relay), nothing of another; with none, all of it.
+     */
+    fun status(workspace: String? = null) = buildJsonObject { put("topic", "status"); workspace?.let { put("workspace", it) } }
+    /** What a chat on `station` says of its connection, and when, all decided in the core (pill.rs; Connection.kt). */
+    fun connection(station: String) = buildJsonObject { put("topic", "connection"); put("station", station) }
     /** What wants the viewer in the chats they take part in, the last 20 (docs/notifications.md; Notices.kt). */
     val notices = buildJsonObject { put("topic", "notices") }
-    /** Notifications on this device: on or off, asked, whether to hold pushes, what to show now (attend.rs; Notices.kt). */
-    val notify = buildJsonObject { put("topic", "notify") }
+    /**
+     * Notifications on this device: on or off, asked, whether to hold pushes, what to show now (attend.rs; Notices.kt),
+     * only `workspace`'s if given.
+     */
+    fun notify(workspace: String? = null) = buildJsonObject { put("topic", "notify"); workspace?.let { put("workspace", it) } }
     /** How its person likes it on this device, and what the device is (Prefs.kt). */
     val prefs = buildJsonObject { put("topic", "prefs") }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */

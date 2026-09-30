@@ -1,5 +1,5 @@
 // How the connection is, over the top of a chat (the web's Connection.tsx): a frosted capsule, one line, only while
-// something is not as it should be (connecting, catching up, down), and a moment after it is again.
+// something is not as it should be (connecting, catching up, down), and a moment after it is again; when, the core says.
 package fail.still.android.screens
 
 import androidx.compose.animation.AnimatedVisibility
@@ -18,12 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,76 +28,48 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
 import fail.still.android.LocalApp
-import fail.still.android.data.LinkShown
-import fail.still.android.data.StatusView
+import fail.still.android.data.ConnectionView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
 import fail.still.android.ui.floating
 import fail.still.core.CoreException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-private enum class PillTone { Busy, Trouble, Back }
-
-private data class PillShown(val tone: PillTone, val text: String, val detail: String? = null)
-
-/** How long "已连上" stays once all is well again. */
-private const val BACK_MS = 1500L
-
 /**
- * What is not as it should be with the link to this chat's station, or with what the core waits on (its `status`: what,
- * how long, how fast): nothing while all is well. Down, it offers to try again at once (no more waiting, the
- * connections tried against new ones: client/core/src/wake.rs `retry`); back, it says so a moment.
+ * What a chat on `station` says of its connection, as the core decides it (its `connection` topic, client/core/src/pill.rs):
+ * its link down or coming back, or what its workspace's core waits on (what, how long, how fast), and only once that
+ * has lasted; "已连上" a moment after. Nothing while all is well, nothing of another workspace. Down, it offers to try
+ * again at once (no more waiting, the connections tried against new ones: client/core/src/wake.rs `retry`).
  */
 @Composable
-fun ConnectionPill(connection: LinkShown?, haze: HazeState, modifier: Modifier = Modifier) {
+fun ConnectionPill(station: String, haze: HazeState, modifier: Modifier = Modifier) {
     val app = LocalApp.current
-    val status by rememberTopic<StatusView>(app.core, Topics.status)
-    val now = shownOf(connection, status.value)
-    var back by remember { mutableStateOf(false) }
-    var was by remember { mutableStateOf(false) }
-    LaunchedEffect(now != null) {
-        if (now != null) {
-            was = true
-            back = false
-        } else if (was) {
-            was = false
-            back = true
-            delay(BACK_MS)
-            back = false
-        }
-    }
-    val shown = now ?: if (back) PillShown(PillTone.Back, "已连上") else null
+    val connection by rememberTopic<ConnectionView>(app.core, Topics.connection(station))
+    val shown = connection.value?.takeIf { it.tone != null }
     AnimatedVisibility(shown != null, modifier, enter = fadeIn(), exit = fadeOut()) {
-        val s = shown ?: PillShown(PillTone.Back, "已连上")
+        // Going, it was "已连上" (what comes after a busy or a trouble shown).
+        val s = shown ?: ConnectionView(tone = "back", text = "已连上", items = emptyList())
         val shape = RoundedCornerShape(50)
+        val trouble = s.tone == "trouble"
         Row(
-            Modifier.widthIn(max = 360.dp).height(30.dp).floating(haze, shape).padding(start = 12.dp, end = if (s.tone == PillTone.Trouble) 4.dp else 12.dp),
+            Modifier.widthIn(max = 360.dp).height(30.dp).floating(haze, shape).padding(start = 12.dp, end = if (trouble) 4.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when (s.tone) {
-                PillTone.Busy -> Spinner(12.dp)
-                PillTone.Trouble -> Box(Modifier.size(6.dp).clip(CircleShape).background(C.red))
-                PillTone.Back -> Box(Modifier.size(6.dp).clip(CircleShape).background(C.muted))
+                "busy" -> Spinner(12.dp)
+                "trouble" -> Box(Modifier.size(6.dp).clip(CircleShape).background(C.red))
+                else -> Box(Modifier.size(6.dp).clip(CircleShape).background(C.muted))
             }
-            val color = when (s.tone) { PillTone.Trouble -> C.red; PillTone.Back -> C.muted; PillTone.Busy -> C.ink }
-            Text(s.text, color = color, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            val color = when (s.tone) { "trouble" -> C.red; "busy" -> C.ink; else -> C.muted }
+            Text(s.text.orEmpty(), color = color, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             s.detail?.let { Text(it, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
-            if (s.tone == PillTone.Trouble) RetryPill()
+            if (trouble) RetryPill()
         }
     }
-}
-
-/** The chat's link as the core says it (its `connection`) while down or coming back, else what the core waits on. */
-private fun shownOf(connection: LinkShown?, status: StatusView?): PillShown? = when {
-    connection != null -> PillShown(if (connection.tone == "trouble") PillTone.Trouble else PillTone.Busy, connection.text, connection.detail)
-    status?.state == "trouble" -> PillShown(PillTone.Trouble, status.text ?: "连不上 still.fail cloud")
-    status?.state == "slow" -> PillShown(PillTone.Busy, status.text ?: "")
-    else -> null
 }
 
 /** 重试 as a small grey pill: the connections tried again at once. Here and on a station down, where it is tried again (Stations.kt). */

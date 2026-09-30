@@ -173,7 +173,7 @@ fun HomeScreen(current: WorkspaceEntry) {
             if (all.value?.stations?.isNotEmpty() == true) Box(Modifier.semantics { contentDescription = "已归档" }) { NavButton(Icons.Archive, { app.push(Screen.Archive) }, 20.dp) }
             // The stations at a glance (ui/StationGlyph.kt); its page says which is which. The core reaching nothing
             // at all (`status` in trouble) puts it to sleep.
-            val status by rememberTopic<StatusView>(app.core, Topics.status)
+            val status by rememberTopic<StatusView>(app.core, Topics.status(scope))
             val counts = glyphCounts(all.value, status.value?.state == "trouble")
             // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
             val said = if (counts.asleep) status.value?.text.orEmpty() else all.value?.glyph?.label.orEmpty()
@@ -191,7 +191,7 @@ fun HomeScreen(current: WorkspaceEntry) {
 private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
     val view = chats.value
     val app = LocalApp.current
-    val status by rememberTopic<StatusView>(app.core, Topics.status)
+    val status by rememberTopic<StatusView>(app.core, Topics.status(current.workspace.id))
     // "Reading", and what the core has been waiting on for a while if anything (the core's `status`).
     val reading = status.value?.text?.let { "正在读取会话… $it" } ?: "正在读取会话…"
     // The rows move as the list changes (ListMotion.kt); while a finger is on the list or it scrolls, they keep their

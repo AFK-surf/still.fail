@@ -235,7 +235,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
 
     /** Follows the core's `notify` (the settings shown in 我). */
     suspend fun followNotify() {
-        core.topic(Topics.notify).collect { state ->
+        core.topic(Topics.notify()).collect { state ->
             val view = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(NotifyView.serializer(), it) }.getOrNull() } ?: return@collect
             notify = view.on
             notifyAsked = view.asked
@@ -396,12 +396,14 @@ fun StillFailApp(app: AppState) {
                     if (entries == null || all == null || !all.all { it.loaded }) {
                         val failed = workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { "没能读取你的 workspace" }
                         // What the core has been waiting on for a while, under it (the core's `status`), as the web's splash says.
-                        val status by rememberTopic<fail.still.android.data.StatusView>(app.core, Topics.status)
+                        val status by rememberTopic<fail.still.android.data.StatusView>(app.core, Topics.status())
                         Splash(failed ?: listOfNotNull("正在读取你的 workspace…", status.value?.text).joinToString("\n"), now = failed != null)
                     }
                     else Landing(signedIn, all)
                 } else {
                     rememberNotificationAsk(app, once = true)
+                    // The core hears which workspace the app is in: what it tells the viewer is of it (attend.rs).
+                    LaunchedEffect(current.workspace.id) { app.core.focus(buildJsonObject { put("workspace", current.workspace.id) }) }
                     Pages(app, current)
                 }
             }
