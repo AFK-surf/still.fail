@@ -52,7 +52,7 @@ Google OAuth（`openid email profile`），沿用 zork 的会话实现：access 
 - station 离线校验：签名来自登记时保存的公钥、workspace 是自己的、设备公钥等于这条 iroh 连接对端的公钥、没过期、没被吊销。同一张凭证进这个 workspace 的每一台 station。
 - 设备把凭证存在本地（`credential/<账号>/<workspace>`，记着签给哪台设备），一天内直接用，过了一天向 still.fail cloud 换新的；still.fail cloud 连不上时，旧的一直用到过期。station 拒绝时（被吊销、过期）立刻换新的。退出账号时一并删掉。
 - **吊销**：成员被移除或改角色（`sub`）、登录会话被注销（`sid`）时，still.fail cloud 通过 station 的控制通道推一条吊销（`revoke` 帧，`state` 帧里也带着最近 31 天的吊销）；station 拒绝签发时间不晚于吊销时间的凭证，已连着的最迟 5 秒内断开。station 不在线时错过的吊销，下次连上 still.fail cloud 时从 `state` 里补上。
-- still.fail cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。station 本机的管理页不受影响。
+- still.fail cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。
 
 连接上用 ALPN `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
 
@@ -60,16 +60,15 @@ station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它
 
 ## 网页版
 
-同一套 React 客户端，两种模式：
+从 still.fail cloud 打开，先登录。以前的**本机模式**（station 上的 `http://127.0.0.1:4760/admin`，不登录）已经去掉：station 不再提供页面和本机管理 API，那个端口只把旧链接 302 到这里的同一页；每台 station 都必须加入一个 workspace 才干活。
 
-- **本机模式**：在 station 上打开 `http://127.0.0.1:4760/admin`，不登录，直接访问本机 API。
-- **cloud 模式**：从 still.fail cloud 打开，先登录。左上角切换的是 workspace（标明属于哪个账号，账号的添加和退出也在这里）。一个 workspace 的页面同时连着它所有在线的 station：侧栏把各台 station 的会话按时间合在一起、每条标出 station，连接按 station 分组；打开的会话、对话、连接和运行时账号都直接和它所在的 station 通信。所有请求都经浏览器里的 iroh（wasm，只能走 relay）送到各自的 station。
+- **cloud 模式**：左上角切换的是 workspace（标明属于哪个账号，账号的添加和退出也在这里）。一个 workspace 的页面同时连着它所有在线的 station：侧栏把各台 station 的会话按时间合在一起、每条标出 station，连接按 station 分组；打开的会话、对话、连接和运行时账号都直接和它所在的 station 通信。所有请求都经浏览器里的 iroh（wasm，只能走 relay）送到各自的 station。
 
   「设置」分两部分：**账号**（当前 workspace 所用的账号：资料、在哪些地方登录了、退出）和 **workspace**（通用、成员与邀请、Station、连接、各 station 的运行时账号）。连接不在侧栏里，在 workspace 设置下，按 station 标注。
 
   会话页：执行历史是主体；没有对话时历史下面就是输入框，发出第一条消息就建好这个会话唯一的对话，之后对话在中间、执行历史在右边。agent 没有名字，显示为「模型 · 思考深度」；思考深度是连接的一项设置（Claude Code 的 `--effort`、Codex 的 `model_reasoning_effort`），会话记下创建时的值。会话列表第二行叠放参与者的头像和所在 station。Profile（原来的"运行时账号"）按 station 分组，显示额度：OpenCode Go 的 5 小时 / 每周 / 每月用量、ChatGPT 订阅的限额窗口、Claude 订阅的 5 小时 / 每周用量。
 
-  连接、会话、管理页对话都记录创建人：连接和对话是添加它的人（still.fail cloud 账号的邮箱，本机页面记为"本机管理页"）；Slack 发起的会话是发起的 Slack 用户，用 Slack 资料里的邮箱和 still.fail cloud 账号对应。会话列表和连接列表可以只看"我创建的"；打开会话时默认进入自己最近的对话。
+  连接、会话、管理页对话都记录创建人：连接和对话是添加它的人（still.fail cloud 账号的邮箱；以前本机页面上建的记为"本机管理页"）；Slack 发起的会话是发起的 Slack 用户，用 Slack 资料里的邮箱和 still.fail cloud 账号对应。会话列表和连接列表可以只看"我创建的"；打开会话时默认进入自己最近的对话。
 
 浏览器的设备密钥存在 IndexedDB；清掉站点数据等于换了一个新客户端，重新申请凭证即可，不需要任何人重新审批。
 

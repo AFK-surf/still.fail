@@ -28,7 +28,7 @@ What differs per platform comes in through one trait, `Host`
 (`client/core/src/host.rs`):
 
 - `fetch` — one HTTP request to still.fail cloud, whole body; `fetch_stream` — a
-  streamed response (the local station's `/admin/api` event streams, web only);
+  streamed response (only tests' stations use it: stations are reached over mesh links only);
   `websocket` — a receive-only WebSocket (still.fail cloud's `/v1/events`) with the
   subprotocols given, resolving once it is open; its text frames end when it
   closes, and dropping them closes it.
@@ -94,8 +94,9 @@ speed, and they are small.
 
 ### Stations and accounts
 
-A station is addressed as `"<workspace>/<station>"`, or `"local"` for the page
-served by a station itself. The core knows which signed-in account reaches
+A station is addressed as `"<workspace>/<station>"`: every station is in a
+workspace and reached over a mesh link. `"local"` (a station's own page, gone)
+is refused with the error `gone`. The core knows which signed-in account reaches
 which workspace (from each account's `/v1/me`) and uses that account's token
 for its member credential (30 days, kept on the device: docs/cloud.md).
 
@@ -106,8 +107,7 @@ chats, what is kept in sync of it and what its new chats were last started on
 keys from before are read where there is none yet). Nothing of one is read or
 dropped through another. What is the device's stays shared (the mesh endpoint,
 relays, what is kept on the device, notification settings), and what is an
-account's is kept by account. `local` is a workspace of its own, with no
-account. A UI says which workspace it is in (`client.focus {workspace}`);
+account's is kept by account. A UI says which workspace it is in (`client.focus {workspace}`);
 notices are only of the workspace the viewer is in (attend.rs).
 
 ### Topics
@@ -246,8 +246,7 @@ While a `chats` view is live, a clock waits for the viewer's next local
 midnight and recomputes it then (`daysAgo` changes); that is the only timer of
 the views.
 
-`scope` is a workspace id, or `"local"` for the page served by a station
-itself (one station, addressed `"local"`).
+`scope` is a workspace id.
 
 | View | Params | Value |
 | --- | --- | --- |
@@ -265,11 +264,11 @@ while `chat` changes with messages.
 ```jsonc
 // chats
 {
-  "me": { "id": "a@b.c", "email": "a@b.c" },     // { "id": "local", "email": null } on a station's own page
+  "me": { "id": "a@b.c", "email": "a@b.c" },
   "stations": [{ "station": "ws/st", "id": "st", "name": "studio", "state": "online", "message": null }],
   //   state: "online" | "connecting" | "offline" (not connected to still.fail cloud) | "error" (message says why)
   //   error: its rows could not be read, or its link failed; connecting: rows not read yet, or the link
-  //   is reconnecting (rows already read stay listed). The local station is named "".
+  //   is reconnecting (rows already read stay listed).
   "loading": false,                                // an online station has not answered its rows yet
   "days": [{ "daysAgo": 0, "at": 1790000000000, "items": [{
     "station": "ws/st", "stationName": "studio",   // added here; the rest is the station's row as it is
@@ -297,7 +296,7 @@ collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
 // stations
 [{
   "station": "ws/st", "id": "st", "name": "studio",
-  "online": true, "lastSeen": 1790000000, "version": "0.4.0",   // from the workspace (local: always online)
+  "online": true, "lastSeen": 1790000000, "version": "0.4.0",   // from the workspace
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read
   "host": { … } | null,
@@ -426,7 +425,7 @@ client/
 - `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.
 - `cloud.rs` — still.fail cloud API: errors, `/v1/me`, workspaces, member credentials. (Its events socket is held in `core.rs`, with the account topics.)
 - `mesh.rs` — the device endpoint (mDNS and the DHT to find stations, ember's and iroh's relays) and station links: the credential, reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
-- `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
+- `station.rs` — the admin API over a mesh link: the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
 - `kept.rs` — threads' entries and transcripts kept on the device in 256-entry chunks through `Host` storage, bounded (least recently opened go first), forgotten for stations out of reach.
 - `entries.rs` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `data.rs` — the data center (docs/core-db.md): what still.fail cloud and the stations said, held as records.

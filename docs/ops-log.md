@@ -36,6 +36,11 @@
 - 发出的消息飞进列表改成先往右、再往上的弧线（send-float-arc）：曲线 (.6, 0, .2, 1)，520ms，不回弹；web（`madeChat.ts` sendingHere，PC 和手机 web 都用）跟部署走，安卓（`ChatHost.kt` Flight）要发一版。新对话第一条消息的飞入没动。只改了客户端，不用部署 cloud 或 station。验证：在打开的 chat 里发一条，消息从输入框先横着往右、再往上落到位，轻轻停住。
 - 安卓发出的消息落地时不再闪一下（send-land-flicker）：飞进来的那一行落地后不再重新做入场（以前会从透明重新升上来一遍）。只改了 app，要发一版安卓。验证：在打开的 chat 里发一条，消息落到位后直接停住，不会消失再淡入。
 - 手机首页去掉底部的「全部 / 我参与的」大开关（mobile-mine-switch）：底部只留新建对话的圆按钮；顶栏的「已归档」按钮换成筛选按钮，点开菜单有全部、我参与的、已归档，筛选中图标变橙色。改了手机 web（跟部署走）和安卓（ui/Sheet.kt 的 MenuItem.icon 改成可空）。要发一版安卓。不用部署 cloud 或 station。验证：手机首页底部只有右下角的圆按钮；点顶栏的筛选图标，选「我参与的」，列表变少，图标变橙色；点「已归档」进归档页。
+- station 必须在 workspace 里、去掉本机页面（station-requires-workspace）：改了 station、core（wasm 和安卓 ffi 都要带上）、web、桌面、安卓（一行）和 install.sh 的提示，cloud 的接口没动。行为变化：没加入 workspace（没有 `mesh/cloud.json`）或被移出的 station 不连 Slack、不开新轮次、不拉起 job；被移出时打断正在跑的轮次、停掉 job 和服务、断开 Slack，并在 cloud.json 里记 `removed_at`（文件保留）；127.0.0.1:4760 不再有管理页和 `/admin/api`，旧的 `/admin/...` 链接 302 到 `{cloud}/w/<ws>/...` 的同一页；Cloudflare Access 隧道那条路删了（config 里的 `admin.access` 照读照留，只是不再用）；新命令 `stillfail status`。
+  - 部署前先查有没有从没加入 workspace 的 station：在每台机器上 `stillfail status`（旧版没有这个命令就看 `ls ~/.stillfail/mesh/cloud.json`），没有 cloud.json 的，这一版一上去就不再接 Slack，要先 `stillfail station enroll <cloud> <token>`（token 在 still.fail 的「添加 station」里生成）或在桌面端点「添加这台 Mac」。新 station 启动时日志里也有一行 `this station is in no workspace` 的警告。
+  - 顺序：web/admin 先随部署上（新页面接旧 station 没问题：只是不再有本机页面这条路），再发 station 包（`release.sh station`，studio 的 station 由 ember-deploy 用 `stillfail update` 交接），再发桌面和安卓。`pnpm build` 现在只编 wasm core 和写 `dist/admin/posthog.json`（scripts/posthog-key.ts），不再出本机页面；station-bundle.sh 打包前自己重写 dist/admin（用 ember-deploy 已 export 的 `STILLFAIL_POSTHOG`），部署检出里旧的页面文件不会再进发布包。
+  - 新旧混跑：旧 station 照旧有本机页面、不认 `removed_at`（被移出后仍会每隔一阵重连 cloud，和以前一样）；新 station 读得了旧的 cloud.json（没有新字段）。旧桌面端只看 cloud.json 在不在，所以被移出的新 station 留着文件，旧桌面端也不会自动再加入。旧 core 里存的 `local` 站点地址（草稿、上次打开的 chat、`/admin/chats/…` 的引用）新 core 读到会当成「已经没有」，不会崩。
+  - 上线后验：`curl -sI http://127.0.0.1:4760/admin/chats/<key>` 返回 302，location 是 `https://app.still.fail/w/<ws>/s/<station>/chats/<key>`（cloud.json 里是旧域名的就是 ember.3720.org，那边再 302 到新域名）；`curl -s http://127.0.0.1:4760/admin/api/overview` 是 404；`stillfail status` 显示 workspace、cloud、在线。
 
 ## 2026-10-01
 

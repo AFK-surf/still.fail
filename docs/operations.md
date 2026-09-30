@@ -4,7 +4,7 @@
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm build                                      # 先构建 wasm 的 client core（client/wasm/build.sh，需要 wasm-bindgen），再构建管理页（web/ → dist/admin）；带 PostHog key 构建见 docs/telemetry.md
+pnpm build                                      # 构建 wasm 的 client core（client/wasm/build.sh，需要 wasm-bindgen），把 station 上报错误用的 PostHog key 写到 dist/admin/posthog.json（没有 key 就只建空目录，见 docs/telemetry.md）；station 没有自己的页面
 (cd mesh && cargo build --release -p ember-station)
 bin/ember start                                 # PATH 里需要 claude 和 codex
 ```
@@ -107,4 +107,4 @@ still.fail 会校验每个经过 tunnel 的请求所带的 Access JWT（签名�
 - client core：在 client/ 里 `cargo test --workspace --exclude stillfail-core-wasm`。
 - `pnpm test`（web 里的 TypeScript 部分，需要先构建 wasm core）、`pnpm typecheck`。
 - `pnpm check`：跑全部检查（scripts/check.sh all）。
-- `pnpm dev:web`：管理页的热更新开发服务器，API 代理到本机 4760。
+- `pnpm dev:web`：still.fail cloud 网页版（`--mode cloud`）的热更新开发服务器。

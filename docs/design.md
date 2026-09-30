@@ -137,7 +137,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 
 ## 13. 可观测性
 
-- 管理页：本机 `127.0.0.1:4760/admin`，或网页版 / 桌面端 / Android 经 iroh 连到 station。能看会话、执行历史（运行时会话记录 + 进行中 turn 的实时步骤）、进程和后台任务，并做管理操作。
+- 管理页：网页版 / 桌面端 / Android 经 iroh 连到 station（station 本机不再有页面；不在 workspace 里的 station 不干活，`stillfail status` 说明它在哪、为什么停着）。能看会话、执行历史（运行时会话记录 + 进行中 turn 的实时步骤）、进程和后台任务，并做管理操作。
 - 多会话连接在 Slack 里新开的会话，先在 thread 里贴一个"在 still.fail 里查看这个会话"的链接（station 加入 workspace 之后）。
 - 错误上报（PostHog）和链路追踪（经 still.fail cloud 转到 Axiom）都可选，默认关闭，见 [telemetry.md](telemetry.md)。
 - 原计划第一版做 `ember status`、`ember session <key>` 这样的 CLI 加一个只读本地页面，已改为上面的管理页和客户端。

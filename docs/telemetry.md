@@ -39,11 +39,11 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 项目 key 是 PostHog 的公开 key（`phc_…`），本来就会出现在网页里，但和别的部署输入一样不进仓库：放在 studio 的 `~/ember-deploy/posthog.json`，内容 `{ "host": "https://us.i.posthog.com", "key": "phc_…" }`。
 
-构建时由环境变量 `EMBER_POSTHOG` 指向这个文件，`web/vite.config.ts` 读它：
+构建时由环境变量 `STILLFAIL_POSTHOG`（改名前是 `EMBER_POSTHOG`，也认）指向这个文件，`web/vite.config.ts`（网页）和 `scripts/posthog-key.ts`（station）读它：
 
 - `cloud/deploy.py` 构建网页版时自动设置（文件不存在就构建一个没有分析的版本，并提示）。
-- station 的构建：`EMBER_POSTHOG=~/ember-deploy/posthog.json pnpm build`。key 除了进管理页，还写一份到 `dist/admin/posthog.json`，station 启动时从那里读，所以管理者只需打开配置，不需要别的设置。
-- 不设 `EMBER_POSTHOG` 的构建（本地、开发）没有任何分析，station 也无从上报。
+- station 的构建：`STILLFAIL_POSTHOG=~/ember-deploy/posthog.json pnpm build`。station 没有自己的页面了，`pnpm build` 只编 wasm core 并把 key 写到 `dist/admin/posthog.json`（scripts/posthog-key.ts），发布包带着它，station 启动时从那里读，所以管理者只需打开配置，不需要别的设置。
+- 不设 `STILLFAIL_POSTHOG` 的构建（本地、开发）没有任何分析，station 也无从上报。
 
 # Telemetry
 
