@@ -1620,12 +1620,19 @@ export type Appearance = "system" | "light" | "dark";
  */
 export type RowPictureSetting = "auto" | "agents" | "people";
 
+/**
+ * How a computer's page is laid out: the chats in a sidebar beside the chat (the default), or no sidebar, the chats a
+ * page of their own found by searching.
+ */
+export type Layout = "sidebar" | "list";
+
 /** What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is. */
 export interface PrefsView {
 	/** The lists show only the chats and connects the viewer takes part in. */
 	onlyMine?: boolean;
 	appearance?: Appearance;
 	rowPicture?: RowPictureSetting;
+	layout?: Layout;
 	/** Times are shown as dates rather than "3 分钟前". */
 	absoluteTime?: boolean;
 	/** Keys changed for an action (the desktop app's), by action. */

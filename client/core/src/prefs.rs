@@ -11,7 +11,7 @@ use crate::error::{CoreError, Result};
 use crate::protocol::Topic;
 
 /// The fields `prefs.set` takes; the rest of a patch is refused.
-const FIELDS: &[&str] = &["onlyMine", "appearance", "rowPicture", "absoluteTime", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
+const FIELDS: &[&str] = &["onlyMine", "appearance", "rowPicture", "layout", "absoluteTime", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
 /// Fields that are maps: a patch changes them entry by entry.
 const MAPS: &[&str] = &["keys", "lastChat", "chatTabs", "resume"];
 /// How many chats keep their tabs: the latest used.

@@ -1259,6 +1259,17 @@ pub enum RowPictureSetting {
     People,
 }
 
+/// How a computer's page is laid out: the chats in a sidebar beside the chat (the default), or no sidebar, the chats a
+/// page of their own found by searching.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Layout {
+    #[default]
+    Sidebar,
+    List,
+}
+
 /// Whose pictures lead the rows of a list (`ChatsView::leading`).
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -1307,6 +1318,8 @@ pub struct PrefsView {
     pub appearance: Appearance,
     #[serde(default)]
     pub row_picture: RowPictureSetting,
+    #[serde(default)]
+    pub layout: Layout,
     /// Times are shown as dates rather than "3 分钟前".
     #[serde(default)]
     pub absolute_time: bool,
