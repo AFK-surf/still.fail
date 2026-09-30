@@ -1,6 +1,6 @@
 // The chats as a page of their own (the 搜索列表 layout, layout.ts): no sidebar; the search on top, typed into at once,
 // narrowing the list in place (the core's `chatSearch`); under it 全部 / 我参与的, the archive and a new chat, then the
-// chats as the sidebar lists them, by day. ↑/↓ pick a row from the search, ↩ opens it. Each chat's bar leads back here
+// chats as the sidebar lists them, by day. ↑/↓ pick a row from the search, from the chat last open, ↩ opens it. Each chat's bar leads back here
 // (ListBack), with how the others are doing.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
@@ -10,6 +10,7 @@ import { Archive, Compose, Search, Settings } from "./icons.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { ChatRow, rowKey, StationTrouble } from "./Sidebar.tsx";
 import { stationBase, useOnlyMine } from "./station.tsx";
+import { lastChat } from "./lastChat.ts";
 import { shortcutOf } from "./keymap.ts";
 import { ICON, Segmented, SkeletonRows, Tip } from "./ui.tsx";
 import * as css from "./ChatsHome.css.ts";
@@ -27,11 +28,26 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
   const search = useChatSearch({ scope, query: typed });
   const view = chats.value;
   const lead = view?.leading ?? "agents";
-  // What is shown, in order: the search's rows while something is typed, else the list's, day by day.
-  const days = typed ? [{ label: "", daysAgo: -1, items: search.value?.items ?? [] }] : view?.days ?? [];
+  // What is shown, in order: the list's rows, day by day as the sidebar has them; while something is typed, only those
+  // the search found (in the list's order still), then any it found the list has not.
+  const found = search.value?.items;
+  const days = useMemo(() => {
+    const listed = view?.days ?? [];
+    if (!typed) return listed;
+    if (!found) return [];
+    const keys = new Set(found.map(rowKey));
+    const kept = listed.map((d) => ({ ...d, items: d.items.filter((i) => keys.has(rowKey(i))) })).filter((d) => d.items.length > 0);
+    const shown = new Set(kept.flatMap((d) => d.items.map(rowKey)));
+    const rest = onlyMine ? [] : found.filter((i) => !shown.has(rowKey(i)));
+    return rest.length ? [...kept, { label: "更早", daysAgo: 1e9, items: rest }] : kept;
+  }, [view, typed, found, onlyMine]);
   const rows = useMemo(() => days.flatMap((d) => d.items), [days]);
-  const [at, setAt] = useState(-1);
-  useEffect(() => setAt(typed ? 0 : -1), [typed]);
+  // The chat last open is the one picked to begin with: ↑/↓ move on from it.
+  const last = decodeURIComponent(lastChat(scope, ""));
+  const active = rows.findIndex((i) => decodeURIComponent(`${stationBase(i.station)}/chats/${encodeURIComponent(i.id)}`) === last);
+  const [picked, setPicked] = useState<string | null>(null);
+  const at = picked === null ? active : rows.findIndex((i) => rowKey(i) === picked);
+  const pick = (i: number) => { const item = rows[i]; if (item) setPicked(rowKey(item)); };
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
     list.current?.querySelector(`[data-at="${at}"]`)?.scrollIntoView({ block: "nearest" });
@@ -53,6 +69,8 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
       </header>
       <div className={css.scroll}>
         <div className={css.column}>
+          {/* The search and what is beside it stay put; the list scrolls under them. */}
+          <div className={css.head}>
           <label className={css.searchBox}>
             <Search size={18} />
             <input className={css.searchInput} autoFocus placeholder="搜索对话" aria-label="搜索对话" value={query} spellCheck={false}
@@ -60,8 +78,8 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing) return;
                 const step = e.key === "ArrowDown" || e.ctrlKey && e.key === "n" ? 1 : e.key === "ArrowUp" || e.ctrlKey && e.key === "p" ? -1 : 0;
-                if (step) { e.preventDefault(); setAt((a) => Math.max(0, Math.min(rows.length - 1, a + step))); }
-                else if (e.key === "Enter") { e.preventDefault(); open(rows[at]); }
+                if (step) { e.preventDefault(); pick(at < 0 ? (step > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, at + step))); }
+                else if (e.key === "Enter") { e.preventDefault(); open(rows[Math.max(at, 0)]); }
                 else if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); }
               }} />
             {keys && !query && <kbd className={css.searchKeys}>{keys}</kbd>}
@@ -72,16 +90,17 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
             <Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={archive}><Archive size={15} />已归档</Link>
             <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.newChat}`} to={newChat}><Compose size={15} />新建对话</Link>
           </div>
+          </div>
           {!typed && <div className={css.jobs}><OpenJobs scope={scope} /></div>}
-          <div ref={list} className={css.list} onPointerMove={() => { if (at !== -1 && !typed) setAt(-1); }}>
+          <div ref={list} className={css.list}>
             {!typed && !view && !chats.error && <SkeletonRows />}
             {chats.error && !view && <p className={css.none}>{chats.error.message}</p>}
-            {typed && search.error && !search.value && <p className={css.none}>更新 still.fail 后才能搜索对话</p>}
-            {typed && search.value && rows.length === 0 && <p className={css.none}>没有找到对话</p>}
+            {typed && search.error && !found && <p className={css.none}>更新 still.fail 后才能搜索对话</p>}
+            {typed && found && rows.length === 0 && <p className={css.none}>没有找到对话</p>}
             {!typed && view && rows.length === 0 && <p className={css.none}>{onlyMine ? "没有你参与的对话" : "还没有对话"}</p>}
             {days.map((day) => (
-              <section key={day.daysAgo} aria-label={day.label || "搜索结果"}>
-                {day.label && <div className={css.day}>{day.label}</div>}
+              <section key={day.daysAgo} aria-label={day.label}>
+                <div className={css.day}>{day.label}</div>
                 {day.items.map((item) => {
                   const i = n++;
                   return <div key={rowKey(item)} className={css.row} data-at={i} data-picked={i === at || undefined}><ChatRow item={item} lead={lead} /></div>;

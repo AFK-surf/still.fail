@@ -14,7 +14,9 @@ export const station = style({ minWidth: 0 });
 globalStyle(`${station} > *`, { margin: 0 });
 globalStyle(`${station} a`, { marginBottom: 0 });
 export const scroll = style({ flex: 1, minHeight: 0, overflowY: "auto" });
-export const column = style({ width: "min(720px, calc(100% - 48px))", margin: "0 auto", padding: "8vh 0 80px" });
+export const column = style({ width: "min(720px, calc(100% - 48px))", margin: "0 auto", padding: "0 0 80px" });
+/** The search and its tools, held at the top while the list scrolls under them. */
+export const head = style({ position: "sticky", top: "calc(16px - 8vh)", zIndex: 1, paddingTop: "8vh", paddingBottom: 6, background: vars.canvas });
 
 export const searchBox = style({
   display: "flex", alignItems: "center", gap: 10, height: 52, padding: "0 16px", borderRadius: vars.rCard,
@@ -29,7 +31,7 @@ export const searchInput = style({
 });
 export const searchKeys = style({ flex: "none", fontFamily: "inherit", fontSize: vars.textXs, color: vars.subtle });
 
-export const tools = style({ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 6px" });
+export const tools = style({ display: "flex", alignItems: "center", gap: 8, marginTop: 14 });
 globalStyle(`${tools} [role="radio"]`, { whiteSpace: "nowrap", minWidth: "5em" });
 export const newChat = style({ marginLeft: "auto" });
 export const jobs = style({ margin: "6px 0 0" });
