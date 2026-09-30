@@ -5,7 +5,7 @@ import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
 import { prime } from "./core/react.ts";
-import { RowAside, RowPicture } from "./RowPicture.tsx";
+import { RowAside } from "./RowPicture.tsx";
 import { Retry, Waiting, WaitingItems } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
@@ -196,7 +196,7 @@ function useScrolling() {
 /**
  * A chat in the list: its title (bold while something in it is unread) and
  * where it came from, then the last thing said in it and when; its state as a
- * dot before its title (ChatMark.tsx), who is in it as its picture and at the title's end.
+ * dot before its title (ChatMark.tsx), who is in it small at the second line's end.
  */
 function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const { connect } = item;
@@ -222,7 +222,6 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       onMouseDown={(e) => e.preventDefault()}
       // Pointed at or pressed: its chat is read meanwhile, there when the page opens.
       onPointerEnter={() => primeChat(item)} onPointerDown={() => primeChat(item)} onFocus={() => primeChat(item)}>
-      <RowPicture item={item} lead={lead} className={nav.rowPicture} box={30} />
       <span className={nav.navSessionText}>
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className={nav.navSessionHead}>
@@ -230,7 +229,6 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{item.title}</span>}
-          <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
           {/* Its station offline: greyed, and marked there instead (the core says so, row by row). */}
@@ -240,9 +238,10 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
             ? <Tip label={item.reconnecting} side="right"><span className={nav.sessionKind} aria-label={item.reconnecting}><span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" /></span></Tip>
             : connect && <Tip label={item.originText ?? "Slack"} side="right"><span className={nav.sessionKind}><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
         </span>
-        {/* People are in the chat itself; here only the last thing said and when. */}
+        {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
           {item.last ? <LastMessage item={item} /> : <span className={nav.navSessionLast} />}
+          <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           <Time className={nav.navTime} stamp={item.time?.lastActiveAt} fixed />
         </span>
       </span>

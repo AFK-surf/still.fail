@@ -308,8 +308,8 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
 
 /**
  * A row: its title (bold while something in it is unread) and, for an agent that came from Slack, the connect's mark;
- * under it the last thing said; the chat's state a dot before its title (ChatMark), who is in it as its picture and at
- * the title's end (RowPicture.kt). Two lines, always the same height. The
+ * under it the last thing said; the chat's state a dot before its title (ChatMark), who is in it small at
+ * the second line's end (RowPicture.kt). Two lines, always the same height. The
  * time shows only while the row is held.
  */
 @Composable
@@ -325,7 +325,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     }))
 }
 
-/** What a row shows, `lead` leading its picture (RowPicture.kt); the time while it is `held`. */
+/** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`. */
 @Composable
 internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, modifier: Modifier = Modifier) {
     Box(
@@ -336,7 +336,6 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, modifier: 
         val offline = item.offline
         val dim = if (offline != null) 0.45f else 1f
         Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        RowPicture(item, lead, Modifier.alpha(dim))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChatMark(item, Modifier)
@@ -344,7 +343,6 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, modifier: 
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
                     color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim),
                 )
-                RowAside(item, lead, Modifier.alpha(dim))
                 // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                     val reconnecting = item.reconnecting
@@ -354,9 +352,9 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, modifier: 
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // The state rides on the agent's picture, when the agent said the last thing; nowhere else.
-                Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
+                                Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
                 if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
+                else RowAside(item, lead, Modifier.alpha(dim))
             }
         }
         }

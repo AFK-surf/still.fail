@@ -70,17 +70,10 @@ export const mChatRow = style({
 export const mChatText = style({
   display: "flex", flexDirection: "column", justifyContent: "center", flex: "1", minWidth: "0",
 });
-/** A chat's picture: its agent's mark, or two of its agents' overlapping, its state at the corner. */
-/** Who is in a chat (../RowPicture.tsx); the row's ground, which the gaps between its pictures are cut in. */
-export const mRowPicture = style({
-  position: "relative", flex: "none", width: "40px", height: "40px",
-  selectors: {
-    [`${mChatRow}[data-offline] &`]: { opacity: ".45" },
-  },
-});
-/** What does not lead, at the title's end. */
+/** Who is in a chat, at the second line's end: its time there instead while the row is held. */
 export const mRowAside = style({
-  selectors: { [`${mChatRow}[data-offline] &`]: { opacity: ".45" } },
+  selectors: { [`${mChatRow}[data-offline] &`]: { opacity: ".45" }, [`${mChatRow}[data-held] &`]: { display: "none" } },
+  "@media": { "(hover: hover) and (pointer: fine)": { selectors: { [`${mChatRow}:hover &`]: { display: "none" } } } },
 });
 export const mChatLine1 = style({ display: "flex", alignItems: "center", gap: "8px", height: "22px" });
 export const mChatTitle = style({

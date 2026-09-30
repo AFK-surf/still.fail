@@ -108,12 +108,7 @@ export const navSession = style({
   },
 });
 
-/** Who is in a chat: its agents' marks or its people's pictures, placed by RowPicture.tsx. */
-export const rowPicture = style({
-  position: "relative", flex: "none", width: 30, height: 30, marginTop: 4,
-  selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
-});
-/** What does not lead, at the title's end (RowPicture.tsx): gone while the row is pointed at, its archive button there. */
+/** Who is in a chat, at the second line's end (RowPicture.tsx): gone while the row is pointed at, its time there. */
 export const rowAside = style({
   selectors: { [`${navSessionWrap}:hover &`]: { display: "none" } },
 });
