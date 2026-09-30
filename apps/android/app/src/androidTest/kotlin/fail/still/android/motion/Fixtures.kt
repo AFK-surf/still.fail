@@ -41,15 +41,16 @@ object Fixtures {
         sessions = emptyList(), last = last, read = read, unread = 0, people = emptyList(),
     )
 
-    fun mine(seq: Long, text: String, at: Long = NOW) = ChatMessage(
+    /** `said`: said while the chat shows, as the core marks it (attend.rs): it comes in. */
+    fun mine(seq: Long, text: String, at: Long = NOW, said: Boolean? = null) = ChatMessage(
         seq = seq, thread = THREAD, ts = "t$seq", authorKind = "person", author = account.email, authorName = "Alice", text = text,
-        attachments = emptyList(), quotes = emptyList(), createdAt = at, mine = true, system = false, by = MessageBy("Alice"), waiting = false, time = stamp(at),
+        attachments = emptyList(), quotes = emptyList(), createdAt = at, mine = true, system = false, by = MessageBy("Alice"), waiting = false, said = said, time = stamp(at),
     )
 
-    fun agent(seq: Long, text: String, at: Long = NOW) = ChatMessage(
+    fun agent(seq: Long, text: String, at: Long = NOW, said: Boolean? = null) = ChatMessage(
         seq = seq, thread = THREAD, ts = "t$seq", authorKind = "agent", author = "ember:c-1", authorName = "Claude", text = text,
         attachments = emptyList(), quotes = emptyList(), createdAt = at, mine = false, system = false,
-        by = MessageBy("Claude", agent = "ember:c-1", maker = anthropic, runtime = "claude"), waiting = false, time = stamp(at),
+        by = MessageBy("Claude", agent = "ember:c-1", maker = anthropic, runtime = "claude"), waiting = false, said = said, time = stamp(at),
     )
 
     fun outgoing(id: String, text: String, seq: Long? = null, at: Long = NOW) =

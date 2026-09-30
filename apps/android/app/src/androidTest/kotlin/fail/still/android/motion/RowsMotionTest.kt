@@ -34,14 +34,15 @@ class RowsMotionTest {
         agentText = "Claude", maker = Fixtures.anthropic, runtimeText = "Claude Code", efforts = listOf("high"),
     )
 
-    private fun agentAt(running: Boolean) = ChatAgent(
+    /** `started`: seen starting while the chat shows, as the core marks it (attend.rs): its activity comes in. */
+    private fun agentAt(running: Boolean, started: Boolean = running) = ChatAgent(
         session = session(), status = if (running) "running" else "idle", profiles = emptyList(), choices = emptyList(), attention = emptyList(),
-        since = if (running) System.currentTimeMillis() - 42_000 else null, turns = emptyList(), threads = emptyList(), jobs = emptyList(),
+        since = if (running) System.currentTimeMillis() - 42_000 else null, started = if (started) true else null, turns = emptyList(), threads = emptyList(), jobs = emptyList(),
     )
 
     private fun live(now: String) = Live(loaded = true, timeline = emptyList(), steps = emptyList(), activity = Activity(ActivityNow(key = now, text = now)))
 
-    private fun chat(messages: List<ChatMessage>, running: Boolean) = Fixtures.chat(messages).copy(agents = listOf(agentAt(running)))
+    private fun chat(messages: List<ChatMessage>, running: Boolean, started: Boolean = running) = Fixtures.chat(messages).copy(agents = listOf(agentAt(running, started)))
 
     /** The chat opened with its agent idle (a working one never lets the clock come to rest: its ring turns). */
     private fun open(messages: List<ChatMessage>): Harness {
@@ -65,7 +66,7 @@ class RowsMotionTest {
         h.fake.put(topic, chat(asked, running = true))
         h.deliver()
         r.frames(30)
-        val reply = asked + Fixtures.agent(6, "都过了：42 个通过，0 个失败。登录页的三个用例也在里面。", later())
+        val reply = asked + Fixtures.agent(6, "都过了：42 个通过，0 个失败。登录页的三个用例也在里面。", later(), said = true)
         h.fake.put(topic, chat(reply, running = true))
         h.deliver()
         r.frames(80)
@@ -83,13 +84,35 @@ class RowsMotionTest {
         h.fake.put(topic, chat(asked, running = true))
         h.deliver()
         r.frames(30)
-        val replies = asked + Fixtures.agent(6, "先说结果：都过了。", later()) + Fixtures.agent(7, "42 个通过，0 个失败；登录页的三个用例也在里面，Safari 那个现在是绿的。", later())
+        val replies = asked + Fixtures.agent(6, "先说结果：都过了。", later(), said = true) + Fixtures.agent(7, "42 个通过，0 个失败；登录页的三个用例也在里面，Safari 那个现在是绿的。", later(), said = true)
         h.fake.put(topic, chat(replies, running = true))
         h.deliver()
         r.frames(150)
         h.fake.put(topic, chat(replies, running = false))
         h.deliver()
         r.frames(60)
+        r.end()
+    }
+
+    /**
+     * Opened from what the device kept while its agent is at work (at work already: not started while it shows), then
+     * caught up on from the station: what was read is there at once (nothing comes out of the avatar, nothing rises in),
+     * as the core marks it (no `said`). Opened idle first: a working agent's ring never lets the clock come to rest.
+     */
+    @Test
+    fun caughtUpShowsAtOnce() {
+        val h = open(asked)
+        val r = h.record("caught-up")
+        h.fake.put(topic, chat(asked, running = true, started = false))
+        h.deliver()
+        r.frames(10)
+        val read = asked + Fixtures.agent(6, "先说结果：都过了。") + Fixtures.agent(7, "42 个通过，0 个失败；登录页的三个用例也在里面。")
+        h.fake.put(topic, chat(read, running = true, started = false))
+        h.deliver()
+        r.frames(90)
+        h.fake.put(topic, chat(read, running = false))
+        h.deliver()
+        r.frames(30)
         r.end()
     }
 
@@ -104,7 +127,7 @@ class RowsMotionTest {
         val h = open(long)
         val r = h.record("follow-glide")
         r.frames(4)
-        h.fake.put(topic, chat(long + Fixtures.agent(25, "改好了：密码错误、账号不存在、网络断开三种情况都有中文提示，另外把按钮的加载状态也补上了，点了以后会转圈，直到服务器回复。", later()), running = false))
+        h.fake.put(topic, chat(long + Fixtures.agent(25, "改好了：密码错误、账号不存在、网络断开三种情况都有中文提示，另外把按钮的加载状态也补上了，点了以后会转圈，直到服务器回复。", later(), said = true), running = false))
         h.deliver()
         r.frames(40)
         probe("follow-glide last")
@@ -140,7 +163,7 @@ class RowsMotionTest {
     }
 
     private fun quoteJump(name: String, quote: Quote, frames: Int = 170) {
-        val quoting = Fixtures.mine(26, "这个还会出现吗", later()).copy(quotes = listOf(quote))
+        val quoting = Fixtures.mine(26, "这个还会出现吗", later(), said = true).copy(quotes = listOf(quote))
         val h = open(long + quoting)
         val r = h.record(name)
         r.frames(2)

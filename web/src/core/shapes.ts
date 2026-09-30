@@ -637,6 +637,8 @@ export interface ChatAgent {
 	since?: number;
 	/** While it waits on work it started (its turn ended as waiting): since when, and for how long at most. */
 	wait?: AgentWait;
+	/** Seen starting its turn while the chat shows (not at work already when first seen): its activity comes in. */
+	started?: boolean;
 	turns: TurnRecord[];
 	threads: ChatThread[];
 	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
@@ -818,6 +820,11 @@ export interface ChatMessage {
 	profile?: string;
 	by: MessageBy;
 	waiting: boolean;
+	/**
+	 * Said while the chat shows (told as it was said, not caught up on): it comes in rather than being there at once.
+	 * Decided by the core once, when first seen (attend.rs).
+	 */
+	said?: boolean;
 	/** Its times in words, by field (`createdAt`). */
 	time?: Record<string, Stamp>;
 }
@@ -884,7 +891,7 @@ export interface ChatView {
 	more: boolean;
 	/**
 	 * The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
-	 * chat is open: those up to it show at once, those after it come in.
+	 * chat is open. The core decides from it which come in (`ChatMessage::said`); clients go by that.
 	 */
 	caught?: number;
 	/**

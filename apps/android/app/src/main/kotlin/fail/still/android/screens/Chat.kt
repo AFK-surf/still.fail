@@ -417,9 +417,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         wasAtWork[0] = shownAtWork
     }
 
-    // Messages new since the chat opened, from an agent whose activity shows, wait their turn out of the list.
-    val since = remember { messages.lastOrNull()?.seq ?: 0L }
-    motion.take(messages, since, atWork.map { it.key }.toSet())
+    // Messages said while the chat shows (the core says which: `said`), from an agent whose activity shows, wait their
+    // turn out of the list.
+    motion.take(messages, atWork.map { it.key }.toSet())
     // A message sent from here stays the row it was in the outbox once the chat shows it: by the seq the station gave
     // it (Outgoing.seq), which the outbox says before it lets the message go.
     val sentAs = remember { HashMap<Long, String>() }
@@ -461,22 +461,13 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val rows = if (reveal.count < all.size) all.takeLast(reveal.count) else all
     host.rows = all.mapTo(HashSet()) { it.id }
     // What was in the list the last time it was drawn: an item new to it rises in; one scrolled to does not, nor one
-    // caught up on rather than said while the chat is open (web Chat.tsx → useMessageList): messages up to where the
-    // core says it caught up (read after what was kept, or once the link is back), and the activity of an agent
-    // already at work when first seen.
+    // caught up on rather than said while the chat is open: the core says which (attend.rs: a message `said`, an agent
+    // `started` while the chat shows).
     val known = remember { HashSet<String>() }
-    val caughtUp = view.caught ?: 0L
-    val statuses = remember { HashMap<String, String>() }
-    val started = remember { HashSet<String>() }
-    agents.forEach { a ->
-        val was = statuses[a.key]
-        if (a.view.status != "running") started -= a.key
-        else if (was != null && was != "running") started += a.key
-        statuses[a.key] = a.view.status
-    }
+    val started = agents.filter { it.view.started == true }.mapTo(HashSet()) { it.key }
     val caught = { row: Entry ->
         when (row) {
-            is Entry.Said -> row.m.seq <= caughtUp
+            is Entry.Said -> row.m.said != true
             is Entry.Working -> row.agent.key !in started
             else -> false
         }

@@ -69,12 +69,13 @@ internal class ChatMotion(private val reduced: Boolean) {
     val activityRows = HashMap<String, LayoutCoordinates>()
     val landings = HashMap<Long, LayoutCoordinates>()
 
-    /** Messages seen for the first time: an agent's, new, while its activity shows, waits its turn to come out of it. */
-    fun take(messages: List<ChatMessage>, since: Long, showing: Set<String>) {
+    /** Messages seen for the first time: an agent's, said while the chat shows (the core's `said`), while its activity
+     *  shows, waits its turn to come out of it. */
+    fun take(messages: List<ChatMessage>, showing: Set<String>) {
         for (m in messages) {
             if (m.seq in decided) continue
             val agent = if (m.authorKind == "agent" && !m.mine && !m.system) m.by.agent else null
-            val emits = !reduced && watched && m.seq > since && agent != null && agent in showing
+            val emits = !reduced && watched && m.said == true && agent != null && agent in showing
             decided[m.seq] = emits
             if (emits) queue.addLast(m.seq to agent!!)
         }

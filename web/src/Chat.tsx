@@ -286,29 +286,15 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of chat.outbox) sentHere.current.add(o.text);
-  // Messages there when the chat opened (and older pages loaded later) show at once, and so do those caught up on (read
-  // after the kept ones, or once the link is back: the core says up to where); only those said while it is open come
-  // in. Each is decided once, when first seen: catching up later does not take back one already coming in.
-  const firstSeq = useRef<number | null>(null);
-  if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
-  const told = useRef(new Map<number, boolean>());
-  const quiet = Math.max(firstSeq.current, chat.caught ?? 0);
-  for (const m of messages) if (!told.current.has(m.seq)) told.current.set(m.seq, m.seq > quiet);
-  const saidHere = (seq: number) => told.current.get(seq) === true;
+  // Only what is said while the chat shows comes in, and an activity only for an agent seen starting meanwhile: the
+  // core decides both (attend.rs: `said`, `started`); the rest is there at once.
+  const said = new Set(messages.filter((m) => m.said).map((m) => m.seq));
+  const saidHere = (seq: number) => said.has(seq);
   // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
   const atWork: AgentAtWork[] = chat.agents.filter((a) => a.status === "running").map(({ session, since, wait }) => (
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, activity: lives.get(session.key)?.activity ?? null, since, wait }
   ));
-  // An activity comes in only for an agent seen starting while the chat is open; one already at work when its agent
-  // is first seen (the agents filling in as the chat opens) is caught up on, there at once.
-  const statuses = useRef(new Map<string, string>());
-  const started = useRef(new Set<string>());
-  for (const a of chat.agents) {
-    const was = statuses.current.get(a.session.key);
-    if (a.status !== "running") started.current.delete(a.session.key);
-    else if (was !== undefined && was !== "running") started.current.add(a.session.key);
-    statuses.current.set(a.session.key, a.status);
-  }
+  const started = new Set(chat.agents.filter((a) => a.started).map((a) => a.session.key));
   const emissions = useEmissions(list);
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
@@ -318,7 +304,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
     const enter = saidHere(m.seq) && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
     return { enter, emitted: told ? emissions.stateOf(m.seq) : null, caught: saidHere(m.seq) ? undefined : true };
   };
-  const caughtAgent = (key: string) => (started.current.has(key) ? undefined : true);
+  const caughtAgent = (key: string) => (started.has(key) ? undefined : true);
   return { messages, divider, away, shown, rowOf, caughtAgent, poseOf: emissions.poseOf };
 }
 

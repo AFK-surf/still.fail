@@ -133,7 +133,7 @@ function answer(name: string, params: Record<string, unknown>): unknown {
       publish();
     }, 450);
     setTimeout(() => {
-      chat.running = { activity: "思考中", since: chat.running?.since ?? Date.now() };
+      chat.running = { activity: "思考中", since: chat.running?.since ?? Date.now(), started: chat.running?.started ?? true };
       publish();
     }, 800);
     setTimeout(() => {

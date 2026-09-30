@@ -661,6 +661,8 @@ data class ChatAgent (
 	val since: Long? = null,
 	/// While it waits on work it started (its turn ended as waiting): since when, and for how long at most.
 	val wait: AgentWait? = null,
+	/// Seen starting its turn while the chat shows (not at work already when first seen): its activity comes in.
+	val started: Boolean? = null,
 	val turns: List<TurnRecord>,
 	val threads: List<ChatThread>,
 	/// Its background jobs, newest first; those with a port are web services, shown by their names.
@@ -842,6 +844,9 @@ data class ChatMessage (
 	val profile: String? = null,
 	val by: MessageBy,
 	val waiting: Boolean,
+	/// Said while the chat shows (told as it was said, not caught up on): it comes in rather than being there at once.
+	/// Decided by the core once, when first seen (attend.rs).
+	val said: Boolean? = null,
 	/// Its times in words, by field (`createdAt`).
 	val time: Map<String, Stamp>? = null
 )
@@ -909,7 +914,7 @@ data class ChatView (
 	val messages: List<ChatMessage>,
 	val more: Boolean,
 	/// The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
-	/// chat is open: those up to it show at once, those after it come in.
+	/// chat is open. The core decides from it which come in (`ChatMessage::said`); clients go by that.
 	val caught: Long? = null,
 	/// The message the unread line goes over: the first the viewer had not read when the chat was opened (not
 	/// theirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it.

@@ -6,6 +6,11 @@
 //!   (not theirs, said before it opened), held for the visit, which lasts while some UI shows the chat; older pages
 //!   are loaded first when it lies above them (`unreadAbove`);
 //! - what is read: a chat is read up to its newest message while a UI shows its end on a page in view;
+//! - what comes in while a chat shows (`said` on a message, `started` on an agent): a message the station told as it
+//!   was said (an event, past what the chat caught up on by reading: what was kept, a page, what was missed while the
+//!   link was down) after the visit began, and an agent seen starting its turn during it. Only those come in with a
+//!   motion; the rest is there at once. Each is decided once, when first seen: catching up later does not take back
+//!   one already coming in;
 //! - which notices a page shows now (`notify`): none while notifications are off, none for a chat a UI is looking
 //!   at, none while this device has pushes and no page is in view (the push tells then); each once (`notice.claim`);
 //! - the workspace the viewer is in: where each UI is (the workspace it says, else its chat's). Notices are only of
@@ -83,6 +88,12 @@ struct Visit {
     session: Option<String>,
     /// The first message shown when older ones were last asked for (once per page).
     asked: Option<u64>,
+    /// The newest message decided on (`said` or not), and those said while it shows.
+    top: u64,
+    said: HashSet<u64>,
+    /// Each agent's status as last seen, and those seen starting while it shows.
+    statuses: HashMap<String, String>,
+    started: HashSet<String>,
 }
 
 /// What a UI said (`client.focus`): each field given changes, the rest stays. `chat: null` shows none; `left`: the
@@ -286,8 +297,40 @@ impl Attend {
         let seq = |m: &Value| m.get("seq").and_then(Value::as_u64).unwrap_or(0);
         let now = self.host.now_ms();
         let mut visits = self.visits.borrow_mut();
-        let visit = visits.entry((station.to_string(), thread)).or_insert_with(|| Visit { at: now, read: known, session: session.map(str::to_string), asked: None });
+        let newest = messages.last().map(seq).unwrap_or(0);
+        let visit = visits.entry((station.to_string(), thread)).or_insert_with(|| Visit {
+            at: now, read: known, session: session.map(str::to_string), asked: None, top: newest, said: HashSet::new(), statuses: HashMap::new(), started: HashSet::new(),
+        });
         let (read, opened) = (visit.read, visit.at);
+        // Said while it shows: past what it had when the visit began, and past what was caught up on (station.rs
+        // `caught`: an event moves it not, a read does).
+        let caught = value.get("caught").and_then(Value::as_u64).unwrap_or(0);
+        for m in &messages {
+            let n = seq(m);
+            if n > visit.top && n > caught {
+                visit.said.insert(n);
+            }
+        }
+        visit.top = visit.top.max(newest);
+        for m in value.get_mut("messages").and_then(Value::as_array_mut).into_iter().flatten() {
+            if visit.said.contains(&seq(m)) {
+                m["said"] = json!(true);
+            }
+        }
+        // Started while it shows: seen at something else first (one at work when first seen was at it before).
+        for a in value.get_mut("agents").and_then(Value::as_array_mut).into_iter().flatten() {
+            let Some(key) = a.get("session").and_then(|s| s.get("key")).and_then(Value::as_str).map(str::to_string) else { continue };
+            let status = a.get("status").and_then(Value::as_str).unwrap_or("").to_string();
+            let running = status == "running";
+            match visit.statuses.insert(key.clone(), status) {
+                _ if !running => { visit.started.remove(&key); }
+                Some(was) if was != "running" => { visit.started.insert(key.clone()); }
+                _ => {}
+            }
+            if visit.started.contains(&key) {
+                a["started"] = json!(true);
+            }
+        }
         let unread = |m: &Value| {
             seq(m) > read
                 && m.get("createdAt").and_then(Value::as_f64).is_some_and(|at| at <= opened)
@@ -305,7 +348,6 @@ impl Attend {
         }
         drop(visits);
         // Read: up to the newest, while its end is in view on a page in view.
-        let newest = messages.last().map(seq).unwrap_or(0);
         if shown.iter().any(|f| f.visible && f.chat.as_ref().is_some_and(|c| c.end)) && newest > known {
             let mut reads = self.reads.borrow_mut();
             let sent = reads.entry((station.to_string(), thread)).or_default();
@@ -434,6 +476,59 @@ mod tests {
             let mut v = chat(1, false, &[(1, 0.0, false), (2, 0.0, false), (10, 0.0, false)]);
             attend.chat("local", None, &mut v);
             assert_eq!(v["unreadLine"], 2);
+        });
+    }
+
+    #[test]
+    fn only_what_is_said_while_a_chat_shows_comes_in() {
+        run(async {
+            let host = FakeHost::new();
+            let attend = Attend::load(host.clone()).await;
+            let said = |v: &Value| -> Vec<u64> {
+                v["messages"].as_array().unwrap().iter().filter(|m| m["said"] == true).map(|m| m["seq"].as_u64().unwrap()).collect()
+            };
+            let started = |v: &Value| -> Vec<String> {
+                v["agents"].as_array().unwrap().iter().filter(|a| a["started"] == true).map(|a| a["session"]["key"].as_str().unwrap().to_string()).collect()
+            };
+            let at = |n: u64, caught: u64, agents: Value| {
+                let mut v = chat(n, false, &(1..=n).map(|s| (s, 0.0, false)).collect::<Vec<_>>());
+                v["caught"] = json!(caught);
+                v["agents"] = agents;
+                v
+            };
+            let agents = |a: &str, b: &str| json!([{ "session": { "key": "a" }, "status": a }, { "session": { "key": "b" }, "status": b }]);
+            attend.focus(1, focus(json!({ "visible": true, "chat": { "station": "local", "thread": 7 } })));
+            // Opened from what was kept (2), its agent a at work already: nothing comes in.
+            let mut v = at(2, 2, agents("running", "idle"));
+            attend.chat("local", None, &mut v);
+            assert!(said(&v).is_empty() && started(&v).is_empty());
+            // Caught up on from the station (3, 4 read after what was kept): there at once, however a works on.
+            let mut v = at(4, 4, agents("running", "idle"));
+            attend.chat("local", None, &mut v);
+            assert!(said(&v).is_empty());
+            // Told as said (5, 6, an event: caught stays), and b starts: they come in.
+            let mut v = at(6, 4, agents("running", "running"));
+            attend.chat("local", None, &mut v);
+            assert_eq!((said(&v), started(&v)), (vec![5, 6], vec!["b".to_string()]));
+            // Caught up on past them later (the link came back): what came in stays so; 7, read, does not.
+            let mut v = at(7, 7, agents("running", "running"));
+            attend.chat("local", None, &mut v);
+            assert_eq!(said(&v), vec![5, 6]);
+            // b's turn ends: it is not starting any more.
+            let mut v = at(7, 7, agents("running", "idle"));
+            attend.chat("local", None, &mut v);
+            assert!(started(&v).is_empty());
+            // Left and opened again: all of it is there at once.
+            attend.focus(1, focus(json!({ "chat": null })));
+            attend.focus(1, focus(json!({ "chat": { "station": "local", "thread": 7 } })));
+            let mut v = at(7, 7, agents("running", "idle"));
+            attend.chat("local", None, &mut v);
+            assert!(said(&v).is_empty());
+            // Not shown: nothing is decided.
+            attend.focus(1, focus(json!({ "chat": null })));
+            let mut v = at(9, 7, agents("running", "idle"));
+            attend.chat("local", None, &mut v);
+            assert!(said(&v).is_empty());
         });
     }
 

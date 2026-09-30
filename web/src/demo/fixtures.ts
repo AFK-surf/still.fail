@@ -62,8 +62,8 @@ export interface DemoChat {
   /** What the visitor sent that the "station" has not taken yet: the chat shows it on its way, as the core does. */
   outbox: Outgoing[];
   items: HistoryItem[];
-  /** Its agent at work: what it does now, and since when. */
-  running: { activity: string; since: number } | null;
+  /** Its agent at work: what it does now, and since when; `started`: while the chat shows (the core's `started`). */
+  running: { activity: string; since: number; started?: boolean } | null;
   blocked: boolean;
   /** Its last turn failed: its account refused by the provider (a visitor's message on the site, which no one serves). */
   failed: boolean;
@@ -73,9 +73,12 @@ export interface DemoChat {
 
 export type Who = Person | "agent" | "me" | "ember";
 
-export function message(chat: DemoChat, by: Who, text: string, at = Date.now()): ChatMessage {
+/** A message of the chat; one said now (no `at`) is said while the chat shows, as the core marks it (`said`). */
+export function message(chat: DemoChat, by: Who, text: string, at?: number): ChatMessage {
   const seq = (chat.messages.at(-1)?.seq ?? 0) + 1;
-  const base = { seq, thread: chat.thread, ts: `${at / 1000}`, text, attachments: [], quotes: [], createdAt: at, system: false, waiting: false, time: { createdAt: stamp(at) } };
+  const now = at === undefined;
+  at ??= Date.now();
+  const base = { seq, thread: chat.thread, ts: `${at / 1000}`, text, attachments: [], quotes: [], createdAt: at, system: false, waiting: false, ...(now ? { said: true } : {}), time: { createdAt: stamp(at) } };
   const m = chat.model;
   if (by === "agent") return { ...base, authorKind: "agent", author: chat.key, mine: false, declared: "final", by: { name: m.name, agent: chat.key, maker: m.maker, runtime: m.runtime } };
   if (by === "ember") return { ...base, authorKind: "ember", author: "ember", mine: false, system: true, by: { name: "still.fail" } };
@@ -237,7 +240,7 @@ export function chatView(chat: DemoChat, runs?: Runs): ChatView {
   const last = chat.messages.at(-1)?.seq ?? 0;
   const agent: ChatAgent = {
     session: session(chat), status: chat.running ? "running" : chat.blocked ? "block" : chat.failed ? "failed" : "final",
-    ...(chat.running ? { badge: "run" as const, since: chat.running.since } : chat.blocked ? { badge: "block" as const } : chat.failed ? { badge: "failed" as const } : {}),
+    ...(chat.running ? { badge: "run" as const, since: chat.running.since, ...(chat.running.started ? { started: true } : {}) } : chat.blocked ? { badge: "block" as const } : chat.failed ? { badge: "failed" as const } : {}),
     ...(runs && chat.model.runtime === "claude" ? {
       profile: runs.profile, choices: runs.choices,
       account: { id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime: "claude" as const, ...(runs.profile.quota ? { quota: runs.profile.quota } : {}) },

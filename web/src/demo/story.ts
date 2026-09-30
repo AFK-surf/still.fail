@@ -119,7 +119,7 @@ export function makeStory(stage: Stage) {
     const done: HistoryStep[] = resume ? calls.slice(0, resume.from).map((x) => x.step) : [];
     const at = resume ? c.items.length - 1 : c.items.length;
     if (!resume) {
-      c.running = { activity: "思考中", since: Date.now() };
+      c.running = { activity: "思考中", since: Date.now(), started: true };
       stage.publish();
       await wait(1100);
     }

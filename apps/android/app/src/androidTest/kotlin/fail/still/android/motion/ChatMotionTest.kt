@@ -43,7 +43,7 @@ class ChatMotionTest {
         h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text, seq = 5))))
         h.deliver()
         r.frames(4)
-        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text)))
+        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true)))
         h.deliver()
         r.frames(24)
         r.end()
@@ -68,7 +68,7 @@ class ChatMotionTest {
         r.frames(14)
         h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text, seq = 5))))
         r.frames(2)
-        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text)))
+        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true)))
         r.frames(26)
         r.end()
     }
@@ -80,7 +80,7 @@ class ChatMotionTest {
         h.fake.put(topic, Fixtures.chat(talk))
         val text = "那顺便加一个单元测试"
         h.fake.answer = { name, _ ->
-            if (name == "chat.send") h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text)))
+            if (name == "chat.send") h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true)))
             JsonNull
         }
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
@@ -114,7 +114,7 @@ class ChatMotionTest {
         // Its station makes it and takes the message, which becomes the chat's first.
         h.fake.put(made, Fixtures.chat(emptyList(), listOf(Fixtures.outgoing("out-1", text, seq = 1)), title = text))
         r.frames(2)
-        h.fake.put(made, Fixtures.chat(listOf(Fixtures.mine(1, text)), title = text))
+        h.fake.put(made, Fixtures.chat(listOf(Fixtures.mine(1, text, said = true)), title = text))
         r.frames(30)
         r.end()
     }
