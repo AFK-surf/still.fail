@@ -63,6 +63,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextOverflow
 import fail.still.android.data.RUNTIME_LABEL
 import fail.still.android.data.ModelOption
+import fail.still.android.data.PickView
+import androidx.compose.foundation.layout.fillMaxHeight
+import fail.still.android.ui.ProviderMark
 import fail.still.android.data.NewChatView
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
@@ -132,9 +135,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
     val model = entry?.model
     val runtime = choice.runtime
     val effort = choice.effort ?: ""
-    val accounts = choice.accounts
     val profile = choice.profile
-    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> app.pickNew(workspace, fill) }
     // The chat, made once with the first message (web/src/NewChat.tsx → useEnsureChat), with what is picked here: the
     // core has it at once under the key it answers, its station makes it behind it; the next new chat starts here too.
     var made by remember(view.station) { mutableStateOf<String?>(null) }
@@ -177,26 +178,17 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
     }
     // The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below.
     Column(Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - fade() }.padding(start = 10.dp, end = 10.dp, top = 8.dp)) {
-        // Room above and below for the chips' shadows, which the scroll would cut.
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Chooser(haze, { IconIn(Icons.Server, 14.dp, C.ink) }, view.name) { pickStation(app, stations, view.station, onStation) }
-            if (runtime == null || model == null) {
+        // One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
+        // cut short rather than pushed off the edge. Room above and below for the chips' shadows.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Chooser(haze, { IconIn(Icons.Server, 14.dp, C.ink) }, view.name, Modifier.widthIn(max = 128.dp)) { pickStation(app, stations, view.station, onStation) }
+            val p = choice.pick
+            if (runtime == null || model == null || p == null || p.options.isEmpty()) {
                 // Nothing to choose from: the chooser leads to where models are enabled.
-                Chooser(haze, null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
+                Chooser(haze, null, "没有可用模型 · 去勾选", Modifier.weight(1f, fill = false)) { app.push(Screen.Station(view.station)) }
             } else {
-                Chooser(haze, { MakerIcon(entry.maker, runtime, 14.dp) }, entry.name) {
-                    pickModel(app, view, model) { m -> pick { put("model", m.model) } }
-                }
-                // The runtime only when the model runs on more than one.
-                if (entry.runtimes.size > 1) Chooser(haze, { MakerIcon(null, runtime, 14.dp) }, RUNTIME_LABEL[runtime] ?: runtime) {
-                    pickRuntime(app, entry.runtimes, runtime) { rt -> pick { put("runtime", rt) } }
-                }
-                Chooser(haze, null, effort.ifEmpty { "默认深度" }) {
-                    pickEffort(app, choice.efforts, effort) { e -> pick { put("effort", e.ifEmpty { null }) } }
-                }
-                // Who runs it, only when there is a choice: the station's pick, or one account kept to.
-                if (choice.pickAccount) Chooser(haze, null, profile?.let { p -> accounts.firstOrNull { it.id == p }?.name } ?: "自动分配") {
-                    pickAccount(app, accounts, profile) { p -> pick { put("profile", p) } }
+                Chooser(haze, { MakerIcon(p.valueOption?.maker ?: entry.maker, runtime, 14.dp) }, tripleLabel(p), Modifier.weight(1f, fill = false), chevron = true) {
+                    openRunPicker(app, view.station)
                 }
             }
         }
@@ -236,14 +228,15 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
 }
 
 @Composable
-private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, onClick: () -> Unit) {
+private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, modifier: Modifier = Modifier, chevron: Boolean = false, onClick: () -> Unit) {
     // The same glass as the composer's capsule under it.
     Row(
-        Modifier.height(30.dp).floatingStill(RoundedCornerShape(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
+        modifier.height(30.dp).floatingStill(RoundedCornerShape(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         leading?.invoke()
-        Text(label, fontSize = 13.sp, color = C.ink, maxLines = 1)
+        Text(label, fontSize = 13.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (chevron) IconIn(Icons.ChevronDown, 12.dp, C.muted)
     }
 }
 
@@ -259,49 +252,113 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
     }
 }
 
-private fun pickModel(app: AppState, view: StationView, current: String, onPick: (ModelOption) -> Unit) {
-    app.sheet = SheetSpec(0.5f) {
+/** What the control says: the model, the runtime where there is a choice, how hard it thinks, and who runs it when that matters. */
+private fun tripleLabel(p: PickView): String {
+    val v = p.value
+    return listOfNotNull(
+        p.valueOption?.name ?: v.model ?: "选模型",
+        if (!p.runtimeFixed && (p.valueOption?.runtimes?.size ?: 0) > 1) RUNTIME_LABEL[v.runtime] ?: v.runtime else null,
+        v.effort ?: "默认深度",
+        p.account?.text,
+    ).joinToString(" · ")
+}
+
+/**
+ * What a new chat runs on, as the PC's panel picks it (web/src/ModelTriple.tsx), in a sheet: the models in a column,
+ * the runtime and how hard it thinks beside them, who runs it in the foot (a list of its own, and back). Picks are a
+ * draft (`pick.set`) until 确定 (`pick.save`); closed otherwise, nothing changes.
+ */
+private fun openRunPicker(app: AppState, station: String) {
+    app.sheet = SheetSpec(0.66f) {
+        val scope = rememberCoroutineScope()
+        val topic by rememberTopic<PickView>(app.core, Topics.pick(station, "new"))
+        val set = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet("new", fill) } catch (_: CoreException) {} }; Unit }
+        // Picked from what it runs on now, each time it is opened.
+        LaunchedEffect(Unit) { set { put("open", true) } }
+        var accounts by remember { mutableStateOf(false) }
+        androidx.activity.compose.BackHandler(enabled = accounts) { accounts = false }
+        val v = topic.value
         SheetGrab()
-        SheetHead("用哪个模型")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            view.models.forEach { m ->
-                PickRow(m.name, listOfNotNull(m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, m.spent?.text).joinToString(" · "), checked = m.model == current, leading = { ModelMark(m.maker, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
+        if (accounts) {
+            Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
+                Text("账号", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
+            }
+        } else SheetHead("模型")
+        if (v == null) return@SheetSpec Loading(topic.error?.message ?: "正在读取…")
+        val draft = v.draft
+        if (accounts) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).windowInsetsPadding(WindowInsets.navigationBars)) {
+                v.dropped?.let { Text(it, fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
+                CascadeOption("自动", v.autoNote, draft.profile == null) { set { put("profile", null as String?) }; accounts = false }
+                v.accounts.forEach { a ->
+                    CascadeOption(a.name, a.quotaLine?.text, draft.profile == a.id, subColor = if (a.quotaLine?.level != null) C.warn else C.muted,
+                        leading = { ProviderMark(a.runtime ?: draft.runtime, a.kind, 16.dp) }) { set { put("profile", a.id) }; accounts = false }
+                }
+            }
+            return@SheetSpec
+        }
+        // Side by side, each scrolling on its own: the models (by series, in the core's order), and what goes with the one picked.
+        Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val groups = v.options.groupBy { it.family ?: "其他" }
+            Column(Modifier.weight(1.35f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                groups.forEach { (who, list) ->
+                    if (groups.size > 1) CascadeLabel(who)
+                    list.forEach { o ->
+                        CascadeOption(o.name, o.spent?.text, v.option == o.model, leading = { MakerIcon(o.maker, o.runtimes.firstOrNull() ?: draft.runtime, 16.dp) }) { set { put("model", o.model) } }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(C.surface).verticalScroll(rememberScrollState()).padding(4.dp)) {
+                if (v.runtimes.isNotEmpty()) {
+                    CascadeLabel("运行时")
+                    v.runtimes.forEach { r -> CascadeOption(RUNTIME_LABEL[r] ?: r, null, draft.runtime == r, leading = { MakerIcon(null, r, 16.dp) }) { set { put("runtime", r) } } }
+                }
+                CascadeLabel("思考深度")
+                (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: "默认", null, draft.effort == e) { set { put("effort", e) } } }
             }
         }
-    }
-}
-
-private fun pickRuntime(app: AppState, runtimes: List<String>, current: String, onPick: (String) -> Unit) {
-    app.sheet = SheetSpec(0.36f) {
-        SheetGrab()
-        SheetHead("用哪个运行时")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            runtimes.forEach { rt -> PickRow(RUNTIME_LABEL[rt] ?: rt, checked = rt == current, leading = { ModelMark(null, rt, 36.dp) }) { onPick(rt); app.sheet = null } }
-        }
-    }
-}
-
-private fun pickEffort(app: AppState, efforts: List<String>, current: String, onPick: (String) -> Unit) {
-    app.sheet = SheetSpec(0.48f) {
-        SheetGrab()
-        SheetHead("思考深度")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("默认", checked = current.isEmpty()) { onPick(""); app.sheet = null }
-            efforts.forEach { e ->
-                PickRow(e, checked = current == e) { onPick(e); app.sheet = null }
+        // The foot: who runs it (the station's pick, most of the time), and 确定.
+        Row(
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(start = 10.dp, end = 14.dp, top = 10.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { accounts = true }.padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("账号", fontSize = 14.sp, color = C.muted)
+                Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                IconIn(Icons.ChevronRight, 14.dp, C.muted)
             }
+            Text(
+                if (v.changed) "确定" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink,
+                modifier = Modifier.clip(RoundedCornerShape(19.dp)).background(if (v.changed) C.ink else C.chip).clickable(enabled = v.option != null) {
+                    app.sheet = null
+                    if (v.changed) scope.launch { try { app.api(station).pickSave("new") } catch (err: CoreException) { app.toast = err.message } }
+                }.padding(horizontal = 22.dp, vertical = 9.dp),
+            )
         }
     }
 }
 
-private fun pickAccount(app: AppState, accounts: List<RunnableProfile>, current: String?, onPick: (String?) -> Unit) {
-    app.sheet = SheetSpec(0.5f) {
-        SheetGrab()
-        SheetHead("账号")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("自动分配", "额度用完或登录失效时换一个", checked = current == null) { onPick(null); app.sheet = null }
-            accounts.forEach { a -> PickRow(a.name, a.quotaLine?.text, checked = current == a.id) { onPick(a.id); app.sheet = null } }
+@Composable
+private fun CascadeLabel(text: String) = Text(text, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 10.dp, top = 10.dp, bottom = 2.dp))
+
+/** A choice in a column of the picker: the chosen one on the accent's pale ground, its words in the accent and bold. */
+@Composable
+private fun CascadeOption(label: String, sub: String?, checked: Boolean, subColor: androidx.compose.ui.graphics.Color = C.muted, leading: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (checked) C.accentBg else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        leading?.invoke()
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = 15.sp, color = if (checked) C.accentInk else C.ink, fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub != null) Text(sub, fontSize = 12.sp, color = subColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
+        if (checked) IconIn(Icons.Check, 14.dp, C.accent)
     }
 }
 
