@@ -232,16 +232,16 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
     val c = C
     val tone = { f: NetFigure -> when (f.level) { "red" -> c.red; "amber" -> c.warn; else -> c.ink } }
     val figure = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(net.path, Modifier.weight(1f, fill = false), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                net.loss?.let { Text(it.text, style = figure, color = tone(it), maxLines = 1) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(net.path, Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                net.loss?.let { Text(it.text, Modifier.alignByBaseline().weight(1f, fill = false), style = figure, color = tone(it), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             net.rtt?.let { rtt ->
                 Row {
-                    Text("延时 ", fontSize = 13.sp, color = C.muted, maxLines = 1)
-                    Text(rtt.text, style = figure, color = tone(rtt), maxLines = 1)
+                    Text("延时 ", Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1)
+                    Text(rtt.text, Modifier.alignByBaseline(), style = figure, color = tone(rtt), maxLines = 1)
                 }
             }
         }
@@ -249,8 +249,8 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
             listOf(Triple("↑", net.up, net.upTotal), Triple("↓", net.down, net.downTotal)).forEach { (arrow, rate, total) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(arrow, fontSize = 13.sp, color = C.muted)
-                    Text(rate, Modifier.padding(start = 6.dp).width(72.dp), style = figure, color = C.ink, maxLines = 1)
-                    total?.let { Text("共 $it", Modifier.width(64.dp), fontSize = 13.sp, fontFeatureSettings = "tnum", color = C.muted, maxLines = 1) }
+                    Text(rate, Modifier.padding(start = 5.dp).width(68.dp), style = figure, color = C.ink, maxLines = 1)
+                    total?.let { Text("共 $it", Modifier.width(60.dp), style = figure.copy(fontWeight = FontWeight.Normal), color = C.muted, maxLines = 1) }
                 }
             }
         }

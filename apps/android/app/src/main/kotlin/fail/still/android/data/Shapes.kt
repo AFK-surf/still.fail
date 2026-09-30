@@ -1530,7 +1530,7 @@ data class Overview (
 /// over the last minute, and what goes over it.
 @Serializable
 data class StationNet (
-	/// 直连, 经中继北京 (the relay's name, or 经中继（host）), or 正在选路.
+	/// 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路.
 	val path: String,
 	val rtt: NetFigure? = null,
 	/// Round trips over the last minute, oldest first, in milliseconds.
@@ -1540,6 +1540,9 @@ data class StationNet (
 	val up: String,
 	/// What went over it since it opened: 本次共 ↓ 212 MB · ↑ 9.6 MB.
 	val total: String,
+	/// The same each way: 212 MB. Missing from a core from before.
+	val downTotal: String? = null,
+	val upTotal: String? = null,
 	/// Packets lost over the last minute, when some were.
 	val loss: NetFigure? = null
 )

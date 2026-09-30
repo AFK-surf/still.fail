@@ -1464,7 +1464,7 @@ export interface Overview {
  * over the last minute, and what goes over it.
  */
 export interface StationNet {
-	/** 直连, 经中继北京 (the relay's name, or 经中继（host）), or 正在选路. */
+	/** 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路. */
 	path: string;
 	rtt?: NetFigure;
 	/** Round trips over the last minute, oldest first, in milliseconds. */
@@ -1474,6 +1474,9 @@ export interface StationNet {
 	up: string;
 	/** What went over it since it opened: 本次共 ↓ 212 MB · ↑ 9.6 MB. */
 	total: string;
+	/** The same each way: 212 MB. Missing from a core from before. */
+	downTotal?: string;
+	upTotal?: string;
 	/** Packets lost over the last minute, when some were. */
 	loss?: NetFigure;
 }
