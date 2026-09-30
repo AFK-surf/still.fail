@@ -1,5 +1,6 @@
 // Small pieces the station client and ember cloud share.
 import { useAppearance } from "./theme.ts";
+import { useRowPicture } from "./rowLead.ts";
 import { useRef, type ReactNode } from "react";
 import type { Host, Level, PersonShown, Quota } from "./api.ts";
 import { useOnlyMine } from "./station.tsx";
@@ -219,5 +220,14 @@ export function AppearanceSetting() {
   return (
     <Segmented label="外观" value={appearance} onChange={setAppearance}
       options={[{ value: "system", label: "跟随系统" }, { value: "light", label: "浅色" }, { value: "dark", label: "深色" }]} />
+  );
+}
+
+/** 侧栏头像: whose pictures lead a chat's row (rowLead.ts), kept in this browser. */
+export function RowPictureSetting() {
+  const [value, setValue] = useRowPicture();
+  return (
+    <Segmented label="侧栏头像" value={value} onChange={setValue}
+      options={[{ value: "auto", label: "自动" }, { value: "agents", label: "Agent 为主" }, { value: "people", label: "人为主" }]} />
   );
 }

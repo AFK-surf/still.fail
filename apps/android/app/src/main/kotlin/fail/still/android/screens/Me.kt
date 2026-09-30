@@ -78,6 +78,11 @@ fun MeScreen(current: WorkspaceEntry) {
         val themes = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 36.dp, fill = true)
+        // Whose pictures lead a chat's row in the list (RowPicture.kt).
+        SectionHeader("列表头像", start = 24.dp)
+        val pictures = listOf("auto" to "自动", "agents" to "Agent 为主", "people" to "人为主")
+        Seg(pictures.map { it.second }, pictures.indexOfFirst { it.first == app.rowPicture }.coerceAtLeast(0), { app.useRowPicture(pictures[it].first) },
+            Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 36.dp, fill = true)
         // Local notices and pushes alike, on this device (Notices.kt, Push.kt); turned on, the system is asked too.
         SectionHeader("通知", start = 24.dp)
         val ask = rememberNotificationAsk(app, once = false)

@@ -87,6 +87,7 @@ import "../mobile/Versions.css.ts";
 import "../mobile/OpenJobs.css.ts";
 import "../cloud/StationCards.css.ts";
 import "../Versions.css.ts";
+import "../RowPicture.css.ts";
 import "../Sidebar.css.ts";
 import "../OpenJobs.css.ts";
 import "../ChatMark.css.ts";

@@ -576,6 +576,15 @@ export interface Origin {
 	threadTs: string;
 }
 
+/** Someone in a chat, named as the core names them. */
+export interface Person {
+	id: string;
+	name: string;
+	email?: string;
+	via: string;
+	shown: PersonShown;
+}
+
 /** An item of the sidebar, as its station puts it together for the viewer, and where it is. */
 export interface ChatItem {
 	id: string;
@@ -606,6 +615,13 @@ export interface ChatItem {
 	time?: Record<string, Stamp>;
 	/** A new chat asked for here that its station has not made yet. Absent otherwise. */
 	pending?: boolean;
+	/**
+	 * Who is in it, for its pictures: who started it first, then everyone who wrote in it, each once. From a
+	 * station that does not say: absent.
+	 */
+	people?: Person[];
+	/** Who started it, as in `people`. */
+	creator?: Creator;
 	/** The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it. */
 	clientKey?: string;
 }
@@ -657,15 +673,6 @@ export interface ChatMessage {
 export interface Me {
 	id?: string;
 	email?: string;
-}
-
-/** Someone in a chat, named as the core names them. */
-export interface Person {
-	id: string;
-	name: string;
-	email?: string;
-	via: string;
-	shown: PersonShown;
 }
 
 /** A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it. */
@@ -743,6 +750,8 @@ export interface ChatsView {
 	 * corner of the list; absent while all are (a station first connecting is not one).
 	 */
 	trouble?: StationTrouble;
+	/** How many people the scope has (one on a station's own page), for how rows are pictured; absent until known. */
+	members?: number;
 }
 
 export interface ConfigTokenOwner {

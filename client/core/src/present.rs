@@ -127,6 +127,39 @@ pub fn person(p: &mut Value, me: &Value, members: &[Value]) {
     p["shown"] = json!({ "name": name, "display": if mine { "你".to_string() } else { name.clone() }, "picture": picture, "mine": mine });
 }
 
+/// A row's people as the clients show them (`person`): who started it first, then everyone who wrote in it, each once;
+/// `creator` shown the same. A Slack user the viewer said is them is the viewer too.
+pub fn row_people(row: &mut Value, me: &Value, slack_users: &[String], members: &[Value]) {
+    // A station that does not say who: the row as it was.
+    if row.get("people").is_none() && row.get("creator").is_none() {
+        return;
+    }
+    let shown = |p: &Value| {
+        let mut p = p.clone();
+        person(&mut p, me, members);
+        if p.get("id").and_then(Value::as_str).is_some_and(|id| is_viewer(me, id, slack_users)) {
+            p["shown"]["mine"] = json!(true);
+            p["shown"]["display"] = json!("你");
+        }
+        p
+    };
+    let creator = row.get("creator").filter(|c| c.is_object()).map(shown);
+    let same = |a: &Value, b: &Value| {
+        let key = |p: &Value| p.get("email").and_then(Value::as_str).or_else(|| p.get("id").and_then(Value::as_str)).unwrap_or("").to_ascii_lowercase();
+        key(a) == key(b)
+    };
+    let mut people: Vec<Value> = creator.iter().cloned().collect();
+    for p in row.get("people").and_then(Value::as_array).into_iter().flatten() {
+        if !people.iter().any(|q| same(q, p)) {
+            people.push(shown(p));
+        }
+    }
+    if let Some(creator) = creator {
+        row["creator"] = creator;
+    }
+    row["people"] = json!(people);
+}
+
 /// Who said a row's last thing, as its line shows them: `{ kind, name, model?, runtime?, picture?, mine, state? }`,
 /// the agent's state riding on its picture when it is an agent of the row.
 pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value]) -> Option<Value> {

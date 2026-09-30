@@ -50,6 +50,7 @@ export const mChatRow = style({
   position: "relative", display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%",
   height: "66px", padding: "0 16px 0 22px", border: "0", background: "transparent", color: "var(--m-ink)",
   textAlign: "left", cursor: "pointer", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none",
+  vars: { "--mark-around": "var(--m-bg)" },
   selectors: {
     "&[data-held]": { background: "color-mix(in srgb, var(--m-ink) 5%, transparent)" },
   },
@@ -70,21 +71,16 @@ export const mChatText = style({
   display: "flex", flexDirection: "column", justifyContent: "center", flex: "1", minWidth: "0",
 });
 /** A chat's picture: its agent's mark, or two of its agents' overlapping, its state at the corner. */
+/** Who is in a chat (../RowPicture.tsx); the row's ground, which the gaps between its pictures are cut in. */
 export const mRowPicture = style({
   position: "relative", flex: "none", width: "40px", height: "40px",
-  vars: { "--mark-around": "var(--m-bg)" },
   selectors: {
     [`${mChatRow}[data-offline] &`]: { opacity: ".45" },
   },
 });
-export const mRowAgent = style({
-  position: "absolute", display: "grid", placeItems: "center",
-  selectors: {
-    [`${mRowPicture}[data-count="1"] &`]: { inset: "0" },
-    [`${mRowPicture}[data-count="2"] &`]: { width: "22px", height: "22px" },
-    [`${mRowPicture}[data-count="2"] &:first-child`]: { left: "0", top: "0" },
-    [`${mRowPicture}[data-count="2"] &:last-child`]: { right: "0", bottom: "0" },
-  },
+/** What does not lead, at the title's end. */
+export const mRowAside = style({
+  selectors: { [`${mChatRow}[data-offline] &`]: { opacity: ".45" } },
 });
 export const mChatLine1 = style({ display: "flex", alignItems: "center", gap: "8px", height: "22px" });
 export const mChatTitle = style({

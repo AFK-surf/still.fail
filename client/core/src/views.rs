@@ -676,6 +676,8 @@ impl Views {
                         let text = crate::format::clean_text(last.get("text").and_then(Value::as_str).unwrap_or(""));
                         last["preview"] = json!(if text.is_empty() { "（文件）".to_string() } else { text });
                     }
+                    // Who is in it, for its pictures: who started it first, then everyone who wrote in it, each once.
+                    crate::present::row_people(&mut row, &me, &slack_users, &members);
                     if let Some(by) = crate::present::last_by(&row, &me, &slack_users, &members) {
                         row["last"]["by"] = by;
                         // What its picture says when pointed at: who, and an agent's state.
@@ -733,7 +735,11 @@ impl Views {
                 json!({ "text": format!("{} 台 station 异常", all.len()), "state": worst })
             }
         };
-        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble })))
+        // How many people the scope has: one on a station's own page; a workspace's members, once known.
+        let members = if scope == "local" { Some(1) } else {
+            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).map(Vec::len))
+        };
+        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members })))
     }
 
     /// Rows newest first, grouped by the viewer's local calendar day.

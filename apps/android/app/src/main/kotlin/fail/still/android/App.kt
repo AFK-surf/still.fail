@@ -123,6 +123,10 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     var theme by mutableStateOf(prefs.getString("theme", null) ?: "system"); private set
     fun useTheme(value: String) { theme = value; prefs.edit().putString("theme", value).apply() }
 
+    /** 列表头像: whose pictures lead a chat's row, "auto" (the default), "agents" or "people" (RowPicture.kt). */
+    var rowPicture by mutableStateOf(prefs.getString("rowPicture", null) ?: "auto"); private set
+    fun useRowPicture(value: String) { rowPicture = value; prefs.edit().putString("rowPicture", value).apply() }
+
     var onlyMine by mutableStateOf(prefs.getBoolean("onlyMine", false)); private set
     fun showOnlyMine(on: Boolean) { onlyMine = on; prefs.edit().putBoolean("onlyMine", on).apply() }
 

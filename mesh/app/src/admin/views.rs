@@ -434,6 +434,9 @@ impl AdminApi {
                 "lastActiveAt": t.thread.created_at.max(t.last_message.as_ref().map(|m| m.created_at).unwrap_or(0)),
                 "connect": from.and_then(slack_connect_of),
                 "origin": origin,
+                // Who is in it, for the row's pictures: who started it, and everyone who wrote in it.
+                "creator": creator,
+                "people": people,
             });
             if let Some(client) = key.as_str().and_then(|k| self.deps.hub.client_key(k)) {
                 row["clientKey"] = json!(client);
@@ -459,6 +462,7 @@ impl AdminApi {
                     _ => NO_WORDS.to_string(),
                 },
             };
+            let starter = self.creator(s.created_by.as_deref());
             let mut row = json!({
                 "id": key, "session": key, "thread": null,
                 "title": title,
@@ -466,10 +470,13 @@ impl AdminApi {
                 "last": null,
                 "unread": false,
                 // No chat yet: mine only if the viewer started the session; others in its Slack thread do not count.
-                "mine": is_mine(self.creator(s.created_by.as_deref()).as_ref()),
+                "mine": is_mine(starter.as_ref()),
                 "lastActiveAt": s.last_active_at,
                 "connect": if s.connect == INTERNAL_CONNECT { None } else { Some(s.connect.clone()) },
                 "origin": origin,
+                // No one has written yet: only who started it.
+                "people": starter.iter().collect::<Vec<_>>(),
+                "creator": starter,
             });
             if let Some(client) = self.deps.hub.client_key(key) {
                 row["clientKey"] = json!(client);

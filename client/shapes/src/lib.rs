@@ -1227,7 +1227,13 @@ pub struct ChatItem {
     /// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
     pub time: Option<HashMap<String, Stamp>>,
     /// A new chat asked for here that its station has not made yet. Absent otherwise.
-    pub pending: Option<bool>,    /// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
+    pub pending: Option<bool>,
+    /// Who is in it, for its pictures: who started it first, then everyone who wrote in it, each once. From a
+    /// station that does not say: absent.
+    pub people: Option<Vec<Person>>,
+    /// Who started it, as in `people`.
+    pub creator: Option<Creator>,
+    /// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
     pub client_key: Option<String>,
 }
 
@@ -1254,6 +1260,9 @@ pub struct ChatsView {
     /// The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
     /// corner of the list; absent while all are (a station first connecting is not one).
     pub trouble: Option<StationTrouble>,
+    /// How many people the scope has (one on a station's own page), for how rows are pictured; absent until known.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub members: Option<i64>,
 }
 
 /// Used up until a time (or no one knows when), in words.

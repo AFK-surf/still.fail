@@ -1313,6 +1313,7 @@ async fn the_sidebar_is_one_kind_of_item_an_agent_merged_with_its_internal_chat_
     settle().await;
     let slack_key = "ds:C1:5.000001";
     let origin = json!({ "teamName": "Acme", "channel": "C1", "channelName": null, "threadTs": "5.000001" });
+    let starter = json!({ "id": "slack:ds:U42", "name": "U42", "email": null, "via": "slack" });
     let rows = || async { t.get("/chats").await.as_array().unwrap().clone() };
     let find = |rows: &[Value], id: &str| rows.iter().find(|r| r["id"] == id).cloned().unwrap();
     let mut agent_row = find(&rows().await, slack_key);
@@ -1322,7 +1323,11 @@ async fn the_sidebar_is_one_kind_of_item_an_agent_merged_with_its_internal_chat_
     o.remove("lastActiveAt");
     assert_eq!(
         agent_row,
-        json!({ "id": slack_key, "session": slack_key, "thread": null, "title": "部署挂了", "last": null, "unread": false, "mine": false, "connect": "ds", "origin": origin })
+        json!({
+            "id": slack_key, "session": slack_key, "thread": null, "title": "部署挂了", "last": null, "unread": false, "mine": false, "connect": "ds", "origin": origin,
+            // No chat yet: who started it is all who is in it.
+            "creator": starter, "people": [starter],
+        })
     );
     let mut keys: Vec<&String> = agents[0].as_object().unwrap().keys().collect();
     keys.sort();

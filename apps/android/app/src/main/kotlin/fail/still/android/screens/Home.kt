@@ -307,34 +307,43 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
 
 /**
  * A row: its title (bold while something in it is unread) and, for an agent that came from Slack, the connect's mark;
- * under it the last thing said; the chat's state on its picture (ChatMark). Two lines, always the same height. The
+ * under it the last thing said; the chat's state a dot before its title (ChatMark), who is in it as its picture and at
+ * the title's end (RowPicture.kt). Two lines, always the same height. The
  * time shows only while the row is held.
  */
 @Composable
 private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     val app = LocalApp.current
     var held by remember { mutableStateOf(false) }
+    ChatRowBody(item, leading(app.rowPicture, view.members), held, Modifier.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id) {
+        detectTapGestures(
+            onPress = { tryAwaitRelease(); held = false },
+            onLongPress = { held = true },
+            onTap = { app.push(Screen.Chat(item.station, item.page)) },
+        )
+    }))
+}
+
+/** What a row shows, `lead` leading its picture (RowPicture.kt); the time while it is `held`. */
+@Composable
+internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, modifier: Modifier = Modifier) {
     Box(
         Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
-            .then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id) {
-                detectTapGestures(
-                    onPress = { tryAwaitRelease(); held = false },
-                    onLongPress = { held = true },
-                    onTap = { app.push(Screen.Chat(item.station, item.page)) },
-                )
-            }),
+            .then(modifier),
     ) {
         // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
         val offline = item.offline
         val dim = if (offline != null) 0.45f else 1f
         Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        AgentsPicture(item, Modifier.alpha(dim))
+        RowPicture(item, lead, Modifier.alpha(dim))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChatMark(item, Modifier)
                 Text(
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
                     color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim),
                 )
+                RowAside(item, lead, Modifier.alpha(dim))
                 // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                     val reconnecting = item.reconnecting
@@ -353,25 +362,6 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     }
 }
 
-/**
- * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping, with its state (the
- * core's) at the corner. A chat with no agent yet shows still.fail's.
- */
-@Composable
-private fun AgentsPicture(item: ChatItem, modifier: Modifier) {
-    val agents = item.agents.take(2)
-    Box(modifier.size(40.dp)) {
-        when {
-            agents.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Mark(26.dp) }
-            agents.size == 1 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { MakerIcon(agents[0].maker, agents[0].runtime, 28.dp) }
-            else -> agents.forEachIndexed { i, a ->
-                Box(Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(22.dp), contentAlignment = Alignment.Center) { MakerIcon(a.maker, a.runtime, 18.dp) }
-            }
-        }
-        ChatMark(item, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
-    }
-}
-
 /** What a chat's row says of it (web/src/ChatMark.tsx): red when it wants someone now, yellow at work, blue ended well and unread. */
 internal enum class RowTone { Busy, Done, Alert }
 
@@ -386,14 +376,13 @@ private val MarkRed = Color(0xFFE5484D)
 private val MarkYellow = Color(0xFFF2B01E)
 
 /**
- * A chat's state at its picture's corner, over the picture with a gap of the row's ground round it: a blue dot done
- * and unread, a red one with a soft halo to be seen now, a turning yellow ring with a gap at work. Nothing otherwise.
+ * A chat's state, a dot before its title (web: ChatMark.css.ts chatMarkInline): a blue dot done and unread, a red one
+ * with a soft halo to be seen now, a turning yellow ring with a gap at work. Nothing otherwise.
  */
 @Composable
 private fun ChatMark(item: ChatItem, modifier: Modifier) {
     val tone = rowTone(item) ?: return
     val label = when (tone) { RowTone.Busy -> "工作中"; RowTone.Done -> "做完了，有新消息"; RowTone.Alert -> "需要处理" }
-    val ground = C.bg
     // A mark that comes while the chat is in view pops in (web: ChatMark.tsx, 320 ms ease-out, 0 → 1.3 at 60 % → 1);
     // ones there when the list is first drawn do not.
     val still = reducedMotion()
@@ -401,16 +390,15 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
     if (pop != null) LaunchedEffect(pop) { pop.animateTo(1f, tween(320, easing = CssEaseOut)) }
     val turn = if (tone == RowTone.Busy && !still) rememberInfiniteTransition(label = "mark")
         .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "turn").value else 0f
-    Canvas(modifier.size(14.dp).graphicsLayer {
+    Canvas(modifier.size(10.dp).graphicsLayer {
         pop?.value?.let { p -> val k = if (p < 0.6f) 1.3f * p / 0.6f else 1.3f - 0.3f * (p - 0.6f) / 0.4f; scaleX = k; scaleY = k }
     }.semantics { contentDescription = label }) {
         val r = size.minDimension / 2
         val ring = 2.dp.toPx()
-        if (tone == RowTone.Alert) drawCircle(MarkRed.copy(alpha = 0.25f), r + 5.dp.toPx())
-        drawCircle(ground, r)
+        if (tone == RowTone.Alert) drawCircle(MarkRed.copy(alpha = 0.25f), r - 1.dp.toPx() + 3.dp.toPx())
         when (tone) {
-            RowTone.Done -> drawCircle(MarkBlue, r - ring)
-            RowTone.Alert -> drawCircle(MarkRed, r - ring)
+            RowTone.Done -> drawCircle(MarkBlue, r - 1.dp.toPx())
+            RowTone.Alert -> drawCircle(MarkRed, r - 1.dp.toPx())
             RowTone.Busy -> {
                 val inset = ring / 2
                 val box = androidx.compose.ui.geometry.Size(size.width - ring, size.height - ring)

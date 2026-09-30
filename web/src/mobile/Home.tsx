@@ -7,8 +7,10 @@ import { useWorkspaces } from "../cloud/api.ts";
 import { Archive, ChevronDown, Edit, Unplug } from "../icons.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { Avatar, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
+import { Avatar, Illustration, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
+import { RowAside, RowPicture } from "../RowPicture.tsx";
+import { leading, useRowPicture } from "../rowLead.ts";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { StationGlyph, glyphCounts, glyphLabel } from "../StationGlyph.tsx";
@@ -88,6 +90,8 @@ function reading(status: StatusView | undefined): string {
 function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine: boolean }) {
   const view = chats.value;
   const status = useStatus();
+  const [setting] = useRowPicture();
+  const lead = leading(setting, view?.members);
   return (
     <div className={css.mHomePane}>
       {!view ? <Note text={chats.error?.message ?? reading(status)} error={!!chats.error} /> : (
@@ -101,7 +105,7 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
           {view.days.map((day) => (
             <section key={day.daysAgo}>
               <SectionHeader title={day.label} />
-              {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
+              {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={lead} />)}
             </section>
           ))}
         </>
@@ -129,11 +133,12 @@ function Empty({ view, onlyMine }: { view: ChatsView; onlyMine: boolean }) {
 
 /**
  * A row: its title (bold while something in it is unread) and, for an agent that came from
- * Slack, the connect's mark; under it the last thing said; the chat's state on its picture (../ChatMark.tsx). Two lines,
+ * Slack, the connect's mark; under it the last thing said; the chat's state a dot before its title (../ChatMark.tsx), who
+ * is in it as its picture and at the title's end (../RowPicture.tsx), as on the wide screen. Two lines,
  * always the same height. The time shows while the row is held (or, with a mouse, pointed at). One whose station is
  * offline is greyed and says so.
  */
-function ChatRow({ item }: { item: ChatItem }) {
+function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const app = useApp();
   const [held, setHeld] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -145,10 +150,12 @@ function ChatRow({ item }: { item: ChatItem }) {
       onPointerDown={() => { longPressed.current = false; timer.current = setTimeout(() => { longPressed.current = true; setHeld(true); }, 450); }}
       onPointerUp={release} onPointerCancel={release} onPointerLeave={release} onContextMenu={(e) => e.preventDefault()}
       onClick={() => { if (!longPressed.current) app.push(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
-      <AgentsPicture item={item} />
+      <RowPicture item={item} lead={lead} box={40} className={css.mRowPicture} />
       <span className={css.mChatText}>
       <span className={css.mChatLine1}>
+        <ChatMark item={item} inline />
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
+        <RowAside item={item} lead={lead} size={18} className={css.mRowAside} />
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
         {item.offline ? <Tip label={item.offline}><span className={css.mChatMark}><Unplug size={14} /></span></Tip>
           : item.reconnecting ? <Tip label={item.reconnecting}><span className={css.mChatMark} aria-label={item.reconnecting}><Spinner size={12} /></span></Tip>
@@ -160,22 +167,6 @@ function ChatRow({ item }: { item: ChatItem }) {
       </span>
       </span>
     </button>
-  );
-}
-
-/**
- * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping, with the chat's state
- * at the corner. A chat with no agent yet shows ember's.
- */
-function AgentsPicture({ item }: { item: ChatItem }) {
-  const agents = item.agents.slice(0, 2);
-  return (
-    <span className={css.mRowPicture} data-count={agents.length || 1}>
-      {agents.length === 0
-        ? <span className={css.mRowAgent} aria-hidden="true"><Mark size={26} /></span>
-        : agents.map((a) => <span key={a.key} className={css.mRowAgent} aria-hidden="true"><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 18 : 28} /></span>)}
-      <ChatMark item={item} />
-    </span>
   );
 }
 

@@ -198,6 +198,8 @@ function chatItem(chat: DemoChat): ChatItem {
     id: chat.key, session: chat.key, thread: chat.thread, title: chat.title, agents: [agent], unread: chat.unread, mine: true,
     lastActiveAt: at, station: "local", stationName: "", ...(agent.mark ? { state: agent.mark } : {}),
     ...(chat.originText ? { originText: chat.originText } : {}),
+    // Who is in it: who asked first started it.
+    people: chat.people, ...(chat.people[0] ? { creator: chat.people[0] } : {}),
     last: {
       seq: last?.seq ?? 0, authorKind: byAgent ? "agent" : "person", author: byAgent ? chat.key : last?.author ?? "", text: preview, preview,
       createdAt: at,

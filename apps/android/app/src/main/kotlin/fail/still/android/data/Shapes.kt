@@ -607,6 +607,16 @@ data class Origin (
 	val threadTs: String
 )
 
+/// Someone in a chat, named as the core names them.
+@Serializable
+data class Person (
+	val id: String,
+	val name: String,
+	val email: String? = null,
+	val via: String,
+	val shown: PersonShown
+)
+
 /// An item of the sidebar, as its station puts it together for the viewer, and where it is.
 @Serializable
 data class ChatItem (
@@ -636,6 +646,11 @@ data class ChatItem (
 	val time: Map<String, Stamp>? = null,
 	/// A new chat asked for here that its station has not made yet. Absent otherwise.
 	val pending: Boolean? = null,
+	/// Who is in it, for its pictures: who started it first, then everyone who wrote in it, each once. From a
+	/// station that does not say: absent.
+	val people: List<Person>? = null,
+	/// Who started it, as in `people`.
+	val creator: Creator? = null,
 	/// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
 	val clientKey: String? = null
 )
@@ -689,16 +704,6 @@ data class ChatMessage (
 data class Me (
 	val id: String? = null,
 	val email: String? = null
-)
-
-/// Someone in a chat, named as the core names them.
-@Serializable
-data class Person (
-	val id: String,
-	val name: String,
-	val email: String? = null,
-	val via: String,
-	val shown: PersonShown
 )
 
 /// A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it.
@@ -777,7 +782,9 @@ data class ChatsView (
 	val days: List<ChatDay>,
 	/// The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
 	/// corner of the list; absent while all are (a station first connecting is not one).
-	val trouble: StationTrouble? = null
+	val trouble: StationTrouble? = null,
+	/// How many people the scope has (one on a station's own page), for how rows are pictured; absent until known.
+	val members: Long? = null
 )
 
 @Serializable

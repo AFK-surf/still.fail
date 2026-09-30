@@ -1,5 +1,6 @@
 // You, on a narrow screen, as the Android app has it (apps/android/…/screens/Me.kt): who is signed in, which accounts
 // and how it looks (workspaces are switched from their name on Home, ./Workspaces.tsx).
+import { useRowPicture, type RowPicture } from "../rowLead.ts";
 import { signIn, signOut, useAccounts } from "../cloud/accounts.ts";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
@@ -13,11 +14,14 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as connectsCss from "./Connects.css.ts";
 
 const THEMES: [Appearance, string][] = [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]];
+/** Whose pictures lead a chat's row (../rowLead.ts). */
+const PICTURES: [RowPicture, string][] = [["auto", "自动"], ["agents", "Agent 为主"], ["people", "人为主"]];
 
 export function MeScreen() {
   const app = useApp();
   const accounts = useAccounts() ?? [];
   const [appearance, setAppearance] = useAppearance();
+  const [picture, setPicture] = useRowPicture();
   const me = app.entry.account;
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
@@ -32,6 +36,10 @@ export function MeScreen() {
       <SectionHeader title="外观" start={24} />
       <div className={`${css.mPadX12} ${css.mSegBlock}`}>
         <Seg options={THEMES.map(([, label]) => label)} selected={Math.max(0, THEMES.findIndex(([v]) => v === appearance))} onSelect={(i) => setAppearance(THEMES[i]![0])} height={36} fill />
+      </div>
+      <SectionHeader title="列表头像" start={24} />
+      <div className={`${css.mPadX12} ${css.mSegBlock}`}>
+        <Seg options={PICTURES.map(([, label]) => label)} selected={Math.max(0, PICTURES.findIndex(([v]) => v === picture))} onSelect={(i) => setPicture(PICTURES[i]![0])} height={36} fill />
       </div>
       <Notify />
       <SectionHeader title="登录的地方" start={24} />

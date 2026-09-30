@@ -98,33 +98,24 @@ export const navSessionWrap = style({
 });
 export const navSession = style({
   alignItems: "flex-start", paddingTop: 7, paddingBottom: 7, position: "relative",
+  // The row's ground, which gaps round its pictures and marks are cut in (RowPicture.css.ts, ChatMark.css.ts).
+  vars: { "--mark-around": vars.sidebar },
   selectors: {
     // Pointing at the button is still pointing at the row.
-    [`${navSessionWrap}:hover &:not([aria-current="page"]):not([data-going="here"])`]: { background: vars.hover },
+    [`${navSessionWrap}:hover &:not([aria-current="page"]):not([data-going="here"])`]: { background: vars.hover, vars: { "--mark-around": vars.hover } },
+    '&[aria-current="page"], &[data-going="here"]': { vars: { "--mark-around": vars.selected } },
+    '&[aria-current="page"][data-going="away"]': { vars: { "--mark-around": vars.sidebar } },
   },
 });
 
-/** Who is in a chat: its agent's mark, or two of them overlapping, with its state at the corner (ChatMark.tsx). */
+/** Who is in a chat: its agents' marks or its people's pictures, placed by RowPicture.tsx. */
 export const rowPicture = style({
   position: "relative", flex: "none", width: 30, height: 30, marginTop: 4,
-  vars: { "--mark-around": vars.sidebar },
-  selectors: {
-    [`${navSession}[data-offline] &`]: { opacity: 0.5 },
-    [`${navSessionWrap}:hover ${navSession}:not([aria-current="page"]):not([data-going="here"]) &`]: {
-      vars: { "--mark-around": vars.hover, "--mark-under": vars.sidebar },
-    },
-    [`${navSession}[aria-current="page"] &, ${navSession}[data-going="here"] &`]: { vars: { "--mark-around": vars.selected } },
-    [`${navSession}[aria-current="page"][data-going="away"] &`]: { vars: { "--mark-around": vars.sidebar } },
-  },
+  selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
-export const rowAgent = style({
-  position: "absolute", display: "grid", placeItems: "center",
-  selectors: {
-    [`${rowPicture}[data-count="1"] &`]: { inset: 0 },
-    [`${rowPicture}[data-count="2"] &`]: { width: 16, height: 16 },
-    [`${rowPicture}[data-count="2"] &:first-child`]: { left: 0, top: 0 },
-    [`${rowPicture}[data-count="2"] &:last-child`]: { right: 0, bottom: 0 },
-  },
+/** What does not lead, at the title's end (RowPicture.tsx): gone while the row is pointed at, its archive button there. */
+export const rowAside = style({
+  selectors: { [`${navSessionWrap}:hover &`]: { display: "none" } },
 });
 /** A station's link coming back: a small turning ring (the global spinner) where the row's mark goes. */
 export const rowSpinner = style({ width: 12, height: 12, borderWidth: 1.5 });

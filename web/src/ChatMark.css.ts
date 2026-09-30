@@ -33,3 +33,20 @@ export const chatMark = style({
   },
   "@media": { "(prefers-reduced-motion: reduce)": { selectors: { '&[data-tone="busy"]::after': { animation: "none" } } } },
 });
+
+/** The same state as a dot in a line, before the chat's title: no gap round it, the row's ground is behind it. */
+export const chatMarkInline = style({
+  position: "relative", flex: "none", width: 8, height: 8, borderRadius: "50%", boxSizing: "border-box",
+  selectors: {
+    '&[data-tone="done"]': { background: "#3b82f6" },
+    '&[data-tone="alert"]': { background: "#e5484d" },
+    '&[data-tone="alert"]::after': {
+      content: "\"\"", position: "absolute", inset: -3, borderRadius: "50%", background: "#e5484d", opacity: 0.25,
+    },
+    '&[data-tone="busy"]': {
+      width: 10, height: 10, border: "2px solid #f2b01e", borderRightColor: "color-mix(in srgb, #f2b01e 25%, transparent)",
+      animation: `${spinKeyframes} 1.2s linear infinite`,
+    },
+  },
+  "@media": { "(prefers-reduced-motion: reduce)": { selectors: { '&[data-tone="busy"]': { animation: "none" } } } },
+});

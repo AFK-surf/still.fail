@@ -5,6 +5,8 @@ import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
 import { prime } from "./core/react.ts";
+import { leading, useRowPicture } from "./rowLead.ts";
+import { RowAside, RowPicture } from "./RowPicture.tsx";
 import { Waiting } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
@@ -153,6 +155,8 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   const list = useRef<HTMLDivElement | null>(null);
   const ref = useCallback((el: HTMLDivElement | null) => { list.current = el; return scroller(el); }, [scroller]);
   useListMotion(list);
+  const [setting] = useRowPicture();
+  const lead = leading(setting, view?.members);
   // A station's link coming back is said on its rows (the core's `reconnecting`); only with no rows at all to show does
   // the list say it, in place of the rows.
   return (
@@ -168,7 +172,7 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
       {days.map((day) => (
         <section key={day.daysAgo} aria-label={day.label}>
           <div className={nav.navHeading} data-flip={`day:${day.daysAgo}`}>{day.label}</div>
-          {day.items.map((item) => <ChatRow key={rowKey(item)} item={item} />)}
+          {day.items.map((item) => <ChatRow key={rowKey(item)} item={item} lead={lead} />)}
         </section>
       ))}
     </div>
@@ -199,9 +203,9 @@ function useScrolling() {
 /**
  * A chat in the list: its title (bold while something in it is unread) and
  * where it came from, then the last thing said in it and when; its state as a
- * mark on its picture (ChatMark.tsx).
+ * dot before its title (ChatMark.tsx), who is in it as its picture and at the title's end.
  */
-function ChatRow({ item }: { item: ChatItem }) {
+function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const { connect } = item;
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
@@ -224,13 +228,15 @@ function ChatRow({ item }: { item: ChatItem }) {
       onMouseDown={(e) => e.preventDefault()}
       // Pointed at or pressed: its chat is read meanwhile, there when the page opens.
       onPointerEnter={() => primeChat(item)} onPointerDown={() => primeChat(item)} onFocus={() => primeChat(item)}>
-      <AgentsPicture item={item} />
+      <RowPicture item={item} lead={lead} className={nav.rowPicture} box={30} />
       <span className={nav.navSessionText}>
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className={nav.navSessionHead}>
+          <ChatMark item={item} inline />
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{item.title}</span>}
+          <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
           {/* Its station offline: greyed, and marked there instead (the core says so, row by row). */}
@@ -321,21 +327,6 @@ function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => Promi
   );
 }
 
-/**
- * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping (more are in the chat
- * itself), with the chat's state at the corner. A chat with no agent yet shows ember's.
- */
-function AgentsPicture({ item }: { item: ChatItem }) {
-  const agents = item.agents.slice(0, 2);
-  return (
-    <Tip label={item.agents.map((a) => a.agentText).join("、") || undefined}><span className={nav.rowPicture} data-count={agents.length || 1}>
-      {agents.length === 0
-        ? <span className={nav.rowAgent} aria-hidden="true"><Mark size={20} /></span>
-        : agents.map((a) => <span key={a.key} className={nav.rowAgent} aria-hidden="true"><ModelLogo maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 14 : 26} /></span>)}
-      <ChatMark item={item} />
-    </span></Tip>
-  );
-}
 
 /** The last thing said in a chat, on one line (the row's picture says who is in it). */
 function LastMessage({ item }: { item: ChatItem }) {

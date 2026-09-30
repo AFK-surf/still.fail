@@ -21,10 +21,11 @@ const LABEL: Record<ChatTone, string> = { busy: "工作中", done: "做完了，
 const shown = new Map<string, { tone: ChatTone | undefined; since: number }>();
 
 /**
- * A chat's state as a mark at its picture's corner (the picture is `position: relative`; it sets `--mark-around`). A mark
+ * A chat's state as a mark at its picture's corner (the picture is `position: relative`; it sets `--mark-around`), or
+ * `inline`, a dot in the line before its title. A mark
  * that comes while the chat is in view (a new message, work begun) pops in; ones there when the list is first drawn do not.
  */
-export function ChatMark({ item }: { item: ChatItem }) {
+export function ChatMark({ item, inline }: { item: ChatItem; inline?: boolean }) {
   const tone = chatTone(item);
   const mark = useRef<HTMLSpanElement>(null);
   const key = `${item.station}/${item.id}`;
@@ -35,5 +36,5 @@ export function ChatMark({ item }: { item: ChatItem }) {
     if (!tone || performance.now() - had.since > 300 || !mark.current || reducedMotion()) return;
     mark.current.animate([{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
   }, [key, tone]);
-  return tone ? <span ref={mark} className={css.chatMark} data-tone={tone} role="img" aria-label={LABEL[tone]} /> : null;
+  return tone ? <span ref={mark} className={inline ? css.chatMarkInline : css.chatMark} data-tone={tone} role="img" aria-label={LABEL[tone]} /> : null;
 }
