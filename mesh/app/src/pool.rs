@@ -13,6 +13,8 @@ use crate::profiles::{ProfileCheck, ProfileQuota};
 pub struct ProfileHealth {
     pub check: Option<ProfileCheck>,
     pub quota: Option<ProfileQuota>,
+    /// A turn on it ran into its allowance since the allowance was last read (Hub::spend).
+    pub spent: bool,
 }
 
 pub trait PoolSignals {
@@ -35,9 +37,10 @@ fn check_state(health: &ProfileHealth) -> Option<&str> {
     health.check.as_ref().map(|c| c.state.as_str())
 }
 
-/// Whether a profile can run now: it signs in, its key was not rejected, and none of its windows is used up.
+/// Whether a profile can run now: it signs in, its key was not rejected, none of its windows is used up, and no turn
+/// ran into its allowance since.
 pub fn usable(health: &ProfileHealth) -> bool {
-    !matches!(check_state(health), Some("login" | "failed")) && used(health.quota.as_ref()) < 100.0
+    !health.spent && !matches!(check_state(health), Some("login" | "failed")) && used(health.quota.as_ref()) < 100.0
 }
 
 /// A chosen model needs the profile to have it enabled; no model means the profile's own default.
@@ -110,10 +113,10 @@ mod tests {
     fn the_pool_skips_broken_spent_and_unfit_profiles_then_prefers_headroom_then_fewer_sessions() {
         let (a, b, c, d) = (profile("a", &["m1"]), profile("b", &["m1"]), profile("c", &["m1", "m2"]), profile("d", &["m2"]));
         let mut health = HashMap::from([
-            ("a".to_string(), ProfileHealth { check: ok("failed"), quota: quota(0.0) }),
-            ("b".to_string(), ProfileHealth { check: ok("ok"), quota: quota(100.0) }),
-            ("c".to_string(), ProfileHealth { check: ok("ok"), quota: quota(60.0) }),
-            ("d".to_string(), ProfileHealth { check: ok("ok"), quota: quota(20.0) }),
+            ("a".to_string(), ProfileHealth { check: ok("failed"), quota: quota(0.0), ..Default::default() }),
+            ("b".to_string(), ProfileHealth { check: ok("ok"), quota: quota(100.0), ..Default::default() }),
+            ("c".to_string(), ProfileHealth { check: ok("ok"), quota: quota(60.0), ..Default::default() }),
+            ("d".to_string(), ProfileHealth { check: ok("ok"), quota: quota(20.0), ..Default::default() }),
         ]);
         let signals = |health: &HashMap<String, ProfileHealth>, load: &[(&str, usize)], picked: &[(&str, i64)]| Signals {
             health: health.clone(),
@@ -124,7 +127,7 @@ mod tests {
         assert_eq!(pick_profile(&all, Some("m1"), &signals(&health, &[], &[]), true).unwrap().id, "c", "a failed, b spent, d lacks m1");
         assert_eq!(pick_profile(&all, Some("m2"), &signals(&health, &[], &[]), true).unwrap().id, "d", "most headroom");
         assert_eq!(pick_profile(&all, None, &signals(&health, &[], &[]), true).unwrap().id, "d");
-        health.insert("c".into(), ProfileHealth { check: ok("ok"), quota: quota(20.0) });
+        health.insert("c".into(), ProfileHealth { check: ok("ok"), quota: quota(20.0), ..Default::default() });
         assert_eq!(pick_profile(&[&c, &d], None, &signals(&health, &[("d", 2), ("c", 1)], &[]), true).unwrap().id, "c", "fewer sessions");
         assert_eq!(pick_profile(&[&c, &d], None, &signals(&health, &[], &[("c", 5), ("d", 1)]), true).unwrap().id, "d", "least recently picked");
         assert_eq!(pick_profile(&[&a], Some("m1"), &signals(&health, &[], &[]), true).unwrap().id, "a", "nothing healthy: still one, so the failure shows");
@@ -137,8 +140,8 @@ mod tests {
     fn a_model_is_served_however_a_profile_spells_it() {
         let (direct, router) = (profile("direct", &["gpt-6-astra"]), profile("router", &["openai/gpt-6-astra"]));
         let health = HashMap::from([
-            ("direct".to_string(), ProfileHealth { check: ok("ok"), quota: quota(100.0) }),
-            ("router".to_string(), ProfileHealth { check: ok("ok"), quota: quota(10.0) }),
+            ("direct".to_string(), ProfileHealth { check: ok("ok"), quota: quota(100.0), ..Default::default() }),
+            ("router".to_string(), ProfileHealth { check: ok("ok"), quota: quota(10.0), ..Default::default() }),
         ]);
         let signals = Signals { health, load: HashMap::new(), picked: HashMap::new() };
         let picked = pick_profile(&[&direct, &router], Some("gpt-6-astra"), &signals, true).unwrap();

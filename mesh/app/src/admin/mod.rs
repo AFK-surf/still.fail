@@ -340,6 +340,7 @@ impl AdminApi {
         api.deps.hub.set_profile_health(Arc::new(move |id| crate::pool::ProfileHealth {
             check: checks.lock().unwrap().get(id).cloned(),
             quota: quotas.lock().unwrap().get(id).cloned(),
+            spent: false,
         }));
         if api.deps.check_on_start {
             let me = api.me.clone();

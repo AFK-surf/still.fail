@@ -20,9 +20,9 @@ use tracing::{error, info, warn};
 use crate::chat::status::tool_status;
 use crate::chat::{ChatSurface, ThreadRef};
 use crate::config::Profile;
-use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
+use crate::instructions::{GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
 use crate::live::LiveHub;
-use crate::runtime::{AgentDriver, AgentSession, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
+use crate::runtime::{AgentDriver, AgentSession, FailureReason, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
 use crate::store::{AuthorKind, STILLFAIL_SURFACE, NewMessage, PendingMessage, Store, now_ms};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +52,11 @@ pub trait SessionDeps: Send + Sync {
     fn driver(&self, runtime: RuntimeKind) -> Result<Arc<dyn AgentDriver>>;
     /// The profile a session's runtime starts on now: its own while usable, else another that can take it on.
     fn run_on(&self, key: &str) -> Result<Profile>;
+    /// A turn ran into its profile's allowance: the names of the profile left and the one the session moved to, when
+    /// it moved (see Hub::spend).
+    fn spend(&self, _key: &str) -> Result<Option<(String, String)>> {
+        Ok(None)
+    }
     fn mcp_url(&self) -> String;
     fn repos_dir(&self) -> PathBuf;
     fn memory_path(&self) -> PathBuf;
@@ -281,6 +286,21 @@ impl SessionActor {
                 agent.abort().await;
             }
             Ok(())
+        })
+    }
+
+    /// Its last turn stopped at its account's allowance and it was changed since (another account or model): it goes on
+    /// where it stopped, unless something runs already.
+    pub fn go_on(&self) -> impl Future<Output = ()> + Send + 'static {
+        self.enqueue(|a| async move {
+            let deps = a.deps()?;
+            if deps.held() || a.st().turn.is_some() || a.agent().is_some_and(|agent| agent.busy()) {
+                return Ok(());
+            }
+            if !deps.store().pending_messages(&a.key)?.is_empty() {
+                return a.pump().await;
+            }
+            a.start_turn(&deps, "resume", GO_ON_AFTER_SPENT).await
         })
     }
 
@@ -825,6 +845,27 @@ impl SessionActor {
             store.end_turn(&turn.id, outcome.kind(), detail.as_deref(), turn.declared.map(DeclaredState::as_str), wait)?;
         }
         match &outcome {
+            TurnOutcome::Failed { reason: FailureReason::RateLimit, .. } => {
+                self.st().nudges = 0;
+                // Left to the station, it moves to another account and goes on there; otherwise it waits for a change.
+                let moved = deps.spend(&self.key).unwrap_or_else(|e| {
+                    warn!(session = self.key, error = %e, "could not move off a spent profile");
+                    None
+                });
+                if let Some((from, to)) = moved {
+                    // Its process runs on the account left: the next starts on the one taken.
+                    let agent = self.st().agent.take();
+                    if let Some((_, agent)) = agent {
+                        agent.dispose().await;
+                    }
+                    info!(session = self.key, from, to, "allowance ran out; going on on another profile");
+                    if !store.pending_messages(&self.key)?.is_empty() {
+                        return self.pump().await;
+                    }
+                    return self.start_turn(&deps, "resume", GO_ON_AFTER_SPENT).await;
+                }
+                self.notice(&deps, &failure_notice(&outcome)).await;
+            }
             TurnOutcome::Failed { .. } => {
                 self.st().nudges = 0;
                 self.notice(&deps, &failure_notice(&outcome)).await;
@@ -939,7 +980,7 @@ fn failure_notice(outcome: &TurnOutcome) -> String {
     let TurnOutcome::Failed { reason, message } = outcome else { return String::new() };
     match reason.as_str() {
         "auth" => format!("⚠️ 认证失败，需要管理员检查账号：{message}"),
-        "rate_limit" => format!("⚠️ 触发额度或限流，稍后回复可继续：{message}"),
+        "rate_limit" => format!("⚠️ 触发额度或限流，换个账号或模型会接着做，稍后回复也可继续：{message}"),
         "exited" => format!("⚠️ agent 进程意外退出，回复可恢复：{message}"),
         _ => format!("⚠️ 这一轮出错：{message}"),
     }

@@ -1197,6 +1197,7 @@ async fn a_session_changes_profile_model_and_effort_by_hand_and_is_taken_on_by_a
             detail: None,
             checked_at: 0,
         }),
+        spent: false,
     }));
     r.accept(&InboundMessage { thread_ts: m.thread_ts.clone(), ..say("<@UBOT> and the tests") }).await;
     settle().await;
@@ -1518,4 +1519,53 @@ async fn a_mention_slack_sends_twice_at_once_makes_one_session_without_an_error(
     let texts = r.chat.texts();
     assert!(!texts.iter().any(|t| t.contains("无法创建会话")), "{texts:?}");
     assert!(r.hub.thread_gates.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_the_session_is_changed() {
+    let r = setup();
+    r.edit(|c| {
+        c.profiles[0].models = vec!["opus".into()];
+        let mut p = c.profiles[0].clone();
+        (p.id, p.name) = ("cc2".into(), "second".into());
+        c.profiles.push(p);
+    });
+    let spent = |message: &str| TurnOutcome::Failed { reason: FailureReason::RateLimit, message: message.into() };
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let first = r.claude.last();
+    let key = first.options.route.clone();
+    let on = r.session(&key).profile;
+    // Left to the station: another account takes it on, in a process of its own, and goes on.
+    first.end(spent("usage limit reached"));
+    settle().await;
+    assert!(first.disposed(), "its process ran on the account left");
+    let second = r.claude.last();
+    assert_eq!(r.claude.count(), 2);
+    assert_ne!(second.options.profile.id, on);
+    assert_eq!(r.session(&key).profile, second.options.profile.id);
+    assert!(!r.session(&key).profile_pinned);
+    assert!(r.chat.texts().iter().all(|t| !t.contains("额度")), "it just goes on, saying nothing");
+    assert_eq!(second.prompts(), vec![crate::instructions::GO_ON_AFTER_SPENT.to_string()]);
+    // That one runs out too: none left, so it says so and waits.
+    second.end(spent("usage limit reached"));
+    settle().await;
+    assert_eq!(r.claude.count(), 2, "no account left to go on with");
+    assert!(matches(&r.chat.last_text(), &["触发额度或限流", "usage limit reached"]));
+    // Changed by hand (here: kept to the first again): it goes on by itself.
+    let change = SessionChange { profile: Some(Some(on.clone())), model: None, effort: None };
+    r.hub.configure(&key, change).await.unwrap();
+    settle().await;
+    let third = r.claude.last();
+    assert_eq!(r.claude.count(), 3);
+    assert_eq!(third.options.profile.id, on);
+    assert_eq!(third.prompts(), vec![crate::instructions::GO_ON_AFTER_SPENT.to_string()]);
+    // A change after a turn that ended well starts nothing.
+    r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "done", "kind": "final" })).await.unwrap();
+    third.complete();
+    settle().await;
+    r.hub.configure(&key, SessionChange { profile: Some(None), model: None, effort: None }).await.unwrap();
+    settle().await;
+    assert_eq!(r.claude.count(), 3);
 }

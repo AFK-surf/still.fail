@@ -21,6 +21,8 @@
 
 - 「正在发送」按消息发出的时间算 0.8 秒（sending-shown-once）：web 随部署生效，安卓要等下次发版。只改客户端，新旧 station 都行。上线后验：新建对话、发第一条，station 慢时「正在发送」只出现一次，不消失再出现。
 
+- 额度用完自动换账号（profile-quota-reselect）：只改 station，页面和安卓都没动，新旧版本混着跑没问题；要重新构建并重启 station，别的 station 要各自 `stillfail update` 才有这个改动。「用完」的标记只存在内存里，重启后就没了。上线后验：自动分配的会话撞到额度时，station 日志里有 `allowance ran out; going on on another profile`，chat 里不发提示，在新账号上接着做；指定了账号的会话仍然发「⚠️ 触发额度或限流…」，改账号或模型后自动继续。
+
 ## 2026-09-30
 
 ### 21:03 部署 c4f4561（桌面端差量更新）

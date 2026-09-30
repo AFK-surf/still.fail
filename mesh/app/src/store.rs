@@ -1722,6 +1722,24 @@ impl Store {
         })
     }
 
+    /// The session's latest turn.
+    pub fn last_turn(&self, session: &str) -> Result<Option<TurnSummary>> {
+        self.with(|i, _| {
+            let turn = i.db.query_row("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", [session], |r| {
+                Ok(TurnSummary {
+                    kind: r.get("kind")?,
+                    outcome: r.get("outcome")?,
+                    declared: r.get("declared")?,
+                    wait_seconds: r.get("wait_seconds")?,
+                    detail: r.get("detail")?,
+                    started_at: r.get("started_at")?,
+                    ended_at: r.get("ended_at")?,
+                })
+            });
+            Ok(turn.optional()?)
+        })
+    }
+
     pub fn list_turns(&self, session: &str) -> Result<Vec<TurnRow>> {
         self.with(|i, _| {
             let mut stmt = i.db.prepare("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at")?;

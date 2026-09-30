@@ -125,6 +125,8 @@ pub struct NewChat {
 
 /// How long a new chat's rows say the key its client gave it: long past its answer.
 const CLIENT_KEY_KEPT_MS: i64 = 10 * 60 * 1000;
+/// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
+const SPENT_FOR_MS: i64 = 60 * 60 * 1000;
 
 pub type ConfigFn = Arc<dyn Fn() -> Arc<Config> + Send + Sync>;
 pub type ChatsFn = Arc<dyn Fn(&str) -> Option<Arc<dyn ChatSurface>> + Send + Sync>;
@@ -159,6 +161,9 @@ pub struct Hub {
     /// How profiles are doing, for the pool; the admin API knows their checks and allowances.
     health: Mutex<HealthFn>,
     picked: Mutex<HashMap<String, i64>>,
+    /// Profiles a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
+    /// SPENT_FOR when it is not.
+    spent: Mutex<HashMap<String, i64>>,
     /// What running turns are doing, for the pages' live view.
     pub live: Arc<LiveHub>,
     /// Turns held (SessionDeps::held).
@@ -207,6 +212,7 @@ impl Hub {
             deadlines: Mutex::default(),
             health: Mutex::new(Arc::new(|_| ProfileHealth::default())),
             picked: Mutex::default(),
+            spent: Mutex::default(),
             live: LiveHub::new(locate, posts),
             held: AtomicBool::new(false),
             adopted: Mutex::default(),
@@ -842,6 +848,11 @@ impl Hub {
         }
         let now = self.store.get_session(key)?.map(|r| r.profile).unwrap_or_default();
         info!(session = key, profile = now, model = ?model, effort = ?effort, "session changed");
+        // Its last turn stopped at the allowance: changed, it goes on by itself.
+        let cut_short = self.store.last_turn(key)?.is_some_and(|t| t.outcome.as_deref() == Some("failed") && t.detail.as_deref().is_some_and(|d| d.starts_with("rate_limit")));
+        if cut_short {
+            drop(self.actor(&row)?.go_on());
+        }
         Ok(())
     }
 
@@ -1066,7 +1077,46 @@ impl Hub {
 
     fn health_of(&self, id: &str) -> ProfileHealth {
         let health = self.health.lock().unwrap().clone();
-        health(id)
+        let mut health = health(id);
+        let mut spent = self.spent.lock().unwrap();
+        if let Some(&at) = spent.get(id) {
+            // Read again since: what it says now counts.
+            if health.quota.as_ref().is_some_and(|q| q.checked_at > at) || now_ms() - at > SPENT_FOR_MS {
+                spent.remove(id);
+            } else {
+                health.spent = true;
+            }
+        }
+        health
+    }
+
+    /// A turn of the session ran into its profile's allowance: that profile is passed over for now, and a session left
+    /// to the station moves to another of its runtime's that can run it now. Says the names of the one left and the one
+    /// taken when it moved; not when it is kept to its profile or none other can.
+    pub fn spend(&self, key: &str) -> Result<Option<(String, String)>> {
+        let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
+        self.spent.lock().unwrap().insert(row.profile.clone(), now_ms());
+        if row.profile_pinned {
+            return Ok(None);
+        }
+        let Some(runtime) = runtime_named(&row.runtime) else { return Ok(None) };
+        let config = self.config();
+        // As the pool: those with its model enabled, or, when none has (a connect's binding from before models were
+        // enabled), all of its runtime's.
+        let runs: Vec<&Profile> = config.profiles.iter().filter(|p| p.runtimes.contains(&runtime)).collect();
+        let strict = runs.iter().any(|p| serves(p, row.model.as_deref()));
+        let candidates: Vec<&Profile> = runs
+            .into_iter()
+            .filter(|p| p.id != row.profile && (!strict || serves(p, row.model.as_deref())) && usable(&self.health_of(&p.id)))
+            .collect();
+        if candidates.is_empty() {
+            return Ok(None);
+        }
+        let next = self.pick(&candidates, row.model.as_deref(), false)?;
+        self.store.set_session_profile(key, &next.id, false)?;
+        info!(session = key, from = row.profile, to = next.id, "allowance ran out; session taken on by another profile");
+        let from = config.profiles.iter().find(|p| p.id == row.profile).map_or(row.profile.clone(), |p| p.name.clone());
+        Ok(Some((from, next.name)))
     }
 
     /// Chooses the profile a new session runs on; see pool.rs.
@@ -1571,6 +1621,9 @@ impl SessionDeps for Hub {
     }
     fn run_on(&self, key: &str) -> Result<Profile> {
         Hub::run_on(self, key)
+    }
+    fn spend(&self, key: &str) -> Result<Option<(String, String)>> {
+        Hub::spend(self, key)
     }
     fn mcp_url(&self) -> String {
         self.mcp_url.clone()
