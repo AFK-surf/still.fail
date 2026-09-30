@@ -26,6 +26,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.StationGlyph
@@ -403,9 +404,11 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
                 val inset = ring / 2
                 val box = androidx.compose.ui.geometry.Size(size.width - ring, size.height - ring)
                 val at = androidx.compose.ui.geometry.Offset(inset, inset)
-                // A quarter faint (the web's border-right), the rest solid; turning.
-                drawArc(MarkYellow.copy(alpha = 0.25f), turn - 45f, 90f, false, at, box, style = Stroke(ring))
-                drawArc(MarkYellow, turn + 45f, 270f, false, at, box, style = Stroke(ring))
+                // A faint track, a solid three-quarter arc on it; turning.
+                drawArc(MarkYellow.copy(alpha = 0.25f), 0f, 360f, false, at, box, style = Stroke(ring))
+                // Round ends (web: styles/busyRing.ts), the arc shortened by the half stroke they add so the gap stays a quarter.
+                val cap = Math.toDegrees((ring / box.width).toDouble()).toFloat()
+                drawArc(MarkYellow, turn + 45f + cap, 270f - 2 * cap, false, at, box, style = Stroke(ring, cap = StrokeCap.Round))
             }
         }
     }

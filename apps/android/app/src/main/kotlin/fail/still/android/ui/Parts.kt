@@ -139,8 +139,10 @@ internal fun AgentStateMark(state: ChatState, around: Color, modifier: Modifier 
             val rr = r - ring - ring / 2
             val at = androidx.compose.ui.geometry.Offset(center.x - rr, center.y - rr)
             val box = androidx.compose.ui.geometry.Size(rr * 2, rr * 2)
-            drawArc(AGENT_YELLOW.copy(alpha = 0.25f), turn - 45f, 90f, false, at, box, style = Stroke(ring))
-            drawArc(AGENT_YELLOW, turn + 45f, 270f, false, at, box, style = Stroke(ring))
+            drawArc(AGENT_YELLOW.copy(alpha = 0.25f), 0f, 360f, false, at, box, style = Stroke(ring))
+            // Round ends (web: styles/busyRing.ts), the arc shortened by the half stroke they add so the gap stays a quarter.
+            val cap = Math.toDegrees((ring / box.width).toDouble()).toFloat()
+            drawArc(AGENT_YELLOW, turn + 45f + cap, 270f - 2 * cap, false, at, box, style = Stroke(ring, cap = StrokeCap.Round))
         } else drawCircle(AGENT_RED, r - ring)
     }
 }

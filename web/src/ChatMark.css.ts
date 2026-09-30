@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { busyRing } from "./styles/busyRing.ts";
 import { spinKeyframes } from "./styles/keyframes.css.ts";
 
 /**
@@ -26,8 +27,7 @@ export const chatMark = style({
     },
     // At work: a turning ring with a gap.
     '&[data-tone="busy"]::after': {
-      content: "\"\"", position: "absolute", inset: 0, borderRadius: "50%", boxSizing: "border-box",
-      border: "2px solid #f2b01e", borderRightColor: "color-mix(in srgb, #f2b01e 25%, transparent)",
+      content: "\"\"", position: "absolute", inset: 0, background: `${busyRing(10)} center / 100% no-repeat`,
       animation: `${spinKeyframes} 1.2s linear infinite`,
     },
   },
@@ -44,7 +44,7 @@ export const chatMarkInline = style({
       content: "\"\"", position: "absolute", inset: -3, borderRadius: "50%", background: "#e5484d", opacity: 0.25,
     },
     '&[data-tone="busy"]': {
-      width: 10, height: 10, border: "2px solid #f2b01e", borderRightColor: "color-mix(in srgb, #f2b01e 25%, transparent)",
+      width: 10, height: 10, background: `${busyRing(10)} center / 100% no-repeat`,
       animation: `${spinKeyframes} 1.2s linear infinite`,
     },
   },

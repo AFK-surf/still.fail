@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { busyRing } from "./styles/busyRing.ts";
 import { vars } from "./styles/tokens.css.ts";
 import { appearKeyframes, dialogInKeyframes, fadeKeyframes, pulseKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
 import { gate, muted } from "./styles/shell.css.ts";
@@ -38,8 +39,7 @@ export const agentMark = style({
     // At work: a turning ring with a gap, over the ground's disc.
     "&[data-badge=\"run\"]::before": {
       content: "\"\"", position: "absolute", right: "-1px", bottom: "-1px", width: "8px", height: "8px", zIndex: 1,
-      boxSizing: "border-box", borderRadius: "50%", border: "2px solid #f2b01e",
-      borderRightColor: "color-mix(in srgb, #f2b01e 25%, transparent)", animation: `${spinKeyframes} 1.2s linear infinite`,
+      background: `${busyRing(8)} center / 100% no-repeat`, animation: `${spinKeyframes} 1.2s linear infinite`,
     },
   },
   "@media": { "(prefers-reduced-motion: reduce)": { selectors: { "&[data-badge=\"run\"]::before": { animation: "none" } } } },
