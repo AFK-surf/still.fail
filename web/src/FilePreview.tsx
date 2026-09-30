@@ -332,7 +332,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
       }}
       // The page itself takes focus, not its first button: no ring on the close button for a tap or click.
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
-      <header ref={head} className={css2.fpHead}
+      <header ref={head} className={css2.fpHead} data-floats
         onPointerEnter={(e) => { if (e.pointerType !== "mouse") return; onBar.current = true; clearTimeout(resting.current); setAwake(true); }}
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
@@ -430,7 +430,7 @@ function Progress({ got, size, inBar = false }: { got: FileProgress | null | und
  */
 export function useZoom(natural: { w: number; h: number } | null, setControls: (c: ReactNode) => void, onSwipe?: (direction: -1 | 1) => void) {
   const stage = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const [box, setBox] = useState<{ w: number; h: number; top: number; bottom: number } | null>(null);
   const [view, setView] = useState<View | null>(null);
   const viewRef = useRef<View | null>(null);
   viewRef.current = view;
@@ -438,33 +438,59 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   useLayoutEffect(() => {
     const el = stage.current;
     if (!el) return;
-    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
+    // The bars floating over it (`data-floats`: the preview's head, a video's controls, the marking tools) take their
+    // height off its top and bottom: faded or not, the picture stays clear of them.
+    const root = el.closest(`.${css2.fp}`) ?? el;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      let top = 0, bottom = 0;
+      for (const bar of root.querySelectorAll("[data-floats]")) {
+        const b = bar.getBoundingClientRect();
+        if (!b.height || b.right <= r.left || b.left >= r.right) continue;
+        if (b.top + b.bottom < r.top + r.bottom) top = Math.max(top, b.bottom - r.top);
+        else bottom = Math.max(bottom, r.bottom - b.top);
+      }
+      setBox((was) => {
+        const next = { w: el.clientWidth, h: el.clientHeight, top: Math.max(0, Math.round(top)), bottom: Math.max(0, Math.round(bottom)) };
+        return was && was.w === next.w && was.h === next.h && was.top === next.top && was.bottom === next.bottom ? was : next;
+      });
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
+    // Bars come and go (the marking tools) and change their size: each is watched as it comes.
+    const watch = () => { for (const bar of root.querySelectorAll("[data-floats]")) observer.observe(bar); measure(); };
+    watch();
+    const coming = new MutationObserver(watch);
+    coming.observe(root, { childList: true, subtree: true });
+    return () => { observer.disconnect(); coming.disconnect(); };
   }, []);
 
-  // Fitted, it keeps a margin from the window's edges.
+  // Fitted, it keeps a margin from the window's edges, and a smaller one from the bars.
   const MARGIN = box && box.w < 640 ? 12 : 32;
-  const fit = natural && box ? Math.min(1, (box.w - 2 * MARGIN) / natural.w, (box.h - 2 * MARGIN) / natural.h) : 1;
+  const padTop = box?.top ? box.top + MARGIN / 2 : MARGIN, padBottom = box?.bottom ? box.bottom + MARGIN / 2 : MARGIN;
+  /** Where a picture smaller than the room between the bars sits: in the middle of it. */
+  const centreY = (padTop - padBottom) / 2;
+  const fit = natural && box ? Math.min(1, (box.w - 2 * MARGIN) / natural.w, (box.h - padTop - padBottom) / natural.h) : 1;
   const minScale = Math.min(fit, 1) / 2;
 
-  /** Keeps a larger-than-window image covering the window, a smaller one centred. */
+  /** Keeps a larger-than-window image covering the window between the bars, a smaller one centred there. */
   const clamp = useCallback((v: View): View => {
     if (!natural || !box) return v;
     const scale = Math.min(MAX_SCALE, Math.max(minScale, v.scale));
-    const spareX = Math.max(0, (natural.w * scale - box.w) / 2), spareY = Math.max(0, (natural.h * scale - box.h) / 2);
-    return { scale, x: Math.min(spareX, Math.max(-spareX, v.x)), y: Math.min(spareY, Math.max(-spareY, v.y)) };
-  }, [natural, box, minScale]);
+    const spareX = Math.max(0, (natural.w * scale - box.w) / 2);
+    const h = natural.h * scale, room = box.h - box.top - box.bottom;
+    const y = h <= room ? centreY : Math.min(h / 2 - box.h / 2 + box.top, Math.max(box.h / 2 - box.bottom - h / 2, v.y));
+    return { scale, x: Math.min(spareX, Math.max(-spareX, v.x)), y };
+  }, [natural, box, minScale, centreY]);
 
   // Fitted when it first shows and whenever the window changes while still fitted.
   const fitted = useRef(true);
   useEffect(() => {
     if (!natural || !box) return;
-    if (fitted.current || !viewRef.current) setView({ scale: fit, x: 0, y: 0 });
+    if (fitted.current || !viewRef.current) setView({ scale: fit, x: 0, y: centreY });
     else setView((v) => (v ? clamp(v) : v));
-  }, [natural, box, fit, clamp]);
+  }, [natural, box, fit, centreY, clamp]);
 
   /** To `scale`, the image's point under (px, py) — relative to the stage's centre — staying put. */
   const zoomTo = useCallback((scale: number, px = 0, py = 0) => {
@@ -475,7 +501,7 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     fitted.current = false;
     setView(clamp({ scale: next, x: px - (px - v.x) * k, y: py - (py - v.y) * k }));
   }, [clamp, minScale]);
-  const reset = useCallback(() => { fitted.current = true; setView({ scale: fit, x: 0, y: 0 }); }, [fit]);
+  const reset = useCallback(() => { fitted.current = true; setView({ scale: fit, x: 0, y: centreY }); }, [fit, centreY]);
 
   const fromCentre = (clientX: number, clientY: number) => {
     const r = stage.current!.getBoundingClientRect();
@@ -586,7 +612,7 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   }, [scale, minScale, zoomTo, reset, setControls]);
   useEffect(() => () => setControls(null), [setControls]);
 
-  const larger = !!natural && !!box && !!view && (natural.w * view.scale > box.w + 1 || natural.h * view.scale > box.h + 1);
+  const larger = !!natural && !!box && !!view && (natural.w * view.scale > box.w + 1 || natural.h * view.scale > box.h - box.top - box.bottom + 1);
   return {
     stage, scale,
     stageProps: {

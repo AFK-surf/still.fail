@@ -444,7 +444,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
   const pickedShape = picked === null ? undefined : shapes.find((s) => s.id === picked);
   const shownColor = writing?.color ?? pickedShape?.color ?? color;
   const tools = on ? (
-    <div className={css.toolbar} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+    <div className={css.toolbar} data-floats onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
       {TOOLS.map((t) => (
         <Tip key={t.tool} label={`${t.label}（${t.key}）`}><button type="button" className={pagesCss.iconBtn} aria-label={t.label}
           aria-pressed={tool === t.tool} onClick={() => pickTool(t.tool)}>{t.icon}</button></Tip>

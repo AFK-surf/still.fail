@@ -340,7 +340,7 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
           <span className={css.vvSwatch} style={{ background: pixel.color }} />{pixel.color}<span className={css.vvDim}>{pixel.x}, {pixel.y}</span>
         </span>
       )}
-      <div className={css.vvBar} data-awake={awake || undefined}
+      <div className={css.vvBar} data-floats data-awake={awake || undefined}
         onPointerEnter={(e) => { if (e.pointerType !== "mouse") return; onControls.current = true; clearTimeout(resting.current); setAwake(true); }}
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onControls.current = false; wake(); }}
         // A finger on them keeps them a while longer.

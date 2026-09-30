@@ -158,7 +158,11 @@ export const fpAudioName = style({
 });
 export const fpFrame = style({ width: "100%", height: "100%", border: "0", background: "#fff" });
 export const fpPage = style({ width: "100%", height: "100%", overflow: "auto", overscrollBehavior: "contain" });
-export const fpPageFrame = style({ overflow: "hidden", display: "grid" });
+/** A page (HTML) starts below the head, as a document's text does: its own top is not under the bar. */
+export const fpPageFrame = style({
+  overflow: "hidden", display: "grid", paddingTop: "76px",
+  "@media": { "(max-width: 640px)": { paddingTop: "60px" } },
+});
 export const fpMarkdown = style({
   maxWidth: "760px", margin: "0 auto", padding: "84px 32px 96px", fontSize: vars.textBody, lineHeight: "1.75",
   "@media": {
