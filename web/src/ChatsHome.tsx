@@ -31,7 +31,9 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
   // `/` and a few letters: a menu of ways to narrow the list (FILTERS), the one picked a chip before what is typed.
   const slash = /(?:^|\s)\/(\S*)$/.exec(query);
   const typed = (slash ? query.slice(0, slash.index) : query).trim();
-  const [filters, setFilters] = useState<Filter[]>([]);
+  // Come from a state's count in a chat's bar: only those chats, for this visit.
+  const from = (useLocation().state as { tone?: ChatTone } | null)?.tone;
+  const [filters, setFilters] = useState<Filter[]>(() => TONES.filter(([t]) => t === from).map(([tone, label]) => toneFilter(tone, label)));
   const chats = useChats(scope, onlyMine);
   const search = useChatSearch({ scope, query: typed });
   const view = chats.value;
@@ -60,7 +62,7 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
     const runtimes = [...new Set(all.flatMap((i) => i.agents.map((a) => a.runtime)))];
     const list: Filter[] = [
       { key: "mine", kind: "who", label: "我参与的", test: () => true },
-      ...TONES.map(([tone, label]) => ({ key: `tone:${tone}`, kind: "tone", label, tone, test: (i: ChatItem) => chatTone(i) === tone })),
+      ...TONES.map(([tone, label]) => toneFilter(tone, label)),
       ...(stations.length > 1 ? stations.map(([id, name]) => ({ key: `station:${id}`, kind: "station", label: name || id, test: (i: ChatItem) => i.station === id })) : []),
       ...(runtimes.length > 1 ? runtimes.map((r) => ({ key: `runtime:${r}`, kind: "runtime", label: RUNTIME[r] ?? r, test: (i: ChatItem) => i.agents.some((a) => a.runtime === r) })) : []),
       { key: "archive", kind: "go", label: "已归档", test: () => true },
@@ -196,6 +198,7 @@ export function ChatsHome({ scope, newChat, settings, archive }: { scope: string
 /** A way to narrow the list, offered after `/`: its kind (any of a kind lets a chat through, every kind must). */
 type Filter = { key: string; kind: string; label: string; tone?: ChatTone; test(item: ChatItem): boolean };
 const TONES: [ChatTone, string][] = [["alert", "要处理"], ["busy", "工作中"], ["done", "有新消息"]];
+const toneFilter = (tone: ChatTone, label: string): Filter => ({ key: `tone:${tone}`, kind: "tone", label, tone, test: (i: ChatItem) => chatTone(i) === tone });
 const RUNTIME: Record<string, string> = { claude: "Claude Code", codex: "Codex" };
 const KIND: Record<string, string> = { who: "谁的", tone: "状态", station: "Station", runtime: "Agent", go: "打开" };
 
@@ -236,9 +239,9 @@ const ORDER: ChatTone[] = ["alert", "busy", "done"];
 const SAID: Record<ChatTone, string> = { alert: "要处理", busy: "工作中", done: "有新消息" };
 
 /**
- * A chat's way back to the list (the 搜索列表 layout), left of its title: how the other chats are doing, a dot of each
+ * A chat's ways back to the list (the 搜索列表 layout), left of its title: how the other chats are doing, a dot of each
  * state with how many (as their rows' marks, ChatMark.tsx), so a chat that wants you is seen without leaving this one;
- * with nothing to say, 对话.
+ * each leads to the list showing only those. With nothing to say, 对话.
  */
 export function ListBack({ scope, to }: { scope: string; to: string }) {
   const view = useChats(scope, false).value;
@@ -250,14 +253,20 @@ export function ListBack({ scope, to }: { scope: string; to: string }) {
     if (tone) counts.set(tone, (counts.get(tone) ?? 0) + 1);
   }
   const said = ORDER.filter((t) => counts.get(t)).map((t) => `${counts.get(t)} 个${SAID[t]}`).join("，");
+  const shown = ORDER.filter((t) => counts.get(t));
   return (
-    <Tip label={said ? `对话列表：${said}` : "对话列表"}>
-      <NavLink className={css.back} to={to} onClick={rememberColumn} aria-label={said ? `对话列表，${said}` : "对话列表"}>
-        {!said && "对话"}
-        {ORDER.filter((t) => counts.get(t)).map((t) => (
-          <span key={t} className={css.backCount}><span className={markCss.chatMarkInline} data-tone={t} />{counts.get(t)}</span>
-        ))}
-      </NavLink>
-    </Tip>
+    <div className={css.back}>
+      {shown.length === 0 && (
+        <Tip label="对话列表"><NavLink className={css.backItem} to={to} onClick={rememberColumn}>对话</NavLink></Tip>
+      )}
+      {/* Each state its own way back: to the list showing only those chats (a filter for this visit only). */}
+      {shown.map((t) => (
+        <Tip key={t} label={`${counts.get(t)} 个${SAID[t]}`}>
+          <NavLink className={css.backItem} to={to} state={{ tone: t }} onClick={rememberColumn} aria-label={`对话列表：${counts.get(t)} 个${SAID[t]}`}>
+            <span className={markCss.chatMarkInline} data-tone={t} />{counts.get(t)}
+          </NavLink>
+        </Tip>
+      ))}
+    </div>
   );
 }

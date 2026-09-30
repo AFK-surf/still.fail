@@ -84,14 +84,16 @@ globalStyle(`${listBar} ${pageBarActions}`, { gridColumn: "3" });
  * title, 2px clear of the pill it shows when pointed at, as far from the last count as from the title.
  */
 export const back = style({
-  display: "inline-flex", alignItems: "center", gap: 10, height: 32, borderRadius: 999,
-  gridColumn: "1", justifySelf: "end", position: "relative", marginRight: 13, padding: "0 8px", color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
-  transition: `background ${vars.dur} ${vars.easeOut}`,
+  gridColumn: "1", justifySelf: "end", position: "relative", display: "flex", alignItems: "center", marginRight: 11,
   selectors: {
-    "&:hover": { background: vars.hover, color: vars.text },
     "&::after": {
       content: '""', position: "absolute", right: -3, top: 6, bottom: 6, width: 1, background: vars.lineStrong, pointerEvents: "none",
     },
   },
 });
-export const backCount = style({ display: "inline-flex", alignItems: "center", gap: 5 });
+/** One of them: a state's dot and count (or 对话), a pill when pointed at. */
+export const backItem = style({
+  display: "inline-flex", alignItems: "center", gap: 5, height: 32, padding: "0 6px", borderRadius: 999,
+  color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums", transition: `background ${vars.dur} ${vars.easeOut}`,
+  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+});
