@@ -371,6 +371,7 @@ impl Source for Router {
                 Topic::Chats { .. } => ("chats.open", None),
                 Topic::ChatSearch { .. } => ("chats.search", None),
                 Topic::Stations { .. } => ("stations.open", None),
+                Topic::Archive { .. } => ("archive.open", None),
                 _ => ("connects.open", None),
             };
             let mut span = self.tracer.root(name, Kind::Internal);
@@ -629,6 +630,21 @@ impl Inner {
                     }
                 }
             },
+            // Out of the chat lists at once while its station archives it; back if it could not.
+            Call::ChatArchive { op, thread, session, archived } => {
+                let station = match &op.target {
+                    crate::ops::Target::Station(station) => station.clone(),
+                    crate::ops::Target::Cloud(_) => return Err(CoreError::invalid("参数不对：要有 station")),
+                };
+                if archived {
+                    self.views.archiving(&station, thread, &session, true);
+                }
+                let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
+                if archived {
+                    self.views.archiving(&station, thread, &session, false);
+                }
+                result
+            }
             Call::ChatSend { station, thread, text, attachments, quotes, client } => {
                 let message = outgoing(crate::refs::expand(&self.data, &text), attachments, quotes, client);
                 let id = self.views.outbox_add(&station, thread, message.clone());
@@ -1544,6 +1560,8 @@ enum Call {
     SignOut { account: String },
     /// Something to have done on a station or still.fail cloud, by its name (ops.rs): the UI never makes a request itself.
     Op(crate::ops::Request),
+    /// A chat into the archive or back (`chat.archive`, an `Op`): one going in is hidden from the lists meanwhile.
+    ChatArchive { op: crate::ops::Request, thread: Option<u64>, session: String, archived: bool },
     /// `client`: the app it is sent from ("android 0.1.1123"), for the station to tell its agent; older UIs give none.
     ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value, client: Option<String> },
     /// A new chat on a station (`POST /sessions` with `ask`): answered at once with the key it goes by here; the
@@ -1594,7 +1612,7 @@ impl Call {
     /// The station a call is about, if any.
     fn station(&self) -> Option<&str> {
         match self {
-            Call::Op(op) => match &op.target {
+            Call::Op(op) | Call::ChatArchive { op, .. } => match &op.target {
                 crate::ops::Target::Station(station) => Some(station),
                 crate::ops::Target::Cloud(_) => None,
             },
@@ -1925,6 +1943,12 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
                 None => None,
             };
             Call::Migrate { accounts: p.accounts.filter(|a| !a.is_null()), device }
+        }
+        "chat.archive" => {
+            let params = params_or_empty(params);
+            let op = crate::ops::request(name, &params).expect("an op")?;
+            let session = params.get("session").and_then(Value::as_str).unwrap_or("").to_string();
+            Call::ChatArchive { op, thread: params.get("thread").and_then(Value::as_u64), session, archived: params.get("archived").and_then(Value::as_bool) == Some(true) }
         }
         _ => match crate::ops::request(name, &params_or_empty(params)) {
             Some(op) => Call::Op(op?),
@@ -2834,6 +2858,145 @@ mod tests {
             // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
             apply(&host, &mut values);
             assert_eq!((values[&2]["pending"].clone(), values[&2]["key"].clone()), (json!(false), json!("ember:c-1")));
+        });
+    }
+
+    /// What came out: subscription values (deltas applied) into `values`, and the calls' answers.
+    fn answers(host: &FakeHost, values: &mut HashMap<RequestId, Value>) -> HashMap<RequestId, std::result::Result<Value, String>> {
+        let mut answers = HashMap::new();
+        for (_, message) in host.take_emitted() {
+            match message {
+                CoreMessage::Value { id, value } => {
+                    values.insert(id, value);
+                }
+                CoreMessage::Delta { id, delta } => crate::delta::apply(values.get_mut(&id).expect("a delta needs a value"), &delta),
+                CoreMessage::Ok { id, ok } => {
+                    answers.insert(id, Ok(ok));
+                }
+                CoreMessage::Error { id, error } => {
+                    answers.insert(id, Err(error.message));
+                }
+            }
+        }
+        answers
+    }
+
+    #[test]
+    fn a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_not_be() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let (archived, refused) = (Rc::new(Cell::new(false)), Rc::new(Cell::new(true)));
+            let (a, r) = (archived.clone(), refused.clone());
+            host.on_fetch(move |req| {
+                let row = |id: &str, thread: u64| json!({ "id": id, "session": id, "thread": thread, "title": id, "agents": [], "last": null,
+                    "unread": false, "mine": true, "lastActiveAt": 1, "connect": null, "origin": null });
+                match (req.method.as_str(), req.url.trim_start_matches("https://stillfail.test/admin/api")) {
+                    ("GET", "/chats") => json_response(200, if a.get() { json!([row("k2", 8)]) } else { json!([row("k1", 7), row("k2", 8)]) }),
+                    ("POST", "/threads/7/archive") if r.get() => json_response(409, json!({ "error": "还在跑" })),
+                    ("POST", "/threads/7/archive") => {
+                        a.set(true);
+                        json_response(200, json!({ "ok": true }))
+                    }
+                    _ => json_response(404, json!({})),
+                }
+            });
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chats { scope: "local".into(), mine: false } });
+            host.settle().await;
+            let mut values = HashMap::new();
+            answers(&host, &mut values);
+            let ids = |values: &HashMap<RequestId, Value>| -> Vec<String> {
+                values[&1]["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string())).collect()
+            };
+            assert_eq!(ids(&values), ["k1", "k2"]);
+            let archive = |id| ClientMessage::Call { id, call: "chat.archive".into(), params: json!({ "station": "local", "thread": 7, "session": "k1", "archived": true }) };
+            // Gone at once, while the station has not answered.
+            let held = host.hold("/threads/7/archive");
+            core.receive(ui, archive(2));
+            host.settle().await;
+            assert!(answers(&host, &mut values).is_empty());
+            assert_eq!(ids(&values), ["k2"]);
+            // It could not be: back, and the call says why.
+            drop(held);
+            host.settle().await;
+            assert_eq!(answers(&host, &mut values)[&2], Err("还在跑".to_string()));
+            assert_eq!(ids(&values), ["k1", "k2"]);
+            // Archived: its station's rows, read again before the answer, no longer have it.
+            refused.set(false);
+            let held = host.hold("/threads/7/archive");
+            core.receive(ui, archive(3));
+            host.settle().await;
+            answers(&host, &mut values);
+            assert_eq!(ids(&values), ["k2"]);
+            held.send(()).unwrap();
+            host.settle().await;
+            assert!(answers(&host, &mut values)[&3].is_ok());
+            assert_eq!(ids(&values), ["k2"]);
+            assert!(archived.get());
+        });
+    }
+
+    #[test]
+    fn the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_restored_or_deleted_leaves_it() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let now = host.now_ms().round();
+            let gone = Rc::new(RefCell::new(Vec::<&str>::new()));
+            let g = gone.clone();
+            host.on_fetch(move |req| {
+                let chat = |id: &str, thread: u64, archived: Value| json!({ "id": id, "session": id, "thread": thread, "title": format!("聊 {id}"),
+                    "last": { "text": "好了" }, "lastActiveAt": now - 9e8, "archived": archived });
+                match (req.method.as_str(), req.url.trim_start_matches("https://stillfail.test/admin/api")) {
+                    ("GET", "/chats?archived=1") => {
+                        let all = [
+                            chat("k2", 8, json!({ "at": now - 3.0 * 86_400_000.0, "by": "auto", "alone": true })),
+                            chat("k1", 7, json!({ "at": now, "by": "manual", "alone": false })),
+                            // A station from before the archive answers the chats it shows: not archived ones.
+                            chat("k3", 9, Value::Null),
+                        ];
+                        json_response(200, Value::Array(all.into_iter().filter(|c| !g.borrow().contains(&c["id"].as_str().unwrap())).collect()))
+                    }
+                    ("DELETE", "/threads/7/archive") => {
+                        g.borrow_mut().push("k1");
+                        json_response(200, json!({ "ok": true }))
+                    }
+                    ("DELETE", "/sessions/k2") => {
+                        g.borrow_mut().push("k2");
+                        json_response(200, json!({ "ok": true }))
+                    }
+                    _ => json_response(404, json!({})),
+                }
+            });
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Archive { scope: "local".into() } });
+            host.settle().await;
+            let mut values = HashMap::new();
+            answers(&host, &mut values);
+            let v = &values[&1];
+            assert_eq!((v["loading"].clone(), v.get("note"), v["errors"].clone()), (json!(false), None, json!([])));
+            let days = v["days"].as_array().unwrap();
+            assert_eq!(days.len(), 2);
+            assert_eq!(days[0]["label"], "今天");
+            let first = &days[0]["items"][0];
+            assert_eq!(
+                (first["station"].clone(), first["session"].clone(), first["thread"].clone(), first["title"].clone(), first["last"].clone(), first["how"].clone(), first["deletable"].clone()),
+                (json!("local"), json!("k1"), json!(7), json!("聊 k1"), json!("好了"), json!("手动归档"), json!(true))
+            );
+            assert_eq!(first["clock"].as_str().unwrap().len(), 5);
+            // One station: which one is not said.
+            assert!(first.get("place").is_none());
+            assert_eq!((days[1]["items"][0]["how"].clone(), days[1]["items"][0]["deletable"].clone()), (json!("空闲后自动归档"), json!(false)));
+            // Put back in the list: it leaves the archive before the call answers.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "chat.archive".into(), params: json!({ "station": "local", "thread": 7, "session": "k1", "archived": false }) });
+            host.settle().await;
+            assert!(answers(&host, &mut values)[&2].is_ok());
+            let sessions = |v: &Value| -> Vec<String> { v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["session"].as_str().unwrap().to_string())).collect() };
+            assert_eq!(sessions(&values[&1]), ["k2"]);
+            // Deleted: the same, and with nothing left the page says so.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "session.delete".into(), params: json!({ "station": "local", "key": "k2" }) });
+            host.settle().await;
+            assert!(answers(&host, &mut values)[&3].is_ok());
+            assert_eq!((values[&1]["days"].clone(), values[&1]["note"].clone()), (json!([]), json!("没有归档的对话。")));
         });
     }
 

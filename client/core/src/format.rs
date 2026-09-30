@@ -37,7 +37,7 @@ pub fn duration(ms: f64) -> String {
 }
 
 /// A local time's parts: (year, month 1–12, day, weekday 0 = Sunday, hour, minute).
-fn local(ms: f64, offset_min: i32) -> (i64, u32, u32, u32, u32, u32) {
+pub(crate) fn local(ms: f64, offset_min: i32) -> (i64, u32, u32, u32, u32, u32) {
     let local = ms + offset_min as f64 * MINUTE;
     let days = (local / DAY).floor() as i64;
     let in_day = (local - days as f64 * DAY) as i64 / 60_000;

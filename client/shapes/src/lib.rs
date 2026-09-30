@@ -1124,6 +1124,60 @@ pub struct ChatSearchView {
     pub items: Vec<ChatItem>,
 }
 
+/// The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once
+/// idle, newest first by the day they were archived; what could not be read of it; and what the page says in place
+/// of rows (reading, none), if anything. Restored (`chat.archive` with `archived` false) or deleted (`session.delete`),
+/// a chat leaves it.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveView {
+    pub days: Vec<ArchiveDay>,
+    /// A station's archive that could not be read, in a line (named where there are several).
+    pub errors: Vec<ArchiveError>,
+    pub loading: bool,
+    pub note: Option<String>,
+}
+
+/// A day of the archive, headed as the chat list's (今天, 昨天, 星期三, 9月20日).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveDay {
+    pub label: String,
+    pub items: Vec<ArchiveItem>,
+}
+
+/// An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
+/// archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
+/// is more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveItem {
+    pub station: String,
+    pub session: String,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub thread: Option<i64>,
+    pub title: String,
+    pub last: String,
+    pub at: f64,
+    pub clock: String,
+    pub how: String,
+    pub deletable: bool,
+    pub place: Option<String>,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveError {
+    pub station: String,
+    pub text: String,
+}
+
 /// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
 /// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
 /// `url` opens it.

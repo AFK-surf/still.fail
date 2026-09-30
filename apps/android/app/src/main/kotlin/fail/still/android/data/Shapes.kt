@@ -53,6 +53,49 @@ data class AgentWait (
 	val seconds: Long? = null
 )
 
+/// An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
+/// archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
+/// is more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere).
+@Serializable
+data class ArchiveItem (
+	val station: String,
+	val session: String,
+	val thread: Long? = null,
+	val title: String,
+	val last: String,
+	val at: Double,
+	val clock: String,
+	val how: String,
+	val deletable: Boolean,
+	val place: String? = null
+)
+
+/// A day of the archive, headed as the chat list's (今天, 昨天, 星期三, 9月20日).
+@Serializable
+data class ArchiveDay (
+	val label: String,
+	val items: List<ArchiveItem>
+)
+
+@Serializable
+data class ArchiveError (
+	val station: String,
+	val text: String
+)
+
+/// The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once
+/// idle, newest first by the day they were archived; what could not be read of it; and what the page says in place
+/// of rows (reading, none), if anything. Restored (`chat.archive` with `archived` false) or deleted (`session.delete`),
+/// a chat leaves it.
+@Serializable
+data class ArchiveView (
+	val days: List<ArchiveDay>,
+	/// A station's archive that could not be read, in a line (named where there are several).
+	val errors: List<ArchiveError>,
+	val loading: Boolean,
+	val note: String? = null
+)
+
 @Serializable
 data class Attachment (
 	val name: String,

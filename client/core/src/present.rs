@@ -460,6 +460,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Notices => s::conform::<s::NoticesView>(value),
         Topic::Draft { .. } => s::conform::<s::DraftView>(value),
         Topic::Notify => s::conform::<s::NotifyView>(value),
+        Topic::Archive { .. } => s::conform::<s::ArchiveView>(value),
         _ => Ok(value),
     }
 }

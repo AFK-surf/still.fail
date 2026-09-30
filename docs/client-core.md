@@ -109,6 +109,7 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 | `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s) / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
+| `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats (read again after `chat.archive`, `session.delete`) |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
@@ -240,6 +241,7 @@ itself (one station, addressed `"local"`).
 | `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models |
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
 | `chat` | `station`, and `thread` (id) or `session` (key) | an item's page: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
+| `archive` | `scope` | the archive: `{ days, errors, loading, note }`, every online station's archived chats newest first by the day they were archived |
 
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.
@@ -352,8 +354,9 @@ and what that changes (`ops.rs`; `scripts/check.sh` fails on a UI that asks
 for a request). Station operations take `station`: `session.stop`,
 `session.warm`, `session.evict`, `session.delete`, `session.settings`,
 `session.new`, `chat.archive` (by its thread, else its session; a station from
-before archiving threads archives the session), `chat.rename` (by its thread,
-else its session), `chats.archived`,
+before archiving threads archives the session; one going in is left out of
+`chats` until the station answers, back if it refused), `chat.rename` (by its
+thread, else its session), `chats.archived`,
 `chat.forSession`, `widget.state`, `widget.setState`, `machineSessions.list`,
 `machineSessions.read`, `machineSessions.continue`, `connect.create`,
 `connect.put`, `connect.delete`, `connect.reconnect`, `connect.bindSession`,

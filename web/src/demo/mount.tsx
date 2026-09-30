@@ -45,6 +45,7 @@ function valueOf(topic: Topic): unknown {
     case "host": return station.host();
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
+    case "archive": return station.archive();
     // still.fail cloud's, for the phone's workspace pages (mobile/).
     case "accounts": return [station.ACCOUNT];
     case "workspaces": return station.workspaces();

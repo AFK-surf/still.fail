@@ -214,9 +214,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     // ── the archive (web/src/pages/Archive.tsx) ──
 
-    /** The archive's items; a station from before it answers its shown ones (none say `archived`), so none. */
-    suspend fun archivedChats(): List<ArchivedChat> =
-        decode(ListSerializer(ArchivedChat.serializer()), op("chats.archived")).filter { it.archived != null }
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
     suspend fun setArchived(thread: Long?, session: String, archived: Boolean) {
         op("chat.archive") { put("session", session); if (thread != null) put("thread", thread); put("archived", archived) }
@@ -316,25 +313,6 @@ data class MachineSession(
 /** Something said in one of them: by the person, else by its agent; when, in ms. */
 @kotlinx.serialization.Serializable
 data class MachineSaid(val person: Boolean, val text: String, val at: Long? = null)
-
-/** An item of a station's archive (`chats.archived`), as the station sends it (not in client/shapes yet). */
-@kotlinx.serialization.Serializable
-data class ArchivedChat(
-    val id: String,
-    val session: String,
-    val thread: Long? = null,
-    val title: String,
-    val last: ArchivedLast? = null,
-    val lastActiveAt: Long,
-    val archived: ArchivedMark? = null,
-)
-
-@kotlinx.serialization.Serializable
-data class ArchivedLast(val text: String? = null)
-
-/** When it was archived, by a person (`manual`) or the station for idling (`auto`); `alone`: its agents still at work elsewhere. */
-@kotlinx.serialization.Serializable
-data class ArchivedMark(val at: Long, val by: String, val alone: Boolean = false)
 
 /** A job's output as its `jobLog` topic has it: its last lines, when it last grew. */
 @kotlinx.serialization.Serializable

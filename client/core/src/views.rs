@@ -23,6 +23,8 @@ use crate::host::Host;
 use crate::protocol::Topic;
 use crate::store::{Store, Watch};
 
+mod archive;
+
 /// The runtimes a chat can run on, in the order they are offered.
 const RUNTIMES: [&str; 2] = ["claude", "codex"];
 const DAY_MS: f64 = 86_400_000.0;
@@ -42,6 +44,7 @@ pub struct Views {
     /// Chats asked for here (`chat.create`) by the key the core gave them, until the station has made them and ever
     /// after (a page that opened one keeps its key).
     pending: RefCell<HashMap<String, Pending>>,
+    archiving: archive::Archiving,
 }
 
 /// A chat asked for here. Until its station has made it, it is shown at once from what is known here: its page,
@@ -94,6 +97,7 @@ impl Views {
             outbox: RefCell::default(),
             sent: Cell::new(0),
             pending: RefCell::default(),
+            archiving: Default::default(),
         })
     }
 
@@ -433,6 +437,7 @@ impl Views {
             },
             Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
             Topic::History { station, key } => self.history(station, key),
+            Topic::Archive { scope } => self.archive(scope),
             _ => None,
         }
     }
@@ -466,6 +471,7 @@ impl Views {
             // Its overview says which Slack users are the viewer (a row's last thing said by one is "你").
             Topic::Chats { scope, .. } | Topic::ChatSearch { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
+            Topic::Archive { scope } => (scope.as_str(), |station| vec![Topic::ArchivedRows { station }]),
             // Its sessions (the recent ones, the one it delivers into) and the chats they were last talked to in.
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station: station.clone() }, Topic::Sessions { station: station.clone() }, Topic::Threads { station }]),
             Topic::Chat { station, thread: None, session: Some(key) } if key.starts_with(PENDING_PREFIX) => {
@@ -644,6 +650,10 @@ impl Views {
                 let asked = self.pending_rows(&s.address, &mut listed);
                 for row in asked.iter().chain(listed.iter()) {
                     if mine && row.get("mine").and_then(Value::as_bool) != Some(true) {
+                        continue;
+                    }
+                    // On its way into the archive from here (archive.rs).
+                    if self.being_archived(&s.address, row) {
                         continue;
                     }
                     let mut row = row.clone();

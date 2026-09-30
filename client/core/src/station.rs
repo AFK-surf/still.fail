@@ -1021,6 +1021,8 @@ impl Stations {
                 }
                 touched.push(Topic::Sessions { station: name.clone() });
                 touched.push(Topic::ChatRows { station: name.clone() });
+                // One archived, restored or deleted.
+                touched.push(Topic::ArchivedRows { station: name.clone() });
                 // A new chat answers its thread.
                 if let Some(thread) = answer.get("thread").filter(|t| t.is_object()) {
                     self.put_thread(&name, thread);
@@ -1036,6 +1038,12 @@ impl Stations {
                 }
                 if let (Some(id), Some("messages")) = (parts.get(1).and_then(|id| id.parse().ok()), parts.get(2).map(String::as_str)) {
                     touched.push(Topic::Thread { station: name.clone(), thread: id });
+                }
+                // Into the archive or back: out of one list and into the other.
+                if parts.get(2).map(String::as_str) == Some("archive") {
+                    touched.retain(|t| !matches!(t, Topic::ChatRows { .. }));
+                    touched.push(Topic::ChatRows { station: name.clone() });
+                    touched.push(Topic::ArchivedRows { station: name.clone() });
                 }
             }
             Some("connects") => {
@@ -1125,6 +1133,7 @@ impl Stations {
             Topic::Sessions { .. } => "/sessions".to_string(),
             Topic::Threads { .. } => "/threads".to_string(),
             Topic::ChatRows { .. } => "/chats".to_string(),
+            Topic::ArchivedRows { .. } => "/chats?archived=1".to_string(),
             Topic::SlackApp { connect, .. } => format!("/connects/{}/slack-app", encode(connect)),
             Topic::Jobs { .. } => "/jobs".to_string(),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
@@ -1243,7 +1252,7 @@ impl Stations {
     /// reconnect), which ends when they are all read.
     fn refetch_all(&self, station: &str, span: Span) {
         let topics = self.live_topics(station, |t| {
-            matches!(t, Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::Thread { .. })
+            matches!(t, Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::ArchivedRows { .. } | Topic::Session { .. } | Topic::Thread { .. })
         });
         let this = self.rc();
         self.spawn_in(Some(span.context()), async move {
@@ -2264,7 +2273,9 @@ impl Source for Stations {
                     this.set_link(&station, link);
                 });
             }
-            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Jobs { .. } => self.refetch(topic),
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::ArchivedRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Jobs { .. } => {
+                self.refetch(topic)
+            }
             Topic::Thread { thread, .. } => {
                 let (this, station, thread) = (self.rc(), station.clone(), *thread);
                 self.spawn(async move { this.open_thread(&station, thread).await });

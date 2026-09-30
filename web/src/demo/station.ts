@@ -4,7 +4,7 @@
 // 0: they are moved to now here.
 import data from "./station.json";
 import { CHEN, LIN, stamp, ZHOU, type Runs } from "./fixtures.ts";
-import type { Connect, ConnectsView, Person } from "../core/shapes.ts";
+import type { ArchiveDay, ArchiveView, Connect, ConnectsView, Person } from "../core/shapes.ts";
 
 const TIME = /^(at|checkedAt|resetsAt|startedAt|createdAt|endedAt|lastActiveAt|updatedAt)$/;
 
@@ -82,13 +82,30 @@ const OWN = new Set(["session.warm", "session.stop", "session.evict", "session.s
  *  ember; what stays in the station answers the overview (what most writes answer with) and changes nothing. */
 export function op(name: string): unknown {
   if (name === "memory.get") return data.memory;
-  if (name === "chats.archived") return now(data.archived);
   if (name === "machineSessions.list") return now(data.machineSessions);
   // An inline visualization keeps nothing here.
   if (name === "widget.state") return { state: null };
   if (name === "widget.setState") return { ok: true };
   if (OWN.has(name)) return overview();
   throw new NeedsReal();
+}
+
+/** The archive, as the core puts it together (client/core/src/views/archive.rs): the station's archived chats by day. */
+export function archive(): ArchiveView {
+  const days: ArchiveDay[] = [];
+  const today = new Date().setHours(0, 0, 0, 0);
+  for (const chat of now(data.archived).sort((a, b) => b.archived.at - a.archived.at)) {
+    const at = new Date(chat.archived.at);
+    const ago = Math.round((today - new Date(at).setHours(0, 0, 0, 0)) / 86_400_000);
+    const label = ago <= 0 ? "今天" : ago === 1 ? "昨天" : ago < 7 ? `星期${"日一二三四五六"[at.getDay()]}` : `${at.getMonth() + 1}月${at.getDate()}日`;
+    const item = {
+      station: "local", session: chat.session, thread: chat.thread, title: chat.title, last: chat.last?.text ?? "", at: chat.archived.at,
+      clock: at.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }), how: "手动归档", deletable: !chat.archived.alone,
+    };
+    const last = days.at(-1);
+    if (last?.label === label) last.items.push(item); else days.push({ label, items: [item] });
+  }
+  return { days, errors: [], loading: false };
 }
 
 // ---- ember cloud ----

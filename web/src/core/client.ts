@@ -46,7 +46,9 @@ export type Topic =
   | { topic: "notify" }
   // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
   // composer's `@` menu and the switcher. A core from before it answers an error.
-  | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number };
+  | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number }
+  // The archived chats of a scope's stations online, newest first by day (client/core/src/views/archive.rs).
+  | { topic: "archive"; scope: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

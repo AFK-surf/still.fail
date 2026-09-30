@@ -16,11 +16,10 @@ import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { CHANGEABLE, useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
-import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename } from "./Rename.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
-import { archiveKey, PendingArchives } from "./pendingArchives.ts";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { StationGlyph, glyphCounts, glyphLabel, glyphSummary } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
@@ -78,11 +77,8 @@ function SettingsNav() {
  * ones the viewer started, with `newChat` above them and the way to the `archive` in the filter's menu beside it. With no station its empty
  * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
  */
-const ArchivesContext = createContext<PendingArchives | null>(null);
-
 export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
   const [onlyMine] = useOnlyMine();
-  const [pending] = useState(() => new PendingArchives());
   const move = useComposerMove();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
@@ -92,13 +88,8 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
   // The page it was going to is there (or another took its place).
   const path = useLocation().pathname;
   useEffect(() => setGoing(null), [path]);
-  useEffect(() => {
-    if (all.value && mine.value) {
-      pending.reconcile(new Set([...all.value.days, ...mine.value.days].flatMap((day) => day.items.map(archiveKey))));
-    }
-  }, [pending, all.value, mine.value]);
   return (
-    <ArchivesContext.Provider value={pending}>
+    <>
       <div className={nav.navNew}>
         <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />新建对话</NavLink>
         {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
@@ -110,7 +101,7 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
           <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} hidden={!onlyMine} />
         </div>
       </div>
-    </ArchivesContext.Provider>
+    </>
   );
 }
 
@@ -146,12 +137,10 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; hidden: boolean }) {
-  const pending = useContext(ArchivesContext)!;
-  const archived = useSyncExternalStore(pending.subscribe, pending.getSnapshot, pending.getSnapshot);
   const view = chats.value;
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
-  const days = useHeldOrder((view?.days ?? []).map((day) => ({ ...day, items: day.items.filter((item) => !archived.has(archiveKey(item))) })).filter((day) => day.items.length > 0), rowKey, over, pinMoved);
+  const days = useHeldOrder(view?.days ?? [], rowKey, over, pinMoved);
   // One station of one's own: its name says nothing, and its state is the page's.
   const several = scope !== "local";
   const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
@@ -285,25 +274,23 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   );
 }
 
-/** Puts a chat's row in the archive (its session with it when it is that session's own), leaving its page if open. */
+/**
+ * Puts a chat's row in the archive (its session with it when it is that session's own), leaving its page if open. The
+ * core takes the row out of the lists at once, and puts it back if the station could not.
+ */
 function useArchive(item: ChatItem, to: string) {
-  const pending = useContext(ArchivesContext)!;
   const api = stationApi(useStationCall(item.station));
   const path = useLocation().pathname;
   const navigate = useNavigate();
   const toast = useToast();
   return async () => {
-    const key = archiveKey(item);
-    if (!pending.begin(key)) return;
     // Move away now, to the chat beside it in the list (the list page if none); a slow response must not navigate over
     // a chat opened meanwhile.
     if (decodeURIComponent(path) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
     try {
       await api.archive(item, true);
-      pending.finish(key);
       toast("已归档");
     } catch (error) {
-      pending.fail(key);
       toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
     }
   };

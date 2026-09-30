@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { Attachment, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { ArchiveView, Attachment, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 
@@ -16,21 +16,6 @@ export type { TopicState };
 export { CoreError };
 
 // ── what is sent to a station (its admin API's inputs) ──
-
-/**
- * An item of a station's archive (GET /chats?archived=1), as the station sends it: its sidebar row with when it was
- * archived, by a person or by the station for idling, and whether the chat went alone (its agents still at work) or
- * with its session.
- */
-export interface ArchivedChat {
-  id: string;
-  session: string;
-  thread: number | null;
-  title: string;
-  last: { text: string | null } | null;
-  lastActiveAt: number;
-  archived?: { at: number; by: "manual" | "auto"; alone: boolean };
-}
 
 export type ConnectKind = "slack";
 
@@ -111,6 +96,11 @@ export function useStatus(): StatusView | undefined {
   return useTopic<StatusView>(STATUS).value;
 }
 const STATUS = { topic: "status" } as const;
+
+/** The archive of a scope's stations online (client/core/src/views/archive.rs). */
+export function useArchiveView(scope: string): TopicState<ArchiveView> {
+  return useTopic<ArchiveView>({ topic: "archive", scope });
+}
 
 export function useStations(scope: string): TopicState<StationView[]> {
   return useTopic<StationView[]>({ topic: "stations", scope });
@@ -194,7 +184,12 @@ function toBase64(file: Blob): Promise<string> {
 
 export function useStationCall(station: string): StationCall {
   const call = useCall();
-  return useMemo(() => ({
+  return useMemo(() => stationCall(call, station), [call, station]);
+}
+
+/** A station's calls through the core's `call` (useCall), for what reaches more than one station. */
+export function stationCall(call: ReturnType<typeof useCall>, station: string): StationCall {
+  return {
     op: <T,>(name: string, params: Record<string, unknown> = {}) => call(name, { ...params, station }) as Promise<T>,
     upload: async (file) => {
       const saved = await call("station.upload", { station, name: file.name, bytes: await toBase64(file) }) as Attachment;
@@ -216,7 +211,7 @@ export function useStationCall(station: string): StationCall {
         onProgress && ((got) => onProgress(got as FileProgress))) as { type: string; bytes: string };
       return new Blob([fromBase64(bytes)], { type });
     },
-  }), [call, station]);
+  };
 }
 
 /** A session the machine's own Claude Code or Codex kept, run in a terminal. */
@@ -253,8 +248,6 @@ export function stationApi(t: StationCall) {
       op<unknown>("chat.rename", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), title }),
     /** Keeps a chat at the top of the viewer's list, or lets it go (by its item's id, its session's key). */
     pin: (of: { session: string }, pinned: boolean) => op<unknown>("chat.pin", { session: of.session, pinned }),
-    /** The archive's items; a station from before it answers its shown ones (none say `archived`), so none. */
-    archivedChats: async () => (await op<ArchivedChat[]>("chats.archived")).filter((row) => row.archived),
     deleteSession: (key: string) => op<{ ok: true }>("session.delete", { key }),
     evict: (key: string) => op<{ ok: true }>("session.evict", { key }),
     putConnect: (id: string, input: ConnectInput) => op<Overview>("connect.put", { id, input }),

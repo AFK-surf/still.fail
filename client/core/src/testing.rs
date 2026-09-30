@@ -43,6 +43,8 @@ pub struct FakeHost {
     pub requests: RefCell<Vec<HttpRequest>>,
     /// Every sleep asked for (ms, before speeding up), in order: timers show here.
     pub sleeps: RefCell<Vec<u64>>,
+    /// Requests held back (`hold`): by what their url ends with, until let go.
+    holds: RefCell<Vec<(String, futures::channel::oneshot::Receiver<()>)>>,
     emitted: RefCell<Vec<(ClientId, CoreMessage)>>,
     seed: RefCell<u64>,
     utc_offset_min: Cell<i32>,
@@ -62,6 +64,7 @@ impl FakeHost {
             resets: Cell::new(0),
             requests: RefCell::default(),
             sleeps: RefCell::default(),
+            holds: RefCell::default(),
             emitted: RefCell::default(),
             seed: RefCell::new(0x5eed),
             utc_offset_min: Cell::new(0),
@@ -75,6 +78,13 @@ impl FakeHost {
 
     pub fn on_fetch_stream(&self, responder: impl Fn(&HttpRequest) -> Result<StreamResponse, HostError> + 'static) {
         *self.stream_responder.borrow_mut() = Some(Box::new(responder));
+    }
+
+    /// Holds back the answer of the next request whose url ends with `path` until the sender is used or dropped.
+    pub fn hold(&self, path: &str) -> futures::channel::oneshot::Sender<()> {
+        let (tx, rx) = futures::channel::oneshot::channel();
+        self.holds.borrow_mut().push((path.to_string(), rx));
+        tx
     }
 
     pub fn stored(&self, key: &str) -> Option<Vec<u8>> {
@@ -155,7 +165,17 @@ impl Host for FakeHost {
             Some(r) => r(&request),
             None => Err(HostError(format!("no responder for {} {}", request.method, request.url))),
         };
-        async move { answer }.boxed_local()
+        let held = {
+            let mut holds = self.holds.borrow_mut();
+            holds.iter().position(|(path, _)| request.url.ends_with(path.as_str())).map(|i| holds.remove(i).1)
+        };
+        async move {
+            if let Some(held) = held {
+                let _ = held.await;
+            }
+            answer
+        }
+        .boxed_local()
     }
 
     fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>> {

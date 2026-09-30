@@ -45,6 +45,49 @@ export interface AgentWait {
 	seconds?: number;
 }
 
+/**
+ * An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
+ * archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
+ * is more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere).
+ */
+export interface ArchiveItem {
+	station: string;
+	session: string;
+	thread?: number;
+	title: string;
+	last: string;
+	at: number;
+	clock: string;
+	how: string;
+	deletable: boolean;
+	place?: string;
+}
+
+/** A day of the archive, headed as the chat list's (今天, 昨天, 星期三, 9月20日). */
+export interface ArchiveDay {
+	label: string;
+	items: ArchiveItem[];
+}
+
+export interface ArchiveError {
+	station: string;
+	text: string;
+}
+
+/**
+ * The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once
+ * idle, newest first by the day they were archived; what could not be read of it; and what the page says in place
+ * of rows (reading, none), if anything. Restored (`chat.archive` with `archived` false) or deleted (`session.delete`),
+ * a chat leaves it.
+ */
+export interface ArchiveView {
+	days: ArchiveDay[];
+	/** A station's archive that could not be read, in a line (named where there are several). */
+	errors: ArchiveError[];
+	loading: boolean;
+	note?: string;
+}
+
 export interface Attachment {
 	name: string;
 	path: string;

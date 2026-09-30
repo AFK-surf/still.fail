@@ -101,6 +101,10 @@ pub enum Topic {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         limit: Option<u32>,
     },
+    /// The station's archived chats (`/chats?archived=1`), as it lists them.
+    ArchivedRows { station: String },
+    /// A view: the archive of a scope's stations online (views/archive.rs).
+    Archive { scope: String },
 }
 
 impl Topic {
@@ -108,13 +112,14 @@ impl Topic {
     pub fn station(&self) -> Option<&str> {
         match self {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
+            Topic::ArchivedRows { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status | Topic::Notices | Topic::Notify | Topic::Draft { .. } => None,
-            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } => None,
+            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } => None,
         }
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. })
     }
 }
