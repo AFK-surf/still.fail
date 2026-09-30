@@ -1,42 +1,22 @@
-import { useEffect, useRef, useState } from "react";
-import { useStatus, type LinkShown, type StatusView } from "./api.ts";
+import { useConnection } from "./api.ts";
 import { core } from "./core/react.ts";
 import { StatusDot, Tip } from "./ui.tsx";
 import * as css from "./Connection.css.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 
-/** How long "连上了" stays once all is well again. */
-const BACK_MS = 1500;
-
-type Shown = { tone: "busy" | "trouble" | "back"; text: string; detail?: string | undefined; items?: StatusView["items"] | undefined };
-
 /**
- * What is not as it should be with the connection to this chat's station, or with what the core waits on (its
- * `status`: what, how long, how fast): nothing while all is well. Down, it offers to try again at once (no more
- * waiting, the connections tried against new ones: client/core/src/wake.rs `retry`); back, it says so a moment.
+ * What a chat on `station` says of its connection, as the core decides it (its `connection` topic,
+ * client/core/src/pill.rs): its link down or coming back, or what its workspace's core waits on (what, how long, how
+ * fast), and only once that has lasted; "已连上" a moment after. Nothing while all is well, nothing of another
+ * workspace. Down, it offers to try again at once (no more waiting, the connections tried against new ones:
+ * client/core/src/wake.rs `retry`).
  */
-export function ConnectionPill({ connection, phone }: { connection?: LinkShown | undefined; phone?: boolean }) {
-  const status = useStatus();
-  const now = shownOf(connection, status);
-  const [back, setBack] = useState(false);
-  const was = useRef(false);
-  useEffect(() => {
-    if (now) {
-      was.current = true;
-      setBack(false);
-      return;
-    }
-    if (!was.current) return;
-    was.current = false;
-    setBack(true);
-    const done = setTimeout(() => setBack(false), BACK_MS);
-    return () => clearTimeout(done);
-  }, [!!now]);
-  const shown: Shown | null = now ?? (back ? { tone: "back", text: "已连上" } : null);
-  if (!shown) return null;
+export function ConnectionPill({ station, phone }: { station: string; phone?: boolean }) {
+  const shown = useConnection(station);
+  if (!shown?.tone) return null;
   const pill = (
-    <div className={phone ? `${css.connection} ${css.connectionPhone}` : css.connection} data-tone={shown.tone} role="status" tabIndex={shown.items?.length ? 0 : undefined}>
+    <div className={phone ? `${css.connection} ${css.connectionPhone}` : css.connection} data-tone={shown.tone} role="status" tabIndex={shown.items.length ? 0 : undefined}>
       <span className={css.connectionMark}>
         {shown.tone === "busy" ? <span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" />
           : shown.tone === "trouble" ? <StatusDot state="error" /> : <span className={css.connectionBack} />}
@@ -46,7 +26,7 @@ export function ConnectionPill({ connection, phone }: { connection?: LinkShown |
       {shown.tone === "trouble" && <RetryPill />}
     </div>
   );
-  if (!shown.items?.length) return pill;
+  if (!shown.items.length) return pill;
   const items = (
     <span className={nav.waitingItems}>
       {shown.items.map((item, i) => (
@@ -58,14 +38,6 @@ export function ConnectionPill({ connection, phone }: { connection?: LinkShown |
     </span>
   );
   return <Tip label={items} side="bottom">{pill}</Tip>;
-}
-
-/** The chat's link as the core says it (its `connection`) while down or coming back, else what the core waits on. */
-function shownOf(connection: LinkShown | undefined, status: StatusView | undefined): Shown | null {
-  if (connection) return { tone: connection.tone === "trouble" ? "trouble" : "busy", text: connection.text, detail: connection.detail, items: connection.tone === "busy" ? status?.items : undefined };
-  if (status?.state === "trouble") return { tone: "trouble", text: status.text ?? "连不上 still.fail cloud", items: status.items };
-  if (status?.state === "slow") return { tone: "busy", text: status.text ?? "", items: status.items };
-  return null;
 }
 
 /** 重试 as a small grey pill: the connections tried again at once (client/core/src/wake.rs `retry`). Here and on a

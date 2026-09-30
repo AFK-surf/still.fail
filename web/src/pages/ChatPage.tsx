@@ -2,7 +2,7 @@
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
-import { useLink, useStation } from "../station.tsx";
+import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
 import { Boxes, Close, Edit, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -289,7 +289,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
         <div className={jobsCss.sessionMain}>
           <section className={sessionCss.chat} aria-label="对话" data-under-composer="" data-avoid-previews="">
-            <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} detail={<StatusLine />} />
+            <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} detail={<StatusLine workspace={scopeOf(station.address)} />} />
             <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
           </section>
         </div>

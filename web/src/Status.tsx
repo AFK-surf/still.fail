@@ -38,8 +38,11 @@ export function Retry() {
   return <button type="button" className={nav.waitingRetry} onClick={() => core().retry()}>重试</button>;
 }
 
-/** Under a page's "loading…": what the core has been waiting on for a while, if anything (the core's `status`). */
-export function StatusLine() {
-  const text = useStatus()?.text;
+/**
+ * Under a page's "loading…": what the core has been waiting on for a while, if anything (the core's `status`): of the
+ * page's workspace, or before there is one all of it.
+ */
+export function StatusLine({ workspace }: { workspace?: string }) {
+  const text = useStatus(workspace)?.text;
   return text ? <span className={nav.statusLine}>{text}</span> : null;
 }

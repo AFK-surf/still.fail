@@ -190,7 +190,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
     <OpenFile.Provider value={(session, file) => app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })))}>
       {quoting.pop}
       {askedFile}
-      <ConnectionPill connection={view.connection} phone />
+      <ConnectionPill station={here.station} phone />
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>

@@ -1,6 +1,7 @@
 // Notifications in the browser (docs/notifications.md): the core's `notices` shown while a page is open, and pushes
 // through the service worker (/sw.js) while none is. The desktop app shows its own from its main process, so its
-// pages show none. Whether they are on is the core's (kept on the device), and the browser's permission.
+// pages show none. Whether they are on is the core's (kept on the device), and the browser's permission. Only the
+// workspace the viewer is in is heard of: each page tells the core where it is (`useInWorkspace`).
 import { useEffect, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router";
 import { core } from "./core/react.ts";
@@ -25,6 +26,25 @@ if (DESKTOP) void DESKTOP.get().then((on) => { desktopOn = on; changed(); });
 export const CAN_NOTIFY = NOTIFIES || !!DESKTOP;
 
 export type NotifyState = "on" | "off" | "denied" | "unsupported";
+
+/** The workspace this page is in (an id, or `local`), as it told the core. */
+let inWorkspace: string | undefined;
+
+/**
+ * This page is in `workspace` (an id, or `local`): the core is told (`client.focus`), so what it tells the viewer is
+ * of it (client/core/src/attend.rs), and so are the notices this page shows.
+ */
+export function useInWorkspace(workspace: string): void {
+  useEffect(() => {
+    inWorkspace = workspace;
+    void core().focus({ workspace }).catch(() => undefined);
+    changed();
+  }, [workspace]);
+}
+
+function useWorkspaceIn(): string | undefined {
+  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => inWorkspace, () => undefined);
+}
 
 /** The core's `notify` (null until it says; a core from before it: on, as the browser kept it). */
 let kept: NotifyView | null = null;
@@ -133,6 +153,7 @@ function equal(a: Uint8Array, b: Uint8Array): boolean {
  */
 export function useNotices(): void {
   const navigate = useNavigate();
+  const workspace = useWorkspaceIn();
   useEffect(() => {
     if (!NOTIFIES) return;
     watch();
@@ -151,7 +172,8 @@ export function useNotices(): void {
     let gone = false;
     void migrated().then(() => {
       if (gone) return;
-      stop = core().subscribe({ topic: "notify" }, (value) => {
+      // Only the page's own workspace's; before it says which, all (the core has none left out either).
+      stop = core().subscribe(workspace ? { topic: "notify", workspace } : { topic: "notify" }, (value) => {
         kept = value as NotifyView;
         if (!pushSynced) { pushSynced = true; void syncPush(); }
         for (const n of kept.show) {
@@ -164,5 +186,5 @@ export function useNotices(): void {
       }, () => {});
     });
     return () => { gone = true; stop(); navigator.serviceWorker?.removeEventListener("message", fromWorker); };
-  }, [navigate]);
+  }, [navigate, workspace]);
 }

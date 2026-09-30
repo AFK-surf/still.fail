@@ -13,6 +13,7 @@ import { NavBack } from "./parts.tsx";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
 import { follower, type Follower } from "../motion.ts";
+import { useInWorkspace } from "../notify.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
@@ -63,6 +64,7 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
   const location = useLocation();
   const type = useNavigationType();
   const home = `/w/${entry.id}`;
+  useInWorkspace(entry.id);
   // The pages as the browser's history has them, from the first one opened here to the one in view.
   const [pages, setPages] = useState<Page[]>(() => [{ key: location.key, location }]);
   const [moving, setMoving] = useState<{ from: Page; to: Page; forward: boolean } | null>(null);

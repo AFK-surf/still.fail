@@ -589,8 +589,10 @@ function open(path = "/", titled = false): BrowserWindow {
   return window;
 }
 
-// The chats' notices (docs/notifications.md), shown by the app itself, so also with no window open. Whether they are on
-// is kept in userData/notify.json; the system's own settings for the app come on top.
+// The chats' notices (docs/notifications.md), shown by the app itself, so also with no window open. Which to show now
+// is the core's call (its `notify`, client/core/src/attend.rs): none for a chat looked at, only the workspace the
+// windows are in; each taken once (`notice.claim`). Whether they are on is kept in userData/notify.json; the system's
+// own settings for the app come on top.
 const NOTIFY_FILE = () => join(app.getPath("userData"), "notify.json");
 let notifyOn = true;
 let noticesHeld: number | null = null;
@@ -603,30 +605,21 @@ function followNotices(): void {
   if (noticesHeld !== null && own?.topics.has(noticesHeld)) return;
   const link = ownLink();
   const id = link.next++;
-  let seen: Set<string> | null = null;
+  const taken = new Set<string>();
   link.topics.set(id, {
     value: undefined,
     onValue: (value) => {
-      const items = (value as { items?: Notice[] } | undefined)?.items ?? [];
-      // What was there when the app started holding them is old news.
-      if (!seen) { seen = new Set(items.map((n) => n.id)); return; }
-      for (const n of items) {
-        if (seen.has(n.id)) continue;
-        seen.add(n.id);
-        if (notifyOn && Notification.isSupported() && !looking(n)) show(n);
+      for (const n of (value as { show?: Notice[] } | undefined)?.show ?? []) {
+        if (taken.has(n.id)) continue;
+        taken.add(n.id);
+        void coreCall("notice.claim", { id: n.id }).then((answer) => {
+          if ((answer as { show?: boolean }).show && notifyOn && Notification.isSupported()) show(n);
+        }, () => undefined);
       }
     },
   });
   noticesHeld = id;
-  link.port.postMessage({ id, subscribe: { topic: "notices" } });
-}
-
-/** The focused window shows that chat. */
-function looking(n: Notice): boolean {
-  const window = BrowserWindow.getFocusedWindow();
-  if (!window) return false;
-  const path = decodeURIComponent(new URL(window.webContents.getURL()).pathname);
-  return path.startsWith(`/w/${n.workspace}/`) && path.endsWith(`/s/${n.stationId}/chats/${n.session}`);
+  link.port.postMessage({ id, subscribe: { topic: "notify" } });
 }
 
 function show(n: Notice): void {

@@ -15,6 +15,7 @@ import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
 import { Loading } from "./ui.tsx";
 import { StatusLine } from "./Status.tsx";
+import { useInWorkspace } from "./notify.ts";
 import { toMadeChat } from "./Chat.tsx";
 import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
@@ -33,6 +34,8 @@ function useDetailOpen(): boolean {
 
 export function App() {
   useRememberChat("local", (p) => /^\/(new|chats\/.+)$/.test(p));
+  // A station's own page is a workspace of its own (client/core/src/workspace.rs).
+  useInWorkspace("local");
   const overview = useOverview("local");
   const detail = useDetailOpen();
   // A web service on a page of its own: the whole window, no sidebar.
@@ -50,7 +53,7 @@ export function App() {
       </div>
     );
   }
-  if (!overview.value) return <div className={shellCss.gate}><Loading label="正在连接 still.fail…" detail={<StatusLine />} /></div>;
+  if (!overview.value) return <div className={shellCss.gate}><Loading label="正在连接 still.fail…" detail={<StatusLine workspace="local" />} /></div>;
 
   return (
     <ToastProvider>

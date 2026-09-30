@@ -36,14 +36,18 @@ export type Topic =
   | { topic: "chat"; station: string; session: string }
   // An agent's execution history, read for people.
   | { topic: "history"; station: string; key: string }
-  // What the core is waiting on, when it is worth saying (a core from before it answers an error: nothing to say).
-  | { topic: "status" }
-  // What a person hears about while the client runs (docs/notifications.md).
-  | { topic: "notices" }
+  // What the core is waiting on, when it is worth saying (a core from before it answers an error: nothing to say): a
+  // workspace's (its stations, its account's socket, the relay), or with none all of it.
+  | { topic: "status"; workspace?: string }
+  // What a chat on a station says of its connection, when it says it all decided (client/core/src/pill.rs).
+  | { topic: "connection"; station: string }
+  // What a person hears about while the client runs (docs/notifications.md): a workspace's, or every one's.
+  | { topic: "notices"; workspace?: string }
   // What is written to a chat on this device, until sent: `chat` its key, `thread:<id>`, or `new` (a new chat there).
   | { topic: "draft"; station: string; chat: string }
-  // Notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (`notice.claim`).
-  | { topic: "notify" }
+  // Notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (`notice.claim`),
+  // only a workspace's for a page in it.
+  | { topic: "notify"; workspace?: string }
   // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
   // composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number }
@@ -67,10 +71,11 @@ export type Topic =
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
 
 /**
- * Where this page's attention is (`client.focus`, client/core/src/attend.rs): in view, looked at, the chat it shows.
- * Each field given changes; `chat: null` shows none; `left` says the chat named is not shown any more.
+ * Where this page's attention is (`client.focus`, client/core/src/attend.rs): in view, looked at, the chat it shows,
+ * the workspace it is in (an id, or `local`). Each field given changes; `chat: null` shows none; `left` says the chat
+ * named is not shown any more.
  */
-export interface Focus { visible?: boolean; focused?: boolean; chat?: ChatShown | null; left?: ChatShown }
+export interface Focus { visible?: boolean; focused?: boolean; chat?: ChatShown | null; left?: ChatShown; workspace?: string }
 
 export interface ErrorBody {
   code: string;

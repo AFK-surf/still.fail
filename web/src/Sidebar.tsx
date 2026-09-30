@@ -111,7 +111,7 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const view = useChats(scope, false).value;
-  const status = useStatus();
+  const status = useStatus(scope);
   if (!view || view.stations.length === 0) return status?.state ? <Waiting status={status} /> : null;
   const counts = glyphCounts(view, status?.state === "trouble");
   const trouble = view.trouble;

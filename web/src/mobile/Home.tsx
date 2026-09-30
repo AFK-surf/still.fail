@@ -71,7 +71,7 @@ export function Home() {
 /** The bar's way to the stations, drawn as how they are: what the core cannot reach at all (`status` in trouble) puts it to sleep. */
 function StationButton({ view }: { view: ChatsView | undefined }) {
   const app = useApp();
-  const status = useStatus();
+  const status = useStatus(app.entry.id);
   const counts = glyphCounts(view, status?.state === "trouble");
   // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
   const said = counts.asleep ? status?.text ?? "" : view?.glyph?.label ?? "";
@@ -92,7 +92,7 @@ function reading(status: StatusView | undefined): string {
 function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine: boolean }) {
   const view = chats.value;
   const scope = useApp().entry.id;
-  const status = useStatus();
+  const status = useStatus(scope);
   const lead = view?.leading ?? "agents";
   return (
     <div className={css.mHomePane}>

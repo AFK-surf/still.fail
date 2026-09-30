@@ -34,6 +34,7 @@ import { signIn, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
+import { useInWorkspace } from "../notify.ts";
 import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./workspace.css.ts";
@@ -62,6 +63,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
   useEffect(() => identify(entry.account), [entry.account]);
   useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
+  useInWorkspace(entry.id);
   // The views the workspace's pages and settings show, subscribed from the start: a page opened the first time draws at
   // once, with no frame waiting for the core's first answer. What the core keeps in sync is its own call (sync.rs);
   // these only read it.

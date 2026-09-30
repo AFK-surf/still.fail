@@ -38,6 +38,7 @@ function valueOf(topic: Topic): unknown {
   switch (topic.topic) {
     case "overview": return station.overview();
     case "status": return { items: [] };
+    case "connection": return { items: [] };
     // Nothing chosen: the defaults (the core's shape leaves them out).
     case "prefs": return {};
     case "chats": return chatsView(chats);

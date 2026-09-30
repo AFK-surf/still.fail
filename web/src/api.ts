@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectionView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 
@@ -91,11 +91,19 @@ export function useChatSearch({ scope, query, station, exclude, limit }: { scope
   return state.value || !last.current || state.error ? state : { ...state, value: last.current };
 }
 
-/** What the core is waiting on, when it is worth saying: something slow, a connection down (`state` absent: nothing). */
-export function useStatus(): StatusView | undefined {
-  return useTopic<StatusView>(STATUS).value;
+/**
+ * What the core is waiting on, when it is worth saying: something slow, a connection down (`state` absent: nothing).
+ * Of a workspace (its stations, its account's socket, the relay): nothing of another one; with none, all of it.
+ */
+export function useStatus(workspace?: string): StatusView | undefined {
+  return useTopic<StatusView>(workspace ? { topic: "status", workspace } : STATUS).value;
 }
 const STATUS = { topic: "status" } as const;
+
+/** What a chat on `station` says of its connection, and when, as the core decides it (client/core/src/pill.rs). */
+export function useConnection(station: string): ConnectionView | undefined {
+  return useTopic<ConnectionView>({ topic: "connection", station }).value;
+}
 
 /** The archive of a scope's stations online (client/core/src/views/archive.rs). */
 export function useArchiveView(scope: string): TopicState<ArchiveView> {
