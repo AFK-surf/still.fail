@@ -46,8 +46,11 @@ const CSP = [
   "connect-src 'none'",
 ].join("; ");
 
-/** Past this the frame scrolls within itself. */
-const MAX_HEIGHT = 1200;
+/**
+ * A fragment's frame is as tall as its content, however tall. Content sized to its window (100vh, min-height:100%)
+ * grows with each height it is given: grown a little each time this many times running, it is held where it got to.
+ */
+const RUNAWAY = 60;
 /** A frame's height before its content says (and what its place holds while the file comes), when none was kept. */
 const FIRST_HEIGHT = 120;
 
@@ -196,7 +199,20 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   // Made once per content: a new document would reload the frame and lose what it holds (its state, a chart drawn).
   // The state is only what it starts with.
   const srcDoc = useMemo(() => (page ? pageDocument(html) : documentOf(html, state)), [html]); // eslint-disable-line react-hooks/exhaustive-deps
-  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight: (h) => { if (page || h <= 0) return; const next = Math.min(MAX_HEIGHT, h); setHeight(next); keepHeight(heightKey, next); }, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
+  const grown = useRef({ height: 0, times: 0 });
+  const onHeight = (h: number) => {
+    if (page || h <= 0) return;
+    const last = grown.current;
+    // Held, it stays so until its content is shorter than where it was held.
+    if (last.times > RUNAWAY && h >= last.height) return;
+    last.times = last.height > 0 && h > last.height && h - last.height <= 64 ? last.times + 1 : 0;
+    if (last.times > RUNAWAY) return;
+    last.height = h;
+    setHeight(h);
+    // Only a height it did not creep to is kept: one kept mid-run would start the next load's run further on.
+    if (last.times === 0) keepHeight(heightKey, h);
+  };
+  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
   return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={page ? undefined : { height }} />;
 }
 
