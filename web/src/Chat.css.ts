@@ -121,7 +121,6 @@ export const msgAgent = style({
   cursor: "pointer",
   selectors: {
     "&:hover": { color: vars.accent },
-    [`${msgHead} &:hover`]: { textDecoration: "underline", textUnderlineOffset: "3px" },
   },
 });
 export const attachBtn = style({
