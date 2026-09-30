@@ -20,6 +20,9 @@
 <!-- Which of the site's domains the page was opened on: the title lights that one (web/src/site/Site.tsx). A preview
      elsewhere can ask for one with ?host=youdid.wtf. -->
 <script>if(/(^|\.)youdid\.wtf$/.test(location.hostname)||new URLSearchParams(location.search).get("host")==="youdid.wtf")document.documentElement.dataset.host="youdid.wtf"</script>
+<!-- What the visitor is on, for the downloads to offer (web/src/site/Site.tsx): mac, android, ios, or desktop (the
+     rest). An iPad says it is a Mac, and has a touch screen. A preview can ask for one with ?platform=. -->
+<script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Mobi/i.test(u)?"":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
 <!-- Script will move the first screen (web/src/site/motion.ts): what it brings in waits unseen for it. -->
 <script>if(!matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.dataset.motion=""</script>
 <meta name="color-scheme" content="light dark">

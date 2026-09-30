@@ -75,6 +75,21 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
           <a href="/" className={css.brand} aria-label="still.fail"><Themed name="mark" className={css.logo} /><span>still<span className={css.brandTail}>.fail</span></span></a>
+          {/* The apps, for the device the page is on (data-platform, set before the first paint by site/index.html): on
+              Android the app itself; on a computer a card under the word, with the Mac's and a code to scan for Android. */}
+          <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>下载</a>
+          <span className={`${css.menu} ${css.forComputer}`}>
+            <button type="button" className={css.navLink}>下载</button>
+            <span className={css.menuCard}>
+              <a className={css.menuItem} href={MAC}>
+                <b>Mac</b><span>Apple 芯片</span><span className={css.menuGo}>下载 →</span>
+              </a>
+              <span className={css.menuItem}>
+                <img className={css.scanCode} src="/android-qr.svg" alt="下载 Android 版的二维码" width={33} height={33} />
+                <span>Android 扫码下载</span>
+              </span>
+            </span>
+          </span>
           <ThemeSwitch />
           <Button href={APP} kind="primary" className={css.navButton}>打开 still.fail</Button>
         </div>
@@ -98,8 +113,6 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           </div>
           <div className={`${css.actions} ${css.heroActions}`}>
             <Button href={APP} kind="primary" large then="开喷">我来指挥</Button>
-            <Button href={MAC} kind="ghost" large>下载 Mac 版</Button>
-            <Button href={ANDROID} kind="ghost" large>下载 Android 版</Button>
           </div>
           <div className={css.stage}>
             <div className={css.stageGlow} />

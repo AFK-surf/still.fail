@@ -73,8 +73,38 @@ export const logo = style({ display: "block", height: "28px", width: "auto" });
 // The logo on the left, the rest of the bar on the right.
 globalStyle(`${navRow} > :first-child`, { marginRight: "auto" });
 export const navLink = style({ transition: "color .2s", selectors: { "&:hover": { color: FG } } });
+// The downloads for the device the page is on (data-platform on the root): none shows without it (an iPhone).
+export const forAndroid = style({ display: "none", selectors: { ":root[data-platform=\"android\"] &": { display: "inline" } } });
+export const forComputer = style({ display: "none", selectors: { ":root:is([data-platform=\"mac\"], [data-platform=\"desktop\"]) &": { display: "inline-block" } } });
+globalStyle(`${navRow} ${navLink}`, { color: "var(--s-muted)", fontSize: "15px" });
+globalStyle(`${navRow} button${navLink}`, { padding: "8px 0", border: "0", background: "none", font: "inherit", cursor: "default" });
+
+/** The downloads' card, under their word while the pointer is on it (or it has focus): frosted, as the bar is. */
+export const menu = style({ position: "relative" });
+export const menuCard = style({
+  position: "absolute", top: "calc(100% + 14px)", left: "50%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px",
+  padding: "6px", borderRadius: "20px", whiteSpace: "nowrap",
+  background: `color-mix(in srgb, var(--s-node) 84%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  boxShadow: `0 16px 48px -16px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
+  opacity: 0, visibility: "hidden", transform: "translate(-50%, -6px)", transition: `opacity .2s, transform .25s ${vars.easeOut}, visibility 0s .25s`,
+  selectors: {
+    // The gap between the word and the card keeps it open on the way down.
+    "&::before": { content: "\"\"", position: "absolute", left: 0, right: 0, bottom: "100%", height: "14px" },
+    [`${menu}:hover &, ${menu}:focus-within &`]: { opacity: 1, visibility: "visible", transform: "translate(-50%, 0)", transition: `opacity .2s, transform .25s ${vars.easeOut}` },
+  },
+});
+export const menuItem = style({
+  display: "grid", gridTemplateRows: "auto 1fr auto", justifyItems: "start", gap: "2px", width: "150px", minHeight: "178px", padding: "14px",
+  borderRadius: "15px", fontSize: "13px", color: DIM, transition: "background .2s",
+  selectors: { "a&:hover": { background: CARD } },
+});
+globalStyle(`${menuItem} > b`, { fontSize: "17px", fontWeight: "650", color: FG, letterSpacing: "-.01em" });
+export const menuGo = style({ gridRow: "3", color: FG, fontWeight: "550" });
+/** The code itself stays dark on white in either theme, with the quiet margin a scanner wants. */
+export const scanCode = style({ display: "block", width: "122px", height: "122px", padding: "8px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
+
 /** The theme switch (ThemeSwitch.tsx): three small buttons in a pill. */
-export const themeSwitch = style({ "@media": { [NARROW]: { marginLeft: "auto" } }, display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
+export const themeSwitch = style({ display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
 export const themeChoice = style({
   display: "grid", placeItems: "center", width: "30px", height: "30px", padding: "0", border: "0", borderRadius: "999px",
   background: "transparent", color: DIM, cursor: "pointer", transition: "color .2s, background .2s",
