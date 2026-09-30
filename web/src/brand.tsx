@@ -108,11 +108,8 @@ function SidebarBuddy() {
   return onPage(buddy);
 }
 
-/**
- * The desktop app has a newer build: 更新 beside the buddy, wherever it stands. Clicked, the build is downloaded (the
- * button says how far) and the app restarts as it.
- */
-function UpdateButton() {
+/** The desktop app's newer build, as its main process says (null in a browser, or while there is none). */
+export function useAppUpdate(): AppUpdate | null {
   const updates = window.stillfailDesktop?.appUpdate;
   const [state, setState] = useState<AppUpdate | null>(null);
   useEffect(() => {
@@ -122,6 +119,16 @@ function UpdateButton() {
     const stop = updates.watch(setState);
     return () => { live = false; stop(); };
   }, [updates]);
+  return state;
+}
+
+/**
+ * The desktop app has a newer build: 更新 beside the buddy, wherever it stands. Clicked, the build is downloaded (the
+ * button says how far) and the app restarts as it.
+ */
+function UpdateButton() {
+  const updates = window.stillfailDesktop?.appUpdate;
+  const state = useAppUpdate();
   if (!updates || !state) return null;
   const label = state.phase === "downloading" ? `下载中 ${state.percent}%` : state.phase === "installing" ? "正在重启…" : state.phase === "failed" ? "更新失败，重试" : "更新";
   const busy = state.phase === "downloading" || state.phase === "installing";

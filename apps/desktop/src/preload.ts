@@ -11,6 +11,8 @@ const desktop = {
   inWorkspace: (account: string, workspace: string) => ipcRenderer.send("station:workspace", account, workspace),
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
+  /** This build's version (0.1.<commits>). */
+  version: ipcRenderer.sendSync("app:version") as string,
   /** A newer build of the app: what there is of it now, each change after, and downloading and installing it (main.ts). */
   appUpdate: {
     state: (): Promise<unknown> => ipcRenderer.invoke("update:state"),
@@ -20,6 +22,8 @@ const desktop = {
       return () => ipcRenderer.off("update:state", on);
     },
     start: () => ipcRenderer.send("update:start"),
+    /** Asks for a newer build now: what it found (main.ts, UpdateCheck). */
+    check: (): Promise<unknown> => ipcRenderer.invoke("update:check"),
   },
   /** Whether the app tells about the chats (its main process shows the notices: main.ts). */
   notify: {

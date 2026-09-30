@@ -53,6 +53,7 @@ import "../dock.css.ts";
 import "../ProfileCard.css.ts";
 import "../Memory.css.ts";
 import "../pages/Archive.css.ts";
+import "../pages/AppVersion.css.ts";
 import "../mobile/styles/root.css.ts";
 import "../mobile/styles/pages.css.ts";
 import "../mobile/styles/parts.css.ts";

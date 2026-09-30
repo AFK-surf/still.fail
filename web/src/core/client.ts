@@ -364,6 +364,8 @@ export interface StillFailDesktop {
   inWorkspace(account: string, workspace: string): void;
   /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */
   cloudOrigin?: string;
+  /** The app's version (0.1.<commits>); an app from before it has none. */
+  version?: string;
   /** A newer build of the app (apps/desktop/src/main.ts, keepUpdated); an app from before updates has none. */
   appUpdate?: {
     state(): Promise<AppUpdate | null>;
@@ -371,6 +373,8 @@ export interface StillFailDesktop {
     watch(listener: (state: AppUpdate | null) => void): () => void;
     /** Downloads it; once it is, the app restarts as the new one. */
     start(): void;
+    /** Asks for a newer build now, not waiting for the next check; an app from before it has none. */
+    check?(): Promise<UpdateCheck | null>;
   };
   /** Whether the app tells about the chats (it shows them from its main process); an app from before them has none. */
   notify?: {
@@ -383,6 +387,9 @@ export interface StillFailDesktop {
    */
   onResume?(listener: (away: number) => void): () => void;
 }
+
+/** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */
+export type UpdateCheck = { current: string; latest?: string; error?: string };
 
 export type AppUpdate =
   | { phase: "available"; version: string }

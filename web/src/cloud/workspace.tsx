@@ -22,6 +22,7 @@ import { CHANGEABLE } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
+import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
@@ -91,6 +92,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
+            {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
             {/* Pages the workspace page took in: links to them still land there. */}

@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs natively (client/node,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, ipcMain, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -95,6 +95,7 @@ ipcMain.on("core:open", (event, id: unknown) => {
 
 // The cloud's origin, for the page to know its links (web/src/core/client.ts, StillFailDesktop.cloudOrigin).
 ipcMain.on("app:cloud-origin", (event) => { event.returnValue = CLOUD_ORIGIN; });
+ipcMain.on("app:version", (event) => { event.returnValue = app.getVersion(); });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
 interface OwnLink {
@@ -441,11 +442,70 @@ ipcMain.handle("update:state", (event) => event.senderFrame?.url.startsWith(`${A
 /** Downloads the update said to be there (set by keepUpdated). */
 let download = () => {};
 
-ipcMain.on("update:start", (event) => {
-  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || !update || update.phase === "downloading" || update.phase === "installing") return;
+/** Downloads the newer build found, unless one is under way already. */
+function startUpdate(): void {
+  if (!update || update.phase === "downloading" || update.phase === "installing") return;
   sayUpdate({ phase: "downloading", version: update.version, percent: 0 });
   download();
+}
+
+ipcMain.on("update:start", (event) => {
+  if (event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) startUpdate();
 });
+
+/** What a check asked for now found (web/src/core/client.ts, UpdateCheck): the newer build, or why it could not tell. */
+type UpdateCheck = { current: string; latest?: string; error?: string };
+
+/** Asks the feed now, not waiting for the next check (set by keepUpdated; run from the source, there is no feed). */
+let checkNow = async (): Promise<UpdateCheck> => ({ current: app.getVersion(), error: "开发版不检查更新" });
+
+ipcMain.handle("update:check", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? checkNow() : null);
+
+/** The menu's 检查更新…: says what it found in a dialog, and offers to update to a newer build. */
+async function checkFromMenu(): Promise<void> {
+  const found = await checkNow();
+  const window = BrowserWindow.getFocusedWindow();
+  const show = (options: Electron.MessageBoxOptions) => window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options);
+  if (found.error) {
+    await show({ type: "warning", message: "检查更新失败", detail: found.error });
+  } else if (!found.latest) {
+    await show({ message: "已是最新版本", detail: `still.fail ${found.current}` });
+  } else {
+    const { response } = await show({
+      message: `有新版本 ${found.latest}`, detail: `当前是 ${found.current}。更新会下载新版本，然后重启 still.fail`,
+      buttons: ["更新", "稍后"], defaultId: 0, cancelId: 1,
+    });
+    if (response === 0) startUpdate();
+  }
+}
+
+/**
+ * The menu bar: Electron's own, but for 检查更新… in the app's menu (macOS; elsewhere the app keeps the default one).
+ */
+function setMenu(): void {
+  if (process.platform !== "darwin") return;
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { role: "about", label: `关于 ${app.name}` },
+        { label: "检查更新…", click: () => void checkFromMenu() },
+        { type: "separator" },
+        { role: "services", label: "服务" },
+        { type: "separator" },
+        { role: "hide", label: `隐藏 ${app.name}` },
+        { role: "hideOthers", label: "隐藏其他" },
+        { role: "unhide", label: "全部显示" },
+        { type: "separator" },
+        { role: "quit", label: `退出 ${app.name}` },
+      ],
+    },
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+  ]));
+}
 
 function keepUpdated(): void {
   if (!app.isPackaged) return;
@@ -471,6 +531,17 @@ function keepUpdated(): void {
   const check = () => {
     if (update?.phase === "downloading" || update?.phase === "installing") return;
     void autoUpdater.checkForUpdates().catch((error: Error) => console.warn("looking for an update failed", error.message));
+  };
+  checkNow = async () => {
+    const current = app.getVersion();
+    if (update?.phase === "downloading" || update?.phase === "installing") return { current, latest: update.version };
+    try {
+      // A newer build is said by update-available (above) before the check resolves.
+      await autoUpdater.checkForUpdates();
+      return update ? { current, latest: update.version } : { current };
+    } catch (error) {
+      return { current, error: (error as Error).message };
+    }
   };
   check();
   setInterval(check, UPDATE_EVERY);
@@ -641,6 +712,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     protocol.handle("app", serve);
     protocol.handle("stillfail-preview", preview);
+    setMenu();
     open();
     station.start();
     keepUpdated();
