@@ -624,14 +624,20 @@ export interface ChatItem {
 	creator?: Creator;
 	/** The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it. */
 	clientKey?: string;
+	/** Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned). */
+	pinned?: boolean;
 }
 
-/** A day of the list, with its heading (今天, 昨天, 星期三, 9月20日). */
+/**
+ * A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
+ * (`pinned`, `daysAgo` -1, headed 已固定).
+ */
 export interface ChatDay {
 	daysAgo: number;
 	at: number;
 	label: string;
 	items: ChatItem[];
+	pinned?: boolean;
 }
 
 /** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */
@@ -699,6 +705,8 @@ export interface Link {
 export interface ChatView {
 	/** Archived chats must be restored before composing another message. */
 	archived?: boolean;
+	/** Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned). */
+	pinned?: boolean;
 	me: Me;
 	thread?: ChatThread;
 	title: string;

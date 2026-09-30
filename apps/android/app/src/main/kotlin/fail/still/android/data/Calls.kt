@@ -229,6 +229,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun setArchived(thread: Long?, session: String, archived: Boolean) {
         op("chat.archive") { put("session", session); if (thread != null) put("thread", thread); put("archived", archived) }
     }
+    /** Keeps a chat at the top of the viewer's list, or lets it go (by its item's id, its session's key). */
+    suspend fun setPinned(session: String, pinned: Boolean) { op("chat.pin") { put("session", session); put("pinned", pinned) } }
     /** Deletes a session for good: its chat, its history and its workspace directory. */
     suspend fun deleteSession(key: String) { op("session.delete") { put("key", key) } }
 

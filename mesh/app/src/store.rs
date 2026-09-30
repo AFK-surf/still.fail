@@ -6,7 +6,7 @@
 //! its own, which readers merge into the message it changes. A thread whose sessions are all archived is written out to
 //! a zstd file and read from there.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -488,6 +488,8 @@ pub enum StoreChange {
     Read { viewer: String, thread: i64, n: i64 },
     /// The Slack users a viewer said are them changed.
     Identities(String),
+    /// The chats a viewer pinned changed.
+    Pins(String),
     /// The recorded runtime processes changed.
     Processes,
     /// A background job started, started again, ended or said something (its session changes as well).
@@ -637,6 +639,13 @@ CREATE TABLE IF NOT EXISTS identities (
   PRIMARY KEY (viewer, slack_user)
 );
 -- Came after schema version 12 without changing it: made in place on open, like add_archive_columns' columns.
+-- The chats a viewer keeps at the top of their list, by their item's id (its session's key), and since when.
+CREATE TABLE IF NOT EXISTS pins (
+  viewer TEXT NOT NULL,
+  session TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (viewer, session)
+);
 CREATE TABLE IF NOT EXISTS widget_states (
   session TEXT NOT NULL,
   path TEXT NOT NULL,
@@ -1149,6 +1158,7 @@ impl Store {
             tx.execute("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", [key])?;
             tx.execute("DELETE FROM jobs WHERE session_key = ?", [key])?;
             tx.execute("DELETE FROM widget_states WHERE session = ?", [key])?;
+            tx.execute("DELETE FROM pins WHERE session = ?", [key])?;
             tx.execute("DELETE FROM sessions WHERE key = ?", [key])?;
             let mut kept = Vec::new();
             let mut removed = Vec::new();
@@ -1627,6 +1637,39 @@ impl Store {
             let now = i.read_position(viewer, thread)?;
             changes.push(StoreChange::Read { viewer: viewer.to_string(), thread, n: now });
             Ok(now)
+        })
+    }
+
+    // ── pins ──────────────────────────────────────────────────────────────
+
+    /// The chats a viewer pinned (by their session's key), with when.
+    pub fn pins(&self, viewer: &str) -> Result<HashMap<String, i64>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT session, at FROM pins WHERE viewer = ?")?;
+            let pins = stmt.query_map(params![viewer], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+            Ok(pins)
+        })
+    }
+
+    /// The chats someone pinned (by their session's key): the station does not archive them for idling.
+    pub fn pinned_sessions(&self) -> Result<HashSet<String>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT DISTINCT session FROM pins")?;
+            let keys = stmt.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+            Ok(keys)
+        })
+    }
+
+    /// Pins a chat to the top of a viewer's list, or lets it go. Pinned again, it keeps when it was first pinned.
+    pub fn set_pin(&self, viewer: &str, session: &str, pinned: bool) -> Result<()> {
+        self.with(|i, changes| {
+            if pinned {
+                i.db.execute("INSERT OR IGNORE INTO pins (viewer, session, at) VALUES (?, ?, ?)", params![viewer, session, now_ms()])?;
+            } else {
+                i.db.execute("DELETE FROM pins WHERE viewer = ? AND session = ?", params![viewer, session])?;
+            }
+            changes.push(StoreChange::Pins(viewer.to_string()));
+            Ok(())
         })
     }
 

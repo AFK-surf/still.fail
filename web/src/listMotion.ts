@@ -102,9 +102,10 @@ function leave(box: HTMLElement, p: Placed) {
 /**
  * `items` (grouped in days) as shown: while `hold` (the pointer over the list), rows keep their places and their days,
  * each with what is new of it, so the row about to be pressed does not move away; ones gone go, new ones come in where
- * they would be. Let go, the list is as it is.
+ * they would be, and so do those moved on purpose (`moved`: pinned or let go), to where they go now. Let go, the list
+ * is as it is.
  */
-export function useHeldOrder<D extends { daysAgo: number; items: I[] }, I>(days: D[], key: (item: I) => string, hold: boolean): D[] {
+export function useHeldOrder<D extends { daysAgo: number; items: I[] }, I>(days: D[], key: (item: I) => string, hold: boolean, moved?: (was: I, now: I) => boolean): D[] {
   const shown = useRef(days);
   if (!hold) {
     shown.current = days;
@@ -118,7 +119,7 @@ export function useHeldOrder<D extends { daysAgo: number; items: I[] }, I>(days:
     items: day.items.flatMap((item) => {
       const k = key(item);
       const now = fresh.get(k);
-      if (!now) return [];
+      if (!now || moved?.(item, now)) return [];
       held.add(k);
       return [now];
     }),

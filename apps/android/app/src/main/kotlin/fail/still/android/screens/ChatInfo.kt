@@ -69,6 +69,19 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                     Text(view!!.title, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
+                // A station from before pins says nothing of them: its chats are not pinned from here.
+                view!!.pinned?.let { pinned ->
+                    InfoRow(onClick = {
+                        val session = (of as? ChatOf.Session)?.key ?: view.agents.firstOrNull()?.session?.key ?: ""
+                        app.scope.launch {
+                            try { app.api(station).setPinned(session, !pinned) }
+                            catch (e: CoreException) { app.toast = "没能${if (pinned) "取消固定" else "固定"}：${e.message}" }
+                        }
+                    }) {
+                        IconIn(Icons.Pin, 16.dp, C.ink)
+                        Text(if (pinned) "取消固定" else "固定到列表顶部", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                    }
+                }
             }
             InfoList {
                 Detail("来自", view?.place?.let { "Slack · $it" } ?: "still.fail 对话")

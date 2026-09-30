@@ -699,8 +699,10 @@ impl Hub {
                 || stat.is_some_and(|s| s.pending > 0)
                 || last.is_some_and(|t| t.declared.as_deref() == Some("block") || t.ended_at.is_none()))
         };
+        // A chat someone pinned stays in the lists until put away by hand.
+        let pinned = self.store.pinned_sessions()?;
         for s in self.store.list_sessions()? {
-            if s.archived_at.is_some() || !idle(&[Some(s.last_active_at), s.shown_at]) || bound.contains_key(&s.key) || busy(&s.key)? {
+            if s.archived_at.is_some() || !idle(&[Some(s.last_active_at), s.shown_at]) || bound.contains_key(&s.key) || pinned.contains(&s.key) || busy(&s.key)? {
                 continue;
             }
             let mut unheard = false;
@@ -720,7 +722,7 @@ impl Hub {
             }
             let mut working = false;
             for m in self.store.thread_sessions(t.id)? {
-                working |= busy(&m.session)?;
+                working |= pinned.contains(&m.session) || busy(&m.session)?;
             }
             if working {
                 continue;

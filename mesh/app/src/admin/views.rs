@@ -356,7 +356,8 @@ impl AdminApi {
     /// internal chat is that chat's item; one with none yet is an item without a chat, whose chat is made with its
     /// first message. A Slack thread is no item: it lends its agent's item a title (while the chat has no words of its
     /// own), the connect and the origin. `archived`: the archive's items instead, archived sessions (with their own
-    /// chats) and chats of their own archived alone, each with `archived: {at, by, alone}`.
+    /// chats) and chats of their own archived alone, each with `archived: {at, by, alone}`. Each says when the viewer pinned
+    /// it (`pinned`), or null.
     pub(super) fn chats(&self, viewer: &Viewer, archived: bool) -> Result<Vec<Value>> {
         let store = &self.deps.store;
         let is_mine = self.is_mine(viewer);
@@ -485,6 +486,11 @@ impl AdminApi {
                 row["archived"] = archived_of(s);
             }
             rows.push(row);
+        }
+        // When the viewer pinned each to the top of their list, or null (a station from before pins says nothing).
+        let pins = store.pins(&viewer.id())?;
+        for row in &mut rows {
+            row["pinned"] = json!(row["id"].as_str().and_then(|id| pins.get(id)));
         }
         Ok(rows)
     }

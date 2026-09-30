@@ -655,6 +655,12 @@ impl AdminApi {
                 self.deps.hub.archive(key, method == "POST")?;
                 return ok(self.summary(key)?);
             }
+            // A chat kept at the top of the viewer's list (PUT), or let go: by its item's id, its session's key.
+            (Some("sessions"), Some(key), Some("pin"), "PUT" | "DELETE") => {
+                self.session_row(key)?;
+                self.deps.store.set_pin(&viewer.id(), key, method == "PUT")?;
+                return ok(json!({ "session": key, "pinned": method == "PUT" }));
+            }
             (Some("sessions"), Some(key), Some("stop"), "POST") => {
                 self.deps.hub.stop(key).await?;
                 return ok(json!({ "ok": true }));

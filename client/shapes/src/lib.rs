@@ -1235,10 +1235,14 @@ pub struct ChatItem {
     pub creator: Option<Creator>,
     /// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
     pub client_key: Option<String>,
+    /// Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned).
+    pub pinned: Option<bool>,
 }
 
-/// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日).
+/// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
+/// (`pinned`, `daysAgo` -1, headed 已固定).
 #[typeshare]
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatDay {
@@ -1247,6 +1251,7 @@ pub struct ChatDay {
     pub at: f64,
     pub label: String,
     pub items: Vec<ChatItem>,
+    pub pinned: Option<bool>,
 }
 
 #[typeshare]
@@ -1446,6 +1451,8 @@ pub struct ChatView {
     /// Archived chats must be restored before composing another message.
     #[serde(default)]
     pub archived: bool,
+    /// Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned).
+    pub pinned: Option<bool>,
     pub me: Me,
     pub thread: Option<ChatThread>,
     pub title: String,

@@ -1220,6 +1220,25 @@ async fn chats_are_archived_with_their_session_or_alone_and_listed_in_the_archiv
 }
 
 #[tokio::test]
+async fn chats_are_pinned_by_each_viewer_for_themselves() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let pinned = |v: Value, key: &str| v.as_array().unwrap().iter().find(|r| r["id"] == key).map(|r| r["pinned"].clone()).unwrap();
+    assert_eq!(pinned(t.get("/chats").await, &key), Value::Null);
+    let pin = format!("/sessions/{}/pin", enc(&key));
+    assert_eq!(t.call("PUT", &pin, None).await, (200, json!({ "session": key, "pinned": true })));
+    let at = pinned(t.get("/chats").await, &key);
+    assert!(at.is_i64(), "when it was pinned: {at}");
+    t.call("PUT", &pin, None).await;
+    assert_eq!(pinned(t.get("/chats").await, &key), at, "pinned again, it keeps when it was first pinned");
+    assert_eq!(pinned(t.call_as("GET", "/chats", None, dev()).await.1, &key), Value::Null, "another viewer's list is their own");
+    assert_eq!(t.call("DELETE", &pin, None).await.0, 200);
+    assert_eq!(pinned(t.get("/chats").await, &key), Value::Null);
+    assert_eq!(t.call("PUT", "/sessions/nobody/pin", None).await.0, 404);
+}
+
+#[tokio::test]
 async fn a_chat_is_renamed_by_hand_and_named_by_its_agent_or_first_message_again_when_the_name_is_cleared() {
     let t = setup().await;
     let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
@@ -1326,7 +1345,7 @@ async fn the_sidebar_is_one_kind_of_item_an_agent_merged_with_its_internal_chat_
         json!({
             "id": slack_key, "session": slack_key, "thread": null, "title": "部署挂了", "last": null, "unread": false, "mine": false, "connect": "ds", "origin": origin,
             // No chat yet: who started it is all who is in it.
-            "creator": starter, "people": [starter],
+            "creator": starter, "people": [starter], "pinned": null,
         })
     );
     let mut keys: Vec<&String> = agents[0].as_object().unwrap().keys().collect();

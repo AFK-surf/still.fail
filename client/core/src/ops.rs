@@ -92,6 +92,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
             Some(thread) => op("PUT", Ok(format!("/threads/{thread}/title")), Some(p.pick(&["title"]))),
             None => op("POST", p.at("session").map(|k| format!("/sessions/{k}/title")), Some(p.pick(&["title"]))),
         })(),
+        // A chat kept at the top of the viewer's list, or let go: by its item's id, its session's key.
+        "chat.pin" => op(if p.bool("pinned") { "PUT" } else { "DELETE" }, p.at("session").map(|k| format!("/sessions/{k}/pin")), None),
         // A new chat: its session and its thread, made before its first message (`chat.create` makes one behind the page).
         "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort"]))),
         "chats.archived" => op("GET", Ok("/chats?archived=1".into()), None),
@@ -211,6 +213,13 @@ mod tests {
         let r = req("workspace.setRole", json!({ "account": "a", "workspace": "w1", "member": "x@y.z", "role": "admin" }));
         assert_eq!((r.target, r.method, r.path.as_str()), (Target::Cloud("a".into()), "PATCH", "/v1/workspaces/w1/members/x%40y.z"));
         assert_eq!(req("invitation.accept", json!({ "account": "a", "token": "t" })).path, "/v1/invitations/accept");
+    }
+
+    #[test]
+    fn pinning_a_chat_goes_by_its_session() {
+        let r = req("chat.pin", json!({ "station": "local", "session": "ember:c-1", "pinned": true }));
+        assert_eq!((r.method, r.path.as_str()), ("PUT", "/sessions/ember%3Ac-1/pin"));
+        assert_eq!(req("chat.pin", json!({ "station": "local", "session": "k", "pinned": false })).method, "DELETE");
     }
 
     #[test]

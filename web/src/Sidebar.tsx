@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Edit, Brain, Command, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
+import { Archive, ArrowLeft, Edit, Brain, Command, Compose, Key, Monitor, Pin, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -145,7 +145,7 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   const view = chats.value;
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
-  const days = useHeldOrder((view?.days ?? []).map((day) => ({ ...day, items: day.items.filter((item) => !archived.has(archiveKey(item))) })).filter((day) => day.items.length > 0), rowKey, over);
+  const days = useHeldOrder((view?.days ?? []).map((day) => ({ ...day, items: day.items.filter((item) => !archived.has(archiveKey(item))) })).filter((day) => day.items.length > 0), rowKey, over, pinMoved);
   // One station of one's own: its name says nothing, and its state is the page's.
   const several = scope !== "local";
   const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
@@ -179,6 +179,9 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   );
 }
 
+/** A row pinned or let go moves at once, even while the list is held still under the pointer. */
+const pinMoved = (was: ChatItem, now: ChatItem): boolean => Boolean(was.pinned) !== Boolean(now.pinned);
+
 /**
  * A row's key in the list, kept as it changes: a chat asked for here goes by the key given here (its `clientKey`) before
  * and after its station makes it.
@@ -210,6 +213,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
   const archive = useArchive(item, to);
+  const pin = usePin(item);
   const rename = useRename(item.station);
   const [editing, setEditing] = useState(false);
   const goingTo = useGoing();
@@ -262,6 +266,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         <ContextMenu.Trigger asChild disabled={editing}>{row}</ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
+            {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
+            {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? "取消固定" : "固定"}</ContextMenu.Item>}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />重命名</ContextMenu.Item>
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void archive()}><Archive size={14} />归档</ContextMenu.Item>
           </ContextMenu.Content>
@@ -314,6 +320,19 @@ function useGoing(): string | null {
 
 function primeChat(item: ChatItem): void {
   if (!item.offline) prime({ topic: "chat", station: item.station, session: item.id });
+}
+
+/** Pins a chat to the top of the list, or lets it go; its station moves the row. */
+function usePin(item: ChatItem) {
+  const api = stationApi(useStationCall(item.station));
+  const toast = useToast();
+  return async () => {
+    try {
+      await api.pin(item, !item.pinned);
+    } catch (error) {
+      toast(`没能${item.pinned ? "取消固定" : "固定"}：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
 }
 
 /** Beside a chat's row while pointed at: puts it in the archive. */

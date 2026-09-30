@@ -742,9 +742,20 @@ impl Views {
         Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members })))
     }
 
-    /// Rows newest first, grouped by the viewer's local calendar day.
-    fn days(&self, mut rows: Vec<Value>) -> Vec<Value> {
+    /// Rows newest first, grouped by the viewer's local calendar day; those the viewer pinned above them all, in a group
+    /// of their own (`pinned`, `daysAgo` -1), the latest pinned first. Each row says whether it is pinned (`pinned`),
+    /// when its station knows pins.
+    fn days(&self, rows: Vec<Value>) -> Vec<Value> {
         let at = |row: &Value| row["lastActiveAt"].as_f64().unwrap_or(0.0);
+        let (mut pinned, mut rows): (Vec<Value>, Vec<Value>) = rows.into_iter().partition(|row| row.get("pinned").is_some_and(Value::is_number));
+        let pinned_at = |row: &Value| row["pinned"].as_f64().unwrap_or(0.0);
+        pinned.sort_by(|a, b| pinned_at(b).total_cmp(&pinned_at(a)).then(at(b).total_cmp(&at(a))));
+        for row in &mut pinned {
+            row["pinned"] = json!(true);
+        }
+        for row in rows.iter_mut().filter(|row| row.get("pinned").is_some()) {
+            row["pinned"] = json!(false);
+        }
         rows.sort_by(|a, b| at(b).total_cmp(&at(a)));
         let day = |ms: f64| ((ms + self.host.utc_offset_min(ms) as f64 * 60_000.0) / DAY_MS).floor() as i64;
         let today = day(self.host.now_ms());
@@ -757,8 +768,11 @@ impl Views {
             }
         }
         let (now, offset) = (self.host.now_ms(), self.host.utc_offset_min(self.host.now_ms()));
-        days.into_iter()
-            .map(|(d, t, items)| json!({ "daysAgo": today - d, "at": t, "label": crate::format::day_label(t, now, offset), "items": items }))
+        let top = (!pinned.is_empty()).then(|| {
+            json!({ "daysAgo": -1, "at": pinned.first().map(at).unwrap_or(0.0), "label": "已固定", "pinned": true, "items": pinned })
+        });
+        top.into_iter()
+            .chain(days.into_iter().map(|(d, t, items)| json!({ "daysAgo": today - d, "at": t, "label": crate::format::day_label(t, now, offset), "items": items })))
             .collect()
     }
 
@@ -978,13 +992,15 @@ impl Views {
                 matches!(conn.get("state").and_then(Value::as_str), Some("connected" | "reconnecting")).then(|| conn.get("workspace")?.get("url")?.as_str().map(str::to_string)).flatten()
             });
         let slack_url = workspace_url.filter(|_| slack).map(|url| format!("{url}archives/{channel}/p{}", str_of(&thread, "threadTs").replace('.', "")));
+        // Its item in the sidebar, as the station has it for the viewer (as kept, until read).
+        let row = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok)
+            .and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id)).cloned());
         Some(Ok(json!({
             "me": self.me(scope),
             "place": place,
             "slackUrl": slack_url,
-            // The same title the sidebar shows: the station's for its item, while it has one (as kept, until read).
-            "title": self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok)
-                .and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id))?.get("title").cloned())
+            // The same title the sidebar shows: the station's for its item, while it has one.
+            "title": row.as_ref().and_then(|r| r.get("title").cloned())
                 .or_else(|| page.get("title").filter(|t| t.is_string()).cloned())
                 .unwrap_or_else(|| json!(chat_title(&thread))),
             "people": people,
@@ -999,7 +1015,13 @@ impl Views {
             "offline": self.offline(station),
             "thread": thread,
             "archived": thread.get("hiddenAt").is_some_and(|at| !at.is_null()),
-        })))
+        })).map(|mut view| {
+            // Pinned to the top of the viewer's list; absent when its station does not know pins.
+            if let Some(pinned) = row.as_ref().and_then(|r| r.get("pinned")) {
+                view["pinned"] = json!(pinned.is_number());
+            }
+            view
+        }))
     }
 }
 
@@ -1930,6 +1952,34 @@ mod tests {
             assert_eq!(v["days"][1]["at"], json!(midnight - 1000.0));
             assert_eq!(v["me"], json!({"id": "local"}));
             assert_eq!(v["stations"], json!([{"station": "local", "id": "local", "name": "", "state": "online"}]));
+        });
+    }
+
+    #[test]
+    fn pinned_rows_go_above_the_days_the_latest_pinned_first() {
+        run(async {
+            let t = setup();
+            let now = t.host.now_ms();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
+            let pinned = |id: &str, at: f64, pinned: Value| {
+                let mut r = row(id, at);
+                r["pinned"] = pinned;
+                r
+            };
+            t.set(rows("local"), json!([
+                pinned("1", now, Value::Null),
+                pinned("2", now - 3.0 * DAY_MS, json!(5)),
+                pinned("3", now - 1000.0, json!(9)),
+                row("4", now - 2000.0),
+            ]));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.unwrap();
+            assert_eq!((&v["days"][0]["label"], &v["days"][0]["daysAgo"], &v["days"][0]["pinned"]), (&json!("已固定"), &json!(-1), &json!(true)));
+            assert_eq!(ids(&v), ["3", "2", "1", "4"], "pinned ones on top, the latest pinned first; the rest by when");
+            let flags: Vec<Value> = v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i.get("pinned").cloned().unwrap_or(json!("absent")))).collect();
+            assert_eq!(flags, [json!(true), json!(true), json!(false), json!("absent")], "a row from a station without pins says nothing");
+            assert_eq!(v["days"][1].get("pinned"), None);
         });
     }
 

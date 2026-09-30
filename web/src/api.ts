@@ -240,6 +240,8 @@ export function stationApi(t: StationCall) {
     /** Names a chat (its thread, or an agent with no chat yet); an empty name leaves it named by its first message. */
     rename: (of: { thread?: number | null; session: string }, title: string) =>
       op<unknown>("chat.rename", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), title }),
+    /** Keeps a chat at the top of the viewer's list, or lets it go (by its item's id, its session's key). */
+    pin: (of: { session: string }, pinned: boolean) => op<unknown>("chat.pin", { session: of.session, pinned }),
     /** The archive's items; a station from before it answers its shown ones (none say `archived`), so none. */
     archivedChats: async () => (await op<ArchivedChat[]>("chats.archived")).filter((row) => row.archived),
     deleteSession: (key: string) => op<{ ok: true }>("session.delete", { key }),

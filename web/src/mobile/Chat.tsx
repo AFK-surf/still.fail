@@ -13,7 +13,7 @@ import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
-import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Plus, Stop, Web } from "../icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { PENDING } from "../lastChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -534,6 +534,13 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             })}>
               <span className={css.mInfoLabel}>名称</span><span className={`${partsCss.mGrow} ${css.mInfoName}`}>{view.title}</span><ChevronRight size={14} className={partsCss.mSubtle} />
             </InfoRow>
+            {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
+            {view.pinned != null && (
+              <InfoRow onClick={() => void stationApi(call).pin({ session: here.key }, !view.pinned)
+                .catch((error) => app.toast(`没能${view.pinned ? "取消固定" : "固定"}：${error instanceof Error ? error.message : String(error)}`))}>
+                <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? "取消固定" : "固定到列表顶部"}</span>
+              </InfoRow>
+            )}
           </InfoList>
         )}
         <InfoList>

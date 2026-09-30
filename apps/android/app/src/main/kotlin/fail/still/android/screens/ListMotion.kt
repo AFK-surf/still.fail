@@ -131,8 +131,8 @@ private class Delayed<T>(private val inner: FiniteAnimationSpec<T>, private val 
 
 /**
  * `days` as shown: while `hold` (a finger on the list, or it scrolling), rows keep their places and their days, each
- * with what is new of it, so the row about to be tapped does not move away; ones gone go, new ones come in where they
- * would be. Let go, the list is as it is (web: useHeldOrder, there while the mouse is over the list).
+ * with what is new of it, so the row about to be tapped does not move away; ones gone go, new ones (and ones pinned or
+ * let go) come in where they would be. Let go, the list is as it is (web: useHeldOrder, there while the mouse is over the list).
  */
 internal class HeldOrder {
     private var shown: List<ChatDay> = emptyList()
@@ -142,7 +142,8 @@ internal class HeldOrder {
         val fresh = HashMap<String, ChatItem>()
         for (day in days) for (item in day.items) fresh[rowKey(item)] = item
         val held = HashSet<String>()
-        val out = shown.map { day -> day to day.items.mapNotNull { item -> fresh[rowKey(item)]?.also { held += rowKey(item) } }.toMutableList() }.toMutableList()
+        // One pinned or let go is no longer held: it goes where it goes now.
+        val out = shown.map { day -> day to day.items.mapNotNull { item -> fresh[rowKey(item)]?.takeIf { (it.pinned == true) == (item.pinned == true) }?.also { held += rowKey(item) } }.toMutableList() }.toMutableList()
         // New rows go into their own day, where they would be in it (a day not shown yet comes in its place).
         for (day in days) day.items.forEachIndexed { i, item ->
             if (rowKey(item) in held) return@forEachIndexed

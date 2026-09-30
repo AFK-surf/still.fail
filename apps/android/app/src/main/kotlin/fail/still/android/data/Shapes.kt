@@ -652,16 +652,20 @@ data class ChatItem (
 	/// Who started it, as in `people`.
 	val creator: Creator? = null,
 	/// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
-	val clientKey: String? = null
+	val clientKey: String? = null,
+	/// Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned).
+	val pinned: Boolean? = null
 )
 
-/// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日).
+/// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
+/// (`pinned`, `daysAgo` -1, headed 已固定).
 @Serializable
 data class ChatDay (
 	val daysAgo: Long,
 	val at: Double,
 	val label: String,
-	val items: List<ChatItem>
+	val items: List<ChatItem>,
+	val pinned: Boolean? = null
 )
 
 /// Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture.
@@ -733,6 +737,8 @@ data class Link (
 data class ChatView (
 	/// Archived chats must be restored before composing another message.
 	val archived: Boolean? = null,
+	/// Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned).
+	val pinned: Boolean? = null,
 	val me: Me,
 	val thread: ChatThread? = null,
 	val title: String,

@@ -1108,6 +1108,11 @@ async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unrea
     assert_eq!(r.session(&web).archived_at, None, "unread");
     assert_eq!(r.session(&bound).archived_at, None, "a single-session connect's");
     r.store.set_read("local", thread.id, r.store.last_entry(thread.id).unwrap()).unwrap();
+    // Pinned by anyone, it stays in the lists.
+    r.store.set_pin("dev@example.com", &web, true).unwrap();
+    r.hub.auto_archive(later).unwrap();
+    assert_eq!(r.session(&web).archived_at, None, "pinned");
+    r.store.set_pin("dev@example.com", &web, false).unwrap();
     r.hub.auto_archive(later).unwrap();
     assert_eq!(r.session(&web).archived_by.as_deref(), Some(AUTO));
     assert!(r.store.get_thread(thread.id).unwrap().unwrap().hidden_at.is_some(), "its own chat with it");
