@@ -12,6 +12,8 @@ import { MemoryPage } from "./Memory.tsx";
 import { ArchivePage } from "./pages/Archive.tsx";
 import { ChatPage } from "./pages/ChatPage.tsx";
 import { Sidebar } from "./Sidebar.tsx";
+import { ChatsHome } from "./ChatsHome.tsx";
+import { useLayout } from "./layout.ts";
 import { ToastProvider } from "./toast.tsx";
 import { Loading } from "./ui.tsx";
 import { StatusLine } from "./Status.tsx";
@@ -35,8 +37,12 @@ export function App() {
   useRememberChat("local", (p) => /^\/(new|chats\/.+)$/.test(p));
   const overview = useOverview("local");
   const detail = useDetailOpen();
+  const path = useLocation().pathname;
+  // 搜索列表 (layout.ts): no sidebar but in the settings, the chats a page of their own.
+  const list = useLayout()[0] === "list";
+  const bare = list && !/^\/(settings|connects)(\/|$)/.test(path);
   // A web service on a page of its own: the whole window, no sidebar.
-  const service = /^\/services\/([^/]+)$/.exec(useLocation().pathname)?.[1];
+  const service = /^\/services\/([^/]+)$/.exec(path)?.[1];
   if (service) return <Tooltip.Provider delayDuration={400} skipDelayDuration={200}><ServicePage station="local" service={decodeURIComponent(service)} /></Tooltip.Provider>;
 
   // Once read, the page stays up through a passing error; the core keeps retrying.
@@ -55,14 +61,15 @@ export function App() {
   return (
     <ToastProvider>
       <Tooltip.Provider delayDuration={400} skipDelayDuration={200}>
-      <div className={shellCss.shell} data-detail={detail}>
-        <Sidebar />
+      <div className={shellCss.shell} data-detail={detail || bare} data-layout={bare ? "list" : undefined}>
+        {!bare && <Sidebar />}
         <GlobalShortcuts scope="local" newChat="/new" settings="/settings" />
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
             <Route path="/" element={<Navigate to="/chats" replace />} />
-            <Route path="/chats/:chat?" element={<ChatPage />} />
+            <Route path="/chats" element={list ? <ChatsHome scope="local" newChat="/new" settings="/settings" archive="/archive" /> : <ChatPage />} />
+            <Route path="/chats/:chat" element={<ChatPage />} />
             <Route path="/new" element={<LocalNewChat />} />
             <Route path="/archive" element={<ArchivePage scope="local" back="/chats" />} />
             <Route path="/connects/:id" element={<ConnectPage />} />

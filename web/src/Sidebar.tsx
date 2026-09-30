@@ -175,7 +175,7 @@ const pinMoved = (was: ChatItem, now: ChatItem): boolean => Boolean(was.pinned) 
  * A row's key in the list, kept as it changes: a chat asked for here goes by the key given here (its `clientKey`) before
  * and after its station makes it.
  */
-const rowKey = (item: ChatItem): string => `${item.station}/${item.clientKey ?? item.id}`;
+export const rowKey = (item: ChatItem): string => `${item.station}/${item.clientKey ?? item.id}`;
 
 /** Marks a scroller `data-scrolling` while it scrolls and a moment after (its rows ignore the pointer meanwhile). */
 function useScrolling() {
@@ -197,7 +197,7 @@ function useScrolling() {
  * where it came from, then the last thing said in it and when; its state as a
  * dot before its title (ChatMark.tsx), who is in it as its picture and at the title's end.
  */
-function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
+export function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const { connect } = item;
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();

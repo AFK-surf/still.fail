@@ -11,6 +11,7 @@ export const shell = style({
       gridTemplateColumns: "var(--sidebar-w, 240px) minmax(0, 1fr)",
       selectors: {
         "[data-sidebar=\"closed\"] &": { gridTemplateColumns: "0px minmax(0, 1fr)" },
+        "&&[data-layout=\"list\"]": { gridTemplateColumns: "minmax(0, 1fr)" },
       },
     },
   },

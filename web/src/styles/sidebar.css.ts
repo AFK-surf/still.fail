@@ -18,6 +18,9 @@ export const pageBar = style({
       selectors: {
         "[data-sidebar=\"closed\"] &": { paddingLeft: "52px" },
         "[data-desktop]:not([data-fullscreen])[data-sidebar=\"closed\"] &": { paddingLeft: "124px" },
+        // No sidebar at all (the 搜索列表 layout): no buddy to make room for; the desktop window's buttons still.
+        ":root [data-layout=\"list\"] &": { paddingLeft: "12px" },
+        "[data-desktop]:not([data-fullscreen]) [data-layout=\"list\"] &": { paddingLeft: "84px" },
       },
     },
   },

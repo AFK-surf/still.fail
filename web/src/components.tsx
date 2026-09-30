@@ -1,6 +1,7 @@
 // Small pieces the station client and ember cloud share.
 import { useAppearance } from "./theme.ts";
 import { useRowPicture } from "./rowLead.ts";
+import { useLayout } from "./layout.ts";
 import { useRef, type ReactNode } from "react";
 import type { Host, Level, PersonShown, Quota } from "./api.ts";
 import { useOnlyMine } from "./station.tsx";
@@ -220,6 +221,15 @@ export function AppearanceSetting() {
   return (
     <Segmented label="外观" value={appearance} onChange={setAppearance}
       options={[{ value: "system", label: "跟随系统" }, { value: "light", label: "浅色" }, { value: "dark", label: "深色" }]} />
+  );
+}
+
+/** 布局: the chats in a sidebar, or a page of their own found by searching (layout.ts), kept in this browser. */
+export function LayoutSetting() {
+  const [value, setValue] = useLayout();
+  return (
+    <Segmented label="布局" value={value} onChange={setValue}
+      options={[{ value: "sidebar", label: "侧边栏" }, { value: "list", label: "搜索列表" }]} />
   );
 }
 

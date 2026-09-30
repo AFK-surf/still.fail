@@ -90,6 +90,7 @@ import "../cloud/StationCards.css.ts";
 import "../Versions.css.ts";
 import "../RowPicture.css.ts";
 import "../Sidebar.css.ts";
+import "../ChatsHome.css.ts";
 import "../OpenJobs.css.ts";
 import "../ChatMark.css.ts";
 import "../Switcher.css.ts";

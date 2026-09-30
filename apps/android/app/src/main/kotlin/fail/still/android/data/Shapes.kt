@@ -1676,6 +1676,10 @@ typealias Appearance = String
 /// people's.
 typealias RowPictureSetting = String
 
+/// How a computer's page is laid out: the chats in a sidebar beside the chat (the default), or no sidebar, the chats a
+/// page of their own found by searching.
+typealias Layout = String
+
 /// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.
 @Serializable
 data class PrefsView (
@@ -1683,6 +1687,7 @@ data class PrefsView (
 	val onlyMine: Boolean? = null,
 	val appearance: Appearance? = null,
 	val rowPicture: RowPictureSetting? = null,
+	val layout: Layout? = null,
 	/// Times are shown as dates rather than "3 分钟前".
 	val absoluteTime: Boolean? = null,
 	/// Keys changed for an action (the desktop app's), by action.

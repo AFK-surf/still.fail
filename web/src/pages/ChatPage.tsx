@@ -2,7 +2,9 @@
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
-import { useLink, useStation } from "../station.tsx";
+import { scopeOf, useLink, useStation } from "../station.tsx";
+import { ListBack } from "../ChatsHome.tsx";
+import { useLayout } from "../layout.ts";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
 import { Boxes, Close, Edit, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -301,6 +303,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
   const slackUrl = chat.slackUrl;
+  const list = useLayout()[0] === "list";
   // Before its agent has a chat, the first message makes one, bound to the agent; the page stays (the core shows the
   // chat at the same address once it is there).
   const session = "session" in of && !chat.thread && !made ? of.session : null;
@@ -314,6 +317,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         <MobileBack to={link("/chats")} label="对话" />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
+          {list && <ListBack scope={scopeOf(station.address)} to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : "/chats"} />}
           {renaming
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
             : <h1 onDoubleClick={renamable ? () => setRenaming(true) : undefined}>{chat.title}</h1>}
