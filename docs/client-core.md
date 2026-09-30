@@ -99,6 +99,17 @@ served by a station itself. The core knows which signed-in account reaches
 which workspace (from each account's `/v1/me`) and uses that account's token
 for its member credential (30 days, kept on the device: docs/cloud.md).
 
+Workspaces are kept apart (`workspace.rs`): each holds the account that
+reaches it, its stations' state, what is waited on for them, the notices of its
+chats, what is kept in sync of it and what its new chats were last started on
+(`choice` records `ws:<workspace>:station:<id>`, `ws:<workspace>:last`; the
+keys from before are read where there is none yet). Nothing of one is read or
+dropped through another. What is the device's stays shared (the mesh endpoint,
+relays, what is kept on the device, notification settings), and what is an
+account's is kept by account. `local` is a workspace of its own, with no
+account. A UI says which workspace it is in (`client.focus {workspace}`);
+notices are only of the workspace the viewer is in (attend.rs).
+
 ### Topics
 
 | Topic | Params | Value |
@@ -119,8 +130,10 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 | `thread` | `station`, `thread` (id) | `{ first, last, entries, thread }`: the thread's entries `first ..= last` (`EntryView`s, never changed once read): its latest page, older pages in front as `chat.older` loads them; `thread` is its summary as kept on the device (null when read from the station) |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
-| `notices` | — | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md) |
-| `notify` | — | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md) |
+| `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.rs): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it |
+| `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.rs): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. The pill over a chat only draws it |
+| `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's |
+| `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
 
 ```jsonc
 // live
@@ -342,7 +355,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `chat.older` | `station`, `thread` | `{ more }`: loads the page (50 entries) before the chat's oldest loaded entry into its `thread` topic — from what is kept, else from the station — so `messages` grows in front |
 | `history.older` | `station`, `key` | `{ more }`: loads the page (200 entries) of the session's transcript before its `live` topic's `first` into it — from what is kept, else from the station — so the `history` view's `items` grow in front (`more` in the view: there are older ones) |
 | `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows. The clients no longer call it: the core reads a chat up to its newest message while a UI shows its end on a page in view (`client.focus`, attend.rs) |
-| `client.focus` | `visible?`, `focused?`, `chat?`, `left?` | — ; where this UI's attention is (docs/notifications.md): what is read, a chat's `unreadLine` (held for the visit, older pages loaded first while `unreadAbove`) and which notices show follow from it |
+| `client.focus` | `visible?`, `focused?`, `chat?`, `left?`, `workspace?` | — ; where this UI's attention is (docs/notifications.md): what is read, a chat's `unreadLine` (held for the visit, older pages loaded first while `unreadAbove`) and which notices show follow from it; `workspace`, the one it is in (else its chat's) |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
 | `station.preview` | `station`, `port`, `method`, `path`, `headers?`, `body?`, `stream?` | a request to a web service on the station's machine (`/preview/<port>`): `{ status, headers, body }`; with `stream`, values `{ head: { status, headers } }` then `{ chunk }` for each piece of the body as it comes, and the answer (null) at its end. Only waited on (`status`) until its head; cancelled, the station stops asking the service |
@@ -418,9 +431,11 @@ client/
 - `entries.rs` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `data.rs` — the data center (docs/core-db.md): what still.fail cloud and the stations said, held as records.
 - `sync.rs` — what the core keeps in sync by itself, whatever the UI shows.
-- `notices.rs` — what a person hears about while the client runs (the `notices` topic), from how the chat rows change.
+- `workspace.rs` — the workspaces, each with what is its own: its account, its stations' state, its waits, its notices, what is kept in sync of it.
+- `notices.rs` — what a person hears about while the client runs (the `notices` topic), from how the chat rows change, each workspace's apart.
 - `attend.rs` — where each UI's attention is (`client.focus`): chats' unread lines and what is read, notifications' settings and which notices show (the `notify` topic).
-- `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down.
+- `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down; each workspace's waits, and the device's.
+- `pill.rs` — what a chat says of its connection (the `connection` topic), and when.
 - `activity.rs`, `history.rs`, `present.rs`, `format.rs` — what the clients show (an agent's current activity, its execution history, sessions' and rows' state, words and times), decided once for every client.
 - `error.rs` — the one error type calls and topics report.
 - `views.rs` — the view topics, put together from the others.

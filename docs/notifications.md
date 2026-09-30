@@ -40,8 +40,9 @@ The title is the chat's title as the sidebar shows it. Texts are one line
 
 ## Client core: the `notices` topic
 
-`notices` (no params) is kept by the core (`notices.rs`, fed by what `sync.rs`
-keeps: every station's `chatRows`). Its value:
+`notices` (`workspace?`) is kept by the core (`notices.rs`, fed by what `sync.rs`
+keeps: every station's `chatRows`), each workspace's apart: with a `workspace`,
+that workspace's (the last 20), with none every workspace's. Its value:
 
 ```jsonc
 { "items": [{
@@ -78,16 +79,19 @@ Calls:
 | `push.register` | `{ kind: "web", endpoint, keys: { p256dh, auth } }` or `{ kind: "fcm", token }` | — ; registers this device with every signed-in account, and again with each account signed in later (kept in storage) |
 | `push.unregister` | — | — ; takes this device's registration off every account |
 | `notify.set` | `on?`, `asked?` | the `notify` value; kept on the device. Off also takes this device's registration off every account, and `push.register` does nothing while off |
-| `client.focus` | `visible?`, `focused?`, `chat?` (`{ station, thread?, session?, end? }` or null), `left?` (a chat) | — ; where this UI's attention is (each field given changes; `left`: that chat is not shown any more, if it is the one) |
+| `client.focus` | `visible?`, `focused?`, `chat?` (`{ station, thread?, session?, end? }` or null), `left?` (a chat), `workspace?` | — ; where this UI's attention is (each field given changes; `left`: that chat is not shown any more, if it is the one; `workspace`: the one it is in, else its chat's) |
 | `notice.claim` | `id` | `{ show }`: true for the first page that takes a notice of `notify.show` |
-| `notice.pushed` | — | `{ show }`: whether a push that came is shown (on, and no page in view) |
+| `notice.pushed` | `workspace?` | `{ show }`: whether a push that came is shown (on, no page in view, and of the workspace the viewer is in) |
 
 `notify` (no params, attend.rs) is what the clients show from: `{ on, asked, push, show }`. `on` and `asked` (the
 system asked to allow them, once) are kept on the device, on by default. `push`: this device should hold a push
 registration. `show`: the notices to show now, decided as they come: none while off; none for a chat a UI is looking at
 (`client.focus`: `visible`, `focused`, that chat); none while this device has pushes and no page is in view (the push
-says it); only while some UI subscribes (what came before is old news). A page takes each with `notice.claim`, so it is
-shown once however many pages are open; one not taken goes after 30 s.
+says it); only while some UI subscribes (what came before is old news); only of the workspace the viewer is in. That is
+the workspace of the UIs in view (as each said with `client.focus {workspace}`, else its chat's), or with none in view
+of every UI (a phone's app in the background is still in its workspace); with no UI saying (none open, or ones from
+before they said), none is left out. `notify {workspace}` shows a page in a workspace only its own. A page takes each
+with `notice.claim`, so it is shown once however many pages are open; one not taken goes after 30 s.
 
 ## still.fail cloud
 
@@ -143,8 +147,9 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
   shows the local notices the core's `notify` says to show (it tells the core
   which chat it shows and whether it is in view and has focus). 设置 → 通知
   turns them on (asking the browser's permission) and off, kept by the core.
-- Desktop: the main process holds `notices` and shows Electron notifications;
-  clicking one opens the chat as a `stillfail://o/…` link would. Pages show
+- Desktop: the main process holds the core's `notify` (claiming each, as a
+  page would) and shows Electron notifications, so they are of the workspace
+  its windows are in; clicking one opens the chat as a `stillfail://o/…` link would. Pages show
   none themselves. The setting is the same page.
 - Android: `POST_NOTIFICATIONS` is asked for; one channel (消息); local notices
   while the app is in front (not for the open chat; the core's `notify`), FCM

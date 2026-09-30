@@ -22,6 +22,7 @@
 - 离线 station 不在左下角给重试，改在 station 页给（offline-station-no-retry）：改了 core（wasm 和安卓 ffi 都要带上）、web 和安卓。新页面接旧 core 时，左下角也不会出重试。安卓要发一版才会在单台 station 页上有重试。验证：停掉一台 station，左下角只显示「xx 离线」；设置里的 Station 页，那张卡片上有「重试」。
 - 中继带名字、station 卡片网络行重排（relay-names）：改了 cloud（`wrangler.jsonc` 的 `RELAY_NAMES`，`/v1/me`、credential 和推给 station 的 state 多带一个 `relay_names`）、core（wasm 和安卓 ffi 都要带上）、web、手机 web 和安卓。要部署 api 这个 Worker，名字才会下发。旧客户端会忽略这个字段；新客户端碰到旧 cloud 没有名字，就显示「中继 host」。安卓要发一版才会用上。验证：设置 → Station 的卡片上，经北京 relay 连的显示「北京中继」，右边 ↑↓ 速度后面跟着「共 …」，没有走势线。
 - station 的 CPU、内存、磁盘改成和额度一样的圆角框（meter-chips），额度框的线也加粗了、灰色淡了一些：只改了 web、手机 web 和安卓的界面，不用部署 cloud 或 station，core 也没动。安卓要发一版才有。验证：设置 → Station 的卡片右上角是「CPU 34%」这样的框，边线画到用了多少；模型选择器里的额度框也是粗一点的线。
+- core 按 workspace 分开（workspace-scoped-core）：只改了客户端（core、web、手机 web、桌面主进程、安卓），station 和 cloud 的接口、存储的键都没动，新 core 接旧 station 没问题，不用部署 cloud 或 station。UI↔core 的协议变了（`status`/`notices`/`notify` 带 `workspace`，新 topic `connection`，shapes 加了 `ConnectionView`），所以 web、admin、桌面、安卓要各自带上同一版 core 一起发：web 和 admin 跟部署走；桌面（主进程改成读 core 的 `notify` 并 claim）和安卓要各发一版，旧 app 里带的是旧 core，不受影响。行为变化：通知（页面里的、桌面和安卓的系统通知、安卓 FCM 推送）只报当前所在 workspace 的；一个 workspace 的 chat 里 `@[标题]` 只会展开成同 workspace 的链接；「新对话」记住的 station 按 workspace 分开（旧记录还会读）；聊天顶上的连接胶囊只看本 workspace，重连不满 1.5 秒不显示，没显示过就不出「已连上」。验证：有两个 workspace 的账号，在 W1 里让 W2 的 chat 出一条消息，W1 页面和系统通知都不该提示；切到 W2 再来一条，应当提示；W2 的 station 断开时，W1 的 chat 顶上不出胶囊，左下角也不提 W2 的 station。
 
 ## 2026-10-01
 
