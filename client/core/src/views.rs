@@ -816,14 +816,14 @@ impl Views {
             states.push(json!({ "station": s.address, "id": s.id, "name": s.name, "state": state, "message": message }));
         }
         let days = self.days(rows);
-        // One says itself; several are counted, marked by the worst.
+        // One says itself; several are counted, marked by the worst. No retry beside it (`retry` false for clients that
+        // read it): a station may stay down for long, and trying one again is done from the stations' page.
         let trouble = match troubles.as_slice() {
             [] => Value::Null,
-            // Down, not only coming back, it can be tried again at once.
-            [(state, text)] => json!({ "text": text, "state": state, "retry": *state != "reconnecting" }),
+            [(state, text)] => json!({ "text": text, "state": state, "retry": false }),
             all => {
                 let worst = ["error", "offline", "reconnecting"].into_iter().find(|w| all.iter().any(|(s, _)| s == w)).unwrap_or("offline");
-                json!({ "text": format!("{} 台 station 异常", all.len()), "state": worst, "retry": worst != "reconnecting" })
+                json!({ "text": format!("{} 台 station 异常", all.len()), "state": worst, "retry": false })
             }
         };
         // The glyph, and what the list says with no rows (looks.rs).
@@ -1959,14 +1959,14 @@ mod tests {
             assert_eq!(v["glyph"]["label"], "3 台 station，1 台在线，2 台离线");
             assert_eq!(v["note"]["reading"], false);
             // Under the list, what is wrong: beta and gamma offline, counted.
-            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline", "retry": true}));
+            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline", "retry": false}));
             // Each of its rows says so itself; the online station's say nothing.
             let items = &v["days"][0]["items"];
             assert_eq!((items[0]["offline"].clone(), items[1]["offline"].clone()), (Value::Null, json!("beta 离线")));
             t.set(link("ws/b"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             // One wrong station says itself.
-            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline", "retry": true}));
+            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline", "retry": false}));
 
             // One station failing shows as that station's state; the other's rows stay.
             t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
@@ -1982,7 +1982,7 @@ mod tests {
             assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][0]["message"].as_str()), (Some("connecting"), Some("连接断开了")));
             assert_eq!(ids(&v).len(), 2);
             // alpha coming back and gamma offline: counted, marked by the worse.
-            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline", "retry": true}));
+            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline", "retry": false}));
             // Its rows say so themselves; the other station's say nothing. Failing and retried, the same, in other words.
             let reconnecting = |v: &Value| v["days"][0]["items"].as_array().unwrap().iter().map(|i| (i["station"].as_str().unwrap().to_string(), i["reconnecting"].clone())).collect::<Vec<_>>();
             assert!(reconnecting(&v).contains(&("ws/a".into(), json!("正在重连 alpha…"))), "{v}");

@@ -6,6 +6,7 @@ import { stamp, type StationView } from "../api.ts";
 import type { Host, Level, NetFigure, StationNet } from "../core/shapes.ts";
 import { StatusDot, Time, Tip } from "../ui.tsx";
 import { Versions } from "../Versions.tsx";
+import { RetryPill } from "../Connection.tsx";
 import * as css from "./StationCards.css.ts";
 
 type Meter = Host["meters"][number];
@@ -104,7 +105,8 @@ function useLong(waiting: boolean, ms: number): boolean {
 }
 
 function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; manager: boolean }) {
-  const wrong = problems(s, useLong(s.online && !s.host, 15_000));
+  const silent = useLong(s.online && !s.host, 15_000);
+  const wrong = problems(s, silent);
   return (
     <div className={css.card} data-online={s.online || undefined}>
       <div className={css.cardHead}>
@@ -114,6 +116,8 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
           <span className={css.state}>{state(s)}</span>
         </span>
         {s.online && s.host && <span className={css.dials}>{s.host.meters.map((m) => <Dial key={m.label} m={m} />)}</span>}
+        {/* Away or silent, it is tried again here (not beside the sidebar's line: a station may stay down for long). */}
+        {(!s.online || silent) && <RetryPill />}
         <span className={css.menu}>{menu}</span>
       </div>
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}

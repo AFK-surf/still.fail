@@ -918,7 +918,7 @@ export interface StationState {
 
 /**
  * What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
- * `retry`: down, not only coming back, so it can be tried again at once (absent from a core before it).
+ * `retry`: always false now (a station down is tried again from the stations' page); true from older cores while down.
  */
 export interface StationTrouble {
 	text: string;

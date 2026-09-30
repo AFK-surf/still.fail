@@ -15,6 +15,7 @@ import { accessLabel, MachineLoginOffers, quotaTrouble, toneDot } from "./Profil
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
 import { Net } from "../cloud/StationCards.tsx";
+import { RetryPill } from "../Connection.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -145,7 +146,7 @@ export function StationScreen() {
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (
-            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 still.fail 就会重新连上</span></span></Card>
+            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 still.fail 就会重新连上</span><RetryPill /></span></Card>
           ) : null}
           {s.overview && (
             <>

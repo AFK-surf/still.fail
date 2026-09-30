@@ -107,7 +107,7 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
  * and who works while all is well, or what is wrong (the core's `trouble`: which, or how many; red while one fails). It
  * leads to the stations. Short of a station down, the line says what the core has been waiting on for a while, or ember
  * cloud not reached (the core's `status`: what, how long, how fast; each thing on hover); that last puts the glyph to
- * sleep. Down, it offers to try again at once.
+ * sleep. Cloud not reached, it offers to try again at once; a station down does not.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const view = useChats(scope, false).value;
@@ -117,7 +117,8 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const trouble = view.trouble;
   const waiting = !trouble && status?.state ? status : undefined;
   const text = trouble?.text ?? waiting?.text ?? view.glyph?.summary ?? "";
-  const retry = trouble ? !!trouble.retry : waiting?.state === "trouble";
+  // A station down offers no retry here (it may stay down for long; the stations' page is where to): only ember cloud not reached.
+  const retry = waiting?.state === "trouble";
   const row = (
     <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state ?? waiting?.state} data-retry={retry || undefined} aria-label={`Station：${trouble?.text ?? waiting?.text ?? view.glyph?.label ?? ""}`}>
       <span className={nav.stationTroubleMark}><StationGlyph counts={counts} size={18} /></span>

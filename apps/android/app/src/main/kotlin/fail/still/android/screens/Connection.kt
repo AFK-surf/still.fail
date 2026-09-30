@@ -75,7 +75,6 @@ fun ConnectionPill(connection: LinkShown?, haze: HazeState, modifier: Modifier =
         }
     }
     val shown = now ?: if (back) PillShown(PillTone.Back, "已连上") else null
-    val scope = rememberCoroutineScope()
     AnimatedVisibility(shown != null, modifier, enter = fadeIn(), exit = fadeOut()) {
         val s = shown ?: PillShown(PillTone.Back, "已连上")
         val shape = RoundedCornerShape(50)
@@ -92,20 +91,7 @@ fun ConnectionPill(connection: LinkShown?, haze: HazeState, modifier: Modifier =
             val color = when (s.tone) { PillTone.Trouble -> C.red; PillTone.Back -> C.muted; PillTone.Busy -> C.ink }
             Text(s.text, color = color, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             s.detail?.let { Text(it, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
-            if (s.tone == PillTone.Trouble) {
-                Box(
-                    Modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable {
-                        scope.launch {
-                            try {
-                                // A person's retry (client/core/src/wake.rs): `network` for a core from before `retry`.
-                                app.core.call("client.wake", buildJsonObject { put("away", 0); put("network", true); put("retry", true) })
-                            } catch (_: CoreException) {
-                            }
-                        }
-                    }.padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) { Text("重试", color = C.ink, fontSize = 13.sp) }
-            }
+            if (s.tone == PillTone.Trouble) RetryPill()
         }
     }
 }
@@ -116,4 +102,23 @@ private fun shownOf(connection: LinkShown?, status: StatusView?): PillShown? = w
     status?.state == "trouble" -> PillShown(PillTone.Trouble, status.text ?: "连不上 still.fail cloud")
     status?.state == "slow" -> PillShown(PillTone.Busy, status.text ?: "")
     else -> null
+}
+
+/** 重试 as a small grey pill: the connections tried again at once. Here and on a station down, where it is tried again (Stations.kt). */
+@Composable
+fun RetryPill(modifier: Modifier = Modifier) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    Box(
+        modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable {
+            scope.launch {
+                try {
+                    // A person's retry (client/core/src/wake.rs): `network` for a core from before `retry`.
+                    app.core.call("client.wake", buildJsonObject { put("away", 0); put("network", true); put("retry", true) })
+                } catch (_: CoreException) {
+                }
+            }
+        }.padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text("重试", color = C.ink, fontSize = 13.sp) }
 }

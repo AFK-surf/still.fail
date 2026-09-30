@@ -174,6 +174,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
                         Text("离线：在这台机器上打开 still.fail 就会重新连上", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
+                        RetryPill(Modifier.padding(top = 6.dp))
                     }
                 }
             }

@@ -43,7 +43,7 @@ export function ConnectionPill({ connection, phone }: { connection?: LinkShown |
       </span>
       <span className={css.connectionText}>{shown.text}</span>
       {shown.detail && <span className={css.connectionDetail}>{shown.detail}</span>}
-      {shown.tone === "trouble" && <button type="button" className={css.connectionRetry} onClick={() => core().retry()}>重试</button>}
+      {shown.tone === "trouble" && <RetryPill />}
     </div>
   );
   if (!shown.items?.length) return pill;
@@ -66,4 +66,10 @@ function shownOf(connection: LinkShown | undefined, status: StatusView | undefin
   if (status?.state === "trouble") return { tone: "trouble", text: status.text ?? "连不上 still.fail cloud", items: status.items };
   if (status?.state === "slow") return { tone: "busy", text: status.text ?? "", items: status.items };
   return null;
+}
+
+/** 重试 as a small grey pill: the connections tried again at once (client/core/src/wake.rs `retry`). Here and on a
+ * station down, where it is tried again (cloud/StationCards.tsx, mobile/Stations.tsx). */
+export function RetryPill() {
+  return <button type="button" className={css.connectionRetry} onClick={() => core().retry()}>重试</button>;
 }
