@@ -17,10 +17,19 @@
 
 ## 待部署
 
-- 草稿挪进 core（android-new-chat-draft）：core 加了 `draft` topic 和 `draft.put`，存在 core 的数据库里（新表名 `draft`，不改库结构）。web 和 wasm 一起发布，不用排顺序。安卓要发新包；安卓旧版存在 SharedPreferences 里的草稿，首次打开时会搬进 core。桌面端 core 如果比页面旧，不认识 `draft.put`，这时草稿只留在内存里（和以前一样），不会报错。上线后验：web 在 new chat 写一句，刷新后还在；安卓在 new chat 写一句，杀掉进程重开后还在；返回手势松手后不会停一下。
+- 草稿挪进 core（android-new-chat-draft）的安卓部分：web 和 wasm 已随 b24e8b2 上线，安卓要发新包（`release.sh android`）才生效。上线后验：安卓在 new chat 写一句，杀掉进程重开后还在；返回手势松手后不会停一下。
 - android-reconnect（原生端重连）：改的是 client/core，web 部署会带上 wasm 那份（重试时胶囊立刻变「正在重连」，span 带 `os.type`）；安卓要 `release.sh android` 发新版，桌面端要发新版，原生端才会只用自己的 relay、在拨号没回应时重建端点。另外：重试改成 `client.wake {retry}`（不作废进行中的请求，老 core 收到的仍是 network）；web 在 Chrome 安卓上按 `navigator.connection.type` 发现换网；桌面端主进程每 3 秒看一次网卡地址，变了告诉页面（要发桌面新版）；原生端 sleep 按墙钟算，设备睡眠期间也计时。新旧混跑没问题：station 和 cloud 都不用动，老桌面端没有 `onNetwork` 就不报。上线后在 Axiom 里验：`name == "mesh.connect"` 按 `['resource.os.type']`（或 `resource.custom`）分组看失败率，失败的看 `stillfail.relay`（home relay 当时是 up 还是 down），`stillfail.rebound`/`mesh.hedge` 说明重建端点、第二路拨号有没有起作用。改之前（9-28 到 9-30）原生端连本机 station 是 43/69 失败，web 是 9/71。
 
 ## 2026-09-30
+
+### 22:50 部署 b24e8b2：ember.3720.org 的网页跳到 app.still.fail，官网
+
+- 部署：d00630c → b24e8b2。包括 732dc78（ember.3720.org 的网页 302 到 app.still.fail 同路径和查询；ember-web 从纯静态改成前面有 `cloud/src/web.ts`，`run_worker_first`），以及已合未部署的草稿进 core、滚动条变细、作者名去下划线、可视化高度不设上限、打开 agent 历史这几个。部署了 api、web、admin，station 重建并重启，发布包后台上传。relay 没动。ad980b7（android-reconnect）是之后合的，没在这次里。
+- 前两次被完整检查拦下：`login::tests::a_subscription_sign_in_relays_the_link_the_code_and_the_result` 等 NeedsCode 超过 10 秒。当时 studio 负载 35～47（几个编译、Android 构建，trustd 占满一核），假登录命令启动很慢；单独跑 2～4 秒就过。b24e8b2 把等待上限放宽到 30 秒。
+- 线上验（curl）：ember.3720.org 的 `/`、`/w/…/chats/…?service=…`、`/assets/…` 都是 302 到 app.still.fail 同路径；`/sw.js`、`/healthz`、`/ping`、`/install.sh`、`/.well-known/assetlinks.json` 是 200，`/v1/me` 是 401（照旧由 API 回答）。旧域名的 API 和 relay 不跳，已装的 station 和旧 app 照旧能连。
+- 官网 `python3 cloud/deploy.py site`：链接和安装命令改成 app.still.fail。
+- 另外（不在仓库里）：manus.rip 的跳转 Worker（studio `~/ember-deploy/redirect-manus-rip`）改成跳到 still.fail。
+- 草稿进 core：web 部分已上线，没在浏览器里实际验；安卓部分留在「待部署」。
 
 ### 21:13 部署 d00630c（relay 预算不再逐帧转发）
 
