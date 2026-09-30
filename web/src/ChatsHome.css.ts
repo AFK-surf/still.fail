@@ -2,6 +2,10 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { navRow, navSession, navSessionWrap, navTime, rowPicture } from "./Sidebar.css.ts";
+import { pageBar } from "./styles/sidebar.css.ts";
+import { pageBarTitle } from "./styles/conversation.css.ts";
+import { sessionPage } from "./styles/session.css.ts";
+import { pageBarActions } from "./pages/ChatPage.css.ts";
 
 export const home = style({ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" });
 export const bar = style({ borderBottom: 0 });
@@ -41,11 +45,24 @@ globalStyle(`${row} .${navTime}`, { display: "inline" });
 globalStyle(`${row}[data-picked] .${navRow}`, { background: vars.hover, vars: { "--mark-around": vars.hover } });
 globalStyle(`${row} .${navSessionWrap}`, { position: "relative" });
 
+/**
+ * A chat's bar, with no sidebar: the way back at the left, the title as wide as the messages under it (760px at most,
+ * 32px in from each side, as the composer), its actions at the right.
+ */
+const listBar = `:root [data-layout="list"] ${sessionPage} ${pageBar}`;
+globalStyle(listBar, { gridTemplateColumns: "minmax(0, 1fr) min(760px, calc(100% - 40px)) minmax(0, 1fr)", gap: 0, paddingLeft: 12 });
+globalStyle(`${listBar} ${pageBarTitle}`, { gridColumn: "2", paddingLeft: 0 });
+globalStyle(`${listBar} ${pageBarActions}`, { gridColumn: "3" });
+
 /** In a chat's bar: back to the list, and the others' states. */
 export const back = style({
   display: "inline-flex", alignItems: "center", gap: 10, height: 32, padding: "0 10px 0 8px", borderRadius: 999,
-  flex: "none", marginLeft: -6, color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
+  gridColumn: "1", justifySelf: "start", color: vars.muted, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
   transition: `background ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+  selectors: {
+    "&:hover": { background: vars.hover, color: vars.text },
+    // Clear of the desktop window's buttons.
+    "[data-desktop]:not([data-fullscreen]) &": { marginLeft: 72 },
+  },
 });
 export const backCount = style({ display: "inline-flex", alignItems: "center", gap: 5 });
