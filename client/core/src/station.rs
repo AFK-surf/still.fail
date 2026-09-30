@@ -650,9 +650,11 @@ fn first_of(live: &Value) -> u64 {
 /// A `thread` topic's value: the entries loaded, `first ..= last` (none of an empty thread: `last` is `first - 1`),
 /// and the thread's summary and sidebar title as kept, for the `chat` view to show before the station's `threads`
 /// and rows are read.
+/// `caught`: the last entry that came by reading (what is kept, a page, `?after=`) rather than as it was said (an event):
+/// clients show what is caught up at once, and bring in only what comes after it.
 fn thread_value(first: u64, entries: Vec<Value>, summary: Value, title: Value) -> Value {
     let last = first + entries.len() as u64 - 1;
-    json!({ "first": first, "last": last, "entries": entries, "thread": summary, "title": title })
+    json!({ "first": first, "last": last, "caught": last, "entries": entries, "thread": summary, "title": title })
 }
 
 /// A station stream that ends (with an error) when nothing, not even its keepalive, came for [`STREAM_IDLE_MS`].
@@ -1125,7 +1127,7 @@ impl Stations {
             (Topic::Thread { station, thread }, Ok(answer)) => {
                 let entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
                 if path.contains("after=") {
-                    self.put_entries(station, *thread, entries);
+                    self.put_entries(station, *thread, entries, false);
                 } else {
                     self.first_page(station, *thread, entries, answer.get("last").and_then(Value::as_u64).unwrap_or(0));
                 }
@@ -1472,7 +1474,7 @@ impl Stations {
             }
             "thread" => {
                 let Some(id) = data.get("id").and_then(Value::as_u64) else { return };
-                self.put_entries(station, id, data.get("entries").and_then(Value::as_array).cloned().unwrap_or_default());
+                self.put_entries(station, id, data.get("entries").and_then(Value::as_array).cloned().unwrap_or_default(), true);
                 // The summaries (last message, unread) are not in the event.
                 self.mark_dirty(station, id);
             }
@@ -1650,8 +1652,9 @@ impl Stations {
     }
 
     /// New entries (an event, or `?after=`) onto a live thread topic, and kept. Those it has are skipped; entries
-    /// past a gap wait while the gap is read.
-    fn put_entries(&self, station: &str, id: u64, entries: Vec<Value>) {
+    /// past a gap wait while the gap is read. `told`: as they were said (an event, and the gap it showed), not caught
+    /// up on by reading (see `thread_value`).
+    fn put_entries(&self, station: &str, id: u64, entries: Vec<Value>, told: bool) {
         let topic = Topic::Thread { station: station.into(), thread: id };
         // Until it has a value, what it reads next covers these.
         let Some(last) = self.sink.get(&topic).and_then(|v| v.get("last")?.as_u64()) else { return };
@@ -1690,10 +1693,13 @@ impl Stations {
                 list.extend(run.iter().cloned());
             }
             value["last"] = json!(last + run.len() as u64);
+            if !told {
+                value["caught"] = value["last"].clone();
+            }
         });
         self.host.spawn(self.kept.write(&Log::thread(station, id), last + 1, run, false, self.summary(station, id)));
         if !past.is_empty() {
-            self.put_entries(station, id, past);
+            self.put_entries(station, id, past, told);
         }
     }
 
@@ -1709,7 +1715,7 @@ impl Stations {
         entries.extend(waiting);
         entries.sort_by_key(|e| n_of(e).unwrap_or(0));
         entries.dedup_by_key(|e| n_of(e));
-        self.put_entries(station, id, entries);
+        self.put_entries(station, id, entries, true);
     }
 
     /// The thread's summary as a live topic lists it.
@@ -2742,6 +2748,7 @@ mod tests {
             assert_eq!(numbers(&sink, 7), vec![11, 12, 13, 14, 15]);
             assert_eq!(texts(&sink, 7), vec!["a", "b 改了", "c", "d"]);
             assert_eq!(sink.get(&thread(7)).unwrap()["last"], 15);
+            assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 12, "what was read, not what was said since");
             assert_eq!(wire.count("GET", "/admin/api/threads/7"), 0, "waits for the burst to end");
             wait(EVENTS_COALESCE_MS).await;
             assert_eq!(wire.count("GET", "/admin/api/threads/7"), 1);
@@ -2783,6 +2790,7 @@ mod tests {
             wire.event("thread", json!({"id": 7, "entries": [entry(7, "m7")]}));
             host.settle().await;
             assert_eq!(numbers(&sink, 7), vec![1, 2, 3, 4, 5, 6, 7]);
+            assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 3, "a gap an event showed is part of what was said");
             assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?from=4&to=5"), 1);
             assert_eq!(wire.paths().iter().filter(|p| p.contains("/entries")).count(), 2, "{:?}", wire.paths());
         });
@@ -2835,6 +2843,8 @@ mod tests {
             // Its latest page came from what is kept (the station was asked only for what came after it).
             let shown = sink.get(&thread(7)).expect("shown from what is kept");
             assert_eq!((shown["first"].clone(), shown["last"].clone(), shown["thread"]["id"].clone()), (json!(252), json!(302), json!(7)));
+            // All of it caught up on (kept, then read): none of it was said while the chat was open.
+            assert_eq!(shown["caught"], 302);
             assert_eq!(wire.paths().iter().filter(|p| p.contains("/entries")).cloned().collect::<Vec<_>>(), vec!["GET /admin/api/threads/7/entries?after=301"]);
             // Scrolling up reads what is kept first; past it, the station (and what it answers is kept too).
             assert!(stations.older(&remote(), 7).await.unwrap());
@@ -2952,6 +2962,7 @@ mod tests {
             host.settle().await;
             assert!(!stations.older(&remote(), 7).await.unwrap());
             assert_eq!(texts(&sink, 7), vec!["a", "b", "c", "d"]);
+            assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 4);
             // Nothing older: no request.
             assert!(!stations.older(&remote(), 7).await.unwrap());
             assert_eq!(wire.paths().iter().filter(|p| p.contains("before=")).count(), 1);
@@ -2963,6 +2974,7 @@ mod tests {
             wait(RECONNECT_MS + 50).await;
             assert_eq!(sink.get(&link()).unwrap()["state"], "online");
             assert_eq!(texts(&sink, 7), vec!["a", "b", "c", "d", "e"]);
+            assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 5, "what was missed while the stream was down is caught up on");
             assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?limit=50"), 1);
         });
     }

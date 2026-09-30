@@ -1447,6 +1447,10 @@ pub struct ChatView {
     pub agents: Vec<ChatAgent>,
     pub messages: Vec<ChatMessage>,
     pub more: bool,
+    /// The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
+    /// chat is open: those up to it show at once, those after it come in.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub caught: Option<i64>,
     pub outbox: Vec<Outgoing>,
     pub link: Link,
     pub offline: bool,

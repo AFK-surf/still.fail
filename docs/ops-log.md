@@ -15,6 +15,10 @@
 - **部署时 `fetch failed`**：studio 出外网经过局域网的 Surge 旁路由（192.168.20.11），偶尔断。`ember-deploy` 的 cloud 部署遇到它会自己重试三次；拉 GitHub 断了就重跑部署。重复部署 Worker 没有副作用。
 - **完整检查不过**：`/tmp/ember-check.log`。什么都没部署出去，线上还是上一版。
 
+## 待部署
+
+- 补历史不播动画（history-no-arrive-anim）：只改客户端（core 的 wasm、web、安卓），station 和 cloud 不用动。web 跟着 cloud / station 的页面上线；安卓要发新版才有。`caught` 是可选字段，新旧页面和 core 混用都不坏（没有 caught 时和以前一样）。上线后验：设备上已经存了某个 chat，关掉页面，等 chat 里来几条新消息后再打开，补回来的消息直接显示，不上浮、不平滑滚动；页面开着时新来的消息照常有进场动画。
+
 ## 2026-09-30
 
 ### 13:10 部署 6b6782f，发安卓 0.1.1141

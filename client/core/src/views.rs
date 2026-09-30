@@ -986,6 +986,8 @@ impl Views {
             "messages": messages,
             // Entries before those loaded (the thread counts from 1).
             "more": page.get("first").and_then(Value::as_u64).is_some_and(|first| first > 1),
+            // Up to where its messages were caught up on rather than said while it was open (station.rs thread_value).
+            "caught": page.get("caught").cloned().unwrap_or(Value::Null),
             "outbox": outbox,
             "link": self.link(station),
             "offline": self.offline(station),

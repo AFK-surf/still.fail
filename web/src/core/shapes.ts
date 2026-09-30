@@ -702,6 +702,11 @@ export interface ChatView {
 	agents: ChatAgent[];
 	messages: ChatMessage[];
 	more: boolean;
+	/**
+	 * The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
+	 * chat is open: those up to it show at once, those after it come in.
+	 */
+	caught?: number;
 	outbox: Outgoing[];
 	link: Link;
 	offline: boolean;

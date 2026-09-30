@@ -4,7 +4,9 @@
 //   its top reaches the top of the pane (under whatever floats over it: its
 //   `scroll-padding-top`), so a long one is read from its start; the bottom
 //   growing otherwise (a reply streaming in, an image loading) is followed too.
-//   Following glides there.
+//   Following glides there, except to what the list marks `data-caught` (caught
+//   up on, not said as the reader watched: history read in after the kept
+//   page, what was missed while the link was down), which is taken at once.
 // - away from the bottom (the reader scrolled up), what they read stays put:
 //   the message at the top of the pane keeps its place, whatever changes
 //   above it (older pages loading, images) or below it (new messages, however
@@ -177,7 +179,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       const kids = [...el.children].filter(isMessage);
       const arrived = added.filter((n) => kids.slice(kids.indexOf(n) + 1).every((k) => added.includes(k) || k.hasAttribute("data-transient")));
       if (arrived.length && following) anchor = arrived.at(-1)!;
-      smooth = grown() && (arrived.length > 0 || records.some((r) => r.target !== el && messageOf(r.target) !== null));
+      smooth = grown() && (arrived.some((n) => !n.hasAttribute("data-caught")) || records.some((r) => r.target !== el && messageOf(r.target) !== null));
       watch();
       hold();
     });

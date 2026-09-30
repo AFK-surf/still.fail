@@ -738,6 +738,9 @@ data class ChatView (
 	val agents: List<ChatAgent>,
 	val messages: List<ChatMessage>,
 	val more: Boolean,
+	/// The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
+	/// chat is open: those up to it show at once, those after it come in.
+	val caught: Long? = null,
 	val outbox: List<Outgoing>,
 	val link: Link,
 	val offline: Boolean,

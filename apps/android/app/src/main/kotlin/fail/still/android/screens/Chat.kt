@@ -411,9 +411,28 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         }
     }
     val rows = if (reveal.count < all.size) all.takeLast(reveal.count) else all
-    // What was in the list the last time it was drawn: an item new to it rises in; one scrolled to does not.
+    // What was in the list the last time it was drawn: an item new to it rises in; one scrolled to does not, nor one
+    // caught up on rather than said while the chat is open (web Chat.tsx → useMessageList): messages up to where the
+    // core says it caught up (read after what was kept, or once the link is back), and the activity of an agent
+    // already at work when first seen.
     val known = remember { HashSet<String>() }
     SideEffect { rows.forEach { known += it.id } }
+    val caughtUp = view.caught ?: 0L
+    val statuses = remember { HashMap<String, String>() }
+    val started = remember { HashSet<String>() }
+    agents.forEach { a ->
+        val was = statuses[a.key]
+        if (a.view.status != "running") started -= a.key
+        else if (was != null && was != "running") started += a.key
+        statuses[a.key] = a.view.status
+    }
+    val caught = { row: Entry ->
+        when (row) {
+            is Entry.Said -> row.m.seq <= caughtUp
+            is Entry.Working -> row.agent.key !in started
+            else -> false
+        }
+    }
     val density = LocalDensity.current
     // The unread line near the top, below the bar, with about four lines of what came before it still in view (web
     // Chat.tsx → useUnreadLine: the bar's room and four of the list's 23px lines).
@@ -495,8 +514,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top + 14.dp, bottom = bottom + 10.dp), verticalArrangement = Arrangement.spacedBy(GAP, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
-                val fresh = remember(row.id) { row.id !in known }
-                Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = tween(200)).rise(fresh).onSizeChanged { size ->
+                val fresh = remember(row.id) { row.id !in known && !caught(row) }
+                Box(Modifier.animateItem(fadeInSpec = if (fresh) tween(250) else null, placementSpec = null, fadeOutSpec = tween(200)).rise(fresh).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.

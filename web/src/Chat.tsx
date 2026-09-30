@@ -151,7 +151,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
   chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null; owners: string;
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
 }) {
-  const { messages, divider, shown, rowOf, poseOf } = rows;
+  const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
   const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
   return (
     <>
@@ -163,13 +163,13 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
       )}
       {messages.map((m) => {
         const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
-        const { enter, emitted } = rowOf(m);
+        const { enter, emitted, caught } = rowOf(m);
         // Keyed as a whole: a bare [line, row] pair is placed by its index, and an older page coming in above would
         // shift every index and draw every message anew.
         return (
           <Fragment key={m.seq}>
             {line}
-            <MessageRow message={m} enter={enter} emitted={emitted}
+            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught}
               agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory} />
           </Fragment>
         );
@@ -177,7 +177,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
       {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
       {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
       {shown.map(({ agent, leaving }) => (
-        <Activity key={agent.key} agent={agent} leaving={leaving} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
+        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
       ))}
     </>
   );
@@ -250,8 +250,11 @@ export function historyLink(href: string): { key: string; entry: number } | null
   return key ? { key, entry: Number.isInteger(entry) && entry >= 0 ? entry : 0 } : null;
 }
 
-/** How a message of the list comes in: easing in (`enter`), or held in its agent's activity and sent out of it (`emitted`). */
-export interface RowState { enter: true | undefined; emitted: "held" | "emitting" | null }
+/**
+ * How a message of the list comes in: easing in (`enter`), or held in its agent's activity and sent out of it
+ * (`emitted`); or not at all, there when the chat opened or caught up on since (`caught`: the list goes to it at once).
+ */
+export interface RowState { enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined }
 
 /**
  * A chat's list as both screens run it (this page, and the phone's, mobile/Chat.tsx): it follows its bottom, loads
@@ -277,23 +280,40 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of chat.outbox) sentHere.current.add(o.text);
-  // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
+  // Messages there when the chat opened (and older pages loaded later) show at once, and so do those caught up on (read
+  // after the kept ones, or once the link is back: the core says up to where); only those said while it is open come
+  // in. Each is decided once, when first seen: catching up later does not take back one already coming in.
   const firstSeq = useRef<number | null>(null);
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
+  const told = useRef(new Map<number, boolean>());
+  const quiet = Math.max(firstSeq.current, chat.caught ?? 0);
+  for (const m of messages) if (!told.current.has(m.seq)) told.current.set(m.seq, m.seq > quiet);
+  const saidHere = (seq: number) => told.current.get(seq) === true;
   // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
   const atWork: AgentAtWork[] = chat.agents.filter((a) => a.status === "running").map(({ session, since, wait }) => (
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, activity: lives.get(session.key)?.activity ?? null, since, wait }
   ));
+  // An activity comes in only for an agent seen starting while the chat is open; one already at work when its agent
+  // is first seen (the agents filling in as the chat opens) is caught up on, there at once.
+  const statuses = useRef(new Map<string, string>());
+  const started = useRef(new Set<string>());
+  for (const a of chat.agents) {
+    const was = statuses.current.get(a.session.key);
+    if (a.status !== "running") started.current.delete(a.session.key);
+    else if (was !== undefined && was !== "running") started.current.add(a.session.key);
+    statuses.current.set(a.session.key, a.status);
+  }
   const emissions = useEmissions(list);
   const shown = useLinger(atWork, emissions.keeps);
-  emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
+  emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
   const rowOf = (m: ChatMessage): RowState => {
     const mine = mineOf(m);
     const told = !mine && !m.system;
-    const enter = m.seq > firstSeq.current! && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
-    return { enter, emitted: told ? emissions.stateOf(m.seq) : null };
+    const enter = saidHere(m.seq) && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
+    return { enter, emitted: told ? emissions.stateOf(m.seq) : null, caught: saidHere(m.seq) ? undefined : true };
   };
-  return { messages, divider, away, shown, rowOf, poseOf: emissions.poseOf };
+  const caughtAgent = (key: string) => (started.current.has(key) ? undefined : true);
+  return { messages, divider, away, shown, rowOf, caughtAgent, poseOf: emissions.poseOf };
 }
 
 /** The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too). */
@@ -479,15 +499,15 @@ export function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentHere, owner, onOpenHistory }: {
-  message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; agentHere: boolean;
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory }: {
+  message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
   /** Whose files are whose, in a word: when it changes, the files are drawn again. */
   owners: string;
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
 }) {
   if (m.mine) {
     return (
-      <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
+      <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
         <MineWords message={m} owner={owner} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
@@ -497,12 +517,12 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
     );
   }
   // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice text={m.text} time={m.time?.createdAt} ts={m.ts} enter={enter} />;
+  if (m.system) return <SystemNotice text={m.text} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
   return (
     <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
-      data-enter={enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
+      data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button>
@@ -550,7 +570,7 @@ function PersonWords({ text }: { text: string }) {
  * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
  * red instead.
  */
-function SystemNotice({ text, time, ts, enter }: { text: string; time: Stamp | undefined; ts: string | undefined; enter: true | undefined }) {
+function SystemNotice({ text, time, ts, enter, caught }: { text: string; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined }) {
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
   // A notice is a line of the UI, not prose: no 。 at its end (stations before 2026-09-30 wrote them as sentences).
@@ -558,7 +578,7 @@ function SystemNotice({ text, time, ts, enter }: { text: string; time: Stamp | u
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
-    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={ts} data-role="system" data-enter={enter} role="note">
+    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={ts} data-role="system" data-enter={enter} data-caught={caught} role="note">
       <div className={css.msgSystemBox} data-failed={failed ? "" : undefined} data-open={open || undefined}
         role="button" tabIndex={0} aria-expanded={open}
         onClick={(e) => { if (!(e.target as Element).closest("a")) toggle(); }}
@@ -1327,11 +1347,11 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     /** Agents whose activity must stay while their messages come out. */
     keeps: new Set([...queue.current.map((q) => q.agent), ...(current ? [current.agent] : [])]),
     /** Messages seen for the first time: an agent's, new, while its activity shows, waits its turn to come out of it. */
-    take(messages: ChatMessage[], since: number, showing: ReadonlySet<string>) {
+    take(messages: ChatMessage[], saidHere: (seq: number) => boolean, showing: ReadonlySet<string>) {
       for (const m of messages) {
         if (decided.current.has(m.seq)) continue;
         const agent = m.authorKind === "agent" ? m.by.agent : undefined;
-        const emits = !reduced && watched() && m.seq > since && agent !== undefined && showing.has(agent);
+        const emits = !reduced && watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
         decided.current.set(m.seq, emits);
         if (emits) queue.current.push({ seq: m.seq, agent: agent! });
       }
@@ -1358,11 +1378,11 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  * long its turn has run. No name: the avatar says whose. What it does changes by crossfading, and each thing stays a
  * moment, so a passing 请求中 does not flicker by. The line opens its history.
  */
-function Activity({ agent, leaving, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
+function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
   const wait = agent.wait;
   const now = useSteady(wait ? { key: "wait", text: "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
-    <div className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
+    <div className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <button type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
         <span className={css.activityTail}>
