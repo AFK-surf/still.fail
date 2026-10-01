@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::Result;
 
 use super::Hub;
-use crate::store::{STILLFAIL_SURFACE, ThreadRow, now_ms};
+use crate::store::{ThreadRow, now_ms};
 
 /// How long a title may run.
 const LONGEST: usize = 30;
@@ -65,9 +65,6 @@ impl Hub {
     /// Whether `title` may name the chat now (false: it already does), or why not.
     fn may_name(&self, thread: i64, title: &str) -> Result<std::result::Result<bool, &'static str>> {
         let Some(row) = self.store.get_thread(thread)? else { return Ok(Err("the chat is gone")) };
-        if row.surface != STILLFAIL_SURFACE {
-            return Ok(Err("a Slack thread is named in Slack"));
-        }
         if row.title.as_deref().is_some_and(|t| !t.trim().is_empty()) {
             return Ok(Err("people named this chat"));
         }

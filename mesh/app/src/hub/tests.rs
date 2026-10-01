@@ -1717,14 +1717,39 @@ async fn an_agent_names_its_chat_once_and_again_only_after_people_said_enough_ne
     assert!(post("别的").await.unwrap().contains("Title not changed: people named this chat"));
     // No title given: the post as before.
     assert_eq!(r.call(&web, "chat_post", json!({ "to": to, "text": "ok" })).await.unwrap(), format!("Posted to {to}."));
-    // A Slack thread is named in Slack.
+}
+
+#[tokio::test]
+async fn a_slack_agent_names_its_list_entry_with_the_same_rename_limits_and_manual_title_protection() {
+    let r = setup();
     let m = message();
     r.accept(&m).await;
     settle().await;
     let key = session_key("cl", "C1", &m.thread_ts);
-    let said = r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "ok", "title": "x" })).await.unwrap();
-    assert!(said.contains("a Slack thread is named in Slack"), "{said}");
-    assert_eq!(r.thread("C1", &m.thread_ts).auto_title, None);
+    let to = format!("C1/{}", m.thread_ts);
+    let post = |title: &str| r.call(&key, "chat_post", json!({ "to": to, "text": "ok", "title": title }));
+    let thread = r.thread("C1", &m.thread_ts);
+    assert!(post("登录排查").await.unwrap().ends_with("Titled the chat \"登录排查\"."));
+    let named = r.thread("C1", &m.thread_ts);
+    assert_eq!(named.auto_title.as_deref(), Some("登录排查"));
+    assert_eq!(post("登录排查").await.unwrap(), format!("Posted to {to}."));
+    assert!(post("部署失败").await.unwrap().contains("people have said too little"));
+    for change in 0..3 {
+        for n in 0..5 {
+            r.accept(&reply(&m, &format!("{}.000100", 20000 + change * 5 + n), "继续排查")).await;
+        }
+        settle().await;
+        let said = post(&format!("新话题 {change}")).await.unwrap();
+        if change < 2 {
+            assert!(said.contains("Titled the chat"), "{said}");
+        } else {
+            assert!(said.contains("changed as often as it may be"), "{said}");
+        }
+    }
+    r.store.set_thread_title(thread.id, Some("手动标题")).unwrap();
+    assert!(post("自动标题").await.unwrap().contains("people named this chat"));
+    let named = r.thread("C1", &m.thread_ts);
+    assert_eq!(named.title.as_deref(), Some("手动标题"));
 }
 
 #[tokio::test]

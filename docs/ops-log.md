@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- Slack 会话自动标题（slack-auto-title）：station 允许 agent 用 chat_post.title 为 Slack 线程设置 still.fail 列表标题，沿用手动标题保护和改名频率限制；同步 agent 指令。只需发 station，新旧客户端均沿用现有 title 字段。上线后验：Slack 线程首个最终回复后，still.fail 列表显示概括标题；手动命名后不会被覆盖。已有会话在 agent 下次提供标题时生效，不批量回填。
+
 - Claude 额度报错识别（fix-quota-failover）：更新 station；无需更新客户端。`You've hit your session limit` 等额度提示现在归为 rate_limit，自动账号会话可进入切换并继续链路；固定账号仍遵守原有固定设置。新旧数据和接口不变。上线后核对自然发生的额度失败记录为 rate_limit，且有可用同模型账号时自动继续。
 - 中继检测口径（relay-measure-consistent）：更新 web/wasm、桌面 core 和安卓；station、cloud API 无需更新，仍兼容旧 station。后台探测只走指定中继，3 次预热后取 5 次 QUIC RTT 估算的中位数；选路优先比较同轮检测。三端移除手动检测入口和各中继检测结果，仅保留当前连接网络信息；旧客户端的检测调用仍兼容。上线后验：安卓同局域网仍可直连，检测值不被直连冒充；无需打开 station 页面或点击检测，后台会自动切换到明显更快的中继。
 
