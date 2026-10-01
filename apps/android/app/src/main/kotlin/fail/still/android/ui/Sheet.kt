@@ -11,6 +11,7 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.HazeTint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -120,14 +121,14 @@ fun SheetHost(app: AppState) {
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     LaunchedEffect(spec) { if (spec != null) { focus.clearFocus(); keyboard?.hide() } }
+    val scrim by animateFloatAsState(if (spec != null) 1f else 0f, tween(300, easing = Ease.Css), label = "scrim")
     val current = shown ?: return
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val total = constraints.maxHeight.toFloat()
         val density = LocalDensity.current
         val height = remember { Animatable(current.height * total) }
-        val offset = remember { Animatable(total) }
+        val offset = remember { Animatable(current.height * total) }
         val scope = rememberCoroutineScope()
-        val scrim by animateFloatAsState(if (spec != null) 1f else 0f, tween(300, easing = Ease.Css), label = "scrim")
         LaunchedEffect(spec) {
             if (spec != null) {
                 val target = spec.height * total
@@ -233,12 +234,19 @@ fun MenuHost(app: AppState) {
     val spec = app.menu
     var shown by remember { mutableStateOf<MenuSpec?>(null) }
     if (spec != null) shown = spec
+    // Keep the closed state alive before the first menu is mounted, and keep its
+    // content until both the menu and its backdrop have finished leaving.
+    val visible = remember { MutableTransitionState(false) }
+    visible.targetState = spec != null
+    val scrim by animateFloatAsState(if (spec != null) 1f else 0f, tween(200), label = "menu-scrim")
+    LaunchedEffect(spec, visible.isIdle, visible.currentState, scrim) {
+        if (spec == null && visible.isIdle && !visible.currentState && scrim == 0f) shown = null
+    }
     val current = shown ?: return
     val close = { current.onDismiss(); app.menu = null }
     BackHandler(enabled = spec != null) { close() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
-        val scrim by animateFloatAsState(if (spec != null) 1f else 0f, tween(200), label = "menu-scrim", finishedListener = { if (spec == null) shown = null })
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f * scrim)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { close() })
         val width = 180.dp
         val x = with(density) { current.anchor.left.toDp() }.coerceAtMost(maxWidth - width - 12.dp).coerceAtLeast(12.dp)
@@ -246,11 +254,12 @@ fun MenuHost(app: AppState) {
         val menuHeight = 45.dp * current.items.size
         val below = with(density) { current.anchor.bottom.toDp() } + 6.dp
         val y = if (below + menuHeight < maxHeight - 24.dp) below else (with(density) { current.anchor.top.toDp() } - menuHeight - 6.dp).coerceAtLeast(24.dp)
+        val origin = TransformOrigin(0f, if (y == below) 0f else 1f)
         AnimatedVisibility(
-            spec != null,
+            visible,
             Modifier.offset(x, y),
-            enter = fadeIn(tween(200)) + scaleIn(tween(200), 0.9f, TransformOrigin(0f, 0f)),
-            exit = fadeOut(tween(150)) + scaleOut(tween(150), 0.9f, TransformOrigin(0f, 0f)),
+            enter = fadeIn(tween(200)) + scaleIn(tween(200), 0.9f, origin),
+            exit = fadeOut(tween(150)) + scaleOut(tween(150), 0.9f, origin),
         ) {
             Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(C.surface)) {
                 current.items.forEachIndexed { i, item ->
