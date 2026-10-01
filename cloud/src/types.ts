@@ -22,8 +22,8 @@ export type AccountEvent =
 
 // ── the operator's console (/v1/admin/*, the admin account only) ──────────
 
-/** How someone got in: the admin, a code, an invitation, or a member from before codes existed. */
-export type Admission = "admin" | "code" | "invitation" | "early";
+/** How someone got in: the admin, a code, the admin's say (`granted`), an invitation, or a member from before codes existed. */
+export type Admission = "admin" | "code" | "granted" | "invitation" | "early";
 export interface AdminUser extends UserView {
   created_at: number;
   /** When they last signed in or opened still.fail (its events socket); null before this was recorded. */
@@ -33,15 +33,23 @@ export interface AdminUser extends UserView {
   workspaces: { id: string; name: string; role: Role }[];
   /** Let into the test channel (app.youdid.wtf). Missing from a cloud from before it. */
   beta?: boolean;
+  /** Whether they may create workspaces; `creator`: they have made one, and so keep that. Missing from a cloud from before. */
+  may_create?: boolean;
+  creator?: boolean;
+  /** Blocked by the admin from the console. Missing from a cloud from before. */
+  blocked?: boolean;
 }
 export interface AdminWorkspace {
   id: string;
   name: string;
   created_at: number;
   created_by: UserView | null;
-  members: MemberView[];
+  /** Each with when they last came (missing from a cloud from before). */
+  members: (MemberView & { last_seen?: number | null })[];
   stations: StationView[];
   invitations: (InvitationView & { inviter: string })[];
+  /** How many people it may hold. Missing from a cloud from before. */
+  seats?: number;
 }
 export interface InviteCodeView {
   code: string;

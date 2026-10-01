@@ -85,10 +85,11 @@ export class Directory extends DurableObject<Env> {
       CREATE UNIQUE INDEX IF NOT EXISTS push_by_token ON push (sub, token);
       CREATE INDEX IF NOT EXISTS push_by_user ON push (sub, sid);
     `);
-    // users had neither column before invite codes, nor beta (1: let into the test channel) before it; the table in
-    // production gains them here.
+    // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
+    // the admin blocked the account; the account's own object is what keeps it out) before the console could block;
+    // the table in production gains them here.
     const columns = new Set(this.#rows("PRAGMA table_info(users)").map((r) => r.name as string));
-    for (const column of ["last_seen INTEGER", "admitted TEXT", "beta INTEGER"]) {
+    for (const column of ["last_seen INTEGER", "admitted TEXT", "beta INTEGER", "blocked INTEGER"]) {
       if (!columns.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE users ADD COLUMN ${column}`);
     }
   }
@@ -276,7 +277,7 @@ export class Directory extends DurableObject<Env> {
 
   /** Whether an account may create workspaces without a code (the admin aside): see createWorkspace. */
   #mayCreate(sub: string): boolean {
-    return Boolean(this.#one(`SELECT 1 AS x FROM users WHERE sub = ? AND admitted = 'code'
+    return Boolean(this.#one(`SELECT 1 AS x FROM users WHERE sub = ? AND admitted IN ('code', 'granted')
       UNION ALL SELECT 1 FROM users u JOIN members m ON m.sub = u.sub WHERE u.sub = ? AND u.admitted IS NULL
       UNION ALL SELECT 1 FROM workspaces WHERE created_by = ? LIMIT 1`, sub, sub, sub));
   }
@@ -626,14 +627,41 @@ export class Directory extends DurableObject<Env> {
       list.push({ id: row.id as string, name: row.name as string, role: row.role as Role });
       memberships.set(row.sub as string, list);
     }
-    return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted, beta FROM users ORDER BY created_at DESC").map((row) => {
-      const workspaces = memberships.get(row.sub as string) ?? [];
-      const admission: Admission | null = isAdmin(this.env, row.email as string) ? "admin" : (row.admitted as Admission | null) ?? (workspaces.length ? "early" : null);
+    const creators = new Set(this.#rows("SELECT DISTINCT created_by FROM workspaces").map((r) => r.created_by as string));
+    return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted, beta, blocked FROM users ORDER BY created_at DESC").map((row) => {
+      const sub = row.sub as string;
+      const workspaces = memberships.get(sub) ?? [];
+      const admin = isAdmin(this.env, row.email as string);
+      const admission: Admission | null = admin ? "admin" : (row.admitted as Admission | null) ?? (workspaces.length ? "early" : null);
+      // As #mayCreate has it, without a query per account.
+      const mayCreate = admin || creators.has(sub) || row.admitted === "code" || row.admitted === "granted" || (row.admitted === null && workspaces.length > 0);
       return {
-        sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string,
+        sub, email: row.email as string, name: row.name as string, picture: row.picture as string,
         created_at: row.created_at as number, last_seen: row.last_seen as number | null, admission, workspaces, beta: Boolean(row.beta),
+        may_create: mayCreate, creator: creators.has(sub), blocked: Boolean(row.blocked),
       };
     });
+  }
+
+  /**
+   * The admin gives an account the right to create workspaces, as a code would (`granted`), or takes it back: it is
+   * then one that may only join (`invitation`), or, in no workspace, one not let in. One that has created a workspace
+   * keeps the right whatever this says (#mayCreate).
+   */
+  setMayCreate(sub: string, on: boolean): { sub: string; may_create: boolean } {
+    const row = this.#one("SELECT email FROM users WHERE sub = ?", sub);
+    if (!row) fail(404, "user_not_found");
+    if (on) this.#run("UPDATE users SET admitted = 'granted' WHERE sub = ? AND (admitted IS NULL OR admitted = 'invitation')", sub);
+    else {
+      const member = this.#one("SELECT 1 AS x FROM members WHERE sub = ? LIMIT 1", sub);
+      this.#run("UPDATE users SET admitted = ? WHERE sub = ?", member ? "invitation" : null, sub);
+    }
+    return { sub, may_create: isAdmin(this.env, row!.email as string) || this.#mayCreate(sub) };
+  }
+
+  /** Notes that the admin blocked the account or let it back (the account's own object is what keeps it out). */
+  setBlocked(sub: string, on: boolean): void {
+    this.#run("UPDATE users SET blocked = ? WHERE sub = ?", on ? 1 : null, sub);
   }
 
   /** Lets an account into the test channel (BETA_ORIGIN), or out of it. */
@@ -657,17 +685,32 @@ export class Directory extends DurableObject<Env> {
 
   adminWorkspaces(): AdminWorkspace[] {
     const now = nowSeconds();
+    // Three reads for all of them, grouped here: a query per workspace grows with every one made.
+    const group = <T>(rows: Row[]): Map<string, T[]> => {
+      const by = new Map<string, T[]>();
+      for (const { workspace, ...rest } of rows) {
+        const list = by.get(workspace as string) ?? [];
+        list.push(rest as T);
+        by.set(workspace as string, list);
+      }
+      return by;
+    };
+    const members = group<AdminWorkspace["members"][number]>(this.#rows(`SELECT m.workspace, m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name,
+      COALESCE(u.picture, '') AS picture, m.role, m.added_at, u.last_seen FROM members m LEFT JOIN users u ON u.sub = m.sub ORDER BY m.added_at`));
+    const stations = group<StationView>(this.#rows("SELECT workspace, id, name, enrolled_at, enrolled_by, last_seen, version FROM stations ORDER BY enrolled_at"));
+    const invitations = group<AdminWorkspace["invitations"][number]>(this.#rows(`SELECT i.workspace, i.id, i.role, i.email, i.created_by, i.expires_at,
+      COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
     return this.#rows(`SELECT w.id, w.name, w.created_at, u.sub, u.email, u.name AS user_name, u.picture FROM workspaces w
       LEFT JOIN users u ON u.sub = w.created_by ORDER BY w.created_at DESC`).map((w) => ({
       id: w.id as string,
       name: w.name as string,
       created_at: w.created_at as number,
       created_by: w.sub === null ? null : { sub: w.sub as string, email: w.email as string, name: w.user_name as string, picture: w.picture as string },
-      members: this.#rows(`SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
-        FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, w.id) as unknown as MemberView[],
-      stations: this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", w.id) as unknown as StationView[],
-      invitations: this.#rows(`SELECT i.id, i.role, i.email, i.created_by, i.expires_at, COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter
-        FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.workspace = ? AND i.expires_at > ? ORDER BY i.expires_at`, w.id, now) as unknown as AdminWorkspace["invitations"],
+      members: members.get(w.id as string) ?? [],
+      stations: stations.get(w.id as string) ?? [],
+      invitations: invitations.get(w.id as string) ?? [],
+      // As #memberCap has it.
+      seats: w.email !== null && isAdmin(this.env, w.email as string) ? LIMITS.adminMembers : LIMITS.membersPerWorkspace,
     }));
   }
 

@@ -17,6 +17,63 @@ export class Directory extends ProductionDirectory {
   forgetAdmission(sub: string) {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = NULL WHERE sub = ?", sub);
   }
+  /**
+   * `users` made-up accounts over the last four months, about one in three with a workspace of up to five people and
+   * up to three stations (none ever connects), some invitations and codes: what the admin's console looks like once
+   * many people use still.fail (dev.ts, SEED). Seeded by `seed`, so each run makes the same.
+   */
+  seedPeople(users: number, seed = 7) {
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const pick = <T>(list: T[]) => list[Math.floor(random() * list.length)]!;
+    const now = nowSeconds();
+    const day = 86400;
+    const names = ["王一凡", "Alice Chen", "陈晨", "Bob Lee", "李雷", "Mia Zhang", "张伟", "Leo Park", "刘洋", "Nina Wu", "赵敏", "Omar Ali", "周杰", "Ivy Lin", "吴昊", "Sam Ho", "韩梅梅", "Tom Xu", "孙悦", "Zoe Ma"];
+    const domains = ["gmail.com", "acme.io", "qq.com", "proton.me", "163.com"];
+    const teams = ["产品", "设计", "增长", "研发", "运营", "Infra", "Data", "AI Lab", "客服", "市场"];
+    const sql = this.ctx.storage.sql;
+    const subs: { sub: string; created: number }[] = [];
+    this.ctx.storage.transactionSync(() => {
+      for (let i = 0; i < users; i++) {
+        const sub = `seed-${i}`;
+        const name = names[i % names.length]!;
+        // More people lately than at first.
+        const created = now - Math.floor(random() * random() * 120 * day);
+        const seen = random() < 0.06 ? null : Math.min(now, created + Math.floor(random() * (now - created)));
+        const local = /[a-z]/i.test(name) ? name.toLowerCase().replace(" ", ".") : "user";
+        sql.exec("INSERT OR IGNORE INTO users (sub, email, name, picture, created_at, last_seen, beta) VALUES (?, ?, ?, '', ?, ?, ?)",
+          sub, `${local}${i}@${pick(domains)}`, name, created, seen, random() < 0.04 ? 1 : null);
+        subs.push({ sub, created });
+      }
+      for (let i = 0; i < Math.floor(users / 3); i++) {
+        const owner = pick(subs);
+        const id = `seedws${String(i).padStart(4, "0")}`;
+        const created = owner.created + Math.floor(random() * 3 * day);
+        sql.exec("INSERT INTO workspaces (id, name, created_by, created_at) VALUES (?, ?, ?, ?)", id, `${teams[i % teams.length]}${i >= teams.length ? ` ${Math.floor(i / teams.length)}` : ""}`, owner.sub, created);
+        sql.exec("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, 'owner', ?)", id, owner.sub, created);
+        sql.exec("UPDATE users SET admitted = ? WHERE sub = ? AND admitted IS NULL", pick(["code", "code", "granted"]), owner.sub);
+        for (let k = Math.floor(random() * 5); k > 0; k--) {
+          const member = pick(subs).sub;
+          sql.exec("INSERT OR IGNORE INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?)", id, member, random() < 0.2 ? "admin" : "member", created + day);
+          sql.exec("UPDATE users SET admitted = 'invitation' WHERE sub = ? AND admitted IS NULL", member);
+        }
+        for (let k = Math.floor(random() * 4); k > 0; k--) {
+          const seen = random() < 0.12 ? null : now - Math.floor(random() * random() * random() * 40 * day);
+          sql.exec("INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            `${"0".repeat(56)}${String(i * 4 + k).padStart(8, "0")}`, id, `${pick(["mac-mini", "studio", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub, seen,
+            pick(["0.1.1212", "0.1.1212", "0.1.1212", "0.1.1190", "0.1.1104"]));
+        }
+        if (random() < 0.15) {
+          sql.exec("INSERT INTO invitations (id, workspace, token_hash, role, email, created_by, expires_at) VALUES (?, ?, ?, 'member', ?, ?, ?)",
+            `seedinv${i}`, id, `seed-hash-${i}`, `friend${i}@gmail.com`, owner.sub, now + 3 * day);
+        }
+      }
+      for (let i = 0; i < Math.floor(users / 20); i++) {
+        const created = now - Math.floor(random() * 60 * day);
+        sql.exec("INSERT INTO invite_codes (code, note, created_by, created_at, expires_at, revoked_at) VALUES (?, ?, 'seed', ?, ?, ?)",
+          `SEED-${String(1000 + i).slice(-4)}-${pick(["ABCD", "EFGH", "JKMN", "PQRS"])}`, pick(["", "", "内测群", "朋友", "展会", "Twitter 抽奖"]), created, created + pick([7, 14, 30]) * day, random() < 0.1 ? created + day : null);
+      }
+    });
+  }
 }
 
 export class Account extends ProductionAccount {

@@ -70,6 +70,22 @@ pub enum Topic {
     LoginSessions { account: String },
     /// still.fail cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
     Admin { account: String, list: String },
+    /// Views of those for the admin's console (views/admin.rs): one list as `query` finds it, in `filter`, by `sort`, its
+    /// first `limit` rows; one user's or workspace's page (`list`: `users` or `workspaces`); the first page's counts.
+    AdminList {
+        account: String,
+        list: String,
+        #[serde(default)]
+        query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        filter: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sort: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<u32>,
+    },
+    AdminItem { account: String, list: String, id: String },
+    AdminOverview { account: String },
     // Views: put together from the topics above (see views.rs). `scope` is a workspace id.
     Chats { scope: String, #[serde(default)] mine: bool },
     Stations { scope: String },
@@ -159,6 +175,7 @@ impl Topic {
             // The core's own (pill.rs).
             Topic::Connection { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } => None,
+            Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
             // The core's own (jobs.rs), not the station module's.
             Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::Job { .. } => None,
@@ -166,6 +183,6 @@ impl Topic {
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::WorkspaceMarks { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::WorkspaceMarks { .. } | Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. })
     }
 }

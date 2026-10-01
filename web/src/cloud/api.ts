@@ -75,6 +75,11 @@ export const admin = {
   revokeCode: (sub: string, code: string) => op<{ ok: true }>(sub, "admin.revokeCode", { code }),
   /** Lets the account `user` into the test channel (app.youdid.wtf), or out of it. */
   setBeta: (sub: string, user: string, on: boolean) => op<{ sub: string; beta: boolean }>(sub, "admin.setBeta", { user, on }),
+  /** Gives the account `user` the right to create workspaces, as an invite code would, or takes it back. */
+  setMayCreate: (sub: string, user: string, on: boolean) => op<{ sub: string; may_create: boolean }>(sub, "admin.setMayCreate", { user, on }),
+  /** Blocks the account `user` (signed out everywhere, kept out), or lets it back. */
+  block: (sub: string, user: string, on: boolean) => op<{ blocked: boolean }>(sub, "admin.block", { user, on }),
+  deleteWorkspace: (sub: string, workspace: string) => op<{ ok: true }>(sub, "admin.deleteWorkspace", { workspace }),
 };
 
 // still.fail cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).

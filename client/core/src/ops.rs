@@ -194,6 +194,11 @@ fn cloud_op(name: &str, params: &Value) -> Option<Result<Request>> {
         "admin.revokeCode" => op("POST", p.at("code").map(|c| format!("/v1/admin/invite-codes/{c}/revoke")), None),
         // An account into the test channel (app.youdid.wtf) or out of it: { user, on }.
         "admin.setBeta" => op("POST", p.at("user").map(|u| format!("/v1/admin/users/{u}/beta")), Some(json!({ "on": p.bool("on") }))),
+        // Gives an account the right to create workspaces, as an invite code would, or takes it back: { user, on }.
+        "admin.setMayCreate" => op("POST", p.at("user").map(|u| format!("/v1/admin/users/{u}/may-create")), Some(json!({ "on": p.bool("on") }))),
+        // Blocks an account (signed out everywhere, kept out) or lets it back: { user, on }.
+        "admin.block" => op("POST", p.at("user").map(|u| format!("/v1/admin/users/{u}/block")), Some(json!({ "on": p.bool("on") }))),
+        "admin.deleteWorkspace" => op("POST", p.at("workspace").map(|w| format!("/v1/admin/workspaces/{w}/delete")), None),
         _ => return None,
     };
     Some(r)

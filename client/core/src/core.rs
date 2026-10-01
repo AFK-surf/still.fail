@@ -434,6 +434,7 @@ impl Source for Router {
                 Topic::Stations { .. } => ("stations.open", None),
                 Topic::Archive { .. } => ("archive.open", None),
                 Topic::WorkspaceMarks { .. } => ("workspaces.marks", None),
+                Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => ("admin.open", None),
                 _ => ("connects.open", None),
             };
             let mut span = self.tracer.root(name, Kind::Internal);

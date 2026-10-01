@@ -206,6 +206,13 @@ const notFound = () => new Response("Not found", { status: 404 });
 
 const inviteUrl = (env: Env, code: string) => `${env.PUBLIC_ORIGIN}/?invite=${code}`;
 
+/** Blocks an account or lets it back, in its own object (which keeps it out) and in the directory (which lists it). */
+export async function blockAccount(env: Env, sub: string, on: boolean): Promise<Response> {
+  const answer = await env.ACCOUNTS.getByName(sub).administer(on);
+  if (answer.ok) await env.DIRECTORY.getByName("primary").setBlocked(sub, on);
+  return answer;
+}
+
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env);
@@ -225,7 +232,23 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
     if (typeof input.on !== "boolean") return reply({ error: "invalid_request" }, 400);
     return directory(() => dir.setBeta(beta[1]!, input.on as boolean));
   }
+  // Gives an account the right to create workspaces, as a code would, or takes it back: { on: boolean }.
+  const mayCreate = /^\/v1\/admin\/users\/([A-Za-z0-9_-]{1,128})\/may-create$/.exec(path);
+  if (mayCreate && method === "POST") {
+    if (typeof input.on !== "boolean") return reply({ error: "invalid_request" }, 400);
+    return directory(() => dir.setMayCreate(mayCreate[1]!, input.on as boolean));
+  }
+  // Blocks an account (signs it out everywhere) or lets it back: { on: boolean }. Not the admin's own.
+  const block = /^\/v1\/admin\/users\/([A-Za-z0-9_-]{1,128})\/block$/.exec(path);
+  if (block && method === "POST") {
+    if (typeof input.on !== "boolean") return reply({ error: "invalid_request" }, 400);
+    if (block[1] === claims.sub) return reply({ error: "forbidden" }, 403);
+    return blockAccount(env, block[1]!, input.on as boolean);
+  }
   if (path === "/v1/admin/workspaces" && method === "GET") return directory(async () => ({ workspaces: await dir.adminWorkspaces() }));
+  // Deletes a workspace as its owner would: its stations are let go, its people told.
+  const remove = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/delete$/.exec(path);
+  if (remove && method === "POST") return directory(() => dir.adminDeleteWorkspace(remove[1]!));
   // Each with its sign-up link: that is the web app's, on the other origin.
   if (path === "/v1/admin/invite-codes" && method === "GET") return directory(async () => ({ codes: (await dir.inviteCodes()).map((c) => ({ ...c, url: inviteUrl(env, c.code) })) }));
   if (path === "/v1/admin/invite-codes" && method === "POST") {

@@ -1,20 +1,19 @@
-// The admin's console, on its own host: every user and workspace in ember
-// cloud, and the invite codes that let a new person create a workspace. Only
-// the admin's account reaches it (ember cloud answers 404 to everyone else).
-// It is an operator's tool: each page reads when it opens and after each
-// action, nothing more.
+// The admin's console, on its own host: every user and workspace in still.fail cloud, and the invite codes that let
+// a new person create a workspace. Only the admin's account reaches it (still.fail cloud answers 404 to everyone
+// else). The core puts each page together (views/admin.rs: found, filtered, sorted, counted); this draws it. Where
+// the page is (a list's words, filter and sort, the item open) is in its URL, so a link shows the same.
 import { useTopic } from "../core/react.ts";
-import { Boxes, Copy, LogOut, Plus, Ticket, Users } from "../icons.tsx";
-import { useCallback, useEffect, useState } from "react";
-import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
+import type { Topic } from "../core/client.ts";
+import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Search, Ticket, Users } from "../icons.tsx";
+import { useEffect, useRef, useState } from "react";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Lockup } from "../brand.tsx";
-import { stamp } from "../api.ts";
+import { stamp, type Stamp } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { About, Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Switch, Time, ICON, type Tone } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, Time, ICON, type Presence, type Tone } from "../ui.tsx";
 import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
-import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "../cloud/api.ts";
+import { admin, useAction } from "../cloud/api.ts";
 import { Avatar } from "../cloud/gate.tsx";
-import { ROLE_LABEL } from "../cloud/settings.tsx";
 import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./console.css.ts";
@@ -24,7 +23,7 @@ import * as controlsCss from "../styles/controls.css.ts";
 // Each account is asked once per page load whether it is the admin.
 const probes = new Map<string, Promise<boolean>>();
 
-/** The signed-in account that is ember's admin: null when none is, undefined until known. */
+/** The signed-in account that is still.fail's admin: null when none is, undefined until known. */
 export function useAdminAccount(): Account | null | undefined {
   const list = useAccounts();
   const [known, setKnown] = useState<Record<string, boolean>>({});
@@ -40,7 +39,46 @@ export function useAdminAccount(): Account | null | undefined {
   return list.find((a) => known[a.sub]) ?? (list.every((a) => a.sub in known) ? null : undefined);
 }
 
-// On a phone the sidebar and a page take turns: "/" is the sidebar there, and the users page elsewhere.
+// ── what the core gives (views/admin.rs) ───────────────────────────────
+
+type List = "users" | "workspaces" | "invite-codes";
+type Timed = { time?: Record<string, Stamp> };
+type Mark = { label: string; tone: Tone };
+type PersonLike = { name: string; email: string; picture: string };
+type Row = Timed & {
+  id: string; title: string; line: string; marks: Mark[]; person?: PersonLike;
+  /** A workspace's: how its stations last stood. A code's: open, used, expired, revoked. */
+  state?: Presence | string | null; url?: string | null; note?: string;
+};
+type ListView = { total: number; found: number; filter: string; filters: { id: string; label: string; count: number }[]; sort: string; sorts: { id: string; label: string }[]; rows: Row[]; more: boolean };
+type UserPage = Timed & {
+  id: string; title: string; person: PersonLike; email: string; admin: boolean; admission: string; code: string | null;
+  mayCreate: boolean | null; mayCreateHint: string; mayCreateFixed: boolean; beta: boolean | null; blocked: boolean | null;
+  workspaces: { id: string; name: string; line: string }[];
+};
+type WorkspacePage = Timed & {
+  id: string; title: string; creator: { id: string; title: string } | null; people: string;
+  members: (Timed & { id: string; title: string; person: PersonLike; role: string })[];
+  stations: (Timed & { id: string; name: string; version: string | null; outdated: boolean; state: Presence })[];
+  invitations: (Timed & { id: string; email: string; line: string })[];
+};
+type Overview = {
+  stats: { label: string; value: number; note: string; list: List; filter: string }[];
+  weeks: { count: number; label: string }[];
+  todo: { text: string; hint: string; tone: string; list: List; filter: string }[];
+};
+
+/** A topic of the core; while the next one (other words, say) is read, the last one's value stays in view. */
+function useKept<T>(topic: Topic): { value: T | undefined; error: Error | null } {
+  const state = useTopic<T>(topic);
+  const last = useRef<T | undefined>(undefined);
+  if (state.value) last.current = state.value;
+  return { value: state.value ?? (state.error ? undefined : last.current), error: state.error ? new Error(state.error.message) : null };
+}
+
+const PATH: Record<List, string> = { users: "/users", workspaces: "/workspaces", "invite-codes": "/codes" };
+
+// On a phone the sidebar and a page take turns: "/" is the sidebar there, and the overview elsewhere.
 const narrow = () => matchMedia("(max-width: 700px)").matches;
 
 export function Console({ account }: { account: Account }) {
@@ -52,6 +90,7 @@ export function Console({ account }: { account: Account }) {
         <div className={`${nav.brand} ${nav.brandCompact}`}><Lockup /></div>
         <div className={nav.navScroll}>
           <div className={nav.navHeading}>管理后台</div>
+          <NavLink className={nav.navRow} to="/overview"><Monitor {...ICON} />概览</NavLink>
           <NavLink className={nav.navRow} to="/users"><Users {...ICON} />用户</NavLink>
           <NavLink className={nav.navRow} to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
           <NavLink className={nav.navRow} to="/codes"><Ticket {...ICON} />邀请码</NavLink>
@@ -63,30 +102,14 @@ export function Console({ account }: { account: Account }) {
       </nav>
       <main className={shellCss.main}>
         <Routes>
-          <Route index element={narrow() ? null : <Navigate to="/users" replace />} />
-          <Route path="users" element={<UsersPage account={account} />} />
-          <Route path="workspaces" element={<WorkspacesPage account={account} />} />
-          <Route path="codes" element={<CodesPage account={account} />} />
+          <Route index element={narrow() ? null : <Navigate to="/overview" replace />} />
+          <Route path="overview" element={<OverviewPage account={account} />} />
+          <Route path="users/:id?" element={<ListPage account={account} list="users" />} />
+          <Route path="workspaces/:id?" element={<ListPage account={account} list="workspaces" />} />
+          <Route path="codes" element={<ListPage account={account} list="invite-codes" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-    </div>
-  );
-}
-
-/** A read on open, again on `reload`; what was read stays in view while it reads again. */
-/** One of ember cloud's operator lists, as a topic of the core (read again after a write through it). */
-function useList<T>(account: string, list: "users" | "workspaces" | "invite-codes", pick: (value: Record<string, unknown>) => T): { data: T | undefined; error: Error | null } {
-  const topic = useTopic<Record<string, unknown>>({ topic: "admin", account, list });
-  return { data: topic.value ? pick(topic.value) : undefined, error: topic.error ? new Error(topic.error.message) : null };
-}
-
-function Page({ title, lead, children }: { title: string; lead?: string | undefined; children: React.ReactNode }) {
-  return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to="/" label="管理后台" />
-      <header className={pagesCss.pageHead}><div><h1>{title}{lead && <About>{lead}</About>}</h1></div></header>
-      {children}
     </div>
   );
 }
@@ -95,197 +118,310 @@ function Failed({ error }: { error: Error | null }) {
   return error ? <p className={controlsCss.fieldError} role="alert">读取失败：{error.message}</p> : null;
 }
 
-// ── users ───────────────────────────────────────────────────────────────
+// ── the overview ────────────────────────────────────────────────────────
 
-const ADMISSION: Record<Admission | "none", { label: string; tone: Tone }> = {
-  admin: { label: "still.fail 管理员", tone: "accent" },
-  code: { label: "用邀请码加入", tone: "blue" },
-  invitation: { label: "被邀请加入", tone: "green" },
-  early: { label: "邀请码之前加入", tone: "neutral" },
-  none: { label: "还没进来", tone: "amber" },
-};
-
-function UsersPage({ account }: { account: Account }) {
-  const users = useList(account.sub, "users", (v) => v.users as AdminUser[]);
-  const list = users.data;
+function OverviewPage({ account }: { account: Account }) {
+  const { value: view, error } = useKept<Overview>({ topic: "adminOverview", account: account.sub });
+  const max = Math.max(1, ...(view?.weeks.map((w) => w.count) ?? []));
   return (
-    <Page title="用户" lead={list && `${list.length} 人登录过 still.fail。「还没进来」的人登录了，但没有 workspace，也没有用过邀请码或接受过邀请。`}>
-      <Failed error={users.error} />
-      {!list ? !users.error && <Loading label="正在读取…" fill={false} /> : (
-        <ul className={css.adminList}>{list.map((u) => <UserItem key={u.sub} account={account} user={u} />)}</ul>
-      )}
-    </Page>
-  );
-}
-
-function UserItem({ account, user }: { account: Account; user: AdminUser }) {
-  const admission = ADMISSION[user.admission ?? "none"];
-  return (
-    <li className={css.adminItem}>
-      <div className={css.adminHead}>
-        <Avatar account={user} size={32} />
-        <span className={pagesCss.listRowText}>
-          <span className={pagesCss.listRowTitle}>{user.name || user.email}</span>
-          <span className={shellCss.muted}>{user.email}</span>
-        </span>
-        <Pill tone={admission.tone}>{admission.label}</Pill>
-        {user.beta !== undefined && <BetaSwitch account={account} user={user} />}
-      </div>
-      <p className={`${css.adminMeta} ${shellCss.muted}`}>
-        <Time stamp={stamp(user, "created_at")} />首次登录 · {user.last_seen ? <><Time stamp={stamp(user, "last_seen")} />来过</> : "还没有来访记录"}
-      </p>
-      {user.workspaces.length > 0 && (
-        <div className={css.chips}>{user.workspaces.map((w) => <span key={w.id} className={css.chip}>{w.name} · {ROLE_LABEL[w.role]}</span>)}</div>
-      )}
-    </li>
-  );
-}
-
-/** Whether the account may use the test channel (app.youdid.wtf); the list is read again once it is set. */
-function BetaSwitch({ account, user }: { account: Account; user: AdminUser }) {
-  const toast = useToast();
-  const set = useAction((on: boolean) => admin.setBeta(account.sub, user.sub, on), (_, on) => toast(on ? "已开通测试版" : "已关闭测试版"));
-  useEffect(() => { if (set.error) toast(`没能更改：${set.error.message}`); }, [set.error, toast]);
-  const id = `beta-${user.sub}`;
-  return (
-    <span className={css.betaSwitch}>
-      <label htmlFor={id} className={shellCss.muted}>测试版</label>
-      <Switch id={id} checked={set.busy ? Boolean(set.arg) : Boolean(user.beta)} disabled={set.busy} onChange={(on) => set.run(on)} />
-    </span>
-  );
-}
-
-// ── workspaces ──────────────────────────────────────────────────────────
-
-function WorkspacesPage({ account }: { account: Account }) {
-  const workspaces = useList(account.sub, "workspaces", (v) => v.workspaces as AdminWorkspace[]);
-  const list = workspaces.data;
-  const stations = list?.reduce((n, w) => n + w.stations.length, 0) ?? 0;
-  return (
-    <Page title="Workspace" lead={list && `${list.length} 个 workspace，${stations} 台 station。`}>
-      <Failed error={workspaces.error} />
-      {!list ? !workspaces.error && <Loading label="正在读取…" fill={false} /> : (
-        <ul className={css.adminList}>{list.map((w) => <WorkspaceItem key={w.id} workspace={w} />)}</ul>
-      )}
-    </Page>
-  );
-}
-
-function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
-  return (
-    <li className={css.adminItem}>
-      <div className={css.adminHead}>
-        <span className={pagesCss.listRowText}>
-          <span className={pagesCss.listRowTitle}>{w.name}</span>
-          <span className={shellCss.muted}>{w.created_by ? w.created_by.name || w.created_by.email : "已不在的人"} 创建于 <Time stamp={stamp(w, "created_at")} /> · <span className={shellCss.mono}>{w.id}</span></span>
-        </span>
-      </div>
-      <div className={css.adminGroup}>
-        <div className={css.adminGroupLabel}>成员 {w.members.length}</div>
-        {w.members.map((m) => (
-          <div key={m.sub} className={css.adminLine}>
-            <Avatar account={m} size={20} />
-            <span className={css.adminLineText}>{m.name || m.email}<span className={shellCss.muted}>{m.name ? m.email : ""}</span></span>
-            <span className={shellCss.muted}>{ROLE_LABEL[m.role]}</span>
-          </div>
-        ))}
-      </div>
-      <div className={css.adminGroup}>
-        <div className={css.adminGroupLabel}>Station {w.stations.length}</div>
-        {w.stations.length === 0 && <div className={`${css.adminLine} ${shellCss.muted}`}>还没有 station</div>}
-        {w.stations.map((s) => (
-          // Whether a station is up is for the devices to find out over the mesh; ember cloud only knows when it last
-          // came to it (or left).
-          <div key={s.id} className={css.adminLine}>
-            <span className={css.adminLineText}>{s.name}<span className={shellCss.muted}>{s.version ? `stillfail-mesh ${s.version}` : ""}</span></span>
-            <span className={shellCss.muted}>{s.last_seen ? <>上次连 still.fail cloud：<Time stamp={stamp(s, "last_seen")} /></> : "还没连过 still.fail cloud"}</span>
-          </div>
-        ))}
-      </div>
-      {w.invitations.length > 0 && (
-        <div className={css.adminGroup}>
-          <div className={css.adminGroupLabel}>未接受的邀请 {w.invitations.length}</div>
-          {w.invitations.map((i) => (
-            <div key={i.id} className={css.adminLine}>
-              <span className={css.adminLineText}>{i.email ?? "任何拿到链接的人"}<span className={shellCss.muted}>{i.inviter ? `${i.inviter} 邀请` : ""}</span></span>
-              <span className={shellCss.muted}>{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
-            </div>
+    <div className={`${pagesCss.page} ${css.mid}`}>
+      <MobileBack to="/" label="管理后台" />
+      <header className={pagesCss.pageHead}><div><h1>概览</h1></div></header>
+      <Failed error={error} />
+      {!view ? !error && <Loading label="正在读取…" fill={false} /> : <>
+        <div className={css.stats}>
+          {view.stats.map((s) => (
+            <Link key={s.label} className={css.stat} to={`${PATH[s.list]}?filter=${s.filter}`}>
+              <span className={shellCss.muted}>{s.label}</span>
+              <span className={css.statValue}>{s.value}</span>
+              <span className={css.statNote}>{s.note}</span>
+            </Link>
           ))}
         </div>
-      )}
-    </li>
+        <section className={css.chart} aria-label="每周新用户">
+          <div className={css.chartHead}><b>每周新用户</b><span className={shellCss.muted}>近 12 周</span></div>
+          <div className={css.bars}>
+            {view.weeks.map((w, i) => (
+              <div key={i} className={css.bar} title={`${w.label}：${w.count} 人`}>
+                <span className={css.barCount}>{w.count || ""}</span>
+                <span className={css.barFill} data-now={i === view.weeks.length - 1 || undefined} style={{ height: `${(w.count / max) * 100}%` }} />
+                <span className={css.barLabel}>{w.label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        {view.todo.length > 0 && <>
+          <h2 className={css.h2}>需要看一眼</h2>
+          <div className={css.list}>
+            {view.todo.map((t) => (
+              <Link key={t.text} className={css.todo} to={`${PATH[t.list]}?filter=${t.filter}`}>
+                <StatusDot state={t.tone === "amber" ? "busy" : "offline"} />
+                <span className={css.todoText}>{t.text}</span>
+                <span className={css.todoHint}>{t.hint}</span>
+                <ChevronRight {...ICON} />
+              </Link>
+            ))}
+          </div>
+        </>}
+      </>}
+    </div>
   );
 }
 
-// ── invite codes ────────────────────────────────────────────────────────
+// ── the lists ───────────────────────────────────────────────────────────
 
-function codeState(c: InviteCodeView): { label: string; tone: Tone } {
-  if (c.used_by || c.used_at) return { label: "已使用", tone: "neutral" };
-  if (c.revoked_at) return { label: "已撤回", tone: "red" };
-  if (stamp(c, "expires_at")?.past) return { label: "已过期", tone: "amber" };
-  return { label: "可用", tone: "green" };
-}
+const TITLE: Record<List, string> = { users: "用户", workspaces: "Workspace", "invite-codes": "邀请码" };
+const PLACEHOLDER: Record<List, string> = { users: "搜索名字、邮箱、workspace、ID", workspaces: "搜索名字、成员、station、ID", "invite-codes": "搜索邀请码、备注、用的人" };
+const STEP = 50;
 
-function CodesPage({ account }: { account: Account }) {
-  const toast = useToast();
-  const codes = useList(account.sub, "invite-codes", (v) => v.codes as (InviteCodeView & { url: string })[]);
+function ListPage({ account, list }: { account: Account; list: List }) {
+  const { id } = useParams();
+  const [params, setParams] = useSearchParams();
+  const query = params.get("q") ?? "";
+  const filter = params.get("filter") ?? undefined;
+  const sort = params.get("sort") ?? undefined;
+  const [limit, setLimit] = useState(STEP);
+  useEffect(() => setLimit(STEP), [list, query, filter, sort]);
+  const { value: view, error } = useKept<ListView>({ topic: "adminList", account: account.sub, list, query, ...(filter ? { filter } : {}), ...(sort ? { sort } : {}), limit });
+  const set = (key: string, value: string | null) => setParams((p) => { const next = new URLSearchParams(p); if (value) next.set(key, value); else next.delete(key); return next; }, { replace: true });
   const [making, setMaking] = useState(false);
-  const [revoking, setRevoking] = useState<InviteCodeView | null>(null);
-  const revoke = useAction((c: InviteCodeView) => admin.revokeCode(account.sub, c.code), () => { setRevoking(null); toast("已撤回邀请码"); });
-  const list = codes.data;
-  const usable = list?.filter((c) => codeState(c).label === "可用").length ?? 0;
-  const copy = (url: string) => void navigator.clipboard.writeText(url).then(() => toast("已复制注册链接"));
+  const search = params.toString() ? `?${params}` : "";
+  const detail = id && list !== "invite-codes";
   return (
-    <Page title="邀请码" lead="新建 workspace 的资格按账号给：用过邀请码的账号最多可以建 5 个 workspace，每个最多邀请 5 个人。被邀请加入的人只能加入，自己要建也得有邀请码。一个邀请码只能用一次。">
-      <Section title={list ? `${list.length} 个，${usable} 个可用` : "邀请码"} actions={<Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>生成邀请码</Button>}>
-        <Failed error={codes.error} />
-        {!list ? !codes.error && <Loading label="正在读取…" fill={false} /> : list.length === 0 ? (
-          <div className={css.adminItem}><p className={`${shellCss.muted} ${css.adminMeta}`}>还没有邀请码。</p></div>
-        ) : (
-          <ul className={css.adminList}>
-            {list.map((c) => {
-              const state = codeState(c);
-              return (
-                <li key={c.code} className={css.adminItem}>
-                  <div className={css.adminHead}>
-                    <span className={pagesCss.listRowText}>
-                      <span className={pagesCss.listRowTitle}><span className={`${shellCss.mono} ${css.adminCode}`}>{c.code}</span>{c.note && <span className={css.adminNote}>{c.note}</span>}</span>
-                      <span className={shellCss.muted}>
-                        <Time stamp={stamp(c, "created_at")} />生成 · {c.used_at ? <>
-                          {c.used_by ? c.used_by.name || c.used_by.email : "已不在的人"} <Time stamp={stamp(c, "used_at")} />用它建了{c.workspace ? `「${c.workspace.name}」` : " workspace（已删除）"}
-                        </> : c.revoked_at ? <><Time stamp={stamp(c, "revoked_at")} />撤回</> : state.label === "已过期" ? <><Time stamp={stamp(c, "expires_at")} />过期</> : `${stamp(c, "expires_at")?.until}过期`}
-                      </span>
-                    </span>
-                    <Pill tone={state.tone}>{state.label}</Pill>
-                    {state.label === "可用" && <>
-                      <IconButton label="复制注册链接" icon={Copy} onClick={() => copy(c.url)} />
-                      <Button variant="ghost" onClick={() => setRevoking(c)}>撤回</Button>
-                    </>}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+    <div className={css.split} data-open={detail || undefined}>
+      <div className={`${pagesCss.page} ${css.listPage}`}>
+        <MobileBack to="/" label="管理后台" />
+        <header className={pagesCss.pageHead}>
+          <div><h1>{TITLE[list]}{view && <span className={css.total}>{view.total}</span>}</h1></div>
+          {list === "invite-codes" && <Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>生成邀请码</Button>}
+        </header>
+        <div className={css.toolbar}>
+          <label className={css.search}>
+            <Search {...ICON} />
+            <input className={controlsCss.input} value={query} placeholder={PLACEHOLDER[list]} aria-label="搜索" onChange={(e) => set("q", e.target.value)} />
+          </label>
+          {view && view.sorts.length > 1 && (
+            <label className={css.sort}>
+              <span className={shellCss.muted}>按</span>
+              <Select value={view.sort} onChange={(v) => set("sort", v === view.sorts[0]!.id ? null : v)} label="排序" options={view.sorts.map((s) => ({ value: s.id, label: s.label }))} />
+            </label>
+          )}
+        </div>
+        {view && (
+          <div className={css.filters} role="tablist">
+            {view.filters.map((f) => (
+              <button key={f.id} role="tab" aria-selected={view.filter === f.id} className={css.filter} data-on={view.filter === f.id || undefined}
+                onClick={() => set("filter", f.id === "all" ? null : f.id)}>{f.label}<span>{f.count}</span></button>
+            ))}
+          </div>
         )}
-      </Section>
-      {making && <NewCodeDialog account={account} onMade={() => {}} onClose={() => setMaking(false)} />}
-      <Confirm open={revoking !== null} onClose={() => setRevoking(null)} busy={revoke.busy} onConfirm={() => revoking && revoke.run(revoking)}
-        title={`撤回 ${revoking?.code ?? ""}？`} action="撤回邀请码"
-        description="撤回后这个邀请码就不能再用来新建 workspace 了。已经发出去的注册链接也会失效。" error={revoke.error?.message} />
-    </Page>
+        <Failed error={error} />
+        {!view ? !error && <Loading label="正在读取…" fill={false} /> : view.rows.length === 0 ? (
+          <p className={css.empty}>{query ? "没有找到" : "这里没有"}</p>
+        ) : (
+          <div className={css.list}>
+            {view.rows.map((row) => list === "invite-codes"
+              ? <CodeRow key={row.id} account={account} row={row} />
+              : <ItemRow key={row.id} list={list} row={row} open={row.id === id} to={`${PATH[list]}/${encodeURIComponent(row.id)}${search}`} />)}
+            {view.more && <button className={css.more} onClick={() => setLimit((n) => n + STEP)}>再显示 {Math.min(STEP, view.found - view.rows.length)} 条 · 共 {view.found} 条</button>}
+          </div>
+        )}
+      </div>
+      {detail && (list === "users"
+        ? <UserDetail key={id} account={account} id={id} close={`${PATH.users}${search}`} search={search} />
+        : <WorkspaceDetail key={id} account={account} id={id} close={`${PATH.workspaces}${search}`} />)}
+      {making && <NewCodeDialog account={account} onClose={() => setMaking(false)} />}
+    </div>
   );
 }
+
+function Marks({ marks }: { marks: Mark[] }) {
+  return <>{marks.map((m) => <Pill key={m.label} tone={m.tone}>{m.label}</Pill>)}</>;
+}
+
+/** A user or a workspace: two lines, what is off marked, when it was last seen at the end. */
+function ItemRow({ list, row, open, to }: { list: List; row: Row; open: boolean; to: string }) {
+  return (
+    <Link className={css.row} to={open ? to.replace(/\/[^/?]+(\?|$)/, "$1") : to} aria-current={open ? "page" : undefined}>
+      {row.person ? <Avatar account={row.person} size={28} /> : <span className={css.wsMark}>{[...row.title][0]}</span>}
+      <span className={css.rowText}>
+        <span className={css.rowLine1}>
+          <b>{row.title}</b>
+          <Marks marks={row.marks} />
+          <span className={css.rowTime}>
+            {list === "workspaces" && row.state && <StatusDot state={row.state as Presence} />}
+            {stamp(row, "last_seen") ? <Time stamp={stamp(row, "last_seen")} fixed /> : list === "users" ? "没来过" : ""}
+          </span>
+        </span>
+        <span className={css.rowLine2}>{row.line}</span>
+      </span>
+    </Link>
+  );
+}
+
+function CodeRow({ account, row }: { account: Account; row: Row }) {
+  const toast = useToast();
+  const [revoking, setRevoking] = useState(false);
+  const revoke = useAction(() => admin.revokeCode(account.sub, row.id), () => { setRevoking(false); toast("已撤回邀请码"); });
+  const copy = () => void navigator.clipboard.writeText(row.url ?? "").then(() => toast("已复制注册链接"));
+  const at = row.state === "used" ? stamp(row, "used_at") : row.state === "revoked" ? stamp(row, "revoked_at") : stamp(row, "created_at");
+  return (
+    <div className={css.row} data-static>
+      <span className={css.rowText}>
+        <span className={css.rowLine1}>
+          <b className={`${shellCss.mono} ${css.code}`}>{row.title}</b>
+          <Marks marks={row.marks} />
+          <span className={css.rowTime}>
+            {row.state === "open" ? <>
+              <IconButton label="复制注册链接" icon={Copy} onClick={copy} />
+              <Button variant="ghost" onClick={() => setRevoking(true)}>撤回</Button>
+            </> : <Time stamp={at} fixed />}
+          </span>
+        </span>
+        <span className={css.rowLine2}>{row.line || (row.state === "open" ? `${stamp(row, "expires_at")?.until ?? ""}过期` : "")}</span>
+      </span>
+      <Confirm open={revoking} onClose={() => setRevoking(false)} busy={revoke.busy} onConfirm={() => revoke.run()}
+        title={`撤回 ${row.title}？`} action="撤回邀请码"
+        description="撤回后这个邀请码就不能再用来新建 workspace 了。已经发出去的注册链接也会失效。" error={revoke.error?.message} />
+    </div>
+  );
+}
+
+// ── an item's page, beside its list ─────────────────────────────────────
+
+function Detail({ close, head, children }: { close: string; head: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <aside className={css.detail}>
+      <MobileBack to={close} label="返回列表" />
+      <div className={css.detailHead}>{head}<Link className={css.close} to={close} aria-label="关闭"><Close {...ICON} /></Link></div>
+      {children}
+    </aside>
+  );
+}
+
+function UserDetail({ account, id, close, search }: { account: Account; id: string; close: string; search: string }) {
+  const toast = useToast();
+  const { value: u, error } = useKept<UserPage>({ topic: "adminItem", account: account.sub, list: "users", id });
+  const mayCreate = useAction((on: boolean) => admin.setMayCreate(account.sub, id, on), (_, on) => toast(on ? "已开通，可以新建 workspace" : "已收回新建 workspace 的资格"));
+  const beta = useAction((on: boolean) => admin.setBeta(account.sub, id, on), (_, on) => toast(on ? "已开通测试版" : "已关闭测试版"));
+  const [blocking, setBlocking] = useState(false);
+  const block = useAction((on: boolean) => admin.block(account.sub, id, on), (_, on) => { setBlocking(false); toast(on ? "已封禁" : "已解封"); });
+  useEffect(() => { const e = mayCreate.error ?? beta.error; if (e) toast(`没能更改：${e.message}`); }, [mayCreate.error, beta.error, toast]);
+  if (!u) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label="正在读取…" fill={false} />}</aside>;
+  return (
+    <Detail close={close} head={<>
+      <Avatar account={u.person} size={40} />
+      <span className={css.detailTitle}><b>{u.title}</b><span>{u.email}</span></span>
+    </>}>
+      <dl className={css.kv}>
+        <dt>准入</dt><dd>{u.admission}{u.code && <span className={shellCss.muted}> · <span className={shellCss.mono}>{u.code}</span></span>}</dd>
+        <dt>首次登录</dt><dd><Time stamp={stamp(u, "created_at")} /></dd>
+        <dt>最近来访</dt><dd>{stamp(u, "last_seen") ? <Time stamp={stamp(u, "last_seen")} /> : "没来过"}</dd>
+        <dt>ID</dt><dd className={`${shellCss.mono} ${shellCss.muted}`}>{u.id}</dd>
+      </dl>
+      <div className={css.group}>Workspace {u.workspaces.length}</div>
+      {u.workspaces.length === 0 && <div className={css.line} data-quiet>不在任何 workspace</div>}
+      {u.workspaces.map((w) => (
+        <Link key={w.id} className={css.line} to={`${PATH.workspaces}/${encodeURIComponent(w.id)}${search}`}>
+          <span className={css.grow}>{w.name}</span><span className={css.lineAside}>{w.line}</span><ChevronRight {...ICON} />
+        </Link>
+      ))}
+      {!u.admin && <>
+        <div className={css.group}>资格</div>
+        {u.mayCreate !== null && (
+          <label className={css.line}>
+            <span className={css.grow}>可以新建 workspace<span className={css.hint}>{u.mayCreateHint}</span></span>
+            <Switch checked={mayCreate.busy ? Boolean(mayCreate.arg) : u.mayCreate} disabled={u.mayCreateFixed || mayCreate.busy} onChange={(on) => mayCreate.run(on)} label="可以新建 workspace" />
+          </label>
+        )}
+        {u.beta !== null && (
+          <label className={css.line}>
+            <span className={css.grow}>测试版<span className={css.hint}>能用 app.youdid.wtf</span></span>
+            <Switch checked={beta.busy ? Boolean(beta.arg) : u.beta} disabled={beta.busy} onChange={(on) => beta.run(on)} label="测试版" />
+          </label>
+        )}
+        {u.blocked !== null && (
+          <div className={css.actions}>
+            {u.blocked
+              ? <Button busy={block.busy} onClick={() => block.run(false)}>解封</Button>
+              : <Button variant="danger" onClick={() => setBlocking(true)}>封禁</Button>}
+          </div>
+        )}
+        {block.error && !blocking && <p className={controlsCss.fieldError} role="alert">{block.error.message}</p>}
+      </>}
+      <Confirm open={blocking} onClose={() => setBlocking(false)} busy={block.busy} onConfirm={() => block.run(true)}
+        title={`封禁 ${u.title}？`} action="封禁"
+        description="会立刻在所有设备上退出，之后也登录不了。workspace 和里面的东西不动，随时可以解封。" error={block.error?.message} />
+    </Detail>
+  );
+}
+
+function WorkspaceDetail({ account, id, close }: { account: Account; id: string; close: string }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const { value: w, error } = useKept<WorkspacePage>({ topic: "adminItem", account: account.sub, list: "workspaces", id });
+  const [deleting, setDeleting] = useState(false);
+  const remove = useAction(() => admin.deleteWorkspace(account.sub, id), () => { setDeleting(false); toast("已删除 workspace"); void navigate(close, { replace: true }); });
+  if (!w) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label="正在读取…" fill={false} />}</aside>;
+  return (
+    <Detail close={close} head={<>
+      <span className={`${css.wsMark} ${css.wsMarkLarge}`}>{[...w.title][0]}</span>
+      <span className={css.detailTitle}><b>{w.title}</b><span className={shellCss.mono}>{w.id}</span></span>
+    </>}>
+      <dl className={css.kv}>
+        <dt>创建</dt><dd>{w.creator ? <Link className={css.link} to={`${PATH.users}/${encodeURIComponent(w.creator.id)}`}>{w.creator.title}</Link> : "已不在的人"} · <Time stamp={stamp(w, "created_at")} /></dd>
+        <dt>人数</dt><dd>{w.people}</dd>
+      </dl>
+      <div className={css.group}>成员 {w.members.length}</div>
+      {w.members.map((m) => (
+        <Link key={m.id} className={css.line} to={`${PATH.users}/${encodeURIComponent(m.id)}`}>
+          <Avatar account={m.person} size={20} />
+          <span className={css.grow}>{m.title}</span>
+          <span className={css.lineAside}>{m.role}{stamp(m, "last_seen") && <> · <Time stamp={stamp(m, "last_seen")} fixed /></>}</span>
+          <ChevronRight {...ICON} />
+        </Link>
+      ))}
+      <div className={css.group}>Station {w.stations.length}</div>
+      {w.stations.length === 0 && <div className={css.line} data-quiet>还没有 station</div>}
+      {w.stations.map((s) => (
+        // still.fail cloud only knows when a station last came to it; whether it is up is for the devices to find out.
+        <div key={s.id} className={css.line}>
+          <StatusDot state={s.state} />
+          <span className={css.grow}>{s.name}</span>
+          <span className={css.lineAside}>
+            <span data-off={s.outdated || undefined}>{s.version ?? "版本未知"}</span> · {stamp(s, "last_seen") ? <Time stamp={stamp(s, "last_seen")} fixed /> : "没连过"}
+          </span>
+        </div>
+      ))}
+      {w.invitations.length > 0 && <>
+        <div className={css.group}>待接受的邀请 {w.invitations.length}</div>
+        {w.invitations.map((i) => (
+          <div key={i.id} className={css.line}>
+            <span className={css.grow}>{i.email}</span>
+            <span className={css.lineAside}>{i.line} · {stamp(i, "expires_at")?.until}过期</span>
+          </div>
+        ))}
+      </>}
+      <div className={css.actions}><Button variant="danger" onClick={() => setDeleting(true)}>删除 workspace</Button></div>
+      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
+        title={`删除「${w.title}」？`} action="删除 workspace"
+        description="成员都会被移出，它的 station 会断开、需要重新加入别的 workspace。删除后不能恢复。" error={remove.error?.message} />
+    </Detail>
+  );
+}
+
+// ── a new invite code ───────────────────────────────────────────────────
 
 const DAYS = [7, 14, 30, 90];
 
-function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(): void; onClose(): void }) {
+function NewCodeDialog({ account, onClose }: { account: Account; onClose(): void }) {
   const [note, setNote] = useState("");
   const [days, setDays] = useState("14");
-  const make = useAction(() => admin.createCode(account.sub, note, Number(days)), onMade);
+  const make = useAction(() => admin.createCode(account.sub, note, Number(days)));
   const made = make.result;
   return (
     <Dialog open onClose={onClose} wide title={made ? "邀请码已生成" : "生成邀请码"}
-      description={made ? `把邀请码或注册链接发给对方。只能用一次，${days} 天后过期。` : "对方登录 still.fail 后用它新建 workspace，这个账号从此就有资格，最多建 5 个。一个邀请码只能用一次。"}
+      description={made ? `把邀请码或注册链接发给对方。只能用一次，${days} 天后过期。` : "对方登录 still.fail 后用它新建 workspace，这个账号从此就有资格，最多建 5 个。一个邀请码只能用一次。已经登录过的人，可以直接在用户页给他开通。"}
       footer={made ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
         <Button variant="primary" busy={make.busy} onClick={() => make.run()}>生成</Button>
@@ -310,3 +446,4 @@ function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(
     </Dialog>
   );
 }
+

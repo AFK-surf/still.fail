@@ -10,7 +10,7 @@ import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, 
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api, socketToken } from "./api";
+import { adminApi, api, blockAccount, socketToken } from "./api";
 import { parseTraceparent, recordCall } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
@@ -172,7 +172,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       }
       const body = await readJson(request);
       if (typeof body.blocked !== "boolean") return reply({ error: "invalid_request" }, 400);
-      return env.ACCOUNTS.getByName(admin![1]).administer(body.blocked);
+      return blockAccount(env, admin![1]!, body.blocked);
     } catch {
       return reply({ error: "invalid_request" }, 400);
     }

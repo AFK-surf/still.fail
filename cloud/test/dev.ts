@@ -6,7 +6,7 @@
 // dist/cloud-preview (`pnpm run build:cloud`) as on Cloudflare. WebSockets
 // (/v1/events, the relay) are piped to miniflare itself, listening on PORT + 1.
 //   RELAY=http://127.0.0.1:3340 pnpm exec tsx test/dev.ts
-// The console's admin is alice (ADMIN_EMAIL=bob@example.test makes it bob).
+// The console's admin is alice (ADMIN_EMAIL=bob@example.test makes it bob). SEED=600 fills it with made-up people.
 // Development-only routes (never in the Worker), on either port:
 //   /__dev/login?user=alice  signs that account into the browser (on that origin) and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
@@ -70,6 +70,11 @@ const alice = h.as(aliceTokens);
 // alice may use the test channel (the console's switch does the same).
 await h.as(aliceTokens, "admin")("POST", `/v1/admin/users/${aliceTokens.subject}/beta`, { on: true });
 const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
+// SEED=600: that many made-up people, workspaces and stations, to see the admin's console as it is with many.
+if (Number(process.env.SEED) > 0) {
+  const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+  await directories.get(directories.idFromName("primary")).seedPeople(Number(process.env.SEED));
+}
 for (const name of ["studio", "mac-mini"]) {
   const enrollment = await (await alice("POST", `/v1/workspaces/${workspace.id}/enrollments`, { name })).json() as { command: string };
   console.log(`ENROLL ${enrollment.command}`);

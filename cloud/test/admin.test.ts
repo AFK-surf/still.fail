@@ -229,3 +229,61 @@ test("an account creates up to five workspaces, and a workspace lets in up to fi
     await h.close();
   }
 });
+
+test("the admin gives an account the right to create workspaces, or takes it back; blocks it; deletes a workspace", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    const alice = h.as(aliceTokens);
+    const aliceAdmin = h.as(aliceTokens, "admin");
+    const bobTokens = await h.login("bob");
+    const bob = h.as(bobTokens);
+    const carol = h.as(await h.login("carol"));
+    const userOf = async (email: string) => (((await (await aliceAdmin("GET", "/v1/admin/users")).json()) as any).users as any[]).find((u) => u.email === email);
+    const bobSub = (await userOf("bob@example.test")).sub;
+    const carolSub = (await userOf("carol@example.test")).sub;
+
+    // Bob, not let in, may not create; given the right, he may, with no code; it shows in the list.
+    assert.deepEqual([(await userOf("bob@example.test")).may_create, (await userOf("bob@example.test")).admission], [false, null]);
+    assert.equal((await bob("POST", "/v1/workspaces", { name: "Nope" })).status, 403);
+    assert.deepEqual(await (await aliceAdmin("POST", `/v1/admin/users/${bobSub}/may-create`, { on: true })).json(), { sub: bobSub, may_create: true });
+    assert.deepEqual([(await userOf("bob@example.test")).may_create, (await userOf("bob@example.test")).admission], [true, "granted"]);
+    const made = await (await bob("POST", "/v1/workspaces", { name: "Bob's" })).json() as any;
+    assert.ok(made.id);
+    // Once he has made one, taking the right back leaves him the right to make more (as a code's would).
+    assert.equal(((await (await aliceAdmin("POST", `/v1/admin/users/${bobSub}/may-create`, { on: false })).json()) as any).may_create, true);
+    assert.deepEqual([(await userOf("bob@example.test")).creator, (await userOf("bob@example.test")).admission], [true, "invitation"]);
+
+    // Carol, given it and having it taken back before making any, may not.
+    await aliceAdmin("POST", `/v1/admin/users/${carolSub}/may-create`, { on: true });
+    assert.equal(((await (await aliceAdmin("POST", `/v1/admin/users/${carolSub}/may-create`, { on: false })).json()) as any).may_create, false);
+    assert.equal((await userOf("carol@example.test")).admission, null);
+    assert.equal((await carol("POST", "/v1/workspaces", { name: "Nope" })).status, 403);
+    assert.equal((await aliceAdmin("POST", "/v1/admin/users/nobody/may-create", { on: true })).status, 404);
+    assert.equal((await aliceAdmin("POST", `/v1/admin/users/${carolSub}/may-create`, {})).status, 400);
+
+    // Blocked, bob is signed out and the list says so; let back, he signs in again. The admin cannot block herself.
+    assert.equal((await aliceAdmin("POST", `/v1/admin/users/${bobSub}/block`, { on: true })).status, 200);
+    assert.equal((await bob("GET", "/v1/me")).status, 401);
+    assert.equal((await userOf("bob@example.test")).blocked, true);
+    assert.equal((await aliceAdmin("POST", `/v1/admin/users/${bobSub}/block`, { on: false })).status, 200);
+    assert.equal((await userOf("bob@example.test")).blocked, false);
+    assert.equal((await h.as(await h.login("bob"))("GET", "/v1/me")).status, 200);
+    const aliceSub = (await userOf("alice@example.test")).sub;
+    assert.equal((await aliceAdmin("POST", `/v1/admin/users/${aliceSub}/block`, { on: true })).status, 403);
+
+    // The admin deletes bob's workspace; it is gone from his list and the console's.
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/delete`)).status, 200);
+    const { workspaces } = await (await aliceAdmin("GET", "/v1/admin/workspaces")).json() as any;
+    assert.ok(!workspaces.some((w: any) => w.id === made.id));
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/delete`)).status, 404);
+    // Members carry when they last came, and each workspace how many it may hold.
+    const home = await (await alice("POST", "/v1/workspaces", { name: "Home" })).json() as any;
+    const listed = ((await (await aliceAdmin("GET", "/v1/admin/workspaces")).json()) as any).workspaces.find((w: any) => w.id === home.id);
+    assert.ok(listed.members[0].last_seen > 0);
+    assert.equal(listed.seats, 200, "the admin's own hold more");
+    void bobTokens;
+  } finally {
+    await h.close();
+  }
+});

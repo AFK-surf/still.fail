@@ -27,6 +27,9 @@ export type Topic =
   | { topic: "jobLog"; station: string; job: string; lines: number }
   | { topic: "loginSessions"; account: string }
   | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" }
+  | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes"; query: string; filter?: string; sort?: string; limit?: number }
+  | { topic: "adminItem"; account: string; list: "users" | "workspaces"; id: string }
+  | { topic: "adminOverview"; account: string }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean }
   | { topic: "stations"; scope: string }
