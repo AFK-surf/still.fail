@@ -831,9 +831,17 @@ impl SessionActor {
             };
             // What changed in how it works since it was last told (migrations.rs): once, before what it is handed.
             let told = deps.store().told_notes(&self.key).unwrap_or(crate::migrations::latest());
-            let prompt = match crate::migrations::untold(told) {
-                notes if notes.is_empty() => prompt,
-                notes => {
+            let prompt = match told < crate::migrations::latest() {
+                false => prompt,
+                true => {
+                    // Today's whole instructions, for it to read when it needs the details: in its workspace.
+                    let row = deps.store().get_session(&self.key)?;
+                    let full = row.as_ref().map(|r| PathBuf::from(&r.workspace).join(".stillfail-instructions.md"));
+                    if let (Some(row), Some(full)) = (&row, &full) {
+                        let text = session_instructions(&row.workspace, row.cwd.as_deref(), &deps.repos_dir().to_string_lossy(), &deps.memory_path().to_string_lossy());
+                        let _ = std::fs::write(full, text);
+                    }
+                    let notes = crate::migrations::untold(told, &full.map(|f| f.to_string_lossy().into_owned()).unwrap_or_default());
                     let _ = deps.store().set_told_notes(&self.key, crate::migrations::latest());
                     format!("{notes}\n\n{prompt}")
                 }
