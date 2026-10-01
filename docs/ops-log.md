@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 模型勾选反馈：需发布 web（含新版 wasm core）和 Android；无需更新 station 或迁移数据。沿用 `profile.put`，core 给 Profile 增加可选 `modelsSaving`，旧 station 兼容。上线后在 Profile 勾选模型，确认立即勾选、保存中行内转圈、成功不退勾，失败回退并提示。
+
 - Android New chat 首条发送闪动（fix/android-new-chat-flash）：随下次 Android 发版；仅视图修复，无接口、数据迁移或 station/cloud 顺序要求。浅色/深色点 New chat 发首条消息，输入框底色不应闪灰。Studio 完整 Android 检查和两项逐帧回归已通过，原版回归均能在第 2 帧捕获灰闪。
 
 - 安卓菜单动效（android-menu-motion）：只改 Android 共用 MenuHost/SheetHost，需要发安卓包；无协议、core 或数据变化。修复首次展开跳过动画、底部菜单遮罩突变与滑入前空程；菜单缩放及底部菜单位移改为弹簧减速，连续开关承接当前速度。studio 完整检查通过，MenuMotionTest 浅深色展开/收起/快速重开录屏已获用户认可。发版后检查首页筛选、长按菜单和附件底部菜单进出动效。
