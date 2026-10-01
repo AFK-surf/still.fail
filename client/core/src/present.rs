@@ -939,9 +939,13 @@ mod tests {
             "profiles": [], "choices": [], "attention": [], "turns": [], "threads": [], "jobs": []
         });
         let checked = stillfail_shapes::conform::<stillfail_shapes::ChatAgent>(agent).unwrap();
-        assert_eq!(checked["status"], "decision");
+        assert_eq!(checked["status"], "block");
         assert_eq!(checked["badge"], "block");
-        assert_eq!(checked["session"]["statusText"], "等你决定");
+        assert_eq!(checked["session"]["statusText"], "要你帮忙");
+        // Older cores emitted decision: the shape must accept those values too.
+        let mut legacy = checked;
+        legacy["status"] = json!("decision");
+        assert_eq!(stillfail_shapes::conform::<stillfail_shapes::ChatAgent>(legacy).unwrap()["status"], "decision");
     }
 
     #[test]
