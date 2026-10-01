@@ -6,8 +6,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64;
 use futures::FutureExt;
 use futures::future::{LocalBoxFuture, Shared};
 use serde_json::{Value, json};
@@ -74,7 +72,7 @@ impl Asks {
             Ask::AppUpdate { platform, version, now } => self.update(&platform, version, now, self.host.beta()).await,
             Ask::Picture { url } => {
                 let (kind, bytes) = self.picture(&url).await?;
-                Ok(json!({ "type": kind, "bytes": BASE64.encode(bytes) }))
+                Ok(json!({ "type": kind, "bytes": crate::core::encode_bytes(self.host.as_ref(), bytes).await? }))
             }
             Ask::Buddies => Ok(buddies()),
             Ask::DevSignIn { user } => {

@@ -67,6 +67,20 @@ pub const SOCKET_IDLE_MS: u64 = 2 * crate::host::SOCKET_PING_MS + 10_000;
 /// The subprotocol still.fail cloud's `/v1/events` answers with; the token travels as a second one.
 pub const EVENTS_PROTOCOL: &str = "stillfail-events";
 
+pub struct PreparedMessage(Prepared);
+
+enum Prepared {
+    Call { id: RequestId, name: String, asked: Option<Value>, call: Result<Call> },
+    Other(ClientMessage),
+}
+
+/// JSON is already decoded here; parameter validation and large base64 inputs can be prepared by a native worker.
+impl PreparedMessage {
+    pub fn call_id(&self) -> Option<RequestId> {
+        match &self.0 { Prepared::Call { id, .. } => Some(*id), Prepared::Other(_) => None }
+    }
+}
+
 pub struct Core {
     inner: Rc<Inner>,
     next_client: Cell<ClientId>,
@@ -336,10 +350,25 @@ impl Core {
 
     /// A message from a UI. Answers and values go out through `Host::emit`.
     pub fn receive(&self, client: ClientId, message: ClientMessage) {
-        match message {
+        self.receive_prepared(client, Self::prepare(message));
+    }
+
+    /// Pure input work, independent of core state. Native callers run this before enqueueing a command.
+    pub fn prepare(message: ClientMessage) -> PreparedMessage {
+        PreparedMessage(match message {
             ClientMessage::Call { id, call: name, params } => {
                 let asked = (!crate::doing::heavy(&name)).then(|| params.clone());
-                match parse_call(&name, params) {
+                let call = parse_call(&name, params);
+                Prepared::Call { id, name, asked, call }
+            }
+            other => Prepared::Other(other),
+        })
+    }
+
+    pub fn receive_prepared(&self, client: ClientId, message: PreparedMessage) {
+        match message.0 {
+            Prepared::Call { id, name, asked, call } => {
+                match call {
                     Err(error) => self.inner.host.emit(client, answer(id, Err(error))),
                     Ok(call) => {
                         // Under way from now until it answers, for every page to show where it is (doing.rs).
@@ -407,9 +436,10 @@ impl Core {
                     }
                 }
             }
-            ClientMessage::Subscribe { id, subscribe } => self.inner.store.subscribe(client, id, subscribe),
-            ClientMessage::Unsubscribe { id, .. } => self.inner.store.unsubscribe(client, id),
-            ClientMessage::Cancel { id, .. } => {
+            Prepared::Other(ClientMessage::Subscribe { id, subscribe }) => self.inner.store.subscribe(client, id, subscribe),
+            Prepared::Other(ClientMessage::Unsubscribe { id, .. }) => self.inner.store.unsubscribe(client, id),
+            Prepared::Other(ClientMessage::Call { .. }) => unreachable!("calls are prepared"),
+            Prepared::Other(ClientMessage::Cancel { id, .. }) => {
                 let call = self.inner.calls.borrow_mut().remove(&(client, id));
                 if let Some(call) = call {
                     call.abort();
@@ -776,3 +806,9 @@ type Progress = Rc<dyn Fn(Value)>;
 
 #[cfg(test)]
 mod tests;
+
+/// Large API outputs are converted away from the native event loop, before their JSON is handed to its output lane.
+pub(crate) async fn encode_bytes(host: &dyn Host, bytes: Vec<u8>) -> Result<String> {
+    crate::host::background(host, move || BASE64.encode(bytes)).await
+        .map_err(|error| CoreError::new("encode", error.0))
+}

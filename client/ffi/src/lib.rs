@@ -3,7 +3,7 @@
 //! with a `LocalSet`, since the core is `!Send` — and returns an
 //! [`StillFailCoreFfi`] the app feeds with each UI's messages. Those calls only
 //! post to the core thread, so they never block the caller; everything the
-//! core says comes back on the core thread through
+//! core says comes back on output threads through
 //! `listener.on_message(client, json)`. Messages cross as JSON strings.
 //!
 //! If the core panics it is finished: every connected client gets
@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use stillfail_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host};
+use stillfail_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host, PreparedMessage};
 use serde_json::{Value, json};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
@@ -26,7 +26,7 @@ use crate::host::{NativeHost, panic_message};
 
 uniffi::setup_scaffolding!();
 
-/// Receives what the core says to a client. Called on the core thread: hand the message on, do not work here.
+/// Receives what the core says to a client. Data and API output threads call this concurrently; hand messages on.
 #[uniffi::export(callback_interface)]
 pub trait CoreListener: Send + Sync {
     fn on_message(&self, client: u64, json: String);
@@ -42,15 +42,39 @@ pub enum StartError {
 /// What the app's threads post to the core thread.
 pub(crate) enum Command {
     Connect(ClientId),
-    Receive(ClientId, String),
+    Receive(ClientId, PreparedMessage),
+    Invalid(ClientId, CoreMessage),
     Disconnect(ClientId),
     /// A task on the core thread panicked.
     Fatal(String),
 }
 
+/// JSON from a UI is decoded on its own thread before it reaches the core's event loop.
+/// All input commands share this queue so connect/receive/disconnect keep their order.
+enum Input {
+    Connect(ClientId),
+    Receive(ClientId, String),
+    Disconnect(ClientId),
+}
+
+fn decode_input(input: Input) -> Option<Command> {
+    match input {
+        Input::Connect(client) => Some(Command::Connect(client)),
+        Input::Disconnect(client) => Some(Command::Disconnect(client)),
+        Input::Receive(client, json) => match serde_json::from_str::<ClientMessage>(&json) {
+            Ok(message) => Some(Command::Receive(client, Core::prepare(message))),
+            Err(error) => {
+                let id = serde_json::from_str::<Value>(&json).ok()?.get("id")?.as_u64()?;
+                let error = CoreError::new("bad_message", format!("无法识别的消息：{error}"));
+                Some(Command::Invalid(client, CoreMessage::Error { id, error }))
+            }
+        },
+    }
+}
+
 #[derive(uniffi::Object)]
 pub struct StillFailCoreFfi {
-    commands: UnboundedSender<Command>,
+    commands: std::sync::mpsc::Sender<Input>,
     /// Held while a connect is posted, so the ids given out reach the core in their order.
     next_client: Mutex<ClientId>,
 }
@@ -69,13 +93,26 @@ pub fn start_as(data_dir: String, cloud_origin: String, beta: bool, listener: Bo
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir).map_err(|e| StartError::Io(format!("无法创建数据目录 {}：{e}", data_dir.display())))?;
     let (commands, queue) = mpsc::unbounded_channel();
+    let (input, inputs) = std::sync::mpsc::channel();
+    let decoded = commands.clone();
+    std::thread::Builder::new().name("stillfail-input".into()).spawn(move || {
+        for input in inputs {
+            let command = match std::panic::catch_unwind(AssertUnwindSafe(|| decode_input(input))) {
+                Ok(command) => command,
+                Err(panic) => { let _ = decoded.send(Command::Fatal(panic_message(&*panic))); break; }
+            };
+            if let Some(command) = command {
+                if decoded.send(command).is_err() { break; }
+            }
+        }
+    }).map_err(|e| StartError::Io(format!("无法启动消息解析线程：{e}")))?;
     let listener: Arc<dyn CoreListener> = Arc::from(listener);
     let host_commands = commands.clone();
     std::thread::Builder::new()
         .name("stillfail-core".into())
         .spawn(move || run(data_dir, cloud_origin.trim_end_matches('/').to_string(), beta, listener, host_commands, queue))
         .map_err(|e| StartError::Io(format!("无法启动核心线程：{e}")))?;
-    Ok(Arc::new(StillFailCoreFfi { commands, next_client: Mutex::new(1) }))
+    Ok(Arc::new(StillFailCoreFfi { commands: input, next_client: Mutex::new(1) }))
 }
 
 #[uniffi::export]
@@ -85,18 +122,18 @@ impl StillFailCoreFfi {
         let mut next = self.next_client.lock().unwrap_or_else(|e| e.into_inner());
         let client = *next;
         *next += 1;
-        let _ = self.commands.send(Command::Connect(client));
+        let _ = self.commands.send(Input::Connect(client));
         client
     }
 
     /// One message from a UI (`{ id, call, params }`, `{ id, subscribe }`, `{ id, unsubscribe }`) as JSON.
     pub fn receive(&self, client: u64, json: String) {
-        let _ = self.commands.send(Command::Receive(client, json));
+        let _ = self.commands.send(Input::Receive(client, json));
     }
 
     /// The UI went away: its subscriptions end.
     pub fn disconnect(&self, client: u64) {
-        let _ = self.commands.send(Command::Disconnect(client));
+        let _ = self.commands.send(Input::Disconnect(client));
     }
 }
 
@@ -137,29 +174,20 @@ async fn serve(host: Rc<NativeHost>, mut queue: UnboundedReceiver<Command>, clie
                 debug_assert_eq!(id, client);
                 clients.insert(client);
             }
-            Command::Receive(client, json) => receive(&core, host.as_ref(), client, &json),
+            Command::Receive(client, message) => {
+                if let Some(id) = message.call_id() { host.call_started(client, id); }
+                core.receive_prepared(client, message);
+            }
+            Command::Invalid(client, error) => host.emit(client, error),
             Command::Disconnect(client) => {
                 clients.remove(&client);
+                host.client_left(client);
                 core.disconnect(client);
             }
             Command::Fatal(reason) => return Some(reason),
         }
     }
     None
-}
-
-fn receive(core: &Core, host: &dyn Host, client: ClientId, json: &str) {
-    match serde_json::from_str::<ClientMessage>(json) {
-        Ok(message) => core.receive(client, message),
-        Err(error) => {
-            // Answer only what can be answered: without an id nobody is waiting.
-            let id = serde_json::from_str::<Value>(json).ok().and_then(|v| v.get("id").and_then(Value::as_u64));
-            if let Some(id) = id {
-                let error = CoreError::new("bad_message", format!("无法识别的消息：{error}"));
-                host.emit(client, CoreMessage::Error { id, error });
-            }
-        }
-    }
 }
 
 #[cfg(test)]

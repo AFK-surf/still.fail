@@ -162,8 +162,9 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
     suspend fun upload(name: String, bytes: ByteArray, width: Long?, height: Long?): Attachment {
+        val encoded = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.encodeToString(bytes, Base64.NO_WRAP) }
         val saved = decode(Attachment.serializer(), core.call("station.upload", buildJsonObject {
-            put("station", station); put("name", name); put("bytes", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            put("station", station); put("name", name); put("bytes", encoded)
         }))
         // An image's size travels with it, so every page can hold its place before it loads.
         return if (width != null && height != null) saved.copy(width = width, height = height) else saved
@@ -172,7 +173,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** A file sent to the session. */
     suspend fun file(key: String, name: String): ByteArray {
         val answer = core.call("station.file", buildJsonObject { put("station", station); put("key", key); put("name", name) }).jsonObject
-        return Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
     }
 
     /**
@@ -192,7 +193,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
             if (loaded != null) onProgress(loaded, (o["total"] as? JsonPrimitive)?.content?.toLongOrNull())
         }).jsonObject
         val type = (answer["type"] as? JsonPrimitive)?.content ?: ""
-        return type to Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
+        return type to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
     }
 
     /** What a visualization's widget kept (widget.state; null when nothing, or an older station that keeps nothing). */

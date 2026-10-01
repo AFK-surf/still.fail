@@ -410,11 +410,11 @@ impl Inner {
                     }
                 };
                 let (kind, bytes) = self.stations.file(&StationAddr::parse(&station)?, &key, &name, thumb, report).await?;
-                Ok(json!({ "type": kind, "bytes": BASE64.encode(bytes) }))
+                Ok(json!({ "type": kind, "bytes": encode_bytes(self.host.as_ref(), bytes).await? }))
             }
             Call::StationPreview { station, port, method, path, headers, body, stream: false } => {
                 let (status, headers, bytes) = self.stations.preview(&StationAddr::parse(&station)?, port, &method, &path, headers, body).await?;
-                Ok(json!({ "status": status, "headers": headers, "body": BASE64.encode(bytes) }))
+                Ok(json!({ "status": status, "headers": headers, "body": encode_bytes(self.host.as_ref(), bytes).await? }))
             }
             // As it comes: `{head: {status, headers}}`, then `{chunk}` (base64) for each piece of the body; the answer
             // (null) once it ended. Cancelling the call stops it.
@@ -422,7 +422,7 @@ impl Inner {
                 let (status, headers, mut chunks) = self.stations.preview_stream(&StationAddr::parse(&station)?, port, &method, &path, headers, body).await?;
                 progress(json!({ "head": { "status": status, "headers": headers } }));
                 while let Some(chunk) = chunks.next().await {
-                    progress(json!({ "chunk": BASE64.encode(chunk?) }));
+                    progress(json!({ "chunk": encode_bytes(self.host.as_ref(), chunk?).await? }));
                 }
                 Ok(Value::Null)
             }
@@ -458,7 +458,7 @@ impl Inner {
                             for frame in station::SocketFrame::take(&mut buf) {
                                 match frame {
                                     station::SocketFrame::Text(text) => progress(json!({ "text": text })),
-                                    station::SocketFrame::Binary(bytes) => progress(json!({ "binary": BASE64.encode(bytes) })),
+                                    station::SocketFrame::Binary(bytes) => progress(json!({ "binary": encode_bytes(self.host.as_ref(), bytes).await? })),
                                     station::SocketFrame::Close(code, reason) => return Ok(json!({ "code": code, "reason": reason })),
                                 }
                             }

@@ -4,6 +4,7 @@
 //! on the disk.
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -29,7 +30,9 @@ pub struct NativeHost {
     /// Its pool of connections; replaced when they are taken for gone (`reset_connections`).
     http: RefCell<reqwest::Client>,
     storage: Storage,
-    listener: Arc<dyn CoreListener>,
+    data_out: mpsc::Sender<(ClientId, CoreMessage)>,
+    api_out: mpsc::Sender<(ClientId, CoreMessage)>,
+    calls: RefCell<HashSet<(ClientId, u64)>>,
     /// Back to the core thread's loop: a task that panicked ends this core.
     commands: UnboundedSender<Command>,
     /// Zero of the monotonic clock.
@@ -40,7 +43,38 @@ impl NativeHost {
     pub fn new(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>) -> NativeHost {
         let tls = Arc::new(tls_config());
         let http = RefCell::new(http_client(&tls));
-        NativeHost { cloud_origin, beta, tls, http, storage: Storage::new(data_dir), listener, commands, started: std::time::Instant::now() }
+        let data_out = output("stillfail-data-out", listener.clone(), commands.clone());
+        let api_out = output("stillfail-api-out", listener, commands.clone());
+        NativeHost { cloud_origin, beta, tls, http, storage: Storage::new(data_dir), data_out, api_out,
+            calls: RefCell::new(HashSet::new()), commands, started: std::time::Instant::now() }
+    }
+
+    pub fn call_started(&self, client: ClientId, id: u64) { self.calls.borrow_mut().insert((client, id)); }
+    pub fn client_left(&self, client: ClientId) { self.calls.borrow_mut().retain(|(c, _)| *c != client); }
+}
+
+/// Both serialization and the foreign callback can copy megabytes. Neither runs on the core event loop.
+/// An API's progress and terminal reply use the same queue; topic values/deltas keep their own FIFO order.
+fn output(name: &str, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>) -> mpsc::Sender<(ClientId, CoreMessage)> {
+    let (send, messages) = mpsc::channel();
+    std::thread::Builder::new().name(name.into()).spawn(move || {
+        for (client, message) in messages {
+            let sent = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                let json = serde_json::to_string(&message).unwrap_or_else(|error| {
+                    let id = message_id(&message);
+                    serde_json::to_string(&CoreMessage::Error { id, error: CoreError::new("host", format!("无法传给界面：{error}")) }).expect("an error serializes")
+                });
+                listener.on_message(client, json);
+            }));
+            if let Err(panic) = sent { let _ = commands.send(Command::Fatal(panic_message(&*panic))); break; }
+        }
+    }).expect("core output thread");
+    send
+}
+
+fn message_id(message: &CoreMessage) -> u64 {
+    match message {
+        CoreMessage::Ok { id, .. } | CoreMessage::Error { id, .. } | CoreMessage::Value { id, .. } | CoreMessage::Delta { id, .. } => *id,
     }
 }
 
@@ -274,16 +308,17 @@ impl Host for NativeHost {
         getrandom::fill(buf).expect("the system's random source");
     }
 
+    fn background(&self, task: Box<dyn FnOnce() + Send>) {
+        tokio::task::spawn_blocking(task);
+    }
+
     fn emit(&self, client: ClientId, message: CoreMessage) {
-        let json = serde_json::to_string(&message).unwrap_or_else(|error| {
-            // Someone is waiting on this id: tell them instead of dropping it.
-            let id = match &message {
-                CoreMessage::Ok { id, .. } | CoreMessage::Error { id, .. } | CoreMessage::Value { id, .. } | CoreMessage::Delta { id, .. } => *id,
-            };
-            let error = CoreMessage::Error { id, error: CoreError::new("host", format!("无法传给界面：{error}")) };
-            serde_json::to_string(&error).expect("an error serializes")
-        });
-        self.listener.on_message(client, json);
+        let key = (client, message_id(&message));
+        let mut calls = self.calls.borrow_mut();
+        let api = calls.contains(&key);
+        if matches!(&message, CoreMessage::Ok { .. } | CoreMessage::Error { .. }) { calls.remove(&key); }
+        let queue = if api { &self.api_out } else { &self.data_out };
+        let _ = queue.send((client, message));
     }
 }
 
@@ -464,6 +499,61 @@ mod tests {
 
             let refused = websocket(Arc::new(tls_config()), "ws://127.0.0.1:9/".into(), vec![]).await;
             assert!(refused.is_err());
+        });
+    }
+
+    #[test]
+    fn a_blocked_api_callback_does_not_hold_data_and_keeps_progress_order() {
+        use std::time::Duration;
+        use serde_json::{Value, json};
+        struct SlowApi {
+            entered: mpsc::Sender<()>,
+            release: std::sync::Mutex<mpsc::Receiver<()>>,
+            seen: mpsc::Sender<Value>,
+        }
+        impl CoreListener for SlowApi {
+            fn on_message(&self, _: u64, text: String) {
+                let message: Value = serde_json::from_str(&text).unwrap();
+                if message["id"] == 7 && message.get("value").is_some() {
+                    self.entered.send(()).unwrap();
+                    self.release.lock().unwrap().recv_timeout(Duration::from_secs(5)).unwrap();
+                }
+                self.seen.send(message).unwrap();
+            }
+        }
+        let (entered, entered_rx) = mpsc::channel();
+        let (release, release_rx) = mpsc::channel();
+        let (seen, seen_rx) = mpsc::channel();
+        let (commands, _) = tokio::sync::mpsc::unbounded_channel();
+        let data = tempfile::tempdir().unwrap();
+        let host = NativeHost::new(data.path().into(), String::new(), false,
+            Arc::new(SlowApi { entered, release: std::sync::Mutex::new(release_rx), seen }), commands);
+        host.call_started(1, 7);
+        host.emit(1, CoreMessage::Value { id: 7, value: json!("chunk") });
+        entered_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        host.emit(1, CoreMessage::Ok { id: 7, ok: json!("finished") });
+        host.emit(1, CoreMessage::Value { id: 8, value: json!("data continues") });
+        let data = seen_rx.recv_timeout(Duration::from_secs(2)).expect("data blocked by API callback");
+        assert_eq!(data["id"], 8);
+        release.send(()).unwrap();
+        let progress = seen_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let done = seen_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!(progress["value"], "chunk");
+        assert_eq!(done["ok"], "finished");
+    }
+
+    #[test]
+    fn pure_cpu_work_runs_outside_the_core_event_loop() {
+        struct Quiet;
+        impl CoreListener for Quiet { fn on_message(&self, _: u64, _: String) {} }
+        let (commands, _) = tokio::sync::mpsc::unbounded_channel();
+        let data = tempfile::tempdir().unwrap();
+        let host = NativeHost::new(data.path().into(), String::new(), false, Arc::new(Quiet), commands);
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        runtime.block_on(async {
+            let core_thread = std::thread::current().id();
+            let worker = stillfail_core::host::background(&host, || std::thread::current().id()).await.unwrap();
+            assert_ne!(core_thread, worker);
         });
     }
 

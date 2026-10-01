@@ -70,6 +70,65 @@ class StillFailCoreTest {
     }
 
     @Test
+    fun streamedProgressArrivesBeforeItsAnswer() = runTest {
+        val engines = FakeEngines(); val core = core(engines)
+        val events = mutableListOf<String>()
+        val call = async {
+            core.call("stream", obj("{}")) { events += it.toString() }.also { events += it.toString() }
+        }
+        runCurrent()
+        engines.last.reply("""{"id":1,"value":"chunk-1"}""")
+        engines.last.reply("""{"id":1,"value":"chunk-2"}""")
+        engines.last.reply("""{"id":1,"ok":"done"}""")
+        runCurrent(); call.await()
+        assertEquals(listOf("\"chunk-1\"", "\"chunk-2\"", "\"done\""), events)
+    }
+
+    @Test
+    fun aSlowReplyParserCannotBlockTopicUpdatesOrNewCalls() {
+        val parsing = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val update = java.util.concurrent.CountDownLatch(1)
+        val sent = java.util.concurrent.CopyOnWriteArrayList<JsonObject>()
+        lateinit var deliver: (String) -> Unit
+        val core = StillFailCore({ callback ->
+            object : Engine {
+                init { deliver = { callback(this, it) } }
+                override fun connect() = 1L
+                override fun receive(client: Long, json: String) { sent += obj(json) }
+                override fun close() {}
+            }
+        }, parseMessage = { raw ->
+            if (raw.contains("slow-response")) {
+                parsing.countDown()
+                check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            }
+            obj(raw)
+        }).also { it.open() }
+        kotlinx.coroutines.runBlocking {
+            val subscription = launch(kotlinx.coroutines.Dispatchers.Default) {
+                core.topic(obj("""{"topic":"accounts"}""")).collect { if (it.value != null) update.countDown() }
+            }
+            val call = async(kotlinx.coroutines.Dispatchers.Default) { core.call("slow") }
+            try {
+                kotlinx.coroutines.withTimeout(5000) { while (sent.size < 2) kotlinx.coroutines.delay(5) }
+                val callId = sent.first { it["call"] != null }.getValue("id")
+                val topicId = sent.first { it["subscribe"] != null }.getValue("id")
+                deliver("""{"id":$callId,"ok":"slow-response"}""")
+                assertTrue(parsing.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                deliver("""{"id":$topicId,"value":[]}""")
+                assertTrue("topic held behind API parsing", update.await(2, java.util.concurrent.TimeUnit.SECONDS))
+                core.focus(obj("""{"visible":true}"""))
+                kotlinx.coroutines.withTimeout(2000) { while (sent.size < 3) kotlinx.coroutines.delay(5) }
+            } finally {
+                release.countDown()
+                subscription.cancel()
+            }
+            assertEquals(json("\"slow-response\""), call.await())
+        }
+    }
+
+    @Test
     fun callObserversFollowTheirOwnCoroutineAcrossSuspension() = runTest {
         val engines = FakeEngines(); val core = core(engines)
         val first = mutableListOf<String>(); val second = mutableListOf<String>()

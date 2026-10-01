@@ -52,6 +52,7 @@ data class TopicState(val value: JsonElement?, val error: CoreException?, val lo
 class StillFailCore internal constructor(
     private val engines: EngineFactory,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val parseMessage: (String) -> JsonObject = { Json.parseToJsonElement(it).jsonObject },
 ) {
     companion object {
         private val started = Mutex()
@@ -81,16 +82,22 @@ class StillFailCore internal constructor(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     /** Every bit of state below is touched only here, one thing at a time, in the order messages arrived. */
     private val confined = dispatcher.limitedParallelism(1)
+    // Payload-sized JSON/FFI work must not occupy the queue that owns subscriptions and calls.
+    // API replies have their own lane, so a large file does not hold topic updates behind it.
+    private val incoming = dispatcher.limitedParallelism(1)
+    private val replies = dispatcher.limitedParallelism(1)
+    private val outgoing = dispatcher.limitedParallelism(1)
 
     private var engine: Engine? = null
     private var client = 0L
     private var nextId = 1L
     private val calls = HashMap<Long, CompletableDeferred<JsonElement>>()
+    private val replyIds = ConcurrentHashMap.newKeySet<Long>()
     /** What calls that say how they go (`{id, value}` before their answer: a streamed preview, a preview socket) hear. */
     private val progress = HashMap<Long, (JsonElement) -> Unit>()
     private val subs = HashMap<Long, Subscription>()
     /** Calls made while the core is being restarted, sent once it is up. */
-    private val queue = ArrayList<String>()
+    private val queue = ArrayList<JsonObject>()
     private var failures = 0
     private val topics = ConcurrentHashMap<JsonObject, Flow<TopicState>>()
     /** Where the app's attention is, as told last (`client.focus`): told again to a core started anew. */
@@ -115,7 +122,7 @@ class StillFailCore internal constructor(
             val chat = next["chat"] as? JsonObject
             if (left != null && chat != null && sameChat(chat, left)) next["chat"] = JsonNull
             focus = JsonObject(next)
-            send(buildJsonObject { put("id", nextId++); put("call", "client.focus"); put("params", part) }.toString())
+            send(buildJsonObject { put("id", nextId++); put("call", "client.focus"); put("params", part) })
         }
     }
 
@@ -125,6 +132,14 @@ class StillFailCore internal constructor(
             ((at(a, "thread") != null && at(a, "thread") == at(b, "thread")) || (at(a, "session") != null && at(a, "session") == at(b, "session")))
     }
 
+    /** Diagnostics must not hold up the topic that encountered them while the core records the error. */
+    fun reportError(source: String, message: String) {
+        scope.launch {
+            try { call("client.error", buildJsonObject { put("source", source); put("message", message) }) }
+            catch (_: CoreException) { /* The page already exposes the original decode failure. */ }
+        }
+    }
+
     /** One call of docs/client-core.md → Calls. Throws [CoreException]. */
     suspend fun call(name: String, params: JsonObject = buildJsonObject {}): JsonElement {
         coroutineContext[CallObserver]?.started?.invoke(name, params)
@@ -132,13 +147,14 @@ class StillFailCore internal constructor(
         val id = withContext(confined) {
             val id = nextId++
             calls[id] = answer
-            send(buildJsonObject { put("id", id); put("call", name); put("params", params) }.toString())
+            replyIds.add(id)
+            send(buildJsonObject { put("id", id); put("call", name); put("params", params) })
             id
         }
         try {
             return answer.await()
         } catch (e: CancellationException) {
-            scope.launch(confined) { calls.remove(id) }
+            scope.launch(confined) { calls.remove(id); replyIds.remove(id) }
             throw e
         }
     }
@@ -154,8 +170,9 @@ class StillFailCore internal constructor(
         val id = withContext(confined) {
             val id = nextId++
             calls[id] = answer
+            replyIds.add(id)
             progress[id] = onProgress
-            send(buildJsonObject { put("id", id); put("call", name); put("params", params) }.toString())
+            send(buildJsonObject { put("id", id); put("call", name); put("params", params) })
             id
         }
         try {
@@ -163,7 +180,8 @@ class StillFailCore internal constructor(
         } catch (e: CancellationException) {
             scope.launch(confined) {
                 progress.remove(id)
-                if (calls.remove(id) != null) send(buildJsonObject { put("id", id); put("cancel", true) }.toString())
+                replyIds.remove(id)
+                if (calls.remove(id) != null) send(buildJsonObject { put("id", id); put("cancel", true) })
             }
             throw e
         }
@@ -209,7 +227,19 @@ class StillFailCore internal constructor(
     /** Starts a core and brings it up to date: every topic subscribed, queued calls sent. */
     internal fun open() {
         val next = try {
-            engines { from, json -> scope.launch(confined) { if (from === engine) receive(json) } }
+            engines { from, json ->
+                // CoreMessage writes id, then ok/value/delta/error (client/core/src/protocol.rs).
+                // Inspect only that bounded prefix, never the text or base64 payload itself.
+                val id = MESSAGE_ID.find(json.take(128))?.groupValues?.get(1)?.toLongOrNull()
+                val lane = if (id != null && id in replyIds) replies else incoming
+                scope.launch(lane) {
+                    val message = try { parseMessage(json) } catch (e: Exception) {
+                        android.util.Log.e("StillFailCore", "unreadable message from the core", e)
+                        return@launch
+                    }
+                    withContext(confined) { if (from === engine) receive(message) }
+                }
+            }
         } catch (e: Exception) {
             android.util.Log.e("StillFailCore", "the core did not start", e)
             retry()
@@ -221,7 +251,7 @@ class StillFailCore internal constructor(
         if (focus.isNotEmpty()) post(buildJsonObject { put("id", nextId++); put("call", "client.focus"); put("params", focus) }.toString())
         val queued = queue.toList()
         queue.clear()
-        queued.forEach(::post)
+        queued.forEach(::send)
     }
 
     private fun restart(reason: String) {
@@ -231,6 +261,7 @@ class StillFailCore internal constructor(
         // Whether they ran is unknown: the caller decides whether to try again.
         val failed = calls.values.toList()
         calls.clear()
+        replyIds.clear()
         progress.clear()
         queue.clear()
         failed.forEach { it.completeExceptionally(CoreException("core_restarted", "核心已重启，请重试", null)) }
@@ -247,21 +278,20 @@ class StillFailCore internal constructor(
         }
     }
 
-    private fun send(json: String) {
-        if (engine != null) post(json) else queue.add(json)
+    private fun send(message: JsonObject) {
+        val target = engine
+        val to = client
+        if (target == null) queue.add(message)
+        else scope.launch(outgoing) { target.receive(to, message.toString()) }
     }
 
     private fun post(json: String) {
-        engine?.receive(client, json)
+        val target = engine ?: return
+        val to = client
+        scope.launch(outgoing) { target.receive(to, json) }
     }
 
-    private fun receive(json: String) {
-        val message = try {
-            Json.parseToJsonElement(json).jsonObject
-        } catch (e: Exception) {
-            android.util.Log.e("StillFailCore", "unreadable message from the core", e)
-            return
-        }
+    private fun receive(message: JsonObject) {
         message["fatal"]?.let {
             restart(it.jsonPrimitive.contentOrNull ?: "")
             return
@@ -272,10 +302,18 @@ class StillFailCore internal constructor(
         val error = message["error"]?.let(::coreException)
         // How a call goes, before its answer.
         val going = message["value"]
-        if (going != null && error == null && message["ok"] == null) progress[id]?.let { it(going); return }
+        if (going != null && error == null && message["ok"] == null) progress[id]?.let { callback ->
+            scope.launch(replies) { callback(going) }
+            return
+        }
         progress.remove(id)
         calls.remove(id)?.let { call ->
-            if (error != null) call.completeExceptionally(error) else call.complete(message["ok"] ?: JsonNull)
+            replyIds.remove(id)
+            // Ordered behind this API's progress callbacks, which may themselves decode chunks. They never run
+            // while owning client state, so even a slow callback cannot hold topic updates or new requests.
+            scope.launch(replies) {
+                if (error != null) call.completeExceptionally(error) else call.complete(message["ok"] ?: JsonNull)
+            }
             return
         }
         val sub = subs[id] ?: return // unsubscribed while a value was on its way
@@ -315,3 +353,5 @@ private fun coreException(body: JsonElement): CoreException {
 // A core that keeps failing (a panic on start) is restarted with growing pauses rather than in a tight loop.
 private val RETRY_MS = longArrayOf(0, 1000, 2000, 5000, 10_000, 30_000)
 private const val LINGER_MS = 2000L
+
+private val MESSAGE_ID = Regex("""^\s*\{\s*"id"\s*:\s*(\d+)\s*[,}]""")

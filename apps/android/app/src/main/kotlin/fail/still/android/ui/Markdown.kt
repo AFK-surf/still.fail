@@ -107,9 +107,13 @@ import org.commonmark.parser.Parser
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-private val parser: Parser = Parser.builder()
+private fun markdownParser(): Parser = Parser.builder()
     .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), AutolinkExtension.create(), TaskListItemsExtension.create()))
     .build()
+
+private val documents = object : android.util.LruCache<String, Node>(256 * 1024) {
+    override fun sizeOf(key: String, value: Node) = key.length.coerceAtLeast(1)
+}
 
 private fun Node.children(): List<Node> = generateSequence(firstChild) { it.next }.toList()
 
@@ -211,9 +215,21 @@ private class Ctx(val size: Int, val placing: Placing?, val fillTables: Boolean)
 
 @Composable
 fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null, fillTables: Boolean = false) {
-    val doc = remember(text) { parser.parse(text) }
-    val ctx = Ctx(size, placing, fillTables)
-    Box(modifier) { Stack(pieces(doc.children(), ctx, tight = false)) }
+    val cached = remember(text) { documents.get(text) }
+    val ready by androidx.compose.runtime.produceState(cached?.let { text to it }, text) {
+        value = cached?.let { text to it }
+        if (cached == null) {
+            val doc = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { markdownParser().parse(text) }
+            documents.put(text, doc)
+            value = text to doc
+        }
+    }
+    val doc = ready?.takeIf { it.first == text }?.second
+    val blocks = remember(doc, size, placing, fillTables) { doc?.let { pieces(it.children(), Ctx(size, placing, fillTables), tight = false) } }
+    Box(modifier) {
+        if (blocks == null) Text("正在排版…", color = webSubtle, fontSize = size.sp)
+        else Stack(blocks)
+    }
 }
 
 /** Pieces one under another, as far apart as the larger margin between each two; the outer margins are the parent's. */
@@ -409,7 +425,6 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
     val dark = C.dark
-    val colored = remember(code, language, dark) { highlight(code, language?.lowercase(), dark) }
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(codeGround)) {
         if (bar) Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp).height(24.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             Text(language ?: "text", fontSize = 10.sp, letterSpacing = 0.2.sp, color = webSubtle, modifier = Modifier.padding(horizontal = 6.dp))
@@ -426,7 +441,7 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {
             // The system's mono face is thin next to the web's (SF Mono, Menlo): drawn a little bolder to have its colour.
-            Text(colored, fontFamily = FontFamily.Monospace, fontWeight = CodeWeight, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink, softWrap = false)
+            CodeInk(code, language, dark)
         }
     }
 }

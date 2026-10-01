@@ -20,7 +20,23 @@ device key, one link per station, one token refresh, one cache.
 The core is single-threaded and async. Its futures are `!Send`; shared state
 is `Rc<RefCell<…>>`. On the web it runs on the worker's event loop
 (`wasm-bindgen-futures`); natively on a dedicated thread running a tokio
-current-thread runtime with a `LocalSet`. Nothing in the core blocks.
+current-thread runtime with a `LocalSet`. Network waits yield to other work.
+
+Native input JSON and call parameters (including base64 uploads) are decoded on
+an input thread with `Core::prepare`, then applied in order on the core thread.
+Pure, payload-sized conversion uses `Host::background` (the native blocking pool).
+Outgoing topic messages and API messages have separate FIFO worker queues for
+JSON serialization and foreign callbacks. An API's progress and answer share
+its queue, so the terminal answer cannot overtake its stream. Callbacks may run
+concurrently across the two queues; consumers must hand them off safely.
+
+Android likewise separates outgoing serialization, incoming topic parsing and
+API parsing from the queue that owns client state. Topic deltas are applied in
+order. Its chat decoder retains unchanged message objects by JSON identity,
+bounded to the current message window. Markdown parsing and code highlighting
+and shaping run off Main; the UI draws the prepared code layout. These boundaries
+avoid blocking the UI on payload processing; they do not eliminate layout costs,
+GC pauses, or contention for CPU and memory.
 
 ## Host
 

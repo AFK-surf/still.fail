@@ -46,7 +46,7 @@ pub mod views;
 pub mod wake;
 pub mod workspace;
 
-pub use crate::core::Core;
+pub use crate::core::{Core, PreparedMessage};
 pub use error::CoreError;
 pub use host::Host;
 pub use protocol::{ClientId, ClientMessage, CoreMessage, Topic};

@@ -123,8 +123,18 @@ pub trait Host {
     fn reset_connections(&self) {}
     /// Runs a task to completion on the core's thread.
     fn spawn(&self, task: LocalBoxFuture<'static, ()>);
+    /// CPU work with no core state. Native hosts use a worker pool; web hosts already run on a worker.
+    fn background(&self, task: Box<dyn FnOnce() + Send>) { task(); }
+
     fn random_bytes(&self, buf: &mut [u8]);
 
     /// Delivers a message to one connected UI.
     fn emit(&self, client: ClientId, message: CoreMessage);
+}
+
+/// Hands pure work to the host without holding the core event loop across it.
+pub fn background<T: Send + 'static>(host: &dyn Host, task: impl FnOnce() -> T + Send + 'static) -> LocalBoxFuture<'static, Result<T, HostError>> {
+    let (send, receive) = futures::channel::oneshot::channel();
+    host.background(Box::new(move || { let _ = send.send(task()); }));
+    Box::pin(async move { receive.await.map_err(|_| HostError("后台数据处理没有完成".into())) })
 }
