@@ -363,6 +363,10 @@ internal class Here(val station: String, val of: ChatOf, val view: ChatView, val
 /** How an activity glides to a new place (web useActivityGlide: a spring, 0.3s, no bounce). */
 private val ACTIVITY_GLIDE = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 300f, visibilityThreshold = IntOffset(1, 1))
 
+/** How long an activity stays once its agent stops, then how long it takes to fade (web Chat.tsx HOLD_MS, FADE_MS). */
+private const val HOLD_MS = 600L
+private const val FADE_MS = 220L
+
 /** The list's gap between messages (web mobile: --list-gap 20px). */
 private val GAP = 20.dp
 
@@ -395,39 +399,45 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val motion = remember { ChatMotion(reduced) }
     motion.ring = androidx.compose.animation.core.rememberInfiniteTransition(label = "ring")
         .animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(tween(1100, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
-    // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
-    val lastBusy = remember { mutableStateOf<List<AgentAtWork>>(emptyList()) }
-    // Only an agent that has taken a message and runs is at work (not one with messages waiting for it): until then
+    // Each agent at work, and each that stopped a moment ago, on its own (web useLinger): one whose turn ends stays
+    // 600ms (a turn ending and the next starting leave a moment between), then fades 220ms and goes, whatever the others
+    // do. Only an agent that has taken a message and runs is at work (not one with messages waiting for it): until then
     // the message itself says it waits. One whose messages are still coming out of its avatar stays too.
     val keeps = motion.keeps()
-    val busy = agents.filter { it.view.status == "running" }.map { a -> AgentAtWork(a.key, a.who, a.runtime, a.maker, a.live, a.view.since, a.view.wait) }
-        .let { now -> now + lastBusy.value.filter { k -> k.key in keeps && now.none { it.key == k.key } } }
-    var leaving by remember { mutableStateOf(false) }
-    if (busy.isNotEmpty()) lastBusy.value = busy
-    LaunchedEffect(busy.isEmpty()) {
-        leaving = false
-        if (busy.isEmpty() && lastBusy.value.isNotEmpty()) {
-            delay(600); leaving = true; delay(220)
-            lastBusy.value = emptyList(); leaving = false
-        }
+    val lingering = remember { LinkedHashMap<String, Pair<AgentAtWork, Long?>>() }
+    var lingered by remember { mutableIntStateOf(0) }
+    lingered
+    val nowMs = android.os.SystemClock.uptimeMillis()
+    val running = agents.filter { it.view.status == "running" }.map { a -> AgentAtWork(a.key, a.who, a.runtime, a.maker, a.live, a.view.since, a.view.wait) }
+    for (a in running) lingering[a.key] = a to null
+    for ((k, v) in lingering.entries.toList()) {
+        if (running.any { it.key == k }) continue
+        if (k in keeps) { lingering[k] = v.first to null; continue }
+        val stopped = v.second ?: nowMs.also { lingering[k] = v.first to it }
+        if (nowMs - stopped >= HOLD_MS + FADE_MS) lingering.remove(k)
     }
-    val atWork = busy.ifEmpty { lastBusy.value }
-    // The list never gets shorter under the reader: an activity that folds away leaves its height as a floor, which
-    // what comes next (a message, another activity) takes back as it arrives.
+    val nextChange = lingering.values.mapNotNull { (_, s) -> s?.let { if (nowMs - it < HOLD_MS) it + HOLD_MS else it + HOLD_MS + FADE_MS } }.minOrNull()
+    LaunchedEffect(nextChange) { if (nextChange != null) { delay((nextChange - android.os.SystemClock.uptimeMillis()).coerceAtLeast(0)); lingered++ } }
+    val atWork = lingering.values.map { it.first }
+    val leaving = { key: String -> lingering[key]?.second?.let { nowMs - it >= HOLD_MS } == true }
+    // The list never gets shorter under the reader: an activity that fades away leaves its height as a floor (what is
+    // under it, another activity, glides up into its place), which what comes next (a message, another activity) takes
+    // back as it arrives.
     val heights = remember { HashMap<String, Int>() }
     var floor by remember { mutableIntStateOf(0) }
     val gapPx = with(LocalDensity.current) { GAP.roundToPx() }
-    val shownAtWork = atWork.isNotEmpty()
     // Taken in the same composition the activity leaves in (an effect would leave a frame without either, the list
     // shorter by it, and its end pulled up), and exactly its room: each activity and the gap before it, less the gap
     // the floor itself brings when it comes in.
-    val wasAtWork = remember { booleanArrayOf(false) }
-    if (wasAtWork[0] != shownAtWork) {
-        val acts = heights.filterKeys { it.startsWith("act:") }.values
-        if (!shownAtWork && acts.isNotEmpty()) floor += acts.sum() + acts.size * gapPx - (if (floor == 0) gapPx else 0)
-        heights.keys.removeAll { it.startsWith("act:") }
-        wasAtWork[0] = shownAtWork
+    val shownActs = atWork.mapTo(HashSet()) { "act:${it.key}" }
+    val wasActs = remember { HashSet<String>() }
+    val gone = wasActs - shownActs
+    if (gone.isNotEmpty()) {
+        val acts = gone.mapNotNull { heights[it] }
+        if (acts.isNotEmpty()) floor += acts.sum() + acts.size * gapPx - (if (floor == 0) gapPx else 0)
+        heights.keys.removeAll(gone)
     }
+    wasActs.clear(); wasActs.addAll(shownActs)
 
     // Messages said while the chat shows (the core says which: `said`), from an agent whose activity shows, wait their
     // turn out of the list.
@@ -705,7 +715,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                         Entry.Line -> UnreadLine()
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
-                        is Entry.Working -> Activity(ctx, row.agent, leaving, opening = fresh)
+                        is Entry.Working -> Activity(ctx, row.agent, leaving(row.agent.key), opening = fresh)
                         is Entry.Floor -> Spacer(Modifier.fillMaxWidth().height(with(LocalDensity.current) { row.px.toDp() }))
                     } }
                 }
