@@ -7,6 +7,7 @@ import { Illustration } from "../brand.tsx";
 import * as cloudCss from "../styles/cloud.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./gate.css.ts";
+import { NAME } from "./beta.tsx";
 
 export function Avatar({ account, size = 24 }: { account: { name: string; email: string; picture: string }; size?: number }) {
   const letter = ([...(account.name || account.email)][0] ?? "?").toUpperCase();
@@ -16,7 +17,7 @@ export function Avatar({ account, size = 24 }: { account: { name: string; email:
     : <span className={`${cloudCss.person} ${cloudCss.personLetter}`} style={{ width: size, height: size, fontSize: size * .45 }} aria-hidden="true">{letter}</span>;
 }
 
-export function SignInPage({ title = "登录 still.fail", lead }: { title?: string; lead?: ReactNode }) {
+export function SignInPage({ title = `登录 ${NAME}`, lead }: { title?: string; lead?: ReactNode }) {
   return (
     <div className={`${shellCss.gate} ${css.signInPage}`}>
       <Illustration name="sign-in" />

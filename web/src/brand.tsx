@@ -8,15 +8,14 @@ import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
-import { BETA } from "./cloud/beta.tsx";
+import { BETA, NAME } from "./cloud/beta.tsx";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
 
 const BASE = import.meta.env.BASE_URL;
 
-/** The name the page goes by: on the test channel (app.youdid.wtf) its own, drawn the same way. */
-const NAME = BETA ? "youdid.wtf" : "still.fail";
+// On the test channel (app.youdid.wtf) the name is its own, drawn the same way.
 const WORDMARK = BETA ? { name: "wordmark-beta", width: 128 } : { name: "wordmark", width: 81 };
 const LOCKUP = BETA ? { name: "lockup-beta", width: 371 } : { name: "lockup", width: 264 };
 

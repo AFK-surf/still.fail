@@ -12,6 +12,9 @@ const meta = typeof document === "undefined" ? null : document.querySelector<HTM
 /** Whether this page is the test channel's. */
 export const BETA = Boolean(meta) || (typeof location !== "undefined" && location.host === "app.youdid.wtf");
 
+/** The name the page goes by: on the test channel its own (youdid.wtf, still.fail's dual). */
+export const NAME = BETA ? "youdid.wtf" : "still.fail";
+
 /** Where the stable channel is. */
 const STABLE = meta?.content || "https://app.still.fail";
 
