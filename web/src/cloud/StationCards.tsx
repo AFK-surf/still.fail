@@ -2,11 +2,9 @@
 // seen at a glance. What is wrong (it is away, a meter running out) is said in words under its name, in colour; its
 // meters are boxes as an allowance's are (components.tsx MeterChips); what the machine is stays grey.
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
 import { stamp, type StationView } from "../api.ts";
 import type { Host, Level, NetFigure, StationNet } from "../core/shapes.ts";
 import { StatusDot, Time } from "../ui.tsx";
-import { ChevronRight } from "../icons.tsx";
 import { Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
@@ -111,12 +109,6 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
         {/* A station that says its versions says the station's among them; one older, only what the cloud knows. */}
         <span className={css.ident}>{s.version && !s.overview?.updates?.length ? `stillfail-station ${s.version} · ` : ""}<span className={css.mono}>{s.id.slice(0, 12)}</span></span>
       </div>
-      {/* How much it takes, opening its footprint page (a station older than the page has none). */}
-      {s.online && s.overview?.footprint && (
-        <Link className={css.footprint} to={`/w/${s.station.split("/")[0]}/settings/stations/${s.id}/footprint`}>
-          <span>占用</span><b>{s.overview.footprint.text}</b><ChevronRight size={12} />
-        </Link>
-      )}
       {s.online && <div className={css.cardVersions}><Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} /></div>}
     </div>
   );

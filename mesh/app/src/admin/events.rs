@@ -86,32 +86,6 @@ impl Events {
         self.wake.notify_one();
     }
 
-    /// The footprint page's measure changed (a scan began or ended, something was cleaned): each viewer following is sent
-    /// it as they see it.
-    pub fn footprint_changed(self: &Arc<Self>) {
-        let Some(api) = self.api.upgrade() else { return };
-        let viewers: Vec<Viewer> = {
-            let clients = self.clients.lock().unwrap();
-            let mut seen = HashSet::new();
-            clients.iter().filter(|c| seen.insert(c.viewer.id())).map(|c| c.viewer.clone()).collect()
-        };
-        if viewers.is_empty() {
-            return;
-        }
-        let events = self.clone();
-        tokio::spawn(async move {
-            for viewer in viewers {
-                match api.footprint_view(&viewer).await {
-                    Ok(value) => {
-                        let id = viewer.id();
-                        events.emit("footprint", &value, |c| c.viewer.id() == id);
-                    }
-                    Err(e) => warn!(error = %e, "footprint event not sent"),
-                }
-            }
-        });
-    }
-
     /// The sidebar rows of `viewer` (everyone's when None) may have changed.
     pub fn rows_changed(&self, viewer: Option<&str>) {
         {

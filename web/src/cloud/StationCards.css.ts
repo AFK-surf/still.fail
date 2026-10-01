@@ -26,13 +26,6 @@ export const warn = style({
 });
 globalStyle(`${warn} [data-level="amber"]`, { color: vars.amber });
 globalStyle(`${warn} [data-level="red"]`, { color: vars.red });
-/** The line that opens its footprint page. */
-export const footprint = style({
-  display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "flex-start", marginLeft: "17px",
-  fontSize: vars.textSm, color: vars.muted, textDecoration: "none",
-  selectors: { "&:hover": { color: vars.text } },
-});
-globalStyle(`${footprint} b`, { fontWeight: "500", color: vars.text, fontVariantNumeric: "tabular-nums" });
 export const cardVersions = style({ marginLeft: "17px", selectors: { "&:empty": { display: "none" } } });
 export const cardFoot = style({
   display: "flex", flexWrap: "wrap", gap: "0 12px", marginLeft: "17px", fontSize: vars.textXs, color: vars.muted,

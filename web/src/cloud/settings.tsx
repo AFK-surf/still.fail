@@ -8,7 +8,7 @@ import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, Navigate, NavLink, useNavigate, useParams } from "react-router";
+import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
@@ -19,7 +19,6 @@ import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
 import { MemoryView } from "../Memory.tsx";
 import { DAYS, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
-import { StationFootprint } from "../Footprint.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
@@ -238,23 +237,6 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
       actions={<Segmented<UsageDays> className={usageCss.pick} label="多少天" value={days} onChange={setDays} options={DAYS} />}>
       {usage.value ? <UsageBody view={usage.value} />
         : usage.error ? <p className={controlsCss.fieldError}>读不到用量：{usage.error.message}</p> : <Loading label="正在读取…" fill={false} />}
-    </Page>
-  );
-}
-
-/** How much a station takes of its machine, and cleaning it up: a page of its own, from its card (StationCards.tsx). */
-export function FootprintSettings({ entry }: { entry: WorkspaceEntry }) {
-  const { station: id } = useParams();
-  const listed = useStations(entry.id).value;
-  const s = listed?.find((x) => x.id === id);
-  const back = `/w/${entry.id}/settings/stations`;
-  if (listed && !s) return <Navigate to={back} replace />;
-  return (
-    <Page title={s ? `占用 · ${s.name}` : "占用"} lead={`${NAME} 在这台 station 上占的磁盘和内存：chat 的工作区、对话记录、agent 进程，以及可以清理的部分。`} back={back}>
-      {!s ? <Loading label="正在读取…" fill={false} />
-        : !s.online ? <p className={shellCss.muted}>离线，等它上线再看。</p>
-        : s.overview && !s.overview.footprint ? <p className={shellCss.muted}>这台 station 的版本还不能统计占用，更新后再看。</p>
-        : <StationFootprint station={s.station} />}
     </Page>
   );
 }

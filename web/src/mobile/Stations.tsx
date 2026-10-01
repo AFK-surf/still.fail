@@ -149,8 +149,6 @@ export function StationScreen() {
                 <GoRow title="连接" value={`${s.overview.connects.length} 个`} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
                 <GoRow title="Profile" value={`${s.overview.profiles.length} 个`} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
                 <GoRow title="记忆" onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
-                {/* A station older than the footprint page has no line of it. */}
-                {s.online && s.overview.footprint && <GoRow title="占用" value={s.overview.footprint.text} onClick={() => app.push(app.at(`/s/${s.id}/footprint`))} />}
               </ListCard>
               {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
             </>

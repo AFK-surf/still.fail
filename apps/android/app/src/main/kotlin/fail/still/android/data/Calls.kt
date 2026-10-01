@@ -288,10 +288,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun setSoftwareAuto(on: Boolean) { op("software.auto") { put("on", on) } }
     /** The agents' memory on the station: the global one and the skills (projects' memories among them), as they are. */
     suspend fun memory(): JsonElement = op("memory.get")
-    /** Measures how much the station takes again (the `footprint` topic says when it is done). */
-    suspend fun scanFootprint() { op("footprint.scan") }
-    /** A clean-up of the footprint page: `call` (footprint.rebuild, footprint.delete, footprint.evict) for those sessions. */
-    suspend fun cleanUp(call: String, keys: List<String>) { op(call) { put("keys", kotlinx.serialization.json.JsonArray(keys.map { kotlinx.serialization.json.JsonPrimitive(it) })) } }
     /**
      * Writes what changed of a connect's Slack app (any of name, displayName, description, longDescription,
      * backgroundColor, groups; `icon`: a data URL) into its manifest; answers whether Slack wants its new permissions

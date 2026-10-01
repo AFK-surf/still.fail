@@ -1784,38 +1784,14 @@ async fn a_station_with_nothing_to_update_has_no_channel_to_set() {
 }
 
 #[tokio::test]
-async fn the_footprint_page_measures_chats_and_cleans_them_up_for_managers() {
+async fn retired_footprint_does_not_offer_stats_or_cleanup() {
     let t = setup().await;
-    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
-    let key = made["key"].as_str().unwrap().to_string();
-    let workspace = PathBuf::from(t.store.get_session(&key).unwrap().unwrap().workspace);
-    std::fs::create_dir_all(workspace.join("app/node_modules/x")).unwrap();
-    std::fs::write(workspace.join("app/node_modules/x/index.js"), vec![1u8; 200_000]).unwrap();
-    std::fs::write(workspace.join("notes.md"), vec![1u8; 30_000]).unwrap();
-    let events = t.follow("/events", owner()).await;
-    // The first look starts a scan; the event says when it is done.
-    let first = t.get("/footprint").await;
-    assert_eq!(first["manage"], json!(true));
-    let done = events.next("footprint", |u| u["checkedAt"].is_i64() && !u["scanning"].as_bool().unwrap_or(true)).await;
-    let row = done["chats"].as_array().unwrap().iter().find(|c| c["key"] == key).unwrap().clone();
-    assert!(row["rebuildBytes"].as_u64().unwrap() >= 200_000 && row["bytes"].as_u64().unwrap() >= 230_000, "{row}");
-    assert_eq!(row["chat"]["archived"], json!(false));
-    let ids: Vec<&str> = done["parts"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, crate::footprint::PARTS);
-    assert!(t.get("/overview").await["footprint"]["bytes"].as_u64().unwrap() > 0);
-    // Members look; only owners and admins clean.
-    assert_eq!(t.call_as("GET", "/footprint", None, dev()).await.1["manage"], json!(false));
-    assert_eq!(t.call_as("POST", "/footprint/rebuild", Some(json!({})), dev()).await.0, 403);
-    let cleaned = t.call("POST", "/footprint/rebuild", Some(json!({ "keys": [key] }))).await.1;
-    assert!(cleaned["freedBytes"].as_u64().unwrap() >= 200_000, "{cleaned}");
-    assert!(!workspace.join("app/node_modules").exists() && workspace.join("notes.md").exists());
-    // Only archived chats are deleted here.
-    assert_eq!(t.call("POST", "/footprint/delete", Some(json!({ "keys": [key] }))).await.0, 409);
-    t.call("POST", &format!("/sessions/{}/archive", enc(&key)), None).await;
-    assert_eq!(t.call_as("POST", "/footprint/delete", Some(json!({ "keys": [key] })), dev()).await.0, 403);
-    let deleted = t.call("POST", "/footprint/delete", Some(json!({ "keys": [key] }))).await.1;
-    assert_eq!(deleted["deleted"], json!(1));
-    assert!(!workspace.exists());
-    assert!(t.get("/footprint").await["chats"].as_array().unwrap().iter().all(|c| c["key"] != key));
-    assert_eq!(t.call("POST", "/footprint/evict", Some(json!({}))).await.1["ended"], json!(0));
+    assert!(t.get("/overview").await["footprint"].is_null());
+    let view = t.get("/footprint").await;
+    assert_eq!(view["scanning"], json!(false));
+    assert_eq!(view["manage"], json!(false));
+    assert_eq!(view["chats"], json!([]));
+    for action in ["scan", "rebuild", "delete", "evict"] {
+        assert_eq!(t.call("POST", &format!("/footprint/{action}"), Some(json!({}))).await.0, 410);
+    }
 }

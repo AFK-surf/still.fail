@@ -176,9 +176,6 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     GoRow("连接", "${overview.connects.size} 个") { app.push(Screen.Connects(address)) }
                     GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles(address)) }
                     GoRow("记忆") { app.push(Screen.Memory(address)) }
-                    // A station older than the footprint page has no line of it.
-                    val usage = overview.footprint
-                    if (s.online && usage != null) GoRow("占用", usage.text) { app.push(Screen.Footprint(address)) }
                 }
                 if (s.online) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             }

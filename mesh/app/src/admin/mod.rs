@@ -204,8 +204,6 @@ pub struct AdminApi {
     app_ids: Mutex<HashMap<String, String>>,
     pending: Mutex<HashMap<String, Pending>>,
     events: Arc<Events>,
-    /// The last measure of how much the station takes (footprint.rs).
-    footprint: crate::footprint::Footprint,
     /// Writes asked with a key, done once (once.rs).
     once: once::Once,
     me: Weak<AdminApi>,
@@ -346,7 +344,6 @@ impl AdminApi {
             app_ids: Mutex::default(),
             pending: Mutex::default(),
             events: Events::new(me.clone()),
-            footprint: crate::footprint::Footprint::default(),
             once: once::Once::default(),
             me: me.clone(),
             deps,
@@ -386,7 +383,6 @@ impl AdminApi {
         }
         api.events.follow();
         if api.deps.check_on_start {
-            api.follow_footprint();
         }
         api
     }
@@ -466,14 +462,11 @@ impl AdminApi {
         match (method, path) {
             ("GET", "/host") => return ok(serde_json::to_value(crate::host::host_info(&self.config().data_dir).await)?),
             ("GET", "/overview") => return ok(self.overview(viewer)),
-            ("GET", "/footprint") => return ok(self.footprint_view(viewer).await?),
-            ("POST", "/footprint/scan") => {
-                self.scan_footprint();
-                return ok(self.footprint_view(viewer).await?);
+            // Retired feature: keep old clients' routes, without scanning or cleanup side effects.
+            ("GET", "/footprint") => return ok(footprint::retired()),
+            ("POST", "/footprint/scan" | "/footprint/rebuild" | "/footprint/delete" | "/footprint/evict") => {
+                return Err(http_error(410, "占用统计已移除"));
             }
-            ("POST", "/footprint/rebuild") => return ok(self.clean_rebuild(viewer, &read_json(body).await?).await?),
-            ("POST", "/footprint/delete") => return ok(self.delete_archived(viewer, &read_json(body).await?).await?),
-            ("POST", "/footprint/evict") => return ok(self.evict_idle(viewer, &read_json(body).await?).await?),
             ("GET", "/events") => {
                 // `live=<key>&from=<n>&last=<m>`, repeated: those sessions as they run, on this same stream (from
                 // entry `n`, but no more than the last `m` of the transcript; `last=0`: all of it).
