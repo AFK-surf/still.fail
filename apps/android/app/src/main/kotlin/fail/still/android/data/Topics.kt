@@ -5,15 +5,27 @@ package fail.still.android.data
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import fail.still.core.TopicState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -47,30 +59,93 @@ fun <T> decode(serializer: KSerializer<T>, json: JsonElement): T = try {
     throw CoreException("decode", "读不懂 core 给的数据：${e.message?.take(200)}", null)
 }
 
-/** Subscribes while in composition; `topic` null subscribes to nothing. */
-@Composable
-fun <T> rememberTopic(core: StillFailCore, topic: JsonObject?, serializer: KSerializer<T>): State<Topic<T>> =
-    produceState(Topic<T>(null, null, topic != null), core, topic) {
-        if (topic == null) return@produceState
-        core.topic(topic).map<TopicState, Topic<T>> { state ->
+/** A topic's states, decoded: what both ways of following one below read. */
+private fun <T> follow(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>): Flow<Topic<T>> =
+    core.topic(topic).map<TopicState, Topic<T>> { state ->
+        try {
+            Topic(state.value?.takeIf { it !is JsonNull }?.let { decode(serializer, it) }, state.error, state.loading)
+        } catch (e: CoreException) {
+            // What this app cannot read is its bug or the core's: recorded with the rest of the trace, not only shown.
             try {
-                Topic(state.value?.takeIf { it !is JsonNull }?.let { decode(serializer, it) }, state.error, state.loading)
-            } catch (e: CoreException) {
-                // What this app cannot read is its bug or the core's: recorded with the rest of the trace, not only shown.
-                try {
-                    core.call("client.error", buildJsonObject { put("source", "android.decode"); put("message", "${topic["topic"]}: ${e.message}") })
-                } catch (_: CoreException) {
-                    // Recording it failed too: the page still says what went wrong.
-                }
-                Topic(null, e, false)
+                core.call("client.error", buildJsonObject { put("source", "android.decode"); put("message", "${topic["topic"]}: ${e.message}") })
+            } catch (_: CoreException) {
+                // Recording it failed too: the page still says what went wrong.
             }
+            Topic(null, e, false)
         }
-            // Decoding a whole value (a chat is all its messages) is work: off the main thread, and only the latest
-            // when several come at once (a chat being fetched arrives in batches).
-            .flowOn(Dispatchers.Default)
-            .conflate()
-            .collect { next -> value = if (next.value == null && next.error != null) next.copy(value = value.value) else next }
     }
+        // Decoding a whole value (a chat is all its messages) is work: off the main thread, and only the latest
+        // when several come at once (a chat being fetched arrives in batches).
+        .flowOn(Dispatchers.Default)
+        .conflate()
+
+/** The next state as shown: a value is kept through a later error. */
+private fun <T> Topic<T>.after(next: Topic<T>): Topic<T> = if (next.value == null && next.error != null) next.copy(value = value) else next
+
+/**
+ * The topics a page of the stack follows, kept while the page is in the stack rather than only while it is drawn
+ * (App.kt): coming back to it, what it shows is there at once, not gone and coming in again (its list's rows, so it
+ * keeps its place; what grows in above them). Following one in the core costs next to nothing. One the page stops
+ * reading while drawn (a search's query typed on) is let go.
+ */
+class PageTopics {
+    private companion object { const val UNREAD_MS = 10_000L }
+
+    private class Followed(val state: State<Topic<*>>, val job: Job) { var readers = 0 }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val followed = HashMap<Pair<JsonObject, SerialDescriptor>, Followed>()
+    /** Whether the page is drawn now (App.kt). */
+    var drawn = false
+
+    @Suppress("UNCHECKED_CAST")
+    fun <T> of(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>): State<Topic<T>> =
+        followed.getOrPut(topic to serializer.descriptor) {
+            val state = mutableStateOf(Topic<T>(null, null, true))
+            val job = scope.launch { follow(core, topic, serializer).collect { state.value = state.value.after(it) } }
+            Followed(state as State<Topic<*>>, job)
+        }.state as State<Topic<T>>
+
+    fun read(topic: JsonObject, serializer: KSerializer<*>) { followed[topic to serializer.descriptor]?.let { it.readers++ } }
+
+    /**
+     * No longer read: let go a while later if still not read and the page still drawn, so not when what stopped reading
+     * it is the page itself going, nor a row of its list scrolled out and back.
+     */
+    fun unread(topic: JsonObject, serializer: KSerializer<*>) {
+        val key = topic to serializer.descriptor
+        val it = followed[key] ?: return
+        if (--it.readers > 0) return
+        scope.launch {
+            delay(UNREAD_MS)
+            if (drawn && it.readers == 0 && followed[key] === it) followed.remove(key)?.job?.cancel()
+        }
+    }
+
+    /** The page left the stack: its topics are let go. */
+    fun close() = scope.cancel()
+}
+
+/** The page being drawn's topics (App.kt), or none outside the stack's pages. */
+val LocalPageTopics = staticCompositionLocalOf<PageTopics?> { null }
+
+/** Follows `topic` (null: nothing): on a page of the stack while the page is in it (PageTopics), else while in composition. */
+@Composable
+fun <T> rememberTopic(core: StillFailCore, topic: JsonObject?, serializer: KSerializer<T>): State<Topic<T>> {
+    val page = LocalPageTopics.current
+    if (page != null && topic != null) {
+        val state = remember(page, core, topic) { page.of(core, topic, serializer) }
+        DisposableEffect(page, topic) {
+            page.read(topic, serializer)
+            onDispose { page.unread(topic, serializer) }
+        }
+        return state
+    }
+    return produceState(Topic<T>(null, null, topic != null), core, topic) {
+        if (topic == null) return@produceState
+        follow(core, topic, serializer).collect { value = value.after(it) }
+    }
+}
 
 @Composable
 inline fun <reified T> rememberTopic(core: StillFailCore, topic: JsonObject?): State<Topic<T>> = rememberTopic(core, topic, serializer<T>())

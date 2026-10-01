@@ -58,6 +58,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -515,6 +516,21 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         }
     }
     val saved = rememberSaveableStateHolder()
+    // Each page's topics, followed while it is in the stack (data/Topics.kt: PageTopics); those of the pages gone from it
+    // let go, once they are not drawn either (a page going away is drawn until it has).
+    val followed = remember { HashMap<String, fail.still.android.data.PageTopics>() }
+    val workspace = current.workspace.id
+    fun keyOf(screen: Screen) = "$workspace|${app.pageOf(screen)}"
+    fun letGo(keep: (String) -> Boolean) = followed.keys.filterNot(keep).forEach { followed.remove(it)?.close() }
+    // A page's own state (its scroll place, what is open on it) is kept while it is in the stack, and forgotten once it
+    // leaves: a chat closed and opened again starts afresh.
+    val kept = remember { HashSet<String>() }
+    LaunchedEffect(app.stack, workspace) {
+        val stacked = app.stack.mapTo(HashSet(), ::keyOf) + keyOf(pages.currentState)
+        letGo { it in stacked }
+        val pagesIn = app.stack.mapTo(HashSet(), app::pageOf)
+        kept.filterNot { it in pagesIn }.forEach { kept.remove(it); saved.removeState(it) }
+    }
     // Wider than a phone (screens/Wide.kt): the pages in a column, the latest chats and the new-chat button at the screen's corners.
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
     val wide = maxWidth >= fail.still.android.screens.WideAt
@@ -536,7 +552,14 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         // Settings go back to the left, where they came from: the shadow is on their right then.
         val lifted = swiped && screen == pages.currentState
         val leftward = screen == Screen.Settings
-        saved.SaveableStateProvider(app.pageOf(screen)) {
+        val page = keyOf(screen)
+        val topics = followed.getOrPut(page) { fail.still.android.data.PageTopics() }
+        DisposableEffect(page) {
+            topics.drawn = true
+            onDispose { topics.drawn = false; if (app.stack.none { keyOf(it) == page }) letGo { it != page } }
+        }
+        kept += app.pageOf(screen)
+        saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(fail.still.android.data.LocalPageTopics provides topics) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
             Box(Modifier.fillMaxSize().then(if (lifted) Modifier.drawBehind { swipeShadow(((1f - pages.fraction) / 0.15f).coerceIn(0f, 1f), leftward) } else Modifier).then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
                 when (screen) {
@@ -568,7 +591,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     }
                 }
             }
-        }
+        } }
     }
     }
     }
