@@ -12,7 +12,9 @@ import { onboardingCard } from "./cloud/settings.css.ts";
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
 export const chatMessages = style({});
-// The last important post stays fully legible; scrolling up restores the rest immediately.
+// The last important post stays fully legible; earlier messages ease out and back as the reader leaves the end.
+globalStyle(`${chatMessages} > ${msg}`, { transition: `opacity 180ms ${vars.easeOut}` });
+globalStyle(`${chatMessages} > ${msg}`, { "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } } });
 globalStyle(`${chatMessages}[data-at-end]:has(> [data-focus]) > ${msg}:not([data-focus])`, { opacity: 0.4 });
 export const chatToBottom = style({
   position: "absolute", right: "24px", bottom: "12px", zIndex: "5", display: "grid", placeItems: "center",
