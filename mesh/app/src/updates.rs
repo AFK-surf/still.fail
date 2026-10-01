@@ -942,6 +942,15 @@ fn find_command(name: &str, env: &Env) -> Option<Found> {
 /// How a runtime installed as `found` is updated, or why it cannot be from here.
 fn how_to_update(kind: Kind, found: &Found, env: &Env) -> Result<How, String> {
     let real = found.real.to_string_lossy();
+    // Vite+ global commands are shims pointing to vp itself. Its packages are separate from npm's;
+    // `claude update` can report success after updating a different installation.
+    if kind != Kind::Station && found.real.file_name().is_some_and(|name| name == "vp") {
+        let vp = found.on_path.parent().map(|dir| dir.join("vp"))
+            .filter(|p| std::fs::canonicalize(p).is_ok_and(|p| p == found.real))
+            .or_else(|| find_command("vp", env).filter(|vp| vp.real == found.real).map(|vp| vp.on_path))
+            .ok_or_else(|| format!("{} 是用 Vite+ 装的，但 station 找不到对应的 vp", kind.name()))?;
+        return Ok(How::new(vp, &["install", "-g", &format!("{}@latest", kind.package())]));
+    }
     let brew = || find_command("brew", env).map(|b| b.on_path).ok_or_else(|| format!("{} 是用 Homebrew 装的，但 station 找不到 brew", kind.name()));
     let npm = || {
         // The npm of the Node the command is installed in (…/lib/node_modules/… → …/bin/npm): the link on PATH can sit
@@ -955,19 +964,37 @@ fn how_to_update(kind: Kind, found: &Found, env: &Env) -> Result<How, String> {
         Kind::Station => Err(String::new()),
         Kind::Claude if real.contains("/Caskroom/") => Ok(How::new(brew()?, &["upgrade", "--cask", "claude-code"])),
         Kind::Claude if real.contains("/Cellar/") => Ok(How::new(brew()?, &["upgrade", "claude-code"])),
-        // Its own updater: the native build (~/.local/share/claude) and npm's alike.
-        Kind::Claude => Ok(How::new(&found.on_path, &["update"])),
         Kind::Codex if real.contains("/Caskroom/") => Ok(How::new(brew()?, &["upgrade", "--cask", "codex"])),
         Kind::Codex if real.contains("/Cellar/") => Ok(How::new(brew()?, &["upgrade", "codex"])),
-        Kind::Codex if real.contains("/node_modules/") => {
+        Kind::Claude | Kind::Codex if real.contains("/node_modules/") => {
             // npm's shebang uses PATH's node; even the right npm can therefore choose another
             // Node's global prefix. Explicitly target the installation the station actually uses.
             let (prefix, _) = real.split_once("/lib/node_modules/")
                 .ok_or_else(|| format!("无法确定 {real} 的 npm 全局安装目录，要在那台机器上自己更新"))?;
             Ok(How::new(npm()?, &["install", "-g", &package, "--prefix", prefix]))
         },
+        Kind::Claude => Ok(How::new(&found.on_path, &["update"])),
+        Kind::Codex if real.contains("/packages/standalone/releases/") => standalone_codex_update(found),
         Kind::Codex => Err(format!("装在 {real}，不是 npm 或 Homebrew 装的，要在那台机器上自己更新")),
     }
+}
+
+/// Reuse the official installer's checksums, versioned releases and atomic link switch. Keep both
+/// the package home and the visible command at the locations this station actually uses.
+fn standalone_codex_update(found: &Found) -> Result<How, String> {
+    let invalid = || format!("无法确定 {} 的 standalone 安装入口，要在那台机器上自己更新", found.on_path.display());
+    let real = found.real.to_str().ok_or_else(invalid)?;
+    let (home, release) = real.rsplit_once("/packages/standalone/releases/").ok_or_else(invalid)?;
+    let (_, binary) = release.split_once('/').ok_or_else(invalid)?;
+    let bin = found.on_path.parent().ok_or_else(invalid)?;
+    // Never replace a binary inside an immutable release, or make current/bin link into itself.
+    if !matches!(binary, "bin/codex" | "codex") || bin.starts_with(Path::new(home).join("packages/standalone")) {
+        return Err(invalid());
+    }
+    let script = r#"set -eu
+installer=$(curl -fsSL https://chatgpt.com/codex/install.sh)
+CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer" -- --release latest"#;
+    Ok(How::new("/bin/sh", &["-c", script, "stillfail-codex-update", home, &bin.to_string_lossy()]))
 }
 
 /// How a runtime the machine has not is installed, or why it cannot be from here: Claude Code by its own installer
@@ -1240,6 +1267,57 @@ pub(crate) mod tests {
         Found { on_path: PathBuf::from("/nowhere/bin/x"), real: PathBuf::from(real) }
     }
 
+    #[tokio::test]
+    async fn vite_shims_update_the_package_with_their_own_vp() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let dir = tempfile::tempdir().unwrap();
+        let vp = dir.path().join("vp");
+        std::fs::write(&vp, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
+        std::fs::set_permissions(&vp, std::fs::Permissions::from_mode(0o755)).unwrap();
+        for kind in [Kind::Claude, Kind::Codex] {
+            symlink("vp", dir.path().join(kind.command())).unwrap();
+            let env: Env = [("PATH".into(), dir.path().display().to_string())].into();
+            let found = find_command(kind.command(), &env).unwrap();
+            let how = how_to_update(kind, &found, &env).unwrap();
+            let args: Vec<&str> = how.args.iter().map(String::as_str).collect();
+            let (ok, said) = run(&how.program, &args, &env, Duration::from_secs(10)).await.unwrap();
+            assert!(ok);
+            assert_eq!(said, format!("install\n-g\n{}@latest\n", kind.package()));
+        }
+    }
+
+    #[tokio::test]
+    async fn standalone_update_preserves_the_actual_home_and_path_with_shell_characters() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("custom codex ' $home");
+        let real = home.join("packages/standalone/releases/0.155.1-aarch64-apple-darwin/bin/codex");
+        let bin = dir.path().join("visible bin ' $bin");
+        std::fs::create_dir_all(real.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(&real, "#!/bin/sh\necho 'codex-cli 0.155.1'\n").unwrap();
+        std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o755)).unwrap();
+        symlink(&real, bin.join("codex")).unwrap();
+        // Supply a harmless installer instead of downloading or changing any real installation.
+        let curl = bin.join("curl");
+        std::fs::write(&curl, r#"#!/bin/sh
+cat <<'INSTALLER'
+test "$CODEX_NON_INTERACTIVE" = 1 || exit 1
+test "$1" = --release && test "$2" = latest || exit 2
+printf '%s\n' "$CODEX_HOME" "$CODEX_INSTALL_DIR"
+INSTALLER
+"#).unwrap();
+        std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let env: Env = [("PATH".into(), format!("{}:/usr/bin:/bin", bin.display())), ("CODEX_HOME".into(), "/wrong/home".into())].into();
+        let found = find_command("codex", &env).unwrap();
+        let how = how_to_update(Kind::Codex, &found, &env).unwrap();
+        let args: Vec<&str> = how.args.iter().map(String::as_str).collect();
+        let (ok, said) = run(&how.program, &args, &env, Duration::from_secs(10)).await.unwrap();
+        assert!(ok, "{said}");
+        assert_eq!(said, format!("{}\n{}\n", home.canonicalize().unwrap().display(), bin.display()));
+        assert!(how_to_update(Kind::Codex, &Found { on_path: real.clone(), real }, &env).is_err());
+    }
+
     #[test]
     fn each_runtime_is_updated_the_way_it_was_installed() {
         let dir = tempfile::tempdir().unwrap();
@@ -1256,6 +1334,8 @@ pub(crate) mod tests {
         assert_eq!(how_to_update(Kind::Codex, &found("/opt/homebrew/Cellar/codex/0.46.0/bin/codex"), &env).unwrap(), How::new(&brew, &["upgrade", "codex"]));
         let by_npm = how_to_update(Kind::Codex, &found("/Users/a/.nvm/versions/node/v24/lib/node_modules/@openai/codex/bin/codex.js"), &env).unwrap();
         assert_eq!(by_npm, How::new(&npm, &["install", "-g", "@openai/codex@latest", "--prefix", "/Users/a/.nvm/versions/node/v24"]));
+        let claude_npm = how_to_update(Kind::Claude, &found("/Users/a/node/lib/node_modules/@anthropic-ai/claude-code/cli.js"), &env).unwrap();
+        assert_eq!(claude_npm, How::new(&npm, &["install", "-g", "@anthropic-ai/claude-code@latest", "--prefix", "/Users/a/node"]));
         // Linked from a directory beside another Node's npm: its own Node's npm, not that one.
         let node = dir.path().join("node/v24.3.0");
         std::fs::create_dir_all(node.join("bin")).unwrap();
