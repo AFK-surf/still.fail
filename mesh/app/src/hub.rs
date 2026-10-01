@@ -175,6 +175,9 @@ pub struct Hub {
     titles: Mutex<HashMap<i64, String>>,
     /// One message at a time per thread: Slack sends a mention twice (app_mention and message), and both would make its session.
     thread_gates: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// The station's background jobs (made after the hub, which tells their agents): what a session stopped while it
+    /// waits ends (SessionDeps::stop_jobs).
+    jobs: Mutex<Weak<crate::jobs::Jobs>>,
     me: Weak<Hub>,
 }
 
@@ -228,6 +231,7 @@ impl Hub {
             client_keys: Mutex::default(),
             titles: Mutex::default(),
             thread_gates: Mutex::default(),
+            jobs: Mutex::new(Weak::new()),
             me: me.clone(),
         })
     }
@@ -816,7 +820,12 @@ impl Hub {
         self.actors.lock().unwrap().get(key).map(|a| a.process_state()).unwrap_or("cold")
     }
 
-    /// Interrupts the session's running turn, as `-stop` in a thread would.
+    /// The station's background jobs, once they are made.
+    pub fn set_jobs(&self, jobs: &Arc<crate::jobs::Jobs>) {
+        *self.jobs.lock().unwrap() = Arc::downgrade(jobs);
+    }
+
+    /// Interrupts the session's running turn, or what it waits on, as `-stop` in a thread would.
     pub async fn stop(&self, key: &str) -> Result<()> {
         let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
         self.actor(&row)?.stop().await;
@@ -1858,6 +1867,23 @@ impl SessionDeps for Hub {
     }
     fn held(&self) -> bool {
         !self.holds.lock().unwrap().is_empty()
+    }
+    fn stop_jobs(&self, key: &str) -> BoxFuture<'static, ()> {
+        let jobs = self.jobs.lock().unwrap().upgrade();
+        let running: Vec<String> = self.store.list_jobs(Some(key)).unwrap_or_default().into_iter()
+            .filter(|j| j.state == "running" && (j.watch || j.port.is_none()))
+            .map(|j| j.id)
+            .collect();
+        let key = key.to_string();
+        Box::pin(async move {
+            let Some(jobs) = jobs else { return };
+            for id in running {
+                match jobs.stop(&id).await {
+                    Ok(_) => info!(session = key, job = id, "job stopped with its session's wait"),
+                    Err(e) => warn!(session = key, job = id, error = %e, "job not stopped"),
+                }
+            }
+        })
     }
 }
 

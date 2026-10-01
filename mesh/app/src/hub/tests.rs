@@ -670,6 +670,56 @@ async fn stop_aborts_the_running_turn_and_confirms_once_it_ends() {
     assert_eq!(session.prompts().len(), 1, "no nudge after a stop");
 }
 
+#[tokio::test(start_paused = true)]
+async fn stop_while_waiting_ends_the_wait_and_its_process() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 10 })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    r.accept(&InboundMessage { addressed: true, ..reply(&m, "9999.2", "<@UBOT> -stop") }).await;
+    settle().await;
+    assert!(r.claude.last().disposed(), "the background work in its process ends with it");
+    assert_eq!(r.chat.last_text(), "已停止当前任务");
+    let last = r.store.last_turn(&key).unwrap().unwrap();
+    assert_eq!((last.outcome.as_deref(), last.declared.as_deref(), last.wait_seconds), (Some("aborted"), None, None), "no longer shown running");
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    settle().await;
+    assert_eq!(r.claude.last().prompts().len(), 1, "not asked again when the wait would have been over");
+}
+
+#[tokio::test]
+async fn stop_while_waiting_ends_the_jobs_that_would_bring_it_back_but_not_its_services() {
+    let r = setup();
+    let jobs = crate::jobs::Jobs::new(r.store.clone(), r._dir.path(), Arc::new(|_, _| {}), Arc::new(|_, _| None)).unwrap();
+    r.hub.set_jobs(&jobs);
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let cwd = r._dir.path();
+    let job = jobs.start(&key, "build", "sleep 600", cwd, None, crate::jobs::Watch::default()).unwrap();
+    let watch = jobs.start(&key, "盯 CI", "sleep 600", cwd, None, crate::jobs::Watch { on: true }).unwrap();
+    let service = jobs.start(&key, "page", "sleep 600", cwd, Some(47123), crate::jobs::Watch::default()).unwrap();
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 600 })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    r.hub.stop(&key).await.unwrap();
+    let state = |id: &str| r.store.get_job(id).unwrap().unwrap().state;
+    for _ in 0..50 {
+        if state(&job.id) != "running" && state(&watch.id) != "running" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!((state(&job.id), state(&watch.id), state(&service.id)), ("stopped".to_string(), "stopped".to_string(), "running".to_string()));
+    assert_eq!(r.chat.last_text(), "已停止当前任务");
+    jobs.stop(&service.id).await.unwrap();
+}
+
 #[tokio::test]
 async fn a_failed_turn_is_reported_to_the_thread_and_not_nudged() {
     let r = setup();

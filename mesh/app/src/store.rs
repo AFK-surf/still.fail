@@ -1918,6 +1918,22 @@ impl Store {
         })
     }
 
+    /// The session was stopped while it waited: its latest turn, if it ended waiting, is recorded as stopped instead
+    /// (aborted, no longer waiting). Whether it was.
+    pub fn stop_wait(&self, session: &str) -> Result<bool> {
+        self.with(|i, changes| {
+            let n = i.db.execute(
+                "UPDATE turns SET outcome = 'aborted', declared = NULL, wait_seconds = NULL, detail = 'other: stopped while waiting'
+                 WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1) AND declared = 'waiting' AND ended_at IS NOT NULL",
+                [session],
+            )?;
+            if n > 0 {
+                changes.push(StoreChange::Session(session.to_string()));
+            }
+            Ok(n > 0)
+        })
+    }
+
     /// The session's latest turn.
     pub fn last_turn(&self, session: &str) -> Result<Option<TurnSummary>> {
         self.with(|i, _| {

@@ -73,6 +73,11 @@ pub trait SessionDeps: Send + Sync {
     fn held(&self) -> bool {
         false
     }
+    /// Stopped while it waits: ends the session's jobs that would bring it back (all but its web services, which people
+    /// may be using).
+    fn stop_jobs(&self, _key: &str) -> BoxFuture<'static, ()> {
+        Box::pin(async {})
+    }
 }
 
 struct Turn {
@@ -284,14 +289,46 @@ impl SessionActor {
         }
     }
 
+    /// Stops what it is doing: the running turn; or, while it waits on work it started, that work and the wait.
     pub fn stop(&self) -> impl Future<Output = ()> + Send + 'static {
         self.enqueue(|a| async move {
             if let Some(agent) = a.agent().filter(|agent| agent.busy()) {
                 a.st().stop_requested = true;
                 agent.abort().await;
+                return Ok(());
+            }
+            if a.st().turn.is_none() {
+                a.stop_waiting().await?;
             }
             Ok(())
         })
+    }
+
+    /// Stopped while it waits (its last turn ended waiting, nothing runs): the wait ends, and so does the work that would
+    /// bring it back: its jobs but web services, and its process with the Bash commands and subagents running in it in the
+    /// background. Its last turn is recorded as stopped, so it no longer shows as running.
+    async fn stop_waiting(self: &Arc<Self>) -> Result<()> {
+        let deps = self.deps()?;
+        let store = deps.store();
+        let waited = self.st().waiting.take().is_some();
+        // Its wait may be on record only (an earlier station had it).
+        let recorded = store.last_turn(&self.key)?.is_some_and(|t| t.ended_at.is_some() && t.declared.as_deref() == Some("waiting"));
+        if !waited && !recorded {
+            return Ok(());
+        }
+        info!(session = self.key, "stopped while waiting");
+        deps.stop_jobs(&self.key).await;
+        let agent = {
+            let mut st = self.st();
+            st.nudges = 0;
+            st.agent.take().map(|(_, agent)| agent)
+        };
+        if let Some(agent) = agent {
+            agent.dispose().await;
+        }
+        store.stop_wait(&self.key)?;
+        self.notice(&deps, "已停止当前任务").await;
+        Ok(())
     }
 
     /// Its last turn stopped at its account's allowance and it was changed since (another account or model): it goes on

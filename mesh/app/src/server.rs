@@ -265,6 +265,7 @@ impl App {
                 }
             }),
         )?;
+        hub.set_jobs(&jobs);
         jobs.set_notify_url(format!("http://{}:{port}/jobs/notify", config.http.host));
         let (tokens, homes_of) = (store.clone(), store.clone());
         let mut tools = hub.tools();
