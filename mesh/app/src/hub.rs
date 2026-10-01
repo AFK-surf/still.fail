@@ -685,7 +685,8 @@ impl Hub {
 
     /// Hides a session from lists, or shows it again (see Store::set_archived); `by` is MANUAL or AUTO. Archiving also
     /// keeps a copy of its transcript, written like an archived thread (the runtime's own file in the profile's home
-    /// stays as it is), and ends its process if idle.
+    /// stays as it is), ends its process if idle, and then cleans what can be made again from its directory
+    /// (clean_rebuildable).
     pub fn archive_by(&self, key: &str, archived: bool, by: &str) -> Result<()> {
         let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
         self.store.set_archived(key, archived, by)?;
@@ -695,8 +696,14 @@ impl Hub {
             return Ok(());
         }
         let actor = self.actors.lock().unwrap().get(key).cloned();
-        if let (Some(actor), Ok(runtime)) = (actor, tokio::runtime::Handle::try_current()) {
-            runtime.spawn(async move { actor.evict().await });
+        if let (Some(hub), Ok(runtime)) = (self.me.upgrade(), tokio::runtime::Handle::try_current()) {
+            let key = key.to_string();
+            runtime.spawn(async move {
+                if let Some(actor) = actor {
+                    actor.evict().await;
+                }
+                let _ = tokio::task::spawn_blocking(move || hub.clean_rebuildable(&key)).await;
+            });
         }
         let config = self.config();
         let profile = config.profiles.iter().find(|p| p.id == row.profile);
@@ -708,6 +715,35 @@ impl Hub {
             write_compressed(&copy, &std::fs::read_to_string(path)?)?;
         }
         Ok(())
+    }
+
+    /// Removes what a build or an install makes again (node_modules, a Cargo target, …; footprint::rebuildable) from an
+    /// archived session's own directory: it may come back, and is built again then. Left as it is while the session is
+    /// back in the lists or at work, and while another session in the lists has the same directory. Answers the bytes
+    /// freed; the footprint page sees it at its next scan.
+    pub fn clean_rebuildable(&self, key: &str) -> u64 {
+        let Ok(Some(row)) = self.store.get_session(key) else { return 0 };
+        let Some(dir) = crate::footprint::room_of(&self.config().data_dir, &row.workspace) else { return 0 };
+        if row.archived_at.is_none() || row.running || self.process_state(key) == "running" {
+            return 0;
+        }
+        let shared = self.store.list_sessions().unwrap_or_default().into_iter().any(|s| {
+            s.key != key && s.archived_at.is_none() && crate::footprint::room_of(&self.config().data_dir, &s.workspace).as_ref() == Some(&dir)
+        });
+        if shared {
+            return 0;
+        }
+        let mut freed = 0;
+        for (path, bytes) in crate::footprint::measure_room(&dir).rebuild {
+            match std::fs::remove_dir_all(&path) {
+                Ok(()) => freed += bytes,
+                Err(e) => warn!(path = %path.display(), error = %e, "not removed"),
+            }
+        }
+        if freed > 0 {
+            info!(session = key, freed, "rebuildable files of an archived session cleaned");
+        }
+        freed
     }
 
     /// Archives a chat on the pages, or shows it again: a session's own chat goes with its session; a chat of its own

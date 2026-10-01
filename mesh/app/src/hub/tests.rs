@@ -1254,6 +1254,30 @@ async fn archiving_a_session_keeps_a_zstd_copy_of_its_transcript_showing_it_agai
 }
 
 #[tokio::test]
+async fn archiving_a_session_cleans_what_can_be_made_again_from_its_directory() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let workspace = PathBuf::from(r.session(&key).workspace);
+    std::fs::create_dir_all(workspace.join("app/node_modules/x")).unwrap();
+    std::fs::write(workspace.join("app/node_modules/x/index.js"), vec![1u8; 50_000]).unwrap();
+    std::fs::write(workspace.join("notes.md"), b"kept").unwrap();
+    assert_eq!(r.hub.clean_rebuildable(&key), 0, "not while in the lists");
+    assert!(workspace.join("app/node_modules").exists());
+    r.hub.archive(&key, true).unwrap();
+    for _ in 0..200 {
+        if !workspace.join("app/node_modules").exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(!workspace.join("app/node_modules").exists(), "cleaned once archived");
+    assert_eq!(std::fs::read(workspace.join("notes.md")).unwrap(), b"kept");
+}
+
+#[tokio::test]
 async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unread_and_bound_ones_stay() {
     let r = setup();
     let day = 86_400_000;
