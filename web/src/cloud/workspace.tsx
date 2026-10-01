@@ -47,6 +47,7 @@ import * as controlsCss from "../styles/controls.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 import * as chatMarkCss from "../ChatMark.css.ts";
 
+import { WebUpdate } from "../WebUpdate.tsx";
 import { NAME } from "../channel.ts";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
@@ -89,7 +90,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
     <PeopleContext.Provider value={people}>
       <div className={shellCss.shell} data-detail={detail}>
         {settings
-          ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WorkspaceSwitcher current={entry} /></div></nav>
+          ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
           : <WorkspaceSidebar entry={entry} />}
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
         <main className={shellCss.main}>
@@ -201,6 +202,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
       <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
       <div className={nav.navFoot}>
+        <WebUpdate />
         <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
         <DecisionsEntry scope={entry.id} to={`/w/${entry.id}/decisions`} />

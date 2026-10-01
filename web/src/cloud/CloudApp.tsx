@@ -32,9 +32,10 @@ import * as additionsCss from "../styles/additions.css.ts";
 
 import { NAME } from "../channel.ts";
 export function CloudApp() {
+  const narrow = useNarrow();
   return (
     <ToastProvider>
-      <WebUpdate />
+      {narrow && <WebUpdate floating />}
       <Tooltip.Provider delayDuration={400}>
         <BrowserRouter>
           <PageViews />

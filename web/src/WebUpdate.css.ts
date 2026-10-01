@@ -18,3 +18,14 @@ export const later = style({
   border: 0, padding: "4px 6px", font: "inherit", cursor: "pointer", background: "none", color: vars.muted,
   ":hover": { color: vars.text },
 });
+
+/** An ordinary footer row: it takes space inside the sidebar and follows it when resized or closed. */
+export const sidebar = style({
+  display: "flex", alignItems: "center", gap: 4, minWidth: 0, padding: "2px 4px 2px 10px",
+  fontSize: vars.textSm, lineHeight: "20px", color: vars.text,
+});
+export const sidebarRefresh = style({
+  display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0,
+  border: 0, padding: "6px 0", background: "none", color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer",
+  ":hover": { color: vars.accentText },
+});
