@@ -76,6 +76,8 @@ pub struct Data {
     /// Records changing as they are typed (drafts), written a moment after their last change: the latest of each.
     soon: RefCell<BTreeMap<(String, String), Vec<u8>>>,
     flushing: Cell<bool>,
+    /// Model selections awaiting their station: never persisted as confirmed data.
+    model_edits: RefCell<BTreeMap<(String, String), (Value, Value)>>,
 }
 
 /// How long a record changing as it is typed waits before it is written.
@@ -91,6 +93,7 @@ impl Data {
             tail: RefCell::default(),
             soon: RefCell::default(),
             flushing: Cell::new(false),
+            model_edits: RefCell::default(),
         })
     }
 
@@ -135,6 +138,42 @@ impl Data {
                 Some(Value::Array(items.collect()))
             }
         }
+    }
+
+    /// The visible selection over confirmed data; station event merging and persistence use get.
+    pub fn shown(&self, topic: &Topic) -> Option<Value> {
+        let mut value = self.get(topic)?;
+        if let Topic::Overview { station } = topic {
+            for p in value.get_mut("profiles").and_then(Value::as_array_mut).into_iter().flatten() {
+                let id = p["id"].as_str().unwrap_or_default().to_string();
+                if let Some((models, changed)) = self.model_edits.borrow().get(&(station.clone(), id)) {
+                    p["modelsSaving"] = changed.clone();
+                    p["models"] = models.clone();
+                }
+            }
+        }
+        Some(value)
+    }
+
+    /// One write at a time per profile; all screens read the same optimistic selection.
+    pub fn begin_models(&self, station: &str, id: &str, models: Value) -> bool {
+        let key = (station.to_string(), id.to_string());
+        let overview = self.get(&Topic::Overview { station: station.into() });
+        let before = overview.as_ref().and_then(|o| o["profiles"].as_array()).and_then(|ps| ps.iter().find(|p| p["id"].as_str() == Some(id))).and_then(|p| p["models"].as_array()).cloned().unwrap_or_default();
+        let after = models.as_array().cloned().unwrap_or_default();
+        let changed = Value::Array(before.iter().chain(after.iter()).filter(|m| before.contains(m) != after.contains(m)).cloned().collect());
+        {
+            let mut edits = self.model_edits.borrow_mut();
+            if edits.contains_key(&key) { return false; }
+            edits.insert(key, (models, changed));
+        }
+        self.tell(&Topic::Overview { station: station.into() });
+        true
+    }
+
+    pub fn end_models(&self, station: &str, id: &str) {
+        self.model_edits.borrow_mut().remove(&(station.to_string(), id.to_string()));
+        self.tell(&Topic::Overview { station: station.into() });
     }
 
     /// A held topic's new value (read, or as an event left it): its records that differ are written, those of items
@@ -402,6 +441,35 @@ mod tests {
 
     fn rows(station: &str) -> Topic {
         Topic::ChatRows { station: station.into() }
+    }
+
+    #[test]
+    fn model_selection_survives_old_events_and_finishes_without_reverting() {
+        run(async {
+            let host = FakeHost::new();
+            let data = Data::new(host.clone());
+            let topic = Topic::Overview { station: "w/s".into() };
+            let old = json!({"profiles": [{"id": "p", "models": ["a"]}]});
+            data.set(&topic, old.clone());
+            assert!(data.begin_models("w/s", "p", json!(["a", "b"])));
+            assert!(!data.begin_models("w/s", "p", json!([])));
+            data.update(&topic, &mut |o| o["name"] = json!("event while saving"));
+            assert_eq!(data.get(&topic).unwrap()["profiles"][0]["models"], json!(["a"]));
+            assert_eq!(data.shown(&topic).unwrap()["profiles"][0]["models"], json!(["a", "b"]));
+            assert_eq!(data.shown(&topic).unwrap()["profiles"][0]["modelsSaving"], json!(["b"]));
+            host.settle().await;
+            let restart = Data::new(host.clone());
+            restart.load().await;
+            assert_eq!(restart.shown(&topic).unwrap()["profiles"][0]["models"], json!(["a"]));
+            data.set(&topic, json!({"profiles": [{"id": "p", "models": ["a", "b"]}]}));
+            assert_eq!(data.shown(&topic).unwrap()["profiles"][0]["modelsSaving"], json!(["b"]));
+            data.end_models("w/s", "p");
+            assert_eq!(data.shown(&topic).unwrap()["profiles"][0]["models"], json!(["a", "b"]));
+            assert!(data.shown(&topic).unwrap()["profiles"][0].get("modelsSaving").is_none());
+            assert!(data.begin_models("w/s", "p", json!([])));
+            data.end_models("w/s", "p"); // refused: reveal the confirmed selection
+            assert_eq!(data.shown(&topic).unwrap()["profiles"][0]["models"], json!(["a", "b"]));
+        });
     }
 
     #[test]

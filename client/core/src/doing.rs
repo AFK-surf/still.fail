@@ -87,6 +87,7 @@ pub(crate) fn counts(call: &Call, name: &str) -> bool {
     match call {
         Call::ConnectFlow { action, .. } => matches!(action.as_str(), "config" | "make" | "verify" | "create"),
         Call::SlackTokens { action, .. } => action == "verify",
+        Call::ProfileModels { .. } => true,
         Call::Op(op) => op.method != "GET" && !matches!(name, "session.warm" | "widget.setState" | "login.drop"),
         Call::ChatArchive { .. } | Call::ChatRetry { .. } | Call::ChatRetryIn { .. } | Call::ChatDiscard { .. } | Call::ChatDiscardIn { .. } => true,
         Call::ChatLatest { .. } | Call::SignOut { .. } | Call::AuthBegin { .. } | Call::StationMeasure { .. } => true,

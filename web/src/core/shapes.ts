@@ -491,6 +491,8 @@ export interface Profile {
 	homeExists: boolean;
 	model?: string;
 	models: string[];
+	/** Models changed by the pending selection; None when no selection is being saved. */
+	modelsSaving?: string[];
 	env: EnvVar[];
 	usedBy: string[];
 	loginCommand: string;

@@ -195,29 +195,8 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
         Loading(stations.error?.message ?: if (s?.overview != null) "没有这个 Profile。" else "正在读取…")
     }
     val api = app.api(address)
-    // Models ticked ahead of the station: shown at once, the next tick built on them; sent one put at a time (the latest
-    // each time), back to the station's when refused.
-    val ticks = remember { Ticks() }
     val setModels = { models: List<String> ->
-        ticks.wanted = models
-        if (ticks.sending) ticks.dirty = true
-        else {
-            ticks.sending = true
-            app.scope.launch {
-                try {
-                    do {
-                        ticks.dirty = false
-                        val m = ticks.wanted ?: break
-                        api.setModels(p.id, m)
-                    } while (ticks.dirty)
-                } catch (e: CoreException) {
-                    app.toast = "没能保存模型：${errorText(e)}"
-                } finally {
-                    ticks.wanted = null; ticks.sending = false
-                }
-            }
-        }
-        Unit
+        app.act("保存模型") { api.setModels(p.id, models) }
     }
     // The switch flipped and not answered yet: shown flipped, with a spinner.
     var flipping by remember { mutableStateOf<Boolean?>(null) }
@@ -247,7 +226,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             if (p.trouble != null) ProfileRecovery(s, p)
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
-            ModelsSection(address, p, ticks.wanted ?: p.models, ticks.sending) { models -> setModels(models) }
+            ModelsSection(address, p, p.models, p.modelsSaving != null) { models -> setModels(models) }
             // A station older than the setting says nothing of it.
             val background = flipping ?: p.backgroundOnMessage
             if ("claude" in p.runtimes && background != null) {
@@ -385,14 +364,6 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
     }
 }
 
-/** The models a profile's page ticked ahead of its station (ProfileScreen): null when none wait. */
-private class Ticks {
-    var wanted by mutableStateOf<List<String>?>(null)
-    var sending by mutableStateOf(false)
-    /** Ticked again while a put was out: the latest goes once it is answered. */
-    var dirty = false
-}
-
 /** Its allowance, window by window: what is left and when it refills; why it cannot be read, when the provider says. */
 @Composable
 private fun QuotaSection(station: String, p: Profile) {
@@ -450,11 +421,11 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
     val checking = app.isDoing("profile.check", "station" to station, "id" to p.id)
     val checkFailed = app.failedOf("profile.check", "station" to station, "id" to p.id)
     var filter by remember { mutableStateOf("") }
-    val all = ((p.check?.models ?: emptyList()) + p.models).distinct().sorted()
+    val all = p.available.sorted()
     val shown = all.filter { m -> listOf(m, p.names[m] ?: m).any { it.contains(filter.trim(), ignoreCase = true) } }
     val save = { models: List<String> -> onSave(models.distinct().sorted()) }
     val suffix = if (filter.isBlank()) "" else "筛选结果"
-    SectionHeader("模型 · 启用 ${models.size} / ${all.size}", start = 24.dp)
+    SectionHeader("模型 · 启用 ${models.size} / ${all.size}${if (saving) " · 正在保存…" else ""}", start = 24.dp)
     Text(
         if (all.isEmpty()) "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" else "只有勾选的模型能在新对话和连接里选。",
         fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
@@ -467,8 +438,8 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         }
         Spacer(Modifier.weight(1f))
         if (all.isNotEmpty()) {
-            Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models + shown) })
-            Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models - shown.toSet()) })
+            Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models + shown) })
+            Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models - shown.toSet()) })
         }
     }
     if (all.size > 10) Field(filter, { filter = it }, "筛选模型", modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp))
@@ -479,7 +450,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         list.forEach { m ->
             val on = m in models
             Row(
-                Modifier.fillMaxWidth().clickable { save(if (on) models - m else models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
+                Modifier.fillMaxWidth().clickable(enabled = !saving) { save(if (on) models - m else models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
@@ -487,7 +458,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
                 }
                 Text(p.names[m] ?: m, fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 // Ticked here, not the station's yet.
-                if (saving && on != (m in p.models)) Spinner(12.dp)
+                if (m in p.modelsSaving.orEmpty()) Spinner(12.dp)
             }
         }
     }

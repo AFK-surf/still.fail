@@ -516,7 +516,9 @@ pub fn profile(p: &mut Value) {
     p["checkTone"] = json!(tone);
     p["trouble"] = profile_trouble(p);
     // Its models' makers, by model.
-    let found = p.get("check").and_then(|c| c.get("models")).and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut found = p.get("check").and_then(|c| c.get("models")).and_then(Value::as_array).cloned().unwrap_or_default();
+    // Keep a removed model in place while its save is still pending.
+    found.extend(p.get("modelsSaving").and_then(Value::as_array).into_iter().flatten().cloned());
     let makers: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
         .filter_map(Value::as_str).map(|m| (m.to_string(), maker(Some(m)))).collect();
     // How many of the models it could run are enabled, in words.

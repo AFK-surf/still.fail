@@ -775,6 +775,8 @@ pub struct Profile {
     pub home_exists: bool,
     pub model: Option<String>,
     pub models: Vec<String>,
+    /// Models changed by the pending selection; None when no selection is being saved.
+    pub models_saving: Option<Vec<String>>,
     pub env: Vec<EnvVar>,
     pub used_by: Vec<String>,
     pub login_command: String,

@@ -506,6 +506,8 @@ data class Profile (
 	val homeExists: Boolean,
 	val model: String? = null,
 	val models: List<String>,
+	/// Models changed by the pending selection; None when no selection is being saved.
+	val modelsSaving: List<String>? = null,
 	val env: List<EnvVar>,
 	val usedBy: List<String>,
 	val loginCommand: String,

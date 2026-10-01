@@ -367,7 +367,9 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
   const all = [...(p.available ?? [])].sort();
   const shown = all.filter((m) => [m, p.names[m] ?? m].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
   // Ticked at once; each tick builds on the last asked (useAsked), not on the station's list from before it.
-  const { value: models, busy, ask } = useAsked(p.id, p.models, put, "保存模型");
+  const models = p.models;
+  const busy = p.modelsSaving != null;
+  const ask = (models: string[]) => act(put(models), "保存模型");
   const save = (next: string[]) => ask([...new Set(next)].sort());
   const suffix = filter.trim() ? "筛选结果" : "";
   return (
@@ -380,8 +382,8 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
         </button>
         <span className={partsCss.mGrow} />
         {all.length > 0 && <>
-          <button type="button" className={partsCss.mLink} onClick={() => save([...models, ...shown])}>全选{suffix}</button>
-          <button type="button" className={partsCss.mLink} onClick={() => save(models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
+          <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => save([...models, ...shown])}>全选{suffix}</button>
+          <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => save(models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
         </>}
       </div>
       {all.length > 10 && <div className={settingsCss.mProfileTools}><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></div>}
@@ -395,9 +397,9 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
             {list.map((m) => {
               const on = models.includes(m);
               // Not yet as the station has it: on its way.
-              const saving = busy && on !== p.models.includes(m);
+              const saving = p.modelsSaving?.includes(m);
               return (
-                <button key={m} type="button" className={settingsCss.mModelRow} onClick={() => save(on ? models.filter((x) => x !== m) : [...models, m])}>
+                <button key={m} type="button" className={settingsCss.mModelRow} disabled={busy} onClick={() => save(on ? models.filter((x) => x !== m) : [...models, m])}>
                   <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={14} />}</span>
                   <span className={partsCss.mGrow}>{p.names[m] ?? m}</span>
                   {saving && <Spinner size={13} />}

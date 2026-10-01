@@ -148,6 +148,20 @@ impl Inner {
                 }
                 Ok(Value::Null)
             }
+            Call::ProfileModels { op, id, models } => {
+                let station = match &op.target {
+                    crate::ops::Target::Station(station) => station.clone(),
+                    _ => return Err(CoreError::invalid("缺少 station")),
+                };
+                if !self.data.begin_models(&station, &id, models) {
+                    return Err(CoreError::invalid("模型正在保存"));
+                }
+                let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
+                // after_write has already installed the confirmed overview. Clear in core, not in a UI
+                // callback that may run before its coalesced topic update arrives. Failure reveals real data.
+                self.data.end_models(&station, &id);
+                result
+            }
             Call::Op(op) => match &op.target {
                 crate::ops::Target::Cloud(account) => {
                     let made = op.method == "POST" && op.path == "/v1/workspaces";

@@ -455,18 +455,14 @@ function QuotaSection({ profile }: { profile: Profile }) {
  * only to a profile that has its model enabled.
  */
 function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): Promise<unknown> }) {
-  const [enabled, setEnabled] = useState(() => new Set(profile.models));
+  const enabled = new Set(profile.models);
+  const busy = profile.modelsSaving != null;
   const [filter, setFilter] = useState("");
-  useEffect(() => setEnabled(new Set(profile.models)), [profile.models.join("\n")]);
+
   const all = [...new Set([...(found ?? []), ...profile.models])].sort();
   const name = (m: string) => profile.names[m] ?? m;
   const shown = all.filter((m) => [m, name(m)].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
-  const commit = (next: Set<string>) => {
-    setEnabled(next);
-    // Not saved (the page says why): back to what the station has.
-    const before = profile.models;
-    void onSave([...next].sort()).then((saved) => { if (saved === undefined) setEnabled(new Set(before)); });
-  };
+  const commit = (next: Set<string>) => { void onSave([...next].sort()); };
   const toggle = (m: string) => {
     const next = new Set(enabled);
     if (next.has(m)) next.delete(m); else next.add(m);
@@ -497,8 +493,8 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
         <div className={chatCss.modelPool}>
           <div className={chatCss.modelPoolTools}>
             {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder="筛选模型" autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
-            <button type="button" className={controlsCss.textToggle} onClick={() => commit(new Set([...enabled, ...shown]))}>全选{filter ? "筛选结果" : ""}</button>
-            <button type="button" className={controlsCss.textToggle} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>全不选{filter ? "筛选结果" : ""}</button>
+            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>全选{filter ? "筛选结果" : ""}</button>
+            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>全不选{filter ? "筛选结果" : ""}</button>
           </div>
           {series.map((s) => {
             const list = s.models.filter((m) => shown.includes(m));
@@ -508,15 +504,16 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
               <div key={s.name} className={modelCss.poolSeries}>
                 <div className={modelCss.poolSeriesHead}>
                   <h4>{s.name}</h4>
-                  <button type="button" className={controlsCss.textToggle} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? "全不选" : "全选"}</button>
+                  <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? "全不选" : "全选"}</button>
                 </div>
                 <ul className={chatCss.modelPoolList}>
                   {list.map((m) => (
                     <li key={m}>
                       <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
-                        <input type="checkbox" checked={enabled.has(m)} onChange={() => toggle(m)} />
+                        <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
                         <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
                         <span>{name(m)}</span>
+                        {profile.modelsSaving?.includes(m) && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在保存" />}
                         {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>检查里没有了</span>}
                       </label></Tip>
                     </li>

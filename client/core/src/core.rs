@@ -188,7 +188,7 @@ impl Core {
             store.set_shaped();
             store.set_held({
                 let data = data.clone();
-                Rc::new(move |topic: &Topic| data.get(topic))
+                Rc::new(move |topic: &Topic| data.shown(topic))
             });
             data.on_change({
                 let store = Rc::downgrade(&store);

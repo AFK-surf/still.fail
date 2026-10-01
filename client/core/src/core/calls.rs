@@ -20,6 +20,7 @@ pub(crate) enum Call {
     SignOut { account: String },
     /// Something to have done on a station or still.fail cloud, by its name (ops.rs): the UI never makes a request itself.
     Op(crate::ops::Request),
+    ProfileModels { op: crate::ops::Request, id: String, models: Value },
     /// A chat into the archive or back (`chat.archive`, an `Op`): one going in is hidden from the lists meanwhile.
     ChatArchive { op: crate::ops::Request, thread: Option<u64>, session: String, archived: bool },
     /// `client`: the app it is sent from ("android 0.1.1123"), for the station to tell its agent; older UIs give none.
@@ -100,7 +101,7 @@ impl Call {
     /// The station a call is about, if any.
     pub(super) fn station(&self) -> Option<&str> {
         match self {
-            Call::Op(op) | Call::ChatArchive { op, .. } => match &op.target {
+            Call::Op(op) | Call::ProfileModels { op, .. } | Call::ChatArchive { op, .. } => match &op.target {
                 crate::ops::Target::Station(station) => Some(station),
                 crate::ops::Target::Cloud(_) => None,
             },
@@ -518,6 +519,14 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
                 None => None,
             };
             Call::Migrate { accounts: p.accounts.filter(|a| !a.is_null()), device }
+        }
+        "profile.put" if params.get("input").and_then(|v| v.get("models")).is_some() => {
+            let op = crate::ops::request(name, &params).expect("an op")?;
+            let models = params["input"]["models"].clone();
+            if !models.as_array().is_some_and(|a| a.iter().all(Value::is_string)) {
+                return Err(CoreError::invalid("模型列表不对"));
+            }
+            Call::ProfileModels { op, id: params["id"].as_str().unwrap_or_default().into(), models }
         }
         "chat.archive" => {
             let params = params_or_empty(params);
