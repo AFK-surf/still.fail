@@ -35,6 +35,11 @@ pub struct SlackIdentity {
     pub bot_id: String,
 }
 
+/// How often the Socket Mode connection is pinged, and how long it may say nothing before it is taken for dead
+/// (SlackSurface::run_socket). Tests wait on a real socket, so theirs are short.
+const PING_EVERY: Duration = if cfg!(test) { Duration::from_millis(50) } else { Duration::from_secs(5) };
+const STALE_AFTER: Duration = if cfg!(test) { Duration::from_millis(200) } else { Duration::from_secs(20) };
+
 /// Where Slack's Web API is (tests point it elsewhere).
 fn api_base() -> String {
     crate::former::var("SLACK_API").unwrap_or_else(|| "https://slack.com/api".into())
@@ -280,15 +285,33 @@ impl SlackSurface {
         }
     }
 
-    /// Returns when the socket closes (Slack rotates connections routinely).
+    /// Returns when the socket closes (Slack rotates connections routinely), and fails when it went quiet: a connection
+    /// cut off on the way (a network blip) can look open forever, and nothing would come through it again (2026-09-30
+    /// on bft). Like Slack's Python SDK (slack_sdk.socket_mode.builtin), it pings every PING_EVERY and takes a socket
+    /// that has said nothing for STALE_AFTER (4 pings unanswered) for dead.
     async fn run_socket(self: Arc<Self>, url: &str, handler: Handler) -> Result<()> {
-        let (socket, _) = tokio_tungstenite::connect_async(url).await?;
+        let (socket, _) = tokio::time::timeout(STALE_AFTER, tokio_tungstenite::connect_async(url)).await.map_err(|_| anyhow!("slack socket did not open within {:?}", STALE_AFTER))??;
         let (write, mut read) = socket.split();
         let write = Arc::new(AsyncMutex::new(write));
         self.set_status(true, None);
         let bot = self.bot_user_id();
         let bot_id = self.identity.lock().unwrap().as_ref().map(|i| i.bot_id.clone()).unwrap_or_default();
-        while let Some(frame) = read.next().await {
+        let mut ping = tokio::time::interval_at(tokio::time::Instant::now() + PING_EVERY, PING_EVERY);
+        let mut heard = tokio::time::Instant::now();
+        loop {
+            let frame = tokio::select! {
+                frame = read.next() => frame,
+                _ = ping.tick() => {
+                    if heard.elapsed() >= STALE_AFTER {
+                        bail!("slack socket said nothing for {:?}", heard.elapsed());
+                    }
+                    // A dead socket can block the write too; the next tick checks again.
+                    let _ = tokio::time::timeout(PING_EVERY, async { write.lock().await.send(Message::Ping(Default::default())).await }).await;
+                    continue;
+                }
+            };
+            let Some(frame) = frame else { break };
+            heard = tokio::time::Instant::now();
             let text = match frame? {
                 Message::Text(t) => t.to_string(),
                 Message::Close(_) => break,
@@ -545,6 +568,47 @@ async fn channel_name_of(channel: &str, token: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn quiet_handler() -> Handler {
+        Arc::new(|_| Box::pin(async { Ok(()) }))
+    }
+
+    /// A local Socket Mode stand-in: `answers` says whether it reads its socket (and so answers pings) or leaves it be,
+    /// like a connection cut off on the way.
+    async fn stand_in(answers: bool) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            if answers {
+                while let Some(Ok(_)) = socket.next().await {}
+            } else {
+                std::future::pending::<()>().await;
+            }
+            drop(socket);
+        });
+        url
+    }
+
+    #[tokio::test]
+    async fn a_socket_that_goes_quiet_is_given_up() {
+        let url = stand_in(false).await;
+        let surface = SlackSurface::new("xapp-1", "xoxb-1", None).unwrap();
+        let started = tokio::time::Instant::now();
+        let error = surface.clone().run_socket(&url, quiet_handler()).await.unwrap_err();
+        assert!(error.to_string().contains("said nothing"), "{error}");
+        assert!(started.elapsed() >= STALE_AFTER && started.elapsed() < STALE_AFTER * 3, "{:?}", started.elapsed());
+    }
+
+    #[tokio::test]
+    async fn a_socket_that_answers_pings_stays() {
+        let url = stand_in(true).await;
+        let surface = SlackSurface::new("xapp-1", "xoxb-1", None).unwrap();
+        let run = surface.clone().run_socket(&url, quiet_handler());
+        // Nothing but pongs comes in, for well past STALE_AFTER: still up.
+        assert!(tokio::time::timeout(STALE_AFTER * 6, run).await.is_err());
+    }
 
     #[test]
     fn slack_events_become_messages_and_edits_and_the_rest_is_left() {
