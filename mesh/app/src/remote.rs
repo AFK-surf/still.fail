@@ -179,13 +179,13 @@ impl Remote {
     }
 
     /// Removed peers and withdrawn local permissions stop their tasks, without touching any local jobs.
-    pub async fn revoke(&self, workspace: &str, peers: &[String]) {
+    pub async fn revoke(&self, workspace: &str, peers: &[String], membership_current: bool) {
         let _guard=self.serial.lock().await;
         if let Ok(entries)=std::fs::read_dir(self.root.join("incoming")) {
             for entry in entries.flatten() {
                 let Ok(meta)=read(&entry.path().join("task.json")) else {continue};
                 let peer=text(&meta,"station");
-                if text(&meta,"workspace")==workspace && peers.iter().any(|p| p==peer) && self.allowed(peer) {continue;}
+                if self.allowed(peer) && (!membership_current || (text(&meta,"workspace")==workspace && peers.iter().any(|p| p==peer))) {continue;}
                 let id=format!("remote_{}",entry.file_name().to_string_lossy());
                 if self.store.get_job(&id).ok().flatten().is_some_and(|j|j.state=="running") { let _=self.jobs.stop(&id).await; }
             }
@@ -391,7 +391,7 @@ mod task_tests {
             call(&r,peer,"task.prepare",json!({"spec":{"command":"sleep 30"}})).await.unwrap();
             call(&r,peer,"task.start",json!({})).await.unwrap();
         }
-        r.revoke("ws",&["peer-b".into()]).await;
+        r.revoke("ws",&["peer-b".into()],true).await;
         assert_eq!(call(&r,"peer-a","task.get",json!({})).await.unwrap()["job"]["state"],"stopped");
         assert_eq!(call(&r,"peer-b","task.get",json!({})).await.unwrap()["job"]["state"],"running");
         call(&r,"peer-b","task.stop",json!({})).await.unwrap();

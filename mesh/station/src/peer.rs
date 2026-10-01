@@ -17,10 +17,12 @@ pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
     tokio::spawn(async move {
         loop {
             if let Some(app)=station.backend.0.get() {
-                let (endpoint, station)=(endpoint.clone(),station.clone());
+                let (endpoint, station)=(endpoint.clone(),Arc::downgrade(&station));
+                let connections: Arc<Mutex<std::collections::HashMap<String,Connection>>>=Arc::default();
                 let call: Call=Arc::new(move |target,request| {
-                    let (endpoint,station)=(endpoint.clone(),station.clone());
+                    let (endpoint,station,connections)=(endpoint.clone(),station.clone(),connections.clone());
                     Box::pin(async move {
+                        let station=station.upgrade().ok_or_else(||anyhow!("station stopped"))?;
                         if target.is_empty() && request["method"]=="peers" {
                             let s=station.state.lock().unwrap();
                             return Ok(json!({"workspace":s.workspace,"stations":s.peers,"current":station.peers_current.load(std::sync::atomic::Ordering::SeqCst)}));
@@ -28,12 +30,20 @@ pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
                         let workspace=member(&station,&target,request["workspace"].as_str())?;
                         // Requests are bounded and retriable by stable task key. A timeout is never reported as
                         // "not run": callers must query the same key after reconnecting.
-                        tokio::time::timeout(Duration::from_secs(30), async {
+                        let result=tokio::time::timeout(Duration::from_secs(30), async {
                             let id: iroh::EndpointId=target.parse()?;
                             let relays=relays(&station.state.lock().unwrap());
                             let mut addr=iroh::EndpointAddr::new(id);
                             for relay in relays { addr=addr.with_relay_url(relay); }
-                            let conn=endpoint.connect(addr,ALPN).await.context("peer unavailable or does not support station RPC")?;
+                            let cached=connections.lock().unwrap().get(&target).filter(|c|c.close_reason().is_none()).cloned();
+                            let conn=match cached {
+                                Some(conn)=>conn,
+                                None=>{
+                                    let conn=endpoint.connect(addr,ALPN).await.context("peer unavailable or does not support station RPC")?;
+                                    connections.lock().unwrap().insert(target.clone(),conn.clone());
+                                    conn
+                                }
+                            };
                             let (mut send,mut recv)=conn.open_bi().await?;
                             let bytes=serde_json::to_vec(&json!({"workspace":workspace,"request":request}))?;
                             if bytes.len()>MAX_MESSAGE { bail!("peer request too large"); }
@@ -44,7 +54,9 @@ pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
                             if let Some(error)=result["error"].as_str() { return Err(stillfail_app::remote::Refused(error.to_string()).into()); }
                             // Keep QUIC alive until the peer's FIN is received (read_to_end above).
                             Ok(result["result"].clone())
-                        }).await.map_err(|_| anyhow!("peer request timed out; execution may have happened — query the same task key"))?
+                        }).await.unwrap_or_else(|_| Err(anyhow!("peer request timed out; execution may have happened — query the same task key")));
+                        if result.as_ref().is_err_and(|e: &anyhow::Error|e.downcast_ref::<stillfail_app::remote::Refused>().is_none()) {connections.lock().unwrap().remove(&target);}
+                        result
                     })
                 });
                 app.remote.attach(call);
@@ -53,10 +65,9 @@ pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         loop {
-            if station.peers_current.load(std::sync::atomic::Ordering::SeqCst) {
-                let (workspace, peers)={let s=station.state.lock().unwrap(); (s.workspace.clone(),s.peers.iter().filter_map(|p|p["id"].as_str().map(str::to_string)).collect::<Vec<_>>())};
-                if let Some(app)=station.backend.0.get() { app.remote.revoke(&workspace,&peers).await; }
-            }
+            let current=station.peers_current.load(std::sync::atomic::Ordering::SeqCst);
+            let (workspace, peers)={let s=station.state.lock().unwrap(); (s.workspace.clone(),s.peers.iter().filter_map(|p|p["id"].as_str().map(str::to_string)).collect::<Vec<_>>())};
+            if let Some(app)=station.backend.0.get() { app.remote.revoke(&workspace,&peers,current).await; }
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
@@ -65,7 +76,8 @@ pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
 pub async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
     let peer=conn.remote_id().to_string();
     member(&station,&peer,None)?;
-    let (mut send,mut recv)=tokio::time::timeout(Duration::from_secs(10),conn.accept_bi()).await??;
+    loop {
+    let (mut send,mut recv)=tokio::time::timeout(Duration::from_secs(60),conn.accept_bi()).await??;
     let bytes=tokio::time::timeout(Duration::from_secs(15),recv.read_to_end(MAX_MESSAGE)).await??;
     let result: Result<Value>=async {
         let envelope: Value=serde_json::from_slice(&bytes)?;
@@ -78,7 +90,7 @@ pub async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
     send.write_all(&serde_json::to_vec(&answer)?).await?;
     send.finish()?;
     let _=tokio::time::timeout(Duration::from_secs(10),send.stopped()).await;
-    Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -107,8 +119,8 @@ mod tests {
             }
         });
         let address=target.addr();
-        async fn rpc(source:&Endpoint,address:&iroh::EndpointAddr,method:&str,extra:Value)->Result<Value> {
-            let conn=source.connect(address.clone(),ALPN).await?;
+        let connection=source.connect(address.clone(),ALPN).await?;
+        async fn rpc(conn:&Connection,method:&str,extra:Value)->Result<Value> {
             let (mut send,mut recv)=conn.open_bi().await?;
             let mut request=json!({"method":method,"session":"session","key":"one"});
             for (k,v) in extra.as_object().unwrap() {request[k]=v.clone();}
@@ -117,21 +129,21 @@ mod tests {
             let bytes=recv.read_to_end(MAX_MESSAGE).await?;
             Ok(serde_json::from_slice::<Value>(&bytes)?)
         }
-        let described=rpc(&source,&address,"describe",json!({})).await?;
+        let described=rpc(&connection,"describe",json!({})).await?;
         assert_eq!(described["result"]["tasks"],true);
-        let prepared=rpc(&source,&address,"task.prepare",json!({"spec":{"command":"echo transport-ok > result.txt"}})).await?;
+        let prepared=rpc(&connection,"task.prepare",json!({"spec":{"command":"echo transport-ok > result.txt"}})).await?;
         assert!(prepared["error"].is_null(),"{prepared}");
-        let started=rpc(&source,&address,"task.start",json!({})).await?;
+        let started=rpc(&connection,"task.start",json!({})).await?;
         assert!(started["error"].is_null(),"{started}");
         for _ in 0..200 {
-            let status=rpc(&source,&address,"task.get",json!({})).await?;
+            let status=rpc(&connection,"task.get",json!({})).await?;
             if status["result"]["job"]["state"]!="running" {assert_eq!(status["result"]["job"]["exitCode"],0);break;}
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
-        let artifact=rpc(&source,&address,"file.get",json!({"path":"result.txt"})).await?;
+        let artifact=rpc(&connection,"file.get",json!({"path":"result.txt"})).await?;
         use base64::Engine;
         assert_eq!(base64::engine::general_purpose::STANDARD.decode(artifact["result"]["data"].as_str().unwrap())?,b"transport-ok\n");
-        let repeated=rpc(&source,&address,"task.start",json!({})).await?;
+        let repeated=rpc(&connection,"task.start",json!({})).await?;
         assert_eq!(repeated["result"]["job"]["id"],started["result"]["job"]["id"]);
         assert!(member(&station,&source_id,Some("other-ws")).is_err());
         station.peers_current.store(false,std::sync::atomic::Ordering::SeqCst);
