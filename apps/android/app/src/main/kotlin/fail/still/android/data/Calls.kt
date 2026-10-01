@@ -53,9 +53,9 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** The chat's latest page in place of what it shows: the reader goes to its end. */
     suspend fun latest(thread: Long) { chat("chat.latest", thread) }
 
-    /** Where the reader leaves the chat: the message at the top of what shows, or none at its end (it opens there next,
-     *  while nothing is unread). */
-    suspend fun place(thread: Long, seq: Long?) { chat("chat.place", thread) { seq?.let { put("seq", it) } } }
+    /** Where the reader leaves the chat: the message at the top of what shows and how far below the list's top its top
+     *  is (`offset`, px), or none at its end (it opens there next, while nothing is unread). */
+    suspend fun place(thread: Long, seq: Long?, offset: Double? = null) { chat("chat.place", thread) { seq?.let { put("seq", it) }; offset?.let { put("offset", it) } } }
 
     /** Brings the page of an agent's execution history before what it shows into the view. */
     suspend fun historyOlder(key: String) { core.call("history.older", buildJsonObject { put("station", station); put("key", key) }) }

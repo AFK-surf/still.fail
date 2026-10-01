@@ -470,14 +470,19 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // Left at its end with nothing new since: it opens at its end, following it, as if new to it (web Chat.tsx →
     // useRememberPlace); the top message's offset would not land there once what is below it lays out otherwise
     // (images still loading, an activity come or gone).
-    val place = app.places[placeKey]?.takeUnless { it.bottom != null && it.bottom == messages.lastOrNull()?.ts }
+    val kept = app.places[placeKey]
+    val leftAtEnd = kept?.bottom != null && kept.bottom == messages.lastOrNull()?.ts
+    val place = kept?.takeUnless { leftAtEnd }
+    // Where the core opened it (`at`), unless it was left here at its end since: the chat's view can outlive the page
+    // (opened again before the core lets it go) and still say where it was opened the first time.
+    val openedAt = view.at.takeUnless { leftAtEnd }
     // A long chat opened at its newest: the newest few first, at the bottom, and the rest rising in above them a
     // few a frame, rather than one frame building a screenful. (Opened elsewhere, at a place or the unread line, or
     // a window short of the chat's end, it is all there at once, to be put in place.)
     val reveal = remember { Reveal() }
     if (!reveal.decided && messages.isNotEmpty()) {
         reveal.decided = true
-        if (all.size > 8 && place == null && !short && view.at == null && all.none { it is Entry.Line }) reveal.count = 3
+        if (all.size > 8 && place == null && !short && openedAt == null && all.none { it is Entry.Line }) reveal.count = 3
     }
     val allSize by rememberUpdatedState(all.size)
     LaunchedEffect(reveal.decided) {
@@ -514,14 +519,16 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val lineOffset = with(density) { -85.dp.roundToPx() }
     // Where the core opened the chat, short of its end (its first unread, where it was left: `at`): that message at the
     // top, when nothing here says otherwise (a place kept here, the unread line).
-    val atIndex = view.at?.let { at -> rows.indexOfFirst { it is Entry.Said && it.m.seq >= at } }?.takeIf { it >= 0 }
+    val atIndex = openedAt?.let { at -> rows.indexOfFirst { it is Entry.Said && it.m.seq >= at } }?.takeIf { it >= 0 }
+    // Where that message's top was when the chat was left there (`atOffset`, as this app told the core: px).
+    val atOffset = view.atOffset?.takeIf { openedAt != null && atIndex != null && (rows[atIndex] as? Entry.Said)?.m?.seq == openedAt }?.roundToInt() ?: 0
     // The list starts where it is going (the unread line, where the chat was left, or the newest), rather than
     // composing its top only to jump away from it.
     // Its first frame is where it is put (the unread line with what came before it, the place with its offset), so
     // putting it there once it has laid out moves nothing.
     val start = rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 }?.let { it to lineOffset }
         ?: place?.let { p -> rows.indexOfFirst { it.place == p.id }.takeIf { it >= 0 }?.let { it to -p.offset } }
-        ?: atIndex?.let { it to 0 } ?: (rows.lastIndex.coerceAtLeast(0) to 0)
+        ?: atIndex?.let { it to -atOffset } ?: (rows.lastIndex.coerceAtLeast(0) to 0)
     val list = rememberLazyListState(initialFirstVisibleItemIndex = start.first)
     // An offset above the item (the line's) is not taken as the initial one: asked for before the list first lays out.
     val begun = remember { booleanArrayOf(false) }
@@ -546,7 +553,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         when {
             line != null -> list.scrollToItem(line, lineOffset)
             back != null -> list.scrollToItem(back, -saved.offset)
-            atIndex != null -> list.scrollToItem(atIndex)
+            atIndex != null -> list.scrollToItem(atIndex, -atOffset)
             else -> follow.toEnd()
         }
         lineShown.value = line != null
@@ -575,23 +582,29 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // Remember where the chat is left: the message at the top and its offset, so what arrives below does not move it;
     // and whether it was left at its end (not a window short of it). The core is told too (`chat.place`): the message
     // at the top short of the end, none at it; it opens the chat's window there next, while nothing is unread.
+    // It is told as the reader comes to rest too, not only on leaving (web Chat.tsx): an app gone from memory or
+    // swiped away never leaves the page, and the core keeps what it was told last on the device.
     val rowsNow by rememberUpdatedState(rows)
     val newestNow by rememberUpdatedState(messages.lastOrNull()?.ts)
     val shortNow by rememberUpdatedState(short)
     val threadNow by rememberUpdatedState(thread?.id)
-    DisposableEffect(placeKey) {
-        onDispose {
-            val atEnd = !shortNow && (follow.on || !list.canScrollForward)
-            val bottom = if (atEnd) newestNow else null
-            val top = list.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item -> (rowsNow.firstOrNull { it.id == item.key && it is Entry.Said } as Entry.Said?)?.let { it to item.offset } }
-            top?.let { (row, offset) -> app.places[placeKey] = AppState.Place(row.place, offset, bottom) }
-            val id = threadNow
-            if (id != null && follow.placed) {
-                val seq = if (atEnd) null else top?.first?.m?.seq
-                app.scope.launch { try { api.place(id, seq) } catch (_: CoreException) {} }
-            }
+    fun leave() {
+        val atEnd = !shortNow && (follow.on || !list.canScrollForward)
+        val bottom = if (atEnd) newestNow else null
+        val top = list.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item -> (rowsNow.firstOrNull { it.id == item.key && it is Entry.Said } as Entry.Said?)?.let { it to item.offset } }
+        top?.let { (row, offset) -> app.places[placeKey] = AppState.Place(row.place, offset, bottom) }
+        val id = threadNow
+        if (id != null && follow.placed) {
+            val seq = if (atEnd) null else top?.first?.m?.seq
+            val offset = if (atEnd) null else top?.second?.toDouble()
+            app.scope.launch { try { api.place(id, seq, offset) } catch (_: CoreException) {} }
         }
     }
+    LaunchedEffect(placeKey, follow.placed) {
+        if (!follow.placed) return@LaunchedEffect
+        snapshotFlow { list.isScrollInProgress }.collect { moving -> if (!moving) leave() }
+    }
+    DisposableEffect(placeKey) { onDispose { leave() } }
     // A page coming in at either end (or going at the other) leaves what is in view where it is. The list keeps its
     // first item in view by its key; when that is a page's spinner, the first row after it is kept where it is instead.
     // The window put back at the chat's end in place of what showed (`chat.latest`; sending from short of it): the list

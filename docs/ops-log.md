@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 安卓 chat 停在底部离开、再进又回到上面（android-chat-scroll-restore）：只改了安卓（Chat.kt、Calls.kt），要发一版；core 不用动（`chat.place` 的 `offset` 和视图的 `atOffset` 已在 514492cf 上线）。上线后验：安卓上打开一个曾停在中间的 chat，滚到最底下，返回再进，应该还在底部；再滚到中间，从最近任务里划掉 app，重开进这个 chat，应该回到原位置。
 - 手机账号页顺序、去掉 chat 顶上的连接胶囊（mobile-me-order-chat-conn）：只改了手机 web 和安卓，web 跟部署走，安卓要发一版；core 的 `connection` topic 保留给旧 app。上线后验：手机上 设置 → 账号，「登录的地方」在「这台设备上的账号」下面；断网再连时 chat 顶上不再出现胶囊。
 - 桌面测试版进 CI、签名提速（desktop-sign-fast）：`apps/desktop/package.json` 加 `signIgnore`，只单独签 Mach-O（以前 .pak、图片、字体也逐个带时间戳签，签名要 4～5 分钟，现在 19 秒；`codesign --verify --deep --strict` 通过，Designated Requirement 不变，本地网络授权认的就是它，按理不受影响）。pipeline 加 desktop job：main 改到桌面带的东西（apps/desktop、client、web、station）就在 studio 上发桌面测试版。正式版桌面照常手动 `release.sh desktop`，也一样变快。上线后验：合进去后改到 web 的那次 pipeline 里 desktop job 绿，`desktop/stillfail-beta-mac.yml` 的版本是那个提交的；桌面测试版「检查更新」能更新上去，更新后打开局域网里的 station 不再弹本地网络授权。
 - station 包和安卓测试版进 CI（ci-station-android）：main 改到 station 或安卓时，pipeline 自动发测试通道的 station 包（并让 studio 的 station 更新）和安卓测试版。合并的同时把 studio 的 `~/bin/ember-deploy` 改成只管 relay 和 mesh（备份 `.bak-1001-station`）。上线后验：合进去的那次 pipeline 里 station、android 两个 job 绿，android 的日志里证书 SHA-256 是 `a01a48b5…b56a`；`/releases/latest/android-beta` 指向新的 apk。
