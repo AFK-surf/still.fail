@@ -57,11 +57,16 @@ internal class ChatMotion(private val reduced: Boolean) {
     enum class Pose(val ms: Int) { Fold(170), Float(440), Spit(380), Return(320) }
     /** Where the flying avatar's 18dp face is, in the pane, and how it is scaled about its middle (`sx`, `sy`). */
     class Flying(val at: Offset, val sx: Float, val sy: Float)
-    class Turn(val seq: Long, val agent: String, val pose: Pose)
+    /** `from`: on from the same agent's message before it (where its avatar is), dropping on without going home; `fold`:
+     *  how much of its folding is left (it folds from when its message begins waiting). */
+    class Turn(val seq: Long, val agent: String, val pose: Pose, val from: Offset? = null, val fold: Int = Pose.Fold.ms)
 
     private val decided = HashMap<Long, Boolean>()
     private val done = HashSet<Long>()
-    private val queue = ArrayDeque<Pair<Long, String>>()
+    /** Waiting messages: seq, agent, and since when (ms; the agent's activity folds from then). */
+    private val queue = ArrayDeque<Triple<Long, String, Long>>()
+    /** Where the flying avatar last let a message out (in the pane): where it drops on from to the same agent's next. */
+    private var landed: Offset? = null
     /** Bumped when what waits changes without the current turn changing (all let out at once). */
     private var version by mutableIntStateOf(0)
     var current by mutableStateOf<Turn?>(null)
@@ -84,7 +89,7 @@ internal class ChatMotion(private val reduced: Boolean) {
             val agent = if (m.authorKind == "agent" && !m.mine && !m.system) m.by.agent else null
             val emits = !reduced && watched && m.said == true && agent != null && agent in showing
             decided[m.seq] = emits
-            if (emits) queue.addLast(m.seq to agent!!)
+            if (emits) queue.addLast(Triple(m.seq, agent!!, android.os.SystemClock.uptimeMillis()))
         }
     }
 
@@ -115,14 +120,21 @@ internal class ChatMotion(private val reduced: Boolean) {
         return buildSet { queue.forEach { add(it.second) }; current?.let { add(it.agent) } }
     }
 
-    /** An agent's activity: folded to its avatar, and whether the avatar is away flying. */
-    fun folded(agent: String) = current?.agent == agent
+    /** An agent's activity: folded to its avatar from when its first message begins waiting until its last is out (others'
+     *  coming out between do not unfold and fold it again), and whether the avatar is away flying. */
+    fun folded(agent: String): Boolean {
+        version
+        return current?.agent == agent || queue.any { it.second == agent }
+    }
     fun away(agent: String) = current?.let { it.agent == agent && it.pose != Pose.Fold } == true
 
     private fun nextAfter(agent: String?) {
         val next = queue.removeFirstOrNull()
-        // The same agent's next message goes straight on: its activity is folded already.
-        current = next?.let { Turn(it.first, it.second, if (it.second == agent) Pose.Float else Pose.Fold) }
+        // The same agent's next message goes straight on: its activity is folded already; another's once folded.
+        current = next?.let {
+            val left = Pose.Fold.ms - (android.os.SystemClock.uptimeMillis() - it.third).toInt()
+            Turn(it.first, it.second, if (it.second == agent || left <= 0) Pose.Float else Pose.Fold, fold = left.coerceAtLeast(0))
+        }
     }
 
     private fun finish(turn: Turn) {
@@ -149,11 +161,25 @@ internal class ChatMotion(private val reduced: Boolean) {
         }
         if (!ready) return finish(turn)
         clock.snapTo(0f)
-        clock.animateTo(1f, tween(turn.pose.ms, easing = LinearEasing))
+        val ms = when {
+            turn.pose == Pose.Fold -> turn.fold
+            turn.pose == Pose.Float && turn.from != null -> DROP_MS
+            else -> turn.pose.ms
+        }
+        clock.animateTo(1f, tween(ms, easing = LinearEasing))
         when (turn.pose) {
             Pose.Fold -> current = Turn(turn.seq, turn.agent, Pose.Float)
             Pose.Float -> current = Turn(turn.seq, turn.agent, Pose.Spit)
-            Pose.Spit -> current = Turn(turn.seq, turn.agent, Pose.Return)
+            Pose.Spit -> {
+                val next = queue.firstOrNull()
+                val at = landed
+                // The same agent's next message is waiting: the avatar drops on to it from here, not going home to hop again.
+                if (next != null && next.second == turn.agent && at != null) {
+                    queue.removeFirst()
+                    done += turn.seq
+                    current = Turn(next.first, next.second, Pose.Float, from = at)
+                } else current = Turn(turn.seq, turn.agent, Pose.Return)
+            }
             Pose.Return -> finish(turn)
         }
     }
@@ -178,15 +204,19 @@ internal class ChatMotion(private val reduced: Boolean) {
         val t = clock.value
         return when (c.pose) {
             Pose.Float -> {
-                val top = min(avatar.y, landing.y) - with(density) { HOP.toPx() }
-                val up = t / RISE
-                val down = (t - RISE) / (1f - RISE)
-                val y = if (t < RISE) avatar.y + (top - avatar.y) * (1f - (1f - up).pow(2.5f)) else top + (landing.y - top) * down.pow(2.5f)
+                // On from the message before it: only the drop.
+                val start = c.from ?: avatar
+                val rise = if (c.from != null) 0f else RISE
+                val top = if (c.from != null) start.y else min(start.y, landing.y) - with(density) { HOP.toPx() }
+                val up = if (rise > 0f) t / rise else 1f
+                val down = (t - rise) / (1f - rise)
+                val y = if (t < rise) start.y + (top - start.y) * (1f - (1f - up).pow(2.5f)) else top + (landing.y - top) * down.pow(2.5f)
                 val across = if (t < 0.5f) 4f * t * t * t else 1f - (-2f * t + 2f).pow(3) / 2f
-                val stretch = if (t < RISE) 0.07f * sin(PI.toFloat() * up) else 0.14f * down * down
-                Flying(Offset(avatar.x + (landing.x - avatar.x) * across, y), 1f - stretch * 0.6f, 1f + stretch)
+                val stretch = if (t < rise) 0.07f * sin(PI.toFloat() * up) else 0.14f * down * down
+                Flying(Offset(start.x + (landing.x - start.x) * across, y), 1f - stretch * 0.6f, 1f + stretch)
             }
             Pose.Spit -> {
+                landed = landing
                 val k = settle(t * Pose.Spit.ms / 1000f)
                 val swell = 1f + 0.12f * when {
                     t < 0.4f -> smooth(t / 0.4f)
@@ -270,6 +300,8 @@ private fun lerp(a: Offset, b: Offset, t: Float) = Offset(a.x + (b.x - a.x) * t,
 /** The hop: how high over the higher of its two ends, and the share of its time spent going up. */
 private val HOP = 34.dp
 private const val RISE = 0.42f
+/** The same agent's next message, waiting as one comes out: the avatar drops on to it, no hop (how long). */
+private const val DROP_MS = 280
 
 /** What is left, at `s` seconds, of a spring let go from 1 (stiffness 520, damping 14, mass 1: under-damped). */
 private fun settle(s: Float): Float {

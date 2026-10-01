@@ -1492,13 +1492,17 @@ const SPIT_MS = 380;
 const HOP_MS = 440;
 const HOP_PX = 34;
 const RISE = 0.42;
+/** The same agent's next message, waiting as one comes out: the avatar drops on to it, no hop (how long). */
+const DROP_MS = 280;
 const FLY = { type: "spring", visualDuration: 0.26, bounce: 0 } as const;
 
 export function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const decided = useRef(new Map<number, boolean>());
   const done = useRef(new Set<number>());
-  const queue = useRef<{ seq: number; agent: string }[]>([]);
-  const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose } | null>(null);
+  // `at`: when it began waiting; its agent's activity folds to its avatar from then.
+  const queue = useRef<{ seq: number; agent: string; at: number }[]>([]);
+  // `chain`: on from the message before it, the same agent's, without going home between.
+  const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose; at: number; chain?: boolean } | null>(null);
   const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number>; sx: MotionValue<number>; sy: MotionValue<number> } | null>(null);
   const [, rerender] = useState(0);
   const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
@@ -1593,7 +1597,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     if (!pane || !avatar || (pose !== "return" && !landing)) { finish(seq, agent, false); return; }
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame = 0;
-    const go = (to: Pose) => setCurrent({ seq, agent, pose: to });
+    const go = (to: Pose) => setCurrent({ ...current, pose: to, chain: false });
     // Where the message's avatar is once the message is out: waiting, the message takes back the list's gap above it.
     const landed = () => {
       const at = layoutSpot(pane, landing!);
@@ -1617,25 +1621,27 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       };
       step();
     };
-    if (pose === "fold") timer = setTimeout(() => go("float"), FOLD_MS);
+    // Folding since it began waiting: on once folded.
+    if (pose === "fold") timer = setTimeout(() => go("float"), Math.max(0, FOLD_MS - (performance.now() - current.at)));
     let hop: AnimationPlaybackControls | undefined;
     if (pose === "float") {
       const f = (flight.current ??= launch(pane, avatar));
       const from = { x: f.x.value, y: f.y.value };
       // Thrown up: it shoots off and slows to the top, hangs there a moment, then drops ever faster (stretching as it
-      // goes) onto where it goes. Across, it eases out and in.
+      // goes) onto where it goes. Across, it eases out and in. On from the message before it, it only drops.
+      const rise = current.chain ? 0 : RISE;
       hop = animate(0, 1, {
-        duration: HOP_MS / 1000, ease: "linear",
+        duration: (current.chain ? DROP_MS : HOP_MS) / 1000, ease: "linear",
         onUpdate: (t) => {
           const to = landed();
-          const top = Math.min(from.y, to.y) - HOP_PX;
-          const up = t / RISE;
-          const down = (t - RISE) / (1 - RISE);
-          const y = t < RISE ? from.y + (top - from.y) * (1 - (1 - up) ** 2.5) : top + (to.y - top) * down ** 2.5;
+          const top = current.chain ? from.y : Math.min(from.y, to.y) - HOP_PX;
+          const up = rise ? t / rise : 1;
+          const down = (t - rise) / (1 - rise);
+          const y = t < rise ? from.y + (top - from.y) * (1 - (1 - up) ** 2.5) : top + (to.y - top) * down ** 2.5;
           const across = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
           f.x.jump(from.x + (to.x - from.x) * across);
           f.y.jump(y);
-          const stretch = t < RISE ? 0.07 * Math.sin(Math.PI * up) : 0.14 * down ** 2;
+          const stretch = t < rise ? 0.07 * Math.sin(Math.PI * up) : 0.14 * down ** 2;
           f.sx.jump(1 - stretch * 0.6);
           f.sy.jump(1 + stretch);
         },
@@ -1654,7 +1660,14 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
         animate(f.s, [1, 1.12, 1], { duration: SPIT_MS / 1000, times: [0, 0.4, 0.75], ease: "easeInOut" });
       }
       follow(landed);
-      timer = setTimeout(() => go("return"), SPIT_MS);
+      timer = setTimeout(() => {
+        const next = queue.current[0];
+        if (next?.agent !== agent || !flight.current) return go("return");
+        // The same agent's next message is waiting: the avatar drops on to it from here, not going home to hop again.
+        queue.current.shift();
+        done.current.add(seq);
+        setCurrent({ ...next, pose: "float", chain: true });
+      }, SPIT_MS);
     }
     if (pose === "return") {
       if (!flight.current) { finish(seq, agent, false); return; }
@@ -1674,7 +1687,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
         const agent = m.authorKind === "agent" ? m.by.agent : undefined;
         const emits = !reduced && watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
         decided.current.set(m.seq, emits);
-        if (emits) queue.current.push({ seq: m.seq, agent: agent! });
+        if (emits) queue.current.push({ seq: m.seq, agent: agent!, at: performance.now() });
       }
     },
     /** Whether a message comes (or came) out of an avatar: it never eases in as others do. */
@@ -1687,9 +1700,11 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       return "held";
     },
     /** How an agent's activity stands: folded to its avatar, and whether the avatar is away flying. */
+    // Folded from when its first message begins waiting until its last is out: with others' messages coming out in
+    // between, it does not unfold and fold again each time.
     poseOf(agent: string): { folded: boolean; away: boolean } {
-      if (current?.agent !== agent) return { folded: false, away: false };
-      return { folded: true, away: current.pose !== "fold" };
+      const mine = current?.agent === agent;
+      return { folded: mine || queue.current.some((q) => q.agent === agent), away: mine && current!.pose !== "fold" };
     },
   };
 }
