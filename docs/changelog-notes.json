@@ -1,0 +1,3 @@
+{
+  "8d0f6cad": { "text": ["修复：安装 Codex / Claude Code 时打开自动更新，station 自更新后安装显示跳回「未安装」；现在 station 会等安装完再更新，装完找不到命令会直接报失败"] }
+}
