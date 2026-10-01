@@ -48,7 +48,8 @@ deps() { (cd "$1" && pnpm install --frozen-lockfile --prefer-offline > /dev/null
 # checks the web against stand-ins for the two modules it imports from there; main's deploy checks the real ones.
 wasm_pkg() {
   pkg=web/src/core/pkg
-  [ -f "$pkg/stillfail_core_wasm.d.ts" ] && [ ! -f "$pkg/.stand-in" ] && return 0
+  # A real build kept from before is current only while the core is unchanged: built again when it changed.
+  [ -f "$pkg/stillfail_core_wasm.d.ts" ] && [ ! -f "$pkg/.stand-in" ] && ! touches '^client/' && return 0
   if has cargo && has wasm-bindgen && sh client/wasm/build.sh > /dev/null 2>&1; then return 0; fi
   mkdir -p "$pkg"
   cat > "$pkg/stillfail_core_wasm.d.ts" <<'TS'
