@@ -78,7 +78,8 @@ export function Home() {
  */
 export function Recent() {
   const app = useApp();
-  const view = useChats(app.entry.id, false).value;
+  const chats = useChats(app.entry.id, false);
+  const view = chats.value;
   const items = view?.days.flatMap((day) => day.items).slice(0, 6) ?? [];
   return (
     <>
@@ -87,7 +88,7 @@ export function Recent() {
         <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label="新建对话"><Edit size={17} /></button>
       </div>
       <div className={css.mRecentRows}>
-        {!view ? <Note text="正在读取会话…" /> : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
+        {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} /> : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
       </div>
       <button type="button" className={css.mRecentAll} onClick={app.home}>全部会话<ChevronRight size={16} /></button>
     </>

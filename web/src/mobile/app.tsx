@@ -134,6 +134,8 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   // The latest chats over the page (WIDE).
   const [drawer, setDrawer] = useState(false);
   useBackClose(drawer, () => setDrawer(false));
+  // Folded below WIDE with them open: they go, and back off their entry of the history with them.
+  useEffect(() => { if (!wide) setDrawer(false); }, [wide]);
   // A move to another page leaves what lay over this one.
   useEffect(() => { setSheet(null); setMenu(null); setReader(null); setDrawer(false); }, [location.key]);
   const isHome = (p: Page) => p.location.pathname.replace(/\/$/, "") === home;

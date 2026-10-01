@@ -109,7 +109,8 @@ fun NewChatDisc() {
 @Composable
 private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier) {
     val app = LocalApp.current
-    var open by remember { mutableStateOf(false) }
+    // Put away when the page changes under them (a new chat becoming its chat, a link opened), as web's on a new address.
+    var open by remember(top) { mutableStateOf(false) }
     BackHandler(open) { open = false }
     if (open) Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) { open = false })
     AnimatedVisibility(
@@ -129,7 +130,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                     contentAlignment = Alignment.Center,
                 ) { IconIn(Icons.Edit, 17.dp, Color.White) }
             }
-            if (view == null) Text("正在读取会话…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(18.dp))
+            if (view == null) Text(chats.error?.message ?: "正在读取会话…", fontSize = 14.sp, color = if (chats.error != null) C.red else C.muted, modifier = Modifier.padding(18.dp))
             else LazyColumn(Modifier.weight(1f, fill = false).padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 items(view.days.flatMap { it.items }.take(6), key = { "${it.station}/${it.id}" }) { item ->
                     val here = top is Screen.Chat && top.station == item.station && top.of == item.page

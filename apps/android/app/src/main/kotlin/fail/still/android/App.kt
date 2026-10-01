@@ -466,7 +466,13 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     // a little behind (web mobile/app.tsx's own edge swipe); let go, it goes on from there, or back if the system says so.
     var swiped by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val width = LocalWindowInfo.current.containerSize.width.toFloat()
+    // The page's own width: a wide screen's column (screens/Wide.kt), so the page follows the finger there too.
+    val window = LocalWindowInfo.current.containerSize.width
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val width = with(density) {
+        val dp = window.toDp()
+        if (dp >= fail.still.android.screens.WideAt) fail.still.android.screens.columnWidth(dp).toPx() else window.toFloat()
+    }
     LaunchedEffect(top) {
         if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
         pages.animateTo(top, if (swiped) tween(300, easing = FastOutSlowInEasing) else null)
