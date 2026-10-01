@@ -62,7 +62,7 @@ pub fn name(id: &str) -> String {
     if context.is_empty() { named } else { format!("{named} {context}") }
 }
 
-/// The series a model is of, as people call it (Opus, Sonnet, GPT, o 系列, DeepSeek, Qwen); None when its family is not
+/// The series a model is of, as people call it (Opus, Sonnet, Sol, Astra, Luna, GPT, o 系列, DeepSeek, Qwen); None when its family is not
 /// known here.
 pub fn family(id: &str) -> Option<String> {
     let k = key(id);
@@ -72,6 +72,11 @@ pub fn family(id: &str) -> Option<String> {
     let first = *words.first()?;
     if first == "claude" || CLAUDE.contains(&first) {
         return words.iter().find(|w| CLAUDE.contains(w)).map(|w| word(w));
+    }
+    if first == "gpt" {
+        if let Some(family) = words.iter().skip(2).find(|w| ["sol", "astra", "luna"].contains(&w.split(':').next().unwrap_or(w))) {
+            return Some(word(family.split(':').next().unwrap_or(family)));
+        }
     }
     if first.len() > 1 && first.starts_with('o') && first[1..].bytes().all(|b| b.is_ascii_digit()) {
         return Some("o 系列".into());
@@ -224,5 +229,21 @@ mod tests {
         let mut ids = ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-fable-5-1", "claude-opus-5", "claude-sonnet-4-6"];
         ids.sort_by_key(|id| order(id));
         assert_eq!(ids, ["claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]);
+    }
+
+    #[test]
+    fn gpt_families_span_versions_and_provider_spellings() {
+        for (id, want) in [
+            ("gpt-6.1-sol", "Sol"), ("gpt-5.6-sol", "Sol"),
+            ("OpenAI/GPT-6-Astra", "Astra"), ("gpt-6-luna[1m]", "Luna"),
+            ("gpt-6-sol-20261001", "Sol"), ("openai/gpt-6-astra:free", "Astra"),
+            ("gpt-5.1-codex", "GPT"), ("gpt-4o-mini", "GPT"),
+            ("gpt-6-solar", "GPT"),
+        ] {
+            assert_eq!(family(id).as_deref(), Some(want), "{id}");
+        }
+        let mut ids = ["gpt-6-sol", "gpt-5.6-sol", "gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra"];
+        ids.sort_by_key(|id| order(id));
+        assert_eq!(ids, ["gpt-6-astra", "gpt-6-luna", "gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol"]);
     }
 }
