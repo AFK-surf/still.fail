@@ -145,8 +145,8 @@ export function StationScreen() {
             <>
               <SectionHeader title="在这台上" start={24} />
               <ListCard>
-                <GoRow title="连接" value={`${s.overview.connects.length} 个`} onClick={() => app.push(app.at("/settings/connects"))} />
-                <GoRow title="Profile" value={`${s.overview.profiles.length} 个`} onClick={() => app.push(app.at("/settings/profiles"))} />
+                <GoRow title="连接" value={`${s.overview.connects.length} 个`} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
+                <GoRow title="Profile" value={`${s.overview.profiles.length} 个`} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
                 <GoRow title="记忆" onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
               </ListCard>
               {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} />}

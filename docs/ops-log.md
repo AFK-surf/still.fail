@@ -17,6 +17,8 @@
 
 ## 待部署
 
+- 从单台 station 页进连接/Profile 只列这台（station-scoped-lists）：web 用 `?station=<id>`，安卓 Screen.Connects/Profiles 带 station；连接列表某台没连接时按它自己的 overview 显示「还没有连接」，不再等所有 station 回话。只改手机 web 和安卓，安卓要发一版。验证：手机设置 → Station → 某台 → 连接，标题上写「<名字> 上的」，只列这台。
+
 下面各条的 cloud、web、admin 部分已经随 1bf61c4 上线（2026-10-01 11:13），剩下的是要发版的安卓和桌面部分。
 
 - 手机设置重构（mobile-settings-workspace-redesign）：首页左上角头像换成设置齿轮，进一个设置总页（账号、Workspace、Station、连接、Profile、记忆、外观、通知；安卓还有版本）；连接、Profile、记忆改成跨 station 的一张表，单台 station 页只留机器和版本；Workspace 页成员、未登录、邀请合成一张表，点名字改名；切换面板不再带设置入口。只改了手机 web 和安卓的界面，core、cloud、station 都没动，旧地址（`settings/general`、`s/…/overview` 等）照样能开。手机 web 跟部署走；安卓要发一版才有。验证：手机上点首页左上角齿轮进设置，行尾显示在线台数、出错的连接；设置 → 连接，按 station 分组列出所有连接。

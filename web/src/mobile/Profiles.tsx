@@ -38,19 +38,24 @@ function useApi() {
  */
 export function ProfilesScreen() {
   const app = useApp();
-  const stations = useStations(app.entry.id).value;
+  // From a station's page (?station=<id>): that station's only, back to it.
+  const [params] = useSearchParams();
+  const only = params.get("station");
+  const listed = useStations(app.entry.id).value;
+  const stations = only ? listed?.filter((s) => s.id === only) : listed;
+  const one = only ? stations?.[0] : undefined;
   const online = stations?.filter((s) => s.online) ?? [];
   const add = () => online.length === 1
     ? app.push(app.at(`/s/${online[0]!.id}/profiles/new`))
     : app.sheet({ height: 0.5, content: () => <PickStation title="添加 Profile" stations={online} to={(s) => `/s/${s.id}/profiles/new`} /> });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加 Profile" onClick={add} /> : undefined} />
-      <LargeTitle small="" big="Profile" />
+      <TopBack label={one?.name ?? "设置"} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加 Profile" onClick={add} /> : undefined} />
+      <LargeTitle small={one ? `${one.name} 上的` : ""} big="Profile" />
       <p className={settingsCss.mPageNote}>agent 跑模型用的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行。</p>
       {!stations ? <Loading text="正在读取 station…" /> : stations.map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-          <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />
+          {!one && <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />}
           <ListCard>
             {!s.overview ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.online ? "正在读取…" : "station 离线，读不到它的 Profile"}</span></ListRow>
               : s.overview.profiles.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>这台机器还没有 Profile</span></ListRow>

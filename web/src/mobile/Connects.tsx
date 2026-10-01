@@ -122,7 +122,12 @@ export function ConnectsScreen() {
   const app = useApp();
   const [mine, setMine] = useState(false);
   const connects = useConnects(app.entry.id, mine);
-  const stations = useStations(app.entry.id).value;
+  // From a station's page (?station=<id>): that station's only, back to it.
+  const [params] = useSearchParams();
+  const only = params.get("station");
+  const listed = useStations(app.entry.id).value;
+  const stations = only ? listed?.filter((s) => s.id === only) : listed;
+  const one = only ? stations?.[0] : undefined;
   const online = stations?.filter((s) => s.online) ?? [];
   const items = connects.value?.items ?? [];
   const add = () => online.length === 1
@@ -130,20 +135,20 @@ export function ConnectsScreen() {
     : app.sheet({ height: 0.5, content: () => <PickStation title="添加连接" stations={online} to={(s) => `/s/${s.id}/connects/new`} /> });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加连接" onClick={add} /> : undefined} />
-      <LargeTitle small="" big="连接" />
+      <TopBack label={one?.name ?? "设置"} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加连接" onClick={add} /> : undefined} />
+      <LargeTitle small={one ? `${one.name} 上的` : ""} big="连接" />
       <p className={settingsCss.mPageNote}>连接是人找到 still.fail 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</p>
       <div className={css.mListSeg}><Seg options={["全部", "我建的"]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>
       {!stations || !connects.value ? <Loading text={connects.error?.message ?? "正在读取连接…"} /> : stations.map((s) => {
         const here = items.filter((i) => i.station === s.station);
         const waiting = s.overview?.slackApps ?? [];
-        if (s.online && here.length === 0 && waiting.length === 0 && mine) return null;
+        if (s.online && here.length === 0 && waiting.length === 0 && mine && !one) return null;
         return (
           <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-            <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />
+            {!one && <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />}
             <ListCard>
               {!s.online && here.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>station 离线，读不到它的连接</span></ListRow>
-                : here.length === 0 && waiting.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{connects.value!.loading ? "正在读取…" : "这台机器上还没有连接"}</span></ListRow>
+                : here.length === 0 && waiting.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? "这台机器上还没有连接" : "正在读取…"}</span></ListRow>
                 : null}
               {here.map((i) => <ConnectRow key={i.connect.id} connect={i.connect} onClick={() => app.push(`${stationBase(i.station)}/connects/${encodeURIComponent(i.connect.id)}`)} />)}
               {/* The Slack apps made here that no connect has taken yet: to be finished any time. */}

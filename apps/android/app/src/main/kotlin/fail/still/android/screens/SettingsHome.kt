@@ -112,8 +112,8 @@ fun SettingsScreen(current: WorkspaceEntry) {
         ListCard {
             GoRow("Workspace", view?.let { "${it.members.size} 人" + if (it.manager && waiting > 0) " · $waiting 人待加入" else "" }) { app.push(Screen.Workspace) }
             GoRow("Station", stations?.let { "$online/${it.size} 在线" }, dot = troubled) { app.push(Screen.Stations) }
-            GoRow("连接", connects?.let { if (failing > 0) "$failing 个出错" else "${it.items.size} 个" }, bad = failing > 0) { app.push(Screen.Connects) }
-            GoRow("Profile", stations?.let { if (short > 0) "$short 个要处理" else "${profiles.size} 个" }, bad = short > 0) { app.push(Screen.Profiles) }
+            GoRow("连接", connects?.let { if (failing > 0) "$failing 个出错" else "${it.items.size} 个" }, bad = failing > 0) { app.push(Screen.Connects()) }
+            GoRow("Profile", stations?.let { if (short > 0) "$short 个要处理" else "${profiles.size} 个" }, bad = short > 0) { app.push(Screen.Profiles()) }
             GoRow("记忆") { app.push(Screen.Memories) }
         }
         SectionHeader("这台设备", start = 24.dp)

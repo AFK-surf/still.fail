@@ -172,8 +172,8 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 // What runs on it is in settings' lists, every station's together; here, how much of it there is.
                 SectionHeader("在这台上", start = 24.dp)
                 ListCard {
-                    GoRow("连接", "${overview.connects.size} 个") { app.push(Screen.Connects) }
-                    GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles) }
+                    GoRow("连接", "${overview.connects.size} 个") { app.push(Screen.Connects(address)) }
+                    GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles(address)) }
                     GoRow("记忆") { app.push(Screen.Memory(address)) }
                 }
                 if (s.online) Versions(address, overview.updates, manager)

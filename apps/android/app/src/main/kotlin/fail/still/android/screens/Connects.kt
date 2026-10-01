@@ -142,33 +142,35 @@ private fun rememberConnect(station: String, id: String): Pair<ConnectItem?, Str
  * says so. A new one is added on a station picked (the only one online, without asking).
  */
 @Composable
-fun ConnectsScreen(current: WorkspaceEntry) {
+fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
     val app = LocalApp.current
     var mine by rememberSaveable { mutableStateOf(false) }
     val connects by rememberTopic<ConnectsView>(app.core, Topics.connects(current.workspace.id, mine))
     val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
-    val stations = topic.value
+    // From a station's page: that station's only, back to it.
+    val stations = topic.value?.let { all -> if (only == null) all else all.filter { it.station == only } }
+    val one = if (only != null) stations?.firstOrNull() else null
     val online = stations.orEmpty().filter { it.online }
     val view = connects.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop, trailing = if (online.isNotEmpty()) ({
+        TopBack(one?.name ?: "设置", app::pop, trailing = if (online.isNotEmpty()) ({
             NavButton(Icons.Plus, {
                 if (online.size == 1) openNewConnect(app, online[0].station)
                 else openPickStation(app, "添加连接", online) { openNewConnect(app, it.station) }
             }, 20.dp)
         }) else null)
-        LargeTitle("", "连接")
+        LargeTitle(one?.let { "${it.name} 上的" } ?: "", "连接")
         PageNote("连接是人找到 still.fail 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。")
         Seg(listOf("全部", "我建的"), if (mine) 1 else 0, { mine = it == 1 }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
         if (stations == null || view == null) Text(connects.error?.message ?: "正在读取连接…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else stations.forEach { s ->
             val here = view.items.filter { it.station == s.station }
             val waiting = s.overview?.slackApps.orEmpty()
-            if (s.online && here.isEmpty() && waiting.isEmpty() && mine) return@forEach
-            SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
+            if (s.online && here.isEmpty() && waiting.isEmpty() && mine && one == null) return@forEach
+            if (one == null) SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
             ListCard {
                 if (!s.online && here.isEmpty()) ListRow { Text("station 离线，读不到它的连接", fontSize = 15.sp, color = C.muted) }
-                else if (here.isEmpty() && waiting.isEmpty()) ListRow { Text(if (view.loading) "正在读取…" else "这台机器上还没有连接", fontSize = 15.sp, color = C.muted) }
+                else if (here.isEmpty() && waiting.isEmpty()) ListRow { Text(if (s.overview != null) "这台机器上还没有连接" else "正在读取…", fontSize = 15.sp, color = C.muted) }
                 here.forEach { ConnectRow(it.station, it.connect) }
                 // The Slack apps made here that no connect has taken yet: to be finished any time.
                 waiting.forEach { a -> WaitingApp(app, s.station, a, s.online) }

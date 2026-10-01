@@ -113,23 +113,25 @@ private val MACHINE_RUNTIME = mapOf("claude" to "Claude Code", "codex" to "Codex
  * under its name, what can be added there (a profile, the machine's own logins) with it; one offline says so.
  */
 @Composable
-fun ProfilesScreen(current: WorkspaceEntry) {
+fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
     val app = LocalApp.current
     val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
-    val stations = topic.value
+    // From a station's page: that station's only, back to it.
+    val stations = topic.value?.let { all -> if (only == null) all else all.filter { it.station == only } }
+    val one = if (only != null) stations?.firstOrNull() else null
     val online = stations.orEmpty().filter { it.online }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop, trailing = if (online.isNotEmpty()) ({
+        TopBack(one?.name ?: "设置", app::pop, trailing = if (online.isNotEmpty()) ({
             NavButton(Icons.Plus, {
                 if (online.size == 1) app.push(Screen.NewProfile(online[0].station))
                 else openPickStation(app, "添加 Profile", online) { app.push(Screen.NewProfile(it.station)) }
             }, 20.dp)
         }) else null)
-        LargeTitle("", "Profile")
+        LargeTitle(one?.let { "${it.name} 上的" } ?: "", "Profile")
         PageNote("agent 跑模型用的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行。")
         if (stations == null) Text(topic.error?.message ?: "正在读取 station…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else stations.forEach { s ->
-            SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
+            if (one == null) SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
             val overview = s.overview
             ListCard {
                 if (overview == null) ListRow { Text(if (s.online) "正在读取…" else "station 离线，读不到它的 Profile", fontSize = 15.sp, color = C.muted) }

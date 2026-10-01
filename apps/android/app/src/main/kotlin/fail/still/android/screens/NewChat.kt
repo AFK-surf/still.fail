@@ -185,7 +185,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
             val p = choice.pick
             if (runtime == null || model == null || p == null || p.options.isEmpty()) {
                 // Nothing to choose from: the chooser leads to where models are enabled.
-                Chooser(haze, null, "没有可用模型 · 去勾选", Modifier.weight(1f, fill = false)) { app.push(Screen.Profiles) }
+                Chooser(haze, null, "没有可用模型 · 去勾选", Modifier.weight(1f, fill = false)) { app.push(Screen.Profiles()) }
             } else {
                 Chooser(haze, { MakerIcon(p.valueOption?.maker ?: entry.maker, runtime, 14.dp) }, tripleLabel(p), Modifier.weight(1f, fill = false), chevron = true) {
                     openRunPicker(app, view.station)

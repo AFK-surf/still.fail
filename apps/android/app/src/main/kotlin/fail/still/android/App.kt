@@ -129,8 +129,10 @@ sealed interface Screen {
     /** How this device shows still.fail: its theme, whose pictures lead a chat's row. */
     data object Appearance : Screen { override val id = "appearance" }
     /** Every station's connects, profiles and memory, from settings. */
-    data object Connects : Screen { override val id = "connects" }
-    data object Profiles : Screen { override val id = "profiles" }
+    /** Every station's connects, or (from a station's page) that station's only. */
+    data class Connects(val station: String? = null) : Screen { override val id = "connects" + (station?.let { "/$it" } ?: "") }
+    /** Every station's profiles, or (from a station's page) that station's only. */
+    data class Profiles(val station: String? = null) : Screen { override val id = "profiles" + (station?.let { "/$it" } ?: "") }
     data object Memories : Screen { override val id = "memories" }
     /** A web service an agent started, full screen: by its job (people know it by its name, never its port). */
     data class Preview(val station: String, val job: String) : Screen { override val id = "preview/$station/$job" }
@@ -522,8 +524,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Me -> MeScreen(current)
                     Screen.Settings -> fail.still.android.screens.SettingsScreen(current)
                     Screen.Appearance -> fail.still.android.screens.AppearanceScreen()
-                    Screen.Connects -> fail.still.android.screens.ConnectsScreen(current)
-                    Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current)
+                    is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
+                    is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)
                     Screen.Memories -> fail.still.android.screens.MemoriesScreen(current)
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
