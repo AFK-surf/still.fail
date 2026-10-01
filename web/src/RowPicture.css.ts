@@ -11,15 +11,15 @@ export const face = style({
 });
 globalStyle(`${face} > *`, { width: "100% !important", height: "100% !important", borderRadius: "50% !important", display: "grid", placeItems: "center" });
 globalStyle(`${face}[data-starter]::after`, {
-  // 1px of ground showing between face and ring, the same all round: the ring's 1.5px from 1px to 2.5px out.
-  content: "\"\"", position: "absolute", inset: -2.5, borderRadius: "50%", pointerEvents: "none",
-  boxShadow: `inset 0 0 0 1.5px ${vars.text}`,
+  // Whole pixels, no half ones to blur: 1px of ground between face and ring, the ring 1px from 1px to 2px out.
+  content: "\"\"", position: "absolute", inset: -2, borderRadius: "50%", pointerEvents: "none",
+  boxShadow: `inset 0 0 0 1px ${vars.text}`,
 });
 globalStyle(`${face}[data-starter] > *`, { boxShadow: `0 0 0 1px var(--mark-around)` });
 /** Small at the title's end: a row of pictures overlapping a little. */
 export const aside = style({ display: "inline-flex", alignItems: "center", flex: "none", paddingLeft: 2 });
 globalStyle(`${aside} > * + *`, { marginLeft: -3 });
-globalStyle(`${aside} > ${face}:not([data-starter])`, { boxShadow: `0 0 0 1.5px var(--mark-around)` });
+globalStyle(`${aside} > ${face}:not([data-starter])`, { boxShadow: `0 0 0 1px var(--mark-around)` });
 // Who started it on top of the others: its ring whole.
 globalStyle(`${aside} > ${face}[data-starter]`, { zIndex: 1, marginRight: 1 });
 export const asideAgent = style({ display: "inline-flex", alignItems: "center", gap: 1, minWidth: 16, height: 16, justifyContent: "center", color: vars.muted });
