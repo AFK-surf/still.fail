@@ -128,8 +128,18 @@ import kotlin.math.roundToInt
 /** How long a finger holds still before it picks rather than scrolls. */
 private const val HOLD = 260L
 
-private class Note(val n: Int, val span: Span, val text: String) {
-    var comment by mutableStateOf("")
+/** A numbered note, as its box and card show it (NoteBox, Card): a passage of a message's, or a mark on an image (ImageMarks.kt). */
+interface NoteLike {
+    val n: Int
+    /** What it is about, in a line under what is said. */
+    val text: String
+    var comment: String
+    /** Its pin's colour (none: the accent). */
+    val color: Color? get() = null
+}
+
+private class Note(override val n: Int, val span: Span, override val text: String) : NoteLike {
+    override var comment by mutableStateOf("")
 }
 
 /** The page's own way in and out: App.kt gives it the pages' transition (nothing slides; the page's parts move). */
@@ -517,7 +527,7 @@ private fun QuoteFlight(sent: SentQuote, note: Note?, placed: PagePlaces, p: () 
 
 /** A note's number, as a web page's marks show theirs: a pin, its point at the bottom right. */
 @Composable
-private fun Pin(n: Int, open: Boolean = false, small: Boolean = false, onClick: (() -> Unit)? = null) {
+private fun Pin(n: Int, open: Boolean = false, small: Boolean = false, color: Color? = null, onClick: (() -> Unit)? = null) {
     val size = if (small) 16.dp else 20.dp
     val shape = if (small) RoundedCornerShape(8.dp, 8.dp, 2.dp, 8.dp) else RoundedCornerShape(10.dp, 10.dp, 2.dp, 10.dp)
     // In the margin: pops in from its point, and grows a little while its note is open (160ms, as the web's).
@@ -526,7 +536,7 @@ private fun Pin(n: Int, open: Boolean = false, small: Boolean = false, onClick: 
         Modifier.heightIn(min = size).widthIn(min = size)
             .then(if (small) Modifier else Modifier.pop(160, TransformOrigin(1f, 1f)).graphicsLayer { scaleX = grown; scaleY = grown; transformOrigin = TransformOrigin(1f, 1f) })
             .then(if (small) Modifier else Modifier.border(2.dp, Color.White, shape))
-            .clip(shape).background(C.accent)
+            .clip(shape).background(color ?: C.accent)
             .then(if (onClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick) else Modifier)
             .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
@@ -620,7 +630,7 @@ private fun Handles(words: PickedWords, rects: List<Rect>, picked: Span, setPick
 
 /** Saying something about a passage: a frosted composer floating under it, as the chat's is, the passage over what is written. */
 @Composable
-private fun NoteBox(note: Note, modifier: Modifier, onDone: () -> Unit, onRemove: () -> Unit) {
+internal fun NoteBox(note: NoteLike, modifier: Modifier, onDone: () -> Unit, onRemove: () -> Unit) {
     val focus = remember { FocusRequester() }
     val into = remember { BringIntoViewRequester() }
     LaunchedEffect(Unit) { focus.requestFocus(); into.bringIntoView() }
@@ -629,7 +639,7 @@ private fun NoteBox(note: Note, modifier: Modifier, onDone: () -> Unit, onRemove
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Pin(note.n, small = true)
+            Pin(note.n, small = true, color = note.color)
             Text(note.text, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -648,7 +658,7 @@ private fun NoteBox(note: Note, modifier: Modifier, onDone: () -> Unit, onRemove
 
 /** A note in the tray at the foot: its number and what is said, over the passage. */
 @Composable
-private fun Card(note: Note, open: Boolean, haze: HazeState, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun Card(note: NoteLike, open: Boolean, haze: HazeState, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier.width(160.dp).pop().floating(haze, shape).then(if (open) Modifier.border(1.5.dp, C.accent, shape) else Modifier)
@@ -658,10 +668,10 @@ private fun Card(note: Note, open: Boolean, haze: HazeState, modifier: Modifier 
 
 /** What a note's card holds: its number and what is said, over the passage. */
 @Composable
-private fun CardContent(note: Note, padded: Boolean = true) {
+private fun CardContent(note: NoteLike, padded: Boolean = true) {
     Column(if (padded) Modifier.padding(horizontal = 12.dp, vertical = 9.dp) else Modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Pin(note.n, small = true)
+            Pin(note.n, small = true, color = note.color)
             val said = note.comment.trim()
             Text(said.ifEmpty { "只引用" }, fontSize = 14.sp, lineHeight = 20.sp, color = if (said.isEmpty()) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

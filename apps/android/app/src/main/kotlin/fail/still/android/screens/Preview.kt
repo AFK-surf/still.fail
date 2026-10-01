@@ -963,8 +963,8 @@ private fun drawMark(shot: Bitmap, n: Int, x: Float, y: Float, w: Float, h: Floa
 
 // ── into the chat's draft (web/src/draft.ts offerToDraft) ──────────────
 
-/** A quote a mark puts into the draft, with the screenshot's file name it goes with. */
-class OfferQuote(val author: String, val text: String, val comment: String, val file: String)
+/** A quote a mark puts into the draft, with the screenshot's file name it goes with (none: an image's mark, ImageMarks.kt), and whose it is. */
+class OfferQuote(val author: String, val text: String, val comment: String, val file: String?, val role: String = "page")
 
 /** What a preview's marks put into the draft of the chat whose agent is `session`: screenshots and quotes. */
 class MarkOffer(val station: String, val session: String, val pictures: List<Picked>, val quotes: List<OfferQuote>)
@@ -983,7 +983,7 @@ fun TakeDraftOffers(station: String, sessions: List<String>, draft: Draft) {
         for (offer in mine) {
             offer.pictures.forEach { app.upload(draft, station, it, app.scope) }
             offer.quotes.forEach { q ->
-                draft.quotes += DraftQuote(System.nanoTime(), q.author, q.text, null, "page", q.file).also { it.comment = q.comment }
+                draft.quotes += DraftQuote(System.nanoTime(), q.author, q.text, null, q.role, q.file).also { it.comment = q.comment }
             }
         }
     }

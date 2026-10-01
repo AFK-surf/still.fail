@@ -547,11 +547,11 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
                 if (coming && progress != null) Progress(progress, file.size, dark = true, inBar = true)
                 when {
                     marks.on -> MarksActions(marks, canDraft = true,
-                        onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p -> app.toast = if (marks.save(context, p.name)) "已存到「下载」" else "没能下载" } } },
+                        onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p, _ -> app.toast = if (marks.save(context, p.name)) "已存到「下载」" else "没能下载" } } },
                         onDraft = {
                             // Into the draft of the chat whose agent keeps the image: its page takes it (Preview.kt → TakeDraftOffers).
                             if (bytes != null) scope.launch {
-                                finish(marks, bytes, zoom, file) { p -> DraftOffers.waiting += MarkOffer(station, key, listOf(p), emptyList()); marks.leave(); onClose() }
+                                finish(marks, bytes, zoom, file) { p, quotes -> DraftOffers.waiting += MarkOffer(station, key, listOf(p), quotes); marks.leave(); onClose() }
                             }
                         })
                     // While the whole of it comes the bar says how far it has; its tools come with it.
@@ -576,21 +576,23 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
             }
         }
         if (marks.on) Box(Modifier.align(Alignment.BottomCenter).padding(WindowInsets.navigationBars.asPaddingValues()).padding(bottom = 8.dp)) {
-            MarksTools(marks, darkGlass(haze, RoundedCornerShape(14.dp)))
+            MarksFoot(marks, haze, darkGlass(haze, RoundedCornerShape(14.dp)))
         }
     }
 }
 
-/** The marked image made and handed on (`use`); what went wrong said in the bar. */
-private suspend fun finish(marks: ImageMarks, bytes: ByteArray, zoom: ZoomState, file: Attachment, use: suspend (Picked) -> Unit) {
+/** The marked image made and handed on (`use`), with a quote per numbered mark; what went wrong said in the bar. */
+private suspend fun finish(marks: ImageMarks, bytes: ByteArray, zoom: ZoomState, file: Attachment, use: suspend (Picked, List<OfferQuote>) -> Unit) {
     val natural = zoom.natural ?: return
     marks.busy = true
     marks.error = null
     try {
         marks.putDown()
+        val all = marks.all()
         val made = marks.render(bytes, natural) ?: throw IllegalStateException("没能画出图片")
         val stamp = java.text.SimpleDateFormat("HHmmss", java.util.Locale.ROOT).format(java.util.Date())
-        use(Picked("${file.name.substringBeforeLast('.')}-标注-$stamp.png", made.bytes, made.width, made.height, made.preview, made.size))
+        val name = "${file.name.substringBeforeLast('.')}-标注-$stamp.png"
+        use(Picked(name, made.bytes, made.width, made.height, made.preview, made.size), marks.quotes(all, name, file.name, natural))
     } catch (e: Exception) {
         marks.error = e.message ?: "没能画出图片"
     } finally {
@@ -801,7 +803,7 @@ private fun ImageStage(station: String, key: String, file: Attachment, bytes: By
                 n.restore()
             }
         }
-        if (marks.on) marks.WritingField()
+        if (marks.on) { marks.Pins(); marks.WritingField() }
     }
 }
 

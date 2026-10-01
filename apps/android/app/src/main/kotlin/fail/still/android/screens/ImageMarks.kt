@@ -1,7 +1,8 @@
 // Marking an image opened in a preview (web/src/annotate/ImageMarks.tsx): boxes, arrows, lines drawn by hand and
 // words, drawn on the image where it is shown (zoomed and panned with it); picked again to move, stretch, recolour or
-// remove; undo and redo. Done, the image with its marks, drawn again at its own size, goes into the chat's draft as a
-// new file, or is downloaded.
+// remove; undo and redo. Boxes and arrows are numbered: a pin on each, and something said about it in a bubble beside
+// it. Done, the image with its marks (and their pins), drawn again at its own size, goes into the chat's draft as a
+// new file with a quote per numbered mark, or is downloaded.
 package fail.still.android.screens
 
 import android.graphics.Bitmap
@@ -13,10 +14,22 @@ import android.graphics.Path
 import android.graphics.Typeface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import fail.still.android.ui.StillFailTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -145,10 +160,53 @@ private fun pathOf(s: ImageMark): Path = Path().apply {
     }
 }
 
+/** A box or an arrow: numbered, with something said about it. */
+private fun numbered(s: ImageMark) = s is ImageMark.Box || s is ImageMark.Arrow
+
+/** The numbered marks' numbers, in the order they were drawn (one removed, those after it move up). */
+private fun numbersOf(marks: List<ImageMark>): Map<Int, Int> = marks.filter(::numbered).withIndex().associate { (i, s) -> s.id to i + 1 }
+
+/**
+ * Where a numbered mark's pin points (a box's top-left corner, an arrow's tail), in the image's pixels, kept in the
+ * image (`natural`) whole: the pin, 24 by 24 at `k` image px a dp, sits up and to the right of its point.
+ */
+private fun pinPoint(s: ImageMark, natural: androidx.compose.ui.unit.IntSize, k: Float): Offset {
+    val p = when (s) { is ImageMark.Box -> boxOf(s).let { Offset(it.x, it.y) }; is ImageMark.Arrow -> s.a; else -> Offset.Zero }
+    return Offset(p.x.coerceIn(2 * k, max(2 * k, natural.width - 22 * k)), p.y.coerceIn(22 * k, max(22 * k, natural.height - 2 * k)))
+}
+
+private val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+private val pinText = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.DEFAULT, 650, false); textAlign = Paint.Align.CENTER }
+
+/** The numbered marks' pins, as they show while marking (web's ImageMarks.tsx render): the mark's colour, edged and numbered in its halo. */
+private fun drawPins(canvas: android.graphics.Canvas, marks: List<ImageMark>, natural: androidx.compose.ui.unit.IntSize) {
+    for ((id, n) in numbersOf(marks)) {
+        val s = marks.first { it.id == id }
+        val k = s.w / LINE
+        val p = pinPoint(s, natural, k)
+        val x = p.x - 2 * k; val y = p.y - 22 * k; val size = 24 * k; val edge = 2 * k
+        fun shape(inset: Float, r: Float, point: Float) = Path().apply {
+            addRoundRect(android.graphics.RectF(x + inset, y + inset, x + size - inset, y + size - inset),
+                floatArrayOf(r, r, r, r, r, r, point, point), Path.Direction.CW)
+        }
+        val halo = haloOf(s.color).toArgb()
+        pinPaint.color = halo
+        pinPaint.setShadowLayer(3 * k, 0f, 2 * k, android.graphics.Color.argb(56, 0, 0, 0))
+        canvas.drawPath(shape(0f, 12 * k, 3 * k), pinPaint)
+        pinPaint.clearShadowLayer()
+        pinPaint.color = s.color.toArgb()
+        canvas.drawPath(shape(edge, 10 * k, 1.5f * k), pinPaint)
+        pinText.color = halo
+        pinText.textSize = 11 * k
+        val mid = y + size / 2 - (pinText.descent() + pinText.ascent()) / 2
+        canvas.drawText("$n", x + size / 2, mid, pinText)
+    }
+}
+
 private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
 
-/** The marks drawn on `canvas`, in the image's pixels. */
-fun drawMarks(canvas: android.graphics.Canvas, marks: List<ImageMark>) {
+/** The marks drawn on `canvas`, in the image's pixels; with `pinned` (the image's size), the numbered ones' pins over them. */
+fun drawMarks(canvas: android.graphics.Canvas, marks: List<ImageMark>, pinned: androidx.compose.ui.unit.IntSize? = null) {
     for (s in marks) {
         if (s is ImageMark.Words) {
             textPaint.textSize = s.w
@@ -162,6 +220,7 @@ fun drawMarks(canvas: android.graphics.Canvas, marks: List<ImageMark>) {
             canvas.drawPath(pathOf(s), linePaint)
         }
     }
+    if (pinned != null) drawPins(canvas, marks, pinned)
 }
 
 private fun moved(s: ImageMark, dx: Float, dy: Float): ImageMark {
@@ -247,6 +306,9 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
         private set
     private var drag by mutableStateOf<MarkDrag?>(null)
     private var writing by mutableStateOf<MarkWriting?>(null)
+    /** What is said about each numbered mark (by its id; kept apart from the marks, so undoing a move keeps it), and the one whose bubble is open. */
+    private val comments = mutableStateMapOf<Int, String>()
+    private var note by mutableStateOf<Int?>(null)
     var busy by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     private var nextId = 1
@@ -260,12 +322,14 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
 
     fun leave() {
         on = false; doc = MarkDoc(emptyList(), emptyList(), emptyList()); picked = null; drag = null; writing = null; error = null; palette = false
+        comments.clear(); note = null
         made?.delete(); made = null
     }
 
-    /** Back: puts down the words being written, closes the colours, lets go of the picked mark, else stops marking. */
+    /** Back: closes a mark's bubble, puts down the words being written, closes the colours, lets go of the picked mark, else stops marking. */
     fun back() {
         when {
+            note != null -> note = null
             writing != null -> putDown()
             palette -> palette = false
             picked != null -> picked = null
@@ -281,16 +345,16 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
     fun undo() {
         val d = doc
         if (d.past.isNotEmpty()) doc = MarkDoc(d.past.last(), d.past.dropLast(1), listOf(d.shapes) + d.future)
-        picked = null
+        picked = null; note = null
     }
 
     fun redo() {
         val d = doc
         if (d.future.isNotEmpty()) doc = MarkDoc(d.future.first(), d.past + listOf(d.shapes), d.future.drop(1))
-        picked = null
+        picked = null; note = null
     }
 
-    fun remove(id: Int) { commit(shapes.filter { it.id != id }); picked = null }
+    fun remove(id: Int) { commit(shapes.filter { it.id != id }); picked = null; note = null }
 
     /** The words being written, put down (all of them gone: the text they were, removed). */
     fun putDown() {
@@ -304,7 +368,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
         } else if (text.isNotEmpty()) commit(shapes + ImageMark.Words(nextId++, w.color, w.w, w.at, text))
     }
 
-    fun pickTool(t: MarkTool) { putDown(); tool = t; if (t != MarkTool.Select) picked = null }
+    fun pickTool(t: MarkTool) { putDown(); note = null; tool = t; if (t != MarkTool.Select) picked = null }
 
     /** A colour to draw in next; the picked mark (or the words being written) takes it at once. */
     fun pickColor(c: Color) {
@@ -324,6 +388,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
         if (zoom.natural == null) return
         palette = false
         if (writing != null) { putDown(); return }
+        if (note != null) { note = null; return }
         val p = zoom.toPicture(at)
         val reach = REACH / zoom.scale
         if (tool == MarkTool.Select || tool == MarkTool.Text) {
@@ -396,7 +461,11 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
             val s = d.shape
             val first = when (s) { is ImageMark.Pen -> s.points.first(); is ImageMark.Box -> s.a; is ImageMark.Arrow -> s.a; else -> return }
             val rest = when (s) { is ImageMark.Pen -> s.points; is ImageMark.Box -> listOf(s.b); is ImageMark.Arrow -> listOf(s.b); else -> emptyList() }
-            if (rest.any { hypot(it.x - first.x, it.y - first.y) > 4 / zoom.scale }) commit(shapes + s)
+            if (rest.any { hypot(it.x - first.x, it.y - first.y) > 4 / zoom.scale }) {
+                commit(shapes + s)
+                // A box or an arrow, drawn: what to say about it, at once.
+                if (numbered(s)) note = s.id
+            }
         } else if (d is MarkDrag.Move && d.changed) {
             val cur = doc
             doc = MarkDoc(cur.shapes, cur.past + listOf(d.before), emptyList())
@@ -448,11 +517,81 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
         }
     }
 
-    /** Where the words being written end on the stage (px), to keep them clear of the keyboard; null when none are. */
+    /** Where the words being written (or the open bubble) end on the stage (px), to keep them clear of the keyboard; null when none are. */
     fun writingBottom(): Float? {
-        val w = writing ?: return null
         val r = zoom.rect() ?: return null
+        note?.let { id ->
+            val s = shapes.firstOrNull { it.id == id } ?: return null
+            val natural = zoom.natural ?: return null
+            // Its box is at the foot, over the keyboard: the mark's pin kept above it.
+            return r.top + pinPoint(s, natural, density / zoom.k).y * zoom.k + NOTE_BOX * density
+        }
+        val w = writing ?: return null
         return r.top + (w.at.y + w.w * LINE_HEIGHT) * zoom.k
+    }
+
+    /** A quote per numbered mark of `all` (on the image `made`, of `natural` size, from `original`): where it is, for the agent (the first line is also what the composer shows), and what was said. */
+    fun quotes(all: List<ImageMark>, made: String, original: String, natural: androidx.compose.ui.unit.IntSize): List<OfferQuote> =
+        numbersOf(all).map { (id, n) ->
+            val s = all.first { it.id == id }
+            fun r(v: Float) = v.roundToInt()
+            val what = when (s) {
+                is ImageMark.Box -> boxOf(s).let { "框 · 左上角 (${r(it.x)}, ${r(it.y)})，${r(it.w)}×${r(it.h)}" }
+                is ImageMark.Arrow -> "箭头 · 从 (${r(s.a.x)}, ${r(s.a.y)}) 指向 (${r(s.b.x)}, ${r(s.b.y)})"
+                else -> ""
+            }
+            OfferQuote("图片 $original 标注 $n", "$what\n在图片 $made（${natural.width}×${natural.height}，原图 $original）上，编号 $n",
+                comments[id]?.trim().orEmpty(), null, "image")
+        }
+
+    /** A numbered mark as its note's box and card show it (Annotate.kt): its number, what it is, what is said about it. */
+    inner class ImageNote(val id: Int, override val n: Int, override val text: String, override val color: Color) : NoteLike {
+        override var comment: String
+            get() = comments[id].orEmpty()
+            set(v) { comments[id] = v }
+    }
+
+    /** The numbered marks' notes, in their numbers' order. */
+    fun notes(): List<ImageNote> = numbersOf(shapes).map { (id, n) ->
+        val s = shapes.first { it.id == id }
+        ImageNote(id, n, if (s is ImageMark.Box) "框" else "箭头", s.color)
+    }
+
+    /** The note being written, if one is. */
+    val openNote get() = note?.let { id -> notes().firstOrNull { it.id == id } }
+
+    /** Opens the note of the mark `id` (none: closes it). */
+    fun open(id: Int?) { putDown(); picked = null; note = id }
+
+    /**
+     * The numbered marks' pins where they are on the screen, each at its own size whatever the zoom (as a page's
+     * marks show theirs). A tap on a pin opens its note.
+     */
+    @Composable
+    fun Pins() {
+        val r = zoom.rect() ?: return
+        val natural = zoom.natural ?: return
+        val k = zoom.k
+        val numbers = numbersOf(shapes)
+        if (numbers.isEmpty()) return
+        val pinShape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 3.dp)
+        with(LocalDensity.current) {
+            for (s in shapes) {
+                val n = numbers[s.id] ?: continue
+                val p = pinPoint(s, natural, density / k)
+                val x = r.left + p.x * k; val y = r.top + p.y * k
+                val open = note == s.id
+                val halo = haloOf(s.color)
+                Box(
+                    Modifier.offset { IntOffset((x - 2.dp.toPx()).roundToInt(), (y - 22.dp.toPx()).roundToInt()) }.size(24.dp)
+                        .graphicsLayer { val g = if (open) 1.12f else 1f; scaleX = g; scaleY = g; transformOrigin = TransformOrigin(2f / 24f, 22f / 24f) }
+                        .shadow(3.dp, pinShape).clip(pinShape).background(halo).padding(2.dp).clip(pinShape).background(s.color)
+                        .clickable { open(if (open) null else s.id) }
+                        .semantics { contentDescription = "标注 $n" },
+                    contentAlignment = Alignment.Center,
+                ) { Text("$n", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = halo) }
+            }
+        }
     }
 
     /** The words being written, where they go on the screen, in their size and colour. */
@@ -538,7 +677,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
                     canvas.save()
                     canvas.translate(0f, -y0.toFloat())
                     canvas.scale(w.toFloat() / max(1, natural.width), h.toFloat() / max(1, natural.height))
-                    drawMarks(canvas, all)
+                    drawMarks(canvas, all, natural)
                     canvas.restore()
                     for (r in 0 until n) { band.getPixels(line, 0, w, 0, r, w, 1); png!!.row(line) }
                     val k = small.height.toFloat() / h
@@ -577,6 +716,9 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
         context.contentResolver.openOutputStream(uri)?.use { o -> file.inputStream().use { it.copyTo(o, 1 shl 16) } } != null
     }
 }
+
+/** How tall a note's box at the foot is, and the room over it (dp). */
+private const val NOTE_BOX = 140f
 
 /** How many pixels a band of the image read at a time has (4 bytes each): a few MB, whatever the image. */
 private const val BAND_PIXELS = 2 shl 20
@@ -718,6 +860,33 @@ fun MarksTools(marks: ImageMarks, glass: Modifier) {
             Gap()
             PictureButton(Icons.Retry, "撤销", enabled = marks.canUndo) { marks.undo() }
             PictureButton(Icons.Redo, "重做", enabled = marks.canRedo) { marks.redo() }
+        }
+    }
+}
+
+/**
+ * The foot while marking, as a message's notes page's (Annotate.kt), in the viewer's dark: the note being written in
+ * its box (over the keyboard), else the notes as cards over the tools (a tap opens one again).
+ */
+@Composable
+fun MarksFoot(marks: ImageMarks, haze: dev.chrisbanes.haze.HazeState, glass: Modifier) {
+    StillFailTheme(dark = true) {
+        val open = marks.openNote
+        if (open != null) {
+            androidx.compose.runtime.key(open.id) {
+                NoteBox(open, Modifier.windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 12.dp), onDone = { marks.open(null) }, onRemove = { marks.remove(open.id) })
+            }
+            return@StillFailTheme
+        }
+        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val notes = marks.notes()
+            if (notes.isNotEmpty()) Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                notes.forEach { x -> androidx.compose.runtime.key(x.id) { Card(x, false, haze) { marks.open(x.id) } } }
+            }
+            MarksTools(marks, glass)
         }
     }
 }
