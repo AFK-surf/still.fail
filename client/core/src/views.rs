@@ -1124,6 +1124,8 @@ impl Views {
             "newer": page.get("end").and_then(Value::as_bool) == Some(false),
             // The entry it opened at, short of its end (the first unread, or where it was left): shown at the top.
             "at": page.get("at").cloned().unwrap_or(Value::Null),
+            // Where that entry's top was when it was left there (the client's measure), if it said.
+            "atOffset": page.get("atOffset").cloned().unwrap_or(Value::Null),
             // Up to where its messages were caught up on rather than said while it was open (station.rs thread_value).
             "caught": page.get("caught").cloned().unwrap_or(Value::Null),
             "outbox": outbox,

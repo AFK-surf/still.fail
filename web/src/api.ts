@@ -367,8 +367,9 @@ export function useChatSend(address?: string) {
     newer: (thread: number) => call("chat.newer", { station, thread }) as Promise<{ more: boolean }>,
     /** The chat's latest page in place of what it shows: the reader goes to its end. */
     latest: (thread: number) => call("chat.latest", { station, thread }),
-    /** Where the reader leaves the chat: the message at the top of what shows (`seq`), or none at its end. */
-    place: (thread: number, seq: number | null) => call("chat.place", { station, thread, seq }),
+    /** Where the reader leaves the chat: the message at the top of what shows (`seq`) and how far below the list's top
+     *  its top is (`offset`, px), or none at its end. */
+    place: (thread: number, seq: number | null, offset: number | null = null) => call("chat.place", { station, thread, seq, offset }),
     /** Only for a core from before `client.focus` (an older desktop app's), which does not read chats itself. */
     read: (thread: number, seq: number) => call("chat.read", { station, thread, seq }),
   }), [call, station]);

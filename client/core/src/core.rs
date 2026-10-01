@@ -889,8 +889,8 @@ impl Inner {
                 self.stations.latest(&StationAddr::parse(&station)?, thread).await?;
                 Ok(Value::Null)
             }
-            Call::ChatPlace { station, thread, seq } => {
-                self.stations.place(&station, thread, seq);
+            Call::ChatPlace { station, thread, seq, offset } => {
+                self.stations.place(&station, thread, seq, offset);
                 Ok(Value::Null)
             }
             Call::HistoryOlder { station, key } => Ok(json!({ "more": self.stations.history_older(&StationAddr::parse(&station)?, &key).await? })),
@@ -1824,8 +1824,9 @@ enum Call {
     /// The page after a chat's window (it is short of its end), and the chat at its end.
     ChatNewer { station: String, thread: u64 },
     ChatLatest { station: String, thread: u64 },
-    /// Where the reader leaves a chat: the entry at the top of what shows, or none at its end (it opens there next).
-    ChatPlace { station: String, thread: u64, seq: Option<u64> },
+    /// Where the reader leaves a chat: the entry at the top of what shows and how far below the list's top its top is
+    /// (`offset`, the client's measure; optional), or none at its end (it opens there next).
+    ChatPlace { station: String, thread: u64, seq: Option<u64>, offset: Option<f64> },
     HistoryOlder { station: String, key: String },
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
@@ -2135,9 +2136,9 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "chat.place" => {
             #[derive(Deserialize)]
-            struct P { station: String, thread: u64, #[serde(default)] seq: Option<u64> }
+            struct P { station: String, thread: u64, #[serde(default)] seq: Option<u64>, #[serde(default)] offset: Option<f64> }
             let p: P = read(params)?;
-            Call::ChatPlace { station: p.station, thread: p.thread, seq: p.seq }
+            Call::ChatPlace { station: p.station, thread: p.thread, seq: p.seq, offset: p.offset }
         }
         "history.older" => {
             let p: Session = read(params)?;

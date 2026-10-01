@@ -920,6 +920,9 @@ data class ChatView (
 	/// The entry the chat opened at when not at its end (its first unread, or where it was left): the list shows it
 	/// at its top. Absent when it opened at its end.
 	val at: Long? = null,
+	/// Opened where it was left (`at`): how far below the top of the list that entry's top was then, as the client
+	/// that left it said (`chat.place`). Absent otherwise, and from a core before it.
+	val atOffset: Double? = null,
 	/// The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
 	/// chat is open. The core decides from it which come in (`ChatMessage::said`); clients go by that.
 	val caught: Long? = null,

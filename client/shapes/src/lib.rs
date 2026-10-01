@@ -2099,6 +2099,9 @@ pub struct ChatView {
     /// at its top. Absent when it opened at its end.
     #[typeshare(serialized_as = "Option<I54>")]
     pub at: Option<i64>,
+    /// Opened where it was left (`at`): how far below the top of the list that entry's top was then, as the client
+    /// that left it said (`chat.place`). Absent otherwise, and from a core before it.
+    pub at_offset: Option<f64>,
     /// The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
     /// chat is open. The core decides from it which come in (`ChatMessage::said`); clients go by that.
     #[typeshare(serialized_as = "Option<I54>")]

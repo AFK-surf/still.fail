@@ -286,17 +286,20 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const mineOf = (m: ChatMessage) => m.mine;
   useStickToBottom(list, `.${conversationCss.msg}`, floor, short);
   useWindowMoves(list, messages);
-  // Where the reader leaves it, the core keeps too (it opens there next, while nothing is unread): the message at the
-  // top of the pane, or none at its end. A core from before `chat.place` does not know it.
+  // Where the reader leaves it, the core keeps too, on the device (it opens there next, while nothing is unread, also
+  // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
+  // `chat.place` does not know it.
   const seqOf = useRef(new Map<string, number>());
   seqOf.current = new Map(messages.map((m) => [m.ts, m.seq]));
-  const leave = (ts: string | null) => {
+  const leave = (ts: string | null, offset: number | null) => {
     const seq = ts === null ? null : seqOf.current.get(ts);
-    if (id !== null && seq !== undefined) void sending.place(id, seq).catch(() => undefined);
+    if (id !== null && seq !== undefined) void sending.place(id, seq, seq === null ? null : offset).catch(() => undefined);
   };
   // Taken to where it was left or to the unread line before anything loads by where the pane is.
-  // With nothing unread, the core may open it short of its end where it was left (`at`): that message goes at the top.
-  const at = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!)?.ts ?? null : null;
+  // With nothing unread, the core may open it short of its end where it was left (`at`): that message goes at the top,
+  // or where its top was (`atOffset`) when it is the very entry left there.
+  const opened = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!) ?? null : null;
+  const at = opened ? { ts: opened.ts, offset: opened.seq === chat.at ? chat.atOffset ?? null : null } : null;
   useRememberPlace(list, place, messages.length > 0, short, leave, at);
   const divider = useUnreadLine(list, chat);
   // Without a chat there is nothing older (or newer) to load.
@@ -447,12 +450,15 @@ const leftAt = new Map<string, { ts: string; offset: number; bottom: string | nu
  * does not move it. The unread line, when there is one, goes over it (useUnreadLine).
  * With no place of its own here, a chat the core opened short of its end
  * (`opensAt`: the message at the entry it opened at, where it was left) shows
- * that message at the top. `short`: the pane shows a window short of the chat's
- * end, so its bottom is not the end. Leaving, `onLeave` is told where, as the
- * pane is then: the message at its top (its `ts`), or none at the end (the core
- * opens the chat there next: `chat.place`).
+ * that message at the top (or where its top was: `offset`). `short`: the pane
+ * shows a window short of the chat's end, so its bottom is not the end.
+ * `onLeave` is told where the reader is, as the pane is: the message at its
+ * top (its `ts`) and its top's offset, or none at the end (the core opens the
+ * chat there next, `chat.place`, and keeps it on the device). Told as the page
+ * goes, and as the reader comes to rest too: a page that is reloaded or closed
+ * is not left that way.
  */
-export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean, short = false, onLeave?: (ts: string | null) => void, opensAt: string | null = null): void {
+export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean, short = false, onLeave?: (ts: string | null, offset: number | null) => void, opensAt: { ts: string; offset: number | null } | null = null): void {
   const [saved] = useState(() => leftAt.get(key));
   const restored = useRef(false);
   const latest = useRef({ short, onLeave });
@@ -464,16 +470,36 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     const end = !latest.current.short && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
     return first ? { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom: end ? lastTs(pane) : null } : null;
   }, []);
+  /** What was last told (`onLeave`), so the same is not told again. */
+  const told = useRef<string | null>(null);
+  const tell = useCallback((at: { ts: string; offset: number; bottom: string | null }) => {
+    const ts = at.bottom !== null ? null : at.ts;
+    const offset = ts === null ? null : Math.round(at.offset * 10) / 10;
+    const said = JSON.stringify([ts, offset]);
+    if (said === told.current) return;
+    told.current = said;
+    latest.current.onLeave?.(ts, offset);
+  }, []);
   useEffect(() => {
     const pane = ref.current;
     if (!pane) return;
+    // Told once the pane comes to rest, after it has been put where it was left (before that, it is not the reader's).
+    let rest: ReturnType<typeof setTimeout> | undefined;
     const record = () => {
       const at = where(pane);
       if (at) leftAt.set(key, at);
+      clearTimeout(rest);
+      rest = setTimeout(() => {
+        const now = restored.current && pane.isConnected ? where(pane) : null;
+        if (now) tell(now);
+      }, REST_MS);
     };
     pane.addEventListener("scroll", record, { passive: true });
-    return () => pane.removeEventListener("scroll", record);
-  }, [ref, key, where]);
+    return () => {
+      clearTimeout(rest);
+      pane.removeEventListener("scroll", record);
+    };
+  }, [ref, key, where, tell]);
   // Told as the page goes, while the pane is still laid out (a layout effect's cleanup runs before it is taken away).
   useLayoutEffect(() => {
     const pane = ref.current;
@@ -482,23 +508,26 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
       if (!pane.isConnected) return;
       const at = where(pane);
       if (at) leftAt.set(key, at);
-      if (at) latest.current.onLeave?.(at.bottom !== null ? null : at.ts);
-      else if (!latest.current.short) latest.current.onLeave?.(null);
+      if (at) tell(at);
+      else if (!latest.current.short) latest.current.onLeave?.(null, null);
     };
-  }, [ref, key, where]);
+  }, [ref, key, where, tell]);
+  const opensTs = opensAt?.ts ?? null;
+  const opensOffset = opensAt?.offset ?? null;
   useEffect(() => {
     if (!ready || restored.current) return;
     restored.current = true;
     const pane = ref.current;
     if (!pane) return;
     if (!saved) {
-      // Opened where it was left, short of its end: that message at the top, below what floats over the pane there
-      // (the phone's bar: its scroll padding).
-      const at = opensAt === null ? null : pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${opensAt}"]`);
+      // Opened where it was left (the core keeps it: the page since reloaded, or this page's place long let go): that
+      // message where its top was, when the core says, else at the top, below what floats over the pane there (the
+      // phone's bar: its scroll padding).
+      const at = opensTs === null ? null : pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${opensTs}"]`);
       if (!at) return;
       pane.dispatchEvent(new WheelEvent("wheel"));
-      const covered = parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0;
-      pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered;
+      const offset = opensOffset ?? (parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0);
+      pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - offset;
       return;
     }
     // Left at the bottom with nothing new since: it opens at the bottom, following it (the top message's offset would
@@ -509,8 +538,11 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     // A reader's move: the pane keeps it rather than holding its bottom.
     pane.dispatchEvent(new WheelEvent("wheel"));
     pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
-  }, [ref, saved, ready, opensAt]);
+  }, [ref, saved, ready, opensTs, opensOffset]);
 }
+
+/** How long the pane stays still before where the reader is gets told (`useRememberPlace`). */
+const REST_MS = 400;
 
 /** The last message's `ts` in a pane. */
 function lastTs(pane: HTMLElement): string | null {

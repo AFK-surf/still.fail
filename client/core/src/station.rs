@@ -582,6 +582,19 @@ fn first_of(live: &Value) -> u64 {
 /// clients show what is caught up at once, and bring in only what comes after it.
 /// `end`: the window reaches the thread's latest entry, so what is said next joins it; short of it, what is said waits
 /// on the device until the window comes down to it.
+/// Where a chat was left short of its end (`chat.place`): the entry at the top of what showed, and where its top was
+/// (`offset`, below the top of the list; the client's own measure, absent from one that does not say).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LeftAt {
+    pub at: u64,
+    pub offset: Option<f64>,
+}
+
+/// Where a chat's place is kept on the device.
+fn place_key(station: &str, thread: u64) -> String {
+    format!("place/{station}/{thread}")
+}
+
 fn thread_value(first: u64, entries: Vec<Value>, summary: Value, title: Value, end: bool) -> Value {
     let last = first + entries.len() as u64 - 1;
     json!({ "first": first, "last": last, "caught": last, "entries": entries, "thread": summary, "title": title, "end": end })
@@ -658,8 +671,10 @@ pub struct Stations {
     kept: Rc<Kept>,
     /// Where each station's state is kept, and what is waited on for it (the `status` topic): its workspace.
     workspaces: Rc<Workspaces>,
-    /// Where each chat was left, not at its end (`chat.place`): the entry it opens at next, while nothing is unread.
-    places: RefCell<HashMap<(String, u64), u64>>,
+    /// Where each chat was left, not at its end (`chat.place`): where it opens next, while nothing is unread. Kept on
+    /// the device too (a core started anew, the page reloaded or the app opened again, finds it there): None, a chat
+    /// read from there with none, or left at its end.
+    places: RefCell<HashMap<(String, u64), Option<LeftAt>>>,
     /// Entries of a thread read apart from what is kept of it (a window far from its end, and the pages ahead of it,
     /// which the one run a log keeps does not take): held while its topic is, for the window to move through at once.
     loose: RefCell<HashMap<(String, u64), BTreeMap<u64, Value>>>,
@@ -1844,12 +1859,18 @@ impl Stations {
         }
         let unread = summary.as_ref().and_then(|t| t.get("unread")?.as_u64()).unwrap_or(0);
         let read = summary.as_ref().and_then(|t| t.get("read")?.as_u64());
-        let place = self.places.borrow().get(&(station.to_string(), id)).copied();
-        let at = match read {
-            Some(read) if unread > 0 => Some(read + 1),
-            _ => place,
+        let place = self.place_of(station, id).await;
+        let (at, offset) = match read {
+            Some(read) if unread > 0 => (Some(read + 1), None),
+            _ => (place.map(|p| p.at), place.and_then(|p| p.offset)),
         };
-        let Some(value) = self.window(station, id, at).await else { return };
+        let Some(mut value) = self.window(station, id, at).await else { return };
+        // Opened where it was left: where that entry's top was, too.
+        if let Some(offset) = offset
+            && value.get("at").is_some()
+        {
+            value["atOffset"] = json!(offset);
+        }
         if !self.is_live(&topic) || self.sink.get(&topic).is_some() {
             return;
         }
@@ -2345,13 +2366,40 @@ impl Stations {
     }
 
     /// Where the reader leaves a chat: at entry `at`, short of its end (it opens there next, while nothing is unread),
-    /// or at its end (none).
-    pub fn place(&self, station: &str, thread: u64, at: Option<u64>) {
+    /// its top `offset` below the top of the list, or at its end (none). Kept on the device as well.
+    pub fn place(&self, station: &str, thread: u64, at: Option<u64>, offset: Option<f64>) {
+        let place = at.map(|at| LeftAt { at, offset: offset.filter(|o| o.is_finite()) });
+        let was = self.places.borrow_mut().insert((station.to_string(), thread), place);
+        if was == Some(place) {
+            return;
+        }
+        // What is written is the latest: a write that finishes after a later one does not put an older place back.
+        let (this, station) = (self.rc(), station.to_string());
+        self.host.spawn(
+            async move {
+                let Some(place) = this.places.borrow().get(&(station.clone(), thread)).copied() else { return };
+                let key = place_key(&station, thread);
+                let _ = match place {
+                    Some(p) => this.host.storage_set(&key, serde_json::to_vec(&json!({ "at": p.at, "offset": p.offset })).unwrap_or_default()).await,
+                    None => this.host.storage_delete(&key).await,
+                };
+            }
+            .boxed_local(),
+        );
+    }
+
+    /// Where a chat was left (`place`): as told since this core started, else as kept on the device.
+    async fn place_of(&self, station: &str, thread: u64) -> Option<LeftAt> {
         let key = (station.to_string(), thread);
-        match at {
-            Some(at) => self.places.borrow_mut().insert(key, at),
-            None => self.places.borrow_mut().remove(&key),
-        };
+        if let Some(place) = self.places.borrow().get(&key) {
+            return *place;
+        }
+        let kept = self.host.storage_get(&place_key(station, thread)).await.ok().flatten().and_then(|bytes| {
+            let v: Value = serde_json::from_slice(&bytes).ok()?;
+            Some(LeftAt { at: v.get("at")?.as_u64()?, offset: v.get("offset").and_then(Value::as_f64) })
+        });
+        // Told meanwhile: that is newer.
+        *self.places.borrow_mut().entry(key).or_insert(kept)
     }
 
     /// The page of a session's transcript before what its `live` topic has, into it: from what is kept, else from the
@@ -3469,13 +3517,49 @@ mod tests {
             assert_eq!(window_of(&sink, 7), (271, 320, true));
             assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 320, "read, not said");
             // Left short of its end and opened again: there.
-            stations.place(ST, 7, Some(120));
+            stations.place(ST, 7, Some(120), None);
             stations.stop(&thread(7));
             sink.values.borrow_mut().remove(&thread(7));
             wire.answer("GET /admin/api/threads/7/entries?from=70&to=169", 200, json!({"last": 320, "entries": entries(70, 169)}));
             stations.start(&thread(7));
             host.settle().await;
             assert_eq!(window_of(&sink, 7), (70, 169, false));
+        });
+    }
+
+    #[test]
+    fn where_a_chat_was_left_is_kept_on_the_device_for_a_core_started_anew() {
+        run(async {
+            let (host, _sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 300, 0)]));
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 300, "entries": entries(251, 300)}));
+            stations.start(&threads());
+            stations.start(&thread(7));
+            host.settle().await;
+            // Left 180 down: the core goes (the page reloaded) before the chat is opened again.
+            stations.place(ST, 7, Some(180), Some(-36.5));
+            host.settle().await;
+            let (sink, wire, stations) = reopened(&host);
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 300, 0)]));
+            wire.answer("GET /admin/api/threads/7/entries?from=130&to=229", 200, json!({"last": 300, "entries": entries(130, 229)}));
+            stations.start(&threads());
+            host.settle().await;
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7), (130, 229, false));
+            let value = sink.get(&thread(7)).unwrap();
+            assert_eq!((value["at"].clone(), value["atOffset"].clone()), (json!(180), json!(-36.5)));
+            // Left at its end: the next core opens it there.
+            stations.place(ST, 7, None, None);
+            host.settle().await;
+            let (sink, wire, stations) = reopened(&host);
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 300, 0)]));
+            stations.start(&threads());
+            host.settle().await;
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7).2, true);
+            assert!(sink.get(&thread(7)).unwrap().get("at").is_none());
         });
     }
 
