@@ -8,11 +8,17 @@ import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
+import { BETA } from "./cloud/beta.tsx";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
 
 const BASE = import.meta.env.BASE_URL;
+
+/** The name the page goes by: on the test channel (app.youdid.wtf) its own, drawn the same way. */
+const NAME = BETA ? "youdid.wtf" : "still.fail";
+const WORDMARK = BETA ? { name: "wordmark-beta", width: 128 } : { name: "wordmark", width: 81 };
+const LOCKUP = BETA ? { name: "lockup-beta", width: 371 } : { name: "lockup", width: 264 };
 
 /** A light asset and its -dark twin, as the page's 外观 has it. */
 function Themed({ name, width, height, alt = "", className }: { name: string; width: number; height: number; alt?: string; className?: string | undefined }) {
@@ -26,8 +32,8 @@ export function Mark({ size, className }: { size: number; className?: string }) 
 }
 
 /** Buddy and name; 132 × 30 at the smallest. */
-export function Lockup({ height = 30, alt = "still.fail" }: { height?: number; alt?: string }) {
-  return <Themed name="lockup" width={Math.round((height * 264) / 60)} height={height} alt={alt} className={css.brandLockup} />;
+export function Lockup({ height = 30, alt = NAME }: { height?: number; alt?: string }) {
+  return <Themed name={LOCKUP.name} width={Math.round((height * LOCKUP.width) / 60)} height={height} alt={alt} className={css.brandLockup} />;
 }
 
 /**
@@ -38,7 +44,7 @@ export function Lockup({ height = 30, alt = "still.fail" }: { height?: number; a
 export function SidebarBrand() {
   return (
     <>
-      {!window.stillfailDesktop && <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />}
+      {!window.stillfailDesktop && <Themed name={WORDMARK.name} width={WORDMARK.width} height={22} alt={NAME} className={css.brandWordmark} />}
       {!window.stillfailDesktop && <span className={css.brandPhone}><Lockup /></span>}
       <SidebarBuddy />
       <UpdateButton />
@@ -48,7 +54,7 @@ export function SidebarBrand() {
 
 /** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
 export function PageBrand() {
-  return window.stillfailDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />;
+  return window.stillfailDesktop ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={22} alt={NAME} className={css.brandWordmark} />;
 }
 
 type Pose = "push" | "hop" | "rest";
