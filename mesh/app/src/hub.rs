@@ -1238,7 +1238,7 @@ impl Hub {
                     "type": "object",
                     "properties": {
                         "to": to.clone(),
-                        "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written)." },
+                        "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written). May be left out when only items change: nothing is posted then." },
                         "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
                         "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they are uploaded below the text). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                         "title": { "type": "string", "description": "A still.fail chat's name in lists: a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first final post in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
@@ -1317,9 +1317,10 @@ impl Hub {
                             kind => state_arg(kind)?.ok_or_else(|| anyhow!("kind is required"))?,
                         };
                         hub.declare(&key, kind);
+                        let open = hub.open_items_said(&key);
                         Ok(match kind {
-                            DeclaredState::Waiting(seconds) => format!("Recorded state waiting: you are asked again in {seconds} seconds unless something brings you back first."),
-                            _ => format!("Recorded state {}.", kind.as_str()),
+                            DeclaredState::Waiting(seconds) => format!("Recorded state waiting: you are asked again in {seconds} seconds unless something brings you back first.{open}"),
+                            _ => format!("Recorded state {}.{open}", kind.as_str()),
                         })
                     })
                 }),
@@ -1416,10 +1417,28 @@ impl Hub {
     async fn chat_post(&self, key: &str, args: &Map<String, Value>) -> Result<String> {
         let text = args.get("text").map(js_string).unwrap_or_default().trim().to_string();
         let paths: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().map(js_string).collect()).unwrap_or_default();
+        let kind = state_arg(args.get("kind"))?;
         if text.is_empty() && paths.is_empty() {
+            // Only where its pieces of work stand: nothing is said in the conversation.
+            let thread = match args.get("items") {
+                Some(v) if !v.is_null() => Some(self.target(key, args.get("to"))?),
+                _ => None,
+            };
+            let items = match &thread {
+                Some(thread) => self.items_arg(key, thread, args.get("items"))?,
+                None => vec![],
+            };
+            if let (Some(thread), false) = (thread, items.is_empty()) {
+                self.store.put_items(thread.thread.id, &items)?;
+                if let Some(kind) = kind {
+                    self.declare(key, kind);
+                }
+                let place = thread_address(&thread.thread.channel, &thread.thread.thread_ts);
+                let open = if kind.is_some() { self.open_items_said(key) } else { String::new() };
+                return Ok(format!("Updated in {place}, nothing posted.{}{open}", items_said(&items)));
+            }
             bail!("text is empty");
         }
-        let kind = state_arg(args.get("kind"))?;
         let thread = self.target(key, args.get("to"))?;
         let items = self.items_arg(key, &thread, args.get("items"))?;
         // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
@@ -1462,15 +1481,50 @@ impl Hub {
         let place = thread_address(&thread.thread.channel, &thread.thread.thread_ts);
         let recorded = items_said(&items);
         Ok(match kind {
-            Some(kind) => format!("Posted to {place}, and recorded state {}.{titled}{recorded}", kind.as_str()),
+            Some(kind) => format!("Posted to {place}, and recorded state {}.{titled}{recorded}{}", kind.as_str(), self.open_items_said(key)),
             None => format!("Posted to {place}.{titled}{recorded}"),
         })
+    }
+
+    /// At a turn's end: the pieces of work still open in the session's still.fail chats (working, or waiting and not
+    /// yet answered), for the agent to check against where things stand; nothing when there are none.
+    fn open_items_said(&self, key: &str) -> String {
+        let threads = self.store.session_threads(key).unwrap_or_default();
+        let mut lines = Vec::new();
+        for t in threads.iter().filter(|t| t.thread.surface == STILLFAIL_SURFACE) {
+            let open: Vec<String> = self
+                .store
+                .items(t.thread.id)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|it| it.state == "working" || it.state == "waiting")
+                .map(|it| match it.state.as_str() {
+                    "waiting" => format!("{} 「{}」 waiting on {}", it.key, it.title, it.waiting_on.join(", ")),
+                    _ => format!("{} 「{}」 working", it.key, it.title),
+                })
+                .collect();
+            if !open.is_empty() {
+                lines.push(format!("{}: {}", thread_address(&t.thread.channel, &t.thread.thread_ts), open.join("; ")));
+            }
+        }
+        if lines.is_empty() {
+            return String::new();
+        }
+        format!(
+            "\nStill open: {}. Check each against where things stand now; if one has changed (done, dropped, now waiting on someone, answered), update it with chat_post items (text may be left out to update without posting).",
+            lines.join(" | ")
+        )
     }
 
     /// The pieces of work a post declares (chat_post items), as they will be kept: known ones updated with what is
     /// given, people to wait on as creator references (the person who last wrote, when none is named).
     fn items_arg(&self, key: &str, thread: &SessionThread, value: Option<&Value>) -> Result<Vec<ItemRow>> {
-        let list = match value {
+        // A runtime that does not know the parameter's type (its tool list from before it was added) sends it as JSON text.
+        let parsed = match value {
+            Some(Value::String(text)) => serde_json::from_str::<Value>(text).ok(),
+            _ => None,
+        };
+        let list = match parsed.as_ref().or(value) {
             None | Some(Value::Null) => return Ok(vec![]),
             Some(Value::Array(list)) => list,
             Some(_) => bail!("items must be an array of {{key, title, state, …}}"),

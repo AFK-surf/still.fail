@@ -1751,7 +1751,13 @@ async fn chat_post_items_are_kept_by_key_and_wait_on_the_person_who_last_wrote()
         .call(&web, "chat_post", json!({ "to": to, "text": "done, look", "kind": "final", "items": [{ "key": "gap", "state": "waiting", "detail": "settings-gap", "ask": { "label": "可以，合" } }] }))
         .await
         .unwrap();
-    assert_eq!(said, format!("Posted to {to}, and recorded state final. Items: gap (waiting on ada@x.com)."));
+    assert_eq!(
+        said,
+        format!("Posted to {to}, and recorded state final. Items: gap (waiting on ada@x.com).\nStill open: {to}: gap 「设置页间距」 waiting on ada@x.com. Check each against where things stand now; if one has changed (done, dropped, now waiting on someone, answered), update it with chat_post items (text may be left out to update without posting).")
+    );
+    // At a turn's end without a post, the same reminder.
+    let state = r.call(&web, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    assert!(state.starts_with("Recorded state final.\nStill open: ") && state.contains("gap 「设置页间距」 waiting on ada@x.com"), "{state}");
     let items = r.store.items(thread.id).unwrap();
     assert_eq!(items.len(), 1);
     let it = &items[0];
@@ -1760,7 +1766,16 @@ async fn chat_post_items_are_kept_by_key_and_wait_on_the_person_who_last_wrote()
     let evidence = r.said(thread.id).last().unwrap().n;
     assert_eq!(it.evidence, Some(evidence), "the post that declared it so shows it");
 
-    r.call(&web, "chat_post", json!({ "to": to, "text": "merged", "items": [{ "key": "gap", "state": "done" }] })).await.unwrap();
+    // As JSON text, from a runtime that does not know the parameter's type.
+    let text = r.call(&web, "chat_post", json!({ "to": to, "items": "[{\"key\": \"gap\", \"detail\": \"settings-gap\"}]" })).await.unwrap();
+    assert!(text.ends_with("Items: gap (waiting on ada@x.com)."), "{text}");
+    let posts = r.said(thread.id).len();
+    // Only the items, nothing said: the post that asked stays its evidence; nothing open, no reminder.
+    let quiet = r.call(&web, "chat_post", json!({ "to": to, "items": [{ "key": "gap", "state": "done" }], "kind": "final" })).await.unwrap();
+    assert_eq!(quiet, format!("Updated in {to}, nothing posted. Items: gap (done)."));
+    assert_eq!(r.said(thread.id).len(), posts);
+    assert_eq!(r.store.items(thread.id).unwrap()[0].evidence, Some(evidence));
+    assert_eq!(r.call(&web, "chat_state", json!({ "kind": "final" })).await.unwrap(), "Recorded state final.");
     let it = &r.store.items(thread.id).unwrap()[0];
     assert_eq!((it.state.as_str(), it.waiting_on.len(), it.ask.clone(), it.title.as_str()), ("done", 0, None, "设置页间距"));
 
