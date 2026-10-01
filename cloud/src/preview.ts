@@ -96,8 +96,8 @@ const FRAME = `<!doctype html>
     reply.onmessage = (m) => {
       if (m.data?.cancel && streams && waiting.delete(id)) port.postMessage({ type: "cancel", id });
     };
-    const { method, path, headers, body } = event.data;
-    port.postMessage({ id, method, path, headers, body }, body ? [body.buffer] : []);
+    const { method, path, headers, body, cache } = event.data;
+    port.postMessage({ id, method, path, headers, body, cache }, body ? [body.buffer] : []);
   });
   // A WebSocket of the service's page (/_ember/socket.js, same origin: it calls this): through the client to the
   // station. \`on\` hears it open, its messages and its close; what is returned sends and closes. Under both names, as
@@ -247,7 +247,7 @@ async function relay(event, url) {
       resolve({ status: reply.status, headers: reply.headers, whole: reply.body });
     };
   });
-  frame.postMessage({ type: "ember-preview-fetch", streams: true, method: request.method, path: url.pathname + url.search, headers: [...request.headers], body }, [channel.port2, ...(body ? [body.buffer] : [])]);
+  frame.postMessage({ type: "ember-preview-fetch", streams: true, cache: request.cache, method: request.method, path: url.pathname + url.search, headers: [...request.headers], body }, [channel.port2, ...(body ? [body.buffer] : [])]);
   const reply = await head;
   if (reply.error) return plain(502, reply.error);
   const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(reply.status);
