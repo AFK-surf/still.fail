@@ -111,6 +111,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
             GoRow("连接", connects?.let { if (failing > 0) "$failing 个出错" else "${it.items.size} 个" }, bad = failing > 0) { app.push(Screen.Connects()) }
             GoRow("Profile", stations?.let { if (short > 0) "$short 个要处理" else "${profiles.size} 个" }, bad = short > 0) { app.push(Screen.Profiles()) }
             GoRow("记忆") { app.push(Screen.Memories) }
+            GoRow("用量") { app.push(Screen.Usage) }
         }
         SectionHeader("这台设备", start = 24.dp)
         ListCard {

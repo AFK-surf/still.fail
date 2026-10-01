@@ -181,6 +181,8 @@ object Topics {
     }
     /** The services and jobs left up a long while on the scope's stations that are up (OpenJobs.kt). */
     fun longJobs(scope: String) = buildJsonObject { put("topic", "longJobs"); put("scope", scope) }
+    /** What the agents of a scope's stations spent over its last `days` (7 or 30): client/core/src/views/usage.rs. */
+    fun usage(scope: String, days: Int) = buildJsonObject { put("topic", "usage"); put("scope", scope); put("days", days) }
     /** A job as it is now (kept current by the core). */
     fun job(station: String, id: String) = buildJsonObject { put("topic", "job"); put("station", station); put("id", id) }
     /** A job's last `lines` lines of output and when it last grew, current as it grows. */

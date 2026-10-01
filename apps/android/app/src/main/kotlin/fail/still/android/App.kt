@@ -144,6 +144,8 @@ sealed interface Screen {
     /** Every station's profiles, or (from a station's page) that station's only. */
     data class Profiles(val station: String? = null) : Screen { override val id = "profiles" + (station?.let { "/$it" } ?: "") }
     data object Memories : Screen { override val id = "memories" }
+    /** What the agents spent (screens/Usage.kt). */
+    data object Usage : Screen { override val id = "usage" }
     /** A web service an agent started, full screen: by its job (people know it by its name, never its port). */
     data class Preview(val station: String, val job: String) : Screen { override val id = "preview/$station/$job" }
     /** A visualization an agent posted, as a page of its own in the preview (web mobile's 在侧边打开 on a phone). */
@@ -643,6 +645,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)
                     Screen.Memories -> fail.still.android.screens.MemoriesScreen(current)
+                    Screen.Usage -> fail.still.android.screens.UsageScreen(current)
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)
