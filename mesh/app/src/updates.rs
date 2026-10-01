@@ -18,12 +18,14 @@
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use stillfail_shapes::SoftwareVersion;
 use serde_json::Value;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::watch;
 use tracing::{info, warn};
@@ -532,14 +534,14 @@ impl Updates {
         let how = item.how.ok_or_else(|| anyhow!("{} 没法在这里更新", kind.name()))?;
         self.set(kind, |i| {
             i.updating = Some(now_ms());
+            i.progress = None;
             i.failed = None;
             i.done = None;
         });
         let me = self.clone();
         tokio::spawn(async move {
             info!(runtime = kind.id(), program = %how.program.display(), args = ?how.args, "updating or installing a runtime");
-            let args: Vec<&str> = how.args.iter().map(String::as_str).collect();
-            let failed = match tokio::time::timeout(RUNTIME_LIMIT, run(&how.program, &args, &me.env, RUNTIME_LIMIT)).await {
+            let failed = match tokio::time::timeout(RUNTIME_LIMIT, me.install(kind, how.clone())).await {
                 Ok(Ok((true, _))) => None,
                 Ok(Ok((false, said))) => Some(tail(&said)),
                 Ok(Err(e)) => Some(e.to_string()),
@@ -570,6 +572,129 @@ impl Updates {
             }
         });
         Ok(())
+    }
+
+    /// Runs `how`, saying where it is as it goes (an item's `progress`): a download that can be measured, by how much of
+    /// it is in (Codex's build for this machine, fetched here first; Claude Code's, as its installer writes it), else
+    /// the step the command says it is at (Homebrew's, Claude Code's installer's).
+    async fn install(self: &Arc<Self>, kind: Kind, mut how: How) -> Result<(bool, String)> {
+        let npm = how.program.file_name().is_some_and(|n| n == "npm") && how.args.first().is_some_and(|a| a == "install");
+        if kind == Kind::Codex && npm {
+            if let Some(version) = self.fetch_codex(&how.program).await {
+                // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
+                how.args = vec!["install".into(), "-g".into(), format!("{}@{version}", kind.package()), "--prefer-offline".into()];
+            }
+        }
+        let installing = Arc::new(AtomicBool::new(false));
+        // Claude Code's own installer (not `claude update`, nor Homebrew).
+        let watch = (kind == Kind::Claude && how.program == Path::new("/bin/sh")).then(|| self.watch_claude_download(installing.clone()));
+        let args: Vec<&str> = how.args.iter().map(String::as_str).collect();
+        let said = run_lines(&how.program, &args, &self.env, RUNTIME_LIMIT, |line| {
+            if let Some(step) = step_of(line) {
+                if step == INSTALLING {
+                    installing.store(true, Ordering::SeqCst);
+                }
+                self.say(kind, step);
+            }
+        })
+        .await;
+        if let Some(watch) = watch {
+            watch.abort();
+        }
+        said
+    }
+
+    /// Where a runtime's update is, as the pages say it (while it updates).
+    fn say(&self, kind: Kind, progress: &str) {
+        let mut items = self.items.lock().unwrap();
+        let item = &mut items[kind as usize];
+        if item.updating.is_none() || item.progress.as_deref() == Some(progress) {
+            return;
+        }
+        item.progress = Some(progress.to_string());
+        drop(items);
+        self.changed();
+    }
+
+    /// Codex's build for this machine (nearly all its install downloads), fetched here so how much is in can be said,
+    /// and put in npm's cache for the install to take: the version fetched; None when it was not (the install then
+    /// downloads it itself, unmeasured).
+    async fn fetch_codex(&self, npm: &Path) -> Option<String> {
+        let platform = platform()?;
+        let package = Kind::Codex.package();
+        let latest = fetch_json(&format!("{}/{package}/latest", self.registry)).await.ok()?;
+        let version = latest.get("version")?.as_str()?.to_string();
+        let build = fetch_json(&format!("{}/{package}/{version}-{platform}", self.registry)).await.ok()?;
+        let url = build.pointer("/dist/tarball")?.as_str()?.to_string();
+        let file = std::env::temp_dir().join(format!("stillfail-codex-{version}-{platform}.tgz"));
+        let cached = match self.download(Kind::Codex, &version, &url, &file).await {
+            Ok(()) => {
+                self.say(Kind::Codex, INSTALLING);
+                run(npm, &["cache", "add", &file.to_string_lossy()], &self.env, Duration::from_secs(120)).await
+            }
+            Err(e) => Err(e),
+        };
+        let _ = std::fs::remove_file(&file);
+        match cached {
+            Ok((true, _)) => Some(version),
+            Ok((false, said)) => {
+                warn!(said = %tail(&said), "Codex's build not put in npm's cache; npm downloads it");
+                None
+            }
+            Err(e) => {
+                warn!(error = %e, "Codex's build not fetched; npm downloads it");
+                None
+            }
+        }
+    }
+
+    /// Downloads `url` to `to`, saying how much of it is in.
+    async fn download(&self, kind: Kind, version: &str, url: &str, to: &Path) -> Result<()> {
+        let http = reqwest::Client::builder().connect_timeout(Duration::from_secs(15)).build()?;
+        let mut response = http.get(url).header("user-agent", "stillfail-station").send().await?;
+        if !response.status().is_success() {
+            bail!("{url}: {}", response.status());
+        }
+        let total = response.content_length();
+        let mut file = tokio::fs::File::create(to).await?;
+        let mut got = 0;
+        self.say(kind, &downloading(version, got, total));
+        while let Some(chunk) = tokio::time::timeout(Duration::from_secs(60), response.chunk()).await.map_err(|_| anyhow!("下载一分钟没有动静"))?? {
+            file.write_all(&chunk).await?;
+            got += chunk.len() as u64;
+            self.say(kind, &downloading(version, got, total));
+        }
+        file.flush().await?;
+        Ok(())
+    }
+
+    /// Says how much of Claude Code's build its installer has downloaded (into ~/.claude/downloads, its size in the
+    /// release's manifest; the zstd one when the machine has zstd), until it sets it up (`installing`).
+    fn watch_claude_download(self: &Arc<Self>, installing: Arc<AtomicBool>) -> tokio::task::JoinHandle<()> {
+        let me = self.clone();
+        tokio::spawn(async move {
+            let (Some(home), Some(platform)) = (me.env.get("HOME").map(PathBuf::from), platform()) else { return };
+            let base = "https://downloads.claude.ai/claude-code-releases";
+            let Ok(version) = fetch_text(&format!("{base}/latest")).await else { return };
+            let version = version.trim().to_string();
+            let (plain, zst) = tokio::join!(fetch_json(&format!("{base}/{version}/manifest.json")), fetch_json(&format!("{base}/{version}/manifest.zst.json")));
+            let size = |manifest: Result<Value>| manifest.ok().and_then(|m| m.pointer(&format!("/platforms/{platform}/size")).and_then(Value::as_u64));
+            let (plain, zst) = (size(plain), size(zst));
+            let file = home.join(".claude/downloads").join(format!("claude-{version}-{platform}"));
+            let zst_file = file.with_file_name(format!("claude-{version}-{platform}.zst"));
+            while !installing.load(Ordering::SeqCst) {
+                let len = |f: &Path| std::fs::metadata(f).ok().map(|m| m.len());
+                let got = match (len(&zst_file), len(&file)) {
+                    (Some(got), _) => zst.map(|total| (got, total)),
+                    (None, Some(got)) => plain.map(|total| (got, total)),
+                    _ => None,
+                };
+                if let Some((got, total)) = got {
+                    me.say(Kind::Claude, &downloading(&version, got, Some(total)));
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        })
     }
 
     /// Runs the cloud's installer apart from the station, as `stillfail update` does, and follows it (`follow`): by
@@ -716,6 +841,54 @@ fn tail(said: &str) -> String {
     if tail.is_empty() { "更新失败，没有输出".to_string() } else { tail.chars().rev().take(600).collect::<Vec<_>>().into_iter().rev().collect() }
 }
 
+/// What a runtime's update says once what it downloads is in.
+const INSTALLING: &str = "正在安装…";
+
+/// The step a line of an installer's output says it is at: Homebrew's, and Claude Code's installer's.
+fn step_of(line: &str) -> Option<&'static str> {
+    let line = line.trim();
+    if ["==> Fetching", "==> Downloading"].iter().any(|s| line.starts_with(s)) {
+        Some("正在下载…")
+    } else if ["==> Installing", "==> Pouring", "==> Upgrading", "==> Moving", "==> Linking", "Setting up Claude Code"].iter().any(|s| line.starts_with(s)) {
+        Some(INSTALLING)
+    } else {
+        None
+    }
+}
+
+/// How much of a download is in, as the pages say it.
+fn downloading(version: &str, got: u64, total: Option<u64>) -> String {
+    let mb = |b: u64| (b as f64 / 1_000_000.0).round() as u64;
+    match total {
+        Some(total) if total > 0 => format!("正在下载 {version}：{}%（共 {} MB）", (got.min(total) * 100 / total), mb(total)),
+        _ => format!("正在下载 {version}：已下 {} MB", mb(got)),
+    }
+}
+
+/// This machine as the runtimes name their builds (`darwin-arm64`…).
+fn platform() -> Option<String> {
+    let os = match std::env::consts::OS {
+        "macos" => "darwin",
+        "linux" => "linux",
+        _ => return None,
+    };
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "x64",
+        _ => return None,
+    };
+    Some(format!("{os}-{arch}"))
+}
+
+async fn fetch_text(url: &str) -> Result<String> {
+    let http = reqwest::Client::builder().timeout(Duration::from_secs(15)).build()?;
+    let response = http.get(url).header("user-agent", "stillfail-station").send().await?;
+    if !response.status().is_success() {
+        bail!("{url}: {}", response.status());
+    }
+    Ok(response.text().await?)
+}
+
 async fn fetch_json(url: &str) -> Result<Value> {
     let http = reqwest::Client::builder().timeout(Duration::from_secs(15)).build()?;
     let response = http.get(url).header("user-agent", "stillfail-station").send().await?;
@@ -800,9 +973,54 @@ async fn run(program: impl AsRef<Path>, args: &[&str], env: &Env, timeout: Durat
     Ok((out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr))))
 }
 
+/// Runs a command to its end as `run` does, telling each line it says as it says it (stdout and stderr).
+async fn run_lines(program: impl AsRef<Path>, args: &[&str], env: &Env, timeout: Duration, mut on_line: impl FnMut(&str)) -> Result<(bool, String)> {
+    let mut cmd = Command::new(program.as_ref());
+    cmd.args(args).env_clear().envs(env).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+    cmd.current_dir(std::env::temp_dir()).process_group(0);
+    let mut child = cmd.spawn()?;
+    let (mut out, mut err) = (BufReader::new(child.stdout.take().unwrap()).split(b'\n'), BufReader::new(child.stderr.take().unwrap()).split(b'\n'));
+    let mut said = String::new();
+    let work = async {
+        let (mut out_done, mut err_done) = (false, false);
+        let mut take = |line: Option<Vec<u8>>, done: &mut bool| match line {
+            Some(line) => {
+                let line = String::from_utf8_lossy(&line);
+                on_line(&line);
+                said.push_str(&line);
+                said.push('\n');
+            }
+            None => *done = true,
+        };
+        while !(out_done && err_done) {
+            tokio::select! {
+                line = out.next_segment(), if !out_done => take(line?, &mut out_done),
+                line = err.next_segment(), if !err_done => take(line?, &mut err_done),
+            }
+        }
+        anyhow::Ok(child.wait().await?)
+    };
+    let status = tokio::time::timeout(timeout, work).await.map_err(|_| anyhow!("{} 没有及时结束", program.as_ref().display()))??;
+    Ok((status.success(), said))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn an_install_says_where_it_is_as_it_goes() {
+        let env: Env = [("PATH".to_string(), "/usr/bin:/bin".to_string())].into_iter().collect();
+        let mut steps = vec![];
+        let (ok, said) = run_lines("/bin/sh", &["-c", "echo '==> Downloading https://x'; echo '==> Pouring codex' >&2; exit 3"], &env, Duration::from_secs(10), |line| steps.extend(step_of(line))).await.unwrap();
+        assert!(!ok);
+        assert_eq!(steps, ["正在下载…", INSTALLING]);
+        assert!(said.contains("==> Pouring codex"));
+        assert_eq!(step_of("Setting up Claude Code..."), Some(INSTALLING));
+        assert_eq!(step_of("added 2 packages in 4s"), None);
+        assert_eq!(downloading("0.159.3", 60_000_000, Some(133_847_481)), "正在下载 0.159.3：44%（共 134 MB）");
+        assert_eq!(downloading("0.159.3", 60_000_000, None), "正在下载 0.159.3：已下 60 MB");
+    }
 
     #[test]
     fn versions_compare_number_by_number() {
