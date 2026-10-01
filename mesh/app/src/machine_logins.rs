@@ -5,7 +5,7 @@
 //!   again before refreshing, so both share one login.
 //! - Claude Code: a link does not hold (it replaces the file when it refreshes), so the profile's processes are handed
 //!   the machine's current access token (CLAUDE_CODE_OAUTH_TOKEN) and never refresh; when it is about to run out, the
-//!   machine's own claude is asked for a moment, which refreshes it where it keeps it. It is read from there as claude
+//!   OAuth login is renewed directly, under Claude Code's locks, in its original store. It is read from there as claude
 //!   reads it: on macOS the keychain first, then the file (a claude run by hand saves to the keychain and deletes the
 //!   file; reading only the file, a stale one would be handed over while claude refreshed the keychain's).
 //! Only logins kept in files: one in the macOS keychain cannot be used so (the pages offer a sign-in instead).
@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
@@ -24,7 +24,6 @@ use serde::Serialize;
 use serde_json::Value;
 use tokio::process::Command;
 use tokio::sync::watch;
-use tracing::{info, warn};
 
 use crate::store::now_ms;
 
@@ -253,69 +252,9 @@ fn parse_claude_credentials(text: &str) -> Option<(String, i64)> {
 /// How close to running out a token is taken as run out: Claude Code refreshes its own this close to the end, so a
 /// moment of it refreshes then, and a process handed one this close is started again for its next turn.
 pub const CLAUDE_TOKEN_MARGIN_MS: i64 = 5 * 60_000;
-/// The last refresh that did not give a good token is not tried again for a while (each try is a model call).
-const RETRY_MS: i64 = 30 * 60_000;
-
-fn refresh_lock() -> &'static tokio::sync::Mutex<Option<(i64, String)>> {
-    static LOCK: OnceLock<tokio::sync::Mutex<Option<(i64, String)>>> = OnceLock::new();
-    LOCK.get_or_init(|| tokio::sync::Mutex::new(None))
-}
-
-/// The machine's Claude Code access token for a profile's process (token, expiresAt), refreshed first (by the
-/// machine's own claude, in its own file) when it is about to run out. Fails, in words for the chat, when there is none.
+/// Read and renew in the machine's original credential store, without invoking a model.
 pub async fn machine_claude_token(env: &Env) -> Result<(String, i64)> {
-    let Some(credentials) = read_claude_credentials(env).await else {
-        bail!("这台机器上的 Claude Code 没有登录（或者登录在 station 读不到的钥匙串里），要在 station 上重新登录");
-    };
-    if credentials.1 - now_ms() > CLAUDE_TOKEN_MARGIN_MS {
-        return Ok(credentials);
-    }
-    // One refresh at a time; whoever waited reads what it made.
-    let mut failed = refresh_lock().lock().await;
-    if let Some(fresh) = read_claude_credentials(env).await.filter(|c| c.1 - now_ms() > CLAUDE_TOKEN_MARGIN_MS) {
-        return Ok(fresh);
-    }
-    if let Some((at, message)) = failed.as_ref() {
-        if now_ms() - at < RETRY_MS && credentials.1 <= now_ms() {
-            bail!("{message}");
-        }
-    }
-    let said = refresh_claude(env).await;
-    if let Some(fresh) = read_claude_credentials(env).await.filter(|c| c.1 > now_ms()) {
-        *failed = None;
-        return Ok(fresh);
-    }
-    // Refused, claude says so (an account on hold, say) rather than refreshing.
-    let lower = said.to_lowercase();
-    let message = if ["on hold", "restricted", "suspend", "disabled", "banned"].iter().any(|w| lower.contains(w)) {
-        let first: String = said.trim().lines().next().unwrap_or("").chars().take(200).collect();
-        format!("Anthropic 停用了这台机器上的 Claude 账号：{first}")
-    } else {
-        "这台机器上 Claude Code 的登录过期了，没能刷新：在 station 上运行一次 claude 看看".to_string()
-    };
-    *failed = Some((now_ms(), message.clone()));
-    bail!("{message}")
-}
-
-/// The machine's own claude, asked for a word with the smallest model: it refreshes its login on the way (where it
-/// keeps it, as it always does). Kept out of its history.
-async fn refresh_claude(env: &Env) -> String {
-    info!("refreshing the machine's Claude Code login");
-    let args = ["-p", "--model", "haiku", "--no-session-persistence", "Reply with one word: ok"];
-    match run("claude", &args, &machine_env(env, &CLAUDE_DROP), Some(&std::env::temp_dir()), Duration::from_secs(120)).await {
-        Some(Ok(ran)) => {
-            let said = format!("{}{}", ran.stdout, ran.stderr);
-            if !ran.ok {
-                warn!(said = &said[..said.len().min(300)], "could not refresh the machine's Claude Code login");
-            }
-            said
-        }
-        Some(Err(e)) => {
-            warn!(error = %e, "could not refresh the machine's Claude Code login");
-            String::new()
-        }
-        None => String::new(),
-    }
+    crate::claude_oauth::token(env, None, None).await
 }
 
 /// A machine profile's Codex home, sharing the machine's login: its auth.json a link to the machine's. Made again when
@@ -435,46 +374,6 @@ mod tests {
         let got = keychain.state.lock().unwrap().0.clone();
         assert_eq!((got[0].usable, got[0].text.as_str()), (false, "Claude Code 已登录 a@x.com（Pro），登录在钥匙串里，station 读不到"));
         assert_eq!((got[1].usable, got[1].text.as_str()), (false, "Codex 已登录，登录存在钥匙串里"));
-    }
-
-    #[tokio::test]
-    async fn the_machines_claude_token_is_handed_over_and_refreshed_by_its_own_claude() {
-        let (home, env) = machine(&[(
-            "claude",
-            // Refreshing, as claude does in its own file: a new token good for hours.
-            r#"echo '{"claudeAiOauth":{"accessToken":"new","expiresAt":'$(( $(date +%s) * 1000 + 28800000 ))'}}' > "$HOME/.claude/.credentials.json"; echo "$@" > "$HOME/asked""#,
-        )]);
-        std::fs::create_dir(home.path().join(".claude")).unwrap();
-        let file = home.path().join(".claude/.credentials.json");
-        std::fs::write(&file, serde_json::json!({"claudeAiOauth": {"accessToken": "old", "expiresAt": now_ms() + 3_600_000}}).to_string()).unwrap();
-        assert_eq!(machine_claude_token(&env).await.unwrap().0, "old");
-        std::fs::write(&file, serde_json::json!({"claudeAiOauth": {"accessToken": "old", "expiresAt": now_ms() + 60_000}}).to_string()).unwrap();
-        let fresh = machine_claude_token(&env).await.unwrap();
-        assert_eq!(fresh.0, "new");
-        assert!(fresh.1 > now_ms() + 3_600_000);
-        assert!(std::fs::read_to_string(home.path().join("asked")).unwrap().contains("--no-session-persistence"));
-    }
-
-    #[tokio::test]
-    async fn the_machines_claude_login_is_read_where_claude_reads_it_the_keychain_first() {
-        let (home, env) = machine(&[
-            // A keychain holding what "$HOME/keychain" holds; claude refreshing saves there and deletes the file, as on macOS.
-            ("security", r#"[ -f "$HOME/keychain" ] || exit 44; cat "$HOME/keychain""#),
-            ("claude", r#"echo '{"claudeAiOauth":{"accessToken":"new","expiresAt":'$(( $(date +%s) * 1000 + 28800000 ))'}}' > "$HOME/keychain"; rm -f "$HOME/.claude/.credentials.json""#),
-        ]);
-        std::fs::create_dir(home.path().join(".claude")).unwrap();
-        let file = home.path().join(".claude/.credentials.json");
-        std::fs::write(&file, serde_json::json!({"claudeAiOauth": {"accessToken": "file", "expiresAt": now_ms() + 60_000}}).to_string()).unwrap();
-        if !cfg!(target_os = "macos") {
-            return;
-        }
-        let keychain = home.path().join("keychain");
-        std::fs::write(&keychain, serde_json::json!({"claudeAiOauth": {"accessToken": "keychain", "expiresAt": now_ms() + 3_600_000}}).to_string()).unwrap();
-        assert_eq!(machine_claude_token(&env).await.unwrap().0, "keychain");
-        // About to run out: claude refreshes it in the keychain (and deletes the file), and that is what is handed over.
-        std::fs::write(&keychain, serde_json::json!({"claudeAiOauth": {"accessToken": "keychain", "expiresAt": now_ms() + 60_000}}).to_string()).unwrap();
-        assert_eq!(machine_claude_token(&env).await.unwrap().0, "new");
-        assert!(!file.exists());
     }
 
     #[test]

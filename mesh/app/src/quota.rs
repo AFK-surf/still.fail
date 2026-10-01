@@ -14,7 +14,7 @@ use futures_util::future::BoxFuture;
 use serde_json::Value;
 
 use crate::config::Profile;
-use crate::machine_logins::{Env, codex_auth_file, machine_claude_token};
+use crate::machine_logins::{Env, codex_auth_file};
 use crate::profiles::{OPENCODE, ProfileQuota, QuotaWindow};
 use crate::store::now_ms;
 use crate::transcript::parse_iso;
@@ -140,11 +140,20 @@ pub fn claude_token(home: &Path) -> Option<String> {
 }
 
 async fn claude(profile: &Profile, env: &Env) -> Result<ProfileQuota> {
-    let token = if profile.machine { Some(machine_claude_token(env).await?.0) } else { claude_token(&profile.home) };
-    let Some(token) = token else {
-        return Ok(quota("unavailable", vec![], Some("没找到这个账号的登录凭据，登录后才能查额度".into())));
-    };
-    claude_usage(&token).await
+    let home = if profile.machine { None } else { Some(profile.home.as_path()) };
+    claude_with_refresh(env, home, ANTHROPIC).await
+}
+
+async fn claude_with_refresh(env: &Env, home: Option<&Path>, base: &str) -> Result<ProfileQuota> {
+    claude_with_refresh_at(env, home, base, crate::claude_oauth::TOKEN_URL).await
+}
+
+pub(crate) async fn claude_with_refresh_at(env: &Env, home: Option<&Path>, base: &str, endpoint: &str) -> Result<ProfileQuota> {
+    let (token, _) = crate::claude_oauth::token_at(env, home, None, endpoint).await?;
+    let (quota, unauthorized) = claude_usage_response(base, &token).await?;
+    if !unauthorized { return Ok(quota); }
+    let (renewed, _) = crate::claude_oauth::token_at(env, home, Some(&token), endpoint).await?;
+    claude_usage_at(base, &renewed).await
 }
 
 /// A Claude subscription's allowance, by its access token: what /usage shows.
@@ -153,9 +162,14 @@ pub async fn claude_usage(token: &str) -> Result<ProfileQuota> {
 }
 
 async fn claude_usage_at(base: &str, token: &str) -> Result<ProfileQuota> {
+    Ok(claude_usage_response(base, token).await?.0)
+}
+
+async fn claude_usage_response(base: &str, token: &str) -> Result<(ProfileQuota, bool)> {
     let response = http().get(format!("{base}/api/oauth/usage")).bearer_auth(token).header("anthropic-beta", "oauth-2025-04-20").send().await?;
     if !response.status().is_success() {
-        return Ok(refused("Anthropic ", response).await);
+        let unauthorized = response.status().as_u16() == 401;
+        return Ok((refused("Anthropic ", response).await, unauthorized));
     }
     let body: Value = response.json().await?;
     let label = |k: &str| match k {
@@ -176,7 +190,7 @@ async fn claude_usage_at(base: &str, token: &str) -> Result<ProfileQuota> {
                 .collect()
         })
         .unwrap_or_default();
-    Ok(quota("ok", windows, None))
+    Ok((quota("ok", windows, None), false))
 }
 
 fn codex_windows(result: &Value) -> Vec<QuotaWindow> {
@@ -261,7 +275,7 @@ pub async fn machine_usage(runtime: RuntimeKind, env: Env) -> Option<ProfileQuot
     let read = async {
         match runtime {
             RuntimeKind::Codex => codex_usage(&codex_auth_file(&env)).await,
-            RuntimeKind::Claude => claude_usage(&machine_claude_token(&env).await?.0).await.map(Some),
+            RuntimeKind::Claude => claude_with_refresh(&env, None, ANTHROPIC).await.map(Some),
         }
     };
     read.await.unwrap_or_else(|e| Some(failed(&e)))

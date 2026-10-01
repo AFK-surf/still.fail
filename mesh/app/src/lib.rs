@@ -18,6 +18,7 @@ pub mod instructions;
 pub mod jobs;
 pub mod live;
 pub mod login;
+mod claude_oauth;
 pub mod machine_logins;
 pub mod machine_sessions;
 pub mod mcp;

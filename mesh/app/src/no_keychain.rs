@@ -109,7 +109,7 @@ pub async fn take_back(home: &Path) {
 }
 
 /// Written aside (readable by its owner only) and moved in.
-fn write_private(file: &Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_private(file: &Path, text: &str) -> std::io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
     let aside = file.with_extension(format!("json.{}", std::process::id()));
