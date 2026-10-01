@@ -58,6 +58,7 @@
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
+      "signIgnore": "\\.(pak|dat|bin|json|plist|png|webp|svg|woff2?|ttf|otf|wasm|icns|ico|car|nib|strings|txt|md|html|css|m?js|map|webmanifest|jpe?g|gif|asar)$",
       "extendInfo": {
         "NSLocalNetworkUsageDescription": "still.fail connects straight to your stations on the local network when it can.",
         "CFBundleName": "still.fail",

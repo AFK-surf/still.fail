@@ -3,10 +3,11 @@
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
 #             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf,
-#             its station release (then studio's station updates to it) and its Android app.
+#             its station release (then studio's station updates to it), its Android app and its desktop app (built
+#             and signed on studio, whose keychain holds the certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
-# Not here: the relay (deploying it drops every connection), the beta desktop app (until a release of it is quick), the
-# stable channel and its apps: ~/bin/ember-deploy and ~/bin/ember-promote on studio, scripts/release.sh.
+# Not here: the relay (deploying it drops every connection), the stable channel and its apps: ~/bin/ember-deploy and
+# ~/bin/ember-promote on studio, scripts/release.sh.
 name: pipeline
 on:
   push:
@@ -29,6 +30,7 @@ jobs:
       relay: ${{ steps.plan.outputs.relay }}
       station: ${{ steps.plan.outputs.station }}
       android: ${{ steps.plan.outputs.android }}
+      desktop: ${{ steps.plan.outputs.desktop }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -52,6 +54,9 @@ jobs:
           if has '^(src/|mesh/|vendor/|client/|bin/|scripts/(release|station-bundle|linux-station)\.sh$|scripts/posthog-key\.ts$)'; then station=true; fi
           android=false
           if has '^(apps/android/|client/|web/src/viz/|scripts/release\.sh$)'; then android=true; fi
+          # The desktop app carries the core, the web app and a station: any of them changed is a new app.
+          desktop=false
+          if has '^(apps/desktop/|client/|web/|src/|mesh/|vendor/|bin/|scripts/(release|station-bundle)\.sh$|scripts/posthog-key\.ts$)'; then desktop=true; fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -60,8 +65,9 @@ jobs:
             echo "relay=$relay"
             echo "station=$station"
             echo "android=$android"
+            echo "desktop=$desktop"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop relay=$relay"
 
   check:
     needs: plan
@@ -168,10 +174,21 @@ jobs:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
         run: sh .github/release.sh android
 
+  # The test channel's desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on studio.
+  desktop:
+    needs: [plan, check, api]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Release the beta desktop app (on studio)
+        run: ssh -o BatchMode=yes studio "sh -s $GITHUB_SHA" < .github/desktop-on-studio.sh
+
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, check, api, static, station, android]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result)
+    needs: [plan, check, api, static, station, android, desktop]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
     runs-on: [self-hosted, mini1]
     steps:
       - uses: actions/checkout@v5

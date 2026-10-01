@@ -1,6 +1,10 @@
 #!/bin/sh
 # Builds the desktop app for macOS arm64, signed with the Apple Development certificate in the login keychain
-# (so macOS keeps its Local Network grant across updates), into out/mac-arm64/still.fail.app:
+# (so macOS keeps its Local Network grant across updates).
+# Only the Mach-O files are signed one by one (package.json build.mac.signIgnore skips the rest: Electron's .pak and
+# .dat, the web app's assets, which the app's own signature seals anyway); signing each, with Apple's timestamp, made a
+# release take some fifty minutes.
+# Into out/mac-arm64/still.fail.app:
 # the core (client/node) as build/stillfail_core.node, the web app (`pnpm run
 # build:cloud`, dist/cloud-web) as build/web, a
 # station (scripts/station-bundle.sh) as build/station, the app's own code as
