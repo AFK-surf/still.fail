@@ -20,7 +20,7 @@
 ## 待部署
 
 - 安卓分屏键盘动效（fix/android-ime-motion）：需发安卓包；仅视图变化，无 core/API 或数据迁移依赖。多窗口缺少系统 IME 中间帧时补升降过渡，有原生帧及全屏继续直通。studio 安卓完整检查和 KeyboardInsetsTest 两项通过，Android 16 双应用分屏浅/深色录屏已确认。发版后在厂商折叠屏实机验分屏升降、快速反向收放，以及退出分屏后的全屏键盘。
-- 奏折输入框（memorial-composer）：选项类奏折也支持直接输入多行回复，文字草稿按奏折保存；发 web（含新 wasm core）、桌面和 Android 包，不能只换视图而继续用旧 core（旧 core 的 decision.reply 只接收问答类卡片）。沿用 chat 消息和引用接口，兼容旧 station，无数据迁移。上线后验：有选项的奏折输入多行回复并发送、选项仍可点；左右滑动后回来保留草稿；失败保留文字；处理最后一件返回列表。
+- 奏折输入框（memorial-composer）：奏折直接复用 chat 的输入组件（PC ComposerView、手机 web MobileComposer、Android HostComposer），带附件、引用、@ 对话与原有伸缩；草稿按奏折保存；发 web（含新 wasm core）、桌面和 Android 包，不能只换视图而继续用旧 core（旧 core 的 decision.reply 只接收问答类卡片且不接附件）。沿用 chat 消息和引用接口，兼容旧 station，无数据迁移。上线后验：有选项的奏折输入多行回复并发送、选项仍可点；加附件或引用后可发送，内容进入原 chat；左右滑动后回来保留草稿；失败保留文字；处理最后一件返回列表。
 
 - 移动端执行历史全屏页（mobile-history-page）：手机 web 和安卓从半屏抽屉改为独立页面，顶部返回、系统返回及聊天链接回到聊天；沿用页面栈保存位置。只改视图，不改 core/station 接口，可与旧 station 混用。web 随部署更新，安卓需要发新版。上线后验：点击 agent 打开全屏历史，步骤/详情可切换，返回后聊天位置不变。
 - 等待决定的对话读取失败（fix-decision-status-compat）：客户端 shapes 补齐旧 core 生成的 `decision` 状态；保留 main 将旧 `need_decision` 映射为 `block` 的逻辑。需更新 web core，并发 Android/桌面客户端；只更新 station 不能修复旧客户端。无需数据迁移。新版客户端打开旧 station 的等待决定对话，确认消息和输入框正常出现。

@@ -42,6 +42,10 @@ import fail.still.android.data.StationState
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceMark
 import fail.still.android.data.WorkspaceMarksView
+import fail.still.android.screens.Pending
+import fail.still.android.data.Attachment
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import fail.still.android.screens.Drafts
 import fail.still.android.motion.Fixtures
 import fail.still.android.motion.Harness
@@ -94,7 +98,7 @@ class DecisionsTest {
         rule.runOnUiThread {
             listOf(first, second, keyItem).forEach { item ->
                 Drafts.of(rule.activity, h.fake.core, "decision:${item.station}:${item.thread}:${item.seq}").apply {
-                    text = ""; starting = false; save()
+                    take(); starting = false; save()
                 }
             }
         }
@@ -326,6 +330,23 @@ class DecisionsTest {
         assertOneCall(h, "decision.reply", gap)
         assertEquals("先调间距\n颜色不动", h.acted()[0].second["text"]!!.jsonPrimitive.content)
         rule.onNodeWithText(second.title).assertExists()
+    }
+
+    @Test fun sharedComposerSendsAttachmentsAndQuotes() {
+        val h = page()
+        rule.runOnUiThread {
+            val draft = Drafts.of(rule.activity, h.fake.core, "decision:${first.station}:${first.thread}:${first.seq}")
+            draft.files.add(Pending(991L, "notes.txt", 12L, null).apply { done = Attachment("notes.txt", "uploads/notes.txt", 12L) })
+            draft.quote("林晓", "看这一处", "t1", "person")
+        }
+        h.settle()
+        rule.onNodeWithText("notes.txt").assertExists()
+        tap(sendButton().center)
+        assertOneCall(h, "decision.reply", gap)
+        val params = h.acted()[0].second
+        assertEquals("", params["text"]!!.jsonPrimitive.content)
+        assertEquals("uploads/notes.txt", params["attachments"]!!.jsonArray.single().jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("看这一处", params["quotes"]!!.jsonArray.single().jsonObject["text"]!!.jsonPrimitive.content)
     }
 
     @Test fun textCardEmptySendsNothing() {

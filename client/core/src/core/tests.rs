@@ -979,7 +979,7 @@ fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_t
         assert_eq!(posted(&host)[1]["text"], "随便");
         assert_eq!(posted(&host)[1]["quotes"][0]["ts"], "9.000004");
         // The shared chat composer can send a file alone and additional quoted passages.
-        let attachments = json!([{ "name": "screen.png", "path": "uploads/screen.png", "type": "image/png", "size": 12 }]);
+        let attachments = json!([{ "name": "screen.png", "path": "uploads/screen.png", "size": 12 }]);
         let extra_quotes = json!([{ "author": "林晓", "text": "看这一处", "comment": "", "role": "person" }]);
         core.receive(ui, ClientMessage::Call { id: 12, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4, "text": "", "attachments": attachments, "quotes": extra_quotes }) });
         host.settle().await;
