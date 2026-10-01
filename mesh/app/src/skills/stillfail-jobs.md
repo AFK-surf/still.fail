@@ -80,3 +80,22 @@ need to reach (a plain background job is enough).
   (each answer passed on whole). So the service must work at its own root paths (`/`, not under a prefix), and
   WebSockets (a dev server's live reload) and streamed answers (server-sent events, long polls) do not get through:
   turn hot reload off, and expect a page that relies on a live stream to show only what it reads.
+
+## Work on another station
+
+When a task needs another machine's tools or resources, use `station_list` to discover stations in this workspace and
+`station_list {station}` to check a target's capabilities and whether it accepts tasks from here. Permission belongs to
+the target administrator; do not enable `remoteTasks.allow` yourself just to get a task through.
+
+Use `station_task` to prepare a named shell task with a stable `key`, upload input files with `station_file`, then start
+it with the same key. Commands run as the target station's OS user in a task directory, not in a sandbox. Include exact
+versions in the inputs and command (for Git, upload a bundle or archive and check out the intended revision).
+
+`station_task` can list, inspect, tail or stop this session's remote tasks. After start, completion and job notices come
+back to this session even across reconnects and station restarts; you do not need a local polling job. While it runs,
+end the turn with `chat_state` waiting, naming the remote task. Download artifacts with `station_file` after it ends,
+and post them in the conversation that asked for the work.
+
+After a timeout, query or retry the **same** key: the command may already have run. A task with a lost process is not
+started again automatically; `failed` with no exit code can mean an uncertain result. Inspect before choosing a new
+key. Uploads can be repeated before starting; downloads create new files and never overwrite existing local files.
