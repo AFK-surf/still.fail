@@ -790,6 +790,8 @@ pub struct Profile {
     // What the core says of it.
     pub check_text: String,
     pub check_tone: Tone,
+    /// The first problem to resolve, with its next step; absent when nothing needs attention.
+    pub trouble: Option<ProfileTrouble>,
     /// The makers of its models, and of those its check found, by model.
     pub makers: HashMap<String, Option<Maker>>,
     /// Its models, its default and those its check found as people call them (Opus 5.5), by model.
@@ -802,6 +804,18 @@ pub struct Profile {
     /// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
     #[serde(default)]
     pub available: Vec<String>,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileTrouble {
+    pub title: String,
+    pub detail: String,
+    pub next: String,
+    /// check | quota | login | command | key | env
+    pub action: String,
+    pub label: String,
 }
 
 /// Models of one series (Opus), newest first.

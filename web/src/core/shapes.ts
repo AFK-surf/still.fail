@@ -465,6 +465,15 @@ export interface Quota {
 	time?: Record<string, Stamp>;
 }
 
+export interface ProfileTrouble {
+	title: string;
+	detail: string;
+	next: string;
+	/** check | quota | login | command | key | env */
+	action: string;
+	label: string;
+}
+
 /** Models of one series (Opus), newest first. */
 export interface ModelSeries {
 	name: string;
@@ -497,6 +506,8 @@ export interface Profile {
 	quota?: Quota;
 	checkText: string;
 	checkTone: Tone;
+	/** The first problem to resolve, with its next step; absent when nothing needs attention. */
+	trouble?: ProfileTrouble;
 	/** The makers of its models, and of those its check found, by model. */
 	makers: Record<string, Maker>;
 	/** Its models, its default and those its check found as people call them (Opus 5.5), by model. */

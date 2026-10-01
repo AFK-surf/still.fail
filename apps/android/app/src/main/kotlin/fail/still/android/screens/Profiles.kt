@@ -127,7 +127,7 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
             }, 20.dp)
         }) else null)
         LargeTitle(one?.let { "${it.name} 上的" } ?: "", "Profile")
-        PageNote("agent 跑模型用的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行。")
+        PageNote("agent 跑模型用的账号。需查看的账号排在各 station 前面，点进去查看原因和处理办法。")
         if (stations == null) Text(topic.error?.message ?: "正在读取 station…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else stations.forEach { s ->
             if (one == null) SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
@@ -172,7 +172,10 @@ internal fun ProfileRow(station: String, p: Profile) {
             }
             Text(listOf(p.checkText, if (p.machine == true) "本机登录" else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
+            if (p.trouble != null) {
+                Text("${p.trouble.title} · ${p.trouble.detail}", fontSize = 13.sp, color = C.muted)
+                Text("查看处理办法", fontSize = 13.sp, color = C.accent)
+            } else trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
         val calls = setOf("profile.check", "profile.quota")
         DoingMark(app.isDoing(calls, "station" to station, "id" to p.id), app.failedOf(calls, "station" to station, "id" to p.id))
@@ -241,6 +244,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
+            if (p.trouble != null) ProfileRecovery(s, p)
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             QuotaSection(address, p)
             ModelsSection(address, p, ticks.wanted ?: p.models, ticks.sending) { models -> setModels(models) }
@@ -317,6 +321,40 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 }
             }
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+/** The same core-provided diagnosis and next step as the mobile web. */
+@Composable
+private fun ProfileRecovery(station: StationView, p: Profile) {
+    val app = LocalApp.current
+    val issue = p.trouble ?: return
+    val address = station.station
+    val api = app.api(address)
+    val checking = app.isDoing("profile.check", "station" to address, "id" to p.id)
+    val refreshing = app.isDoing("profile.quota", "station" to address, "id" to p.id)
+    SectionHeader(issue.title, start = 24.dp)
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(issue.detail, fontSize = 13.sp, color = C.ink)
+            Text(issue.next, fontSize = 13.sp, color = C.muted)
+            if (!station.online) Text("${station.name} 已离线，恢复连接后才能操作", fontSize = 13.sp, color = C.muted)
+            if (issue.action == "command") CommandBox(p.loginCommand)
+            if (issue.action != "login") Button(issue.label, primary = false, enabled = station.online, busy = checking || refreshing) {
+                when (issue.action) {
+                    "key" -> ask(app, "新的 key", "", "粘贴 key", "保存", secret = true, hint = "保存后会重新检查") { key ->
+                        api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", p.access.kind); put("key", key) } })
+                    }
+                    "env" -> app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) }
+                    "quota" -> app.act("查询额度", "已更新额度") { api.refreshQuota(p.id) }
+                    else -> app.act("检查账号", "已检查") { api.checkProfile(p.id) }
+                }
+            }
+            if (issue.action in setOf("key", "env")) Button("重新检查", primary = false, enabled = station.online, busy = checking) {
+                app.act("检查账号", "已检查") { api.checkProfile(p.id) }
+            }
+            DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id))
         }
     }
 }

@@ -13,7 +13,6 @@ import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { useApp } from "./app.tsx";
 import { useChangelog } from "../changelog.ts";
 import { Presence } from "./Connects.tsx";
-import { quotaTrouble } from "./Profiles.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -49,7 +48,7 @@ export function SettingsScreen() {
   const troubled = stations?.some((s) => !s.online) ?? false;
   const failing = connects?.items.filter((i) => i.connect.presence === "error").length ?? 0;
   const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
-  const short = profiles.filter((p) => p.checkTone === "red" || quotaTrouble(p.quota)).length;
+  const short = profiles.filter((p) => p.trouble != null).length;
   const at = (path: string) => () => app.push(app.at(path));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
@@ -67,7 +66,7 @@ export function SettingsScreen() {
         <GoRow title="Workspace" value={view ? `${view.members.length} 人${manager && waiting ? ` · ${waiting} 人待加入` : ""}` : undefined} onClick={at("/settings/workspace")} />
         <GoRow title="Station" value={stations ? <>{troubled && <Presence state="error" />}{online}/{stations.length} 在线</> : undefined} onClick={at("/settings/stations")} />
         <GoRow title="连接" bad={failing > 0} value={connects ? (failing ? `${failing} 个出错` : `${connects.items.length} 个`) : undefined} onClick={at("/settings/connects")} />
-        <GoRow title="Profile" bad={short > 0} value={stations ? (short ? `${short} 个要处理` : `${profiles.length} 个`) : undefined} onClick={at("/settings/profiles")} />
+        <GoRow title="Profile" bad={short > 0} value={stations ? (short ? `${short} 个需查看` : `${profiles.length} 个`) : undefined} onClick={at("/settings/profiles")} />
         <GoRow title="记忆" onClick={at("/settings/memory")} />
         <GoRow title="用量" onClick={at("/settings/usage")} />
       </ListCard>

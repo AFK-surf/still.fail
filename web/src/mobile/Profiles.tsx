@@ -55,7 +55,7 @@ export function ProfilesScreen() {
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={one?.name ?? "设置"} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加 Profile" onClick={add} /> : undefined} />
       <LargeTitle small={one ? `${one.name} 上的` : ""} big="Profile" />
-      <p className={settingsCss.mPageNote}>agent 跑模型用的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行。</p>
+      <p className={settingsCss.mPageNote}>agent 跑模型用的账号。需查看的账号排在各 station 前面，点进去查看原因和处理办法。</p>
       {!stations ? <Loading text="正在读取 station…" /> : stations.map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           {!one && <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />}
@@ -100,7 +100,10 @@ export function ProfileRow({ station, p }: { station: StationView; p: Profile })
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
         <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
-        {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
+        {p.trouble ? <>
+          <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}><b>{p.trouble.title}</b> · {p.trouble.detail}</span>
+          <span className={`${listsCss.mRowNote} ${partsCss.mLink}`}>查看处理办法</span>
+        </> : trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
       </span>
       <QuotaRings quota={p.quota} />
       <ChevronRight size={14} className={partsCss.mSubtle} />
@@ -162,6 +165,7 @@ function ProfilePage({ p }: { p: Profile }) {
             {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />没能刷新额度：{quotaFailed}</span>}
           </span>
         </div>
+        {p.trouble && <ProfileRecovery p={p} />}
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         <Quota p={p} />
         <Models p={p} put={(models) => api.putProfile(p.id, { models })} />
@@ -208,6 +212,39 @@ function ProfilePage({ p }: { p: Profile }) {
       </div>
     </div>
   );
+}
+
+/** The core supplies the diagnosis and next step; the view opens the existing operation or editor. */
+function ProfileRecovery({ p }: { p: Profile }) {
+  const app = useApp();
+  const station = useStation();
+  const api = useApi();
+  const act = useAct();
+  const issue = p.trouble!;
+  const checking = useDoing("profile.check", { station: station.address, id: p.id });
+  const refreshing = useDoing("profile.quota", { station: station.address, id: p.id });
+  const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
+  const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
+  const run = () => {
+    if (issue.action === "key") ask(app, { title: "新的 key", value: "", placeholder: "粘贴 key", action: "保存", secret: true,
+      hint: "保存后会重新检查", run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }) });
+    else if (issue.action === "env") app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
+    else if (issue.action === "quota") act(api.refreshQuota(p.id), "查询额度", "已更新额度");
+    else act(api.checkProfile(p.id), "检查账号", "已检查");
+  };
+  return <>
+    <SectionHeader title={issue.title} start={24} />
+    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
+      <p className={`${partsCss.mSmall} ${settingsCss.mWrap}`}>{issue.detail}</p>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{issue.next}</p>
+      {!station.online && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{station.name} 已离线，恢复连接后才能操作</p>}
+      {issue.action === "command" && <CommandBox text={p.loginCommand} />}
+      {issue.action !== "login" && <LinkButton label={issue.label} enabled={station.online}
+        busy={checking || refreshing} failed={issue.action === "quota" ? quotaFailed : checkFailed} onClick={run} />}
+      {["key", "env"].includes(issue.action) && <LinkButton label="重新检查" enabled={station.online} busy={checking} failed={checkFailed}
+        onClick={() => act(api.checkProfile(p.id), "检查账号", "已检查")} />}
+    </div>
+  </>;
 }
 
 /** Renaming, checking, refreshing its allowance, deleting it (stopping one on the machine's login); not while a connect uses it. */

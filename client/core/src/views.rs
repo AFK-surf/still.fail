@@ -2726,7 +2726,7 @@ mod tests {
 
     /// A value without what the clients show of it (present.rs): what a view puts together, alone.
     fn plain(v: &Value) -> Value {
-        const SHOWN: [&str; 42] = ["settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary", "modelsText"];
+        const SHOWN: [&str; 43] = ["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary", "modelsText"];
         match v {
             Value::Array(items) => Value::Array(items.iter().map(plain).collect()),
             // An absent option is left out, as the shapes send it.

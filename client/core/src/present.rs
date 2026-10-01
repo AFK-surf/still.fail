@@ -514,6 +514,7 @@ pub fn profile(p: &mut Value) {
     let (text, tone) = if blocked { ("被停用", "red") } else { format::check_text(p.get("check").unwrap_or(&Value::Null)) };
     p["checkText"] = json!(text);
     p["checkTone"] = json!(tone);
+    p["trouble"] = profile_trouble(p);
     // Its models' makers, by model.
     let found = p.get("check").and_then(|c| c.get("models")).and_then(Value::as_array).cloned().unwrap_or_default();
     let makers: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
@@ -540,6 +541,40 @@ pub fn profile(p: &mut Value) {
     p["series"] = by_series;
     p["modelsText"] = json!(text);
     p["available"] = json!(available);
+}
+
+/// Use provider/check states, never guesses from an error string, to offer a safe next step.
+fn profile_trouble(p: &Value) -> Value {
+    let check = &p["check"];
+    let quota = &p["quota"];
+    let detail = |v: &Value, fallback: &str| v["detail"].as_str().filter(|s| !s.trim().is_empty()).unwrap_or(fallback).to_string();
+    let issue = |title: &str, detail: String, next: &str, action: &str, label: &str|
+        json!({ "title": title, "detail": detail, "next": next, "action": action, "label": label });
+    if quota["state"] == "blocked" {
+        return issue("账号被停用", detail(quota, "服务商拒绝了这个账号"),
+            "到服务商的账号页面查看停用原因，按提示恢复账号；处理后重新查询额度", "quota", "重新查询额度");
+    }
+    if check["state"] == "login" || check["state"] == "failed" {
+        let title = if check["state"] == "login" { "需要登录" } else { "账号检查失败" };
+        let why = detail(check, title);
+        if p["machine"] == true && check["state"] == "login" {
+            return issue(title, why, "在这台 Profile 所属的 station 上运行下面的登录命令，完成后重新检查", "command", "登录后重新检查");
+        }
+        match p["access"]["kind"].as_str() {
+            Some("subscription") if p["machine"] != true && check["state"] == "login" =>
+                return issue(title, why, "重新登录这个账号，按下方步骤完成浏览器授权", "login", "重新登录"),
+            Some("anthropic-api" | "opencode-go") =>
+                return issue(title, why, "核对服务商的 key 是否有效、余额和权限是否足够；可以更换 key，保存后会自动检查", "key", "更换 key"),
+            Some("env") =>
+                return issue(title, why, "检查模型服务地址、凭据和网络，修改环境变量后重新检查", "env", "编辑环境变量"),
+            _ => return issue(title, why, "先重新检查；如果仍然失败，按上面的原因检查账号或 station 的网络", "check", "重新检查"),
+        }
+    }
+    if quota["state"] == "unavailable" {
+        return issue("额度查询失败", detail(quota, "暂时查不到额度"),
+            "查不到额度不代表账号不能用。先重新查询；仍失败时按返回原因检查登录或网络", "quota", "重新查询额度");
+    }
+    Value::Null
 }
 
 /// Models by series, newest first (stillfail_shapes::model::order), those of no known series last as 其他:
@@ -743,7 +778,11 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
                 crate::footprint::brief(usage);
             }
             value.get_mut("connects").and_then(Value::as_array_mut).into_iter().flatten().for_each(connect);
-            value.get_mut("profiles").and_then(Value::as_array_mut).into_iter().flatten().for_each(profile);
+            if let Some(profiles) = value.get_mut("profiles").and_then(Value::as_array_mut) {
+                profiles.iter_mut().for_each(profile);
+                // Both mobile clients open the settings count onto the same, actionable profiles first.
+                profiles.sort_by_key(|p| p["trouble"].is_null());
+            }
             // The machine's own logins a profile could use now: signed in, on a plan, and no profile on it yet.
             let taken: Vec<Value> = value.get("profiles").and_then(Value::as_array).into_iter().flatten()
                 .filter(|p| p.get("machine").and_then(Value::as_bool) == Some(true)).filter_map(|p| p.get("runtime").cloned()).collect();
@@ -827,6 +866,39 @@ mod tests {
         let mut row = json!({ "people": [{ "id": "lina@x.com", "name": "Lina" }] });
         row_people(&mut row, &me, &[], &[]);
         assert_eq!(row["peopleText"], "Lina");
+    }
+
+    #[test]
+    fn profile_recovery_follows_states_and_clears_after_success() {
+        let mut p = json!({"access": {"kind": "subscription"}, "check": {"state": "login"}, "quota": {"state": "unavailable"}});
+        profile(&mut p);
+        assert_eq!(p["trouble"]["action"], "login", "fix the login before retrying the quota");
+        p["machine"] = json!(true);
+        profile(&mut p);
+        assert_eq!(p["trouble"]["action"], "command", "a machine login cannot be changed in the app");
+        p["check"]["state"] = json!("ok");
+        profile(&mut p);
+        assert_eq!(p["trouble"]["action"], "quota");
+        assert_eq!(p["checkText"], "可用", "failure to read quota does not make the account unusable");
+        assert_eq!(p["trouble"]["detail"], "暂时查不到额度", "old stations may omit the error detail");
+        p["quota"]["state"] = json!("ok");
+        profile(&mut p);
+        assert!(p["trouble"].is_null(), "a recovered profile no longer contributes to the count");
+        p["quota"]["state"] = json!("blocked");
+        profile(&mut p);
+        assert_eq!(p["trouble"]["title"], "账号被停用");
+        assert_eq!(p["checkTone"], "red");
+    }
+
+    #[test]
+    fn profile_recovery_offers_only_the_editor_for_its_access_kind() {
+        for (kind, action) in [("anthropic-api", "key"), ("opencode-go", "key"), ("env", "env"), ("subscription", "check")] {
+            let p = json!({"access": {"kind": kind}, "check": {"state": "failed", "detail": "timeout"}});
+            let issue = profile_trouble(&p);
+            assert_eq!(issue["action"], action);
+            assert_eq!(issue["detail"], "timeout");
+        }
+        assert!(profile_trouble(&json!({})).is_null(), "an unchecked old profile has no invented problem");
     }
 
     #[test]

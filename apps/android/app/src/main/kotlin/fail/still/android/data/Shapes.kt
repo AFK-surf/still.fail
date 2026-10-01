@@ -477,6 +477,16 @@ data class Quota (
 	val time: Map<String, Stamp>? = null
 )
 
+@Serializable
+data class ProfileTrouble (
+	val title: String,
+	val detail: String,
+	val next: String,
+	/// check | quota | login | command | key | env
+	val action: String,
+	val label: String
+)
+
 /// Models of one series (Opus), newest first.
 @Serializable
 data class ModelSeries (
@@ -509,6 +519,8 @@ data class Profile (
 	val quota: Quota? = null,
 	val checkText: String,
 	val checkTone: Tone,
+	/// The first problem to resolve, with its next step; absent when nothing needs attention.
+	val trouble: ProfileTrouble? = null,
 	/// The makers of its models, and of those its check found, by model.
 	val makers: Map<String, Maker?>,
 	/// Its models, its default and those its check found as people call them (Opus 5.5), by model.

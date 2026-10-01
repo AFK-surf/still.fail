@@ -90,7 +90,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
     val troubled = stations?.any { !it.online } ?: false
     val failing = connects?.items?.count { it.connect.presence == "error" } ?: 0
     val profiles = stations.orEmpty().flatMap { it.overview?.profiles.orEmpty() }
-    val short = profiles.count { it.checkTone == "red" || quotaTrouble(it.quota) != null }
+    val short = profiles.count { it.trouble != null }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack("会话", app::pop)
         LargeTitle("", "设置")
@@ -109,7 +109,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
             GoRow("Workspace", view?.let { "${it.members.size} 人" + if (it.manager && waiting > 0) " · $waiting 人待加入" else "" }) { app.push(Screen.Workspace) }
             GoRow("Station", stations?.let { "$online/${it.size} 在线" }, dot = troubled) { app.push(Screen.Stations) }
             GoRow("连接", connects?.let { if (failing > 0) "$failing 个出错" else "${it.items.size} 个" }, bad = failing > 0) { app.push(Screen.Connects()) }
-            GoRow("Profile", stations?.let { if (short > 0) "$short 个要处理" else "${profiles.size} 个" }, bad = short > 0) { app.push(Screen.Profiles()) }
+            GoRow("Profile", stations?.let { if (short > 0) "$short 个需查看" else "${profiles.size} 个" }, bad = short > 0) { app.push(Screen.Profiles()) }
             GoRow("记忆") { app.push(Screen.Memories) }
             GoRow("用量") { app.push(Screen.Usage) }
         }
