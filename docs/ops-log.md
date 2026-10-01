@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 安卓分屏键盘动效（fix/android-ime-motion）：需发安卓包；仅视图变化，无 core/API 或数据迁移依赖。多窗口缺少系统 IME 中间帧时补升降过渡，有原生帧及全屏继续直通。studio 安卓完整检查和 KeyboardInsetsTest 两项通过，Android 16 双应用分屏浅/深色录屏已确认。发版后在厂商折叠屏实机验分屏升降、快速反向收放，以及退出分屏后的全屏键盘。
+
 - 移动端执行历史全屏页（mobile-history-page）：手机 web 和安卓从半屏抽屉改为独立页面，顶部返回、系统返回及聊天链接回到聊天；沿用页面栈保存位置。只改视图，不改 core/station 接口，可与旧 station 混用。web 随部署更新，安卓需要发新版。上线后验：点击 agent 打开全屏历史，步骤/详情可切换，返回后聊天位置不变。
 - 等待决定的对话读取失败（fix-decision-status-compat）：客户端 shapes 补齐旧 core 生成的 `decision` 状态；保留 main 将旧 `need_decision` 映射为 `block` 的逻辑。需更新 web core，并发 Android/桌面客户端；只更新 station 不能修复旧客户端。无需数据迁移。新版客户端打开旧 station 的等待决定对话，确认消息和输入框正常出现。
 - 奏折清空自动返回（fix/edicts-empty-back）：发布 web 和 Android 包；沿用 core 的 decisions count/loading 字段，无接口或数据迁移，无部署顺序要求。上线后验最后一件处理完返回上一页、加载中不退、从奏折打开的其他页面不被误退。Studio 完整检查及 7 项安卓交互测试通过。
