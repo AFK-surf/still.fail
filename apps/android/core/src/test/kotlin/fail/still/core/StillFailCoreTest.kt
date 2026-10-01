@@ -70,6 +70,38 @@ class StillFailCoreTest {
     }
 
     @Test
+    fun restartDoesNotDisposeAnEngineInsideAnOutgoingFfiCall() {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val closed = java.util.concurrent.CountDownLatch(1)
+        val created = java.util.concurrent.atomic.AtomicInteger()
+        lateinit var fatal: () -> Unit
+        val core = StillFailCore({ callback ->
+            val first = created.getAndIncrement() == 0
+            object : Engine {
+                init { if (first) fatal = { callback(this, """{"fatal":"restart during receive"}""") } }
+                override fun connect() = 1L
+                override fun receive(client: Long, json: String) {
+                    if (first) { entered.countDown(); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)) }
+                }
+                override fun close() { if (first) closed.countDown() }
+            }
+        }).also { it.open() }
+        kotlinx.coroutines.runBlocking {
+            val failed = async(kotlinx.coroutines.Dispatchers.Default) {
+                try { core.call("pending"); "unexpected success" } catch (e: CoreException) { e.code }
+            }
+            try {
+                assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                fatal()
+                assertEquals("core_restarted", kotlinx.coroutines.withTimeout(2000) { failed.await() })
+                assertEquals("engine disposed during receive", 1L, closed.count)
+            } finally { release.countDown() }
+            assertTrue(closed.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun streamedProgressArrivesBeforeItsAnswer() = runTest {
         val engines = FakeEngines(); val core = core(engines)
         val events = mutableListOf<String>()
