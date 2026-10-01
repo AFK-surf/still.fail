@@ -151,6 +151,9 @@ struct State {
     /// When the wait is over (ms), and how long it was said to be.
     waiting_until: i64,
     waiting_seconds: u64,
+    /// Messages (thread, n) given to the running turn while it ran, since the last turn the station started: the runtime
+    /// may not have read them yet (suspend).
+    steered: Vec<(i64, i64)>,
 }
 
 type Task = Box<dyn FnOnce(Arc<SessionActor>) -> BoxFuture<'static, Result<()>> + Send>;
@@ -464,6 +467,49 @@ impl SessionActor {
         })
     }
 
+    /// The station left its workspace: the runtime process ends, and with it whatever the agent was doing or had been
+    /// given, so nothing it was told gets acted on outside the workspace (a turn interrupted could still read input it
+    /// had queued, and post). As at a shutdown, a turn under way stays marked running, for Hub::recover to resume once
+    /// the station is back in its workspace (unless it had already said final or block); the messages given to it while
+    /// it ran are pending again, since the process may have ended before reading them. Its record ends as aborted. No
+    /// notice goes to the thread: the station says nothing while out of its workspace.
+    pub fn suspend(&self) -> impl Future<Output = ()> + Send + 'static {
+        self.enqueue(|a| async move {
+            let (agent, turn, busy, steered) = {
+                let mut st = a.st();
+                let agent = st.agent.take().map(|(_, agent)| agent);
+                let busy = agent.as_ref().is_some_and(|agent| agent.busy());
+                st.tools.clear();
+                st.working_for.clear();
+                st.stop_requested = false;
+                (agent, st.turn.take(), busy, std::mem::take(&mut st.steered))
+            };
+            if agent.is_none() && turn.is_none() {
+                return Ok(());
+            }
+            let deps = a.deps()?;
+            let store = deps.store();
+            let settled = turn.as_ref().is_some_and(|t| matches!(t.declared, Some(DeclaredState::Final | DeclaredState::Block)));
+            let resume = (turn.is_some() || busy) && !settled;
+            info!(session = a.key, resume, "ending the runtime process: the station is in no workspace");
+            if let Some(agent) = agent {
+                agent.dispose().await;
+            }
+            if let Some(turn) = &turn {
+                store.end_turn(&turn.id, "aborted", Some("other: the station left its workspace"), turn.declared.map(DeclaredState::as_str), None)?;
+            }
+            store.set_running(&a.key, resume)?;
+            if turn.is_some() || busy {
+                store.mark_undelivered(&a.key, &steered)?;
+            }
+            if let Some(live) = deps.live() {
+                live.turn_ended(&a.key);
+            }
+            store.notify(&a.key);
+            Ok(())
+        })
+    }
+
     /// For shutdown. A running turn is left marked running, so the next start resumes it instead of reporting a crash
     /// to the thread.
     pub async fn dispose(&self) {
@@ -522,6 +568,7 @@ impl SessionActor {
             if agent.steer(&text).await {
                 self.work_for(&deps, &pending);
                 self.delivered(&store, &pending, &widgets)?;
+                self.st().steered.extend(pending.iter().map(|m| (m.message.thread, m.message.n)));
             }
             return Ok(()); // otherwise delivered when the turn ends
         }
@@ -687,6 +734,7 @@ impl SessionActor {
             if agent.busy() && agent.steer(&prompt).await {
                 return Ok(());
             }
+            self.st().steered.clear();
             self.begin_turn(deps, kind)?;
             if let Err(e) = agent.prompt(&prompt).await {
                 // The runtime is unusable (died between turns, or refused): replace it once.

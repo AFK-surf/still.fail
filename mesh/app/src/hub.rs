@@ -263,15 +263,20 @@ impl Hub {
         self.holds.lock().unwrap().contains(&reason)
     }
 
-    /// Interrupts every running turn (the station left its workspace): each as `-stop` would, marked not running, so
-    /// nothing resumes it later.
-    pub async fn stop_all(&self) {
-        let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
-        let running: Vec<Arc<SessionActor>> = actors.into_iter().filter(|a| a.process_state() == "running").collect();
-        for actor in &running {
-            info!(session = actor.key, "interrupting a turn: the station is in no workspace");
-            actor.stop().await;
+    /// The station left its workspace (turns are held first): every runtime process ends, running or idle, then what the
+    /// drivers run themselves (codex's app-servers), so no agent goes on outside the workspace. Interrupting turns was
+    /// not enough: input a runtime had queued still ran after the interrupt, and posted. Turns cut off stay marked
+    /// running and messages given to them pending again (SessionActor::suspend): `recover` resumes them once the
+    /// station is back in its workspace.
+    pub async fn suspend_all(&self) {
+        for (_, deadline) in self.deadlines.lock().unwrap().drain() {
+            deadline.abort();
         }
+        // Taken up from the previous binary or not, what was cut off now resumes the usual way.
+        self.adopted.lock().unwrap().clear();
+        let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
+        futures_util::future::join_all(actors.iter().map(|a| a.suspend())).await;
+        futures_util::future::join_all(self.drivers.values().map(|d| d.shutdown())).await;
     }
 
     /// Whether any turn is running.

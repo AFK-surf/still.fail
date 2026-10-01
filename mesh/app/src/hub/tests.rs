@@ -173,11 +173,13 @@ struct FakeDriver {
     /// Runtime session ids that resume fails for.
     unresumable: Mutex<HashSet<String>>,
     next: AtomicU64,
+    /// Times every process it started was ended.
+    shutdowns: AtomicUsize,
 }
 
 impl FakeDriver {
     fn new(runtime: RuntimeKind) -> Arc<FakeDriver> {
-        Arc::new(FakeDriver { runtime, sessions: Mutex::default(), unresumable: Mutex::default(), next: AtomicU64::new(1) })
+        Arc::new(FakeDriver { runtime, sessions: Mutex::default(), unresumable: Mutex::default(), next: AtomicU64::new(1), shutdowns: AtomicUsize::new(0) })
     }
     fn last(&self) -> Arc<FakeSession> {
         self.sessions.lock().unwrap().last().cloned().expect("a session opened")
@@ -217,7 +219,9 @@ impl AgentDriver for FakeDriver {
         self.sessions.lock().unwrap().push(session.clone());
         Ok(session)
     }
-    async fn shutdown(&self) {}
+    async fn shutdown(&self) {
+        self.shutdowns.fetch_add(1, Ordering::SeqCst);
+    }
     async fn adopt_session(&self, handed: &Value, events: Events) -> Result<Arc<dyn AgentSession>> {
         let options = OpenOptions {
             profile: {
@@ -839,22 +843,76 @@ async fn a_station_in_no_workspace_starts_no_turn_until_it_joins_one_whatever_a_
     assert!(session.prompts()[0].contains("hello"));
 }
 
+/// Removed from its workspace with a turn under way and a message given to it meanwhile: the runtime ends (an interrupt
+/// left it free to act on the message it had queued, and post), and nothing it says afterwards counts. Back in the
+/// workspace, the turn resumes on the same runtime session with the message again.
 #[tokio::test]
-async fn leaving_the_workspace_interrupts_running_turns() {
+async fn leaving_the_workspace_ends_the_runtimes_and_coming_back_resumes_the_cut_off_turn_with_what_it_was_given() {
     let r = setup_with(Setup { max_nudges: Some(0), ..Setup::default() });
     let m = message();
     r.accept(&m).await;
     settle().await;
-    assert!(r.hub.any_running());
-    r.hub.hold(Hold::Unbound);
-    r.hub.stop_all().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
     let session = r.claude.last();
-    assert_eq!(session.aborts.load(Ordering::SeqCst), 1, "the running turn was interrupted");
-    session.end(TurnOutcome::Aborted);
+    r.accept(&reply(&m, "9999.5", "and the docs too")).await;
     settle().await;
+    assert!(session.steers()[0].contains("and the docs too"), "given to the running turn");
+    assert!(r.store.pending_messages(&key).unwrap().is_empty());
+    // An idle process of another session ends as well.
+    let other = say("<@UBOT> other");
+    r.accept(&other).await;
+    settle().await;
+    let idle = r.claude.last();
+    idle.complete();
+    settle().await;
+    assert!(!Arc::ptr_eq(&idle, &session) && !idle.busy() && !idle.disposed());
+
+    let said = r.chat.texts().len();
+    r.hub.hold(Hold::Unbound);
+    r.hub.suspend_all().await;
+    assert!(session.disposed() && idle.disposed(), "every runtime process ended");
+    assert_eq!(session.aborts.load(Ordering::SeqCst), 0, "ended, not just interrupted");
+    assert_eq!((r.claude.shutdowns.load(Ordering::SeqCst), r.codex.shutdowns.load(Ordering::SeqCst)), (1, 1), "and the drivers' own");
     assert!(!r.hub.any_running());
-    assert!(!r.session(&session_key("cl", "C1", &m.thread_ts)).running, "nothing resumes it later");
-    assert_eq!(session.prompts().len(), 1, "no nudge after it");
+    assert_eq!(r.hub.process_state(&key), "cold");
+    assert!(r.session(&key).running, "kept for recover");
+    let pending = r.store.pending_messages(&key).unwrap();
+    assert_eq!(pending.iter().map(|p| p.message.text.as_str()).collect::<Vec<_>>(), ["and the docs too"], "what it may not have read waits again");
+    // What the ended runtime still says is not taken: no nudge, no notice, nothing started.
+    session.complete();
+    settle().await;
+    assert_eq!(r.claude.count(), 2, "no runtime starts while out of the workspace");
+    assert_eq!(r.chat.texts().len(), said, "nothing said in the threads: {:?}", r.chat.texts());
+    assert!(r.session(&key).running);
+
+    // Back in the workspace (App::bind): recover, then release.
+    r.hub.recover().unwrap();
+    r.hub.release(Hold::Unbound);
+    settle().await;
+    let resumed = r.claude.last();
+    assert_eq!(r.claude.count(), 3, "only the cut-off turn resumes; the idle session waits for its next message");
+    assert_eq!(resumed.options.resume, Some(session.id.clone()), "on the same runtime session");
+    assert!(matches(&resumed.prompts()[0], &["restarted while you were in the middle of a turn", "and the docs too"]), "{:?}", resumed.prompts());
+    assert!(r.store.pending_messages(&key).unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_turn_that_had_already_said_final_is_not_resumed_after_leaving_the_workspace() {
+    let r = setup_with(Setup { max_nudges: Some(0), ..Setup::default() });
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let thread = format!("C1/{}", m.thread_ts);
+    r.call(&key, "chat_post", json!({ "to": thread, "text": "done", "kind": "final" })).await.unwrap();
+    r.hub.hold(Hold::Unbound);
+    r.hub.suspend_all().await;
+    assert!(r.claude.last().disposed());
+    assert!(!r.session(&key).running);
+    r.hub.recover().unwrap();
+    r.hub.release(Hold::Unbound);
+    settle().await;
+    assert_eq!(r.claude.count(), 1, "nothing to resume");
 }
 
 #[tokio::test]

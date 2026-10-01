@@ -1566,6 +1566,20 @@ impl Store {
         })
     }
 
+    /// Makes messages delivered to the session pending again: the runtime they were handed to ended before it could be
+    /// sure to have read them (SessionActor::suspend).
+    pub fn mark_undelivered(&self, session: &str, messages: &[(i64, i64)]) -> Result<()> {
+        self.with(|i, changes| {
+            for (thread, n) in messages {
+                i.db.execute("UPDATE deliveries SET delivered_at = NULL WHERE thread = ? AND n = ? AND session = ?", params![thread, n, session])?;
+            }
+            if !messages.is_empty() {
+                changes.push(StoreChange::Session(session.to_string()));
+            }
+            Ok(())
+        })
+    }
+
     /// Threads the session has already read something from.
     pub fn heard_threads(&self, session: &str) -> Result<HashSet<i64>> {
         self.with(|i, _| {

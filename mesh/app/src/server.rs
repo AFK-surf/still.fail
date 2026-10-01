@@ -265,7 +265,15 @@ impl App {
         let (tokens, homes_of) = (store.clone(), store.clone());
         let mut tools = hub.tools();
         tools.extend(jobs.tools(Arc::new(move |key| homes_of.get_session(key).ok().flatten().map(|row| PathBuf::from(row.workspace)))));
-        let mcp = Arc::new(McpEndpoint::new(move |token| tokens.session_by_token(token).ok().flatten().map(|row| row.key), tools));
+        // A station does no work outside a workspace: never in one, or removed from it.
+        let status = mesh.status();
+        let bound = Arc::new(AtomicBool::new(status.bound()));
+        // Nor do its agents reach out of it meanwhile (mcp.rs OUTWARD): their runtimes end as it leaves (`unbind`), and
+        // a call that still comes is refused. cloud.json read as well, so the refusal starts as soon as it is marked.
+        let (gate_bound, gate_mesh) = (bound.clone(), mesh.clone());
+        let mcp = Arc::new(McpEndpoint::new(move |token| tokens.session_by_token(token).ok().flatten().map(|row| row.key), tools).gated(move || {
+            (!gate_bound.load(Ordering::SeqCst) || !gate_mesh.status().bound()).then(|| crate::mcp::UNBOUND_REFUSAL.to_string())
+        }));
         let logins = LoginManager::new(&config.data_dir, LoginCommands::default());
         // The machine's own Claude Code and Codex logins, read at start and again as pages ask.
         let machine_logins = MachineLogins::new(
@@ -324,9 +332,6 @@ impl App {
         // What the chats' people hear about while no client of theirs runs (the station process posts it on).
         crate::admin::notify::Notifier::start(&admin);
         let mcp_door = serve_mcp(listener, mcp, jobs.clone());
-        // A station does no work outside a workspace: never in one, or removed from it.
-        let status = mesh.status();
-        let bound = Arc::new(AtomicBool::new(status.bound()));
         let app = Arc::new(App {
             settings: settings.clone(),
             connections: connections.clone(),
@@ -394,35 +399,36 @@ impl App {
         self.bound.load(Ordering::SeqCst)
     }
 
-    /// In a workspace (again): connects connect, what a start outside one left owed is done (cut-off turns resumed,
-    /// jobs taken up), and turns start, what waited meanwhile first.
+    /// In a workspace (again): connects connect, turns cut off resume (by a start outside one, or by leaving it), what
+    /// a start outside one left owed is done (jobs taken up), and turns start, what waited meanwhile first.
     async fn bind(&self) {
         if self.bound.swap(true, Ordering::SeqCst) {
             return;
         }
         info!("in a workspace: connects, turns and jobs go on");
         self.connections.reconcile(&self.settings.config()).await;
+        // Resumed while still held: a message that waited joins the resumed turn rather than racing it.
+        if let Err(e) = self.hub.recover() {
+            warn!(error = %e, "cut-off turns not resumed");
+        }
         if self.owed.swap(false, Ordering::SeqCst) {
-            // Resumed while still held: a message that waited joins the resumed turn rather than racing it.
-            if let Err(e) = self.hub.recover() {
-                warn!(error = %e, "cut-off turns not resumed");
-            }
             self.jobs.relaunch();
         }
         self.hub.release(Hold::Unbound);
     }
 
-    /// Out of its workspace (removed, or its cloud.json taken away): no turn starts and those running are interrupted,
-    /// connects disconnect, jobs and services stop (their logs say why). Messages that come meanwhile wait.
+    /// Out of its workspace (removed, or its cloud.json taken away): no turn starts, the agents' runtime processes end
+    /// (turns under way are resumed once it is back, Hub::suspend_all), their outward tools are refused, connects
+    /// disconnect, jobs and services stop (their logs say why). Messages that come meanwhile wait.
     async fn unbind(&self, status: &MeshStatus) {
         if !self.bound.swap(false, Ordering::SeqCst) {
             return;
         }
         let why = out_why(status);
-        warn!(why, "out of its workspace: stopping connects, turns, jobs and services");
+        warn!(why, "out of its workspace: ending the agents' runtimes, stopping connects, jobs and services");
         self.hub.hold(Hold::Unbound);
+        self.hub.suspend_all().await;
         self.connections.stop_all().await;
-        self.hub.stop_all().await;
         self.jobs.stop_all(&why).await;
     }
 
@@ -696,6 +702,46 @@ mod tests {
         assert!(again.hub.holds(Hold::Unbound));
         assert_eq!(again.mesh.status().state, "removed");
         again.shutdown().await;
+    }
+
+    /// One tool call to the station's MCP endpoint as session s1: the tool's text, and whether it is an error.
+    async fn call(app: &App, name: &str, args: Value) -> (String, bool) {
+        let url = crate::session::SessionDeps::mcp_url(&*app.hub);
+        let body = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": name, "arguments": args } });
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let reply: Value = client.post(url).bearer_auth("tok-s1").json(&body).send().await.unwrap().json().await.unwrap();
+        let result = &reply["result"];
+        (result["content"][0]["text"].as_str().unwrap_or_default().to_string(), result["isError"] == json!(true))
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn out_of_its_workspace_the_agents_tools_that_reach_out_are_refused() {
+        let r = Rig::start("mcp-gate", json!({})).await;
+        let db = Store::open(&r.dir.join(DB_FILE).to_string_lossy(), None).unwrap();
+        let work = r.dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        db.insert_session(&crate::store::NewSession { key: "s1".into(), connect: "c".into(), runtime: "claude".into(), profile: "p".into(), workspace: work.to_string_lossy().into(), token: "tok-s1".into(), ..Default::default() }).unwrap();
+        let refused = |(text, error): (String, bool)| error && text == crate::mcp::UNBOUND_REFUSAL;
+        // Never joined one.
+        assert!(refused(call(&r.app, "chat_post", json!({ "to": "EMBER/1.0", "text": "hi" })).await));
+        assert!(refused(call(&r.app, "job_start", json!({ "name": "x", "command": "true" })).await));
+        assert!(refused(call(&r.app, "slack_api", json!({ "method": "auth.test" })).await));
+        let (listed, error) = call(&r.app, "chat_list", json!({})).await;
+        assert!(!error, "reads stay open: {listed}");
+        r.enroll(None);
+        r.until_bound(true).await;
+        let (text, _) = call(&r.app, "chat_post", json!({ "to": "EMBER/1.0", "text": "hi" })).await;
+        assert!(text.contains("not a conversation of this session"), "in a workspace it runs: {text}");
+        // Removed: refused at once, before the station has even seen its cloud.json change.
+        r.enroll(Some(1_790_000_000));
+        assert!(refused(call(&r.app, "chat_post", json!({ "to": "EMBER/1.0", "text": "hi" })).await));
+        r.until_bound(false).await;
+        assert!(refused(call(&r.app, "chat_post", json!({ "to": "EMBER/1.0", "text": "hi" })).await));
+        assert!(refused(call(&r.app, "job_start", json!({ "name": "x", "command": "true" })).await));
+        assert!(db.list_jobs(None).map(|jobs| jobs.is_empty()).unwrap_or(true), "no job started");
+        let (state, error) = call(&r.app, "chat_state", json!({ "kind": "final" })).await;
+        assert!(!error, "{state}");
+        r.app.shutdown().await;
     }
 
     /// Removed while it was down (or it crashed between the removal and stopping its jobs): the next start finds the
