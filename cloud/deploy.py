@@ -50,7 +50,7 @@ import tempfile
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -285,9 +285,10 @@ def main() -> None:
     template = read_template()
     origin = template["vars"]["PUBLIC_ORIGIN"]
     aliases = [o.strip() for o in template["vars"].get("PUBLIC_ORIGIN_ALIASES", "").split(",") if o.strip()]
-    web = json.loads(args.google.read_text())["web"]
+    # Only the API needs the Google client: a deploy of the static sites (CI's web-beta) goes without it.
+    web = json.loads(args.google.read_text())["web"] if args.check or "api" in parts else {}
     # Google calls back the new origin; a login started on an old one before a deploy, the old one.
-    for callback in [f"{o}/v1/auth/google/callback" for o in [origin, *aliases]]:
+    for callback in [f"{o}/v1/auth/google/callback" for o in [origin, *aliases]] if web else []:
         if callback not in web.get("redirect_uris", []):
             print(f"note: {args.google} does not list {callback}; make sure it is registered in Google Cloud Console")
     if args.check:
@@ -322,9 +323,11 @@ def main() -> None:
         subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)
     if not args.skip_build and "site-beta" in parts:
         subprocess.run(["pnpm", "run", "build:site-beta"], cwd=REPO, check=True)
+    # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
+    # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push()},
-        "relay": {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push()},
+        "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:
         config = {**read_template(PARTS[part]), "account_id": account}
@@ -342,11 +345,12 @@ def main() -> None:
         if part in secrets_of:
             with tempfile.TemporaryDirectory(prefix="stillfail-secrets-") as directory:
                 path = Path(directory) / "secrets.json"
-                write_private(path, secrets_of[part])
+                write_private(path, secrets_of[part]())
                 wrangler("secret", "bulk", str(path), "--config", str(local), env=env, capture=True)
         print(f"deployed {part}", flush=True)
 
-    with docker_env() as env:
+    # Docker only builds the relay's image: the other parts deploy without it (a CI runner may have none).
+    with docker_env() if "relay" in parts else nullcontext(dict(os.environ)) as env:
         # The relay, then the API, in that order (the first split moved paths from one to the other); the static sites,
         # which depend on nothing, side by side after them (each is mostly wrangler's own round trips).
         for part in [p for p in parts if p in ("relay", "api")]:

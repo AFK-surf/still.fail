@@ -108,3 +108,11 @@ still.fail 会校验每个经过 tunnel 的请求所带的 Access JWT（签名�
 - `pnpm test`（web 里的 TypeScript 部分，需要先构建 wasm core）、`pnpm typecheck`。
 - `pnpm check`：跑全部检查（scripts/check.sh all）。
 - `pnpm dev:web`：still.fail cloud 网页版（`--mode cloud`）的热更新开发服务器。
+
+## CI
+
+- 测试版 web（app.youdid.wtf）自动部署：`.github/workflows/web-beta.yml`，main 上改到 `web/`、`client/`（以及依赖、`cloud/deploy.py`、这个 workflow）的 push 触发。跑 wasm 核心构建、web 和脚本的 typecheck、`pnpm test`，过了就 `python3 cloud/deploy.py web-beta`；新的 push 会取消还在跑的那次。冷编约 2.5 分钟，有缓存时几十秒。
+- 跑在 mini1 的自托管 runner 上（名字和 label 都是 `mini1`，`~/actions-runner-ember`，LaunchAgent `actions.runner.zzj3720-ember.mini1`，用户 zuozijian），不花 GitHub 分钟数。Cloudflare 用的是 mini1 自己的 `wrangler login`；部署目录 `~/stillfail-deploy` 只有 `posthog.json`、`builds/`（promote-web 用的构建）和 `beta-web-commit`（最近一次上 beta 的提交）。cargo 的 target 放在 `~/stillfail-ci/target`，跨次保留。工具链：rustup 1.95（`~/.cargo/bin`，带 wasm32 和 wasm-bindgen-cli 0.2.129，Cargo.lock 里 wasm-bindgen 升级时要跟着 `cargo install wasm-bindgen-cli --version <新版> --locked`）、Homebrew 的 llvm@22、`~/.local/bin` 的 node 24 和 pnpm。
+- 其余部分（api、relay、admin、preview、官网、station 发布包）仍由 studio 的 `~/bin/ember-deploy` 部署，它不再部署 web-beta。转正 `~/bin/ember-promote web` 从 mini1 取 `beta-web-commit` 和那份构建，原样部署到 app.still.fail。
+- 一个提交同时改了 api 时，CI 只发 web：新页面会先配旧 api，直到在 studio 部署。新字段本来就要求可选，一般不坏；要紧的改动合进去后尽快跑一次 `ember-deploy`。
+- runner 重新注册：在 mini1 上 `cd ~/actions-runner-ember && ./config.sh remove`，再用 `gh api -X POST repos/zzj3720/ember/actions/runners/registration-token --jq .token` 拿 token，`./config.sh --unattended --url https://github.com/zzj3720/ember --token <token> --name mini1 --labels mini1`，`./svc.sh install && ./svc.sh start`。
