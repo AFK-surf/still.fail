@@ -48,7 +48,7 @@ pub fn prepare(text: &str, paths: &mut Vec<String>, workspace: &Path) -> Result<
             let before = source[..start].trim_end().trim_end_matches('<').trim_end();
             before.ends_with("](").then_some(start)
         }).ok_or_else(|| anyhow!("write local file link {destination} without Markdown escapes (use <…> around paths with spaces)"))?;
-        let canonical = path.canonicalize()?;
+        let canonical = path.canonicalize().map_err(|_| anyhow!("no such file: {}", path.display()))?;
         if !paths.iter().any(|p| workspace.join(p).canonicalize().ok().as_ref() == Some(&canonical)) {
             paths.push(path.to_string_lossy().into_owned());
         }
@@ -61,7 +61,7 @@ pub fn prepare(text: &str, paths: &mut Vec<String>, workspace: &Path) -> Result<
     let mut names = std::collections::HashMap::new();
     for path in paths.iter() {
         let path = workspace.join(path);
-        let canonical = path.canonicalize()?;
+        let canonical = path.canonicalize().map_err(|_| anyhow!("no such file: {}", path.display()))?;
         if let Some(name) = path.file_name() {
             if let Some(previous) = names.insert(name.to_os_string(), canonical.clone()) {
                 if previous != canonical { bail!("attachments have the same name: {}; rename the files before posting", name.to_string_lossy()); }
