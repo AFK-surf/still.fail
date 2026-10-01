@@ -19,6 +19,9 @@
 
 ## 待部署
 
+- Claude 额度续期（claude-quota-refresh）：需发 station 包，无客户端/API/数据迁移依赖。额度读取和机器账号启动直接走 OAuth 续期，不再发 Haiku 对话；沿用文件/钥匙串原位置与 Claude Code 2.1.286 的新旧刷新锁。升级后在机器登录和独立登录两类账号上，token 到期后只打开账号额度页，确认恢复显示且不出现模型调用；模拟接口已覆盖到期、提前 401、并发、失败重试、钥匙串及遗留锁恢复。未来 Claude Code 调整锁或凭据格式时需同步核对。
+
+
 - 模型勾选反馈：需发布 web（含新版 wasm core）和 Android；无需更新 station 或迁移数据。沿用 `profile.put`，core 给 Profile 增加可选 `modelsSaving`，旧 station 兼容。上线后在 Profile 勾选模型，确认立即勾选、保存中行内转圈、成功不退勾，失败回退并提示。
 
 - Android New chat 首条发送闪动（fix/android-new-chat-flash）：随下次 Android 发版；仅视图修复，无接口、数据迁移或 station/cloud 顺序要求。浅色/深色点 New chat 发首条消息，输入框底色不应闪灰。Studio 完整 Android 检查和两项逐帧回归已通过，原版回归均能在第 2 帧捕获灰闪。
