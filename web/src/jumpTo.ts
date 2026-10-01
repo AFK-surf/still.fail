@@ -27,5 +27,6 @@ export function useJump(station: string, thread: number | null): number | null {
   return useSyncExternalStore(
     (h) => { heard.add(h); return () => { heard.delete(h); }; },
     () => (wanted && thread !== null && wanted.station === station && wanted.thread === thread ? wanted.seq : null),
+    () => null,
   );
 }
