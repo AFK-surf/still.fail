@@ -3202,6 +3202,9 @@ mod tests {
             op.path = "/different-endpoint".into();
             stations.perform(&remote(), &op).await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/overview"), before + 1);
+            let verify = crate::ops::request("slack.verify", &json!({"station": ST, "appToken": "app", "botToken": "bot"})).unwrap().unwrap();
+            stations.perform(&remote(), &verify).await.unwrap();
+            assert_eq!(wire.count("GET", "/admin/api/overview"), before + 1, "checking tokens is not a settings change");
             // A response that happens to resemble an overview does not give a read write effects.
             let op = crate::ops::request("job.get", &json!({"station": ST, "id": "j"})).unwrap().unwrap();
             wire.answer("GET /admin/api/jobs/j", 200, json!({"connects": [], "profiles": []}));

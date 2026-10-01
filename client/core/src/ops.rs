@@ -99,10 +99,14 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // with no chat yet. A station from before chats were archived by themselves archives its session instead.
         "chat.archive" => (|| {
             let method = if p.bool("archived") { "POST" } else { "DELETE" };
-            let by_session = format!("/sessions/{}/archive", p.at("session")?);
+            let fallback = op(method, p.at("session").map(|key| format!("/sessions/{key}/archive")), None, Effect::Session(p.word("session")))?;
             match p.0.get("thread").and_then(Value::as_u64) {
-                Some(thread) => op(method, Ok(format!("/threads/{thread}/archive")), None, Effect::Thread { archived: true }).and_then(|r| Ok(Request { fallback: Some(Box::new(op(method, Ok(by_session), None, Effect::Session(Some(p.str("session")?)))?)), ..r })),
-                None => op(method, Ok(by_session), None, Effect::Session(p.word("session"))),
+                Some(thread) => {
+                    let mut request = op(method, Ok(format!("/threads/{thread}/archive")), None, Effect::Thread { archived: true })?;
+                    request.fallback = Some(Box::new(fallback));
+                    Ok(request)
+                }
+                None => Ok(fallback),
             }
         })(),
         // A chat named by hand (an empty name: named by its first message again): its thread, or an agent with no chat yet.
@@ -138,7 +142,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         "connect.bindSession" => op("POST", p.at("connect").map(|c| format!("/connects/{c}/session")), Some(p.pick(&["session", "title"])), Effect::Connect(p.word("connect"))),
         "connect.putSlackApp" => op("PUT", p.at("connect").map(|c| format!("/connects/{c}/slack-app")), Some(p.value("input").unwrap_or(json!({}))), Effect::Connect(p.word("connect"))),
         // ── Slack ──
-        "slack.verify" => op("POST", Ok("/slack/verify".into()), Some(p.pick(&["connect", "install", "appToken", "botToken"])), Effect::Slack),
+        // Verification reads Slack; it does not change the overview or any app settings.
+        "slack.verify" => op("POST", Ok("/slack/verify".into()), Some(p.pick(&["connect", "install", "appToken", "botToken"])), Effect::None),
         "slack.makeApp" => op("POST", Ok("/slack/apps".into()), Some(p.pick(&["team", "settings", "icon"])), Effect::Slack),
         "slack.dropApp" => op("DELETE", p.at("appId").map(|a| format!("/slack/apps/{a}")), None, Effect::Slack),
         "slack.installed" => op("POST", Ok("/slack/installs".into()), Some(p.pick(&["code", "state"])), Effect::Slack),

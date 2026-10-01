@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- core 与多端精简（simplify-core-operations）：发布 web（含 WASM）、桌面 core、Android；station/cloud API 无变更，无部署顺序要求。新版 web 配旧桌面 core 的 Slack token 表单会退回原校验逻辑；旧页面配新 core 的 `slack.verify` 保留。token 草稿只在内存中，关闭表单/断开客户端清除。上线后验：三端新增连接与更换 token，修改输入后原校验失效、旧校验结果不推进下一步；旧 station 的归档 404 回退仍正常。
+
 - Slack 会话自动标题（slack-auto-title）：station 允许 agent 用 chat_post.title 为 Slack 线程设置 still.fail 列表标题，沿用手动标题保护和改名频率限制；同步 agent 指令。只需发 station，新旧客户端均沿用现有 title 字段。上线后验：Slack 线程首个最终回复后，still.fail 列表显示概括标题；手动命名后不会被覆盖。已有会话在 agent 下次提供标题时生效，不批量回填。
 
 - Claude 额度报错识别（fix-quota-failover）：更新 station；无需更新客户端。`You've hit your session limit` 等额度提示现在归为 rate_limit，自动账号会话可进入切换并继续链路；固定账号仍遵守原有固定设置。新旧数据和接口不变。上线后核对自然发生的额度失败记录为 rate_limit，且有可用同模型账号时自动继续。
