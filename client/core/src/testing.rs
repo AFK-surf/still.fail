@@ -56,6 +56,8 @@ pub struct FakeHost {
     seed: RefCell<u64>,
     utc_offset_min: Cell<i32>,
     speedup: Cell<u64>,
+    /// How far the clock was moved on (`advance`), ms.
+    ahead: Cell<f64>,
 }
 
 impl FakeHost {
@@ -78,6 +80,7 @@ impl FakeHost {
             seed: RefCell::new(0x5eed),
             utc_offset_min: Cell::new(0),
             speedup: Cell::new(1),
+            ahead: Cell::new(0.0),
         })
     }
 
@@ -112,6 +115,12 @@ impl FakeHost {
     /// Makes the core's timers run `factor` times faster (eviction after 0.6 s at 100).
     pub fn speed_up(&self, factor: u64) {
         self.speedup.set(factor);
+    }
+
+    /// Moves the clock (`now_ms`) on by `ms` at once, timers left as they are: time that passed while nothing ran (an
+    /// app away in the background).
+    pub fn advance(&self, ms: u64) {
+        self.ahead.set(self.ahead.get() + ms as f64);
     }
 
     /// Sends a text frame on the newest open WebSocket whose url ends with `path`.
@@ -257,7 +266,7 @@ impl Host for FakeHost {
     }
 
     fn now_ms(&self) -> f64 {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as f64
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as f64 + self.ahead.get()
     }
 
     fn utc_offset_min(&self, _at_ms: f64) -> i32 {

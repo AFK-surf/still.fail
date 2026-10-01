@@ -60,6 +60,9 @@ pub const RETRY_MS: u64 = 3_000;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone though nothing
 /// said so, and is read again (from where it was).
 pub const STREAM_IDLE_MS: u64 = 40_000;
+/// A stream silent past one keepalive (and a little) may be on a link that is gone: one opened in its place reads
+/// again what it may have missed.
+pub const STREAM_QUIET_MS: u64 = 30_000;
 /// A job's log on a station that does not follow it is read again after this, doubling while it stays the same, up
 /// to LOG_READ_MAX_MS.
 pub const LOG_READ_MS: u64 = 2_000;
@@ -545,6 +548,8 @@ pub(crate) struct StationState {
     generation: u64,
     /// The stream dropped since the topics were read: the next one to open reads them again.
     stale: bool,
+    /// When the open stream last gave anything (its keepalive included); None while none is open.
+    heard: Option<f64>,
     /// Per topic: its live stream.
     tasks: HashMap<Topic, AbortHandle>,
     /// Per session key: the steps in flight and the phase.
@@ -570,6 +575,7 @@ impl StationState {
             replaced: None,
             generation: 0,
             stale: false,
+            heard: None,
             tasks: HashMap::new(),
             lives: HashMap::new(),
             dirty: HashSet::new(),
@@ -1457,6 +1463,12 @@ impl Stations {
             if !anew && s.events.as_ref().is_some_and(|(_, asks)| *asks == wants) {
                 return;
             }
+            // Replacing a stream gone quiet: it may have died unnoticed (the app away, the link gone), and what was said
+            // meanwhile is read again once its successor opens, as after a drop.
+            let now = self.host.now_ms();
+            if s.events.is_some() && s.heard.is_some_and(|h| now - h > STREAM_QUIET_MS as f64) {
+                s.stale = true;
+            }
             if let Some((old, _)) = s.events.take()
                 && let Some(older) = s.replaced.replace(old)
             {
@@ -1503,6 +1515,16 @@ impl Stations {
             old.abort();
         }
         true
+    }
+
+    /// The current stream gave something now (`open`), or is no longer open.
+    fn heard(&self, station: &str, generation: u64, open: bool) {
+        let now = self.host.now_ms();
+        if let Some(s) = self.of(station).stations.borrow_mut().get_mut(station)
+            && s.generation == generation
+        {
+            s.heard = open.then_some(now);
+        }
     }
 
     fn is_current(&self, station: &str, generation: u64) -> bool {
@@ -1574,6 +1596,7 @@ impl Stations {
                 Ok(mut body) => {
                     misses = 0;
                     reached = true;
+                    self.heard(&station, generation, true);
                     self.set_link(&station, json!({ "state": "online" }));
                     // Down for a while: what changed meanwhile was not told.
                     if self.set_stale(&station, false) {
@@ -1608,6 +1631,7 @@ impl Stations {
                             }
                         };
                         heard = self.host.now_ms();
+                        self.heard(&station, generation, true);
                         match chunk {
                             Ok(bytes) => {
                                 for (name, data) in parser.feed(&bytes) {
@@ -1625,6 +1649,7 @@ impl Stations {
                         return;
                     }
                     previous = Some((why.clone(), self.host.now_ms() - opened_at));
+                    self.heard(&station, generation, false);
                     self.set_stale(&station, true);
                     self.set_link(&station, json!({ "state": "reconnecting", "message": if why == "ended" { "连接断开了".to_string() } else { why } }));
                     // Taken for gone as the UI came back: opened again at once.
@@ -1934,7 +1959,7 @@ impl Stations {
             Some(read) if unread > 0 => (Some(read + 1), None),
             _ => (place.map(|p| p.at), place.and_then(|p| p.offset)),
         };
-        let Some(mut value) = self.window(station, id, at).await else { return };
+        let Some((mut value, asked)) = self.window(station, id, at).await else { return };
         // Opened where it was left: where that entry's top was, too.
         if let Some(offset) = offset
             && value.get("at").is_some()
@@ -1954,6 +1979,19 @@ impl Stations {
             self.put_entries(station, id, told, true);
         }
         self.ahead(station, id);
+        // Opened from the device alone: what came after it is asked once.
+        if !asked {
+            self.confirm_end(station, id).await;
+        }
+    }
+
+    /// A thread opened at its end from what the device has, asked what came after it: an event this device missed (a
+    /// stream that died unnoticed while the app was away) is not told again, and the station's list it was found
+    /// current by may be as old.
+    async fn confirm_end(&self, station: &str, id: u64) {
+        if self.reachable(station) {
+            self.reload(&Topic::Thread { station: station.into(), thread: id }).await;
+        }
     }
 
     /// A thread's latest entry, as the station's list says (it follows its events, a moment behind), or as far as what
@@ -1966,8 +2004,9 @@ impl Stations {
 
     /// The window a chat shows around entry `at` (a page before it and a page from it on), or its latest page: from
     /// what is kept when all of it is and it is known to be current, else read from the station (and kept). Offline,
-    /// the latest page kept is all there is. None while nothing can be had.
-    async fn window(&self, station: &str, id: u64, at: Option<u64>) -> Option<Value> {
+    /// the latest page kept is all there is. None while nothing can be had; else with whether the station was asked (what
+    /// is kept, and the list it was found current by, may be behind what was said while no stream told this device).
+    async fn window(&self, station: &str, id: u64, at: Option<u64>) -> Option<(Value, bool)> {
         let log = Log::thread(station, id);
         let held = self.kept.held_of(&log).await;
         let summary = self.summary(station, id);
@@ -1986,7 +2025,7 @@ impl Stations {
             if let Some(latest) = latest
                 && let Some(entries) = self.have(station, id, from, to).await
             {
-                return Some(placed(thread_value(from, entries, thread, title, to >= latest)));
+                return Some((placed(thread_value(from, entries, thread, title, to >= latest)), false));
             }
             if let Some(addr) = &addr
                 && let Ok(answer) = self.call(addr, "GET", &format!("/threads/{id}/entries?from={from}&to={to}"), Vec::new(), Vec::new()).await
@@ -1996,7 +2035,7 @@ impl Stations {
                 if let Some(first) = entries.first().and_then(n_of) {
                     self.keep_entries(station, id, entries.clone());
                     let end = first + entries.len() as u64 > last;
-                    return Some(placed(thread_value(first, entries, thread, title, end)));
+                    return Some((placed(thread_value(first, entries, thread, title, end)), true));
                 }
             }
         }
@@ -2005,7 +2044,7 @@ impl Stations {
             && latest.is_some_and(|l| l == h.last)
             && let Some((held, entries)) = self.kept.open(&log, PAGE).await
         {
-            return Some(thread_value(held.first, entries, thread, title, true));
+            return Some((thread_value(held.first, entries, thread, title, true), false));
         }
         if let Some(addr) = &addr {
             // What came after what is kept, when that is less than a page; else the latest page.
@@ -2023,19 +2062,19 @@ impl Stations {
                         self.kept.write(&log, first, entries.clone(), false, summary.clone()).await;
                     }
                     let (held, kept) = self.kept.open(&log, PAGE).await?;
-                    return Some(thread_value(held.first, kept, thread, title, true));
+                    return Some((thread_value(held.first, kept, thread, title, true), true));
                 }
                 let first = entries.first().and_then(n_of).unwrap_or(last + 1);
                 if !entries.is_empty() {
                     self.host.spawn(self.kept.write(&log, first, entries.clone(), false, summary.clone()));
                 }
-                return Some(thread_value(first, entries, thread, title, true));
+                return Some((thread_value(first, entries, thread, title, true), true));
             }
             return None;
         }
         // Offline: its latest page kept, as it was.
         let (held, entries) = self.kept.open(&log, PAGE).await?;
-        Some(thread_value(held.first, entries, thread, title, true))
+        Some((thread_value(held.first, entries, thread, title, true), false))
     }
 
     /// What a thread shows is on the device; so is the page on either side of it, for when the reader goes on.
@@ -2427,10 +2466,13 @@ impl Stations {
         if self.sink.get(&topic).is_some_and(|v| at_end(&v)) {
             return Ok(());
         }
-        let value = self.window(&name, thread, None).await.ok_or_else(|| CoreError::new("offline", "连不上 station"))?;
+        let (value, asked) = self.window(&name, thread, None).await.ok_or_else(|| CoreError::new("offline", "连不上 station"))?;
         if self.is_live(&topic) {
             self.sink.set(&topic, Ok(value));
             self.ahead(&name, thread);
+            if !asked {
+                self.confirm_end(&name, thread).await;
+            }
         }
         Ok(())
     }
@@ -3580,7 +3622,9 @@ mod tests {
             stations.start(&thread(7));
             host.settle().await;
             assert_eq!(window_of(&sink, 7), (251, 300, true));
-            assert!(wire.paths().iter().all(|p| !p.contains("/threads/7/entries?after") && !p.contains("entries?limit=50")), "{:?}", wire.paths());
+            // Shown from the device, then asked once what came after it (an event missed is not told again).
+            assert!(wire.paths().iter().all(|p| !p.contains("entries?limit=50")), "{:?}", wire.paths());
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?after=300"), 1);
             // Opened again with 20 new (read): what came after is read first; the first value is whole.
             let (sink, wire, stations) = reopened(&host);
             wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 320, 320, 0)]));
@@ -3942,6 +3986,33 @@ mod tests {
             // Nothing at all for longer: the link is taken for gone, and it is asked for again.
             wait(STREAM_IDLE_MS + RECONNECT_MS + 5_000).await;
             assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0&last=200"), 2);
+        });
+    }
+
+    #[test]
+    fn a_stream_replaced_after_it_went_quiet_reads_again_what_it_may_have_missed() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 12, 12, 0)]));
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 12, "entries": [entry(11, "a"), entry(12, "b")]}));
+            stations.start(&threads());
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(numbers(&sink, 7), vec![11, 12]);
+            // Opened for something more while its stream is heard from: nothing is read again.
+            let lists = wire.count("GET", "/admin/api/threads");
+            stations.start(&host_topic());
+            host.settle().await;
+            assert_eq!(wire.count("GET", "/admin/api/threads"), lists);
+            // The app away for a minute: its stream died unnoticed, and 13 was said meanwhile (its event never came).
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 13, 12, 1)]));
+            wire.answer("GET /admin/api/threads/7/entries?after=12", 200, json!({"last": 13, "entries": [entry(13, "c")]}));
+            host.advance(60_000);
+            // Back, a new stream opened in its place (asking for something else): what it missed is read.
+            stations.stop(&host_topic());
+            host.settle().await;
+            assert_eq!(numbers(&sink, 7), vec![11, 12, 13]);
+            assert_eq!(sink.get(&threads()).unwrap()[0]["last"], 13);
         });
     }
 
