@@ -134,7 +134,7 @@ export const page = style({ flex: "1", minHeight: "0", display: "flex", flexDire
 /** Its field and send button, where an options card's options are: the field a chip, the button round, in ink. */
 export const reply = style({
   display: "flex", alignItems: "flex-end", gap: "6px", marginTop: "8px", padding: "6px 6px 6px 16px", borderRadius: "24px",
-  cornerShape: vars.cornerShape, background: chip,
+  cornerShape: vars.cornerShape, background: vars.raised,
 });
 export const replyInput = style({
   flex: "1", minWidth: "0", minHeight: "36px", maxHeight: "144px", resize: "none", textWrap: "wrap", height: "36px", padding: "6px 0", border: "0", outline: "none", background: "none",

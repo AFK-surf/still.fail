@@ -294,13 +294,17 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     // what was written stays and why is said.
     val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
     val reply = { text: String ->
-        app.scope.launch {
-            try {
-                app.api(item.station).replyDecision(item.thread, item.seq, text)
-                replyDraft.text = ""
-                replyDraft.save()
-                go(0) { local.gone.add(item.key) }
-            } catch (e: CoreException) { app.toast = "没能回复：${errorText(e)}" }
+        if (!replyDraft.starting) {
+            replyDraft.starting = true
+            app.scope.launch {
+                try {
+                    app.api(item.station).replyDecision(item.thread, item.seq, text)
+                    replyDraft.text = ""
+                    replyDraft.save()
+                    go(0) { local.gone.add(item.key) }
+                } catch (e: CoreException) { app.toast = "没能回复：${errorText(e)}" }
+                finally { replyDraft.starting = false }
+            }
         }
         Unit
     }
@@ -467,16 +471,16 @@ private fun TextReply(item: DecisionItem, placeholder: String?, onField: (Layout
     val app = LocalApp.current
     val draft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
     val text = draft.text
-    val doing = app.isDoing("decision.reply", "station" to item.station, "thread" to item.thread, "seq" to item.seq)
+    val doing = draft.starting || app.isDoing("decision.reply", "station" to item.station, "thread" to item.thread, "seq" to item.seq)
     val ready = text.isNotBlank() && !doing
     val send = { if (ready) onReply(text.trim()) }
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp).clip(RoundedCornerShape(24.dp)).background(C.surface)
+            .onGloballyPositioned(onField).padding(6.dp),
+        verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
-            Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(C.chip).onGloballyPositioned(onField)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+            Modifier.weight(1f).heightIn(min = 36.dp).padding(start = 10.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (text.isEmpty()) Text(placeholder?.takeIf { it.isNotBlank() } ?: "写点什么…", style = SendTextStyle.copy(color = C.subtle), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -484,12 +488,11 @@ private fun TextReply(item: DecisionItem, placeholder: String?, onField: (Layout
                 text, { draft.text = it }, Modifier.fillMaxWidth().semantics { contentDescription = "回复" },
                 enabled = !doing, maxLines = 6,
                 textStyle = SendTextStyle.copy(color = C.ink), cursorBrush = SolidColor(C.accent),
-                
             )
         }
         // Nothing to send: the ink faint over the page (as the composer's).
         Box(
-            Modifier.size(40.dp).clip(CircleShape).background(if (ready || doing) C.ink else C.ink.copy(alpha = 0.18f).compositeOver(C.bg))
+            Modifier.size(36.dp).clip(CircleShape).background(if (ready || doing) C.ink else C.ink.copy(alpha = 0.18f).compositeOver(C.surface))
                 .clickable(enabled = ready) { send() }.semantics { contentDescription = "发送" },
             contentAlignment = Alignment.Center,
         ) {
