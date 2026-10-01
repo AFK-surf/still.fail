@@ -44,7 +44,12 @@ internal fun AgentWords(ctx: Here, text: String, files: List<Attachment>, draft:
     val placing = if (placed.isEmpty()) null else Placing(
         files = placed,
         shown = { f -> PlacedFile(ctx, f) },
-        row = { f, size -> val owner = ctx.owner(f); if (owner != null && IMAGE.containsMatchIn(f.name)) StationImage(ctx.station, owner, f, size) else FileCard(f.name, f.size) },
+        row = { f, size ->
+            val owner = ctx.owner(f)
+            if (owner != null && IMAGE.containsMatchIn(f.name)) StationImage(ctx.station, owner, f, size)
+            // Markdown's ![] can place a video (or any file), too. Its card must open the same preview as a link.
+            else FileCard(f.name, f.size, onClick = if (owner != null) ({ opened = f }) else null)
+        },
         open = { opened = it },
     )
     val followUp: ((String) -> Boolean)? = draft?.let { d -> { words -> d.text = if (d.text.isBlank()) words else "${d.text.trimEnd()}\n$words"; d.focus++; true } }
