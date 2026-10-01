@@ -86,10 +86,11 @@ fn ask_of(item: &Value) -> Value {
     let label = ask.and_then(|a| a.get("label")).and_then(Value::as_str).map(str::trim).filter(|l| !l.is_empty());
     let options: Vec<&str> = ask.and_then(|a| a.get("options")).and_then(Value::as_array).into_iter().flatten()
         .filter_map(Value::as_str).map(str::trim).filter(|o| !o.is_empty()).collect();
-    if label.is_none() && options.is_empty() {
+    let question = ask.and_then(|a| a.get("question")).and_then(Value::as_str).map(str::trim).filter(|q| !q.is_empty());
+    if question.is_none() && label.is_none() && options.is_empty() {
         return Value::Null;
     }
-    json!({ "label": label, "options": (!options.is_empty()).then_some(options) })
+    json!({ "question": question, "label": label, "options": (!options.is_empty()).then_some(options) })
 }
 
 /// The answers a card offers while it waits, the same whoever it waits on (anyone may answer): yes (准, or the
@@ -152,6 +153,11 @@ fn shown(item: &Value, viewer: &Viewer, deferred: &Deferred, answered: &Deferred
     let detail = item.get("detail").and_then(Value::as_str).map(str::trim).filter(|d| !d.is_empty());
     let when = (updated > 0).then(|| crate::format::relative_time(updated as f64, c.now, c.offset_min));
     let line = detail.map(str::to_string).into_iter().chain(when).collect::<Vec<_>>().join(" · ");
+    // Its card: the question in front, and over it one quiet line, whose, what it is and since when (奏 · 设置页间距 ·
+    // 3 分钟前); not its detail (a branch, a commit: the agent's, the question says what matters of it).
+    let question = ask.get("question").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| title.clone());
+    let since = (updated > 0).then(|| crate::format::relative_time(updated as f64, c.now, c.offset_min)).unwrap_or_default();
+    let head = [lead.as_str(), title.as_str(), since.as_str()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
     json!({
         "key": key,
         "session": text("session"),
@@ -167,6 +173,8 @@ fn shown(item: &Value, viewer: &Viewer, deferred: &Deferred, answered: &Deferred
         "deferred": set_aside.then_some(true),
         "lead": lead,
         "line": line,
+        "question": question,
+        "head": head,
         "answers": if waiting { answers(&title, &ask) } else { Vec::new() },
     })
 }
@@ -441,9 +449,10 @@ mod tests {
             a("准", "yes", Some("「设置页间距」准")), a("随便", "delegate", Some("「设置页间距」随便")), a("待定", "defer", None),
         ]);
         // In the agent's words, with answers to pick.
-        asked["ask"] = json!({ "label": " 合并 ", "options": ["先上线", 3, ""], "other": 1 });
+        asked["ask"] = json!({ "question": " 间距这样改，合吗？ ", "label": " 合并 ", "options": ["先上线", 3, ""], "other": 1 });
         let r = shown_row(row(vec![asked.clone()]), &Deferred::new());
-        assert_eq!(r["asks"][0]["ask"], json!({ "label": "合并", "options": ["先上线"] }));
+        assert_eq!(r["asks"][0]["ask"], json!({ "question": "间距这样改，合吗？", "label": "合并", "options": ["先上线"] }));
+        assert_eq!(r["asks"][0]["question"], "间距这样改，合吗？");
         assert_eq!(said(&r)[..2], [a("合并", "yes", Some("「设置页间距」合并")), a("先上线", "option", Some("「设置页间距」先上线"))]);
         // Waiting on others: the same answers, anyone may give them.
         asked["waitingOn"] = json!([wl.clone()]);
@@ -452,6 +461,8 @@ mod tests {
         let r = shown_row(row(vec![asked.clone()]), &Deferred::new());
         assert_eq!(said(&r), [a("准", "yes", Some("「设置页间距」准")), a("随便", "delegate", Some("「设置页间距」随便")), a("待定", "defer", None)]);
         assert_eq!(r["asks"][0]["line"], "分支 settings-gap · 3 分钟前");
+        assert_eq!(r["asks"][0]["question"], "设置页间距", "no question from the agent: its title");
+        assert_eq!(r["asks"][0]["head"], "等王磊决定 · 设置页间距 · 3 分钟前");
     }
 
     #[test]

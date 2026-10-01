@@ -286,6 +286,7 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
                     catch (e: CoreException) { asks.undo(item.key); app.toast = "没能待定：${e.message}" }
                 }
             },
+            onShow = { item -> item.evidence?.let { host.showSaid?.invoke(it) } },
             onReply = { item, words ->
                 val session = (of as? ChatOf.Session)?.key ?: item.session
                 val thread = view.thread?.id ?: (of as? ChatOf.Thread)?.id
@@ -573,6 +574,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     motion.follow = follow
     val scope = rememberCoroutineScope()
     motion.scope = scope
+    // A card over the composer tapped (AskCard.kt): the message that asked it, as a quote's (no passage: it flashes whole).
+    val jumpTo = rememberJump(list, rows, motion)
+    SideEffect { host.showSaid = { seq -> rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == seq } }?.let { jumpTo(it.ts, "") } } }
     // Put in place once: at the unread line (even coming back: something unread goes over where the chat was left),
     // else back where the chat was left, else where the core opened it (`at`), else at the newest.
     val lineShown = remember { mutableStateOf(false) }
@@ -1115,8 +1119,7 @@ private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
  * the list, then it flashes (a reader's move: the list follows the newest again only if that leaves it at the end).
  */
 @Composable
-private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>): (String, String) -> Unit {
-    val motion = LocalChatMotion.current
+private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, motion: ChatMotion? = LocalChatMotion.current): (String, String) -> Unit {
     val accent = chatInk().accent
     return { ts, passage ->
         val index = rows.indexOfFirst { it is Entry.Said && it.m.ts == ts }

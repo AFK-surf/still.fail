@@ -282,6 +282,14 @@ impl SessionActor {
         self.enqueue(|a| async move { a.give_notices().await })
     }
 
+    /// What the turn running now waits for, once it ends as waiting (chat_state waiting `for`).
+    pub fn wait_for(&self, what: &str) {
+        let id = self.st().turn.as_ref().map(|t| t.id.clone());
+        if let (Some(id), Some(deps)) = (id, self.deps.upgrade()) {
+            let _ = deps.store().set_wait_for(&id, what);
+        }
+    }
+
     /// Called by the MCP tools while a turn runs.
     pub fn declare(&self, state: DeclaredState) {
         if let Some(turn) = self.st().turn.as_mut() {

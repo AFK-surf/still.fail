@@ -167,6 +167,8 @@ pub struct TurnSummary {
     /// For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none).
     #[typeshare(serialized_as = "Option<I54>")]
     pub wait_seconds: Option<i64>,
+    /// For waiting: what it waits for, in the agent's words (a station yet to update says nothing).
+    pub wait_for: Option<String>,
     pub detail: Option<String>,
     #[typeshare(serialized_as = "I54")]
     pub started_at: i64,
@@ -1924,6 +1926,10 @@ pub struct WorkItem {
     pub lead: String,
     /// The line under its title: its detail and when it was last declared so (分支 settings-gap · 3 分钟前).
     pub line: String,
+    /// Its card's main line: what is to be decided (`ask.question`), its title when the agent gave none.
+    pub question: String,
+    /// Its card's quiet top line: lead, title and since when (奏 · 设置页间距 · 3 分钟前).
+    pub head: String,
     /// What its card offers while it waits, in order; none otherwise.
     pub answers: Vec<WorkAnswer>,
 }
@@ -1934,6 +1940,8 @@ pub struct WorkItem {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkAsk {
+    /// What is to be decided, in a sentence: its card's main line (the title there when absent: an older station).
+    pub question: Option<String>,
     pub label: Option<String>,
     pub options: Option<Vec<String>>,
 }

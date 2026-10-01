@@ -337,6 +337,9 @@ pub struct TurnSummary {
     /// For waiting: at most how long, in seconds, until the agent is asked again.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wait_seconds: Option<i64>,
+    /// For waiting: what it waits for, in the agent's words.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait_for: Option<String>,
     pub detail: Option<String>,
     pub started_at: i64,
     pub ended_at: Option<i64>,
@@ -646,7 +649,8 @@ CREATE TABLE IF NOT EXISTS turns (
   outcome TEXT,
   detail TEXT,
   declared TEXT,
-  wait_seconds INTEGER
+  wait_seconds INTEGER,
+  wait_for TEXT
 );
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
@@ -812,6 +816,10 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
     // Came with waiting's limit, after the turns table.
     if !has("turns", "wait_seconds")? {
         db.execute_batch("ALTER TABLE turns ADD COLUMN wait_seconds INTEGER")?;
+    }
+    // Came with saying what a wait is for (chat_state waiting `for`).
+    if !has("turns", "wait_for")? {
+        db.execute_batch("ALTER TABLE turns ADD COLUMN wait_for TEXT")?;
     }
     // Came with usage (store/usage.rs): whom a turn worked for, where, and on which profile.
     for (column, kind) in [("profile", "TEXT"), ("person", "TEXT"), ("thread", "INTEGER")] {
@@ -1904,6 +1912,14 @@ impl Store {
         })
     }
 
+    /// What a turn waits for once it ends as waiting (chat_state waiting `for`), in the agent's words.
+    pub fn set_wait_for(&self, id: &str, what: &str) -> Result<()> {
+        self.with(|i, _| {
+            i.db.execute("UPDATE turns SET wait_for = ? WHERE id = ?", params![what, id])?;
+            Ok(())
+        })
+    }
+
     /// Ends a turn; `wait_seconds` is how long a turn ending as waiting waits at most.
     pub fn end_turn(&self, id: &str, outcome: &str, detail: Option<&str>, declared: Option<&str>, wait_seconds: Option<u64>) -> Result<()> {
         self.with(|i, changes| {
@@ -1943,6 +1959,7 @@ impl Store {
                     outcome: r.get("outcome")?,
                     declared: r.get("declared")?,
                     wait_seconds: r.get("wait_seconds")?,
+                    wait_for: r.get("wait_for")?,
                     detail: r.get("detail")?,
                     started_at: r.get("started_at")?,
                     ended_at: r.get("ended_at")?,
@@ -1963,6 +1980,7 @@ impl Store {
                         outcome: r.get("outcome")?,
                         declared: r.get("declared")?,
                         wait_seconds: r.get("wait_seconds")?,
+                    wait_for: r.get("wait_for")?,
                         detail: r.get("detail")?,
                         started_at: r.get("started_at")?,
                         ended_at: r.get("ended_at")?,
@@ -1982,7 +2000,7 @@ impl Store {
                    (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
                    (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
                      WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
-                   l.kind, l.outcome, l.declared, l.wait_seconds, l.detail, l.started_at, l.ended_at
+                   l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.detail, l.started_at, l.ended_at
                  FROM sessions s
                  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
                  {}",
@@ -2004,6 +2022,7 @@ impl Store {
                                 outcome: r.get("outcome")?,
                                 declared: r.get("declared")?,
                                 wait_seconds: r.get("wait_seconds")?,
+                    wait_for: r.get("wait_for")?,
                                 detail: r.get("detail")?,
                                 started_at,
                                 ended_at: r.get("ended_at")?,

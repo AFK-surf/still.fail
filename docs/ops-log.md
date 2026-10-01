@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 事项卡片说清在问什么、等待说清在等什么（ask-question）：station 要求 waiting 的事项带 `ask.question`（没有就报错让 agent 补），`chat_state waiting` 必须带 `for`（turns 表补 `wait_for` 列，旧库自动补，行和会话的 `lastTurn` 带 `waitFor`）；指令同步。core：`WorkItem` 加 `question`、`head`（「奏 · 标题 · 时间」，不再带分支），agent 状态「在等：…」。web 和安卓卡片改成问题做主文字、点空白跳到提问的消息；安卓卡片的滑动改挂在外层（加了 23 个真实触摸的 androidTest：`AskCardSwipeTest`）。新字段可选：旧 station 没有 question 时卡片用标题、没有 waitFor 时显示「等待中」。web 跟部署走，station 要发包，安卓要发一版。上线后验：让 agent 声明一件 waiting 的事，卡片主文字是一句问题；agent 用 waiting 结束时，名字下面显示「在等：…」；安卓上横着拖卡片能滑走。
 - 归档时清理可重建的文件（archive-clean-rebuild）：chat 归档（手动或自动）后，station 结束空闲进程，再在后台删掉它工作区里可重建的目录（判断同 footprint::rebuildable）；agent 在跑、已恢复、和没归档的 session 共用目录、或不在 station 的 sessions 目录下时不动。只改 station，要发包；客户端不用动。占用页的数字等下次统计才变。上线后验：归档一个工作区里有 node_modules 的 chat，一两秒后那个 node_modules 没了，station 日志有 `rebuildable files of an archived session cleaned`。
 - 新对话怎么来就怎么走（android-new-chat-back）：新对话变成正式 chat 后，点返回不再往右横着出去，而是和升上来时一样往下沉；安卓侧滑返回新对话（或它变成的 chat）时跟着手指往下沉。手机 web 的 `mobile/app.tsx` 也改了点返回（页面记下自己是怎么进来的），侧滑没改。改了安卓 App.kt 和手机 web，web 跟部署走，安卓要发一版。上线后验：点新对话 → 发一条消息 → 点返回，往下沉；再来一次换成侧滑，同样往下沉。motion 测试 `OverMotionTest#newChatInAndOut`。
 - chat 里漏新回复（chat-stale-messages）：app 在后台时事件流静默断掉，回前台恰好被新流顶替，漏掉的不会补；点进 chat 又只从本地打开不问 station，所以列表看得到、chat 里没有。改成：顶替一个超过 30 秒没动静的旧流时，新流连上后重读一遍；chat 只靠本地打开到末尾时，后台再问一次 `entries?after=`。只改了 core，web 跟部署走，安卓、桌面要各发一版。上线后验：app 切后台一两分钟，期间让 agent 回一条，切回来点进去应该有；Axiom 里回前台有一次 `GET /threads`，打开 chat 有一次 `entries?after=`。

@@ -1,7 +1,7 @@
 // What a chat waits on, over its composer (web mobile, the same interaction set): its pieces of work waiting on
 // someone, one card at a time, as the core orders them (`asks`: those on the viewer first, set aside last). The card
-// is the composer's glass: a ring and who it waits on, its title, its line, and its answers as pills (yes filled in
-// ink). Swiped right it is 随便 (the agent decides: its delegate answer is said), swiped left 待定 (set aside: last
+// is the composer's glass: a ring and one quiet line (whose, what, since when), what is to be decided, and its answers
+// as pills (yes filled in ink); tapped elsewhere, it shows the message that asked, in the list over it. Swiped right it is 随便 (the agent decides: its delegate answer is said), swiped left 待定 (set aside: last
 // of those waiting, the ring kept; nothing said); what it reveals under it says which. Let go past about a third of
 // its width, or flung, it flies off and the next comes up from the edge of the card behind it; short of that it
 // springs back. Anything else is written in the card's own field and said of it. `1 / N ›` steps through them here.
@@ -13,6 +13,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -114,13 +120,15 @@ internal class AskLocal {
 /**
  * The cards, over the composer: none when nothing waits. `onAnswer` says an answer (its `text`) in the chat,
  * `onDefer` sets one aside, `onReply` says the words written in its own field of it (`failed` with what to say when
- * they did not go: they are back in the field).
+ * they did not go: they are back in the field); `onShow`, the card tapped (not on a pill or its field): the message that
+ * asked it (its `evidence`) is to be shown.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AskCards(
     asks: List<WorkItem>, local: AskLocal, haze: HazeState, modifier: Modifier = Modifier,
     onAnswer: (WorkItem, WorkAnswer) -> Unit, onDefer: (WorkItem) -> Unit, onReply: (WorkItem, String) -> Unit,
+    onShow: (WorkItem) -> Unit = {},
 ) {
     val shown = local.shown(asks)
     androidx.compose.runtime.SideEffect { local.caughtUp(asks) }
@@ -178,7 +186,60 @@ internal fun AskCards(
         fun delegateIt() { delegate?.let { a -> go(1, shown - item) { local.answered[item.key] = item.updatedAt; onAnswer(item, a) } } }
         fun deferIt() { if (defer != null) go(-1, shown - item + item) { local.later = local.later - item.key + item.key; onDefer(item) } }
 
-        Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).onSizeChanged { width = it.width }) {
+        // Swiped where it rests, not on the card that follows the finger (in the card's own terms the finger would
+        // barely move: the card moves with it). Seen before the card's glass, which keeps every touch to itself: once
+        // the finger has gone across far enough (and not up or down first), the swipe is this and the card's pills let
+        // go. One begun in the reply field stays the field's.
+        var field by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+        var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).onSizeChanged { width = it.width }
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            .pointerInput(item.key, next?.key, delegate != null, defer != null, still) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    if (busy || field.contains(down.position + origin)) return@awaitEachGesture
+                    val tracker = VelocityTracker()
+                    var pos = drag.value
+                    var across = 0f
+                    var upDown = 0f
+                    var swiping = false
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                            if (swiping) {
+                                change.consume()
+                                val v = tracker.calculateVelocity().x
+                                val at = drag.value
+                                val fling = abs(v) > 900.dp.toPx() && abs(at) > 16.dp.toPx() && (v > 0) == (at > 0)
+                                when {
+                                    busy -> {}
+                                    (at > width * THRESHOLD || fling && at > 0) && delegate != null -> delegateIt()
+                                    (at < -width * THRESHOLD || fling && at < 0) && defer != null -> deferIt()
+                                    else -> scope.launch { if (still) drag.snapTo(0f) else drag.animateTo(0f, MoveSpring, v) }
+                                }
+                            }
+                            break
+                        }
+                        val dx = change.position.x - change.previousPosition.x
+                        if (!swiping) {
+                            across += dx
+                            upDown += change.position.y - change.previousPosition.y
+                            if (abs(upDown) > viewConfiguration.touchSlop && abs(upDown) > abs(across)) break
+                            if (abs(across) <= viewConfiguration.touchSlop) continue
+                            swiping = true
+                            tracker.resetTracking()
+                        }
+                        change.consume()
+                        if (busy) continue
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                        // A side with nothing to do there only gives a little.
+                        val stiff = (pos + dx > 0 && delegate == null) || (pos + dx < 0 && defer == null)
+                        pos += if (stiff) dx * 0.2f else dx
+                        val to = pos
+                        scope.launch { drag.snapTo(to) }
+                    }
+                }
+            }) {
             // Under the front card, what letting it go there does; once let go to go, under the card behind too, which
             // comes forward over it as it fades.
             val x = drag.value
@@ -215,37 +276,9 @@ internal fun AskCards(
                     rotationZ = drag.value / width * 7f
                     alpha = fade.value * (if (next == null) l else 1f)
                 },
-                // Inside the glass, which keeps every touch on the card to itself once its content has had it.
-                gesture = Modifier.pointerInput(item.key, next?.key, delegate != null, defer != null, still) {
-                    val tracker = VelocityTracker()
-                    // Where the finger has it (kept here: the card is moved to it after, a frame's moves at once).
-                    var pos = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { tracker.resetTracking(); pos = drag.value },
-                        onHorizontalDrag = { change, dx ->
-                            if (busy) return@detectHorizontalDragGestures
-                            change.consume()
-                            tracker.addPosition(change.uptimeMillis, change.position)
-                            // A side with nothing to do there only gives a little.
-                            val stiff = (pos + dx > 0 && delegate == null) || (pos + dx < 0 && defer == null)
-                            pos += if (stiff) dx * 0.2f else dx
-                            val to = pos
-                            scope.launch { drag.snapTo(to) }
-                        },
-                        onDragEnd = {
-                            if (busy) return@detectHorizontalDragGestures
-                            val v = tracker.calculateVelocity().x
-                            val at = drag.value
-                            val fling = abs(v) > 900.dp.toPx() && abs(at) > 16.dp.toPx() && (v > 0) == (at > 0)
-                            when {
-                                (at > width * THRESHOLD || fling && at > 0) && delegate != null -> delegateIt()
-                                (at < -width * THRESHOLD || fling && at < 0) && defer != null -> deferIt()
-                                else -> scope.launch { if (still) drag.snapTo(0f) else drag.animateTo(0f, MoveSpring, v) }
-                            }
-                        },
-                        onDragCancel = { scope.launch { drag.animateTo(0f, MoveSpring) } },
-                    )
-                }.semantics {
+                // A tap where nothing else takes it (its pills, its field, `1 / N` do): the message that asked. A swipe
+                // takes the touch from it (consumed once it is one).
+                gesture = Modifier.clickable(interactionSource = null, indication = null, onClickLabel = "看提问的消息") { if (!busy) onShow(item) }.semantics {
                     customActions = listOfNotNull(
                         delegate?.let { CustomAccessibilityAction(it.label) { delegateIt(); true } },
                         defer?.let { CustomAccessibilityAction(it.label) { deferIt(); true } },
@@ -260,6 +293,7 @@ internal fun AskCards(
                     if (words.isNotEmpty()) go(1, shown - item) { local.replies.remove(item.key); local.answered[item.key] = item.updatedAt; onReply(item, words) }
                 },
                 hint = hintOf(item),
+                onField = { field = it },
             )
         }
     }
@@ -271,13 +305,14 @@ private fun hintOf(item: WorkItem) = listOfNotNull(
     item.answers.firstOrNull { it.kind == "delegate" && it.text != null }?.let { "${it.label} →" },
 ).joinToString("\u3000")
 
-/** A card's face: its ring and who it waits on, `1 / N`, its title and line, its answers; `fill`: as the one behind (its pills not to be pressed). */
+/** A card's face: its ring and its quiet line (whose, what, since when), `1 / N`, what is to be decided, its answers; `fill`: as the one behind (its pills not to be pressed). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Face(
     item: WorkItem, number: Int, of: Int, haze: HazeState, modifier: Modifier, fill: Boolean = false, gesture: Modifier = Modifier,
     onCycle: () -> Unit = {}, onPill: (WorkAnswer) -> Unit = {}, hint: String = "",
     reply: String = "", onType: (String) -> Unit = {}, onSend: () -> Unit = {},
+    onField: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     Column(modifier.fillMaxWidth().floating(haze, CardShape).then(gesture).padding(start = 14.dp, end = 12.dp, top = 11.dp, bottom = 12.dp)) {
         Row(Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -287,18 +322,15 @@ private fun Face(
                 drawCircle(ring, size.minDimension / 2 - w / 2, style = Stroke(w))
             }
             Spacer(Modifier.width(7.dp))
-            Text(item.lead, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(item.head, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (of > 1) Text(
                 "$number / $of ›", fontSize = 13.sp, color = C.muted, maxLines = 1,
                 modifier = Modifier.clip(CircleShape).clickable(enabled = !fill, onClick = onCycle).padding(horizontal = 4.dp, vertical = 2.dp),
             )
         }
-        Spacer(Modifier.height(5.dp))
-        Text(item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (item.line.isNotEmpty()) {
-            Spacer(Modifier.height(2.dp))
-            Text(item.line, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        Spacer(Modifier.height(6.dp))
+        // What is to be decided (the web's: 15px, 500).
+        Text(item.question, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink)
         val pills = item.answers.filter { it.kind != "delegate" && it.kind != "defer" }
         if (pills.isNotEmpty() || hint.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
@@ -310,7 +342,7 @@ private fun Face(
             }
         }
         Spacer(Modifier.height(8.dp))
-        ReplyField(item.title, reply, enabled = !fill, onType = onType, onSend = onSend)
+        ReplyField(item.title, reply, enabled = !fill, onType = onType, onSend = onSend, onPlaced = onField)
     }
 }
 
@@ -319,10 +351,10 @@ private fun Face(
  * is written. A touch in it stays in it (no swipe starts from it).
  */
 @Composable
-private fun ReplyField(title: String, text: String, enabled: Boolean, onType: (String) -> Unit, onSend: () -> Unit) {
+private fun ReplyField(title: String, text: String, enabled: Boolean, onType: (String) -> Unit, onSend: () -> Unit, onPlaced: (androidx.compose.ui.geometry.Rect) -> Unit) {
     val ink = C.ink
     Box(
-        Modifier.fillMaxWidth().height(34.dp).clip(CircleShape).background(C.chip)
+        Modifier.fillMaxWidth().height(34.dp).onGloballyPositioned { onPlaced(it.boundsInRoot()) }.clip(CircleShape).background(C.chip)
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
         contentAlignment = Alignment.CenterStart,
     ) {

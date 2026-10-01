@@ -227,6 +227,8 @@ data class TurnSummary (
 	val declared: String? = null,
 	/// For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none).
 	val waitSeconds: Long? = null,
+	/// For waiting: what it waits for, in the agent's words (a station yet to update says nothing).
+	val waitFor: String? = null,
 	val detail: String? = null,
 	val startedAt: Long,
 	val endedAt: Long? = null
@@ -806,6 +808,8 @@ data class RowWatch (
 /// What a piece of work asks: the word for yes (`label`, 准 when absent), and answers to pick from (`options`).
 @Serializable
 data class WorkAsk (
+	/// What is to be decided, in a sentence: its card's main line (the title there when absent: an older station).
+	val question: String? = null,
 	val label: String? = null,
 	val options: List<String>? = null
 )
@@ -851,6 +855,10 @@ data class WorkItem (
 	val lead: String,
 	/// The line under its title: its detail and when it was last declared so (分支 settings-gap · 3 分钟前).
 	val line: String,
+	/// Its card's main line: what is to be decided (`ask.question`), its title when the agent gave none.
+	val question: String,
+	/// Its card's quiet top line: lead, title and since when (奏 · 设置页间距 · 3 分钟前).
+	val head: String,
 	/// What its card offers while it waits, in order; none otherwise.
 	val answers: List<WorkAnswer>
 )

@@ -319,10 +319,17 @@ pub fn session(s: &mut Value) {
         return;
     }
     let status = shown_status(s);
-    let (mut text, tone) = format::status_text(status);
+    let (text, tone) = format::status_text(status);
+    let mut text = text.to_string();
     if !waiting(s).is_null() {
         // Waiting on a watch of its own: the watch brings it back, however long (the station does not ask it again).
-        text = if s.get("watch").is_some_and(Value::is_object) { "监控中" } else { "等待中" };
+        // Otherwise on what it said it waits for (an older station says nothing of it).
+        let what = s.get("lastTurn").and_then(|t| t.get("waitFor")).and_then(Value::as_str).map(str::trim).filter(|w| !w.is_empty());
+        text = match (s.get("watch").is_some_and(Value::is_object), what) {
+            (true, _) => "监控中".to_string(),
+            (false, Some(what)) => format!("在等：{what}"),
+            (false, None) => "等待中".to_string(),
+        };
     }
     let fields = s.clone();
     let str_of = |k: &str| fields.get(k).and_then(Value::as_str).map(str::to_string);
@@ -724,6 +731,9 @@ mod tests {
         let mut plain = waits.clone();
         session(&mut plain);
         assert_eq!(plain["statusText"], "等待中");
+        let mut said = json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitSeconds": 600, "waitFor": "CI 跑完"}});
+        session(&mut said);
+        assert_eq!(said["statusText"], "在等：CI 跑完");
         assert_eq!(waiting(&json!({"process": "running", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5}})), Value::Null);
         assert_eq!(waiting(&json!({"process": "warm", "pending": 1, "lastTurn": {"declared": "waiting", "endedAt": 5}})), Value::Null);
         assert_eq!(session_status(&json!({})), "idle");

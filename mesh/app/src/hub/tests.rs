@@ -503,10 +503,12 @@ async fn a_turn_ending_waiting_is_not_nudged_nor_evicted_and_is_asked_again_when
     r.accept(&m).await;
     settle().await;
     let key = session_key("cl", "C1", &m.thread_ts);
-    let said = r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 1 })).await.unwrap();
+    let said = r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 1, "for": "CI 跑完" })).await.unwrap();
     assert!(said.contains("in 10 seconds"), "at least 10: {said}");
     r.claude.last().complete();
     settle().await;
+    let last = r.store.session_stats(None).unwrap()[&key].last_turn.clone().unwrap();
+    assert_eq!((last.declared.as_deref(), last.wait_for.as_deref()), (Some("waiting"), Some("CI 跑完")), "what it waits for is kept with the turn");
     assert_eq!(r.claude.last().prompts().len(), 1, "not nudged");
     assert!(!r.claude.last().disposed(), "its background work may run in its process");
     assert!(r.chat.texts().is_empty());
@@ -531,7 +533,7 @@ async fn a_wait_does_not_run_out_while_a_watch_of_its_session_runs() {
         log: "/dev/null".into(), watch: true,
     };
     r.store.insert_job(&watch).unwrap();
-    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 10 })).await.unwrap();
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 10, "for": "CI 跑完" })).await.unwrap();
     r.claude.last().complete();
     settle().await;
     tokio::time::sleep(Duration::from_secs(35)).await;
@@ -551,7 +553,7 @@ async fn a_turn_that_starts_before_the_wait_is_over_ends_it() {
     r.accept(&m).await;
     settle().await;
     let key = session_key("cl", "C1", &m.thread_ts);
-    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 60 })).await.unwrap();
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 60, "for": "CI 跑完" })).await.unwrap();
     r.claude.last().complete();
     settle().await;
     r.accept(&reply(&m, "9999.1", "any news?")).await;
@@ -563,6 +565,8 @@ async fn a_turn_that_starts_before_the_wait_is_over_ends_it() {
     assert_eq!(r.claude.last().prompts().len(), 2, "no word when the old wait's time comes");
     let refused = r.call(&key, "chat_state", json!({ "kind": "waiting" })).await.unwrap_err();
     assert!(refused.to_string().contains("seconds is required"), "{refused}");
+    let refused = r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 60 })).await.unwrap_err();
+    assert!(refused.to_string().contains("for is required"), "{refused}");
 }
 
 #[tokio::test]
@@ -677,7 +681,7 @@ async fn stop_while_waiting_ends_the_wait_and_its_process() {
     r.accept(&m).await;
     settle().await;
     let key = session_key("cl", "C1", &m.thread_ts);
-    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 10 })).await.unwrap();
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 10, "for": "任务跑完" })).await.unwrap();
     r.claude.last().complete();
     settle().await;
     r.accept(&InboundMessage { addressed: true, ..reply(&m, "9999.2", "<@UBOT> -stop") }).await;
@@ -704,7 +708,7 @@ async fn stop_while_waiting_ends_the_jobs_that_would_bring_it_back_but_not_its_s
     let job = jobs.start(&key, "build", "sleep 600", cwd, None, crate::jobs::Watch::default()).unwrap();
     let watch = jobs.start(&key, "盯 CI", "sleep 600", cwd, None, crate::jobs::Watch { on: true }).unwrap();
     let service = jobs.start(&key, "page", "sleep 600", cwd, Some(47123), crate::jobs::Watch::default()).unwrap();
-    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 600 })).await.unwrap();
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 600, "for": "任务跑完" })).await.unwrap();
     r.claude.last().complete();
     settle().await;
     r.hub.stop(&key).await.unwrap();
@@ -1829,7 +1833,7 @@ async fn chat_post_items_are_kept_by_key_and_wait_on_the_person_who_last_wrote()
         .unwrap();
     assert_eq!(said, format!("Posted to {to}. Items: gap (working)."));
     let said = r
-        .call(&web, "chat_post", json!({ "to": to, "text": "done, look", "kind": "final", "items": [{ "key": "gap", "state": "waiting", "detail": "settings-gap", "ask": { "label": "可以，合" } }] }))
+        .call(&web, "chat_post", json!({ "to": to, "text": "done, look", "kind": "final", "items": [{ "key": "gap", "state": "waiting", "detail": "settings-gap", "ask": { "question": "间距改成 16px，合吗？", "label": "可以，合" } }] }))
         .await
         .unwrap();
     assert_eq!(
@@ -1843,7 +1847,7 @@ async fn chat_post_items_are_kept_by_key_and_wait_on_the_person_who_last_wrote()
     assert_eq!(items.len(), 1);
     let it = &items[0];
     assert_eq!((it.title.as_str(), it.state.as_str(), it.waiting_on.clone(), it.detail.as_deref()), ("设置页间距", "waiting", vec!["ada@x.com".to_string()], Some("settings-gap")));
-    assert_eq!(it.ask, Some(json!({ "label": "可以，合" })));
+    assert_eq!(it.ask, Some(json!({ "question": "间距改成 16px，合吗？", "label": "可以，合" })));
     let evidence = r.said(thread.id).last().unwrap().n;
     assert_eq!(it.evidence, Some(evidence), "the post that declared it so shows it");
 
@@ -1863,11 +1867,13 @@ async fn chat_post_items_are_kept_by_key_and_wait_on_the_person_who_last_wrote()
     assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "new" }] })).await.unwrap_err().to_string().contains("title is required"));
     assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "merged" }] })).await.unwrap_err().to_string().contains("state must be one of"));
     assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Bob"] }] })).await.unwrap_err().to_string().contains("ada@x.com"));
+    // Waiting says what is to be decided.
+    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting" }] })).await.unwrap_err().to_string().contains("ask.question is required"));
     // Someone who has not written yet, by email: still.fail people are their emails.
-    let bob = r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Bob@x.com"] }] })).await.unwrap();
+    let bob = r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Bob@x.com"], "ask": { "question": "这样行吗？" } }] })).await.unwrap();
     assert!(bob.ends_with("Items: gap (waiting on bob@x.com)."), "{bob}");
     let named = r
-        .call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Ada (ada@x.com)"] }] }))
+        .call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Ada (ada@x.com)"], "ask": { "question": "这样行吗？" } }] }))
         .await
         .unwrap();
     assert!(named.ends_with("Items: gap (waiting on ada@x.com)."), "{named}");

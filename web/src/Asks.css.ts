@@ -86,8 +86,8 @@ export const count = style({
   font: "inherit", fontSize: "12px", fontVariantNumeric: "tabular-nums",
   selectors: { "&:hover": { color: "var(--ask-ink)" } },
 });
-export const title = style({ margin: "6px 0 2px", fontSize: "16px", lineHeight: "22px", fontWeight: "600", overflowWrap: "anywhere" });
-export const line = style({ fontSize: "13px", lineHeight: "18px", color: "var(--ask-muted)", overflowWrap: "anywhere" });
+/** What is to be decided: the card's main line. */
+export const title = style({ margin: "6px 0 0", fontSize: "15px", lineHeight: "21px", fontWeight: "500", overflowWrap: "anywhere" });
 export const answers = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px" });
 /** An answer: a pill on the card's grey; yes in ink. 待定 (wide screen) is plain words at the row's end. */
 export const answer = style({

@@ -117,6 +117,8 @@ class Host {
     internal var capsule: LayoutCoordinates? = null
     internal var overlay: LayoutCoordinates? = null
     internal var layer: GraphicsLayer? = null
+    /** Shows the chat's message `seq` (in the list, in its middle, flashing), if it is loaded: set by the list. */
+    internal var showSaid: ((Long) -> Unit)? = null
     var flight by mutableStateOf<Flight?>(null)
         private set
     /** The composer's hint is away (words just sent are over it). */

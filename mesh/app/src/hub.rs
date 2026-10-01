@@ -1299,8 +1299,8 @@ impl Hub {
                                     "waitingOn": { "type": "array", "items": { "type": "string" }, "description": "For waiting: who has to decide, as from=\"…\" gives them (the part in parentheses). Default: the person who last wrote in the conversation." },
                                     "ask": {
                                         "type": "object",
-                                        "description": "For waiting: the answers people can give with one tap. Their card always has 准 (yes; label: other words for it) and 随便 (you decide), and the composer for anything else. options: the other answers that fit, e.g. 不要了, or the choices when it is a choice.",
-                                        "properties": { "label": { "type": "string" }, "options": { "type": "array", "items": { "type": "string" } } },
+                                        "description": "For waiting (required): what people decide, on their card. question: one sentence they can answer without reading anything else, the facts it turns on in it (\"「共 …」改成按今天累计（重连、换中继不清零，零点归零），这样合吗？\"). The card always has 准 (yes; label: other words for it) and 随便 (you decide), and a field for anything else. options: the other answers that fit, each a short phrase that reads on its own (\"界面上标明「今天」\", \"不要了\"), or the choices when it is a choice.",
+                                        "properties": { "question": { "type": "string" }, "label": { "type": "string" }, "options": { "type": "array", "items": { "type": "string" } } },
                                         "additionalProperties": false,
                                     },
                                     "detail": { "type": "string", "description": "A short line under its title: a branch, a commit, where it went." },
@@ -1348,6 +1348,7 @@ impl Hub {
                     "properties": {
                         "kind": { "type": "string", "enum": ["final", "block", "waiting"] },
                         "seconds": { "type": "integer", "minimum": MIN_WAIT_SECONDS, "maximum": MAX_WAIT_SECONDS, "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch)." },
+                        "for": { "type": "string", "description": "For waiting (required): what you wait for, in a few words people read under your name, in the language they use there (e.g. 安卓滑动测试在模拟器上跑完)." },
                     },
                     "required": ["kind"],
                     "additionalProperties": false,
@@ -1357,6 +1358,9 @@ impl Hub {
                         let kind = match args.get("kind") {
                             Some(Value::String(s)) if s == "waiting" => {
                                 let seconds = args.get("seconds").and_then(js_number).ok_or_else(|| anyhow!("seconds is required for waiting: how long until the work brings you back"))?;
+                                let what = args.get("for").map(js_string).map(|w| w.trim().to_string()).filter(|w| !w.is_empty())
+                                    .ok_or_else(|| anyhow!("for is required for waiting: what you wait for, in a few words people read"))?;
+                                hub.wait_for(&key, &what);
                                 DeclaredState::Waiting((seconds.max(0.0) as u64).clamp(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
                             }
                             kind => state_arg(kind)?.ok_or_else(|| anyhow!("kind is required"))?,
@@ -1430,6 +1434,13 @@ impl Hub {
                 run: run(|hub, _key, args| Box::pin(async move { tokio::task::spawn_blocking(move || hub.session_history(&args)).await? })),
             },
         ]
+    }
+
+    fn wait_for(&self, key: &str, what: &str) {
+        let actor = self.actors.lock().unwrap().get(key).cloned();
+        if let Some(actor) = actor {
+            actor.wait_for(what);
+        }
     }
 
     fn declare(&self, key: &str, kind: DeclaredState) {
@@ -1631,10 +1642,15 @@ impl Hub {
             let ask = match it.get("ask") {
                 Some(Value::Object(a)) => Some(Value::Object(a.clone())),
                 Some(Value::Null) => None,
-                Some(_) => bail!("items[{i}].ask must be an object {{label?, options?}}"),
+                Some(_) => bail!("items[{i}].ask must be an object {{question, label?, options?}}"),
                 None if state == "waiting" => before.and_then(|b| b.ask.clone()),
                 None => None,
             };
+            // A card that waits says what is to be decided: its title alone does not.
+            let asked = ask.as_ref().and_then(|a| a.get("question")).and_then(Value::as_str).is_some_and(|q| !q.trim().is_empty());
+            if state == "waiting" && !asked {
+                bail!("items[{i}].ask.question is required while it waits ({item_key}): one sentence people can decide on from their card alone, with the facts it turns on");
+            }
             out.push(ItemRow {
                 key: item_key,
                 session: key.to_string(),

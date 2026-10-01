@@ -14,6 +14,7 @@ import { reducedMotion } from "./motion.ts";
 import { ArrowUp, ChevronRight } from "./icons.tsx";
 import * as markCss from "./ChatMark.css.ts";
 import * as css from "./Asks.css.ts";
+import * as chatCss from "./Chat.css.ts";
 
 /** How far (of its width) a card is swiped before letting go takes it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;
@@ -162,6 +163,17 @@ export function AskCards({ asks, station, thread, swipe = false, onError, classN
       .catch((e: Error) => { setReply(words); onError(`没能回复「${item.title}」：${e.message}`); });
   };
 
+  // Tapped (not on an answer or its field): the message that asked, in the list over it, brought to the middle and lit.
+  const showEvidence = (item: WorkItem) => {
+    if (item.evidence == null) return;
+    const target = wrap.current?.parentElement?.querySelector<HTMLElement>(`.${chatCss.chatMessages} [data-seq="${item.evidence}"]`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
+    target.classList.remove(chatCss.msgFlash);
+    void target.offsetWidth;
+    target.classList.add(chatCss.msgFlash);
+  };
+
   const delegate = front?.answers.find((a) => a.kind === "delegate");
   const defer = front?.answers.find((a) => a.kind === "defer");
   does.current = { right: swipe && delegate ? () => answer(delegate, 1) : null, left: swipe && defer ? () => answer(defer, -1) : null };
@@ -180,14 +192,14 @@ export function AskCards({ asks, station, thread, swipe = false, onError, classN
             <span className={css.underLeft}><small>排到最后，圈留着</small><b>待定 ←</b></span>
           </div>
         )}
-        {front && <div ref={card} className={css.card} role="group" aria-label={`${front.lead}：${front.title}`} {...(swipe ? drag : {})}>
+        {front && <div ref={card} className={css.card} role="group" aria-label={`${front.lead}：${front.question}`} {...(swipe ? drag : {})}
+          onClick={(e) => { if (!(e.target as HTMLElement).closest("button, input, form")) showEvidence(front); }}>
           <div className={css.top}>
             <span className={markCss.chatMarkInline} data-tone={front.mine ? "wait" : "other"} />
-            <span className={css.lead}>{front.lead}</span>
+            <span className={css.lead}>{front.head}</span>
             {n > 1 && <button type="button" className={css.count} onClick={next} aria-label="下一件">{at + 1} / {n}<ChevronRight size={12} /></button>}
           </div>
-          <div className={css.title}>{front.title}</div>
-          {front.line && <div className={css.line}>{front.line}</div>}
+          <div className={css.title}>{front.question}</div>
           <div className={css.answers}>
             {buttons.map((a) => (
               <button key={`${a.kind}:${a.label}`} type="button" className={css.answer} data-kind={a.kind} onClick={() => answer(a, a.kind === "defer" ? -1 : 1)}>{a.label}</button>
