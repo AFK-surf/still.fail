@@ -242,7 +242,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 }
             }
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
-            QuotaSection(p, refreshing = app.isDoing("profile.quota", "station" to address, "id" to p.id))
+            QuotaSection(address, p)
             ModelsSection(address, p, ticks.wanted ?: p.models, ticks.sending) { models -> setModels(models) }
             // A station older than the setting says nothing of it.
             val background = flipping ?: p.backgroundOnMessage
@@ -321,20 +321,18 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
     }
 }
 
-/** Renaming, checking, refreshing its allowance, deleting it (not while a connect uses it). */
+/** Renaming, checking, deleting it (not while a connect uses it). */
 private fun openProfileMenu(app: AppState, station: String, p: Profile) {
     val api = app.api(station)
     app.sheet = SheetSpec(0.5f) {
         // Goes on past the sheet; the profile's page shows it under way (a spinner by its state or its allowance).
         val run = { what: String, done: String, call: suspend () -> Unit -> app.sheet = null; app.act(what, done) { call() } }
         val checking = app.isDoing("profile.check", "station" to station, "id" to p.id)
-        val refreshing = app.isDoing("profile.quota", "station" to station, "id" to p.id)
         SheetGrab()
         SheetHead(p.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             if (p.machine != true) PickRow("改名") { ask(app, "Profile 的名字", p.name, "名字", "保存") { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = "已改名" } }
             PickRow("重新检查", busy = checking, failed = app.failedOf("profile.check", "station" to station, "id" to p.id)) { run("检查", "已检查") { api.checkProfile(p.id) } }
-            PickRow("刷新额度", busy = refreshing, failed = app.failedOf("profile.quota", "station" to station, "id" to p.id)) { run("刷新额度", "已刷新额度") { api.refreshQuota(p.id) } }
             // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
             val machine = p.machine == true
             PickRow((if (machine) "停用" else "删除 Profile") + if (p.usedBy.isNotEmpty()) "（还有连接在用）" else "", color = C.red, enabled = p.usedBy.isEmpty()) {
@@ -359,13 +357,26 @@ private class Ticks {
 
 /** Its allowance, window by window: what is left and when it refills; why it cannot be read, when the provider says. */
 @Composable
-private fun QuotaSection(p: Profile, refreshing: Boolean = false) {
+private fun QuotaSection(station: String, p: Profile) {
+    val app = LocalApp.current
+    val refreshing = app.isDoing("profile.quota", "station" to station, "id" to p.id)
+    val failed = app.failedOf("profile.quota", "station" to station, "id" to p.id)
     val windows = p.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     val trouble = quotaTrouble(p.quota)
     val checked = if (refreshing) "正在刷新…" else p.quota?.time?.get("checkedAt")?.let { "${it.ago}查询" }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("额度", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Spacer(Modifier.weight(1f))
+        Row(Modifier.clickable(enabled = !refreshing) {
+            app.act("查询额度", "已更新额度") { app.api(station).refreshQuota(p.id) }
+        }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            DoingMark(refreshing, failed, 12.dp)
+            Text(if (refreshing) "正在查询…" else "查询额度", fontSize = 14.sp, color = if (refreshing) C.muted else C.accent)
+        }
+    }
+    if (checked != null && !refreshing) Text(checked, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, bottom = 8.dp))
     if (trouble != null) {
         val blocked = p.quota?.state == "blocked"
-        SectionHeader("额度", checked, start = 24.dp)
         ListCard {
             ListRow {
                 Column(Modifier.weight(1f)) {
@@ -379,8 +390,10 @@ private fun QuotaSection(p: Profile, refreshing: Boolean = false) {
         }
         return
     }
-    if (windows.isEmpty()) return
-    SectionHeader("额度", checked, start = 24.dp)
+    if (windows.isEmpty()) {
+        Text(p.quota?.detail?.ifBlank { null } ?: "还没有额度信息", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp))
+        return
+    }
     ListCard { QuotaDials(p.quota, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 14.dp)) }
 }
 
