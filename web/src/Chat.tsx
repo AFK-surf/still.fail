@@ -17,7 +17,7 @@ import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, 
 import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
-import { animate, arrive, EASE_OUT, follower, moveState, type Follower } from "./motion.ts";
+import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
@@ -1320,12 +1320,13 @@ function layoutSpot(pane: HTMLElement, el: Element) {
 
 /**
  * A message an agent posts while its activity shows comes out of the activity's avatar, one at a time:
- * the activity folds to its avatar (fold), the avatar floats to where the message goes (float), the message comes out
- * of it, growing into its place (spit), and the avatar goes on down to where the activity now is, which unfolds again
+ * the activity folds to its avatar (fold), the avatar hops to where the message's avatar goes (float: up, slowing, then
+ * falling faster and faster, stopping dead there), the message comes out of it as it lands, carried on by the fall,
+ * growing down into its place (spit), and the avatar goes on down to where the activity now is, which unfolds again
  * (return). The avatar that flies is a copy over the list, put exactly where the real one is (and the real one hidden)
  * as it sets out, and let go of only once it has come to rest exactly where the real one is, so nothing blinks or
- * jumps; it moves on springs that follow where it goes as that moves (the message growing, the activity gliding down),
- * from the speed it has. The message's own avatar is where it lands, the same picture in the same place. Until its turn
+ * jumps; where it goes is read anew each frame (the message growing, the activity gliding down), and going home it is
+ * on springs, from the speed it has. The message's own avatar is where it lands, the same picture in the same place. Until its turn
  * a message waits folded to nothing. With reduced motion messages just appear, and so do those no one watches come
  * out: arriving while the page is hidden or the reader has scrolled up (scroll.ts), and all still waiting when the page
  * is hidden or the reader scrolls up (the browser barely runs timers for a hidden page, so a queue would otherwise
@@ -1334,6 +1335,10 @@ function layoutSpot(pane: HTMLElement, el: Element) {
 type Pose = "fold" | "float" | "spit" | "return";
 const FOLD_MS = 170;
 const SPIT_MS = 380;
+/** The hop: how long, how high above the higher of its two ends it goes, and the share of it spent going up. */
+const HOP_MS = 440;
+const HOP_PX = 26;
+const RISE = 0.4;
 const FLY = { type: "spring", visualDuration: 0.26, bounce: 0 } as const;
 
 export function useEmissions(list: RefObject<HTMLDivElement | null>) {
@@ -1450,9 +1455,22 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       step();
     };
     if (pose === "fold") timer = setTimeout(() => go("float"), FOLD_MS);
+    let hop: AnimationPlaybackControls | undefined;
     if (pose === "float") {
-      flight.current ??= launch(pane, avatar);
-      follow(landed, () => go("spit"));
+      const f = (flight.current ??= launch(pane, avatar));
+      const from = { x: f.x.value, y: f.y.value };
+      // Thrown up: it slows to the top, then falls ever faster (as under gravity) onto where it goes.
+      hop = animate(0, 1, {
+        duration: HOP_MS / 1000, ease: "linear",
+        onUpdate: (t) => {
+          const to = landed();
+          const top = Math.min(from.y, to.y) - HOP_PX;
+          const y = t < RISE ? from.y + (top - from.y) * (1 - (1 - t / RISE) ** 2) : top + (to.y - top) * ((t - RISE) / (1 - RISE)) ** 2;
+          f.x.jump(from.x + (to.x - from.x) * t);
+          f.y.jump(y);
+        },
+        onComplete: () => go("spit"),
+      });
     }
     // A small swell as it lets the message out, staying on the message's avatar as the message grows.
     if (pose === "spit") {
@@ -1465,7 +1483,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       if (!flight.current) { finish(seq, agent, false); return; }
       follow(() => home(avatar), () => finish(seq, agent));
     }
-    return () => { clearTimeout(timer); cancelAnimationFrame(frame); };
+    return () => { clearTimeout(timer); cancelAnimationFrame(frame); hop?.stop(); };
   }, [current?.seq, current?.pose]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => land, []); // eslint-disable-line react-hooks/exhaustive-deps
 
