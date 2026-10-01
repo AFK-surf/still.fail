@@ -8,14 +8,16 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 // STILLFAIL_SITE=beta (`pnpm build:site-beta`): the site of the test channel, youdid.wtf (into dist/site-beta): the
 // same page, named youdid.wtf, its downloads the beta apps' (src/site/Site.tsx).
 const beta = process.env.STILLFAIL_SITE === "beta";
-/** The page's head, named youdid.wtf for the test channel's site. */
+/** The page's head, named youdid.wtf for the test channel's site, its icons the beta apps' face. */
 const betaHead: Plugin = {
   name: "stillfail-site-beta",
   transformIndexHtml: (html) => html
     .replaceAll("<title>still.fail", "<title>youdid.wtf")
     .replaceAll('content="still.fail', 'content="youdid.wtf')
     .replaceAll("？still.fail 让", "？youdid.wtf 让")
-    .replaceAll("https://still.fail/og-image.png", "https://youdid.wtf/og-image.png"),
+    .replaceAll("https://still.fail/og-image.png", "https://youdid.wtf/og-image.png")
+    .replaceAll('href="/favicon-32.png"', 'href="/favicon-beta-32.png"')
+    .replaceAll('href="/apple-touch-icon.png"', 'href="/apple-touch-icon-beta.png"'),
 };
 
 // The official site (site/index.html → src/site), with the web app itself in it on made-up data (src/demo), into

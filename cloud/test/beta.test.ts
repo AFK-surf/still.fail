@@ -132,6 +132,7 @@ test("the test channel's pages are the web app's, not to be indexed, and say the
     if (path === "/web/index.html") return new MFResponse(INDEX, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (path === "/web/site.webmanifest") return new MFResponse(MANIFEST, { headers: { "content-type": "application/manifest+json" } });
     if (path === "/web/assets/app.js") return new MFResponse("// the web app", { headers: { "content-type": "text/javascript" } });
+    if (path === "/web/favicon.svg" || path === "/web/favicon-beta.svg") return new MFResponse(path, { headers: { "content-type": "image/svg+xml" } });
     return new MFResponse("Not found", { status: 404 });
   };
   const h = await harness({ assets: assets as unknown as (request: Request) => Response });
@@ -151,6 +152,9 @@ test("the test channel's pages are the web app's, not to be indexed, and say the
     const file = await h.fetchBeta("/assets/app.js");
     assert.equal(await file.text(), "// the web app");
     assert.equal(file.headers.get("x-robots-tag"), "noindex, nofollow");
+    // Its icons are the beta apps' face, at the same paths.
+    assert.equal(await (await h.fetchBeta("/favicon.svg")).text(), "/web/favicon-beta.svg");
+    assert.equal(await (await h.fetch("/favicon.svg")).text(), "/web/favicon.svg");
     const robots = await h.fetchBeta("/robots.txt");
     assert.equal(robots.headers.get("x-robots-tag"), "noindex, nofollow");
     assert.equal(await robots.text(), "User-agent: *\nDisallow: /\n");
