@@ -8,6 +8,7 @@ export const notice = style({
   borderRadius: vars.rCard, background: `color-mix(in srgb, ${vars.raised} 92%, transparent)`,
   backdropFilter: "blur(20px)", boxShadow: "0 2px 12px #00000018", color: vars.text,
   fontSize: vars.textSm, lineHeight: "24px", whiteSpace: "nowrap",
+  "@media": { "(max-width: 767px)": { top: "calc(env(safe-area-inset-top, 0px) + 64px)" } },
 });
 export const refresh = style({
   border: 0, borderRadius: vars.rField, padding: "4px 10px", font: "inherit", cursor: "pointer",
