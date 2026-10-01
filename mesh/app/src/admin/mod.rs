@@ -863,6 +863,15 @@ impl AdminApi {
                         self.deps.store.dismiss(&viewer.id(), thread_id, n)?;
                         return ok(json!({ "dismissed": { "thread": thread_id, "n": n } }));
                     }
+                    // End this question without sending a message or starting an agent turn.
+                    (Some("closed-card"), "PUT") => {
+                        let input = read_json(body).await?;
+                        let n = input.get("n").and_then(Value::as_i64).filter(|n| *n > 0).ok_or_else(|| http_error(400, "n 必须是整数"))?;
+                        if !self.deps.store.close_card(&viewer.id(), thread_id, n)? {
+                            return Err(http_error(409, "这次等待已改变，请刷新后重试"));
+                        }
+                        return ok(json!({ "closedCard": { "thread": thread_id, "n": n } }));
+                    }
                     // A chat archived or shown again: with its session when it is that session's own (Hub::archive_chat).
                     (Some("archive"), "POST" | "DELETE") => {
                         self.deps.hub.archive_chat(thread_id, method == "POST").map_err(|e| http_error(400, e.to_string()))?;

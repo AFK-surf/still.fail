@@ -62,6 +62,20 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
   );
 }
 
+/** End this question without posting a reply. Shared by the chat and both decision decks. */
+export function CloseDecision({ station, thread, seq, onClosed }: {
+  station: string; thread: number; seq: number; onClosed?: () => void;
+}) {
+  const call = useCall();
+  const act = useAct();
+  const busy = useDoing("decision.close", { station, thread, seq });
+  return <button type="button" className={css.hintButton} disabled={busy} aria-busy={busy || undefined}
+    title="结束这次等待，不发消息，也不通知 agent"
+    onClick={() => act(call("decision.close", { station, thread, seq }).then(() => onClosed?.()), "无需处理")}>
+    无需处理{busy && <span className={waitingCss.spinner} aria-hidden="true" />}
+  </button>;
+}
+
 /** What kind of card it is: its `type`, or (a core before cards) options when it has some. */
 export function cardType(card: MessageCard | undefined, options: readonly DecisionOption[] | undefined): string | undefined {
   return card?.type ?? (options?.length ? "options" : undefined);
@@ -123,7 +137,10 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
   if (cardType(m.card, m.options) !== "options" || !m.options?.length) return null;
   const d = m.decision;
   const open = !d?.resolved && !d?.dismissed;
-  if (open && thread !== null) return <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />;
+  if (open && thread !== null) return <>
+    <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />
+    <CloseDecision station={station} thread={thread} seq={m.seq} />
+  </>;
   return d?.text ? <p className={css.settledLine}>{d.text}</p> : null;
 }
 
@@ -278,6 +295,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
                 if (type === "text") return <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} />;
                 return <button type="button" className={css.elsewhere} onClick={() => onOpen(path)}>去 chat 里回</button>;
               })()}
+              <CloseDecision station={d.station} thread={d.thread} seq={d.seq} onClosed={() => answered(d)} />
               {swipe
                 ? <div className={css.hint} aria-hidden="true"><span>← 待定</span><span>不再提醒 →</span></div>
                 : (

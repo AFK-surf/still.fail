@@ -791,6 +791,14 @@ CREATE TABLE IF NOT EXISTS dismissed (
   at INTEGER NOT NULL,
   PRIMARY KEY (viewer, thread, n)
 );
+-- A person closed a card without replying or waking its agent.
+CREATE TABLE IF NOT EXISTS closed_cards (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  viewer TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (thread, n)
+);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same.
 CREATE TABLE IF NOT EXISTS usage (
@@ -1395,6 +1403,7 @@ impl Store {
                 tx.execute("DELETE FROM reads WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM items WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM dismissed WHERE thread = ?", [thread])?;
+                tx.execute("DELETE FROM closed_cards WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM threads WHERE id = ?", [thread])?;
             }
             tx.commit()?;
@@ -1949,7 +1958,8 @@ impl Store {
                 .query_row("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", params![thread, n], |_| Ok(()))
                 .optional()?
                 .is_some();
-            if answered {
+            let closed = i.db.query_row("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", params![thread, n], |_| Ok(())).optional()?.is_some();
+            if answered || closed {
                 return Ok(None);
             }
             let Some(card) = card_of(card, options) else { return Ok(None) };
@@ -1973,6 +1983,40 @@ impl Store {
             i.db.execute("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", params![viewer, thread, n, now_ms()])?;
             changes.push(StoreChange::Dismissed(viewer.to_string()));
             Ok(())
+        })
+    }
+
+    /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep.
+    /// A stale click cannot close a newer question or overwrite a newer turn's state.
+    pub fn close_card(&self, viewer: &str, thread: i64, n: i64) -> Result<bool> {
+        self.with(|i, changes| {
+            let tx = i.db.transaction()?;
+            if tx.query_row("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", params![thread, n], |_| Ok(())).optional()?.is_some() {
+                return Ok(true);
+            }
+            let asked: Option<(i64, String, i64)> = tx.query_row(
+                "SELECT n, author, created_at FROM entries WHERE thread = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY n DESC LIMIT 1",
+                [thread], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            ).optional()?;
+            let Some((latest, agent, at)) = asked else { return Ok(false) };
+            if latest != n || tx.query_row("SELECT EXISTS(SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ?)", params![thread, n], |r| r.get::<_, bool>(0))? {
+                return Ok(false);
+            }
+            // Do not race the agent still composing its question / recording its ending.
+            let composing = tx.query_row("SELECT ended_at IS NULL FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", [&agent], |r| r.get::<_, bool>(0)).optional()?.unwrap_or(false);
+            if composing { return Ok(false); }
+            tx.execute("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", params![thread, n, viewer, now_ms()])?;
+            let changed = tx.execute(
+                "UPDATE turns SET declared = 'final', need = '用户选择无需处理', wait_seconds = NULL
+                 WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
+                   AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND ended_at IS NOT NULL
+                   AND ((about_thread = ?2 AND about_n = ?3) OR (about_n IS NULL AND thread = ?2 AND started_at <= ?4))",
+                params![agent, thread, n, at],
+            )?;
+            tx.commit()?;
+            if changed > 0 { changes.push(StoreChange::Session(agent)); }
+            changes.push(StoreChange::Thread { id: thread, entries: vec![] });
+            Ok(true)
         })
     }
 
