@@ -18,9 +18,9 @@ import { StationContext, stationBase, useStation, type Station } from "./station
 import { doingMatches, failed, useDoing, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
 import { reducedMotion } from "./motion.ts";
-import { StaticMessage } from "./Chat.tsx";
-import { useDraft } from "./draft.ts";
-import { ArrowUp } from "./icons.tsx";
+import { ComposerView, StaticMessage } from "./Chat.tsx";
+import { useDraft, type Draft } from "./draft.ts";
+import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -71,43 +71,45 @@ export function cardType(card: MessageCard | undefined, options: readonly Decisi
  * A text card's field and send button: Enter or the button sends what is written (`decision.reply`), a spinner on the
  * button meanwhile; failed, the words stay and a toast says why. `onSent` once it went through.
  */
-export function DecisionReply({ station, thread, seq, placeholder, onSent }: {
-  station: string; thread: number; seq: number; placeholder?: string | undefined; onSent?: () => void;
+export function DecisionReply({ station, thread, seq, session, mobile, placeholder, onSent }: {
+  station: string; thread: number; seq: number; session: string; mobile: boolean; placeholder?: string | undefined; onSent?: () => void;
 }) {
   const call = useCall();
   const act = useAct();
-  // Under way: the core's doing list says so, or (a core that does not list it) this call not yet answered.
   const [asked, setAsked] = useState(false);
+  const replying = useRef(false);
   const sending = useDoing("decision.reply", { station, thread, seq }) || asked;
   const api = useApi();
-  const draft = useDraft({ key: `decision:${station}:${thread}:${seq}`, station, upload: (file) => api.uploadFile(file) });
-  const { text, setText } = draft;
-  const input = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const field = input.current;
-    if (!field) return;
-    field.style.height = "0px";
-    field.style.height = `${Math.min(field.scrollHeight, 144)}px`;
-  }, [text]);
-  const ready = text.trim() !== "" && !sending;
-  const send = () => {
-    if (!ready) return;
+  const draftKey = `decision:${station}:${thread}:${seq}`;
+  const upload = useRef((file: File) => api.uploadFile(file));
+  const shared = useDraft({ key: draftKey, station, upload: (file) => upload.current(file) });
+  const [focus, setFocus] = useState(0);
+  const draft = { ...shared, starting: sending, ready: shared.ready && !sending, focus, bumpFocus: () => setFocus((n) => n + 1) };
+  const send = (written: Draft) => {
+    if (!written.ready || replying.current) return;
+    replying.current = true;
     setAsked(true);
-    const reply = call("decision.reply", { station, thread, seq, text: text.trim() });
+    const reply = call("decision.reply", {
+      station, thread, seq, text: written.text.trim(),
+      attachments: written.files.flatMap((f) => f.done ? [f.done] : []),
+      quotes: written.quotes.map(({ id: _, ...q }) => q),
+    });
     act(reply, "回复");
-    reply.then(() => { setText(""); onSent?.(); }, () => undefined).finally(() => setAsked(false));
+    reply.then(() => { written.take(); onSent?.(); }, () => undefined).finally(() => { replying.current = false; setAsked(false); });
   };
+  const spec: HostComposer = { station, session, placeholder: placeholder || "发消息", offline: false, send };
+  const latest = useRef<HostComposer | null>(spec);
+  latest.current = spec;
+  const now = useRef(draft);
+  now.current = draft;
+  const root = useRef<HTMLDivElement>(null);
   return (
-    <form className={css.reply} onSubmit={(e) => { e.preventDefault(); send(); }}
-      // A finger on the field writes in it: no swipe starts there.
-      onPointerDown={(e) => e.stopPropagation()}>
-      <textarea ref={input} rows={1} className={css.replyInput} value={text} placeholder={placeholder || "写点什么…"} aria-label={placeholder || "回复"}
-        readOnly={sending} onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia("(pointer: coarse)").matches) { e.preventDefault(); send(); } }} />
-      <button type="submit" className={css.replySend} disabled={!ready} aria-label="发送" aria-busy={sending || undefined}>
-        {sending ? <span className={`${waitingCss.spinner} ${css.replySpinner}`} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
-      </button>
-    </form>
+    <div ref={root} onPointerDown={(e) => e.stopPropagation()}>
+      {mobile
+        ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} inline />
+        : <ComposerView draft={draft} thread={thread} sessionKey={session} draftKey={draftKey} submitDraft={send}
+            placeholder={spec.placeholder} locked={sending} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} />}
+    </div>
   );
 }
 
@@ -271,9 +273,9 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
                 const type = cardType(d.card, d.options);
                 if (type === "options") return <>
                   <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={() => answered(d)} />
-                  <DecisionReply key={keyOf(d)} station={d.station} thread={d.thread} seq={d.seq} onSent={() => answered(d)} />
+                  <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} onSent={() => answered(d)} />
                 </>;
-                if (type === "text") return <DecisionReply key={keyOf(d)} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} />;
+                if (type === "text") return <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} />;
                 return <button type="button" className={css.elsewhere} onClick={() => onOpen(path)}>去 chat 里回</button>;
               })()}
               {swipe

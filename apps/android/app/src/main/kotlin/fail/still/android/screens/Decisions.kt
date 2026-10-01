@@ -28,16 +28,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import fail.still.android.ui.keyboard
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -293,14 +287,16 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     // A text card's reply: it stays (a spinner on its send) until the core has it, then goes as an answer does; refused,
     // what was written stays and why is said.
     val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
-    val reply = { text: String ->
-        if (!replyDraft.starting) {
+    val reply = {
+        val text = replyDraft.text.trim()
+        val files = replyDraft.files.mapNotNull { it.done }
+        val quotes = replyDraft.quotes.map { it.sent() }
+        if (replyDraft.ready) {
             replyDraft.starting = true
             app.scope.launch {
                 try {
-                    app.api(item.station).replyDecision(item.thread, item.seq, text)
-                    replyDraft.text = ""
-                    replyDraft.save()
+                    app.api(item.station).replyDecision(item.thread, item.seq, text, files, quotes)
+                    replyDraft.take()
                     go(0) { local.gone.add(item.key) }
                 } catch (e: CoreException) { app.toast = "没能回复：${errorText(e)}" }
                 finally { replyDraft.starting = false }
@@ -401,7 +397,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
  */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.Face(
-    item: DecisionItem, onPick: (DecisionOption) -> Unit, onReply: (String) -> Unit, onField: (LayoutCoordinates) -> Unit,
+    item: DecisionItem, onPick: (DecisionOption) -> Unit, onReply: () -> Unit, onField: (LayoutCoordinates) -> Unit,
 ) {
     val app = LocalApp.current
     val messages = item.before + item.message
@@ -446,9 +442,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
         "options" -> {
             DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 14.dp), onPick = onPick)
             Spacer(Modifier.height(8.dp))
-            TextReply(item, null, onField, onReply)
+            DecisionComposer(item, null, onField, onReply)
         }
-        "text" -> TextReply(item, card?.placeholder, onField, onReply)
+        "text" -> DecisionComposer(item, card?.placeholder, onField, onReply)
         // A card this app does not know: answered in its chat, at the post.
         else -> Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("这张卡片要在 chat 里回", fontSize = 13.sp, color = C.muted)
@@ -461,43 +457,16 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
     }
 }
 
-/**
- * A card's foot: a multiline field (the agent's placeholder, else 写点什么…) and a round send button in ink; the
- * send button replies. While the reply is under way, a spinner on the button and nothing pressed again;
- * refused, what was written stays.
- */
+/** Uses the chat's entire composer: attachments, references, draft extras, capsule and resizing. */
 @Composable
-private fun TextReply(item: DecisionItem, placeholder: String?, onField: (LayoutCoordinates) -> Unit, onReply: (String) -> Unit) {
+private fun DecisionComposer(item: DecisionItem, placeholder: String?, onField: (LayoutCoordinates) -> Unit, onReply: () -> Unit) {
     val app = LocalApp.current
     val draft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
-    val text = draft.text
-    val doing = draft.starting || app.isDoing("decision.reply", "station" to item.station, "thread" to item.thread, "seq" to item.seq)
-    val ready = text.isNotBlank() && !doing
-    val send = { if (ready) onReply(text.trim()) }
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp).clip(RoundedCornerShape(24.dp)).background(C.surface)
-            .onGloballyPositioned(onField).padding(6.dp),
-        verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            Modifier.weight(1f).heightIn(min = 36.dp).padding(start = 10.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (text.isEmpty()) Text(placeholder?.takeIf { it.isNotBlank() } ?: "写点什么…", style = SendTextStyle.copy(color = C.subtle), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            BasicTextField(
-                text, { draft.text = it }, Modifier.fillMaxWidth().semantics { contentDescription = "回复" },
-                enabled = !doing, maxLines = 6,
-                textStyle = SendTextStyle.copy(color = C.ink), cursorBrush = SolidColor(C.accent),
-            )
-        }
-        // Nothing to send: the ink faint over the page (as the composer's).
-        Box(
-            Modifier.size(36.dp).clip(CircleShape).background(if (ready || doing) C.ink else C.ink.copy(alpha = 0.18f).compositeOver(C.surface))
-                .clickable(enabled = ready) { send() }.semantics { contentDescription = "发送" },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (doing) CircularProgressIndicator(Modifier.size(16.dp), color = C.bg, strokeWidth = 2.dp)
-            else IconIn(Icons.ArrowUp, 18.dp, C.bg)
-        }
-    }
+    val host = remember(item.key) { Host() }
+    val launchers = AttachLaunchers { picked -> app.upload(draft, item.station, picked, app.scope) }
+    host.spec = ComposerSpec(
+        station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: "发消息",
+        onPlus = { openAttach(app, launchers) }, onSend = onReply,
+    )
+    HostComposer(host, Modifier.onGloballyPositioned(onField))
 }

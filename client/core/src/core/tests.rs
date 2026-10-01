@@ -136,7 +136,7 @@ fn parses_each_call() {
     // A text card answered with what was written.
     assert_eq!(
         parse_call("decision.reply", json!({"station": "w/s", "thread": 7, "seq": 4, "text": " sk_test_1 "})).unwrap(),
-        Call::DecisionReply { station: "w/s".into(), thread: 7, seq: 4, text: "sk_test_1".into() }
+        Call::DecisionReply { station: "w/s".into(), thread: 7, seq: 4, text: "sk_test_1".into(), attachments: json!([]), quotes: json!([]) }
     );
     assert_eq!(code(parse_call("decision.reply", json!({"station": "w/s", "thread": 7, "seq": 4, "text": "  "}))), "invalid_params");
     assert_eq!(code(parse_call("decision.reply", json!({"station": "w/s", "thread": 7, "text": "x"}))), "invalid_params");
@@ -978,6 +978,14 @@ fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_t
         assert!(!replies.iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 8, .. })), "{replies:?}");
         assert_eq!(posted(&host)[1]["text"], "随便");
         assert_eq!(posted(&host)[1]["quotes"][0]["ts"], "9.000004");
+        // The shared chat composer can send a file alone and additional quoted passages.
+        let attachments = json!([{ "name": "screen.png", "path": "uploads/screen.png", "type": "image/png", "size": 12 }]);
+        let extra_quotes = json!([{ "author": "林晓", "text": "看这一处", "comment": "", "role": "person" }]);
+        core.receive(ui, ClientMessage::Call { id: 12, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4, "text": "", "attachments": attachments, "quotes": extra_quotes }) });
+        host.settle().await;
+        assert_eq!(posted(&host)[2]["attachments"], attachments);
+        assert_eq!(posted(&host)[2]["quotes"][0]["ts"], "9.000004");
+        assert_eq!(posted(&host)[2]["quotes"][1], extra_quotes[0]);
         let card = json!({ "seq": 6, "card": { "type": "text", "placeholder": "sk_" }, "message": { "seq": 6, "ts": "9.000006", "text": "key？", "authorName": "Claude" }, "before": [] });
         core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{ "id": "k1", "session": "k1", "thread": 7, "card": card }]));
         core.receive(ui, ClientMessage::Call { id: 9, call: "decision.answer".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 6, "option": "sk_" }) });
@@ -988,9 +996,9 @@ fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_t
         core.receive(ui, ClientMessage::Call { id: 11, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 6, "text": " sk_test_1 " }) });
         host.settle().await;
         let sent = posted(&host);
-        assert_eq!(sent.len(), 3);
-        assert_eq!(sent[2]["text"], "sk_test_1");
-        assert_eq!(sent[2]["quotes"], json!([{ "author": "Claude", "text": "key？", "comment": "", "role": "agent", "ts": "9.000006" }]));
+        assert_eq!(sent.len(), 4);
+        assert_eq!(sent[3]["text"], "sk_test_1");
+        assert_eq!(sent[3]["quotes"], json!([{ "author": "Claude", "text": "key？", "comment": "", "role": "agent", "ts": "9.000006" }]));
     });
 }
 

@@ -1198,9 +1198,19 @@ export interface ComposerProps {
   carry?: MutableRefObject<string | null>;
 }
 
-export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey, carry }: ComposerProps) {
+export function Composer(props: ComposerProps) {
   const api = useApi();
+  const { draftKey, carry, quotes = [], setQuotes = () => {} } = props;
   const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file) => api.uploadFile(file), quotes: [quotes, setQuotes] });
+  return <ComposerView {...props} draft={draft} />;
+}
+
+/** The chat's composer, also used where a page sends its draft as a reply to a decision. */
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey }: ComposerProps & {
+  draft: Draft; submitDraft?: (draft: Draft) => void;
+}) {
+  const api = useApi();
+  const quotes = draft.quotes;
   const { text, files, add } = draft;
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -1213,6 +1223,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     void api.warm(sessionKey).catch(() => {});
   };
   const send = async () => {
+    if (submitDraft) { submitDraft(draft); return; }
     // In a chat (not a new one's first message, onSending's): its words stay where they were typed until its row is in
     // the list, then go there (madeChat.ts), over the dock.
     const field = input.current;
@@ -1436,7 +1447,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
   const field = (
     <>
       {marked && <RefMirror text={text} className={className} mirror={mirror} />}
-      <textarea ref={input} className={`${className}${marked ? ` ${refCss.refTextSeeThrough}` : ""}`} rows={1} value={text} placeholder={placeholder} aria-label="消息"
+      <textarea ref={input} className={`${className}${marked ? ` ${refCss.refTextSeeThrough}` : ""}`} rows={1} value={text} placeholder={placeholder} aria-label="消息" readOnly={draft.starting}
         onChange={(e) => { setText(e.target.value); onType(); lookForReference(e.target); }}
         onSelect={(e) => lookForReference(e.currentTarget)}
         onBlur={() => setReference(null)}

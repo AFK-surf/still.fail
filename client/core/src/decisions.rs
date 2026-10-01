@@ -255,8 +255,8 @@ pub fn answer(card: &Value, option: &str) -> Option<(String, Value)> {
 
 /// The text and quote a card's free-form answer sends (`decision.reply`): what the viewer wrote, quoting the post that
 /// asked. Both options and text cards accept a written answer.
-pub fn reply(card: &Value, text: &str) -> Option<(String, Value)> {
-    if !matches!(kind(&card["card"]), "text" | "options") || text.trim().is_empty() {
+pub fn reply(card: &Value, text: &str, has_extras: bool) -> Option<(String, Value)> {
+    if !matches!(kind(&card["card"]), "text" | "options") || (text.trim().is_empty() && !has_extras) {
         return None;
     }
     Some((text.trim().to_string(), quote_of(card)?))
@@ -430,15 +430,16 @@ mod tests {
         assert_eq!(text, "先不改");
         assert_eq!(quotes, json!([{ "author": "Claude", "text": "**「共」改成按今天累计吗？**\n细节：重连、换中继不清零", "comment": "", "role": "agent", "ts": "9.000002" }]));
         assert!(answer(&d, "别的").is_none());
-        let (text, quotes) = reply(&d, "  先调间距\n颜色不动  ").unwrap();
+        let (text, quotes) = reply(&d, "  先调间距\n颜色不动  ", false).unwrap();
         assert_eq!(text, "先调间距\n颜色不动");
         assert_eq!(quotes[0]["ts"], "9.000002");
-        assert!(reply(&d, " ").is_none());
-        assert!(reply(&json!({ "card": { "type": "date" } }), "明天").is_none());
+        assert!(reply(&d, " ", false).is_none());
+        assert_eq!(reply(&d, "", true).unwrap().0, "");
+        assert!(reply(&json!({ "card": { "type": "date" } }), "明天", false).is_none());
         let t = text_card(5);
-        let (text, quotes) = reply(&t, "  sk_test_123 ").unwrap();
+        let (text, quotes) = reply(&t, "  sk_test_123 ", false).unwrap();
         assert_eq!((text.as_str(), quotes[0]["ts"].clone()), ("sk_test_123", json!("9.000003")));
-        assert!(reply(&t, " ").is_none());
+        assert!(reply(&t, " ", false).is_none());
         assert!(answer(&t, "sk").is_none(), "a text card has no options");
     }
 

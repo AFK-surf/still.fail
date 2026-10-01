@@ -582,7 +582,7 @@ fun ComposerBar(
 ) {
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = SendTextStyle.copy(color = C.ink)
-    val locked = draft.locked
+    val locked = draft.locked || draft.starting
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(
             Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus),
@@ -608,7 +608,7 @@ fun ComposerBar(
                     draft.input = if (mark != null) TextFieldValue(was.text.removeRange(mark, caret), TextRange(mark)) else next
                     if (next.text != was.text) onType()
                 },
-                textStyle = style, visualTransformation = marks,
+                textStyle = style, visualTransformation = marks, readOnly = draft.starting,
                 cursorBrush = SolidColor(C.accent), maxLines = 6, onTextLayout = onFieldText,
                 modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { draft.focused = it.isFocused }.onGloballyPositioned(onField),
             )

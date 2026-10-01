@@ -34,7 +34,7 @@ pub(crate) enum Call {
     DecisionAnswer { station: String, thread: u64, seq: u64, option: String },
     /// A card answered in writing (decisions.rs): what the viewer wrote, quoting the post that asked, sent as `chat.send`
     /// sends one. Only while its chat's row says it is pending; options and text cards accept it.
-    DecisionReply { station: String, thread: u64, seq: u64, text: String },
+    DecisionReply { station: String, thread: u64, seq: u64, text: String, attachments: Value, quotes: Value },
     /// A decision set aside by the viewer (待定): last on the decisions page, still pending. Kept on the device; nothing
     /// is sent.
     DecisionDefer { station: String, thread: u64, seq: u64 },
@@ -367,12 +367,16 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "decision.reply" => {
             #[derive(Deserialize)]
-            struct P { station: String, thread: u64, seq: u64, text: String }
-            let p: P = read(params)?;
-            if p.text.trim().is_empty() {
-                return Err(CoreError::invalid("参数不对：text 是空的"));
+            struct P {
+                station: String, thread: u64, seq: u64, text: String,
+                #[serde(default)] attachments: Vec<Value>,
+                #[serde(default)] quotes: Vec<Value>,
             }
-            Call::DecisionReply { station: p.station, thread: p.thread, seq: p.seq, text: p.text.trim().to_string() }
+            let p: P = read(params)?;
+            if p.text.trim().is_empty() && p.attachments.is_empty() && p.quotes.is_empty() {
+                return Err(CoreError::invalid("参数不对：回复是空的"));
+            }
+            Call::DecisionReply { station: p.station, thread: p.thread, seq: p.seq, text: p.text.trim().to_string(), attachments: json!(p.attachments), quotes: json!(p.quotes) }
         }
         "decision.defer" => {
             #[derive(Deserialize)]

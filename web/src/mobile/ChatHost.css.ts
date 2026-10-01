@@ -10,6 +10,8 @@ export const mComposer = style({
   position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
   padding: "8px 10px calc(10px + var(--m-foot))",
 });
+/** The same composer, in the decisions page's footer rather than over a chat. */
+export const mInlineComposer = style({ position: "relative", padding: "8px 0 0" });
 export const mHostComposer = style({
   selectors: {
     [`${mComposer}&`]: { zIndex: "6" },

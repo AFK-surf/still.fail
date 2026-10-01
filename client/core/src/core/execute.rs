@@ -235,12 +235,16 @@ impl Inner {
                 let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await
             }
-            Call::DecisionReply { station, thread, seq, text } => {
+            Call::DecisionReply { station, thread, seq, text, attachments, quotes: added } => {
                 // As its chat's row has it: still pending, and a supported card.
                 let card = self.pending_card(&station, thread, seq)?;
-                let (text, quotes) = crate::decisions::reply(&card, &text).ok_or_else(|| CoreError::invalid("请在 chat 里回复这张卡片"))?;
+                let extras = attachments.as_array().is_some_and(|a| !a.is_empty()) || added.as_array().is_some_and(|a| !a.is_empty());
+                let (text, mut quotes) = crate::decisions::reply(&card, &text, extras).ok_or_else(|| CoreError::invalid("请在 chat 里回复这张卡片"))?;
+                if let (Some(quotes), Some(added)) = (quotes.as_array_mut(), added.as_array()) {
+                    quotes.extend(added.iter().cloned());
+                }
                 crate::prefs::undefer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq));
-                let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
+                let send = Call::ChatSend { station, thread, text, attachments, quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await
             }
             Call::DecisionDefer { station, thread, seq } => {

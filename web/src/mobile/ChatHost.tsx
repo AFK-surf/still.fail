@@ -84,7 +84,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
     : !stations ? <Loading text="正在读取…" />
     : !station ? <Loading text="这个 workspace 里没有这台 station。" />
     : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>;
-  const composer = shown && <Composer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
+  const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
   return (
     <HostContext.Provider value={{ draft, use }}>
       <div className={css.mChatHost} ref={root}>
@@ -97,15 +97,15 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
 }
 
 /** The composer: a floating capsule at the page's foot, with the files and quotes going with the message, as the wide screen's composer shows them. */
-function Composer({ shown, draftKey, latest, draft, now, root, upload: uploader }: {
+export function MobileComposer({ shown, draftKey, latest, draft, now, root, upload: uploader, inline = false }: {
   shown: Shown; draftKey: string | undefined; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
-  root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File) => Promise<Attachment>>;
+  root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File) => Promise<Attachment>>; inline?: boolean;
 }) {
   const app = useApp();
   const call = useStationCall(shown.station);
   uploader.current = (file) => call.upload(file);
   const upload = draft.add;
-  const locked = shown.offline || !!shown.archived;
+  const locked = shown.offline || !!shown.archived || draft.starting;
   const capsule = useRef<HTMLDivElement>(null);
   // What is above keeps its end clear of the capsule, whatever its height.
   useLayoutEffect(() => {
@@ -127,7 +127,7 @@ function Composer({ shown, draftKey, latest, draft, now, root, upload: uploader 
   const frame = useRef<HTMLDivElement>(null);
   useMorph(frame, `${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
   return (
-    <div className={`${css.mComposer} ${css.mHostComposer} ${rootCss.wide}`} ref={capsule}>
+    <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>
       {menu}
       {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}
       <div ref={frame} className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} data-made-composer onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}

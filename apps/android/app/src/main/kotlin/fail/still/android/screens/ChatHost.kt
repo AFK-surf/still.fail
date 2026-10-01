@@ -392,7 +392,7 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
 internal const val SCENE_LEAVE_MS = 140
 
 @Composable
-private fun HostComposer(host: Host, modifier: Modifier) {
+internal fun HostComposer(host: Host, modifier: Modifier) {
     val spec = host.spec ?: return
     val draft = spec.draft
     val morph = rememberMorph()
