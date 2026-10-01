@@ -54,6 +54,8 @@ class Follow(val list: LazyListState, private val margin: Int) {
     var anchor by mutableStateOf<Any?>(null)
     /** Where an item is, by key (-1: not in the list). */
     var indexOf: (Any) -> Int = { -1 }
+    /** Something else puts the list in place for now, frame by frame (words sent flying in, ChatHost.kt): not followed meanwhile. */
+    var paused by mutableStateOf(false)
     /** Someone else moved the list since it was last at rest. */
     internal var touched = false
     /** How many of its own scrolls are going (snapshot state: read with the list's scrolling). */
@@ -131,6 +133,7 @@ class Follow(val list: LazyListState, private val margin: Int) {
             while (true) {
                 val left = left()
                 if (left == null) { above = true; return@scroll }
+                if (paused) return@scroll
                 // Nearly there, or the goal back up (the content grew shorter): put there at once, as the web does.
                 if (left < 1f) { if (abs(left) > 0.01f) scrollBy(left); return@scroll }
                 val now = withFrameNanos { it }
@@ -185,9 +188,9 @@ fun rememberFollow(list: LazyListState): Follow {
         snapshotFlow {
             val info = list.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
-            listOf(info.totalItemsCount, last?.index, last?.size, follow.placed && follow.on, follow.anchor)
+            listOf(info.totalItemsCount, last?.index, last?.size, follow.placed && follow.on, follow.anchor, follow.paused)
         }.collect {
-            if (!follow.placed || !follow.on || follow.short || list.isScrollInProgress) return@collect
+            if (!follow.placed || !follow.on || follow.short || follow.paused || list.isScrollInProgress) return@collect
             // A glide the reader's finger took over ends here; one another scroll (the keyboard's) cut short goes on.
             while (follow.on && !follow.short && !follow.touched) {
                 try { follow.hold(); break } catch (e: CancellationException) { currentCoroutineContext().ensureActive(); withFrameNanos { } }

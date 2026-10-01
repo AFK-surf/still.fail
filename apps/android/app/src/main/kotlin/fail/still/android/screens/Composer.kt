@@ -84,6 +84,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -570,12 +571,14 @@ fun DraftExtras(draft: Draft) {
  * with the text up to six lines right after it (its references drawn as marks, a backspace taking one whole), and a round
  * send button (a spinner while a new chat is made). Locked (offline, archived), neither ＋ nor send does anything.
  * `hint`: how much the placeholder shows (words just sent pass over it first: ChatHost.kt); `morph`: the capsule's, whose
- * parts ＋, the field and send are (they move with it); `onField`: where the field is, as it is laid out.
+ * parts ＋, the field and send are (they move with it); `onField`: where the field is, as it is laid out, and
+ * `onFieldText` how its words are (where each line breaks: words sent fly line by line from there, ChatHost.kt).
  */
 @Composable
 fun ComposerBar(
     draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit,
     hint: () -> Float = { 1f }, morph: Morph? = null, onField: (LayoutCoordinates) -> Unit = {},
+    onFieldText: (TextLayoutResult) -> Unit = {},
 ) {
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = TextStyle(color = C.ink, fontSize = 16.sp, lineHeight = 21.sp)
@@ -606,7 +609,7 @@ fun ComposerBar(
                     if (next.text != was.text) onType()
                 },
                 textStyle = style, visualTransformation = marks,
-                cursorBrush = SolidColor(C.accent), maxLines = 6,
+                cursorBrush = SolidColor(C.accent), maxLines = 6, onTextLayout = onFieldText,
                 modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { draft.focused = it.isFocused }.onGloballyPositioned(onField),
             )
         }

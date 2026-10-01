@@ -266,7 +266,7 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     var asksHeight by remember { mutableIntStateOf(0) }
     val asks = remember(station, of) { AskLocal() }
     Box(Modifier.fillMaxSize().background(C.bg)) {
-        Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { (host.composerHeight + asksHeight).toDp() }, host)
+        Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { (host.roomForList() + asksHeight).toDp() }, host)
         ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
         AskCards(
             if (view.archived == true) emptyList() else view.asks.orEmpty(), asks, haze,
@@ -656,6 +656,38 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         list.requestScrollToItem(lastRow, 1_000_000)
         follow.on = true
     }
+    // Words sent flying in an open chat (ChatHost.kt), while the list follows: it is put in place in each frame, not
+    // followed, so that what is above only goes up, smoothly. As the row comes in nothing moves (its top where the list
+    // ended); as the words go up, it makes room for what of it they show, at the composer's own foot (not the composer
+    // held tall, nor on its way down); as they settle, the rest of it (what the field did not show) comes in above,
+    // its foot where it is.
+    val flying = host.flight
+    val room by rememberUpdatedState(with(LocalDensity.current) { (bottom + 10.dp).roundToPx() })
+    LaunchedEffect(flying) {
+        if (flying == null || flying.carried) return@LaunchedEffect
+        var from: Int? = null
+        try {
+            while (host.flight === flying) {
+                withFrameNanos { }
+                val key = flying.key
+                val item = key?.let { k -> list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == k } }
+                val full = flying.row?.takeIf { it.isAttached }?.size?.height
+                val index = key?.let(follow.indexOf)?.takeIf { it >= 0 }
+                // Not following: nothing is put in place (the words go where the row is). Following, the list is not
+                // glided after the row as it comes in either: it is put in place from the first frame it is laid out.
+                if (!follow.on || short) { follow.paused = false; flying.toFinal = null; continue }
+                follow.paused = true
+                if (!flying.placed || item == null || full == null || index == null) { flying.toFinal = null; continue }
+                val top = from ?: item.offset.also { from = it }
+                // Where its foot will be: above the composer's own room (and what else the list keeps clear of).
+                val foot = list.layoutInfo.viewportEndOffset - (room - host.listRoom + host.naturalRoom())
+                val cut = flying.reserve().roundToInt()
+                val at = if (flying.settle() > 0f) foot - (full - cut) else (top + (foot - (full - flying.hidden().roundToInt()) - top) * flying.up()).roundToInt()
+                list.requestScrollToItem(index, -at)
+                flying.toFinal = ((foot - full) - (at - cut)).toFloat()
+            }
+        } finally { follow.paused = false }
+    }
     // A message sent from up the list takes the reader to its end at once, following again (web Chat.tsx useToEnd). Told
     // by the composer as it sends, not by the outbox growing: on a quick link the station has the message before the
     // outbox ever shows it.
@@ -666,6 +698,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         lastHead[0] = headKey
         val sent = sends > sentCount[0]
         sentCount[0] = sends
+        // Words sent flying in, while it follows: it is put in place by them (below), not glided after their row.
+        if (sent && host.flight?.carried == false && follow.on && !short) follow.paused = true
         if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }
         if (sent && !short && follow.placed && !follow.on) { atLatest(); return@SideEffect }
         if (was == null || was == headKey || !follow.placed || reveal.revealing) return@SideEffect
@@ -1049,14 +1083,16 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
         val words = fail.still.android.ui.withRefs(text)
         val (mark, laid) = passageMark(words.text)
         Text(
-            words, fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = laid,
+            words, fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = { laid(it); flight?.words = it },
             modifier = Modifier.widthIn(max = maxWidth * 0.78f).then(hold)
                 .let { m ->
                     if (flight == null || host == null) m else m.onGloballyPositioned {
                         with(density) { flight.bubbleAt(it, host, androidx.compose.ui.geometry.Offset(14.dp.toPx(), 8.dp.toPx()), 23.sp.toPx(), 15.sp.toPx()) }
                     }
                 }
-                .clip(RoundedCornerShape(18.dp)).drawBehind { drawRect(ink.neutral, alpha = flight?.e() ?: 1f) }.background(press).padding(horizontal = 14.dp, vertical = 8.dp).then(mark),
+                .clip(RoundedCornerShape(18.dp)).drawBehind { drawRect(ink.neutral, alpha = flight?.e() ?: 1f) }.background(press).padding(horizontal = 14.dp, vertical = 8.dp).then(mark)
+                // On their way, its words are drawn piece by piece over the composer (ChatHost.kt FlightLayer), not here.
+                .drawWithContent { if (flight == null || host?.flight !== flight || flight.pieces() == null) drawContent() },
         )
     }
 }
@@ -1098,7 +1134,12 @@ private fun Out(ctx: Here, o: Outgoing) {
             UnsentButton(Icons.Trash, "删除", enabled = !retrying, busy = discarding, failed = app.failedOf("chat.discard", "station" to ctx.station, "id" to o.id)) {
                 app.act("删除") { if (thread != null) app.api(ctx.station).discard(thread.id, o.id) else pending?.let { app.api(ctx.station).discardIn(it, o.id) } }
             }
-        } else if (slow) Waiting("正在发送")
+        } else if (slow) {
+            // Not while its words are on their way here (ChatHost.kt): only once they have landed, if it is still going.
+            val flight = LocalFlight.current
+            val host = LocalFlightHost.current
+            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { Waiting("正在发送") }
+        }
     }
 }
 

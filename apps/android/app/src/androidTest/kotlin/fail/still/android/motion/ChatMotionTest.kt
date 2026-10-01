@@ -69,7 +69,75 @@ class ChatMotionTest {
         h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text, seq = 5))))
         r.frames(2)
         h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true)))
-        r.frames(26)
+        r.frames(40)
+        r.end()
+    }
+
+    /** Sent in a chat, written over several lines (one wrapping): each line from where it was typed to its place in the bubble. */
+    @Test
+    fun sentManyLines() {
+        val h = Harness(rule)
+        h.fake.put(topic, Fixtures.chat(talk))
+        val text = "还有几件事：\n1. 登录页在 Safari 上点了没反应，Chrome 上是好的，可能是 cookie 的 SameSite 设置\n2. 顺便加一个单元测试\n3. 改完发截图"
+        h.fake.answer = { name, _ ->
+            if (name == "chat.send") h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text))))
+            JsonNull
+        }
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        h.type(text)
+        h.keyboard()
+        val r = h.record("sent-many-lines")
+        r.frame { h.send() }
+        r.frames(14)
+        h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text, seq = 5))))
+        r.frames(2)
+        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true)))
+        r.frames(40)
+        r.end()
+    }
+
+    /** Sent in a chat over several lines, the outbox a few frames behind (as on a device): the words wait in the field as typed. */
+    @Test
+    fun sentManyLinesOutboxLate() {
+        val h = Harness(rule)
+        h.fake.put(topic, Fixtures.chat(talk))
+        val text = "还有几件事：\n1. 登录页在 Safari 上点了没反应，Chrome 上是好的，可能是 cookie 的 SameSite 设置\n2. 顺便加一个单元测试\n3. 改完发截图"
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        h.type(text)
+        h.keyboard()
+        val r = h.record("sent-many-lines-late")
+        r.frame { h.send() }
+        r.frames(6)
+        h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text))))
+        r.frames(14)
+        h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text, seq = 5))))
+        r.frames(2)
+        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true)))
+        r.frames(40)
+        r.end()
+    }
+
+    /** Sent in a chat, more than the field shows (it scrolled), its long lines breaking elsewhere in the bubble. */
+    @Test
+    fun sentPastTheField() {
+        val h = Harness(rule)
+        h.fake.put(topic, Fixtures.chat(talk))
+        val text = "这次改动要注意的几件事情我先列一下，大家看看有没有漏掉的地方，然后我们再决定先做哪一件比较好\n" +
+            "1. 登录页\n2. 注册页\n3. 忘记密码的邮件模板也要跟着一起改掉，不然用户收到的还是旧的文案\n4. 单元测试\n5. 截图\n6. 发版说明"
+        h.fake.answer = { name, _ ->
+            if (name == "chat.send") h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text))))
+            JsonNull
+        }
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        h.type(text)
+        h.keyboard()
+        val r = h.record("sent-past-the-field")
+        r.frame { h.send() }
+        r.frames(14)
+        h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text, seq = 5))))
+        r.frames(2)
+        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true)))
+        r.frames(40)
         r.end()
     }
 
