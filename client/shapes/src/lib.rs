@@ -768,6 +768,8 @@ pub struct LoginJob {
 pub struct Profile {
     pub id: String,
     pub name: String,
+    /// The signed-in subscription identity; independent of the editable display name.
+    pub email: Option<String>,
     pub runtime: RuntimeKind,
     pub runtimes: Vec<RuntimeKind>,
     pub access: Access,

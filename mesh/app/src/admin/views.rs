@@ -154,6 +154,7 @@ impl AdminApi {
                     .collect();
                 json!({
                     "id": p.id, "name": p.name, "runtime": p.runtime, "runtimes": p.runtimes,
+                    "email": if p.access_kind == stillfail_shapes::AccessKind::Subscription && !p.machine { super::edits::account_email(p.runtime, &p.home) } else { None },
                     "access": { "kind": p.access_kind, "key": mask(&p.key) },
                     "home": p.home, "homeExists": p.home.exists(), "model": p.model, "models": p.models,
                     "env": env,

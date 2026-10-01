@@ -484,6 +484,8 @@ export interface ModelSeries {
 export interface Profile {
 	id: string;
 	name: string;
+	/** The signed-in subscription identity; independent of the editable display name. */
+	email?: string;
 	runtime: RuntimeKind;
 	runtimes: RuntimeKind[];
 	access: Access;

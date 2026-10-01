@@ -78,7 +78,7 @@ fn taken_ids(config: &crate::config::Config) -> HashSet<String> {
 }
 
 /// The account a subscription home is signed in as, when its files say: Codex's id token, Claude's account record.
-fn account_email(runtime: RuntimeKind, home: &Path) -> Option<String> {
+pub(super) fn account_email(runtime: RuntimeKind, home: &Path) -> Option<String> {
     if runtime == RuntimeKind::Codex {
         let auth: Value = serde_json::from_str(&std::fs::read_to_string(home.join("auth.json")).ok()?).ok()?;
         let payload = auth["tokens"]["id_token"].as_str()?.split('.').nth(1)?;

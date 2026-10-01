@@ -785,13 +785,20 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
                 // Both mobile clients open the settings count onto the same, actionable profiles first.
                 profiles.sort_by_key(|p| p["trouble"].is_null());
             }
-            // The machine's own logins a profile could use now: signed in, on a plan, and no profile on it yet.
+            // The machine's own logins a profile could use now: no machine profile or bound subscription on the same account.
+            let subscriptions: Vec<(Value, String)> = value.get("profiles").and_then(Value::as_array).into_iter().flatten()
+                .filter(|p| p["access"]["kind"] == "subscription")
+                .filter_map(|p| Some((p.get("runtime")?.clone(), p.get("email")?.as_str()?.trim().to_ascii_lowercase())))
+                .filter(|(_, email)| !email.is_empty()).collect();
             let taken: Vec<Value> = value.get("profiles").and_then(Value::as_array).into_iter().flatten()
                 .filter(|p| p.get("machine").and_then(Value::as_bool) == Some(true)).filter_map(|p| p.get("runtime").cloned()).collect();
             for l in value.get_mut("machineLogins").and_then(Value::as_array_mut).into_iter().flatten() {
                 let offered = l.get("loggedIn").and_then(Value::as_bool) == Some(true)
                     && l.get("plan").is_some_and(|p| p.as_str().is_some_and(|p| !p.is_empty()))
-                    && !l.get("runtime").is_some_and(|r| taken.contains(r));
+                    && !l.get("runtime").is_some_and(|r| taken.contains(r))
+                    && !l.get("email").and_then(Value::as_str).is_some_and(|email| {
+                        subscriptions.iter().any(|(runtime, bound)| l.get("runtime") == Some(runtime) && email.trim().eq_ignore_ascii_case(bound))
+                    });
                 l["offered"] = json!(offered);
             }
         }
@@ -1101,6 +1108,39 @@ mod tests {
         decorate(&Topic::Overview { station: "w/s".into() }, &mut o, c);
         let offered: Vec<bool> = o["machineLogins"].as_array().unwrap().iter().map(|l| l["offered"] == true).collect();
         assert_eq!(offered, [false, true, false, false]);
+    }
+
+    #[test]
+    fn bound_subscriptions_hide_only_the_same_machine_account() {
+        let mut o = json!({
+            "profiles": [
+                {"name": "Renamed", "runtime": "claude", "access": {"kind": "subscription"}, "email": " A@x.com "},
+                {"runtime": "codex", "access": {"kind": "env"}, "email": "b@x.com"},
+                {"runtime": "codex", "access": {"kind": "subscription"}, "email": "c@x.com"},
+                {"name": "d@x.com", "runtime": "codex", "access": {"kind": "subscription"}},
+            ],
+            "machineLogins": [
+                {"runtime": "claude", "email": "a@x.com"},
+                {"runtime": "codex", "email": "a@x.com"},
+                {"runtime": "codex", "email": "b@x.com"},
+                {"runtime": "codex", "email": "c@x.com"},
+                {"runtime": "codex", "email": "d@x.com"},
+                {"runtime": "claude", "email": ""},
+                {"runtime": "claude"},
+            ],
+        });
+        for l in o["machineLogins"].as_array_mut().unwrap() {
+            l["loggedIn"] = json!(true);
+            l["plan"] = json!("pro");
+        }
+        let topic = Topic::Overview { station: "w/s".into() };
+        let clock = Clock { now: 0.0, offset_min: 0 };
+        decorate(&topic, &mut o, clock);
+        let offered: Vec<_> = o["machineLogins"].as_array().unwrap().iter().map(|l| l["offered"] == true).collect();
+        assert_eq!(offered, [false, true, true, false, true, true, true]);
+        o["profiles"] = json!([]);
+        decorate(&topic, &mut o, clock);
+        assert!(o["machineLogins"].as_array().unwrap().iter().all(|l| l["offered"] == true));
     }
 
     #[test]

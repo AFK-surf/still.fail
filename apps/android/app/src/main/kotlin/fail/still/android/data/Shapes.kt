@@ -499,6 +499,8 @@ data class ModelSeries (
 data class Profile (
 	val id: String,
 	val name: String,
+	/// The signed-in subscription identity; independent of the editable display name.
+	val email: String? = null,
 	val runtime: RuntimeKind,
 	val runtimes: List<RuntimeKind>,
 	val access: Access,
