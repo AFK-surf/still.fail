@@ -10,6 +10,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (2, "In still.fail chats, chat_post automatically attaches local files named by inline Markdown links or images. Invalid local paths and conflicting attachment names are rejected before posting; correct them or write paths as code when they are only examples."),
     (3, "After giving advice, a recommendation or proposed options, ask for the user’s decision and end with need_human, not all_done; include an answer card in still.fail chats. Do not reopen decisions already made or ask again before doing authorized work."),
     (4, "Station instructions and built-in skill wording are shorter; the same routing, decision, completion and safety rules still apply. Use the current instructions file and skill files when you need details."),
+    (5, "People can close a card with 无需处理: its need_human wait ends without a reply or waking the agent. Do not reopen that question unless they ask."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

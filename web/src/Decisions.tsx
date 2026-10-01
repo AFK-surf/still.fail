@@ -17,6 +17,7 @@ import { useApi, useStations } from "./api.ts";
 import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoing, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
+import { DoingMark } from "./DoingMark.tsx";
 import { reducedMotion } from "./motion.ts";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { useDraft, type Draft } from "./draft.ts";
@@ -72,7 +73,7 @@ export function CloseDecision({ station, thread, seq, onClosed }: {
   return <button type="button" className={css.hintButton} disabled={busy} aria-busy={busy || undefined}
     title="结束这次等待，不发消息，也不通知 agent"
     onClick={() => act(call("decision.close", { station, thread, seq }).then(() => onClosed?.()), "无需处理")}>
-    无需处理{busy && <span className={waitingCss.spinner} aria-hidden="true" />}
+    无需处理<DoingMark calls="decision.close" on={{ station, thread, seq }} />
   </button>;
 }
 

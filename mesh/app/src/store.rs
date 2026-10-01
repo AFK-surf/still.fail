@@ -1995,7 +1995,7 @@ impl Store {
                 return Ok(true);
             }
             let asked: Option<(i64, String, i64)> = tx.query_row(
-                "SELECT n, author, created_at FROM entries WHERE thread = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY n DESC LIMIT 1",
+                "SELECT n, author, at FROM entries WHERE thread = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL) ORDER BY n DESC LIMIT 1",
                 [thread], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             ).optional()?;
             let Some((latest, agent, at)) = asked else { return Ok(false) };

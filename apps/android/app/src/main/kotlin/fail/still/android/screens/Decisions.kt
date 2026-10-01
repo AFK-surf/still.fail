@@ -164,7 +164,7 @@ private fun CloseDecision(station: String, thread: Long, seq: Long, enabled: Boo
         app.act("无需处理") { app.api(station).closeDecision(thread, seq); onClosed() }
     }.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("无需处理", fontSize = 13.sp, color = C.muted)
-        if (busy) DoingMark(true, null, 14.dp)
+        DoingMark(busy, app.failedOf("decision.close", "station" to station, "thread" to thread, "seq" to seq), 14.dp)
     }
 }
 
