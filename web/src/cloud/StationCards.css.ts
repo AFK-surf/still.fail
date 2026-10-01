@@ -3,6 +3,8 @@ import { vars } from "../styles/tokens.css.ts";
 import { btn } from "../styles/controls.css.ts";
 
 export const name = style({
+  padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer",
+  selectors: { "&:hover": { textDecoration: "underline", textUnderlineOffset: "3px" } },
   fontSize: vars.textBody, fontWeight: "600", color: vars.text, minWidth: "0",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
@@ -47,3 +49,7 @@ export const netPart = style({ display: "flex", flexDirection: "column", gap: "2
 export const netLine = style({ display: "flex", gap: "8px", minWidth: "0" });
 globalStyle(`${netLine} > *:last-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
 export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5ch 7.5ch", columnGap: "5px", rowGap: "2px", alignItems: "baseline", flex: "none" });
+
+export const details = style({ display: "grid", gap: "24px" });
+export const detailSection = style({ display: "grid", gap: "10px", fontSize: vars.textSm, color: vars.muted, overflowWrap: "anywhere" });
+export const detailTitle = style({ margin: "0", fontSize: vars.textBody, fontWeight: "600", color: vars.text });

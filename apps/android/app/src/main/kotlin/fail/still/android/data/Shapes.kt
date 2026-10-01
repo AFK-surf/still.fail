@@ -1798,6 +1798,8 @@ data class Meter (
 	val percent: Long,
 	val level: Level,
 	val value: String,
+	/// Remaining capacity for an alert chip; absent for CPU and older cores.
+	val remaining: String? = null,
 	val note: String? = null
 )
 

@@ -1778,6 +1778,8 @@ export interface Meter {
 	percent: number;
 	level: Level;
 	value: string;
+	/** Remaining capacity for an alert chip; absent for CPU and older cores. */
+	remaining?: string;
 	note?: string;
 }
 

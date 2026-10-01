@@ -2,6 +2,8 @@
 // and Codex, each updated (or a runtime installed) from here by whoever may. Grey but for what wants doing.
 import type { SoftwareVersion } from "./core/shapes.ts";
 import { stationApi, useAction, useStationCall } from "./api.ts";
+import { useDoing } from "./doing.ts";
+import { DoingMark } from "./DoingMark.tsx";
 import { EdgeChip } from "./components.tsx";
 import { Switch, Tip } from "./ui.tsx";
 import * as css from "./Versions.css.ts";
@@ -12,6 +14,7 @@ import * as css from "./Versions.css.ts";
  */
 export function Versions({ station, updates, manager, beta = false, rows = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean; rows?: boolean }) {
   const { update, check, channel, auto } = useSoftware(station);
+  const batch = useDoing("software.updateAll", { station });
   if (!updates?.length) return null;
   const checked = updates[0]?.checkedAt;
   const on = onBeta(updates, channel);
@@ -19,18 +22,18 @@ export function Versions({ station, updates, manager, beta = false, rows = false
   const error = update.error ?? channel.error ?? auto.error ?? (check.error && new Error(`没能检查更新：${check.error.message}`));
   return (
     <div className={`${css.versions}${rows ? ` ${css.rows}` : ""}`}>
-      {updates.map((v) => <Item key={v.id} v={v} manager={manager} busy={update.busy && update.args?.[0] === v.id} onUpdate={() => void update.run(v.id)} />)}
+      {updates.map((v) => <Item key={v.id} v={v} manager={manager} busy={batch || (update.busy && update.args?.[0] === v.id)} onUpdate={() => void update.run(v.id)} />)}
       {beta && manager && on != null && (
         <label className={css.channel}>
           测试版
-          <Switch small checked={on} disabled={channel.busy} label="测试版" onChange={(next) => void channel.run(next ? "beta" : "stable")} />
+          <Switch small checked={on} disabled={batch || channel.busy} label="测试版" onChange={(next) => void channel.run(next ? "beta" : "stable")} />
         </label>
       )}
       {manager && autoOn != null && (
         <Tip label="有新版本时 station 自己更新，agent 不中断">
           <label className={css.channel}>
             自动更新
-            <Switch small checked={autoOn} disabled={auto.busy} label="自动更新" onChange={(next) => void auto.run(next)} />
+            <Switch small checked={autoOn} disabled={batch || auto.busy} label="自动更新" onChange={(next) => void auto.run(next)} />
           </label>
         </Tip>
       )}
@@ -41,6 +44,28 @@ export function Versions({ station, updates, manager, beta = false, rows = false
       {error && <span className={css.failed}>{error.message}</span>}
     </div>
   );
+}
+
+/** Only software that needs attention on a station's overview; its full version/settings UI is in the detail. */
+export function UpdateSummary({ station, updates, manager }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean }) {
+  const api = stationApi(useStationCall(station));
+  const update = useAction(() => api.updateAllSoftware<SoftwareVersion[]>());
+  const busy = useDoing(["software.updateAll", "software.update"], { station });
+  const visible = (updates ?? []).filter((v) => v.installed && (v.newer || v.downgrade || v.state === "updating" || v.state === "failed"));
+  const updating = visible.some((v) => v.state === "updating");
+  const failed = visible.some((v) => v.state === "failed");
+  if (!visible.length && !busy && !update.error) return null;
+  return <div className={css.summary}>
+    <span className={css.summaryText}>
+      {updating ? visible.map((v) => <span key={v.id} className={v.state === "failed" ? css.failed : undefined}>{v.name} {v.state === "updating" ? describe(v).updating : v.state === "failed" ? "更新失败" : "待更新"}</span>)
+        : <span>{visible.map((v) => v.name).join("、")} {failed ? "更新失败" : busy ? "正在更新…" : visible.length ? "可更新" : ""}</span>}
+      {update.error && <span className={css.failed} role="alert">{update.error.message}</span>}
+    </span>
+    {manager && <span className={css.summaryAction}>
+      <DoingMark calls={["software.updateAll", "software.update"]} on={{ station }} size={14} />
+      <button type="button" className={css.action} disabled={busy || updating || !visible.some((v) => v.updatable)} onClick={() => void update.run()}>{busy || updating ? "正在更新…" : failed ? "重试" : "更新"}</button>
+    </span>}
+  </div>;
 }
 
 /**

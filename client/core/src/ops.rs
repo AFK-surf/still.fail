@@ -239,6 +239,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // @params id?:string
         "software.update" => op("POST", Ok("/updates".into()), Some(p.pick(&["id"])), Effect::Overview),
         // @params
+        "software.updateAll" => op("POST", Ok("/updates/all".into()), None, Effect::Overview),
+        // @params
         "software.check" => op("POST", Ok("/updates/check".into()), None, Effect::Overview),
         // The station's update channel: { channel: "stable" | "beta" }. Back to stable from a beta, the stable release
         // is then offered to go back to (`downgrade`), older or not.

@@ -120,7 +120,7 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
  * clockwise from the top left, in the colour of the core's `level`: an allowance's window, a machine's meter; or, as
  * level `progress`, how much of a download is in (in the accent, its edge moving smoothly to each new share). What else
  * it is given (a tip's trigger props and ref) goes on the box. */
-export function EdgeChip({ fill, level, mark, label, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
+export function EdgeChip({ fill, level, mark, label, text, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; text?: string | undefined; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
   const p = Math.max(0, Math.min(100, fill));
   return (
     <span {...rest} className={css.quotaChip} data-level={level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={label}>
@@ -128,19 +128,19 @@ export function EdgeChip({ fill, level, mark, label, small, bare, ...rest }: { f
         <rect className={css.quotaChipTrack} pathLength={100} />
         {p > 0 && <rect className={css.quotaChipLeft} pathLength={100} strokeDasharray={`${p} 100`} />}
       </svg>
-      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}{fill}%</span>
+      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}{text ?? `${fill}%`}</span>
     </span>
   );
 }
 
 /** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and how full, its edge drawn as
  * far as that; what it is in the tip. */
-export function MeterChips({ meters, bare }: { meters: Meter[]; bare?: boolean }) {
+export function MeterChips({ meters, bare, alerts = false }: { meters: Meter[]; bare?: boolean; alerts?: boolean }) {
   return (
     <span className={css.quotaChips}>
-      {meters.map((m) => (
+      {meters.filter((m) => !alerts || m.level !== "ok").map((m) => (
         <Tip key={m.label} label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}>
-          <EdgeChip fill={m.percent} level={m.level} mark={m.short} label={`${m.label} ${m.percent}%`} bare={bare} />
+          <EdgeChip fill={m.percent} level={m.level} mark={m.short} text={alerts ? m.remaining : undefined} label={`${m.label} ${m.percent}%${alerts && m.remaining ? ` · ${m.remaining}` : ""}`} bare={bare} />
         </Tip>
       ))}
     </span>

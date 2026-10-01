@@ -376,6 +376,10 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = SoftwareUpdateFields().apply(fill).fields
         return call("software.update", JsonObject(values))
     }
+    suspend fun softwareUpdateAll(): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        return call("software.updateAll", JsonObject(values))
+    }
     suspend fun softwareCheck(): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         return call("software.check", JsonObject(values))

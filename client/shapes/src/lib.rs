@@ -1120,6 +1120,8 @@ pub struct Meter {
     pub percent: i64,
     pub level: Level,
     pub value: String,
+    /// Remaining capacity for an alert chip; absent for CPU and older cores.
+    pub remaining: Option<String>,
     pub note: Option<String>,
 }
 

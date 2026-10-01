@@ -54,6 +54,7 @@ export interface OperationParams {
   "footprint.delete": { keys?: string[] | null | undefined };
   "footprint.evict": { keys?: string[] | null | undefined };
   "software.update": { id?: string | null | undefined };
+  "software.updateAll": {  };
   "software.check": {  };
   "software.channel": { channel?: string | null | undefined };
   "software.auto": { on?: boolean | null | undefined };
@@ -143,6 +144,7 @@ export function bindStationOperations(call: Call) {
     footprintDelete: <T = unknown>(params: OperationParams["footprint.delete"] = {}) => call("footprint.delete", params) as Promise<T>,
     footprintEvict: <T = unknown>(params: OperationParams["footprint.evict"] = {}) => call("footprint.evict", params) as Promise<T>,
     softwareUpdate: <T = unknown>(params: OperationParams["software.update"] = {}) => call("software.update", params) as Promise<T>,
+    softwareUpdateAll: <T = unknown>(params: OperationParams["software.updateAll"] = {}) => call("software.updateAll", params) as Promise<T>,
     softwareCheck: <T = unknown>(params: OperationParams["software.check"] = {}) => call("software.check", params) as Promise<T>,
     softwareChannel: <T = unknown>(params: OperationParams["software.channel"] = {}) => call("software.channel", params) as Promise<T>,
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,

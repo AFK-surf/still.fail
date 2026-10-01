@@ -639,6 +639,9 @@ pub fn host(h: &mut Value) {
             (swap > 0.0).then(|| format!("swap {}", format::gb1(swap)))),
         meter("磁盘", "磁盘", if disk_total > 0.0 { (disk_total - disk_free) / disk_total * 100.0 } else { 0.0 }, format!("剩 {} / {}", format::gb1(disk_free), format::gb1(disk_total)), None),
     ]);
+    let remaining = |bytes: f64| format!("剩余 {:.1} G", bytes.max(0.0) / 1024f64.powi(3));
+    h["meters"][1]["remaining"] = json!(remaining(mem_total - mem_used));
+    h["meters"][2]["remaining"] = json!(remaining(disk_free));
     h["emberText"] = json!(format!("{} {} MB", crate::brand::name(), (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
 }
 
@@ -1220,4 +1223,18 @@ fn focus_message_results_and_pending_requests() {
         json!({"authorKind":"agent", "ending":"need_human", "decision":{"resolved":true}}),
         json!({"authorKind":"agent", "ending":"need_human", "decision":{"resolved":false,"dismissed":true}}),
     ] { assert!(!focus_message(&message), "{message}"); }
+}
+
+#[test]
+fn alert_capacity_is_remaining_while_its_edge_is_used_percent() {
+    let gib = 1024f64.powi(3);
+    let mut h = json!({"memory":{"usedBytes":5.3*gib,"totalBytes":6.0*gib},"disk":{"freeBytes":6.0*gib,"totalBytes":60.0*gib}});
+    host(&mut h);
+    assert_eq!(h["meters"][1]["remaining"], "剩余 0.7 G");
+    assert_eq!(h["meters"][1]["percent"], 88);
+    assert_eq!(h["meters"][2]["remaining"], "剩余 6.0 G");
+    assert_eq!(h["meters"][2]["percent"], 90);
+    h["memory"]["usedBytes"] = json!(7.0*gib);
+    host(&mut h);
+    assert_eq!(h["meters"][1]["remaining"], "剩余 0.0 G");
 }

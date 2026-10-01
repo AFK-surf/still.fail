@@ -1320,3 +1320,51 @@ fn socket_frames_are_taken_whole_however_they_come_apart() {
     // A close with no code says 1005, as a WebSocket does.
     assert_eq!(SocketFrame::take(&mut vec![8, 0, 0, 0, 0]), vec![SocketFrame::Close(1005, String::new())]);
 }
+
+#[test]
+fn updating_available_software_skips_installs_and_updates_station_last() {
+    run(async {
+        let (_, _, wire, stations) = setup();
+        let items = json!([
+            {"id":"station", "installed":true, "updatable":true, "newer":true},
+            {"id":"claude", "installed":true, "updatable":true, "newer":true},
+            {"id":"codex", "installed":false, "updatable":true, "newer":true},
+            {"id":"manual", "installed":true, "updatable":false, "newer":true}
+        ]);
+        wire.answer("GET /admin/api/overview", 200, json!({"updates":items}));
+        wire.answer("POST /admin/api/updates", 200, items);
+        let op = crate::ops::request("software.updateAll", &json!({"station":ST})).unwrap().unwrap();
+        stations.perform(&remote(), &op).await.unwrap();
+        let ids: Vec<Value> = wire.calls.borrow().iter().filter(|(_, m, p, _)| m == "POST" && p == "/admin/api/updates")
+            .map(|(_, _, _, body)| serde_json::from_slice::<Value>(body).unwrap()["id"].clone()).collect();
+        assert_eq!(ids, vec![json!("claude"), json!("station")]);
+        assert_eq!(wire.count("POST", "/admin/api/updates/all"), 0, "batch remains compatible with the existing station API");
+    });
+}
+
+#[test]
+fn a_failed_runtime_stops_the_batch_before_station_restarts() {
+    run(async {
+        let (_, _, wire, stations) = setup();
+        wire.answer("GET /admin/api/overview", 200, json!({"updates":[
+            {"id":"station", "installed":true, "updatable":true, "newer":true},
+            {"id":"claude", "installed":true, "updatable":true, "newer":true}
+        ]}));
+        wire.answer("POST /admin/api/updates", 200, json!([{"id":"claude", "state":"failed", "message":"download failed"}]));
+        let op = crate::ops::request("software.updateAll", &json!({"station":ST})).unwrap().unwrap();
+        let error = stations.perform(&remote(), &op).await.unwrap_err();
+        assert!(error.message.contains("download failed"));
+        assert_eq!(wire.count("POST", "/admin/api/updates"), 1);
+    });
+}
+
+#[test]
+fn an_existing_update_is_not_started_twice_by_a_batch() {
+    run(async {
+        let (_, _, wire, stations) = setup();
+        wire.answer("GET /admin/api/overview", 200, json!({"updates":[{"id":"codex", "state":"updating"}]}));
+        let op = crate::ops::request("software.updateAll", &json!({"station":ST})).unwrap().unwrap();
+        assert!(stations.perform(&remote(), &op).await.unwrap_err().message.contains("正在更新"));
+        assert_eq!(wire.count("POST", "/admin/api/updates"), 0);
+    });
+}

@@ -1,17 +1,14 @@
-// A workspace's stations, in its settings (cloud/settings.tsx): a card each, made so what may be wrong with one is
-// seen at a glance. What is wrong (it is away, a meter running out) is said in words under its name, in colour; its
-// meters are boxes as an allowance's are (components.tsx MeterChips); what the machine is stays grey.
+// Station overview: only alerts and available updates. Click its name for the complete device and software details.
 import { useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
 import type { Host, Level, NetFigure, StationNet } from "../core/shapes.ts";
-import { StatusDot, Time } from "../ui.tsx";
-import { Versions } from "../Versions.tsx";
+import { Dialog, StatusDot, Time } from "../ui.tsx";
+import { UpdateSummary, Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
 
 import { NAME } from "../channel.ts";
-type Meter = Host["meters"][number];
 
 /** `manager`: may update a station and its runtimes (a workspace owner or admin). */
 export function StationList({ stations, menu, manager = false }: { stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean }) {
@@ -32,15 +29,7 @@ function problems(s: StationView, silent: boolean): { key: string; level: Level;
   if (!s.online) {
     return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? `离线：在那台机器上打开 ${NAME}，它就会重新连上` : `还没连上过：在那台机器上打开 ${NAME}` }];
   }
-  const said: Record<string, (m: Meter) => string> = {
-    CPU: (m) => `${m.label} ${m.value}`,
-    内存: (m) => `内存快满了：${m.value}`,
-    磁盘: (m) => `磁盘快满了：${m.value}`,
-  };
-  return (s.host?.meters ?? [])
-    .filter((m) => m.level !== "ok")
-    .sort((a, b) => (a.level === "red" ? 0 : 1) - (b.level === "red" ? 0 : 1))
-    .map((m) => ({ key: m.label, level: m.level, text: (said[m.short] ?? ((m) => `${m.label} ${m.percent}%`))(m) }));
+  return [];
 }
 
 /** What the machine is, in a line: its chip, system, cores and memory, and how long it has been up. */
@@ -87,6 +76,7 @@ function useLong(waiting: boolean, ms: number): boolean {
 }
 
 function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; manager: boolean }) {
+  const [details, setDetails] = useState(false);
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
   return (
@@ -94,22 +84,36 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
       <div className={css.cardHead}>
         <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
         <span className={css.cardTitle}>
-          <span className={css.name}>{s.name}</span>
+          <button type="button" className={css.name} onClick={() => setDetails(true)} aria-label={`查看 ${s.name} 详情`}>{s.name}</button>
           <span className={css.state}>{state(s)}</span>
         </span>
-        {s.online && s.host && <MeterChips meters={s.host.meters} />}
+        {s.online && s.host && <MeterChips meters={s.host.meters} alerts />}
         {/* Away or silent, it is tried again here (not beside the sidebar's line: a station may stay down for long). */}
         {(!s.online || silent) && <RetryPill />}
         <span className={css.menu}>{menu}</span>
       </div>
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {s.online && s.net && <Net net={s.net} />}
-      <div className={css.cardFoot}>
-        {s.online && <span>{machine(s.host) || "正在读取设备信息…"}</span>}
-        {/* A station that says its versions says the station's among them; one older, only what the cloud knows. */}
-        <span className={css.ident}>{s.version && !s.overview?.updates?.length ? `stillfail-station ${s.version} · ` : ""}<span className={css.mono}>{s.id.slice(0, 12)}</span></span>
-      </div>
-      {s.online && <div className={css.cardVersions}><Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} /></div>}
+      {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
+      <Dialog open={details} title={s.name} onClose={() => setDetails(false)}>
+        <div className={css.details}>
+          <section className={css.detailSection} aria-label="设备信息">
+            <h3 className={css.detailTitle}>设备信息</h3>
+            {s.host ? <>
+              <span>{machine(s.host)}</span>
+              <span>{s.host.hostname} · {s.host.arch} · {s.host.emberText}</span>
+              <MeterChips meters={s.host.meters} />
+              {s.host.meters.map((m) => <span key={m.label}>{m.label} · {m.value}{m.note ? ` · ${m.note}` : ""}</span>)}
+            </> : <span>{s.online ? "正在读取设备信息…" : "离线，暂无设备信息"}</span>}
+            <span className={css.mono}>{s.id}</span>
+          </section>
+          <section className={css.detailSection} aria-label="软件与更新">
+            <h3 className={css.detailTitle}>软件与更新</h3>
+            {s.online ? <Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} rows /> : <span>station 离线，连接后可查看更新</span>}
+            {!s.overview?.updates?.length && s.version && <span>still.fail station {s.version}</span>}
+          </section>
+        </div>
+      </Dialog>
     </div>
   );
 }

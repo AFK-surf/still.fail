@@ -9,6 +9,8 @@ impl Stations {
     /// An operation and its compatibility fallback both carry their own effects. The result is returned only once
     /// the topics changed by the successful request are current.
     pub async fn perform(&self, station: &StationAddr, op: &Request) -> Result<Value> {
+        // A client-side batch uses the existing per-item endpoint, including on older stations.
+        if op.method == "POST" && op.path == "/updates/all" { return self.update_all(station).await; }
         let mut current = op;
         loop {
             match self.json(station, current.method, &current.path, current.body.clone()).await {
@@ -20,6 +22,45 @@ impl Stations {
                 }
             }
         }
+    }
+    /// Runtimes must finish before station replaces itself. Stop on a failure, leaving the rest available to retry.
+    async fn update_all(&self, station: &StationAddr) -> Result<Value> {
+        let overview = self.get(station, "/overview").await?;
+        let updates = overview.get("updates").and_then(Value::as_array)
+            .ok_or_else(|| CoreError::invalid("这台 station 还不支持更新"))?;
+        if updates.iter().any(|v| v["state"] == "updating") {
+            return Err(CoreError::invalid("已有软件正在更新，请等它完成"));
+        }
+        let mut selected: Vec<Value> = updates.iter().filter(|v| {
+            v["installed"] == true && v["updatable"] == true
+                && (v["newer"] == true || v["downgrade"] == true || v["state"] == "failed")
+        }).cloned().collect();
+        selected.sort_by_key(|v| v["id"] == "station");
+        let mut answer = json!(updates);
+        for item in selected {
+            let id = item["id"].as_str().ok_or_else(|| CoreError::invalid("软件缺少标识"))?;
+            answer = self.json(station, "POST", "/updates", Some(json!({"id": id}))).await?;
+            self.after_write(station, &Effect::Overview, &answer).await;
+            // The station's restart is reflected by its connection and overview, not another queued write.
+            if id == "station" { break; }
+            let deadline = self.host.now_ms() + 15.0 * 60_000.0;
+            loop {
+                let status = answer.as_array().and_then(|items| items.iter().find(|v| v["id"] == id))
+                    .ok_or_else(|| CoreError::invalid("读不到更新进度，后续更新未开始"))?;
+                if status["state"] == "failed" {
+                    return Err(CoreError::invalid(format!("{} 更新失败：{}", item["name"].as_str().unwrap_or(id), status["message"].as_str().unwrap_or("请在详情中重试"))));
+                }
+                if status["state"] != "updating" { break; }
+                if self.host.now_ms() >= deadline {
+                    return Err(CoreError::invalid("更新仍未完成，后续更新未开始，请在详情中查看进度"));
+                }
+                self.host.sleep(1000).await;
+                let overview = self.get(station, "/overview").await?;
+                self.sink.set(&Topic::Overview { station: station.to_string() }, Ok(overview.clone()));
+                answer = overview["updates"].clone();
+            }
+        }
+        Ok(answer)
     }
     pub(super) async fn json(&self, station: &StationAddr, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
         let (headers, bytes) = match body {

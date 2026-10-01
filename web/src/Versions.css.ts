@@ -24,3 +24,8 @@ export const betaTag = style({
 });
 /** The 测试版 switch, with its name before it. */
 export const channel = style({ display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "center", cursor: "pointer", whiteSpace: "nowrap" });
+
+/** A single overview line; version numbers and settings live in the station detail. */
+export const summary = style({ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px", fontSize: vars.textSm, color: vars.muted });
+export const summaryText = style({ display: "flex", flexWrap: "wrap", gap: "4px 12px", minWidth: 0 });
+export const summaryAction = style({ display: "inline-flex", alignItems: "center", gap: "6px", flexShrink: 0 });

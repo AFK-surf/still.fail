@@ -334,6 +334,7 @@ export function stationApi(t: StationCall) {
     /** What the station's agents remember (their memory and skills). */
     memory: <T,>() => ops.memoryGet<T>(),
     /** Brings a piece of the station's software up to date, or checks what is new. */
+    updateAllSoftware: <T,>() => ops.softwareUpdateAll<T>(),
     updateSoftware: <T,>(id: string) => ops.softwareUpdate<T>({ id }),
     checkSoftware: <T,>() => ops.softwareCheck<T>(),
     /** Puts the station on the stable channel or the test channel's; the core reads its versions again. */
