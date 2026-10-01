@@ -400,6 +400,8 @@ export interface EnvVar {
 }
 
 export interface ProfileCheck {
+	/** Runtime → model → supported reasoning levels; absent on older stations. */
+	modelEfforts?: Record<string, Record<string, string[]>>;
 	/** ok | login | failed | unknown */
 	state: string;
 	detail: string;
@@ -510,6 +512,8 @@ export interface QuotaLine {
 
 /** A profile that can run a model: `current` it runs on it now. */
 export interface RunnableProfile {
+	/** The chosen model’s reasoning levels on this account. */
+	efforts?: string[];
 	id: string;
 	name: string;
 	current: boolean;

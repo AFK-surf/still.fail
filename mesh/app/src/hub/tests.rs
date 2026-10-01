@@ -1980,3 +1980,41 @@ async fn a_turn_ends_all_done_needing_a_decision_or_help_or_waiting_and_the_word
     let thread = r.thread("C1", &m.thread_ts);
     assert_eq!(r.said(thread.id).iter().filter_map(|m| m.declared.clone()).collect::<Vec<_>>(), ["need_help"], "posts keep today's words");
 }
+
+#[tokio::test]
+async fn codex_model_efforts_validate_new_chats_changes_and_pinned_accounts() {
+    let r = setup();
+    r.edit(|c| {
+        let p = c.profiles.iter_mut().find(|p| p.id == "cx").unwrap();
+        p.models = vec!["gpt-6-astra".into()];
+        let mut second = p.clone();
+        second.id = "limited".into();
+        c.profiles.push(second);
+    });
+    r.hub.set_profile_health(Arc::new(|id| {
+        let levels = if id == "limited" { json!(["low", "medium", "high", "xhigh", "max"]) } else { json!(["low", "medium", "high", "xhigh", "max", "ultra"]) };
+        crate::pool::ProfileHealth {
+            check: Some(serde_json::from_value(json!({"state": "ok", "detail": "", "models": ["gpt-6-astra"], "checkedAt": 0,
+                "modelEfforts": {"codex": {"gpt-6-astra": levels}}
+            })).unwrap()),
+            ..Default::default()
+        }
+    }));
+    let new = |profile: Option<&str>, effort: &str| NewChat {
+        runtime: RuntimeKind::Codex, profile: profile.map(String::from), model: Some("openai/gpt-6-astra".into()),
+        effort: Some(effort.into()), title: None, created_by: "local".into(), client_key: None,
+    };
+    let (key, _) = r.hub.new_session(new(None, "max")).unwrap();
+    assert_eq!(r.session(&key).effort.as_deref(), Some("max"));
+    assert!(r.hub.new_session(new(None, "minimal")).is_err());
+    assert!(r.hub.new_session(new(None, "ultra")).is_err());
+    let (pinned, _) = r.hub.new_session(new(Some("cx"), "ultra")).unwrap();
+    assert_eq!(r.session(&pinned).effort.as_deref(), Some("ultra"));
+    // A profile change must not carry an unsupported depth to the destination.
+    assert!(r.hub.configure(&pinned, SessionChange { profile: Some(Some("limited".into())), model: None, effort: None }).await.is_err());
+    assert!(r.hub.configure(&pinned, SessionChange { profile: Some(None), model: None, effort: None }).await.is_err());
+    r.hub.configure(&key, SessionChange { profile: Some(Some("cx".into())), model: None, effort: Some(Some("ultra".into())) }).await.unwrap();
+    assert_eq!(r.session(&key).effort.as_deref(), Some("ultra"));
+    r.hub.configure(&key, SessionChange { profile: Some(None), model: None, effort: Some(None) }).await.unwrap();
+    assert_eq!(r.session(&key).effort, None);
+}

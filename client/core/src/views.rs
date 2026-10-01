@@ -1640,7 +1640,7 @@ fn choices(overview: Option<&Value>, session: &Value, now: f64) -> Value {
             json!({
                 "model": model, "name": stillfail_shapes::model::name(model), "family": stillfail_shapes::model::family(model), "ids": ids,
                 "maker": crate::present::maker(Some(model)), "runtimes": [runtime],
-                "efforts": { runtime: crate::format::efforts(runtime) },
+                "efforts": { runtime: model_efforts(overview, runtime, Some(model)) },
                 "accounts": { runtime: profiles_running(overview, runtime, Some(model), current, now) },
             })
         })
@@ -1654,6 +1654,19 @@ fn spellings<'a>(key: &str, ids: BTreeSet<&'a str>) -> (&'a str, Vec<&'a str>) {
     (ids[0], ids)
 }
 
+fn profile_efforts(profile: &Value, runtime: &str, model: Option<&str>) -> Vec<String> {
+    let catalog = profile.get("check").and_then(|c| c.get("modelEfforts")).and_then(|c| serde_json::from_value(c.clone()).ok());
+    stillfail_shapes::reasoning::available(runtime, model.or_else(|| profile.get("model").and_then(Value::as_str)), catalog.as_ref())
+}
+
+fn model_efforts(overview: Option<&Value>, runtime: &str, model: Option<&str>) -> Vec<String> {
+    let profiles = overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
+        .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|rs| rs.iter().any(|r| r.as_str() == Some(runtime))))
+        .filter(|p| model.is_none_or(|m| p.get("models").and_then(Value::as_array).is_some_and(|ms| ms.iter().filter_map(Value::as_str).any(|id| stillfail_shapes::model::same(id, m)))))
+        .map(|p| profile_efforts(p, runtime, model));
+    stillfail_shapes::reasoning::common(profiles, runtime)
+}
+
 fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>, current: Option<&str>, now: f64) -> Value {
     Value::Array(overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
@@ -1665,6 +1678,7 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
             json!({
                 "id": id, "name": p.get("name").cloned().unwrap_or(json!(id)), "current": Some(id) == current,
                 "spent": spent.map(|until| spent_view(until, now)),
+                "efforts": profile_efforts(p, runtime, model),
                 // What its line shows: whose account it is, and its quota.
                 "kind": p.get("access").and_then(|a| a.get("kind")).cloned().unwrap_or(Value::Null),
                 "runtime": p.get("runtime").cloned().unwrap_or(Value::Null),
@@ -1707,7 +1721,7 @@ pub fn models(overview: Option<&Value>, now: f64) -> Value {
         // Spent when every account that runs it has a window used up; back when the first of them refills.
         let spent = backs.iter().all(Option::is_some).then(|| backs.iter().flatten().copied().fold(f64::INFINITY, f64::min));
         // For each runtime: how hard it can think, and who can run it there.
-        let efforts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), json!(crate::format::efforts(r)))).collect();
+        let efforts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), json!(model_efforts(overview, r, Some(model))))).collect();
         let accounts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), profiles_running(overview, r, Some(model), None, now))).collect();
         json!({
             "model": model, "name": stillfail_shapes::model::name(model), "family": stillfail_shapes::model::family(model), "ids": ids,
@@ -2142,8 +2156,8 @@ mod tests {
         // Of its runtime, and with its model enabled.
         let session = json!({"runtime": "codex", "profile": "a", "model": "m"});
         assert_eq!(runnable_on(Some(&overview), &session, 0.0), json!([
-            {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null, "quotaLine": null},
-            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0, "text": "额度用完 · 1 分钟内恢复", "back": "1 分钟内恢复"}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}, "quotaLine": {"text": "只剩 0%", "level": "red"}},
+            {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null, "quotaLine": null, "efforts": ["minimal", "low", "medium", "high", "xhigh"]},
+            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0, "text": "额度用完 · 1 分钟内恢复", "back": "1 分钟内恢复"}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}, "quotaLine": {"text": "只剩 0%", "level": "red"}, "efforts": ["minimal", "low", "medium", "high", "xhigh"]},
         ]));
         // Every model of its runtime, each with who runs it.
         let choices = choices(Some(&overview), &session, 0.0);

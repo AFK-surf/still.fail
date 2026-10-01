@@ -412,6 +412,8 @@ data class EnvVar (
 
 @Serializable
 data class ProfileCheck (
+	/// Runtime → model → supported reasoning levels; absent on older stations.
+	val modelEfforts: Map<String, Map<String, List<String>>>? = null,
 	/// ok | login | failed | unknown
 	val state: String,
 	val detail: String,
@@ -524,6 +526,8 @@ data class QuotaLine (
 /// A profile that can run a model: `current` it runs on it now.
 @Serializable
 data class RunnableProfile (
+	/// The chosen model’s reasoning levels on this account.
+	val efforts: List<String>? = null,
 	val id: String,
 	val name: String,
 	val current: Boolean,

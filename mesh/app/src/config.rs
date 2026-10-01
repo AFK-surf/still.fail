@@ -19,14 +19,6 @@ use crate::profiles::{access_env, access_kinds, keyed, runtimes_of};
 
 pub const RUNTIMES: [RuntimeKind; 2] = [RuntimeKind::Claude, RuntimeKind::Codex];
 
-/// Reasoning effort each runtime accepts.
-pub fn efforts(runtime: RuntimeKind) -> &'static [&'static str] {
-    match runtime {
-        RuntimeKind::Claude => &["low", "medium", "high", "xhigh", "max"],
-        RuntimeKind::Codex => &["minimal", "low", "medium", "high", "xhigh"],
-    }
-}
-
 /// The runtime a stored name is (sessions keep it as text).
 pub fn runtime_named(name: &str) -> Option<RuntimeKind> {
     RUNTIMES.into_iter().find(|r| runtime_name(*r) == name)
@@ -482,8 +474,11 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
         let mode = c.mode.unwrap_or(ConnectMode::MultiSession);
         let runtime = c.bind.runtime;
         if let Some(effort) = c.bind.effort.as_deref().filter(|e| !e.is_empty()) {
-            if !efforts(runtime).contains(&effort) {
-                bail!("connect {}: {} has no effort {effort}; use {}", c.id, runtime_name(runtime), efforts(runtime).join(", "));
+            // Codex reports an open set of levels per model, after sign-in. Loading persisted config must
+            // not reject a newly advertised level before the account's capabilities have been read.
+            let legacy = stillfail_shapes::reasoning::fallback(runtime_name(runtime));
+            if runtime != RuntimeKind::Codex && !legacy.contains(&effort) {
+                bail!("connect {}: {} has no effort {effort}; use {}", c.id, runtime_name(runtime), legacy.join(", "));
             }
         }
         let slack = c.slack.clone().unwrap_or_default();

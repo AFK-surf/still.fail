@@ -284,16 +284,53 @@ impl CodexDriver {
     }
 
     /// The models the account can run in Codex, as its app-server lists them (the ones it does not hide).
-    pub async fn models(&self, profile: &Profile) -> Result<Vec<String>> {
-        let answer = self.host(profile).await?.request("model/list", json!({})).await?;
-        Ok(answer
-            .get("data")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter(|m| m.get("hidden") != Some(&Value::Bool(true)))
-            .filter_map(|m| m.get("id").or_else(|| m.get("model")).and_then(Value::as_str).filter(|s| !s.is_empty()).map(String::from))
-            .collect())
+    pub async fn models(&self, profile: &Profile) -> Result<ModelCatalog> {
+        let host = self.host(profile).await?;
+        let mut catalog = ModelCatalog::default();
+        let mut cursor = None;
+        let mut seen = HashSet::new();
+        loop {
+            let answer = host.request("model/list", json!({"cursor": cursor})).await?;
+            catalog.extend(&answer)?;
+            cursor = answer.get("nextCursor").and_then(Value::as_str).filter(|c| !c.is_empty()).map(String::from);
+            match &cursor {
+                None => break,
+                Some(c) if !seen.insert(c.clone()) => bail!("model/list repeated its cursor"),
+                _ => {}
+            }
+        }
+        catalog.models.sort();
+        catalog.models.dedup();
+        Ok(catalog)
+    }
+}
+
+/// Keep capabilities alongside model ids; an old runtime may omit them.
+#[derive(Default)]
+pub struct ModelCatalog {
+    pub models: Vec<String>,
+    pub efforts: HashMap<String, Vec<String>>,
+}
+
+impl ModelCatalog {
+    fn extend(&mut self, answer: &Value) -> Result<()> {
+        let rows = answer.get("data").and_then(Value::as_array).ok_or_else(|| anyhow!("model/list omitted data"))?;
+        for m in rows.iter().filter(|m| m.get("hidden") != Some(&Value::Bool(true))) {
+            let Some(id) = m.get("id").or_else(|| m.get("model")).and_then(Value::as_str).filter(|s| !s.is_empty()) else { continue };
+            self.models.push(id.to_string());
+            if let Some(levels) = m.get("supportedReasoningEfforts").and_then(Value::as_array) {
+                let mut efforts = Vec::new();
+                for level in levels {
+                    if let Some(effort) = level.get("reasoningEffort").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                        if !efforts.iter().any(|e| e == effort) {
+                            efforts.push(effort.to_string());
+                        }
+                    }
+                }
+                self.efforts.insert(id.to_string(), efforts);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -666,6 +703,24 @@ impl LiveFromCodex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_catalog_keeps_reported_efforts_across_pages_and_old_runtimes() {
+        let mut catalog = ModelCatalog::default();
+        catalog.extend(&json!({"data": [
+            {"id": "gpt-6-astra", "supportedReasoningEfforts": [
+                {"reasoningEffort": "low"}, {"reasoningEffort": "max"}, {"reasoningEffort": "ultra"}
+            ]},
+            {"id": "hidden", "hidden": true, "supportedReasoningEfforts": []}
+        ], "nextCursor": "page2"})).unwrap();
+        catalog.extend(&json!({"data": [{"model": "legacy"}, {"id": "fixed", "supportedReasoningEfforts": []}]})).unwrap();
+        assert_eq!(catalog.models, ["gpt-6-astra", "legacy", "fixed"]);
+        assert_eq!(catalog.efforts["gpt-6-astra"], ["low", "max", "ultra"]);
+        assert!(!catalog.efforts.contains_key("legacy"));
+        assert_eq!(catalog.efforts["fixed"], Vec::<String>::new());
+        assert!(catalog.extend(&json!({})).is_err());
+    }
+
 
     #[test]
     fn codex_item_notifications_become_steps() {

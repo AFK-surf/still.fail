@@ -14,6 +14,7 @@ import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
 import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { useAct } from "../toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -321,6 +322,11 @@ function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<u
 
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
 function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unknown> }) {
+  const station = useStation();
+  const api = useApi();
+  const act = useAct();
+  const checking = useDoing("profile.check", { station: station.address, id: p.id });
+  const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
   const [filter, setFilter] = useState("");
   const all = [...(p.available ?? [])].sort();
   const shown = all.filter((m) => [m, p.names[m] ?? m].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
@@ -332,13 +338,17 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
     <>
       <SectionHeader title={`模型 · 启用 ${models.length} / ${all.length}${busy ? " · 正在保存…" : ""}`} start={24} />
       <p className={css.mProfileNote}>{all.length === 0 ? "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" : "只有勾选的模型能在新对话和连接里选。"}</p>
-      {all.length > 0 && (
-        <div className={settingsCss.mProfileTools}>
-          {all.length > 10 ? <span className={partsCss.mGrow}><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></span> : <span className={partsCss.mGrow} />}
+      <div className={settingsCss.mProfileTools}>
+        <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), "刷新模型", "模型列表已刷新")}>
+          {checking ? <Spinner size={12} /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? "正在刷新…" : "刷新模型"}
+        </button>
+        <span className={partsCss.mGrow} />
+        {all.length > 0 && <>
           <button type="button" className={partsCss.mLink} onClick={() => save([...models, ...shown])}>全选{suffix}</button>
           <button type="button" className={partsCss.mLink} onClick={() => save(models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
-        </div>
-      )}
+        </>}
+      </div>
+      {all.length > 10 && <div className={settingsCss.mProfileTools}><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></div>}
       {/* By series, newest first (the core's). */}
       {p.series.map((s) => {
         const list = s.models.filter((m) => shown.includes(m));

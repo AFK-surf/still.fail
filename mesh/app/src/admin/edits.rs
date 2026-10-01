@@ -185,6 +185,12 @@ impl AdminApi {
                     }
                 }
             }
+            if let Some(effort) = effort.as_ref().filter(|_| bind.is_some_and(|b| ["model", "effort", "profile"].iter().any(|f| b.get(f).is_some()))) {
+                let allowed = self.deps.hub.model_efforts(runtime, model.as_deref(), profile.as_deref());
+                if !allowed.contains(effort) {
+                    bail!("{} 的思考深度只有 {}", runtime_name(runtime), allowed.join("、"));
+                }
+            }
             // Who it is in Slack: given with new tokens (as they were verified), else as last seen.
             let team = slack.and_then(|s| s.get("team")).filter(|t| t.is_object()).and_then(|t| serde_json::from_value::<RawPlace>(t.clone()).ok());
             let (team, bot_name, bot_image) = match team {
@@ -345,15 +351,21 @@ impl AdminApi {
     pub(super) async fn check(self: &Arc<Self>, id: &str) -> Result<ProfileCheck> {
         let profile = self.config().profiles.iter().find(|p| p.id == id).cloned().ok_or_else(|| http_error(404, format!("unknown profile {id}")))?;
         let mut check = (self.deps.check_profile)(CheckRequest { home: profile.home.clone(), profile: profile.clone() }).await;
-        // A ChatGPT subscription's sign-in check does not say its models; its app-server does.
+        // Keep Codex capabilities for each account, including providers whose model ids came from their API.
         let codex_subscription = profile.access_kind == AccessKind::Subscription && profile.runtime == RuntimeKind::Codex;
-        if let (true, true, Some(models)) = (check.state == "ok" && check.models.is_none(), codex_subscription, self.deps.codex_models.clone()) {
+        if let (true, Some(models)) = (matches!(check.state.as_str(), "ok" | "unknown") && profile.runtimes.contains(&RuntimeKind::Codex), self.deps.codex_models.clone()) {
             match models(profile.clone()).await {
-                Ok(mut models) => {
-                    models.sort();
-                    check.models = Some(models);
+                Ok(catalog) => {
+                    if codex_subscription && check.models.is_none() {
+                        check.models = Some(catalog.models);
+                    }
+                    check.model_efforts = Some(std::collections::HashMap::from([("codex".into(), catalog.efforts)]));
                 }
-                Err(e) => warn!(profile = id, error = %e, "could not list a subscription's codex models"),
+                Err(e) => {
+                    // A temporary listing failure must not erase a saved max/ultra selection in the clients.
+                    check.model_efforts = self.checks.lock().unwrap().get(id).and_then(|c| c.model_efforts.clone());
+                    warn!(profile = id, error = %e, "could not list codex model capabilities");
+                }
             }
         }
         self.checks.lock().unwrap().insert(id.to_string(), check.clone());

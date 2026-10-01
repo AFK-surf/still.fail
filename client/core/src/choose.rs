@@ -106,9 +106,12 @@ fn resolve(options: &[Value], choice: &Value) -> Resolved {
     let runtimes = entry.as_ref().map(|e| list(&e["runtimes"])).unwrap_or_default();
     let runtime = runtimes.iter().find(|r| **r == choice["runtime"]).or(runtimes.first()).and_then(Value::as_str).map(str::to_string);
     let at = |field: &str| entry.as_ref().zip(runtime.as_ref()).map(|(e, r)| list(&e[field][r])).unwrap_or_default();
-    let (efforts, accounts) = (at("efforts"), at("accounts"));
-    let effort = text(choice.get("effort")).filter(|e| efforts.iter().any(|x| x == e.as_str()));
+    let (mut efforts, accounts) = (at("efforts"), at("accounts"));
     let profile = text(choice.get("profile")).filter(|p| accounts.iter().any(|a| a["id"] == p.as_str()));
+    if let Some(levels) = profile.as_ref().and_then(|id| accounts.iter().find(|a| a["id"] == *id)).and_then(|a| a["efforts"].as_array()) {
+        efforts = levels.clone();
+    }
+    let effort = text(choice.get("effort")).filter(|e| efforts.iter().any(|x| x == e.as_str()));
     Resolved { entry, runtime, effort, profile, efforts, accounts }
 }
 
@@ -477,13 +480,16 @@ impl Choose {
         let on_name = on.as_str().unwrap_or("");
         let accounts = option.map(|o| list(&o["accounts"][on_name])).unwrap_or_default();
         // With no model yet, a runtime that stays still says how hard it can think.
-        let efforts = match option {
+        let mut efforts = match option {
             Some(o) => list(&o["efforts"][on_name]),
             None if fixed => crate::format::efforts(on_name).iter().map(|e| json!(e)).collect(),
             None => Vec::new(),
         };
         let account = |id: Option<&str>| id.and_then(|id| accounts.iter().find(|a| a["id"] == id));
         let profile = account(profile_drafted.as_deref()).map(|a| a["id"].clone());
+        if let Some(levels) = profile.as_ref().and_then(|id| accounts.iter().find(|a| a["id"] == *id)).and_then(|a| a["efforts"].as_array()) {
+            efforts = levels.clone();
+        }
         let dropped = profile_drafted.is_some() && profile.is_none();
         let effort = picked("effort").filter(|e| efforts.iter().any(|x| x == e.as_str()));
         // The model it has, as it spells it, stays: another spelling of it is not a change.
@@ -643,6 +649,24 @@ impl Choose {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_efforts_follow_the_account_and_survive_resolving_saved_choices() {
+        let overview = json!({"profiles": [
+            {"id": "full", "runtimes": ["codex"], "models": ["gpt-6-astra"], "check": {"modelEfforts": {"codex": {"gpt-6-astra": ["low", "medium", "high", "xhigh", "max", "ultra"]}}}},
+            {"id": "limited", "runtimes": ["codex"], "models": ["openai/gpt-6-astra"], "check": {"modelEfforts": {"codex": {"openai/gpt-6-astra": ["low", "medium", "high", "xhigh", "max"]}}}}
+        ]});
+        let options = list(&models(Some(&overview), 0.0));
+        let choice = |profile: Value, effort: &str| json!({"runtime": "codex", "model": "gpt-6-astra", "profile": profile, "effort": effort});
+        assert_eq!(resolve(&options, &choice(Value::Null, "max")).effort.as_deref(), Some("max"));
+        assert_eq!(resolve(&options, &choice(Value::Null, "ultra")).effort, None);
+        let pinned = resolve(&options, &choice(json!("full"), "ultra"));
+        assert_eq!(pinned.effort.as_deref(), Some("ultra"));
+        assert!(!pinned.efforts.contains(&json!("minimal")));
+        assert_eq!(resolve(&options, &choice(json!("limited"), "ultra")).effort, None);
+        assert_eq!(resolve(&options, &choice(json!("full"), "")).effort, None, "default stays unset");
+    }
+
 
     #[test]
     fn a_machines_session_is_a_line_its_home_as_tilde() {

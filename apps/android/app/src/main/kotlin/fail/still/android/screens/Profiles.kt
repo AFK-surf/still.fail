@@ -243,7 +243,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             }
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             QuotaSection(p, refreshing = app.isDoing("profile.quota", "station" to address, "id" to p.id))
-            ModelsSection(p, ticks.wanted ?: p.models, ticks.sending) { models -> setModels(models) }
+            ModelsSection(address, p, ticks.wanted ?: p.models, ticks.sending) { models -> setModels(models) }
             // A station older than the setting says nothing of it.
             val background = flipping ?: p.backgroundOnMessage
             if ("claude" in p.runtimes && background != null) {
@@ -394,7 +394,10 @@ internal fun TonePill(text: String, tone: String, size: androidx.compose.ui.unit
 
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
 @Composable
-private fun ModelsSection(p: Profile, models: List<String>, saving: Boolean, onSave: (List<String>) -> Unit) {
+internal fun ModelsSection(station: String, p: Profile, models: List<String>, saving: Boolean, onSave: (List<String>) -> Unit) {
+    val app = LocalApp.current
+    val checking = app.isDoing("profile.check", "station" to station, "id" to p.id)
+    val checkFailed = app.failedOf("profile.check", "station" to station, "id" to p.id)
     var filter by remember { mutableStateOf("") }
     val all = ((p.check?.models ?: emptyList()) + p.models).distinct().sorted()
     val shown = all.filter { m -> listOf(m, p.names[m] ?: m).any { it.contains(filter.trim(), ignoreCase = true) } }
@@ -405,11 +408,19 @@ private fun ModelsSection(p: Profile, models: List<String>, saving: Boolean, onS
         if (all.isEmpty()) "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" else "只有勾选的模型能在新对话和连接里选。",
         fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
     )
-    if (all.isNotEmpty()) Row(Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (all.size > 10) Field(filter, { filter = it }, "筛选模型", modifier = Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
-        Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models + shown) })
-        Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models - shown.toSet()) })
+    Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.clickable(enabled = !checking) { app.act("刷新模型", "模型列表已刷新") { app.api(station).checkProfile(p.id) } },
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            DoingMark(checking, checkFailed, 12.dp)
+            Text(if (checking) "正在刷新…" else "刷新模型", fontSize = 14.sp, color = if (checking) C.muted else C.accent)
+        }
+        Spacer(Modifier.weight(1f))
+        if (all.isNotEmpty()) {
+            Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models + shown) })
+            Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models - shown.toSet()) })
+        }
     }
+    if (all.size > 10) Field(filter, { filter = it }, "筛选模型", modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp))
     // Plain rows on the page, no card behind them; by series, newest first (the core's).
     p.series.forEach { series ->
         val list = series.models.filter { it in shown }

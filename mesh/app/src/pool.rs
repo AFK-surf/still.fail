@@ -87,7 +87,7 @@ mod tests {
         crate::config::parse_config(&serde_json::from_str(&raw).unwrap(), std::path::Path::new("/")).unwrap().profiles.remove(0)
     }
     fn ok(state: &str) -> Option<ProfileCheck> {
-        Some(ProfileCheck { state: state.into(), detail: String::new(), models: None, checked_at: 0 })
+        Some(ProfileCheck { model_efforts: None, state: state.into(), detail: String::new(), models: None, checked_at: 0 })
     }
     fn quota(used: f64) -> Option<ProfileQuota> {
         Some(ProfileQuota { state: "ok".into(), windows: vec![QuotaWindow { label: "5 小时".into(), used_percent: used, resets_at: None }], detail: None, checked_at: 0 })

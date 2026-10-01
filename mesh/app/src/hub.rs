@@ -25,7 +25,7 @@ use tracing::{error, info, warn};
 use crate::agent_home::agent_home_paths;
 use crate::chat::internal::{INTERNAL_CHANNEL, INTERNAL_CONNECT, InternalChat, next_ts};
 use crate::chat::{ChatEvent, ChatSurface, InboundMessage, ThreadRef};
-use crate::config::{Config, Connect, Profile, efforts, profiles_for, runtime_named};
+use crate::config::{Config, Connect, Profile, profiles_for, runtime_named};
 use crate::image_size::image_size;
 use crate::instructions::{format_history, parse_thread_address, thread_address};
 use crate::live::LiveHub;
@@ -911,9 +911,10 @@ impl Hub {
                 bail!("没有能跑 {model} 的 {runtime_name} Profile：先在一个 Profile 上启用它");
             }
         }
-        if let (Some(Some(_)), Some(effort)) = (&new_effort, &effort) {
-            let allowed = efforts(runtime);
-            if !allowed.contains(&effort.as_str()) {
+        if let Some(effort) = effort.as_ref().filter(|_| new_effort.is_some() || wanted_profile.is_some() || remodel) {
+            let pinned = wanted_profile.as_ref().map(|p| p.as_deref()).unwrap_or_else(|| (!remodel && row.profile_pinned).then_some(row.profile.as_str()));
+            let allowed = self.model_efforts(runtime, model.as_deref(), pinned);
+            if !allowed.contains(effort) {
                 bail!("{runtime_name} 的思考深度只有 {}", allowed.join("、"));
             }
         }
@@ -1040,8 +1041,8 @@ impl Hub {
         }
         let effort = options.effort.filter(|e| !e.is_empty());
         if let Some(effort) = &effort {
-            let allowed = efforts(options.runtime);
-            if !allowed.contains(&effort.as_str()) {
+            let allowed = self.model_efforts(options.runtime, model.as_deref(), options.profile.as_deref());
+            if !allowed.contains(effort) {
                 bail!("effort must be one of {}", allowed.join(", "));
             }
         }
@@ -1157,6 +1158,20 @@ impl Hub {
         self.store.insert_message(NewMessage::new(thread.id, &next_ts(), AuthorKind::StillFail, "ember", &note))?;
         self.store.set_read(created_by, thread.id, self.store.last_entry(thread.id)?)?;
         Ok((key, thread))
+    }
+
+    /// The same per-account capabilities sent to the clients. Automatic selection must work on every
+    /// eligible account, including after quota failover; a pinned account may expose additional levels.
+    pub fn model_efforts(&self, runtime: RuntimeKind, model: Option<&str>, pinned: Option<&str>) -> Vec<String> {
+        let config = self.config();
+        let name = crate::config::runtime_name(runtime);
+        let profiles: Vec<_> = config.profiles.iter().filter(|p| p.runtimes.contains(&runtime))
+            .filter(|p| pinned.is_none_or(|id| p.id == id))
+            .filter(|p| model.is_none_or(|m| p.runs(m))).collect();
+        stillfail_shapes::reasoning::common(profiles.into_iter().map(|p| {
+            let health = self.health_of(&p.id);
+            stillfail_shapes::reasoning::available(name, model.or(p.model.as_deref()), health.check.as_ref().and_then(|c| c.model_efforts.as_ref()))
+        }), name)
     }
 
     /// Lets the pool see profiles' checks and allowances.

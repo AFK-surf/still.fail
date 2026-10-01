@@ -139,7 +139,7 @@ impl SlackService for SlackOnline {
 
 pub type CheckFn = Arc<dyn Fn(CheckRequest) -> BoxFuture<'static, ProfileCheck> + Send + Sync>;
 pub type QuotaFn = Arc<dyn Fn(Profile) -> BoxFuture<'static, ProfileQuota> + Send + Sync>;
-pub type ModelsFn = Arc<dyn Fn(Profile) -> BoxFuture<'static, Result<Vec<String>>> + Send + Sync>;
+pub type ModelsFn = Arc<dyn Fn(Profile) -> BoxFuture<'static, Result<crate::runtime::codex::ModelCatalog>> + Send + Sync>;
 
 pub struct AdminDeps {
     pub settings: Arc<Settings>,

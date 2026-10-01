@@ -304,10 +304,7 @@ pub fn agent_label(model: Option<&str>, effort: Option<&str>) -> String {
 
 /// How hard a runtime's models can think, lowest first.
 pub fn efforts(runtime: &str) -> &'static [&'static str] {
-    match runtime {
-        "codex" => &["minimal", "low", "medium", "high", "xhigh"],
-        _ => &["low", "medium", "high", "xhigh", "max"],
-    }
+    stillfail_shapes::reasoning::fallback(runtime)
 }
 
 pub fn runtime_label(runtime: &str) -> &'static str {

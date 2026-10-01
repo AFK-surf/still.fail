@@ -115,6 +115,8 @@ mod tests {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileCheck {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_efforts: Option<stillfail_shapes::reasoning::Catalog>,
     /// ok: usable; login: needs a subscription sign-in; failed: the key or login was rejected; unknown.
     pub state: String,
     pub detail: String,
@@ -160,7 +162,7 @@ pub struct CheckOptions<'a> {
 }
 
 fn check(state: &str, detail: impl Into<String>, models: Option<Vec<String>>) -> ProfileCheck {
-    ProfileCheck { state: state.into(), detail: detail.into(), models, checked_at: crate::store::now_ms() }
+    ProfileCheck { model_efforts: None, state: state.into(), detail: detail.into(), models, checked_at: crate::store::now_ms() }
 }
 
 fn http() -> reqwest::Client {

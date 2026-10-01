@@ -442,7 +442,7 @@ async fn setup_with(o: Setup) -> Rig {
         names: Arc::default(),
         mesh,
         quota,
-        check_profile: Arc::new(|_r| Box::pin(async { ProfileCheck { state: "ok".into(), detail: "fake".into(), models: Some(vec![]), checked_at: now_ms() } })),
+        check_profile: Arc::new(|_r| Box::pin(async { ProfileCheck { model_efforts: None, state: "ok".into(), detail: "fake".into(), models: Some(vec![]), checked_at: now_ms() } })),
         codex_models: None,
         slack_apps: Some(slack.clone()),
         check_on_start: false,
@@ -1827,4 +1827,33 @@ async fn retired_footprint_does_not_offer_stats_or_cleanup() {
     for action in ["scan", "rebuild", "delete", "evict"] {
         assert_eq!(t.call("POST", &format!("/footprint/{action}"), Some(json!({}))).await.0, 410);
     }
+}
+
+#[tokio::test]
+async fn connect_depth_uses_model_capabilities_and_survives_config_reload() {
+    let t = setup().await;
+    t.settings.update(|raw| {
+        raw.profiles.as_mut().unwrap().iter_mut().find(|p| p.id == "cx").unwrap().models = Some(vec!["gpt-6-astra".into()]);
+        Ok(())
+    }).unwrap();
+    let check: ProfileCheck = serde_json::from_value(json!({
+        "state": "ok", "detail": "", "models": ["gpt-6-astra"], "checkedAt": 1,
+        "modelEfforts": {"codex": {"gpt-6-astra": ["low", "medium", "high", "xhigh", "max", "ultra"]}}
+    })).unwrap();
+    t.api.checks.lock().unwrap().insert("cx".into(), check.clone());
+    t.store.set_profile_check("cx", &serde_json::to_value(&check).unwrap()).unwrap();
+    let body = |effort: &str| json!({"bind": {"runtime": "codex", "model": "gpt-6-astra", "effort": effort}});
+    let (status, _) = t.call("PUT", "/connects/astra", Some(body("max"))).await;
+    assert_eq!(status, 200);
+    assert_eq!(t.saved()["connects"][1]["bind"]["effort"], "max");
+    assert_eq!(t.call("PUT", "/connects/astra", Some(body("minimal"))).await.0, 400);
+    assert_eq!(t.call("PUT", "/connects/astra", Some(body("ultra"))).await.0, 200);
+    let raw = serde_json::from_value(t.saved()).unwrap();
+    let reloaded = crate::config::parse_config(&raw, t.path.parent().unwrap()).unwrap();
+    assert_eq!(reloaded.connects[1].bind.effort.as_deref(), Some("ultra"));
+    let saved = t.store.profile_status().unwrap().remove("cx").unwrap().check.unwrap();
+    let restored: ProfileCheck = serde_json::from_value(saved).unwrap();
+    assert_eq!(restored.model_efforts, check.model_efforts);
+    let old: ProfileCheck = serde_json::from_value(json!({"state": "ok", "detail": "", "checkedAt": 0})).unwrap();
+    assert!(old.model_efforts.is_none());
 }

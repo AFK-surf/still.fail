@@ -7,6 +7,7 @@
 //! (client/core/src/present.rs, format.rs, views.rs, history.rs, activity.rs).
 
 pub mod model;
+pub mod reasoning;
 
 use std::collections::HashMap;
 
@@ -652,6 +653,8 @@ pub struct Access {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileCheck {
+    /// Runtime → model → supported reasoning levels; absent on older stations.
+    pub model_efforts: Option<HashMap<String, HashMap<String, Vec<String>>>>,
     /// ok | login | failed | unknown
     pub state: String,
     pub detail: String,
@@ -2065,6 +2068,8 @@ pub struct Spent {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RunnableProfile {
+    /// The chosen model’s reasoning levels on this account.
+    pub efforts: Option<Vec<String>>,
     pub id: String,
     pub name: String,
     pub current: bool,
