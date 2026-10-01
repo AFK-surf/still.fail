@@ -20,6 +20,7 @@
 ## 待部署
 
 - Station 概览精简（station-summary-alerts）：发布 web 和桌面端（含同版本 core）；无需更新 station 或迁移数据。概览仅显示异常进度框（边框为已用比例、文字为剩余容量）、网络和可用更新，点击名字查看设备与软件详情。一键更新由 core 调旧版已有的单项更新接口，先运行时后 station；失败则停止后续项目。新 Meter.remaining 为可选字段，旧界面不受影响；移动端布局不变。上线后确认正常指标隐藏、详情可打开、更新失败留在原行。
+- 决策「无需处理」（dismiss-human-decision）：新增 station `PUT /threads/:id/closed-card` 和 core `decision.close`，web/桌面、手机 web、Android 卡片提供静默结束入口；写入 `closed_cards`，只结束对应的 need human，不发送消息或唤醒 agent。先更新 station，再发 web/桌面/Android；新客户端连旧 station 时此入口会报不支持，卡片保留，普通回复和「不再提醒」仍可用。旧客户端连新 station 会从现有状态更新看到卡片结束。上线后验：点「无需处理」后两台设备上的卡片和等待标记都消失，聊天没有新消息、agent 没有新轮次；再提问仍可正常唤醒。老会话通过 migration 5 得知静默关闭行为。
 
 - 建议等待用户决策（advice-needs-decision）：更新 station；agent 给出建议或备选方案后应询问用户决策，用 `need_human` 并附答复卡片，不直接 `all_done`。已授权工作继续执行，不重复索要决定。同时精简主 prompt 和四个内置 skill，保留行为规则及技术限制，不新增参考文件。迁移说明 3、4 会通知旧会话；无接口或数据格式变化。上线后在新旧会话分别请求建议，确认出现决策卡片且对话保持待用户处理。
 - 网页更新提示（web-update-notice）：只需部署 web，build.json 新增可选 revision，旧客户端/旧 station 不受影响。用户需先刷新一次加载本功能，此后当前站点发布不同 revision 会出现「刷新更新 / 稍后」；后台标签页回前台后检查，当前页每分钟检查。按域名检查，beta 不会提示正式站的版本。旧元数据、离线和请求失败静默重试。上线验：保留已加载本功能的页面，再部署一个 web revision，一分钟内出现提示，稍后关闭，点击刷新保留当前 URL。
