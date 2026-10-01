@@ -398,11 +398,13 @@ export function Previews() {
         const m = motionOf(entry.key, frame, card);
         m.box = box;
         const goal = { x: at.area.x, y: at.area.y, w: at.area.w, h: at.area.h, top: at.bar ? 0 : bar, opacity: seen ? 1 : 0 };
-        const going = moved || Object.values(m.frame).some((f) => f.moving);
+        // Resized, it follows the edge dragged at once (whatever it was on its way to is cut short).
+        const resizing = document.documentElement.dataset.previewResizing !== undefined;
+        const going = !resizing && (moved || Object.values(m.frame).some((f) => f.moving));
         for (const k of FRAME) if (going) m.frame[k].to(goal[k]); else m.frame[k].jump(goal[k]);
         m.drawFrame();
         if (shell) {
-          const cardGoing = (moved && was!.mode === "small" && mode === "small") || Object.values(m.card).some((f) => f.moving);
+          const cardGoing = !resizing && ((moved && was!.mode === "small" && mode === "small") || Object.values(m.card).some((f) => f.moving));
           for (const k of CARD) if (cardGoing) m.card[k].to(shell[k]); else m.card[k].jump(shell[k]);
         }
         placed.current.set(entry.key, { mode, box, seen: at, to, layout, style });

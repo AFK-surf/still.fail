@@ -18,6 +18,7 @@
 
 ## 待部署
 
+- 预览小窗拖边缩放跟手（preview-resize-no-transition）：只改了 web 的 Previews.tsx，web 跟部署走，station、cloud 和安卓都不用动。拖动期间小窗直接跳到位，不再被悬停展开时启动的弹簧拖着走。上线后验：鼠标移到小窗上，马上拖左上角缩放，小窗要紧跟鼠标。
 - activity 动效（android-activity-motion，接 main 上已有的 web 部分 b815859..7950bbc）：只改了客户端（web、手机 web、安卓），station 和 cloud 不用动。web 跟部署走，安卓要发一版。内容：web 的 scroll.ts 跟随到底部时会滑过去，不再走一步就一次到位；activity 离场时列表不再被拉上去；同一个 agent 连续回复时，头像直接落到下一条；排队的 agent 一直收成头像；飞的头像和真头像的转圈同步。安卓移植了 web 的这些，另外修了几处只闪一两帧的交接问题，activity 按 agent 各自停留、淡出。上线后验：让两个 agent 在同一个 chat 里交错回复，PC 和手机上都看一遍：消息从头像里吐出来，activity 不瞬移，没有一闪。
 - 管理后台改成能管很多人（admin-console-scale）：新加概览页（总数、每周新用户、「需要看一眼」）；用户、Workspace、邀请码三张列表有搜索、筛选（带数量）、排序和「再显示」，点一行在右边打开详情（手机上列表和详情轮流显示），筛选和打开的是哪条都写在 URL 里。用户详情里「可以新建 workspace」开关直接给资格（准入记为新值 `granted`），还能封禁/解封；workspace 详情能删除。改了 cloud（`/v1/admin/users/:sub/may-create`、`/block`，`/v1/admin/workspaces/:id/delete`；users 表补 `blocked` 列，旧库自动补；`adminWorkspaces` 一共查 3 次，不再每个 workspace 查 3 次；新字段都可选）和 core（`adminList`/`adminItem`/`adminOverview` 三个 view，`admin.setMayCreate`/`admin.block`/`admin.deleteWorkspace`）。顺序：先部署 api，再部署 admin（新页面配旧 api 会读不到 `may_create` 等字段，开关不显示，列表照常能用）。只有 admin.still.fail 用到，app、station 和安卓都不用动。上线后验：admin.still.fail 打开就是概览，数字和用户页的总数对得上；挑一个「还没进来」的人打开「可以新建 workspace」，计数减 1，准入显示「管理员开通」，再关掉恢复原样。
 - 消息里的表格换新样式（table-style）：外面一圈卡片的平滑圆角框（web 用 `--r-card` + `corner-shape`，安卓用 20dp 普通圆角），去掉竖线，只在行之间画线，表头浅底灰字。只改客户端样式（web、手机 web、安卓 `ui/Markdown.kt`），web 跟部署走，安卓要发一版，cloud 和 station 不用动。上线后验：让 agent 回一个 Markdown 表格，PC 和手机上都是圆角框加浅底表头；表格很宽时在框里横向滚动。
