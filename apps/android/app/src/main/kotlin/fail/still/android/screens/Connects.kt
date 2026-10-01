@@ -32,6 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,7 +65,9 @@ import fail.still.android.data.MadeSlackApp
 import fail.still.android.data.ModelOption
 import fail.still.android.data.Overview
 import fail.still.android.data.RUNTIME_LABEL
-import fail.still.android.data.SlackIdentity
+import fail.still.android.data.SlackTokenForm
+import fail.still.android.data.StillFailJson
+import fail.still.android.data.SlackTokensView
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
@@ -89,6 +93,9 @@ import fail.still.android.ui.SlackMark
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -385,7 +392,7 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
     val connect = item.connect
     var mode by remember { mutableStateOf(connect.mode) }
     var mention by remember { mutableStateOf(connect.requireMention) }
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing("connect.put", "station" to station, "id" to connect.id)
     val changed = mode != connect.mode || (mode == "single-session" && mention != connect.requireMention)
     val effects = if (changed) consequences(connect, mode, mention, item.running) else emptyList()
     SheetGrab()
@@ -399,10 +406,9 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button("取消", primary = false) { app.sheet = null }
             Button(if (mode == connect.mode) "确认更改" else "改为${if (mode == "single-session") "单会话" else "多会话"}", primary = true, busy = busy, enabled = changed) {
-                busy = true
                 scope.launch {
                     try { app.api(station).putConnect(connect.id, buildJsonObject { put("mode", mode); put("requireMention", mention) }); app.toast = "已更改会话方式"; app.sheet = null }
-                    catch (e: CoreException) { app.toast = e.message } finally { busy = false }
+                    catch (e: CoreException) { app.toast = e.message }
                 }
             }
         }
@@ -417,7 +423,7 @@ private fun ColumnScope.SessionSheet(station: String, item: ConnectItem) {
     val connect = item.connect
     var choice by remember { mutableStateOf(connect.session ?: "new") }
     var title by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing("connect.bindSession", "station" to station, "connect" to connect.id)
     SheetGrab()
     SheetHead("选择会话")
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -428,10 +434,9 @@ private fun ColumnScope.SessionSheet(station: String, item: ConnectItem) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button("取消", primary = false) { app.sheet = null }
             Button(if (choice == "new") "新建并使用" else "使用这个会话", primary = true, busy = busy, enabled = choice != connect.session) {
-                busy = true
                 scope.launch {
                     try { app.api(station).bindSession(connect.id, if (choice == "new") null else choice, title); app.toast = if (choice == "new") "已新建会话" else "已换成这个会话"; app.sheet = null }
-                    catch (e: CoreException) { app.toast = e.message } finally { busy = false }
+                    catch (e: CoreException) { app.toast = e.message }
                 }
             }
         }
@@ -440,42 +445,54 @@ private fun ColumnScope.SessionSheet(station: String, item: ConnectItem) {
 
 // ── tokens ─────────────────────────────────────────────────────────────
 
-/**
- * The two tokens and who they were verified as (null until verified, and after any edit); checked by the button that
- * goes on (web/src/slack.tsx → useTokenCheck), whose failures are said under them.
- */
-private class Tokens {
-    var app by mutableStateOf("")
-    var bot by mutableStateOf("")
-    var verified by mutableStateOf<SlackIdentity?>(null)
-    var errors by mutableStateOf<List<String>>(emptyList())
-    var checking by mutableStateOf(false)
-
-    /** Whether there is anything to check: a token typed, or (a connect's own) the ones saved. */
-    fun ready(install: String?, connect: String?) = app.isNotEmpty() || (install == null && bot.isNotEmpty()) || connect != null
-
-    /** Checks them (once: a verified pair is not checked again), then `go` when Slack takes them. */
-    fun then(scope: kotlinx.coroutines.CoroutineScope, api: fail.still.android.data.StationApi, connect: String? = null, install: String? = null, go: suspend () -> Unit) {
-        if (verified != null) { scope.launch { go() }; return }
-        checking = true; errors = emptyList()
-        scope.launch {
-            val ok = try {
-                val (identity, found) = api.verifySlack(connect, install, app, bot)
-                errors = found
-                if (found.isEmpty()) verified = identity
-                found.isEmpty()
-            } catch (e: CoreException) { errors = listOf(e.message); false } finally { checking = false }
-            if (ok) go()
-        }
+/** The form is owned by the shared core; this adapter only binds its values to Compose. */
+private class Tokens(private val owner: AppState, private val station: String, val form: String) {
+    var view by mutableStateOf(SlackTokensView(appToken = "", botToken = "", errors = emptyList(), ready = false))
+    // Immediate text-field echo; readiness, validation and the draft itself belong to core.
+    private var appEcho by mutableStateOf("")
+    private var botEcho by mutableStateOf("")
+    var app: String
+        get() = appEcho
+        set(value) { appEcho = value; edit(buildJsonObject { put("appToken", value) }) }
+    var bot: String
+        get() = botEcho
+        set(value) { botEcho = value; edit(buildJsonObject { put("botToken", value) }) }
+    val verified get() = if (view.appToken == appEcho && view.botToken == botEcho) view.verified else null
+    val errors get() = view.errors
+    val checking get() = owner.isDoing("slack.tokens.verify", "station" to station, "form" to form)
+    val ready get() = view.ready
+    val address = StillFailJson.encodeToJsonElement(SlackTokenForm.serializer(), SlackTokenForm(station, form)).jsonObject
+    suspend fun call(action: String, input: JsonObject? = null) = owner.core.call("slack.tokens.$action", buildJsonObject {
+        address.forEach { (key, value) -> put(key, value) }; input?.let { put("input", it) }
+    })
+    private fun edit(input: JsonObject) { owner.act("修改 token") { call("edit", input) } }
+    fun reset() { edit(buildJsonObject { put("clear", true) }) }
+    fun then(go: suspend () -> Unit) {
+        if (checking) return
+        owner.act("校验 token") { if (call("verify").jsonPrimitive.booleanOrNull == true) go() }
     }
+}
+
+@Composable
+private fun rememberTokens(app: AppState, station: String, connect: String? = null, install: String? = null): Tokens {
+    val tokens = remember(app.core, station) { Tokens(app, station, java.util.UUID.randomUUID().toString()) }
+    val topic by rememberTopic<SlackTokensView>(app.core, buildJsonObject { put("topic", "slackTokens"); tokens.address.forEach { (key, value) -> put(key, value) } })
+    tokens.view = topic.value ?: SlackTokensView(appToken = "", botToken = "", errors = emptyList(), ready = false)
+    LaunchedEffect(tokens, connect, install) {
+        try { tokens.call("edit", buildJsonObject { put("connect", connect); put("install", install) }) }
+        catch (e: CoreException) { app.toast = e.message }
+    }
+    DisposableEffect(tokens) {
+        onDispose { app.act("关闭 token 草稿") { tokens.call("drop") } }
+    }
+    return tokens
 }
 
 /** Replaces a connect's Slack tokens (either one; the other kept), verified before they are saved. */
 private fun openTokens(app: AppState, station: String, connect: Connect) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
-        val scope = rememberCoroutineScope()
-        val tokens = remember { Tokens() }
-        var busy by remember { mutableStateOf(false) }
+        val tokens = rememberTokens(app, station, connect = connect.id)
+        val busy = app.isDoing("connect.put", "station" to station, "id" to connect.id)
         SheetGrab()
         SheetHead("Slack token")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -483,11 +500,10 @@ private fun openTokens(app: AppState, station: String, connect: Connect) {
             TokenFields(tokens, masked = connect.slack.appToken to connect.slack.botToken)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }
-                Button("保存并连接", primary = true, busy = busy || tokens.checking, enabled = tokens.ready(null, connect.id)) {
-                    tokens.then(scope, app.api(station), connect = connect.id) {
-                        busy = true
+                Button("保存并连接", primary = true, busy = busy || tokens.checking, enabled = tokens.ready) {
+                    tokens.then {
                         try { app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("slack") { put("appToken", tokens.app); put("botToken", tokens.bot) } }); app.toast = "已保存 token，正在连接"; app.sheet = null }
-                        catch (e: CoreException) { app.toast = e.message } finally { busy = false }
+                        catch (e: CoreException) { app.toast = e.message }
                     }
                 }
             }
@@ -514,10 +530,10 @@ internal fun SecretField(value: String, onChange: (String) -> Unit, placeholder:
 private fun TokenFields(tokens: Tokens, masked: Pair<String, String>? = null, install: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("App-Level Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        SecretField(tokens.app, { tokens.app = it; tokens.verified = null; tokens.errors = emptyList() }, masked?.first?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xapp-…")
+        SecretField(tokens.app, { tokens.app = it }, masked?.first?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xapp-…")
         if (install == null) {
             Text("Bot Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            SecretField(tokens.bot, { tokens.bot = it; tokens.verified = null; tokens.errors = emptyList() }, masked?.second?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xoxb-…")
+            SecretField(tokens.bot, { tokens.bot = it }, masked?.second?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xoxb-…")
         }
         tokens.verified?.let { Text("连接到「${it.team}」，bot 是 @${it.botName}", fontSize = 12.sp, color = C.green) }
         tokens.errors.forEach { Text(it, fontSize = 13.sp, color = C.red) }
@@ -617,7 +633,7 @@ fun NewConnectScreen(station: String) {
     // The app made, as the station keeps it (it outlives this page until a connect takes it; a station yet to update has none).
     var madeId by remember { mutableStateOf(resume) }
     val made = madeId?.let { id -> overview.value?.slackApps?.firstOrNull { it.appId == id } }
-    val tokens = remember { Tokens() }
+    val tokens = rememberTokens(app, station, install = made?.state)
     var model by remember { mutableStateOf<ModelOption?>(null) }
     var runtime by remember { mutableStateOf<String?>(null) }
     var mode by remember { mutableStateOf("multi-session") }
@@ -678,7 +694,7 @@ fun NewConnectScreen(station: String) {
                         Button("创建 app", primary = true, busy = busy, enabled = draft.name.isNotBlank() && chosen != null) {
                             run {
                                 val (id, failed) = api.makeSlackApp(chosen!!.teamId, draft.settings(), icon?.data)
-                                madeId = id; iconError = failed; tokens.verified = null; step = "install"
+                                madeId = id; iconError = failed; tokens.reset(); step = "install"
                             }
                         }
                     }
@@ -696,7 +712,7 @@ fun NewConnectScreen(station: String) {
                     if (install == null) Text("OAuth 页", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(m.links.oauth) })
                     TokenFields(tokens, install = m.state)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("下一步", primary = true, busy = tokens.checking, enabled = tokens.ready(m.state, null)) { tokens.then(scope, api, install = m.state) { step = "bind" } }
+                        Button("下一步", primary = true, busy = tokens.checking, enabled = tokens.ready) { tokens.then { step = "bind" } }
                     }
                 }
                 "manual" -> {
@@ -708,7 +724,7 @@ fun NewConnectScreen(station: String) {
                     ))
                     TokenFields(tokens)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("下一步", primary = true, busy = tokens.checking, enabled = tokens.ready(null, null)) { tokens.then(scope, api) { step = "bind" } }
+                        Button("下一步", primary = true, busy = tokens.checking, enabled = tokens.ready) { tokens.then { step = "bind" } }
                     }
                 }
                 else -> {

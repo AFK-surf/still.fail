@@ -11,7 +11,7 @@ import { ChevronRight, More, Plus } from "../icons.tsx";
 import { modelName, optionOf } from "../ModelTriple.tsx";
 import { consequences } from "../pages/Connect.tsx";
 import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
-import { useTokenCheck, type TokenCheck } from "../slack.tsx";
+import { useSlackTokens, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
@@ -313,7 +313,7 @@ function ModeSheet({ item }: { item: ConnectItem }) {
   const api = useApi();
   const { connect } = item;
   const [next, setNext] = useState({ mode: connect.mode, requireMention: connect.requireMention });
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("connect.put", { station: useStation().address, id: connect.id });
   const changed = next.mode !== connect.mode || (next.mode === "single-session" && next.requireMention !== connect.requireMention);
   const effects = changed ? consequences(connect, next, item.running) : [];
   return (
@@ -326,7 +326,7 @@ function ModeSheet({ item }: { item: ConnectItem }) {
         <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label={next.mode === connect.mode ? "确认更改" : `改为${next.mode === "single-session" ? "单会话" : "多会话"}`} primary busy={busy} enabled={changed}
-            onClick={() => { setBusy(true); api.putConnect(connect.id, next).then(() => { app.toast("已更改会话方式"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
+            onClick={() => { api.putConnect(connect.id, next).then(() => { app.toast("已更改会话方式"); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
         </div>
       </div>
     </>
@@ -359,7 +359,7 @@ function SessionSheet({ item }: { item: ConnectItem }) {
   const { connect, candidates } = item;
   const [choice, setChoice] = useState<string>(connect.session ?? "new");
   const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("connect.bindSession", { station: useStation().address, connect: connect.id });
   return (
     <>
       <SheetGrab />
@@ -372,7 +372,7 @@ function SessionSheet({ item }: { item: ConnectItem }) {
         <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label={choice === "new" ? "新建并使用" : "使用这个会话"} primary busy={busy} enabled={choice !== connect.session}
-            onClick={() => { setBusy(true); api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => { app.toast(choice === "new" ? "已新建会话" : "已换成这个会话"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
+            onClick={() => { api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => { app.toast(choice === "new" ? "已新建会话" : "已换成这个会话"); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
         </div>
       </div>
     </>
@@ -382,7 +382,6 @@ function SessionSheet({ item }: { item: ConnectItem }) {
 // ── tokens ─────────────────────────────────────────────────────────────
 
 interface Tokens { appToken: string; botToken: string; verified: SlackIdentity | null }
-const NO_TOKENS: Tokens = { appToken: "", botToken: "", verified: null };
 
 /** Replaces a connect's Slack tokens (either one; the other kept), verified before they are saved. */
 function openTokens(app: MobileApp, connect: Connect) {
@@ -392,9 +391,8 @@ function openTokens(app: MobileApp, connect: Connect) {
 function TokensSheet({ connect }: { connect: Connect }) {
   const app = useApp();
   const api = useApi();
-  const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
-  const check = useTokenCheck(tokens, setTokens, { connect: connect.id });
-  const [busy, setBusy] = useState(false);
+  const [tokens, setTokens, check] = useSlackTokens({ connect: connect.id });
+  const busy = useDoing("connect.put", { station: useStation().address, id: connect.id });
   return (
     <>
       <SheetGrab />
@@ -405,7 +403,7 @@ function TokensSheet({ connect }: { connect: Connect }) {
         <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label="保存并连接" primary busy={busy || check.busy} enabled={check.ready}
-            onClick={() => check.then(() => { setBusy(true); api.putConnect(connect.id, { slack: { appToken: tokens.appToken, botToken: tokens.botToken } }).then(() => { app.toast("已保存 token，正在连接"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); })} />
+            onClick={() => check.then(() => { api.putConnect(connect.id, { slack: { appToken: tokens.appToken, botToken: tokens.botToken } }).then(() => { app.toast("已保存 token，正在连接"); app.sheet(null); }, (e: Error) => app.toast(e.message)); })} />
         </div>
       </div>
     </>
@@ -416,8 +414,8 @@ function TokensSheet({ connect }: { connect: Connect }) {
  * The two tokens with a verify step. For an existing connect a blank field keeps the stored token. An app installed
  * through Slack's OAuth (`install`) has its bot token on the station already: only the app-level token is asked for.
  */
-function TokenFields({ value, onChange, masked, install, check }: { value: Tokens; onChange: (t: Tokens) => void; masked?: { appToken: string; botToken: string }; install?: string | undefined; check: TokenCheck }) {
-  const edit = (patch: Partial<Tokens>) => onChange({ ...value, ...patch, verified: null });
+function TokenFields({ value, onChange, masked, install, check }: { value: Tokens; onChange: (t: Partial<Tokens>) => void; masked?: { appToken: string; botToken: string }; install?: string | undefined; check: TokenCheck }) {
+  const edit = (patch: Partial<Tokens>) => onChange(patch);
   return (
     <div className={settingsCss.mFormGroup}>
       <b className={sheetsCss.mFormLabel}>App-Level Token</b>
@@ -523,8 +521,7 @@ export function NewConnectScreen() {
   // The app made, as the station keeps it (it outlives this screen until a connect takes it).
   const [madeId, setMadeId] = useState<string | null>(resume);
   const made: MadeSlackApp | undefined = madeId ? overview?.slackApps?.find((a) => a.appId === madeId) : undefined;
-  const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
-  const check = useTokenCheck(tokens, setTokens, { install: made?.state ?? undefined });
+  const [tokens, setTokens, check] = useSlackTokens({ install: made?.state ?? undefined });
   const [config, setConfig] = useState("");
   const models = view?.models ?? [];
   const [model, setModel] = useState<ModelOption | null>(null);

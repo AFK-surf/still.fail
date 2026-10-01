@@ -351,6 +351,9 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `auth.begin` | `redirect_uri`, `return_to`, `device_name` | `{ url }` to open (web: navigate; native: system browser) |
 | `auth.complete` | `query` (the callback's query string) | `{ account, return_to }` |
 | `auth.signOut` | `account` | — |
+| `slack.tokens.edit` | `station`, `form` (the generated `SlackTokenForm`), `input` (changed `appToken`, `botToken`, `connect`, `install`; `clear` invalidates verification) | the transient draft; also published as `{ topic: "slackTokens", station, form }` (`SlackTokensView`) |
+| `slack.tokens.verify` | `station`, `form` | `true` only for the current verified draft; errors and identity in the topic. Late results for edited or closed forms cannot advance it |
+| `slack.tokens.drop` | `station`, `form` | clears the in-memory draft; disconnecting its owning UI also clears it. Nothing is saved to device storage |
 | *an operation* | `station` or `account`, and its own | what the station or still.fail cloud answers; see below |
 | `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?`, `client?` (the app it is sent from, for the chat's agent) | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on ember's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
@@ -428,7 +431,9 @@ client/
 
 - `host.rs` — the `Host` trait and its request/response types.
 - `protocol.rs` — the messages above (serde).
-- `core.rs` — `Core`: accepts client messages, routes calls, manages subscriptions.
+- `core.rs` — `Core`: accepts client messages, routes calls, manages subscriptions. `core/calls.rs` holds the named calls and input validation.
+- `ops.rs` — requests and their explicit update effects together. Compatibility fallbacks have their own effects; `station.rs` applies only the successful request's effect, before answering.
+- `slack_tokens.rs` — transient token drafts and verification shared by Web and Android. Input controls echo keystrokes immediately; readiness and verification belong to core. Web retains the previous form for desktop cores without these calls.
 - `store.rs` — topics: values, subscribers and watches, coalesced emission as deltas, eviction.
 - `delta.rs` — the ops between two values of a topic.
 - `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.

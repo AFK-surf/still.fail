@@ -2129,6 +2129,21 @@ export interface SkillFile {
 	about?: string;
 }
 
+/** Address of a transient Slack token form, shared by calls and topic subscriptions. */
+export interface SlackTokenForm {
+	station: string;
+	form: string;
+}
+
+/** A Slack token form: a transient core draft, never saved to device storage. */
+export interface SlackTokensView {
+	appToken: string;
+	botToken: string;
+	verified?: SlackIdentity;
+	errors: string[];
+	ready: boolean;
+}
+
 /** The agents' memory on a station (`memory.get`): the global one, and the skills (projects' memories among them). */
 export interface StationMemory {
 	global: MemoryFile;

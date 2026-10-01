@@ -1057,13 +1057,15 @@ impl Stations {
                 touched.extend(self.live_topics(&name, |t| matches!(t, Topic::SlackApp { .. })));
             }
             // A job stopped: it answers the job as it is now.
-            Effect::Job if answer.get("id").is_some() && answer.get("state").is_some() => self.on_job(&name, answer),
+            Effect::Job => {
+                if answer.get("id").is_some() && answer.get("state").is_some() { self.on_job(&name, answer); }
+            },
             // Who the viewer is on Slack: it answers the overview, and changes which rows are theirs.
             Effect::Identity => {
                 touched.push(Topic::Overview { station: name.clone() });
                 touched.push(Topic::ChatRows { station: name.clone() });
             }
-            _ => {}
+            Effect::None => {}
         }
         // Profile and connect edits answer the overview as it is now.
         if answer.get("connects").is_some() && answer.get("profiles").is_some() {
@@ -3186,6 +3188,49 @@ mod tests {
             wire.answer("GET /admin/api/connects/ds/slack-app", 200, json!({"state": "ok"}));
             stations.perform(&remote(), &crate::ops::request("slack.addConfigToken", &json!({"station": ST, "refreshToken": "x"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(sink.get(&app).unwrap()["state"], "ok");
+        });
+    }
+
+    #[test]
+    fn operation_effects_do_not_depend_on_the_wire_path() {
+        run(async {
+            let (host, _sink, wire, stations) = setup();
+            stations.start(&overview());
+            host.settle().await;
+            let before = wire.count("GET", "/admin/api/overview");
+            let mut op = crate::ops::request("profile.check", &json!({"station": ST, "id": "p"})).unwrap().unwrap();
+            op.path = "/different-endpoint".into();
+            stations.perform(&remote(), &op).await.unwrap();
+            assert_eq!(wire.count("GET", "/admin/api/overview"), before + 1);
+            // A response that happens to resemble an overview does not give a read write effects.
+            let op = crate::ops::request("job.get", &json!({"station": ST, "id": "j"})).unwrap().unwrap();
+            wire.answer("GET /admin/api/jobs/j", 200, json!({"connects": [], "profiles": []}));
+            stations.perform(&remote(), &op).await.unwrap();
+            assert_eq!(wire.count("GET", "/admin/api/overview"), before + 1);
+        });
+    }
+
+    #[test]
+    fn archive_fallback_updates_the_session_only_after_success() {
+        run(async {
+            let (host, _sink, wire, stations) = setup();
+            stations.start(&session("k"));
+            stations.start(&sessions());
+            host.settle().await;
+            let op = crate::ops::request("chat.archive", &json!({"station": ST, "thread": 7, "session": "k", "archived": true})).unwrap().unwrap();
+            let before = wire.count("GET", "/admin/api/sessions/k");
+            wire.answer("POST /admin/api/threads/7/archive", 403, json!({"error": "denied"}));
+            assert_eq!(stations.perform(&remote(), &op).await.unwrap_err().status, Some(403));
+            assert_eq!(wire.count("POST", "/admin/api/sessions/k/archive"), 0);
+            assert_eq!(wire.count("GET", "/admin/api/sessions/k"), before);
+            wire.answer("POST /admin/api/threads/7/archive", 404, json!({}));
+            wire.answer("POST /admin/api/sessions/k/archive", 500, json!({}));
+            assert!(stations.perform(&remote(), &op).await.is_err());
+            assert_eq!(wire.count("GET", "/admin/api/sessions/k"), before);
+            wire.answer("POST /admin/api/sessions/k/archive", 200, json!({}));
+            stations.perform(&remote(), &op).await.unwrap();
+            assert_eq!(wire.count("GET", "/admin/api/sessions/k"), before + 1);
+            assert_eq!(wire.count("POST", "/admin/api/sessions/k/archive"), 2);
         });
     }
 

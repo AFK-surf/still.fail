@@ -2977,3 +2977,23 @@ pub fn conform<T: Serialize + serde::de::DeserializeOwned>(value: serde_json::Va
     let typed: T = serde_path_to_error::deserialize(value).map_err(|e| format!("{}: {}", e.path(), e.inner()))?;
     serde_json::to_value(typed).map_err(|e| e.to_string())
 }
+
+/// A Slack token form: a transient core draft, never saved to device storage.
+#[typeshare]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SlackTokensView {
+    pub app_token: String,
+    pub bot_token: String,
+    pub verified: Option<SlackIdentity>,
+    pub errors: Vec<String>,
+    pub ready: bool,
+}
+
+/// Address of a transient Slack token form, shared by calls and topic subscriptions.
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlackTokenForm {
+    pub station: String,
+    pub form: String,
+}

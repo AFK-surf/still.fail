@@ -32,6 +32,7 @@ pub mod present;
 pub mod protocol;
 pub mod refs;
 pub mod station;
+pub mod slack_tokens;
 pub mod status;
 pub mod store;
 pub mod sync;

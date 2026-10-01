@@ -2151,6 +2151,23 @@ data class SkillFile (
 	val about: String? = null
 )
 
+/// Address of a transient Slack token form, shared by calls and topic subscriptions.
+@Serializable
+data class SlackTokenForm (
+	val station: String,
+	val form: String
+)
+
+/// A Slack token form: a transient core draft, never saved to device storage.
+@Serializable
+data class SlackTokensView (
+	val appToken: String,
+	val botToken: String,
+	val verified: SlackIdentity? = null,
+	val errors: List<String>,
+	val ready: Boolean
+)
+
 /// The agents' memory on a station (`memory.get`): the global one, and the skills (projects' memories among them).
 @Serializable
 data class StationMemory (

@@ -11,6 +11,7 @@ import { captureException } from "../telemetry.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
 export type Topic =
+  | { topic: "slackTokens"; station: string; form: string }
   | { topic: "accounts" }
   | { topic: "workspaces" }
   | { topic: "workspace"; workspace: string }

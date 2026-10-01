@@ -1,7 +1,11 @@
 // Connecting a Slack connect: create the app from ember's manifest, paste the two
 // tokens, and see who they belong to before anything is saved.
 import { CheckCircle, External } from "./icons.tsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useCall, useTopic } from "./core/react.ts";
+import { useStation } from "./station.tsx";
+import { useDoing } from "./doing.ts";
+import type { SlackTokenForm, SlackTokensView } from "./core/shapes.ts";
 import { useAction, useApi, type SlackIdentity } from "./api.ts";
 import { Button, Field, ICON } from "./ui.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -49,7 +53,7 @@ export interface TokenCheck {
  * The tokens' check. For an existing connect (`connect`), a blank field means "keep the stored token", and the check
  * uses the stored one. An app installed through Slack's OAuth (`install`, its state) has its bot token on the station.
  */
-export function useTokenCheck(value: TokenState, onChange: (value: TokenState) => void, { connect, install }: { connect?: string; install?: string | undefined } = {}): TokenCheck {
+export function useTokenCheck(value: TokenState, onChange: (value: TokenState) => void, { connect, install }: { connect?: string | undefined; install?: string | undefined } = {}): TokenCheck {
   const api = useApi();
   const [errors, setErrors] = useState<string[]>([]);
   const verify = useAction(() => api.verifySlack({ ...(connect ? { connect } : {}), ...(install ? { install } : {}), appToken: value.appToken, botToken: value.botToken }));
@@ -72,11 +76,50 @@ export function useTokenCheck(value: TokenState, onChange: (value: TokenState) =
   };
 }
 
+/** The current core owns the draft and its verification. Older desktop cores keep the previous form until updated. */
+export function useSlackTokens({ connect, install }: { connect?: string | undefined; install?: string | undefined } = {}): [TokenState, (patch: Partial<TokenState>) => void, TokenCheck] {
+  const station = useStation().address;
+  const [form] = useState(() => crypto.randomUUID());
+  const call = useCall();
+  const address: SlackTokenForm = { station, form };
+  const topic = useTopic<SlackTokensView>({ topic: "slackTokens", ...address });
+  const [legacyValue, legacySet] = useState<TokenState>(emptyTokens);
+  const legacy = useTokenCheck(legacyValue, legacySet, { connect, install });
+  const [error, setError] = useState<string | null>(null);
+  const [oldCore, setOldCore] = useState(false);
+  const busy = useDoing("slack.tokens.verify", { station, form });
+  const edit = (input: Record<string, unknown>) => call("slack.tokens.edit", { ...address, input });
+  useEffect(() => {
+    void edit({ connect: connect ?? null, install: install ?? null }).catch((e: Error & { code?: string }) => {
+      if (e.code === "unknown_call") setOldCore(true);
+      else setError(e.message);
+    });
+  }, [station, form, connect, install, call]);
+  useEffect(() => () => { void call("slack.tokens.drop", { station, form }).catch(() => undefined); }, [station, form, call]);
+  const echo = (patch: Partial<TokenState>) => legacySet((value) => ({ ...value, ...patch, verified: null }));
+  if (oldCore) return [legacyValue, echo, legacy];
+  // Echo keystrokes immediately in controlled inputs while the worker publishes the authoritative draft.
+  const current = topic.value?.appToken === legacyValue.appToken && topic.value?.botToken === legacyValue.botToken;
+  const value = { ...legacyValue, verified: current ? topic.value?.verified ?? null : null };
+  return [value, (patch) => {
+    echo(patch);
+    setError(null);
+    void edit({ ...patch, ...(patch.verified === null ? { clear: true } : {}) }).catch((e: Error) => setError(e.message));
+  }, {
+    then(go) {
+      if (busy) return;
+      setError(null);
+      void call("slack.tokens.verify", address).then((verified) => { if (verified) go(); }, (e: Error) => setError(e.message));
+    },
+    busy, errors: topic.value?.errors ?? [], error: error ?? topic.error?.message ?? null, ready: topic.value?.ready ?? false,
+  }];
+}
+
 /** Token inputs; checked by the button that goes on (`check`, useTokenCheck), whose failures are said under them. */
 export function TokenFields({ value, onChange, masked, install, check }: {
-  value: TokenState; onChange(value: TokenState): void; masked?: { appToken: string; botToken: string }; install?: string | undefined; check: TokenCheck;
+  value: TokenState; onChange(value: Partial<TokenState>): void; masked?: { appToken: string; botToken: string }; install?: string | undefined; check: TokenCheck;
 }) {
-  const edit = (patch: Partial<TokenState>) => onChange({ ...value, ...patch, verified: null });
+  const edit = (patch: Partial<TokenState>) => onChange(patch);
   return (
     <div className={css.tokenFields}>
       <Field label="App-Level Token" htmlFor="app-token">

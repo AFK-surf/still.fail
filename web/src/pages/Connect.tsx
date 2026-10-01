@@ -12,7 +12,7 @@ import { usePick } from "../pick.ts";
 import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
-import { CreateAppSteps, emptyTokens, TokenFields, useTokenCheck, type TokenState } from "../slack.tsx";
+import { CreateAppSteps, emptyTokens, TokenFields, useSlackTokens } from "../slack.tsx";
 import { useAct, useToast } from "../toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import * as waitingCss from "../styles/waiting.css.ts";
@@ -135,8 +135,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
 function SlackSection({ connect }: { connect: Connect }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const [tokens, setTokens] = useState<TokenState>(emptyTokens);
-  const check = useTokenCheck(tokens, setTokens);
+  const [tokens, setTokens, check] = useSlackTokens();
   const c = connect.connection;
   if (c.state === "no_tokens") {
     return (
@@ -162,8 +161,7 @@ function SlackSection({ connect }: { connect: Connect }) {
 function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const [tokens, setTokens] = useState<TokenState>(emptyTokens);
-  const check = useTokenCheck(tokens, setTokens, { connect: connect.id });
+  const [tokens, setTokens, check] = useSlackTokens({ connect: connect.id });
   return (
     <Dialog open onClose={onClose} title="更换 Slack token" description="只换其中一个也可以，另一个留空会沿用已保存的。"
       footer={<>
@@ -417,8 +415,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
   // The app made, as the station keeps it (it outlives this dialog: the connects page lists it until it is connected).
   const [madeId, setMadeId] = useState<string | null>(resume ?? null);
   const made: MadeSlackApp | undefined = madeId ? overview.value?.slackApps?.find((a) => a.appId === madeId) : undefined;
-  const [tokens, setTokens] = useState<TokenState>(emptyTokens);
-  const check = useTokenCheck(tokens, setTokens, { install: made?.state ?? undefined });
+  const [tokens, setTokens, check] = useSlackTokens({ install: made?.state ?? undefined });
   // The model first; the runtime only when the model runs on more than one (the core's pick of a connect being added).
   const models = useStationModels();
   const pick = usePick(station.address, "connect-new");
