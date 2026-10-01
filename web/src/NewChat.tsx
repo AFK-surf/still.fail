@@ -149,7 +149,7 @@ function NewChatOn({ choice, view, station, stations, onStation, create, onCreat
         <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting ? choice.problem : ""}</p>
         {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
         <div className={css.newChatOffer} data-made-leave="fade">
-          <MachineSessions models={view.models} onContinued={(key) => {
+          <MachineSessions name={station.name} models={view.models} onContinued={(key) => {
             keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
             onCreated(station.address, key);
           }} />

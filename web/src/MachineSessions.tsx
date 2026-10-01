@@ -50,8 +50,8 @@ function useNow(every: number): number {
   return now;
 }
 
-/** `models`: the station's, for the agents' names and pictures in a preview. */
-export function MachineSessions({ models, onContinued }: { models: ModelOption[]; onContinued(key: string): void }) {
+/** `models`: the station's, for the agents' names and pictures in a preview; `name`: the station's, said for where they ran. */
+export function MachineSessions({ name, models, onContinued }: { name: string; models: ModelOption[]; onContinued(key: string): void }) {
   const api = useApi();
   const [sessions, setSessions] = useState<MachineSession[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -84,7 +84,7 @@ export function MachineSessions({ models, onContinued }: { models: ModelOption[]
   const meta = (s: MachineSession) => s.meta ?? "";
   return (
     <>
-      <button type="button" className={css.offer} onClick={() => setOpen(true)}><Monitor size={14} />接着本机终端里的会话</button>
+      <button type="button" className={css.offer} onClick={() => setOpen(true)}><Monitor size={14} />接着 {name || "本机"} 终端里的会话</button>
       {looking ? (
         <Dialog open={open} wide onClose={close} title={looking.title ?? looking.first} description={meta(looking)}
           footer={<>
@@ -95,7 +95,7 @@ export function MachineSessions({ models, onContinued }: { models: ModelOption[]
           <Preview runtime={looking.runtime} id={looking.id} models={models} />
         </Dialog>
       ) : (
-        <Dialog open={open} wide onClose={close} title="接着本机的会话"
+        <Dialog open={open} wide onClose={close} title={`接着 ${name || "本机"} 上的会话`}
           description="这台机器上的 Claude Code 和 Codex 在终端里跑过的会话。点一个先看看内容，再决定要不要在它原来的目录里接着聊；终端里的那个不受影响。">
           <ul className={css.list}>
             {sessions.map((s) => (

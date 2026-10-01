@@ -381,14 +381,14 @@ private fun MachineSessionsOffer(view: StationView) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         IconIn(Icons.Monitor, 14.dp, C.muted)
-        Text("接着本机终端里的会话", fontSize = 14.sp, color = C.muted)
+        Text("接着 ${view.name.ifEmpty { "本机" }} 终端里的会话", fontSize = 14.sp, color = C.muted)
     }
 }
 
 private fun openMachineSessions(app: AppState, view: StationView, sessions: List<MachineSession>) {
     app.sheet = SheetSpec(0.7f) {
         SheetGrab()
-        SheetHead("接着本机的会话")
+        SheetHead("接着 ${view.name.ifEmpty { "本机" }} 上的会话")
         Text(
             "这台机器上的 Claude Code 和 Codex 在终端里跑过的会话。点一个先看看内容，再决定要不要在它原来的目录里接着聊；终端里的那个不受影响。",
             fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
