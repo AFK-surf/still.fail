@@ -409,7 +409,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
     )
     Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.clickable(enabled = !checking) { app.act("刷新模型", "模型列表已刷新") { app.api(station).checkProfile(p.id) } },
+        Row(Modifier.clickable(enabled = !checking) { app.act("刷新模型", "检查完成") { app.api(station).checkProfile(p.id) } },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DoingMark(checking, checkFailed, 12.dp)
             Text(if (checking) "正在刷新…" else "刷新模型", fontSize = 14.sp, color = if (checking) C.muted else C.accent)

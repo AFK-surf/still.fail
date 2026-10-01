@@ -363,7 +363,13 @@ impl AdminApi {
                 }
                 Err(e) => {
                     // A temporary listing failure must not erase a saved max/ultra selection in the clients.
-                    check.model_efforts = self.checks.lock().unwrap().get(id).and_then(|c| c.model_efforts.clone());
+                    if let Some(previous) = self.checks.lock().unwrap().get(id) {
+                        check.model_efforts = previous.model_efforts.clone();
+                        if codex_subscription && check.models.is_none() {
+                            check.models = previous.models.clone();
+                        }
+                    }
+                    check.detail.push_str("，模型列表暂时无法刷新");
                     warn!(profile = id, error = %e, "could not list codex model capabilities");
                 }
             }

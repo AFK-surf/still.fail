@@ -339,7 +339,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
       <SectionHeader title={`模型 · 启用 ${models.length} / ${all.length}${busy ? " · 正在保存…" : ""}`} start={24} />
       <p className={css.mProfileNote}>{all.length === 0 ? "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" : "只有勾选的模型能在新对话和连接里选。"}</p>
       <div className={settingsCss.mProfileTools}>
-        <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), "刷新模型", "模型列表已刷新")}>
+        <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), "刷新模型", "检查完成")}>
           {checking ? <Spinner size={12} /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? "正在刷新…" : "刷新模型"}
         </button>
         <span className={partsCss.mGrow} />
