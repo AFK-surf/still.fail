@@ -26,6 +26,6 @@ export const sidebar = style({
 });
 export const sidebarRefresh = style({
   display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0,
-  border: 0, padding: "6px 0", background: "none", color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer",
+  border: 0, padding: "6px 0", background: "none", color: vars.accentText, font: "inherit", fontWeight: 500, textAlign: "left", cursor: "pointer",
   ":hover": { color: vars.accentText },
 });
