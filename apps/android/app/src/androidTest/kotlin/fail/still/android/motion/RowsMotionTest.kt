@@ -157,6 +157,27 @@ class RowsMotionTest {
         r.end()
     }
 
+    /** Two agents at work, one done first: its activity stays a moment, fades, and the other glides up into its place. */
+    @Test
+    fun oneAgentStopsFirst() {
+        val h = Harness(rule)
+        h.fake.put(Topics.live(Fixtures.STATION, key), live("运行测试"))
+        h.fake.put(Topics.live(Fixtures.STATION, key2), live("读取 login.css"))
+        h.fake.put(topic, two(asked, running = false))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        val r = h.record("one-stops-first")
+        h.fake.put(topic, two(asked, running = true))
+        h.deliver()
+        r.frames(30)
+        h.fake.put(topic, Fixtures.chat(asked).copy(agents = listOf(agentAt(false), agentAt(true, k = key2))))
+        h.deliver()
+        r.frames(90)
+        h.fake.put(topic, two(asked, running = false))
+        h.deliver()
+        r.frames(80)
+        r.end()
+    }
+
     /** Two replies at once: one after the other, the second straight from where the first left the avatar. */
     @Test
     fun twoRepliesOneAfterTheOther() {
