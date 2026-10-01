@@ -76,9 +76,7 @@ import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 
 /** A write behind a button: whether it runs, and how the last try ended. */
-private class Write {
-    var busy by mutableStateOf(false)
-    var error by mutableStateOf<CoreException?>(null)
+private class Write(app: AppState) : Action(app) {
     /** What the running (or last) try was given. */
     var arg by mutableStateOf<String?>(null)
     var done by mutableStateOf(false)
@@ -86,10 +84,8 @@ private class Write {
 
 /** Runs `write` for a button: busy while it runs, its error kept until the next try. */
 private fun AppState.run(w: Write, arg: String? = null, write: suspend () -> Unit) {
-    w.busy = true; w.error = null; w.arg = arg; w.done = false
-    scope.launch {
-        try { write(); w.done = true } catch (e: CoreException) { w.error = e } finally { w.busy = false }
-    }
+    w.arg = arg; w.done = false
+    w.run { write(); w.done = true }
 }
 
 /** The workspace an invitation's acceptance joined becomes the one in view. */
@@ -108,8 +104,8 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val first = accounts.first()
-    val create = remember { Write() }
-    val accept = remember { Write() }
+    val create = remember { Write(app) }
+    val accept = remember { Write(app) }
     val pending = workspaces.flatMap { a -> a.invitations.map { a.account to it } }
     val make = { code: String -> app.run(create, code) { app.pickWorkspace(Cloud(app.core, first.sub).createWorkspace("${first.name.ifEmpty { first.email.substringBefore('@') }} 的 workspace", code)) } }
     // Once asked for a code, the form stays while a code is tried, rather than flicking to "creating…".
@@ -164,7 +160,7 @@ fun Blocked(entry: AccountWorkspaces) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val out = remember { Write() }
+    val out = remember { Write(app) }
     Column(
         Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -245,7 +241,7 @@ fun openWorkspaces(app: AppState) {
 private fun ColumnScope.WorkspacesSheet(app: AppState) {
     val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     val byAccount = all.value.orEmpty()
-    val respond = remember { Write() }
+    val respond = remember { Write(app) }
     val pending = byAccount.flatMap { a -> a.invitations.map { a.account to it } }
     val currentOf = byAccount.firstOrNull { a -> a.workspaces.any { it.id == app.workspace } }
     val current = currentOf?.workspaces?.firstOrNull { it.id == app.workspace }
@@ -324,7 +320,7 @@ private fun ColumnScope.NewWorkspaceSheet(app: AppState) {
     var owner by remember { mutableStateOf<String?>(null) }
     // Sent every time: still.fail cloud looks at it only for an account not let in yet, and then asks for it when it is missing or wrong.
     var code by remember { mutableStateOf("") }
-    val create = remember { Write() }
+    val create = remember { Write(app) }
     var asked by remember { mutableStateOf(false) }
     if (needsInviteCode(create.error)) asked = true
     val sub = owner?.takeIf { o -> list.any { it.sub == o } } ?: list.firstOrNull()?.sub
@@ -401,7 +397,7 @@ private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
     // Read once per account: what the link leads to depends on who looks.
     var preview by remember { mutableStateOf<fail.still.android.data.InvitationPreview?>(null) }
     var failed by remember { mutableStateOf<String?>(null) }
-    val accept = remember { Write() }
+    val accept = remember { Write(app) }
     androidx.compose.runtime.LaunchedEffect(token, sub) {
         preview = null; failed = null
         val t = token ?: return@LaunchedEffect

@@ -1,3 +1,4 @@
+import { useConnectFlow } from "../connect-flow.ts";
 // Connects on a narrow screen (what the desktop's ../pages/Connects.tsx and Connect.tsx do, in the Android app's
 // manner): the list, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its
 // Slack link, what is done to it less often under "…"); how it runs, picked on a page of its own; a new one, in steps.
@@ -446,7 +447,7 @@ export function ConnectRunScreen() {
   const { set: pickSet } = pick;
   useEffect(() => { if (item) pickSet({ open: true }); }, [item?.connect.id, pickSet]);
   const [list, setList] = useState<"model" | "account" | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = pick.saving;
   const title = list === "model" ? "选模型" : list === "account" ? "选账号" : "换模型";
   const bar = <NavBar back={list ? "换模型" : "返回"} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
   if (!item || !v) return <div className={pagesCss.mScreen}>{bar}<Loading text="正在读取连接…" /></div>;
@@ -483,8 +484,7 @@ export function ConnectRunScreen() {
       <button type="button" className={historyCss.mRunGo} data-changed={changed || undefined} disabled={busy || (changed && !model)}
         onClick={() => {
           if (!changed) return app.pop();
-          setBusy(true);
-          pick.save().then(() => { app.toast("已保存，新会话会用新的设置"); app.pop(); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false));
+          pick.save().then(() => { app.toast("已保存，新会话会用新的设置"); app.pop(); }, (e: Error) => app.toast(e.message));
         }}>
         {busy && <Spinner size={14} />}{v.saveText}
       </button>
@@ -506,40 +506,38 @@ export function NewConnectScreen() {
   const app = useApp();
   const api = useApi();
   const station = useStation();
-  const overview = useOverview(station.address).value;
-  const view = useStations(station.address.split("/")[0]!).value?.find((s) => s.station === station.address);
-  const teams = overview?.slackTeams ?? [];
-  // `?resume=`: an app made before and still waiting on the station, picked up where it was left (installing it).
   const [params] = useSearchParams();
-  const resume = params.get("resume");
-  const [step, setStep] = useState<Step>(resume ? "install" : "team");
-  const [team, setTeam] = useState<string | null>(null);
-  const [appSettings, setAppSettings] = useState(NEW_APP);
-  const [icon, setIcon] = useState<string | null>(null);
-  const [iconError, setIconError] = useState<string | null>(null);
-  // The app made, as the station keeps it (it outlives this screen until a connect takes it).
-  const [madeId, setMadeId] = useState<string | null>(resume);
-  const made: MadeSlackApp | undefined = madeId ? overview?.slackApps?.find((a) => a.appId === madeId) : undefined;
-  const [tokens, setTokens, check] = useSlackTokens({ install: made?.state ?? undefined });
-  const [config, setConfig] = useState("");
-  const models = view?.models ?? [];
-  const [model, setModel] = useState<ModelOption | null>(null);
-  const entry = model ?? models[0] ?? null;
-  const [runtime, setRuntime] = useState<RuntimeKind | null>(null);
-  const rt: RuntimeKind = entry && runtime && entry.runtimes.includes(runtime) ? runtime : (entry?.runtimes[0] ?? "claude");
-  const [mode, setMode] = useState<{ mode: ConnectMode; requireMention: boolean }>({ mode: "multi-session", requireMention: true });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const chosen = teams.find((t) => t.teamId === team) ?? (teams.length === 1 ? teams[0] : undefined);
-  const order: Step[] = step === "manual" || (step === "bind" && !madeId) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
-  const titles: Record<Step, string> = { team: "选 Slack 工作区", token: "加配置 token", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
-  const run = (work: () => Promise<unknown>) => { setBusy(true); setError(null); work().catch((e: Error) => setError(e.message)).finally(() => setBusy(false)); };
-  const back = () => ({ team: app.pop, token: () => setStep("team"), app: () => setStep("team"), install: resume ? app.pop : () => setStep("app"), manual: () => setStep("team"), bind: () => setStep(madeId ? "install" : "manual") }[step]());
-  // A connect runs a profile's model: with none on the station, the first step is a profile.
-  const noProfile = !resume && overview !== undefined && overview.profiles.length === 0;
+  const flow = useConnectFlow(station.address, true, params.get("resume"));
+  const [tokens, setTokens, tokenCheck] = useSlackTokens({ install: flow.view?.made?.state ?? undefined, form: flow.form });
+  const [settingsEcho, setSettingsEcho] = useState<SlackAppSettings | null>(null);
+  const [configEcho, setConfigEcho] = useState("");
+  const view = flow.view;
+  if (!view) return <div className={pagesCss.mScreen}><NavBar back="取消" onBack={app.pop} title="添加连接" />正在读取…</div>;
+  const { step, teams, chosen, made, noProfile } = view;
+  const models = view.pick?.options ?? [];
+  const entry = view.pick?.valueOption;
+  const rt = view.pick?.value.runtime ?? "claude";
+  const appSettings = settingsEcho ?? view.settings as SlackAppSettings;
+  const icon = view.icon ?? null;
+  const iconError = view.iconError ?? null;
+  const config = configEcho;
+  const mode = { mode: view.mode, requireMention: view.requireMention };
+  const setMode = (mode: { mode: ConnectMode; requireMention: boolean }) => flow.edit(mode);
+  const setStep = (step: string) => flow.go(step);
+  const setTeam = (team: string) => flow.edit({ team });
+  const setAppSettings = (settings: SlackAppSettings) => { setSettingsEcho(settings); flow.edit({ settings }); };
+  const setIcon = (icon: string | null) => flow.edit({ icon });
+  const setIconError = (iconError: string | null) => flow.edit({ iconError });
+  const setConfig = (config: string) => { setConfigEcho(config); flow.edit({ config }); };
+  const setModel = (model: ModelOption) => flow.choose({ model: model.model });
+  const setRuntime = (runtime: RuntimeKind) => flow.choose({ runtime });
+  const busy = flow.busy;
+  const error = flow.error;
+  const back = () => flow.go("back", app.pop);
+  const check = { ...tokenCheck, busy, then: (_go: () => void) => flow.act("verify") };
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={step === "team" || (resume && step === "install") ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className={barsCss.mNavbarNote}>{titles[step]} · {Math.max(1, order.indexOf(step) + 1)} / {order.length}</span>} />
+      <NavBar back={view.back === "close" ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className={barsCss.mNavbarNote}>{view.title} · {view.number} / {view.total}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {step === "team" && noProfile ? (
           <div className={newChatCss.mNewNone}>
@@ -571,9 +569,9 @@ export function NewConnectScreen() {
               <li>把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。{NAME} 会自己续期，以后不用再管。</li>
             </ol>
             <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={config} placeholder="xoxe-1-…" onChange={(e) => setConfig(e.target.value.trim())} />
-            {config.startsWith("xoxe.xoxp-") && <p className={partsCss.mError}>这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。</p>}
-            <Button label="加上" primary busy={busy} enabled={config.startsWith("xoxe-1-") && config.length > 20}
-              onClick={() => run(() => api.addConfigToken(config).then(({ teamId }) => { setConfig(""); setTeam(teamId); setStep("app"); }))} />
+            {view.configError && <p className={partsCss.mError}>{view.configError}</p>}
+            <Button label="加上" primary busy={busy} enabled={view.configReady}
+              onClick={() => flow.act("config", () => setConfigEcho(""))} />
           </>
         )}
         {step === "app" && (
@@ -585,11 +583,11 @@ export function NewConnectScreen() {
             <AppLook settings={appSettings} onChange={setAppSettings} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
             {iconError && <p className={partsCss.mError}>{iconError}</p>}
             <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>权限用默认的（全部打开）；建好以后可以在电脑上改。</p>
-            <Button label="创建 app" primary busy={busy} enabled={!!appSettings.name.trim() && !!chosen}
-              onClick={() => run(() => api.makeSlackApp({ team: chosen!.teamId, settings: appSettings, ...(icon ? { icon } : {}) }).then((r) => { setMadeId(r.appId); setIconError(r.iconError); setStep("install"); }))} />
+            <Button label="创建 app" primary busy={busy} enabled={view.canMake}
+              onClick={() => flow.act("make")} />
           </>
         )}
-        {step === "install" && !made && <p className={partsCss.mMuted}>{overview ? "这个 app 已经不在这台 station 上了：可能已经连上，或者被移除了。" : "正在读取…"}</p>}
+        {step === "install" && !made && <p className={partsCss.mMuted}>{view ? "这个 app 已经不在这台 station 上了：可能已经连上，或者被移除了。" : "正在读取…"}</p>}
         {step === "install" && made && (
           <>
             {iconError && <p className={partsCss.mError}>图标没传上：{iconError}</p>}
@@ -614,7 +612,7 @@ export function NewConnectScreen() {
                 // to Slack once its address is here; with no page to open, this one goes there.
                 const page = window.open("", "_blank");
                 if (page) page.opener = null;
-                run(() => api.createAppUrl(NAME).then(({ url }) => { if (page) page.location.href = url; else window.location.assign(url); }, (e: unknown) => { page?.close(); throw e; }));
+                void api.createAppUrl(NAME).then(({ url }) => { if (page) page.location.href = url; else window.location.assign(url); }, (e: unknown) => { page?.close(); app.toast(e instanceof Error ? e.message : String(e)); });
               }} />。</li>
               <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
@@ -640,10 +638,7 @@ export function NewConnectScreen() {
             <GroupLabel>会话方式</GroupLabel>
             <ModeChoices value={mode} onChange={setMode} />
             <Button label="添加并连接" primary busy={busy} enabled={!!entry}
-              onClick={() => run(() => api.createConnect({
-                kind: "slack", ...mode, bind: { runtime: rt, model: entry?.model ?? "", effort: "", profile: null },
-                slack: made?.state ? { appToken: tokens.appToken, install: made.state } : { appToken: tokens.appToken, botToken: tokens.botToken, ...(made ? { appId: made.appId } : {}) },
-              }).then(({ id }) => { app.toast("已添加连接，正在连接 Slack"); app.replace(`${stationBase(station.address)}/connects/${encodeURIComponent(id)}`); }))} />
+              onClick={() => flow.act("create", ({ id }) => { app.toast("已添加连接，正在连接 Slack"); app.replace(`${stationBase(station.address)}/connects/${encodeURIComponent(String(id))}`); })} />
           </>
         )}
         {error && <p className={partsCss.mError}>{error}</p>}

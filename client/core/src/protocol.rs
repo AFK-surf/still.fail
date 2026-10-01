@@ -183,6 +183,7 @@ pub enum Topic {
     Doing,
     /// A form owned by one UI, kept only in memory.
     SlackTokens { station: String, form: String },
+    ConnectFlow { station: String, form: String },
     /// What changed in still.fail, as this app shows it (changelog.rs): by day, each change saying where it is and
     /// whether this app has it, and what this app got since it was last shown (`changelog.seen`).
     Changelog,
@@ -206,7 +207,7 @@ impl Topic {
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
             // The core's own (pill.rs, changelog.rs).
-            Topic::Changelog | Topic::Doing | Topic::SlackTokens { .. } => None,
+            Topic::Changelog | Topic::Doing | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. } => None,
             Topic::Connection { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } | Topic::Usage { .. } | Topic::Decisions { .. } => None,
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => None,

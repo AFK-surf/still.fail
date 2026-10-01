@@ -149,8 +149,6 @@ impl std::fmt::Display for StationAddr {
 
 mod wire;
 pub use wire::{WireReply, StationWire, WireSocket, SocketOut, SocketFrame, MeshSource, StationCredentials, MeshWire, wire};
-#[cfg(test)]
-use wire::first_answer;
 
 // ── where topic values go ───────────────────────────────────────────────────
 

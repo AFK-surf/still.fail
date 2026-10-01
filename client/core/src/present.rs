@@ -661,6 +661,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::JobLog { .. } => s::conform::<s::JobLogView>(value),
         Topic::Prefs => s::conform::<s::PrefsView>(value),
         Topic::Changelog => s::conform::<s::ChangelogView>(value),
+        Topic::ConnectFlow { .. } => s::conform::<s::ConnectFlowView>(value),
         Topic::SlackTokens { .. } => s::conform::<s::SlackTokensView>(value),
         Topic::Doing => s::conform::<s::DoingView>(value),
         Topic::WorkspaceMarks { .. } => s::conform::<s::WorkspaceMarksView>(value),

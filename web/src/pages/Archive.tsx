@@ -1,3 +1,4 @@
+import { useDoing } from "../doing.ts";
 // The archive: chats archived by hand or by the station once they idled (a
 // day by default), of every station online in one list, newest first and
 // grouped by the day they were archived; each can be shown again, and one
@@ -50,19 +51,16 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
   const toast = useToast();
   const { days, errors, note, restore, remove: removeItem } = useArchive(scope, toast);
   const [deleting, setDeleting] = useState<ArchiveItem | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("session.delete", { station: deleting?.station, key: deleting?.session });
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const remove = async () => {
     if (!deleting) return;
-    setBusy(true);
     setDeleteError(null);
     try {
       await removeItem(deleting);
       setDeleting(null);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
     }
   };
   return (

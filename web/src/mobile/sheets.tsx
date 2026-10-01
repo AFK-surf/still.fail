@@ -1,3 +1,4 @@
+import { useAction } from "../action.ts";
 // Sheets that ask something of the viewer, as the Android app's do: whether to go on with what cannot be undone, a
 // name, a command to copy.
 import { useState, type ReactNode } from "react";
@@ -16,8 +17,9 @@ export function confirm(app: MobileApp, spec: { title: string; text: ReactNode; 
 
 function Confirm({ title, text, action, danger = false, run }: { title: string; text: ReactNode; action: string; danger?: boolean; run: () => Promise<unknown> }) {
   const app = useApp();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const operation = useAction(run, () => app.sheet(null));
+  const { busy } = operation;
+  const error = operation.error?.message;
   return (
     <>
       <SheetGrab />
@@ -29,8 +31,7 @@ function Confirm({ title, text, action, danger = false, run }: { title: string; 
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <span data-danger={danger || undefined} className={css.mDangerButton}>
             <Button label={action} primary busy={busy} onClick={() => {
-              setBusy(true); setError(null);
-              run().then(() => app.sheet(null), (e: unknown) => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false));
+              void operation.run();
             }} />
           </span>
         </div>
@@ -47,11 +48,11 @@ export function ask(app: MobileApp, spec: { title: string; value: string; placeh
 function Ask({ title, value: first, placeholder, action, hint, secret = false, empty = false, run }: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; empty?: boolean; run: (value: string) => Promise<unknown> }) {
   const app = useApp();
   const [value, setValue] = useState(first);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const operation = useAction(run, () => app.sheet(null));
+  const { busy } = operation;
+  const error = operation.error?.message;
   const go = () => {
-    setBusy(true); setError(null);
-    run(value.trim()).then(() => app.sheet(null), (e: unknown) => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false));
+    void operation.run(value.trim());
   };
   return (
     <>

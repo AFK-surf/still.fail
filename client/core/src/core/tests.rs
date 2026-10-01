@@ -1748,3 +1748,125 @@ fn the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen() 
         assert_eq!(host.requests.borrow().iter().filter(|r| r.url.ends_with("/v1/changelog")).count(), 2);
     });
 }
+
+#[test]
+fn connect_wizard_owns_steps_tokens_and_submission_on_all_clients() {
+    run(async {
+        let (host, core) = choosing_core().await;
+        let ui = core.connect();
+        let topic = Topic::ConnectFlow { station:"ws/st".into(), form:"wizard".into() };
+        let form = json!({"station":"ws/st","form":"wizard"});
+        call(&host,&core,ui,1,"connect.flow.open",form.clone()).await.unwrap();
+        let flow = &core.inner.connect_flow;
+        let view = flow.value(&topic).unwrap();
+        assert_eq!(view["gettingToken"],true,"desktop has the config form on its first step");
+        assert_eq!(view["total"],4);
+        let mut shaped = view;
+        crate::present::decorate(&topic, &mut shaped, crate::present::Clock {now:0.0,offset_min:0});
+        stillfail_shapes::conform::<stillfail_shapes::ConnectFlowView>(shaped).unwrap();
+        assert!(flow.go(&topic,ui,"bind").is_err(),"cannot skip token verification");
+        flow.go(&topic,ui,"manual").unwrap();
+        assert_eq!(flow.value(&topic).unwrap()["total"],2);
+        call(&host,&core,ui,2,"slack.tokens.edit",json!({"station":"ws/st","form":"wizard","input":{"appToken":"app","botToken":"bot"}})).await.unwrap();
+        let overview=core.inner.store.get(&Topic::Overview{station:"ws/st".into()}).unwrap();
+        station_answers(&host,move |req| match req.url.trim_start_matches("https://stillfail.test") {
+            "/admin/api/slack/verify"=>json_response(200,json!({"identity":{"team":"Team","teamId":"T","url":"https://t.slack.com","botUserId":"B","botName":"bot"},"errors":[]})),
+            "/admin/api/connects"=>json_response(200,json!({"id":"new"})),
+            "/admin/api/overview"=>json_response(200,overview.clone()),
+            _=>json_response(200,json!({})),
+        });
+        call(&host,&core,ui,3,"connect.flow.verify",form.clone()).await.unwrap();
+        assert_eq!(flow.value(&topic).unwrap()["step"],"bind");
+        call(&host,&core,ui,4,"pick.set",json!({"station":"ws/st","of":"connect-new:wizard","model":"gpt-6-astra","runtime":"codex"})).await.unwrap();
+        call(&host,&core,ui,5,"pick.save",json!({"station":"ws/st","of":"connect-new:wizard"})).await.unwrap();
+        let created=call(&host,&core,ui,6,"connect.flow.create",form.clone()).await.unwrap();
+        assert_eq!(created["id"],"new");
+        let sent=posted(&host,"/connects");
+        assert_eq!(sent.len(),1);
+        assert_eq!(sent[0]["bind"]["model"],"gpt-6-astra");
+        assert_eq!(sent[0]["bind"]["runtime"],"codex");
+        assert_eq!(sent[0]["bind"]["effort"],"");
+        assert_eq!(sent[0]["slack"]["appToken"],"app");
+        assert!(call(&host,&core,ui,7,"connect.flow.create",form.clone()).await.is_err(),"a completed form cannot create twice");
+        call(&host,&core,ui,8,"connect.flow.drop",form).await.unwrap();
+        assert!(flow.value(&topic).is_err());
+        assert_eq!(core.inner.slack_tokens.value(&crate::connect_flow::tokens("ws/st","wizard"))["appToken"],"");
+    });
+}
+
+#[test]
+fn connect_wizard_isolates_forms_handles_resume_and_discards_closed_results() {
+    run(async {
+        let (host,core)=choosing_core().await;let ui=core.connect();let other=core.connect();
+        for (id,form) in [(1,"one"),(2,"two")] {
+            call(&host,&core,ui,id,"connect.flow.open",json!({"station":"ws/st","form":form,"input":{"mobile":true}})).await.unwrap();
+        }
+        let flow=&core.inner.connect_flow;
+        let one=Topic::ConnectFlow{station:"ws/st".into(),form:"one".into()};
+        let two=Topic::ConnectFlow{station:"ws/st".into(),form:"two".into()};
+        assert_eq!(flow.value(&one).unwrap()["gettingToken"],false,"mobile shows a token page, not the desktop inline form");
+        assert!(flow.edit(&one,other,&json!({"config":"secret"})).is_err());
+        assert!(flow.edit(&one,ui,&json!({"requireMention":"false"})).is_err());
+        flow.go(&one,ui,"token").unwrap();
+        flow.edit(&one,ui,&json!({"config":"xoxe.xoxp-wrong"})).unwrap();
+        assert!(flow.value(&one).unwrap()["configError"].is_string());
+        assert!(flow.begin(&one,ui,"config",&json!({}),false).is_err());
+        flow.edit(&one,ui,&json!({"config":" xoxe-1-long-enough-refresh-token "})).unwrap();
+        let (generation,name,params)=flow.begin(&one,ui,"config",&json!({}),false).unwrap();
+        assert_eq!(name,"slack.addConfigToken");assert_eq!(params["refreshToken"],"xoxe-1-long-enough-refresh-token");
+        assert!(flow.go(&one,ui,"back").is_err());
+        assert!(flow.begin(&one,ui,"config",&json!({}),false).is_err());
+        flow.drop(&one,ui);flow.open(&one,ui,&json!({"mobile":true,"resume":"existing"})).unwrap();
+        assert!(!flow.finish(&one,generation,"config",&Ok(json!({"teamId":"late"}))));
+        assert_eq!(flow.value(&one).unwrap()["step"],"install");assert_eq!(flow.value(&one).unwrap()["back"],"close");
+        call(&host,&core,ui,3,"pick.set",json!({"station":"ws/st","of":"connect-new:one","model":"gpt-6-astra","runtime":"codex"})).await.unwrap();
+        call(&host,&core,ui,4,"pick.save",json!({"station":"ws/st","of":"connect-new:one"})).await.unwrap();
+        assert_eq!(flow.value(&one).unwrap()["pick"]["value"]["model"],"gpt-6-astra");
+        assert_ne!(flow.value(&two).unwrap()["pick"]["value"]["model"],"gpt-6-astra");
+        core.disconnect(ui);
+        assert!(flow.value(&one).is_err());assert!(flow.value(&two).is_err());
+    });
+}
+
+#[test]
+fn connect_wizard_configuration_and_oauth_install_keep_one_draft() {
+    run(async {
+        let (host, core) = choosing_core().await;
+        let ui = core.connect();
+        let topic = Topic::ConnectFlow { station: "ws/st".into(), form: "oauth".into() };
+        let flow = &core.inner.connect_flow;
+        flow.open(&topic, ui, &json!({"mobile":true})).unwrap();
+        flow.go(&topic, ui, "token").unwrap();
+        flow.edit(&topic, ui, &json!({"config":"xoxe-1-a-refresh-token-for-test"})).unwrap();
+        let (generation, _, _) = flow.begin(&topic, ui, "config", &json!({}), false).unwrap();
+        flow.finish(&topic, generation, "config", &Ok(json!({"teamId":"T"})));
+        let overview_topic = Topic::Overview { station: "ws/st".into() };
+        let mut overview = core.inner.store.get(&overview_topic).unwrap();
+        overview["slackTeams"] = json!([{"teamId":"T","teamName":"Team"}]);
+        core.inner.store.set(&overview_topic, Ok(overview.clone()));
+        assert_eq!(flow.value(&topic).unwrap()["config"], "");
+        let (generation, name, params) = flow.begin(&topic, ui, "make", &json!({}), false).unwrap();
+        assert_eq!(name, "slack.makeApp");
+        assert_eq!(params["team"], "T");
+        assert_eq!(params["settings"]["groups"].as_object().unwrap().len(), 16);
+        flow.finish(&topic, generation, "make", &Err(CoreError::invalid("try again")));
+        assert_eq!(flow.value(&topic).unwrap()["step"], "app");
+        let (generation, _, _) = flow.begin(&topic, ui, "make", &json!({}), false).unwrap();
+        flow.finish(&topic, generation, "make", &Ok(json!({"appId":"A"})));
+        overview["slackApps"] = json!([{"appId":"A","state":"oauth-state","installed":true}]);
+        core.inner.store.set(&overview_topic, Ok(overview));
+        let tokens = json!({"appToken":"app-token","botToken":""});
+        let (generation, name, params) = flow.begin(&topic, ui, "verify", &tokens, false).unwrap();
+        assert_eq!(name, "slack.verify");
+        assert_eq!(params["install"], "oauth-state");
+        flow.finish(&topic, generation, "verify", &Ok(json!({"identity":null,"errors":["invalid token"]})));
+        assert_eq!(flow.value(&topic).unwrap()["step"], "install");
+        let (generation, _, _) = flow.begin(&topic, ui, "verify", &tokens, false).unwrap();
+        flow.finish(&topic, generation, "verify", &Ok(json!({"identity":{"teamId":"T"},"errors":[]})));
+        assert!(flow.begin(&topic, ui, "create", &tokens, false).is_err());
+        let (_, name, params) = flow.begin(&topic, ui, "create", &tokens, true).unwrap();
+        assert_eq!(name, "connect.create");
+        assert_eq!(params["input"]["slack"], json!({"appToken":"app-token","install":"oauth-state"}));
+        assert!(host.requests.borrow().iter().all(|r| !r.url.contains("slack.com")));
+    });
+}

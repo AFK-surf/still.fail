@@ -1,3 +1,4 @@
+import { useAction } from "../action.ts";
 // An agent's execution history on a narrow screen, as the Android app has it (apps/android/…/screens/History.kt): a
 // sheet that drags between half and full height. What it received and what it sent are drawn alike (a line, then the
 // words beside a bar); what it did in between is grouped, each group opening to its commands and output; its details
@@ -73,14 +74,10 @@ function Actions({ station, agent }: { station: string; agent: ChatAgent }) {
 }
 
 function Act({ icon: I, label, run }: { icon: Icon; label: string; run: () => Promise<unknown> }) {
-  const app = useApp();
-  const [busy, setBusy] = useState(false);
-  return (
-    <button type="button" className={css.mHAct} disabled={busy} aria-label={label}
-      onClick={() => { setBusy(true); run().catch((e: unknown) => app.toast(`没能${label}：${e instanceof Error ? e.message : String(e)}`)).finally(() => setBusy(false)); }}>
-      {busy ? <Spinner size={14} /> : <I size={14} />}
-    </button>
-  );
+  const action = useAction(run);
+  return <button type="button" className={css.mHAct} disabled={action.busy} aria-label={label} onClick={() => void action.run()}>
+    {action.busy ? <Spinner size={14} /> : <I size={14} />}
+  </button>;
 }
 
 /** A station's API by its address: a sheet lies over the page, outside its station's context. */
@@ -367,7 +364,7 @@ export function RunSettingsScreen() {
   useEffect(() => pickSet({ open: true }), [pickSet]);
   // A long list (the models, the accounts) is a list of its own, picked from and back.
   const [list, setList] = useState<"model" | "account" | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = pick.saving;
   const title = list === "model" ? "选模型" : list === "account" ? "选账号" : "换模型";
   const bar = <NavBar back={list ? "换模型" : "返回"} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
   if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? "正在读取…"}</p></div>;
@@ -377,10 +374,8 @@ export function RunSettingsScreen() {
   if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={v.accounts} runtime={s.runtime} picked={chosen} onPick={(p) => { pick.set({ profile: p }); setList(null); }} /></div>;
   const save = () => {
     if (!v.changed || !v.option) return app.pop();
-    setBusy(true);
     pick.save()
-      .then(() => { app.toast("已改，下一轮起生效"); app.pop(); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)))
-      .finally(() => setBusy(false));
+      .then(() => { app.toast("已改，下一轮起生效"); app.pop(); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)));
   };
   const effort = v.draft.effort ?? null;
   return (

@@ -1184,6 +1184,138 @@ export interface ConfigTokenOwner {
 	image?: string;
 }
 
+export interface ConnectAppSettings {
+	name: string;
+	displayName: string;
+	description: string;
+	longDescription: string;
+	backgroundColor: string;
+	groups: Record<string, boolean>;
+}
+
+export interface SlackTeam {
+	teamId: string;
+	name: string;
+	owner?: ConfigTokenOwner;
+}
+
+export interface SlackAppLinks {
+	settings: string;
+	install: string;
+	appToken: string;
+	oauth: string;
+}
+
+/** A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens). */
+export interface MadeSlackApp {
+	appId: string;
+	name: string;
+	teamId: string;
+	/** The Slack workspace's name, when its configuration token says. */
+	team?: string;
+	created: number;
+	links: SlackAppLinks;
+	/** The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand. */
+	install?: string;
+	/** Its install's state, what a connect names it by. */
+	state?: string;
+	installed: boolean;
+	installedTeam?: string;
+}
+
+/**
+ * What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
+ * station's pick.
+ */
+export interface Picked {
+	model?: string;
+	runtime: RuntimeKind;
+	effort?: string;
+	profile?: string;
+}
+
+/** The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low. */
+export interface PickAccount {
+	text: string;
+	auto: boolean;
+	level?: Level;
+	profile?: RunnableProfile;
+}
+
+/**
+ * A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
+ * until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
+ * station's pick, said so (`dropped`, `force`).
+ */
+export interface PickView {
+	options: ModelOption[];
+	runtimeFixed: boolean;
+	value: Picked;
+	valueOption?: ModelOption;
+	/** The account the control names; none: it names none (a new chat's, while the station's pick is fine). */
+	account?: PickAccount;
+	draft: Picked;
+	/** The option picked in the panel, by its `model`. */
+	option?: string;
+	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
+	runtimes: RuntimeKind[];
+	efforts: string[];
+	accounts: RunnableProfile[];
+	dropped?: string;
+	/**
+	 * The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
+	 * station's pick runs low.
+	 */
+	who: string;
+	whoLevel?: Level;
+	/** The station's pick, said: who it is on now, or what it does. */
+	autoNote: string;
+	changed: boolean;
+	/**
+	 * Full screen (the phone's): the model, depth and account as they were and as they become; why the account
+	 * must change; the model and account picked in words; what the button says.
+	 */
+	was: string[];
+	becomes: string[];
+	force?: string;
+	modelText: string;
+	maker?: Maker;
+	accountText: string;
+	accountNote: string;
+	accountWarn: boolean;
+	saveText: string;
+}
+
+/** One transient connect wizard. Decisions and navigation come from the core on every client. */
+export interface ConnectFlowView {
+	step: string;
+	title: string;
+	back: string;
+	number: number;
+	total: number;
+	resume?: string;
+	mobile: boolean;
+	team?: string;
+	adding: boolean;
+	settings: ConnectAppSettings;
+	icon?: string;
+	iconError?: string;
+	madeId?: string;
+	config: string;
+	configReady: boolean;
+	configError?: string;
+	mode: ConnectMode;
+	requireMention: boolean;
+	gettingToken: boolean;
+	noProfile: boolean;
+	canMake: boolean;
+	canCreate: boolean;
+	teams: SlackTeam[];
+	chosen?: SlackTeam;
+	made?: MadeSlackApp;
+	pick?: PickView;
+}
+
 export interface ConnectItem {
 	station: string;
 	stationName: string;
@@ -1733,30 +1865,6 @@ export interface MachineLogin {
 	offered?: boolean;
 }
 
-export interface SlackAppLinks {
-	settings: string;
-	install: string;
-	appToken: string;
-	oauth: string;
-}
-
-/** A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens). */
-export interface MadeSlackApp {
-	appId: string;
-	name: string;
-	teamId: string;
-	/** The Slack workspace's name, when its configuration token says. */
-	team?: string;
-	created: number;
-	links: SlackAppLinks;
-	/** The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand. */
-	install?: string;
-	/** Its install's state, what a connect names it by. */
-	state?: string;
-	installed: boolean;
-	installedTeam?: string;
-}
-
 export interface MemoryFile {
 	path: string;
 	text: string;
@@ -1809,12 +1917,6 @@ export interface Viewer {
 	role?: string;
 	workspace?: string;
 	device?: string;
-}
-
-export interface SlackTeam {
-	teamId: string;
-	name: string;
-	owner?: ConfigTokenOwner;
 }
 
 export interface PendingLogin {
@@ -1961,69 +2063,6 @@ export interface StationView {
 	net?: StationNet;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
-}
-
-/**
- * What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
- * station's pick.
- */
-export interface Picked {
-	model?: string;
-	runtime: RuntimeKind;
-	effort?: string;
-	profile?: string;
-}
-
-/** The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low. */
-export interface PickAccount {
-	text: string;
-	auto: boolean;
-	level?: Level;
-	profile?: RunnableProfile;
-}
-
-/**
- * A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
- * until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
- * station's pick, said so (`dropped`, `force`).
- */
-export interface PickView {
-	options: ModelOption[];
-	runtimeFixed: boolean;
-	value: Picked;
-	valueOption?: ModelOption;
-	/** The account the control names; none: it names none (a new chat's, while the station's pick is fine). */
-	account?: PickAccount;
-	draft: Picked;
-	/** The option picked in the panel, by its `model`. */
-	option?: string;
-	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
-	runtimes: RuntimeKind[];
-	efforts: string[];
-	accounts: RunnableProfile[];
-	dropped?: string;
-	/**
-	 * The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
-	 * station's pick runs low.
-	 */
-	who: string;
-	whoLevel?: Level;
-	/** The station's pick, said: who it is on now, or what it does. */
-	autoNote: string;
-	changed: boolean;
-	/**
-	 * Full screen (the phone's): the model, depth and account as they were and as they become; why the account
-	 * must change; the model and account picked in words; what the button says.
-	 */
-	was: string[];
-	becomes: string[];
-	force?: string;
-	modelText: string;
-	maker?: Maker;
-	accountText: string;
-	accountNote: string;
-	accountWarn: boolean;
-	saveText: string;
 }
 
 /**

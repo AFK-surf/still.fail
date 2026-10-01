@@ -4,7 +4,7 @@ use super::*;
 impl Source for Router {
     fn start(&self, topic: &Topic) {
         // Always kept (status.rs): only computed while shown.
-        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Doing | Topic::SlackTokens { .. }) {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Doing | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. }) {
             if let Some(core) = self.core.upgrade() {
                 core.store.invalidate(topic);
             }
@@ -65,7 +65,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs | Topic::Doing | Topic::SlackTokens { .. }) {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs | Topic::Doing | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. }) {
             return;
         }
         if let Topic::Connection { .. } = topic {
@@ -106,6 +106,9 @@ impl Source for Router {
         }
         if let Topic::Notify { workspace } = topic {
             return Some(Ok(self.attend.value(workspace.as_deref())));
+        }
+        if let Topic::ConnectFlow { .. } = topic {
+            return self.core.upgrade().map(|core| core.connect_flow.value(topic));
         }
         if let Topic::SlackTokens { .. } = topic {
             return self.core.upgrade().map(|core| Ok(core.slack_tokens.value(topic)));

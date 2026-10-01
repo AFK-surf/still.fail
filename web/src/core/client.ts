@@ -1,3 +1,4 @@
+import { UNTRACKED_OPERATIONS } from "./operations.ts";
 // The UI's side of the core (docs/client-core.md): one channel to the worker
 // that runs it, calls with request ids, and subscriptions that survive the
 // worker being replaced. The worker is a SharedWorker so every tab shares one
@@ -11,6 +12,7 @@ import { captureException } from "../telemetry.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
 export type Topic =
+  | { topic: "connectFlow"; station: string; form: string }
   | { topic: "slackTokens"; station: string; form: string }
   | { topic: "accounts" }
   | { topic: "workspaces" }
@@ -167,6 +169,20 @@ const RETRY_MS = [0, 1000, 2000, 5000, 10_000, 30_000];
 /** A worker that answered before and says nothing this long after the page is back is taken for gone. */
 export const WAKE_ANSWER_MS = 5000;
 
+// Promise identity survives thin generated bindings. Only identifying scalar params are retained, never bodies/tokens.
+interface CallDetails { name: string; on: Record<string, string | number | boolean>; tracked: boolean }
+const calls = new WeakMap<Promise<unknown>, CallDetails>();
+let capturing: CallDetails[] | undefined;
+/** Identifies the call behind a thin .then/async adapter. Multi-call orchestration keeps local feedback. */
+export function captureCall<T>(run: () => Promise<T>): { promise: Promise<T>; details: CallDetails | undefined } {
+  const parent = capturing;
+  const found: CallDetails[] = [];
+  capturing = found;
+  try { const promise = run(); return { promise, details: calls.get(promise) ?? (found.length === 1 ? found[0] : undefined) }; }
+  finally { capturing = parent; }
+}
+export const callDetails = (promise: Promise<unknown>) => calls.get(promise);
+
 export class CoreClient {
   readonly #open: Opener;
   readonly #schedule: (ms: number, run: () => void) => void;
@@ -198,7 +214,7 @@ export class CoreClient {
     if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: "连接已关闭" }));
     if (signal?.aborted) return Promise.reject(new CoreError({ code: "cancelled", message: "已取消" }));
     const id = this.#nextId++;
-    return new Promise((resolve, reject) => {
+    const promise = new Promise<unknown>((resolve, reject) => {
       this.#calls.set(id, { resolve, reject, onProgress });
       this.#send({ id, call: name, params });
       signal?.addEventListener("abort", () => {
@@ -213,6 +229,12 @@ export class CoreClient {
         }
       }, { once: true });
     });
+    const on = Object.fromEntries(Object.entries((params ?? {}) as Record<string, unknown>).filter(([k, v]) =>
+      !/token|code|password|secret/i.test(k) && (typeof v === "string" || typeof v === "number" || typeof v === "boolean"))) as CallDetails["on"];
+    const details = { name, on, tracked: !UNTRACKED_OPERATIONS.has(name) };
+    calls.set(promise, details);
+    capturing?.push(details);
+    return promise;
   }
 
   /** Values arrive on `onValue` (the whole current value each time, deltas already applied); returns the unsubscribe. */

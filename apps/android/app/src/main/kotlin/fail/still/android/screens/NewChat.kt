@@ -428,7 +428,7 @@ private fun lookAtMachineSession(app: AppState, view: StationView, sessions: Lis
         val scope = rememberCoroutineScope()
         var shown by remember { mutableStateOf<Pair<List<MachineSaid>, Long>?>(null) }
         var error by remember { mutableStateOf<String?>(null) }
-        var busy by remember { mutableStateOf(false) }
+        val busy = app.isDoing("machineSessions.continue", "station" to view.station, "id" to s.id)
         LaunchedEffect(s.id) {
             try { shown = app.api(view.station).machineSession(s.runtime, s.id) } catch (e: CoreException) { error = e.message }
         }
@@ -464,12 +464,12 @@ private fun lookAtMachineSession(app: AppState, view: StationView, sessions: Lis
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button("返回", primary = false) { openMachineSessions(app, view, sessions) }
             Button(if (s.session != null) "打开它的对话" else "接着这个会话", primary = true, busy = busy) {
-                busy = true; error = null
+                error = null
                 scope.launch {
                     try {
                         val key = app.api(view.station).continueMachineSession(s.runtime, s.id)
                         app.replace(Screen.Chat(view.station, ChatOf.Session(key)))
-                    } catch (e: CoreException) { error = e.message } finally { busy = false }
+                    } catch (e: CoreException) { error = e.message }
                 }
             }
         }

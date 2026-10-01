@@ -2,6 +2,7 @@ package fail.still.core
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -66,6 +67,22 @@ class StillFailCoreTest {
         }
         fail("expected $code")
         throw AssertionError()
+    }
+
+    @Test
+    fun callObserversFollowTheirOwnCoroutineAcrossSuspension() = runTest {
+        val engines = FakeEngines(); val core = core(engines)
+        val first = mutableListOf<String>(); val second = mutableListOf<String>()
+        val a = async { withContext(CallObserver { name, _ -> first += name }) {
+            core.call("one"); core.call("after-one")
+        } }
+        val b = async { withContext(CallObserver { name, _ -> second += name }) { core.call("two") } }
+        runCurrent()
+        assertEquals(listOf("one"), first); assertEquals(listOf("two"), second)
+        engines.last.reply("""{"id":1,"ok":{}}"""); engines.last.reply("""{"id":2,"ok":{}}""")
+        runCurrent()
+        assertEquals(listOf("one", "after-one"), first); assertEquals(listOf("two"), second)
+        engines.last.reply("""{"id":3,"ok":{}}"""); runCurrent(); a.await(); b.await()
     }
 
     @Test

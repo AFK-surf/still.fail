@@ -69,6 +69,10 @@ TS
   : > "$pkg/.stand-in"
 }
 
+if touches '^client/core/src/(ops|doing)\.rs$|^scripts/operations\.py$|^web/src/core/operations\.ts$|/data/Operations\.kt$'; then
+  step "operation bindings" python3 scripts/operations.py --check
+fi
+
 ts_root='^(scripts|test|spike)/.*\.ts$|^(tsconfig\.json|package\.json|pnpm-lock\.yaml)$'
 ts_web='^web/|^client/shapes/'
 ts_cloud='^cloud/'
@@ -115,7 +119,7 @@ if [ $full = 1 ]; then
   if touches '^(apps/android|client)/'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if has cargo && [ -d "$sdk/ndk/28.2.13676358" ]; then
-      step "Android" python3 apps/android/build.py --tasks :app:compileDebugKotlin :core:testDebugUnitTest
+      step "Android" python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest
     else later "Android"; fi
   fi
 fi

@@ -163,7 +163,7 @@ internal fun askTitle(app: AppState, station: String, thread: Long?, session: St
     app.sheet = SheetSpec(0.42f) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(first) }
-        var busy by remember { mutableStateOf(false) }
+        val busy = app.isDoing("chat.rename", "station" to station, "session" to session)
         var error by remember { mutableStateOf<String?>(null) }
         SheetGrab()
         SheetHead("重命名对话")
@@ -174,10 +174,10 @@ internal fun askTitle(app: AppState, station: String, thread: Long?, session: St
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }
                 Button("保存", primary = true, busy = busy, enabled = text.trim() != first) {
-                    busy = true; error = null
+                    error = null
                     scope.launch {
                         try { app.api(station).rename(thread, session, text.trim()); app.sheet = null }
-                        catch (e: CoreException) { error = e.message } finally { busy = false }
+                        catch (e: CoreException) { error = e.message }
                     }
                 }
             }

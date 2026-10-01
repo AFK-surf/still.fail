@@ -24,6 +24,7 @@ import kotlinx.serialization.json.putJsonArray
 
 /** The admin API of one station, by what each call does. */
 class StationApi(private val core: StillFailCore, val station: String) {
+    private val ops = StationOperations { name, params -> core.call(name, JsonObject(params + ("station" to JsonPrimitive(station)))) }
     private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
         core.call(name, buildJsonObject { fill(); put("station", station) })
 
@@ -63,108 +64,100 @@ class StationApi(private val core: StillFailCore, val station: String) {
     // ── connects (web/src/api.ts → stationApi) ──
 
     /** Changes a connect: any of `bind`, `mode`, `requireMention`, `enabled`, `slack`, `owner`. */
-    suspend fun putConnect(id: String, body: JsonObject) { op("connect.put") { put("id", id); put("input", body) } }
-    suspend fun deleteConnect(id: String) { op("connect.delete") { put("id", id) } }
-    suspend fun reconnect(id: String) { op("connect.reconnect") { put("id", id) } }
+    suspend fun putConnect(id: String, body: JsonObject) { ops.connectPut(id = id) { this.input = body } }
+    suspend fun deleteConnect(id: String) { ops.connectDelete(id = id) }
+    suspend fun reconnect(id: String) { ops.connectReconnect(id = id) }
     /** A single-session connect's session: `session` null makes a new one (named `title`). */
     suspend fun bindSession(connect: String, session: String?, title: String) {
-        op("connect.bindSession") { put("connect", connect); put("session", session); if (title.isNotBlank()) put("title", title) }
+        ops.connectBindSession(connect = connect) { this.session = session; if (title.isNotBlank()) this.title = title }
     }
     /** Who the Slack tokens are (null with the errors when they do not work). */
     suspend fun verifySlack(connect: String?, install: String?, appToken: String, botToken: String): Pair<SlackIdentity?, List<String>> {
-        val r = op("slack.verify") {
-            if (connect != null) put("connect", connect); if (install != null) put("install", install); put("appToken", appToken); put("botToken", botToken)
-        }.jsonObject
+        val r = ops.slackVerify() { if (connect != null) this.connect = connect; if (install != null) this.install = install; this.appToken = appToken; this.botToken = botToken }.jsonObject
         val identity = r["identity"]?.takeIf { it !is JsonNull }?.let { decode(SlackIdentity.serializer(), it) }
         return identity to (r["errors"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList())
     }
     /** A Slack workspace's app configuration token (its refresh token); answers which workspace. */
     suspend fun addConfigToken(refreshToken: String): String =
-        op("slack.addConfigToken") { put("refreshToken", refreshToken) }.jsonObject["teamId"]!!.jsonPrimitive.content
+        ops.slackAddConfigToken() { this.refreshToken = refreshToken }.jsonObject["teamId"]!!.jsonPrimitive.content
     /**
      * Makes a Slack app with still.fail's manifest in the workspace of `team`: its name and description, the rest as a new
      * app's. The station keeps it, waiting for its connect (the overview's `slackApps`); answers its app id.
      */
     suspend fun makeSlackApp(team: String, name: String, description: String): String =
-        op("slack.makeApp") {
-            put("team", team)
-            put("settings", buildJsonObject {
+        ops.slackMakeApp() { this.team = team
+            this.settings = buildJsonObject {
                 put("name", name); put("displayName", name); put("description", description); put("longDescription", ""); put("backgroundColor", "#F3E3D3")
                 put("groups", buildJsonObject { SLACK_GROUPS.forEach { put(it, true) } })
-            })
-        }.jsonObject["appId"]!!.jsonPrimitive.content
+            } }.jsonObject["appId"]!!.jsonPrimitive.content
     /** Drops an app made here from the waiting ones; it stays in Slack. */
-    suspend fun dropSlackApp(appId: String) { op("slack.dropApp") { put("appId", appId) } }
+    suspend fun dropSlackApp(appId: String) { ops.slackDropApp(appId = appId) }
     /** The people of the Slack workspaces this station's connects are in, once each by email, and what could not be read. */
     suspend fun slackPeople(): Pair<List<SlackPerson>, List<String>> {
-        val r = op("slack.people").jsonObject
+        val r = ops.slackPeople().jsonObject
         val people = r["people"]?.takeIf { it !is JsonNull }?.let { decode(ListSerializer(SlackPerson.serializer()), it) } ?: emptyList()
         return people to (r["errors"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList())
     }
     /** Where to make a Slack app by hand from still.fail's manifest. */
     suspend fun createAppUrl(name: String): String =
-        op("slack.createAppUrl") { put("name", name) }.jsonObject["url"]!!.jsonPrimitive.content
+        ops.slackCreateAppUrl(name = name).jsonObject["url"]!!.jsonPrimitive.content
     /** A new connect; answers its id. */
-    suspend fun createConnect(body: JsonObject): String = op("connect.create") { put("input", body) }.jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun createConnect(body: JsonObject): String = ops.connectCreate() { this.input = body }.jsonObject["id"]!!.jsonPrimitive.content
 
     // ── profiles ──
 
     /** Changes a profile: any of `name`, `access`, `env`, `models`. */
-    suspend fun putProfile(id: String, body: JsonObject) { op("profile.put") { put("id", id); put("input", body) } }
-    suspend fun deleteProfile(id: String) { op("profile.delete") { put("id", id) } }
-    suspend fun refreshQuota(id: String) { op("profile.quota") { put("id", id) } }
-    suspend fun startLogin(profile: String) { op("profile.login") { put("id", profile) } }
-    suspend fun cancelLogin(profile: String) { op("profile.cancelLogin") { put("id", profile) } }
-    suspend fun loginCode(profile: String, code: String) { op("profile.loginCode") { put("id", profile); put("code", code) } }
+    suspend fun putProfile(id: String, body: JsonObject) { ops.profilePut(id = id) { this.input = body } }
+    suspend fun deleteProfile(id: String) { ops.profileDelete(id = id) }
+    suspend fun refreshQuota(id: String) { ops.profileQuota(id = id) }
+    suspend fun startLogin(profile: String) { ops.profileLogin(id = profile) }
+    suspend fun cancelLogin(profile: String) { ops.profileCancelLogin(id = profile) }
+    suspend fun loginCode(profile: String, code: String) { ops.profileLoginCode(id = profile) { this.code = code } }
     /** A subscription signed in before its profile exists: the station makes the profile when it succeeds. Answers the login's id. */
-    suspend fun newLogin(runtime: String): String = op("login.new") { put("runtime", runtime) }.jsonObject["id"]!!.jsonPrimitive.content
-    suspend fun newLoginCode(id: String, code: String) { op("login.code") { put("id", id); put("code", code) } }
-    suspend fun dropLogin(id: String) { op("login.drop") { put("id", id) } }
+    suspend fun newLogin(runtime: String): String = ops.loginNew() { this.runtime = runtime }.jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun newLoginCode(id: String, code: String) { ops.loginCode(id = id) { this.code = code } }
+    suspend fun dropLogin(id: String) { ops.loginDrop(id = id) }
     /** A keyed (or variables) profile, made only once its key is checked; answers its id. */
-    suspend fun addProfile(runtime: String?, kind: String, key: String?): String = op("profile.add") {
-        if (runtime != null) put("runtime", runtime)
-        put("access", buildJsonObject { put("kind", kind); if (key != null) put("key", key) })
-    }.jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun addProfile(runtime: String?, kind: String, key: String?): String = ops.profileAdd() { if (runtime != null) this.runtime = runtime
+        this.access = buildJsonObject { put("kind", kind); if (key != null) put("key", key) } }.jsonObject["id"]!!.jsonPrimitive.content
     /** A profile on the machine's own login of `runtime` (one kept in a file); answers its id. */
     suspend fun useMachineLogin(runtime: String): String =
-        op("profile.useMachineLogin") { put("runtime", runtime) }.jsonObject["id"]!!.jsonPrimitive.content
+        ops.profileUseMachineLogin() { this.runtime = runtime }.jsonObject["id"]!!.jsonPrimitive.content
 
     /** Starts the session's runtime ahead of a message. */
-    suspend fun warm(key: String) { op("session.warm") { put("key", key) } }
+    suspend fun warm(key: String) { ops.sessionWarm(key = key) }
 
-    suspend fun stop(key: String) { op("session.stop") { put("key", key) } }
+    suspend fun stop(key: String) { ops.sessionStop(key = key) }
 
     /**
      * How it runs from its next turn on: a model, how hard it thinks, and who runs it (a profile kept to by hand, or
      * null: the station's pick).
      */
     suspend fun sessionSettings(key: String, model: String, effort: String?, profile: String?) {
-        op("session.settings") { put("key", key); put("model", model); put("effort", effort); put("profile", profile) }
+        ops.sessionSettings(key = key) { this.model = model; this.effort = effort; this.profile = profile }
     }
 
     /** Releases an idle agent's process. */
-    suspend fun evict(key: String) { op("session.evict") { put("key", key) } }
+    suspend fun evict(key: String) { ops.sessionEvict(key = key) }
 
     /** A new chat: its session and its thread, made before its first message so files can go into it. */
     suspend fun newChat(runtime: String, model: String, effort: String?): Pair<String, Long> =
-        op("session.new") {
-            put("runtime", runtime); put("model", model)
-            if (effort != null) put("effort", effort)
-        }.jsonObject.let { it["key"]!!.jsonPrimitive.content to it["thread"]!!.jsonObject["id"]!!.jsonPrimitive.long }
+        ops.sessionNew() { this.runtime = runtime; this.model = model
+            if (effort != null) this.effort = effort }.jsonObject.let { it["key"]!!.jsonPrimitive.content to it["thread"]!!.jsonObject["id"]!!.jsonPrimitive.long }
 
     /** The chat of an agent that has none yet, bound to its session; answers the thread. */
     suspend fun chatFor(session: String): Long =
-        op("chat.forSession") { put("session", session) }.jsonObject["id"]!!.jsonPrimitive.long
+        ops.chatForSession() { this.session = session }.jsonObject["id"]!!.jsonPrimitive.long
 
     /** Checks a profile, which lists the models it can use. */
-    suspend fun checkProfile(id: String) { op("profile.check") { put("id", id) } }
+    suspend fun checkProfile(id: String) { ops.profileCheck(id = id) }
 
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
-    suspend fun slackIdentity(user: String, bound: Boolean) { op("slack.identity") { put("user", user); put("bound", bound) } }
+    suspend fun slackIdentity(user: String, bound: Boolean) { ops.slackIdentity(user = user) { this.bound = bound } }
 
     /** Replaces a profile's enabled models. */
     suspend fun setModels(profile: String, models: List<String>) {
-        op("profile.put") { put("id", profile); put("input", buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } }) }
+        ops.profilePut(id = profile) { this.input = buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } } }
     }
 
     /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
@@ -204,19 +197,19 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     /** What a visualization's widget kept (widget.state; null when nothing, or an older station that keeps nothing). */
     suspend fun widgetState(key: String, path: String): JsonElement? =
-        op("widget.state") { put("key", key); put("path", path) }.jsonObject["state"]?.takeIf { it !is JsonNull }
+        ops.widgetState(key = key, path = path).jsonObject["state"]?.takeIf { it !is JsonNull }
     /** Keeps what a visualization's widget asks to keep (widget.setState), for the next time it is shown. */
     suspend fun setWidgetState(key: String, path: String, state: JsonElement) {
-        op("widget.setState") { put("key", key); put("path", path); put("state", state) }
+        ops.widgetSetState(key = key) { this.path = path; this.state = state }
     }
 
     // ── background jobs and web services (web/src/Jobs.tsx) ──
 
     // A job and its output are topics (Topics.job, Topics.jobLog): the core reads them again while shown.
     /** Stops a job from the app (its agent is told who did). */
-    suspend fun stopJob(id: String) { op("job.stop") { put("id", id) } }
+    suspend fun stopJob(id: String) { ops.jobStop(id = id) }
     /** Clears a session's ended jobs (stopped, failed, ended by itself) off its pages, as the station keeps them. */
-    suspend fun clearEndedJobs(session: String) { op("job.clearEnded") { put("session", session) } }
+    suspend fun clearEndedJobs(session: String) { ops.jobClearEnded(session = session) }
 
     // ── decisions (client/core/src/decisions.rs) ──
 
@@ -227,18 +220,18 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Sets a decision aside on this device (待定): last on the decisions page, still pending; nothing is sent. */
     suspend fun deferDecision(thread: Long, seq: Long) { op("decision.defer") { put("thread", thread); put("seq", seq) } }
     /** Dismisses a decision for the viewer, on every device of theirs: off their list, still pending for others. */
-    suspend fun dismissDecision(thread: Long, seq: Long) { op("decision.dismiss") { put("thread", thread); put("seq", seq) } }
+    suspend fun dismissDecision(thread: Long, seq: Long) { ops.decisionDismiss(thread, seq) }
 
     // ── the archive (web/src/pages/Archive.tsx) ──
 
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
     suspend fun setArchived(thread: Long?, session: String, archived: Boolean) {
-        op("chat.archive") { put("session", session); if (thread != null) put("thread", thread); put("archived", archived) }
+        ops.chatArchive(session = session) { if (thread != null) this.thread = thread; this.archived = archived }
     }
     /** Keeps a chat at the top of the viewer's list, or lets it go (by its item's id, its session's key). */
-    suspend fun setPinned(session: String, pinned: Boolean) { op("chat.pin") { put("session", session); put("pinned", pinned) } }
+    suspend fun setPinned(session: String, pinned: Boolean) { ops.chatPin(session = session) { this.pinned = pinned } }
     /** Deletes a session for good: its chat, its history and its workspace directory. */
-    suspend fun deleteSession(key: String) { op("session.delete") { put("key", key) } }
+    suspend fun deleteSession(key: String) { ops.sessionDelete(key = key) }
 
     // ── what a chat runs on, chosen (client/core/src/choose.rs; web/src/pick.ts) ──
 
@@ -260,45 +253,45 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     /** Sessions the machine's own Claude Code and Codex kept (in a terminal); a station from before them fails it. */
     suspend fun machineSessions(): List<MachineSession> =
-        decode(ListSerializer(MachineSession.serializer()), op("machineSessions.list").jsonObject["sessions"] ?: JsonArray(emptyList()))
+        decode(ListSerializer(MachineSession.serializer()), ops.machineSessionsList().jsonObject["sessions"] ?: JsonArray(emptyList()))
     /** One of them to look at first: what was said in it (the latest `limit`), and how many there are in all. */
     suspend fun machineSession(runtime: String, id: String, limit: Int = 200): Pair<List<MachineSaid>, Long> {
-        val r = op("machineSessions.read") { put("runtime", runtime); put("id", id); put("limit", limit) }.jsonObject
+        val r = ops.machineSessionsRead(runtime = runtime, id = id) { this.limit = limit.toLong() }.jsonObject
         val said = decode(ListSerializer(MachineSaid.serializer()), r["said"] ?: JsonArray(emptyList()))
         return said to (r["total"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: said.size.toLong())
     }
     /** A chat going on with one of them (the one already going on with it, if any); answers its key. */
     suspend fun continueMachineSession(runtime: String, id: String): String =
-        op("machineSessions.continue") { put("runtime", runtime); put("id", id) }.jsonObject["key"]!!.jsonPrimitive.content
+        ops.machineSessionsContinue() { this.runtime = runtime; this.id = id }.jsonObject["key"]!!.jsonPrimitive.content
 
     // ── the station's software, its memory, Slack apps (web/src/api.ts → stationApi) ──
 
     /** Updates the station or a runtime (`id`: station | claude | codex), or installs a runtime not there; the overview says how it goes. */
-    suspend fun updateSoftware(id: String) { op("software.update") { put("id", id) } }
+    suspend fun updateSoftware(id: String) { ops.softwareUpdate() { this.id = id } }
     /** Reads again what versions are out. */
-    suspend fun checkSoftware() { op("software.check") }
+    suspend fun checkSoftware() { ops.softwareCheck() }
     /** Puts the station on a channel (`stable` | `beta`); its versions are read again. */
-    suspend fun setSoftwareChannel(channel: String) { op("software.channel") { put("channel", channel) } }
+    suspend fun setSoftwareChannel(channel: String) { ops.softwareChannel() { this.channel = channel } }
     /** Turns the station's updating by itself on or off; turned on, it reads what is out and updates at once. */
-    suspend fun setSoftwareAuto(on: Boolean) { op("software.auto") { put("on", on) } }
+    suspend fun setSoftwareAuto(on: Boolean) { ops.softwareAuto { this.on = on } }
     /** The agents' memory on the station: the global one and the skills (projects' memories among them), as they are. */
-    suspend fun memory(): JsonElement = op("memory.get")
+    suspend fun memory(): JsonElement = ops.memoryGet()
     /**
      * Writes what changed of a connect's Slack app (any of name, displayName, description, longDescription,
      * backgroundColor, groups; `icon`: a data URL) into its manifest; answers whether Slack wants its new permissions
      * approved, and why the icon did not go up.
      */
-    suspend fun putSlackApp(connect: String, input: JsonObject): JsonObject = op("connect.putSlackApp") { put("connect", connect); put("input", input) }.jsonObject
+    suspend fun putSlackApp(connect: String, input: JsonObject): JsonObject = ops.connectPutSlackApp(connect = connect) { this.input = input }.jsonObject
     /** A Slack app made with its settings as a whole (and its icon, a data URL); answers its app id and why the icon did not go up. */
     suspend fun makeSlackApp(team: String, settings: JsonObject, icon: String?): Pair<String, String?> {
-        val r = op("slack.makeApp") { put("team", team); put("settings", settings); if (icon != null) put("icon", icon) }.jsonObject
+        val r = ops.slackMakeApp() { this.team = team; this.settings = settings; if (icon != null) this.icon = icon }.jsonObject
         return r["appId"]!!.jsonPrimitive.content to r["iconError"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
     }
     /** Forgets the viewer's configuration token of a Slack workspace. */
-    suspend fun removeConfigToken(team: String) { op("slack.removeConfigToken") { put("team", team) } }
+    suspend fun removeConfigToken(team: String) { ops.slackRemoveConfigToken(team = team) }
     /** Hands Slack's install code to the station that made the app; answers the workspace it went into. */
     suspend fun slackInstalled(code: String, state: String): String? =
-        op("slack.installed") { put("code", code); put("state", state) }.jsonObject["team"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+        ops.slackInstalled() { this.code = code; this.state = state }.jsonObject["team"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
 
     // ── a chat itself (web/src/api.ts → rename; chats made here, by their key) ──
 
@@ -315,7 +308,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun discardIn(session: String, id: String) { op("chat.discard") { put("session", session); put("id", id) } }
     /** A chat named by hand; an empty name: named by its first message again. */
     suspend fun rename(thread: Long?, session: String, title: String) {
-        op("chat.rename") { put("session", session); if (thread != null) put("thread", thread); put("title", title) }
+        ops.chatRename() { this.session = session; if (thread != null) this.thread = thread; this.title = title }
     }
 }
 
@@ -360,45 +353,46 @@ object Auth {
 
 /** still.fail cloud's account API: what the app has done there, by name, done by the core as one of the signed-in accounts (web/src/cloud/api.ts). */
 class Cloud(private val core: StillFailCore, private val account: String) {
+    private val ops = CloudOperations { name, params -> core.call(name, JsonObject(params + ("account" to JsonPrimitive(account)))) }
     private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
         core.call(name, buildJsonObject { fill(); put("account", account) })
 
     /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). Answers the new workspace's id. */
     suspend fun createWorkspace(name: String, code: String): String =
-        op("workspace.create") { put("name", name); if (code.isNotEmpty()) put("invite_code", code) }.jsonObject["id"]!!.jsonPrimitive.content
+        ops.workspaceCreate() { this.name = name; if (code.isNotEmpty()) this.invite_code = code }.jsonObject["id"]!!.jsonPrimitive.content
 
     /** Answers the workspace joined. */
-    suspend fun acceptInvitation(id: String): String = op("invitation.accept") { put("id", id) }.jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun acceptInvitation(id: String): String = ops.invitationAccept() { this.id = id }.jsonObject["id"]!!.jsonPrimitive.content
 
-    suspend fun declineInvitation(id: String) { op("invitation.decline") { put("id", id) } }
+    suspend fun declineInvitation(id: String) { ops.invitationDecline(id = id) }
 
-    suspend fun renameWorkspace(workspace: String, name: String) { op("workspace.rename") { put("workspace", workspace); put("name", name) } }
-    suspend fun deleteWorkspace(workspace: String) { op("workspace.delete") { put("workspace", workspace) } }
+    suspend fun renameWorkspace(workspace: String, name: String) { ops.workspaceRename(workspace = workspace) { this.name = name } }
+    suspend fun deleteWorkspace(workspace: String) { ops.workspaceDelete(workspace = workspace) }
     /** Leaving a workspace is removing oneself. */
-    suspend fun removeMember(workspace: String, member: String) { op("workspace.removeMember") { put("workspace", workspace); put("member", member) } }
-    suspend fun setRole(workspace: String, member: String, role: String) { op("workspace.setRole") { put("workspace", workspace); put("member", member); put("role", role) } }
+    suspend fun removeMember(workspace: String, member: String) { ops.workspaceRemoveMember(workspace = workspace, member = member) }
+    suspend fun setRole(workspace: String, member: String, role: String) { ops.workspaceSetRole(workspace = workspace, member = member) { this.role = role } }
     /** Adds people by email: members at once, or from their first sign-in; no invitation to accept. */
     suspend fun addMembers(workspace: String, role: String, emails: List<String>): AddedMembers {
-        val r = op("workspace.addMembers") { put("workspace", workspace); put("role", role); putJsonArray("emails") { emails.forEach { add(JsonPrimitive(it)) } } }.jsonObject
+        val r = ops.workspaceAddMembers(workspace = workspace) { this.role = role; this.emails = emails }.jsonObject
         val list = { key: String -> r[key]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList() }
         return AddedMembers(list("joined"), list("added"), list("already"))
     }
     /** An email added and not signed in yet, taken off. */
-    suspend fun removeAdded(workspace: String, email: String) { op("workspace.removeAdded") { put("workspace", workspace); put("email", email) } }
-    suspend fun revokeInvitation(workspace: String, invitation: String) { op("workspace.revokeInvitation") { put("workspace", workspace); put("invitation", invitation) } }
+    suspend fun removeAdded(workspace: String, email: String) { ops.workspaceRemoveAdded(workspace = workspace, email = email) }
+    suspend fun revokeInvitation(workspace: String, invitation: String) { ops.workspaceRevokeInvitation(workspace = workspace, invitation = invitation) }
     /** A one-time token for a machine to join as a station: the installer's command, and the command for a machine that has ember. */
     suspend fun enroll(workspace: String, name: String): Enrollment =
-        op("workspace.enroll") { put("workspace", workspace); put("name", name) }.jsonObject.let {
+        ops.workspaceEnroll(workspace = workspace) { this.name = name }.jsonObject.let {
             Enrollment(it["install"]!!.jsonPrimitive.content, it["command"]!!.jsonPrimitive.content)
         }
-    suspend fun renameStation(workspace: String, station: String, name: String) { op("workspace.renameStation") { put("workspace", workspace); put("station", station); put("name", name) } }
-    suspend fun removeStation(workspace: String, station: String) { op("workspace.removeStation") { put("workspace", workspace); put("station", station) } }
-    suspend fun revokeLoginSession(id: String) { op("loginSession.revoke") { put("id", id) } }
+    suspend fun renameStation(workspace: String, station: String, name: String) { ops.workspaceRenameStation(workspace = workspace, station = station) { this.name = name } }
+    suspend fun removeStation(workspace: String, station: String) { ops.workspaceRemoveStation(workspace = workspace, station = station) }
+    suspend fun revokeLoginSession(id: String) { ops.loginSessionRevoke(id = id) }
     /** What an invitation link leads to, for the account looking: the workspace, the role, who invited, whose email it is for. */
     suspend fun previewInvitation(token: String): InvitationPreview =
-        decode(InvitationPreview.serializer(), op("invitation.preview") { put("token", token) })
+        decode(InvitationPreview.serializer(), ops.invitationPreview() { this.token = token })
     /** Accepts an invitation by its link's token; answers the workspace joined. */
-    suspend fun acceptInvitationToken(token: String): String = op("invitation.accept") { put("token", token) }.jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun acceptInvitationToken(token: String): String = ops.invitationAccept() { this.token = token }.jsonObject["id"]!!.jsonPrimitive.content
 }
 
 @kotlinx.serialization.Serializable

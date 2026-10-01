@@ -1,3 +1,4 @@
+import { useDoing } from "../doing.ts";
 // The workspace itself on a narrow screen, from settings (./Settings.tsx): its name as the title (a tap renames it), its
 // people in one list (those in it, those added who have not signed in, the invitations out), adding them from the ＋
 // at the top, and leaving or deleting it at the bottom. What the desktop's workspace settings do, in the Android app's manner.
@@ -134,7 +135,7 @@ function AddSheet({ view }: { view: WorkspaceView }) {
   const me = app.entry.account;
   const [text, setText] = useState("");
   const [role, setRole] = useState<Role>("member");
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("workspace.addMembers", { account: me.sub, workspace: view.id });
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const roles: Role[] = view.role === "owner" ? ["member", "admin", "owner"] : ["member", "admin"];
@@ -198,12 +199,12 @@ function AddSheet({ view }: { view: WorkspaceView }) {
             <div className={sheetsCss.mFormActions}>
               <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
               <Button label={emails.length > 1 ? `添加 ${emails.length} 人` : "添加"} primary busy={busy} enabled={emails.length > 0} onClick={() => {
-                setBusy(true); setError(null);
+                setError(null);
                 cloud.addMembers(me.sub, view.id, role, emails).then((r) => setDone([
                   r.joined.length ? `${r.joined.length} 人已经加入` : "",
                   r.added.length ? `${r.added.length} 人第一次登录 ${NAME} 时自动加入` : "",
                   r.already.length ? `${r.already.length} 人本来就在` : "",
-                ].filter(Boolean).join("，") + "。"), (e: Error) => setError(errorText(e))).finally(() => setBusy(false));
+                ].filter(Boolean).join("，") + "。"), (e: Error) => setError(errorText(e)));
               }} />
             </div>
           </>

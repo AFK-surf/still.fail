@@ -154,20 +154,19 @@ private fun Actions(station: String, agent: ChatAgent) {
     val s = agent.session
     val st = agent.status
     @Composable
-    fun act(icon: androidx.compose.ui.graphics.vector.ImageVector, done: String, call: suspend () -> Unit) {
-        var busy by remember { mutableStateOf(false) }
+    fun act(icon: androidx.compose.ui.graphics.vector.ImageVector, done: String, name: String, call: suspend () -> Unit) {
+        val busy = app.isDoing(name, "station" to station, "key" to s.key)
         Box(
             Modifier.size(28.dp).clip(CircleShape).background(C.chip).clickable(enabled = !busy) {
-                busy = true
-                scope.launch {
-                    try { call(); app.toast = done } catch (e: CoreException) { app.toast = e.message } finally { busy = false }
+                    scope.launch {
+                    try { call(); app.toast = done } catch (e: CoreException) { app.toast = e.message }
                 }
             },
             contentAlignment = Alignment.Center,
         ) { if (busy) Spinner(12.dp) else IconIn(icon, 14.dp, C.ink) }
     }
-    if (st == "running" || st == "queued") act(Icons.Stop, "已请求停止") { app.api(station).stop(s.key) }
-    if (s.process == "warm") act(Icons.Unplug, "已释放进程") { app.api(station).evict(s.key) }
+    if (st == "running" || st == "queued") act(Icons.Stop, "已请求停止", "session.stop") { app.api(station).stop(s.key) }
+    if (s.process == "warm") act(Icons.Unplug, "已释放进程", "session.evict") { app.api(station).evict(s.key) }
 }
 
 /** The head's short line: only what is worth a look now (an account signed out, a quota running out, the disk filling up). */
@@ -535,7 +534,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         NavBar(if (list != null) "换模型" else "返回", { if (list != null) list = null else app.pop() }, when (list) { "model" -> "选模型"; "account" -> "选账号"; else -> "换模型" })
         if (agent == null || v == null) return Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         val s = agent.session
-        var busy by remember { mutableStateOf(false) }
+        val busy = app.isDoing("pick.save", "station" to station, "of" to "session:$key")
         val chosen = v.draft.profile
         if (list == "model") return ModelList(v.options, s.runtime, v.option) { m -> pick { put("model", m) }; list = null }
         if (list == "account") return AccountList(v.accounts, s.runtime, chosen) { p -> pick { put("profile", p) }; list = null }
@@ -578,11 +577,10 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 .clip(RoundedCornerShape(16.dp)).background(if (v.changed) C.ink else C.chip)
                 .clickable(enabled = !busy) {
                     if (!go) { app.pop(); return@clickable }
-                    busy = true
                     scope.launch {
                         try { app.api(station).pickSave(pickOf); app.toast = "已改，下一轮起生效"; app.pop() }
                         catch (err: CoreException) { app.toast = "没能保存：${errorText(err)}" }
-                        finally { busy = false }
+
                     }
                 }
                 .padding(horizontal = 16.dp, vertical = 12.dp),

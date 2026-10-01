@@ -1,3 +1,5 @@
+import type { SlackAppSettings } from "../api.ts";
+import { useConnectFlow } from "../connect-flow.ts";
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
@@ -397,7 +399,127 @@ function TokenOwner({ team }: { team: SlackTeam }) {
  * the app-level token; last, the model it runs. Without a configuration token the app is made in Slack by hand and
  * both tokens are pasted.
  */
-export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onClose(): void; resume?: string | undefined }) {
+export function NewConnectDialog(props: { open: boolean; onClose(): void; resume?: string | undefined }) {
+  return props.open ? <CoreNewConnectDialog {...props} /> : null;
+}
+
+function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClose(): void; resume?: string | undefined }) {
+  const station = useStation();
+  const link = useLink();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const flow = useConnectFlow(station.address, false, resume);
+  const [tokens, setTokens, tokenCheck] = useSlackTokens({ install: flow.view?.made?.state ?? undefined, form: flow.form });
+  // Only the input's immediate echo belongs to React; all decisions use the core's view.
+  const [echo, setEcho] = useState<SlackAppSettings | null>(null);
+  if (flow.unsupported) return <LegacyNewConnectDialog open={open} onClose={onClose} resume={resume} />;
+  const view = flow.view;
+  if (!view) return <Dialog open={open} onClose={onClose} title="添加连接">正在读取…</Dialog>;
+  const { step, teams, chosen, made, madeId, adding, gettingToken } = view;
+  const app = echo ?? view.settings as SlackAppSettings;
+  const icon = view.icon ?? null;
+  const iconError = view.iconError ?? null;
+  const pick = flow.pick;
+  const models = pick.view?.options ?? [];
+  const mode = { mode: view.mode, requireMention: view.requireMention };
+  const setMode = (mode: { mode: ConnectMode; requireMention: boolean }) => flow.edit(mode);
+  const setApp = (settings: SlackAppSettings) => { setEcho(settings); flow.edit({ settings }); };
+  const setTeam = (team: string | null) => flow.edit({ team });
+  const setAdding = (adding: boolean) => flow.edit({ adding });
+  const setIcon = (icon: string | null) => flow.edit({ icon });
+  const setIconError = (iconError: string | null) => flow.edit({ iconError });
+  const setStep = (step: string) => flow.go(step);
+  const close = onClose;
+  const act = (_: Promise<unknown>, __: string) => { void _.catch((e: Error) => toast(e.message)); };
+  const check = { ...tokenCheck, busy: flow.busy, then: (_go: () => void) => flow.act("verify") };
+  const makeApp = { busy: flow.busy, error: flow.error ? new Error(flow.error) : null, run: () => flow.act("make") };
+  const create = { busy: flow.busy, error: flow.error ? new Error(flow.error) : null, run: () => flow.act("create", ({ id }) => {
+    toast("已添加连接，正在连接 Slack"); close(); navigate(link(`/connects/${id}`));
+  }) };
+  const footer = step === "team" ? (
+    <>
+      {adding && teams.length > 0
+        ? <Button variant="ghost" onClick={() => setAdding(false)}>返回</Button>
+        : <Button variant="ghost" onClick={close}>取消</Button>}
+      {!gettingToken && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>}
+    </>
+  ) : step === "app" ? (
+    <>
+      <Button variant="ghost" onClick={() => setStep("team")}>上一步</Button>
+      <Button variant="primary" disabled={!view.canMake} busy={makeApp.busy} onClick={() => void makeApp.run()}>创建 app</Button>
+    </>
+  ) : step === "install" || step === "manual" ? (
+    <>
+      <Button variant="ghost" onClick={step === "manual" ? () => setStep("team") : close}>{step === "manual" ? "上一步" : "取消"}</Button>
+      <Button variant="primary" disabled={!check.ready} busy={check.busy} onClick={() => check.then(() => setStep("bind"))}>下一步</Button>
+    </>
+  ) : (
+    <>
+      <Button variant="ghost" onClick={() => setStep(madeId ? "install" : "manual")}>上一步</Button>
+      <Button variant="primary" disabled={models.length === 0} busy={create.busy} onClick={() => void create.run()}>添加并连接</Button>
+    </>
+  );
+
+  return (
+    <Dialog open={open} onClose={close} wide title={<>{view.title}<span className={css.dialogStep}>{view.number} / {view.total}</span></>} footer={footer}
+      description={step === "team" && !gettingToken ? "用哪个 Slack 工作区的配置 token 建 app。" : undefined}>
+      {gettingToken && (
+        <div className={css.tokenStart}>
+          <p className={shellCss.muted}>有了它，{NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
+          <ConfigTokenForm flow={flow} onSaved={() => {}} />
+          {teams.length === 0 && <p className={`${shellCss.muted} ${css.tokenManual}`}>不想用配置 token？<button type="button" className={chatCss.textButton} onClick={() => setStep("manual")}>自己在 Slack 建 app，再粘贴 token</button></p>}
+        </div>
+      )}
+      {step === "team" && !gettingToken && (
+        <>
+          <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
+            options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackTeamIcon team={t} />, description: <TokenOwner team={t} /> }))} />
+          <div className={css.teamMore}>
+            <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />添加工作区的配置 token</Button>
+            <button type="button" className={`${chatCss.textButton} ${css.tokenManual}`} onClick={() => setStep("manual")}>不用配置 token，自己建 app</button>
+          </div>
+        </>
+      )}
+      {step === "app" && (
+        <div className="slack-app">
+          <AppFields fresh settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
+          {iconError && <p className={controlsCss.fieldError} role="alert">{iconError}</p>}
+          {makeApp.error && <p className={controlsCss.fieldError} role="alert">{makeApp.error.message}</p>}
+        </div>
+      )}
+      {step === "install" && made && (
+        <>
+          <MadeAppSteps made={made} />
+          {iconError && <p className={controlsCss.fieldError} role="alert">图标没传上：{iconError}</p>}
+          <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} check={check} />
+        </>
+      )}
+      {step === "manual" && (
+        <>
+          <CreateAppSteps name={NAME} />
+          <TokenFields value={tokens} onChange={setTokens} check={check} />
+        </>
+      )}
+      {step === "bind" && (
+        <>
+          <Field label="模型" hint={(pick.view?.valueOption?.runtimes.length ?? 0) > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
+            {models.length === 0
+              ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
+              : <ModelTriple pick={pick} onConfirm={() => act(pick.save(), "改模型")} />}
+          </Field>
+          <Field label="会话方式">
+            <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />
+          </Field>
+          {create.error && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
+        </>
+      )}
+    </Dialog>
+  );
+}
+
+
+// Compatibility for desktop releases whose bundled core predates connect.flow.
+function LegacyNewConnectDialog({ open, onClose, resume }: { open: boolean; onClose(): void; resume?: string | undefined }) {
   const api = useApi();
   const station = useStation();
   const link = useLink();

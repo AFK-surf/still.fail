@@ -1175,6 +1175,138 @@ data class ConfigTokenOwner (
 )
 
 @Serializable
+data class ConnectAppSettings (
+	val name: String,
+	val displayName: String,
+	val description: String,
+	val longDescription: String,
+	val backgroundColor: String,
+	val groups: Map<String, Boolean>
+)
+
+@Serializable
+data class SlackTeam (
+	val teamId: String,
+	val name: String,
+	val owner: ConfigTokenOwner? = null
+)
+
+@Serializable
+data class SlackAppLinks (
+	val settings: String,
+	val install: String,
+	val appToken: String,
+	val oauth: String
+)
+
+/// A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
+@Serializable
+data class MadeSlackApp (
+	val appId: String,
+	val name: String,
+	val teamId: String,
+	/// The Slack workspace's name, when its configuration token says.
+	val team: String? = null,
+	val created: Long,
+	val links: SlackAppLinks,
+	/// The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand.
+	val install: String? = null,
+	/// Its install's state, what a connect names it by.
+	val state: String? = null,
+	val installed: Boolean,
+	val installedTeam: String? = null
+)
+
+/// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
+/// station's pick.
+@Serializable
+data class Picked (
+	val model: String? = null,
+	val runtime: RuntimeKind,
+	val effort: String? = null,
+	val profile: String? = null
+)
+
+/// The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low.
+@Serializable
+data class PickAccount (
+	val text: String,
+	val auto: Boolean,
+	val level: Level? = null,
+	val profile: RunnableProfile? = null
+)
+
+/// A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
+/// until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
+/// station's pick, said so (`dropped`, `force`).
+@Serializable
+data class PickView (
+	val options: List<ModelOption>,
+	val runtimeFixed: Boolean,
+	val value: Picked,
+	val valueOption: ModelOption? = null,
+	/// The account the control names; none: it names none (a new chat's, while the station's pick is fine).
+	val account: PickAccount? = null,
+	val draft: Picked,
+	/// The option picked in the panel, by its `model`.
+	val option: String? = null,
+	/// The runtimes offered for it (none: not asked), how hard it can think there, who can run it.
+	val runtimes: List<RuntimeKind>,
+	val efforts: List<String>,
+	val accounts: List<RunnableProfile>,
+	val dropped: String? = null,
+	/// The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
+	/// station's pick runs low.
+	val who: String,
+	val whoLevel: Level? = null,
+	/// The station's pick, said: who it is on now, or what it does.
+	val autoNote: String,
+	val changed: Boolean,
+	/// Full screen (the phone's): the model, depth and account as they were and as they become; why the account
+	/// must change; the model and account picked in words; what the button says.
+	val was: List<String>,
+	val becomes: List<String>,
+	val force: String? = null,
+	val modelText: String,
+	val maker: Maker? = null,
+	val accountText: String,
+	val accountNote: String,
+	val accountWarn: Boolean,
+	val saveText: String
+)
+
+/// One transient connect wizard. Decisions and navigation come from the core on every client.
+@Serializable
+data class ConnectFlowView (
+	val step: String,
+	val title: String,
+	val back: String,
+	val number: UInt,
+	val total: UInt,
+	val resume: String? = null,
+	val mobile: Boolean,
+	val team: String? = null,
+	val adding: Boolean,
+	val settings: ConnectAppSettings,
+	val icon: String? = null,
+	val iconError: String? = null,
+	val madeId: String? = null,
+	val config: String,
+	val configReady: Boolean,
+	val configError: String? = null,
+	val mode: ConnectMode,
+	val requireMention: Boolean,
+	val gettingToken: Boolean,
+	val noProfile: Boolean,
+	val canMake: Boolean,
+	val canCreate: Boolean,
+	val teams: List<SlackTeam>,
+	val chosen: SlackTeam? = null,
+	val made: MadeSlackApp? = null,
+	val pick: PickView? = null
+)
+
+@Serializable
 data class ConnectItem (
 	val station: String,
 	val stationName: String,
@@ -1763,32 +1895,6 @@ data class MachineLogin (
 )
 
 @Serializable
-data class SlackAppLinks (
-	val settings: String,
-	val install: String,
-	val appToken: String,
-	val oauth: String
-)
-
-/// A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
-@Serializable
-data class MadeSlackApp (
-	val appId: String,
-	val name: String,
-	val teamId: String,
-	/// The Slack workspace's name, when its configuration token says.
-	val team: String? = null,
-	val created: Long,
-	val links: SlackAppLinks,
-	/// The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand.
-	val install: String? = null,
-	/// Its install's state, what a connect names it by.
-	val state: String? = null,
-	val installed: Boolean,
-	val installedTeam: String? = null
-)
-
-@Serializable
 data class MemoryFile (
 	val path: String,
 	val text: String
@@ -1847,13 +1953,6 @@ data class Viewer (
 	val role: String? = null,
 	val workspace: String? = null,
 	val device: String? = null
-)
-
-@Serializable
-data class SlackTeam (
-	val teamId: String,
-	val name: String,
-	val owner: ConfigTokenOwner? = null
 )
 
 @Serializable
@@ -1985,64 +2084,6 @@ data class StationView (
 	val net: StationNet? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null
-)
-
-/// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
-/// station's pick.
-@Serializable
-data class Picked (
-	val model: String? = null,
-	val runtime: RuntimeKind,
-	val effort: String? = null,
-	val profile: String? = null
-)
-
-/// The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low.
-@Serializable
-data class PickAccount (
-	val text: String,
-	val auto: Boolean,
-	val level: Level? = null,
-	val profile: RunnableProfile? = null
-)
-
-/// A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
-/// until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
-/// station's pick, said so (`dropped`, `force`).
-@Serializable
-data class PickView (
-	val options: List<ModelOption>,
-	val runtimeFixed: Boolean,
-	val value: Picked,
-	val valueOption: ModelOption? = null,
-	/// The account the control names; none: it names none (a new chat's, while the station's pick is fine).
-	val account: PickAccount? = null,
-	val draft: Picked,
-	/// The option picked in the panel, by its `model`.
-	val option: String? = null,
-	/// The runtimes offered for it (none: not asked), how hard it can think there, who can run it.
-	val runtimes: List<RuntimeKind>,
-	val efforts: List<String>,
-	val accounts: List<RunnableProfile>,
-	val dropped: String? = null,
-	/// The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
-	/// station's pick runs low.
-	val who: String,
-	val whoLevel: Level? = null,
-	/// The station's pick, said: who it is on now, or what it does.
-	val autoNote: String,
-	val changed: Boolean,
-	/// Full screen (the phone's): the model, depth and account as they were and as they become; why the account
-	/// must change; the model and account picked in words; what the button says.
-	val was: List<String>,
-	val becomes: List<String>,
-	val force: String? = null,
-	val modelText: String,
-	val maker: Maker? = null,
-	val accountText: String,
-	val accountNote: String,
-	val accountWarn: Boolean,
-	val saveText: String
 )
 
 /// A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs

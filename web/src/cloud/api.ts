@@ -1,7 +1,8 @@
+import { bindCloudOperations } from "../core/operations.ts";
 // still.fail cloud's account API: what the pages have done there, by name, done by the core as one of the signed-in
 // accounts. Reads are the core's `workspaces` and `workspace` topics; after a
 // write the core refetches them, so nothing here keeps a cache.
-import { useCallback, useRef, useState } from "react";
+import { useAction as useOperation } from "../action.ts";
 import type { ErrorBody } from "../core/client.ts";
 import { core, useTopic, type TopicState } from "../core/react.ts";
 import { prefs, setPrefs } from "../prefs.ts";
@@ -36,52 +37,50 @@ export function useWorkspace(id: string): TopicState<WorkspaceView> {
 }
 
 /** Has the core do `name` (client/core/src/ops.rs) on still.fail cloud as the account `sub`, with `params`. */
-function op<T>(sub: string, name: string, params: Record<string, unknown> = {}): Promise<T> {
-  return core().call(name, { ...params, account: sub }) as Promise<T>;
-}
+const operations = (account: string) => bindCloudOperations((name, params) => core().call(name, { ...params, account }));
 
 export interface LoginSession { id: string; name: string; created_at: number; expires_at: number; current: boolean }
 
 export const cloud = {
   /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). */
-  createWorkspace: (sub: string, name: string, code?: string) => op<WorkspaceView>(sub, "workspace.create", code ? { name, invite_code: code } : { name }),
-  renameWorkspace: (sub: string, id: string, name: string) => op<WorkspaceView>(sub, "workspace.rename", { workspace: id, name }),
-  deleteWorkspace: (sub: string, id: string) => op<{ ok: true }>(sub, "workspace.delete", { workspace: id }),
+  createWorkspace: (sub: string, name: string, code?: string) => operations(sub).workspaceCreate<WorkspaceView>(code ? { name, invite_code: code } : { name }),
+  renameWorkspace: (sub: string, id: string, name: string) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, name }),
+  deleteWorkspace: (sub: string, id: string) => operations(sub).workspaceDelete<{ ok: true }>({ workspace: id }),
   invite: (sub: string, id: string, role: Role, email: string) =>
-    op<{ token: string; url: string; expires_at: number }>(sub, "workspace.invite", { workspace: id, role, email }),
+    operations(sub).workspaceInvite<{ token: string; url: string; expires_at: number }>({ workspace: id, role, email }),
   /** Adds people by email: members at once, or from their first sign-in; no invitation to accept. */
   addMembers: (sub: string, id: string, role: Role, emails: string[]) =>
-    op<{ joined: string[]; added: string[]; already: string[]; view: WorkspaceView }>(sub, "workspace.addMembers", { workspace: id, role, emails }),
-  removeAdded: (sub: string, id: string, email: string) => op<WorkspaceView>(sub, "workspace.removeAdded", { workspace: id, email }),
-  revokeInvitation: (sub: string, id: string, invitation: string) => op<{ ok: true }>(sub, "workspace.revokeInvitation", { workspace: id, invitation }),
+    operations(sub).workspaceAddMembers<{ joined: string[]; added: string[]; already: string[]; view: WorkspaceView }>({ workspace: id, role, emails }),
+  removeAdded: (sub: string, id: string, email: string) => operations(sub).workspaceRemoveAdded<WorkspaceView>({ workspace: id, email }),
+  revokeInvitation: (sub: string, id: string, invitation: string) => operations(sub).workspaceRevokeInvitation<{ ok: true }>({ workspace: id, invitation }),
   previewInvitation: (sub: string, token: string) =>
-    op<{ workspace: string; name: string; role: Role; inviter: string; email: string | null }>(sub, "invitation.preview", { token }),
-  acceptInvitationById: (sub: string, id: string) => op<WorkspaceView>(sub, "invitation.accept", { id }),
-  declineInvitation: (sub: string, id: string) => op<{ ok: true }>(sub, "invitation.decline", { id }),
-  acceptInvitation: (sub: string, token: string) => op<WorkspaceView>(sub, "invitation.accept", { token }),
-  setRole: (sub: string, id: string, member: string, role: Role) => op<WorkspaceView>(sub, "workspace.setRole", { workspace: id, member, role }),
-  removeMember: (sub: string, id: string, member: string) => op<{ ok: true }>(sub, "workspace.removeMember", { workspace: id, member }),
-  enroll: (sub: string, id: string, name: string) => op<{ token: string; expires_at: number; install: string; command: string }>(sub, "workspace.enroll", { workspace: id, name }),
-  renameStation: (sub: string, id: string, station: string, name: string) => op<WorkspaceView>(sub, "workspace.renameStation", { workspace: id, station, name }),
-  removeStation: (sub: string, id: string, station: string) => op<{ ok: true }>(sub, "workspace.removeStation", { workspace: id, station }),
-  revokeLoginSession: (sub: string, id: string) => op<{ ok: true }>(sub, "loginSession.revoke", { id }),
+    operations(sub).invitationPreview<{ workspace: string; name: string; role: Role; inviter: string; email: string | null }>({ token }),
+  acceptInvitationById: (sub: string, id: string) => operations(sub).invitationAccept<WorkspaceView>({ id }),
+  declineInvitation: (sub: string, id: string) => operations(sub).invitationDecline<{ ok: true }>({ id }),
+  acceptInvitation: (sub: string, token: string) => operations(sub).invitationAccept<WorkspaceView>({ token }),
+  setRole: (sub: string, id: string, member: string, role: Role) => operations(sub).workspaceSetRole<WorkspaceView>({ workspace: id, member, role }),
+  removeMember: (sub: string, id: string, member: string) => operations(sub).workspaceRemoveMember<{ ok: true }>({ workspace: id, member }),
+  enroll: (sub: string, id: string, name: string) => operations(sub).workspaceEnroll<{ token: string; expires_at: number; install: string; command: string }>({ workspace: id, name }),
+  renameStation: (sub: string, id: string, station: string, name: string) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, name }),
+  removeStation: (sub: string, id: string, station: string) => operations(sub).workspaceRemoveStation<{ ok: true }>({ workspace: id, station }),
+  revokeLoginSession: (sub: string, id: string) => operations(sub).loginSessionRevoke<{ ok: true }>({ id }),
 };
 
 /** The admin's console (on its own host, src/admin/); every call is a 404 for other accounts. */
 export const admin = {
-  me: (sub: string) => op<{ email: string }>(sub, "admin.me"),
+  me: (sub: string) => operations(sub).adminMe<{ email: string }>(),
   /** Each with its sign-up link on the web app. */
-  createCode: (sub: string, note: string, days: number) => op<InviteCodeView & { url: string }>(sub, "admin.createCode", { note, days }),
-  revokeCode: (sub: string, code: string) => op<{ ok: true }>(sub, "admin.revokeCode", { code }),
+  createCode: (sub: string, note: string, days: number) => operations(sub).adminCreateCode<InviteCodeView & { url: string }>({ note, days }),
+  revokeCode: (sub: string, code: string) => operations(sub).adminRevokeCode<{ ok: true }>({ code }),
   /** Lets the account `user` into the test channel (app.youdid.wtf), or out of it. */
-  setBeta: (sub: string, user: string, on: boolean) => op<{ sub: string; beta: boolean }>(sub, "admin.setBeta", { user, on }),
+  setBeta: (sub: string, user: string, on: boolean) => operations(sub).adminSetBeta<{ sub: string; beta: boolean }>({ user, on }),
   /** Gives the account `user` the right to create workspaces, as an invite code would, or takes it back. */
-  setMayCreate: (sub: string, user: string, on: boolean) => op<{ sub: string; may_create: boolean }>(sub, "admin.setMayCreate", { user, on }),
+  setMayCreate: (sub: string, user: string, on: boolean) => operations(sub).adminSetMayCreate<{ sub: string; may_create: boolean }>({ user, on }),
   /** Blocks the account `user` (signed out everywhere, kept out), or lets it back. */
-  block: (sub: string, user: string, on: boolean) => op<{ blocked: boolean }>(sub, "admin.block", { user, on }),
-  deleteWorkspace: (sub: string, workspace: string) => op<{ ok: true }>(sub, "admin.deleteWorkspace", { workspace }),
+  block: (sub: string, user: string, on: boolean) => operations(sub).adminBlock<{ blocked: boolean }>({ user, on }),
+  deleteWorkspace: (sub: string, workspace: string) => operations(sub).adminDeleteWorkspace<{ ok: true }>({ workspace }),
   /** Where a bug report stands. */
-  feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => op<{ ok: true }>(sub, "admin.feedbackStatus", { id, status }),
+  feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => operations(sub).adminFeedbackStatus<{ ok: true }>({ id, status }),
 };
 
 // still.fail cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).
@@ -137,18 +136,8 @@ export interface Action<A, T> {
   result: T | undefined;
 }
 
-/** A write behind a button: whether it is running, how it ended, and what to do after it succeeded. */
+/** Same action adapter as the station pages; kept as a one-argument facade for existing cloud controls. */
 export function useAction<A = void, T = unknown>(write: (arg: A) => Promise<T>, onDone?: (result: T, arg: A) => void): Action<A, T> {
-  const [state, setState] = useState<{ busy: boolean; error: Error | null; arg: A | undefined; result: T | undefined }>({ busy: false, error: null, arg: undefined, result: undefined });
-  // The latest closures, so `run` stays the same function across renders.
-  const latest = useRef({ write, onDone });
-  latest.current = { write, onDone };
-  const run = useCallback((arg: A) => {
-    setState({ busy: true, error: null, arg, result: undefined });
-    latest.current.write(arg).then(
-      (result) => { setState({ busy: false, error: null, arg, result }); latest.current.onDone?.(result, arg); },
-      (error: unknown) => setState({ busy: false, error: error instanceof Error ? error : new Error(String(error)), arg, result: undefined }),
-    );
-  }, []);
-  return { run, ...state };
+  const action = useOperation(write, onDone);
+  return { run: action.run, busy: action.busy, error: action.error, arg: action.args?.[0], result: action.data };
 }

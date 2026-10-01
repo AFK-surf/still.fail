@@ -134,12 +134,24 @@ internal val SLACK_SECTIONS = listOf(
 )
 
 /** A Slack app's settings being edited: what its form shows, and what it started as. */
-internal class AppDraft(start: SlackAppSettings) {
+internal class AppDraft(start: SlackAppSettings, private val onEdit: (JsonObject) -> Unit = {}) {
     val start = start
-    var name by mutableStateOf(start.name)
-    var description by mutableStateOf(start.description)
-    var color by mutableStateOf(start.backgroundColor)
-    var groups by mutableStateOf(SLACK_GROUP_WORDS.associate { (g, _) -> g to (start.groups[g] ?: false) })
+    private var nameEcho by mutableStateOf(start.name)
+    var name: String
+        get() = nameEcho
+        set(value) { nameEcho = value; onEdit(settings()) }
+    private var descriptionEcho by mutableStateOf(start.description)
+    var description: String
+        get() = descriptionEcho
+        set(value) { descriptionEcho = value; onEdit(settings()) }
+    private var colorEcho by mutableStateOf(start.backgroundColor)
+    var color: String
+        get() = colorEcho
+        set(value) { colorEcho = value; onEdit(settings()) }
+    private var groupsEcho by mutableStateOf(SLACK_GROUP_WORDS.associate { (g, _) -> g to (start.groups[g] ?: false) })
+    var groups: Map<String, Boolean>
+        get() = groupsEcho
+        set(value) { groupsEcho = value; onEdit(settings()) }
 
     /** The settings as the station takes them (the name in messages is the app's name). */
     fun settings(): JsonObject = buildJsonObject {
@@ -432,7 +444,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     var icon by remember { mutableStateOf<IconPick?>(null) }
     var iconError by iconErrorState
     var approve by approveState
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing("connect.putSlackApp", "station" to station, "connect" to connect)
     var error by remember { mutableStateOf<String?>(null) }
     var perms by remember { mutableStateOf(false) }
     val changes = draft.changes()
@@ -493,7 +505,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
             draft.groups = SLACK_GROUP_WORDS.associate { (g, _) -> g to (settings.groups[g] ?: false) }; icon = null
         }
         Button("应用到 Slack", primary = true, busy = busy, enabled = dirty) {
-            busy = true; error = null
+            error = null
             val body = buildJsonObject { changes.forEach { (k, v) -> put(k, v) }; icon?.let { put("icon", it.data) } }
             scope.launch {
                 try {
@@ -505,7 +517,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
                     // Changed permissions are approved in Slack: its page opens at once (the notice stays, to go back to it).
                     if (updated && links != null) open(links.install)
                     app.toast = if (updated) "已更新，在 Slack 同意新权限后生效" else "已更新 Slack app"
-                } catch (e: CoreException) { error = e.message } finally { busy = false }
+                } catch (e: CoreException) { error = e.message }
             }
         }
     }
@@ -516,28 +528,29 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
  * token Slack shows above it is told apart from the one wanted.
  */
 @Composable
-internal fun ConfigTokenSteps(station: String, onSaved: (String) -> Unit) {
+internal fun ConfigTokenSteps(station: String, flow: ConnectFlow? = null, onSaved: (String) -> Unit) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var config by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
+    val busy = flow?.busy ?: app.isDoing("slack.addConfigToken", "station" to station)
     var error by remember { mutableStateOf<String?>(null) }
     Steps(listOf(
         "打开 api.slack.com/apps，用要放 bot 的那个 Slack 工作区的账号登录。" to { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://api.slack.com/apps"))) },
         "拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。" to null,
         "把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。${BuildConfig.APP_NAME} 会自己续期，以后不用再管。" to null,
     ))
-    SecretField(config, { config = it }, "xoxe-1-…")
-    if (config.startsWith("xoxe.xoxp-")) Text("这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
+    SecretField(config, { config = it; flow?.edit { put("config", it) } }, "xoxe-1-…")
+    if (flow != null) flow.view?.configError?.let { Text(it, fontSize = 13.sp, color = C.red) }
+    else if (config.startsWith("xoxe.xoxp-")) Text("这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
     else if (config.isNotEmpty() && !config.startsWith("xoxe-")) Text("Refresh Token 以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
     error?.let { Text(it, fontSize = 13.sp, color = C.red) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Button("加上", primary = true, busy = busy, enabled = config.startsWith("xoxe-1-") && config.length > 20) {
-            busy = true; error = null
+        Button("加上", primary = true, busy = busy, enabled = flow?.view?.configReady ?: (config.startsWith("xoxe-1-") && config.length > 20)) {
+            if (flow != null) { flow.act("config"); return@Button }; error = null
             scope.launch {
                 try { val team = app.api(station).addConfigToken(config); config = ""; app.toast = "已加上配置 token"; onSaved(team) }
-                catch (e: CoreException) { error = e.message } finally { busy = false }
+                catch (e: CoreException) { error = e.message }
             }
         }
     }

@@ -77,9 +77,10 @@ export function useTokenCheck(value: TokenState, onChange: (value: TokenState) =
 }
 
 /** The current core owns the draft and its verification. Older desktop cores keep the previous form until updated. */
-export function useSlackTokens({ connect, install }: { connect?: string | undefined; install?: string | undefined } = {}): [TokenState, (patch: Partial<TokenState>) => void, TokenCheck] {
+export function useSlackTokens({ connect, install, form: sharedForm }: { connect?: string | undefined; install?: string | undefined; form?: string } = {}): [TokenState, (patch: Partial<TokenState>) => void, TokenCheck] {
   const station = useStation().address;
-  const [form] = useState(() => crypto.randomUUID());
+  const [ownForm] = useState(() => crypto.randomUUID());
+  const form = sharedForm ?? ownForm;
   const call = useCall();
   const address: SlackTokenForm = { station, form };
   const topic = useTopic<SlackTokensView>({ topic: "slackTokens", ...address });

@@ -527,3 +527,48 @@ In development the core can also run on the page itself, for debugging.
 2. `stillfail-core-wasm` and `web/src/core`; the web app moves onto the core.
 3. Electron shell (`client/node`).
 4. Native apps (`client/ffi`; Android first), with push notifications through still.fail cloud.
+
+## Operation contracts and module boundaries
+
+`core.rs` owns initialization and the client protocol. `core/execute.rs` executes
+named calls; `core/account_state.rs` reconciles accounts/workspaces and their
+sockets; `core/routing.rs` routes topics. `station.rs` owns station state, with
+wire types in `station/wire.rs`, requests in `station/transport.rs`, event and
+reconnect handling in `station/events.rs`, and thread subscriptions/lifetimes in
+`station/threads.rs`. Tests live beside those boundaries in their `tests.rs`.
+
+The 81 ordinary station/cloud HTTP operations declare their scalar parameters
+beside the routes in `ops.rs` (`@params`). `python3 scripts/operations.py` generates
+`web/src/core/operations.ts` and Android's `data/Operations.kt`; `--check` rejects
+drift and missing route inputs. These bindings own named calls and parameter
+packing; the hand-written facades provide convenient return types and adapters.
+Special core calls (chat streaming, picks, local drafts) keep their own adapters.
+Optional fields distinguish absence (leave unchanged) from explicit `null`
+(reset). Kotlin's optional-fields builder records assignments, including null;
+it must not serialize every unassigned property. Tests cover both languages.
+
+`connectFlow {station, form}` owns the complete Slack connection wizard: team,
+configuration token, app settings, installation, token verification, model binding
+and submission. Calls are `connect.flow.open/edit/go/config/make/verify/create/drop`.
+The core chooses desktop inline versus mobile separate token steps. Each form has
+its own `connect-new:<form>` pick and token state, belongs to its client, and is
+removed on close/disconnect. Secrets are transient; no draft is written to Data.
+Operation generations and token revisions prevent late replies from advancing a
+closed or edited form; pending and completed forms cannot submit twice. Nested
+pick quota labels use the normal presentation decorator. Web keeps a legacy
+wizard only for a desktop host whose bundled core answers `unknown_call`.
+
+Web `action.ts` replaces the station and cloud action implementations. It observes
+named calls and shows their `doing` state; synchronous thin wrappers preserve this
+metadata through `captureCall`. Android's `CallObserver` carries call metadata in
+the coroutine context (isolated across concurrent actions), and `Action` observes
+`doing`. Read-only exclusions are generated from `ops.rs` and `doing.rs`. Neither
+adapter retains token/password/code parameters. A local entry lock prevents a
+second click before the core's first update.
+
+Business operations in account/workspace/profile/connection/archive/login and
+confirmation controls use that shared state. Local pending flags remain for
+browser/OS permissions, sign-in handoffs, image rendering/export, gesture
+animations, old core compatibility and host callbacks with no single tracked
+operation. Input echoes, optimistic setting queues and displayed errors remain
+view concerns; they do not claim whether the station completed a write.

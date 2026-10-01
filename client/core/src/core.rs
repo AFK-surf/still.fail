@@ -129,6 +129,7 @@ struct Inner {
     changelog: Rc<crate::changelog::Changelog>,
     /// What people set going here, until it is done (doing.rs).
     doing: crate::doing::Doing,
+    connect_flow: crate::connect_flow::Flows,
     slack_tokens: crate::slack_tokens::Tokens,
 }
 
@@ -249,6 +250,7 @@ impl Core {
                 })
             });
             Inner {
+                connect_flow: crate::connect_flow::Flows::new(store.clone(), choose.clone()),
                 sync,
                 views,
                 choose,
@@ -321,6 +323,7 @@ impl Core {
 
     /// A UI went away (tab closed, port gone): its subscriptions end.
     pub fn disconnect(&self, client: ClientId) {
+        self.inner.connect_flow.disconnect(client);
         for topic in self.inner.slack_tokens.disconnect(client) { self.inner.store.invalidate(&topic); }
         self.inner.store.drop_client(client);
         self.inner.attend.gone(client);

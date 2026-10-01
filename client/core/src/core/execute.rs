@@ -6,6 +6,39 @@ impl Inner {
     pub(super) async fn execute(&self, call: Call, progress: Progress, at: (ClientId, RequestId)) -> Result<Value> {
         let at_call = at;
         match call {
+            Call::ConnectFlow { topic, action, patch } => {
+                let Topic::ConnectFlow { station, form } = &topic else { unreachable!() };
+                let token_topic = crate::connect_flow::tokens(station, form);
+                match action.as_str() {
+                    "open" => { self.connect_flow.open(&topic, at.0, &patch)?; self.slack_tokens.edit(&token_topic, at.0, &json!({}))?; }
+                    "drop" => { self.connect_flow.drop(&topic, at.0); self.slack_tokens.drop(&token_topic, at.0); self.store.invalidate(&token_topic); return Ok(json!({})); }
+                    "edit" => self.connect_flow.edit(&topic, at.0, &patch)?,
+                    "go" => return self.connect_flow.go(&topic, at.0, patch["to"].as_str().unwrap_or("")),
+                    _ => {
+                        let view = self.connect_flow.value(&topic)?;
+                        self.slack_tokens.edit(&token_topic, at.0, &json!({"install":view["made"]["state"]}))?;
+                        let (input, verified) = self.slack_tokens.input(&token_topic, at.0)?;
+                        let (generation, name, params) = self.connect_flow.begin(&topic, at.0, &action, &input, verified)?;
+                        let revision = if action == "verify" {
+                            match self.slack_tokens.begin(&token_topic, at.0) {
+                                Ok((revision, _, _)) => Some(revision),
+                                Err(e) => { self.connect_flow.finish(&topic, generation, &action, &Err(e.clone())); return Err(e); }
+                            }
+                        } else {None};
+                        let answer = match crate::ops::request(name, &params).unwrap() {
+                            Ok(op) => self.stations.perform(&StationAddr::parse(station)?, &op).await,
+                            Err(e) => Err(e),
+                        };
+                        let current = if let Some(revision) = revision { let ok = self.slack_tokens.finish(&token_topic, revision, &answer); self.store.invalidate(&token_topic); ok } else {true};
+                        let transition = if current {answer.clone()} else {Err(CoreError::invalid("token 已改变，请重新校验"))};
+                        let alive = self.connect_flow.finish(&topic, generation, &action, &transition);
+                        if !alive { return Err(CoreError::invalid("连接草稿已关闭")); }
+                        return answer;
+                    }
+                }
+                self.store.invalidate(&topic);
+                self.connect_flow.value(&topic)
+            }
             Call::SlackTokens { topic, action, patch } => {
                 match action.as_str() {
                     "edit" => { self.slack_tokens.edit(&topic, at.0, &patch)?; }

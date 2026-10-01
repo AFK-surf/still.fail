@@ -1,5 +1,6 @@
 package fail.still.core
 
+import kotlin.coroutines.coroutineContext
 import android.content.Context
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -126,6 +127,7 @@ class StillFailCore internal constructor(
 
     /** One call of docs/client-core.md → Calls. Throws [CoreException]. */
     suspend fun call(name: String, params: JsonObject = buildJsonObject {}): JsonElement {
+        coroutineContext[CallObserver]?.started?.invoke(name, params)
         val answer = CompletableDeferred<JsonElement>()
         val id = withContext(confined) {
             val id = nextId++
@@ -147,6 +149,7 @@ class StillFailCore internal constructor(
      * order), then its answer. Cancelling the coroutine cancels the call (`{id, cancel}`), which the core stops.
      */
     suspend fun call(name: String, params: JsonObject, onProgress: (JsonElement) -> Unit): JsonElement {
+        coroutineContext[CallObserver]?.started?.invoke(name, params)
         val answer = CompletableDeferred<JsonElement>()
         val id = withContext(confined) {
             val id = nextId++

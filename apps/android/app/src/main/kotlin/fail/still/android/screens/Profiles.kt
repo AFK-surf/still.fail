@@ -451,7 +451,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
     val job = p.login
     val active = job != null && job.state in SIGNING_IN
     val provider = if (p.runtime == "claude") "Claude" else "ChatGPT"
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing("profile.login", "station" to station, "id" to p.id)
     var manual by remember { mutableStateOf(false) }
     var previous by remember { mutableStateOf(job?.state) }
     LaunchedEffect(job?.state) {
@@ -470,8 +470,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
                     fontSize = 13.sp, color = C.muted,
                 )
                 Button(if (job?.state == "done" || !needed) "重新登录" else "登录", primary = needed, busy = busy) {
-                    busy = true
-                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = "没能开始登录：${errorText(e)}" } finally { busy = false } }
+                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = "没能开始登录：${errorText(e)}" } }
                 }
                 Text("也可以在那台机器上手动登录", fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
                 if (manual) CommandBox(p.loginCommand)
@@ -487,10 +486,12 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
 @Composable
 private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) -> Unit) {
     val context = LocalContext.current
+    val app = LocalApp.current
     val scope = rememberCoroutineScope()
     var code by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val operation = remember(app) { Action(app) }
+        val busy = operation.busy
+    val error = operation.error?.message
     var copied by remember { mutableStateOf(false) }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     val waiting = @Composable { text: String ->
@@ -519,8 +520,8 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
             Field(code, { code = it }, "粘贴授权码", mono = true)
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Button("完成登录", primary = true, busy = busy, enabled = code.isNotBlank()) {
-                busy = true; error = null
-                scope.launch { try { send(code.trim()); code = "" } catch (e: CoreException) { error = e.message } finally { busy = false } }
+
+                operation.run { send(code.trim()); code = "" }
             }
         }
     }
@@ -539,7 +540,7 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
     val scope = rememberCoroutineScope()
     var next by remember { mutableIntStateOf(1) }
     var rows by remember { mutableStateOf(p.env.mapIndexed { i, e -> EnvRow(-i - 1, e.key, if (e.secret) "" else e.value, if (e.secret) e.value else null, e.key) }) }
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing("profile.put", "station" to station, "id" to p.id)
     val patch = {
         buildJsonObject {
             val kept = rows.map { it.key.trim() }.toSet()
@@ -574,10 +575,9 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button("取消", primary = false) { app.sheet = null }
             Button("保存", primary = true, busy = busy) {
-                busy = true
-                scope.launch {
+                    scope.launch {
                     try { app.api(station).putProfile(p.id, buildJsonObject { put("env", patch()) }); app.toast = "已保存"; app.sheet = null }
-                    catch (e: CoreException) { app.toast = e.message } finally { busy = false }
+                    catch (e: CoreException) { app.toast = e.message }
                 }
             }
         }
@@ -599,7 +599,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     val picked = PROFILE_CHOICES[choice]
     var key by remember { mutableStateOf("") }
     var login by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing(setOf("login.new", "profile.add"), "station" to address)
     var error by remember { mutableStateOf<String?>(null) }
     val pending = login?.let { l -> s?.overview?.logins?.firstOrNull { it.id == l } }
     val go = { id: String, message: String -> app.toast = message; app.replace(Screen.Profile(address, id)) }
@@ -637,7 +637,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 }
                 if (picked.kind == "subscription") Text("登录在运行 ${BuildConfig.APP_NAME} 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。", fontSize = 13.sp, color = C.muted)
                 error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-                val run = { work: suspend () -> Unit -> busy = true; error = null; scope.launch { try { work() } catch (e: CoreException) { error = e.message } finally { busy = false } }; Unit }
+                val run = { work: suspend () -> Unit -> error = null; scope.launch { try { work() } catch (e: CoreException) { error = e.message } }; Unit }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     if (picked.kind == "subscription") Button("登录 $provider", primary = true, busy = busy) { run { login = api.newLogin(picked.runtime!!) } }
                     else Button(if (picked.kind in KEYED) "验证并添加" else "添加", primary = true, busy = busy, enabled = picked.kind !in KEYED || key.isNotEmpty()) {
@@ -660,20 +660,18 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
 fun MachineLoginOffers(station: String, overview: Overview, inset: androidx.compose.ui.unit.Dp = 12.dp, onLogin: ((String) -> Unit)? = null) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf<String?>(null) }
     val offers = overview.machineLogins.orEmpty().filter { it.offered == true }
     if (offers.isEmpty()) return
     Text("这台机器上已经登录了", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = inset + 12.dp, end = inset + 12.dp, top = 8.dp, bottom = 4.dp))
     Column(Modifier.padding(horizontal = inset).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
-        offers.forEach { l -> MachineLoginRow(l, busy == l.runtime) {
+        offers.forEach { l -> MachineLoginRow(l, app.isDoing("profile.useMachineLogin", "station" to station, "runtime" to l.runtime)) {
             if (l.usable == true) {
-                busy = l.runtime
                 scope.launch {
                     try {
                         val id = app.api(station).useMachineLogin(l.runtime)
                         app.toast = "已添加 Profile，用的是这台机器的登录"
                         if (onLogin != null) app.replace(Screen.Profile(station, id)) else app.push(Screen.Profile(station, id))
-                    } catch (e: CoreException) { app.toast = e.message } finally { busy = null }
+                    } catch (e: CoreException) { app.toast = e.message }
                 }
             } else if (onLogin != null) onLogin(l.runtime) else app.push(Screen.NewProfile(station))
         } }

@@ -1,3 +1,4 @@
+import { useDoing } from "../doing.ts";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
@@ -86,7 +87,7 @@ function AddStationSheet({ known }: { known: string[] }) {
   const stations = useStations(app.entry.id).value ?? [];
   const [name, setName] = useState("");
   const [made, setMade] = useState<{ install: string; command: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("workspace.enroll", { account: me.sub, workspace: app.entry.id });
   const [error, setError] = useState<string | null>(null);
   const joined = made && stations.find((s) => !known.includes(s.id));
   return (
@@ -103,8 +104,8 @@ function AddStationSheet({ known }: { known: string[] }) {
             <div className={sheetsCss.mFormActions}>
               <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
               <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
-                setBusy(true); setError(null);
-                cloud.enroll(me.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message)).finally(() => setBusy(false));
+                setError(null);
+                cloud.enroll(me.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
               }} />
             </div>
           </>
@@ -183,7 +184,7 @@ export function FirstStation() {
   const manager = view?.role === "owner" || view?.role === "admin";
   const [name, setName] = useState("");
   const [made, setMade] = useState<{ install: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("workspace.enroll", { account: app.entry.account.sub, workspace: app.entry.id });
   const [error, setError] = useState<string | null>(null);
   const shown = useRef(0);
   useEffect(() => { if (made) shown.current = performance.now(); }, [made]);
@@ -204,8 +205,8 @@ export function FirstStation() {
               <Field value={name} onChange={setName} placeholder="比如 studio、mac-mini" />
               {error && <p className={partsCss.mError}>{error}</p>}
               <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
-                setBusy(true); setError(null);
-                cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message)).finally(() => setBusy(false));
+                setError(null);
+                cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
               }} />
             </>
           )}

@@ -1,3 +1,5 @@
+import { useDoing } from "./doing.ts";
+import { useStation } from "./station.tsx";
 // Going on in a chat with a session the station's machine kept: its own Claude Code or Codex, run in a terminal. The
 // new chat page offers them, when there are any, in a dialog, newest first; the chat runs on in the directory the
 // session ran in, and its transcript is copied, so the one in the terminal is left as it was.
@@ -58,7 +60,7 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
   const [open, setOpen] = useState(false);
   /** The one being looked at before going on with it. */
   const [looking, setLooking] = useState<MachineSession | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("machineSessions.continue", { station: useStation().address });
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -69,7 +71,6 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
   if (!sessions?.length) return null;
   const close = () => { setOpen(false); setLooking(null); setError(null); };
   const go = async (s: MachineSession) => {
-    setBusy(true);
     setError(null);
     try {
       const { key } = await api.continueMachineSession(s.runtime, s.id);
@@ -77,8 +78,6 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
       onContinued(key);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
     }
   };
   // Its runtime, where it ran and how long ago, in a line (the core's).

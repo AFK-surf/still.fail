@@ -1,3 +1,4 @@
+import type { useConnectFlow } from "../connect-flow.ts";
 // A connect's Slack app, edited from ember: name, description, colour, icon and
 // permissions are written into the app's manifest with the workspace's app
 // configuration token. When permissions change, Slack asks a person to approve
@@ -94,14 +95,16 @@ export function SlackAppSection({ connect }: { connect: Connect }) {
  * Adds a Slack workspace's app configuration token (by its refresh token); `onSaved` gets the workspace. Pasting the
  * refresh token saves it at once; pasting the access token Slack shows above it says which one is wanted.
  */
-export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(teamId: string): void }) {
+export function ConfigTokenForm({ replacing, onSaved, flow }: { replacing?: boolean; onSaved(teamId: string): void; flow?: ReturnType<typeof useConnectFlow> }) {
   const api = useApi();
   const toast = useToast();
-  const [token, setToken] = useState("");
-  const save = useAction((value: string) => api.addConfigToken(value), ({ teamId }) => { setToken(""); toast("已加上配置 token"); onSaved(teamId); });
-  const wrong = token.startsWith("xoxe.xoxp-") ? "这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。"
+  const [token, echo] = useState("");
+  const legacySave = useAction((value: string) => api.addConfigToken(value), ({ teamId }) => { setToken(""); toast("已加上配置 token"); onSaved(teamId); });
+  const setToken = (config: string) => { echo(config); flow?.edit({ config }); };
+  const save = flow ? { busy: flow.busy, error: flow.error ? new Error(flow.error) : null, run: (_value: string) => flow.act("config") } : legacySave;
+  const wrong = flow ? flow.view?.configError : token.startsWith("xoxe.xoxp-") ? "这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。"
     : token && !token.startsWith("xoxe-") ? "Refresh Token 以 xoxe-1- 开头。" : null;
-  const ready = token.startsWith("xoxe-1-") && token.length > 20;
+  const ready = flow ? flow.view?.configReady : token.startsWith("xoxe-1-") && token.length > 20;
   return (
     <ol className={css.tokenGuide}>
       <li>

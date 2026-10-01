@@ -83,8 +83,9 @@ import kotlinx.coroutines.launch
 fun confirm(app: AppState, title: String, text: String, action: String, danger: Boolean = false, run: suspend () -> Unit) {
     app.sheet = SheetSpec(0.36f) {
         val scope = rememberCoroutineScope()
-        var busy by remember { mutableStateOf(false) }
-        var error by remember { mutableStateOf<String?>(null) }
+        val operation = remember(app) { Action(app) }
+        val busy = operation.busy
+        val error = operation.error?.message
         SheetGrab()
         SheetHead(title)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -93,8 +94,8 @@ fun confirm(app: AppState, title: String, text: String, action: String, danger: 
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, danger = danger) {
-                    busy = true; error = null
-                    scope.launch { try { run(); app.sheet = null } catch (e: CoreException) { error = errorText(e) } finally { busy = false } }
+
+                    operation.run { run(); app.sheet = null }
                 }
             }
         }
@@ -106,8 +107,9 @@ fun ask(app: AppState, title: String, value: String, placeholder: String, action
     app.sheet = SheetSpec(0.42f) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(value) }
-        var busy by remember { mutableStateOf(false) }
-        var error by remember { mutableStateOf<String?>(null) }
+        val operation = remember(app) { Action(app) }
+        val busy = operation.busy
+        val error = operation.error?.message
         SheetGrab()
         SheetHead(title)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -117,8 +119,8 @@ fun ask(app: AppState, title: String, value: String, placeholder: String, action
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, enabled = text.isNotBlank() && text.trim() != value) {
-                    busy = true; error = null
-                    scope.launch { try { run(text.trim()); app.sheet = null } catch (e: CoreException) { error = errorText(e) } finally { busy = false } }
+
+                    operation.run { run(text.trim()); app.sheet = null }
                 }
             }
         }
@@ -295,7 +297,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
     val online = stations.value.orEmpty().filter { it.online }
     var text by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("member") }
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing("workspace.addMembers", "account" to current.account.sub, "workspace" to view.id)
     var error by remember { mutableStateOf<String?>(null) }
     var done by remember { mutableStateOf<String?>(null) }
     var people by remember { mutableStateOf<List<SlackPerson>?>(null) }
@@ -366,7 +368,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button("取消", primary = false) { app.sheet = null }
             Button(if (emails.size > 1) "添加 ${emails.size} 人" else "添加", primary = true, busy = busy, enabled = emails.isNotEmpty()) {
-                busy = true; error = null
+                error = null
                 scope.launch {
                     try {
                         val r = cloud.addMembers(view.id, role, emails)
@@ -375,7 +377,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
                             if (r.added.isNotEmpty()) "${r.added.size} 人第一次登录 ${BuildConfig.APP_NAME} 时自动加入" else "",
                             if (r.already.isNotEmpty()) "${r.already.size} 人本来就在" else "",
                         ).filter { it.isNotEmpty() }.joinToString("，") + "。"
-                    } catch (e: CoreException) { error = errorText(e) } finally { busy = false }
+                    } catch (e: CoreException) { error = errorText(e) }
                 }
             }
         }
@@ -449,7 +451,7 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     var name by remember { mutableStateOf("") }
     var made by remember { mutableStateOf<Enrollment?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    val busy = app.isDoing("workspace.enroll", "account" to current.account.sub, "workspace" to current.workspace.id)
     var error by remember { mutableStateOf<String?>(null) }
     val joined = made?.let { stations.value?.firstOrNull { it.id !in known } }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -462,8 +464,8 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                     if (onCancel != null) Button("取消", primary = false) { onCancel() }
                     Button("生成命令", primary = true, busy = busy, enabled = name.isNotBlank()) {
-                        busy = true; error = null
-                        scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = errorText(e) } finally { busy = false } }
+                        error = null
+                        scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = errorText(e) } }
                     }
                 }
             }

@@ -3033,3 +3033,49 @@ pub struct SlackTokenForm {
     pub station: String,
     pub form: String,
 }
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectAppSettings {
+    pub name: String,
+    pub display_name: String,
+    pub description: String,
+    pub long_description: String,
+    pub background_color: String,
+    pub groups: HashMap<String, bool>,
+}
+
+/// One transient connect wizard. Decisions and navigation come from the core on every client.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectFlowView {
+    pub step: String,
+    pub title: String,
+    pub back: String,
+    pub number: u32,
+    pub total: u32,
+    pub resume: Option<String>,
+    pub mobile: bool,
+    pub team: Option<String>,
+    pub adding: bool,
+    pub settings: ConnectAppSettings,
+    pub icon: Option<String>,
+    pub icon_error: Option<String>,
+    pub made_id: Option<String>,
+    pub config: String,
+    pub config_ready: bool,
+    pub config_error: Option<String>,
+    pub mode: ConnectMode,
+    pub require_mention: bool,
+    pub getting_token: bool,
+    pub no_profile: bool,
+    pub can_make: bool,
+    pub can_create: bool,
+    pub teams: Vec<SlackTeam>,
+    pub chosen: Option<SlackTeam>,
+    pub made: Option<MadeSlackApp>,
+    pub pick: Option<PickView>,
+}

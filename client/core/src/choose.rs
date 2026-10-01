@@ -43,7 +43,7 @@ pub struct Choose {
     /// Per pick topic, what its panel has picked and not saved (only the fields picked).
     drafts: RefCell<HashMap<Topic, Map<String, Value>>>,
     /// A connect being added, per station: what it will run on (until the page is left).
-    adding: RefCell<HashMap<String, Value>>,
+    adding: RefCell<HashMap<(String, String), Value>>,
     /// Profiles asked to check themselves this run, by station.
     checked: RefCell<HashSet<(String, String)>>,
 }
@@ -53,13 +53,14 @@ enum Of<'a> {
     New,
     Session(&'a str),
     Connect(&'a str),
-    ConnectNew,
+    ConnectNew(&'a str),
 }
 
 fn of(of: &str) -> Result<Of<'_>> {
     Ok(match of.split_once(':') {
         None if of == "new" => Of::New,
-        None if of == "connect-new" => Of::ConnectNew,
+        None if of == "connect-new" => Of::ConnectNew(""),
+        Some(("connect-new", form)) if !form.is_empty() => Of::ConnectNew(form),
         Some(("session", key)) if !key.is_empty() => Of::Session(key),
         Some(("connect", id)) if !id.is_empty() => Of::Connect(id),
         _ => return Err(CoreError::invalid(format!("没有这种选择：{of}"))),
@@ -435,9 +436,9 @@ impl Choose {
                 overview()?;
                 (options, r.picked(), None, false, true)
             }
-            Of::ConnectNew => {
+            Of::ConnectNew(form) => {
                 let options = list(&models(Some(&overview()?), now));
-                let r = resolve(&options, self.adding.borrow().get(station).unwrap_or(&json!({})));
+                let r = resolve(&options, self.adding.borrow().get(&(station.into(), (*form).into())).unwrap_or(&json!({})));
                 (options, r.picked(), None, false, false)
             }
             Of::Connect(id) => {
@@ -584,8 +585,8 @@ impl Choose {
     pub fn set(&self, station: &str, o: &str, params: &Value) -> Result<()> {
         let o_parsed = of(o)?;
         let topic = Topic::Pick { station: station.to_string(), of: o.to_string() };
-        if params["clear"] == true && matches!(o_parsed, Of::ConnectNew) {
-            self.adding.borrow_mut().remove(station);
+        if params["clear"] == true {
+            if let Of::ConnectNew(form) = o_parsed { self.adding.borrow_mut().remove(&(station.into(), form.into())); }
         }
         {
             let mut drafts = self.drafts.borrow_mut();
@@ -627,8 +628,8 @@ impl Choose {
                 self.pick_new(scope, &json!({ "station": station_id(station), "model": next["model"], "runtime": next["runtime"], "effort": text_of("effort"), "profile": text_of("profile") }))?;
                 Saved::Done(json!({ "saved": true }))
             }
-            Of::ConnectNew => {
-                self.adding.borrow_mut().insert(station.to_string(), next.clone());
+            Of::ConnectNew(form) => {
+                self.adding.borrow_mut().insert((station.into(), form.into()), next.clone());
                 Saved::Done(json!({ "saved": true }))
             }
             Of::Session(key) => {

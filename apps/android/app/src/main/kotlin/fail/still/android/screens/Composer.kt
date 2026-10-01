@@ -732,17 +732,19 @@ fun rememberMorph(): Morph {
 /** An archived chat's composer keeps its draft and says so, with its restore (retried after an error): web ArchiveNotice.tsx. */
 @Composable
 private fun ArchiveNotice(offline: Boolean, restore: suspend () -> Unit) {
+    val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val operation = remember(app) { Action(app) }
+        val busy = operation.busy
+    val error = operation.error?.message
     Column(Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("已归档，还原后才能发送消息。 ", fontSize = 13.sp, color = C.muted)
             Text(
                 if (busy) "正在还原…" else "还原对话", fontSize = 13.sp, color = if (offline) C.muted else C.ink, textDecoration = TextDecoration.Underline,
                 modifier = Modifier.clickable(enabled = !busy && !offline) {
-                    busy = true; error = null
-                    scope.launch { try { restore() } catch (e: CoreException) { error = e.message } finally { busy = false } }
+
+                    operation.run { restore() }
                 },
             )
         }

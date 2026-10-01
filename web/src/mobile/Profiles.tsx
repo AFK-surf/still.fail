@@ -274,10 +274,10 @@ function Quota({ p }: { p: Profile }) {
  * builds on the one before, not on what the station said last; one at a time goes, the latest asked waiting for it, so
  * two quick taps both count. Failing, it goes back to how it is (and the toast says why).
  */
-function useAsked<T>(real: T, put: (value: T) => Promise<unknown>, what: string): { value: T; busy: boolean; ask: (value: T) => void } {
+function useAsked<T>(id: string, real: T, put: (value: T) => Promise<unknown>, what: string): { value: T; busy: boolean; ask: (value: T) => void } {
   const app = useApp();
   const [asked, setAsked] = useState<{ value: T; done: boolean } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("profile.put", { station: useStation().address, id });
   const going = useRef(false);
   const next = useRef<{ value: T } | null>(null);
   const latest = useRef(real);
@@ -286,7 +286,6 @@ function useAsked<T>(real: T, put: (value: T) => Promise<unknown>, what: string)
   useEffect(() => { setAsked((a) => (a?.done ? null : a)); }, [real]);
   const send = (value: T) => {
     going.current = true;
-    setBusy(true);
     put(value).then(
       () => { if (!next.current) setAsked(JSON.stringify(latest.current) === JSON.stringify(value) ? null : { value, done: true }); },
       (e: unknown) => { app.toast(`没能${what}：${e instanceof Error ? e.message : String(e)}`); if (!next.current) setAsked(null); },
@@ -294,7 +293,7 @@ function useAsked<T>(real: T, put: (value: T) => Promise<unknown>, what: string)
       const waiting = next.current;
       next.current = null;
       if (waiting) send(waiting.value);
-      else { going.current = false; setBusy(false); }
+      else { going.current = false;  }
     });
   };
   const ask = (value: T) => {
@@ -307,7 +306,7 @@ function useAsked<T>(real: T, put: (value: T) => Promise<unknown>, what: string)
 
 /** Whether a new message sends what runs to the background: the switch goes over at once, a spinner by it till saved. */
 function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<unknown> }) {
-  const { value: on, busy, ask } = useAsked(!!p.backgroundOnMessage, put, "保存");
+  const { value: on, busy, ask } = useAsked(p.id, !!p.backgroundOnMessage, put, "保存");
   return (
     <ListRow onClick={() => ask(!on)}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
@@ -331,7 +330,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
   const all = [...(p.available ?? [])].sort();
   const shown = all.filter((m) => [m, p.names[m] ?? m].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
   // Ticked at once; each tick builds on the last asked (useAsked), not on the station's list from before it.
-  const { value: models, busy, ask } = useAsked(p.models, put, "保存模型");
+  const { value: models, busy, ask } = useAsked(p.id, p.models, put, "保存模型");
   const save = (next: string[]) => ask([...new Set(next)].sort());
   const suffix = filter.trim() ? "筛选结果" : "";
   return (
@@ -382,7 +381,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   const job = p.login;
   const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
   const provider = p.runtime === "claude" ? "Claude" : "ChatGPT";
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
   const previous = useRef(job?.state);
   useEffect(() => {
@@ -403,7 +402,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
           <>
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : `登录在运行 ${NAME} 的机器上完成，你只需要在浏览器里授权。`}</p>
             <Button label={job?.state === "done" || !needed ? "重新登录" : "登录"} primary={needed} busy={busy}
-              onClick={() => { setBusy(true); api.startLogin(p.id).catch((e: Error) => app.toast(`没能开始登录：${e.message}`)).finally(() => setBusy(false)); }} />
+              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(`没能开始登录：${e.message}`)); }} />
             <details className={css.mDetails}><summary>也可以在那台机器上手动登录</summary><CommandBox text={p.loginCommand} /></details>
           </>
         )}
@@ -416,7 +415,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
 function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown> }) {
   const app = useApp();
   const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing(["profile.loginCode", "login.code"], { station: useStation().address });
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在生成 {provider} 的登录链接…</p>;
@@ -440,7 +439,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
         <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder="粘贴授权码" onChange={(e) => setCode(e.target.value)} />
         {error && <p className={partsCss.mError}>{error}</p>}
         <Button label="完成登录" primary busy={busy} enabled={!!code.trim()}
-          onClick={() => { setBusy(true); setError(null); send(code.trim()).then(() => setCode(""), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
+          onClick={() => { setError(null); send(code.trim()).then(() => setCode(""), (e: Error) => setError(e.message)); }} />
       </>
     );
   }
@@ -455,7 +454,7 @@ function EnvSheet({ p }: { p: Profile }) {
   const api = useApi();
   const next = useRef(1);
   const [rows, setRows] = useState<EnvRow[]>(() => p.env.map((e) => ({ row: next.current++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing("profile.put", { station: useStation().address, id: p.id });
   const patch = (): Record<string, string | null> => {
     const out: Record<string, string | null> = {};
     const kept = new Set(rows.map((r) => r.key.trim()));
@@ -487,7 +486,7 @@ function EnvSheet({ p }: { p: Profile }) {
         <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setRows([...rows, { row: next.current++, key: "", value: "", masked: null, original: null }])}>＋ 添加变量</button>
         <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label="保存" primary busy={busy} onClick={() => { setBusy(true); api.putProfile(p.id, { env: patch() }).then(() => { app.toast("已保存"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
+          <Button label="保存" primary busy={busy} onClick={() => { api.putProfile(p.id, { env: patch() }).then(() => { app.toast("已保存"); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
         </div>
       </div>
     </>
@@ -511,7 +510,7 @@ export function NewProfileScreen() {
   const { kind, runtime } = CHOICES[choice];
   const [key, setKey] = useState("");
   const [login, setLogin] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const busy = useDoing(["login.new", "profile.add"], { station: station.address });
   const [error, setError] = useState<string | null>(null);
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
   const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
@@ -537,7 +536,7 @@ export function NewProfileScreen() {
           <>
             {overview && (
               <MachineLoginOffers inForm logins={overview.machineLogins}
-                onSignIn={(c) => { setChoice(c); setBusy(true); setError(null); api.newLogin(CHOICES[c].runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
+                onSignIn={(c) => { setChoice(c); setError(null); api.newLogin(CHOICES[c].runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
             )}
             {overview && machineOffers(overview.machineLogins).length > 0 && <b className={sheetsCss.mFormLabel}>或者添加一个新的</b>}
             <ListCard>
@@ -555,9 +554,9 @@ export function NewProfileScreen() {
             {kind === "subscription" && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>登录在运行 {NAME} 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
             {error && <p className={partsCss.mError}>{error}</p>}
             {kind === "subscription"
-              ? <Button label={`登录 ${provider}`} primary busy={busy} onClick={() => { setBusy(true); setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
+              ? <Button label={`登录 ${provider}`} primary busy={busy} onClick={() => { setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
               : <Button label={KEYED.has(kind) ? "验证并添加" : "添加"} primary busy={busy} enabled={!KEYED.has(kind) || !!key}
-                  onClick={() => { setBusy(true); setError(null); api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }).then(({ id }) => go(id, "已验证并添加 Profile"), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />}
+                  onClick={() => { setError(null); api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }).then(({ id }) => go(id, "已验证并添加 Profile"), (e: Error) => setError(e.message)); }} />}
           </>
         )}
         <div style={{ height: 30 }} />

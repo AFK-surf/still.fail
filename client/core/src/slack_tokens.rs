@@ -47,6 +47,12 @@ impl Tokens {
         self.0.borrow().get(topic).map(shown).unwrap_or_else(|| json!({"appToken":"", "botToken":"", "verified":null, "errors":[], "ready":false}))
     }
 
+    pub fn input(&self, topic: &Topic, owner: ClientId) -> Result<(Value, bool)> {
+        let drafts = self.0.borrow();
+        let d = drafts.get(topic).filter(|d| d.owner == owner).ok_or_else(|| CoreError::invalid("token 草稿已经关闭"))?;
+        Ok((d.input.clone(), !d.verified.is_null()))
+    }
+
     pub fn begin(&self, topic: &Topic, owner: ClientId) -> Result<(u64, Value, bool)> {
         let mut drafts = self.0.borrow_mut();
         let draft = drafts.get_mut(topic).filter(|d| d.owner == owner).ok_or_else(|| CoreError::invalid("token 草稿已经关闭"))?;
