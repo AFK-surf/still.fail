@@ -268,7 +268,10 @@ impl App {
                 }
             }),
         )?;
-        let remote = crate::remote::Remote::new(settings.clone(), store.clone(), jobs.clone(), Arc::downgrade(&hub))?;
+        let told=Arc::downgrade(&hub);
+        let remote = crate::remote::Remote::new(settings.clone(), store.clone(), jobs.clone(), Arc::new(move |session, text| {
+            told.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.notify(session,text)
+        }))?;
         hub.set_jobs(&jobs);
         jobs.set_notify_url(format!("http://{}:{port}/jobs/notify", config.http.host));
         let (tokens, homes_of) = (store.clone(), store.clone());

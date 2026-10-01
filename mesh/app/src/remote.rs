@@ -1,14 +1,15 @@
 //! Workspace peers call named operations over an authenticated station transport. Shell tasks are one service on
 //! that transport, never an admin API proxy. An administrator explicitly trusts source station keys in config.json:
 //! remoteTasks.allow = ["<station public key>"]. This grants shell execution as the station's OS user, not a sandbox.
-use std::{collections::HashSet, io::{Read, Seek, SeekFrom, Write}, path::{Component, Path, PathBuf}, sync::{Arc, Mutex, Weak}};
+use std::{collections::HashSet, io::{Read, Seek, SeekFrom, Write}, path::{Component, Path, PathBuf}, sync::{Arc, Mutex}};
 use anyhow::{Result, anyhow, bail};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use crate::{hub::Hub, jobs::{Jobs, Watch}, mcp::Tool, settings::Settings, store::Store};
+use crate::{jobs::{Jobs, Watch}, mcp::Tool, settings::Settings, store::Store};
 
+pub type Notify = Arc<dyn Fn(&str, String) -> Result<()> + Send + Sync>;
 pub type Call = Arc<dyn Fn(String, Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -21,7 +22,7 @@ pub struct Remote {
     settings: Arc<Settings>,
     store: Arc<Store>,
     jobs: Arc<Jobs>,
-    hub: Weak<Hub>,
+    notify: Notify,
     root: PathBuf,
     call: Mutex<Option<Call>>,
     serial: tokio::sync::Mutex<()>,
@@ -57,10 +58,10 @@ fn file_path(root: &Path, relative: &str, create: bool) -> Result<PathBuf> {
 }
 
 impl Remote {
-    pub fn new(settings: Arc<Settings>, store: Arc<Store>, jobs: Arc<Jobs>, hub: Weak<Hub>) -> Result<Arc<Self>> {
+    pub fn new(settings: Arc<Settings>, store: Arc<Store>, jobs: Arc<Jobs>, notify: Notify) -> Result<Arc<Self>> {
         let root = settings.data_dir.join("remote");
         for name in ["incoming", "outgoing"] { std::fs::create_dir_all(root.join(name))?; }
-        Ok(Arc::new(Self { settings, store, jobs, hub, root, call: Mutex::new(None), serial: tokio::sync::Mutex::new(()), watching: Mutex::new(HashSet::new()) }))
+        Ok(Arc::new(Self { settings, store, jobs, notify, root, call: Mutex::new(None), serial: tokio::sync::Mutex::new(()), watching: Mutex::new(HashSet::new()) }))
     }
 
     pub fn attach(self: &Arc<Self>, call: Call) {
@@ -218,12 +219,10 @@ impl Remote {
                     let finished = !state.is_empty() && state != "running";
                     if finished || (notices.as_array().is_some_and(|n| !n.is_empty()) && entry["notices"] != notices) {
                         let message = format!("Remote task {} on {}: {}", text(&entry,"key"), text(&entry,"station"), result);
-                        if let Some(hub) = remote.hub.upgrade() {
-                            if hub.notify(text(&entry,"session"), message).is_ok() {
-                                entry["notices"] = notices;
-                                entry["delivered"] = json!(finished);
-                                let _ = write(&path, &entry);
-                            }
+                        if (remote.notify)(text(&entry,"session"), message).is_ok() {
+                            entry["notices"] = notices;
+                            entry["delivered"] = json!(finished);
+                            let _ = write(&path, &entry);
                         }
                     }
                     if finished && entry["delivered"] == true { break; }
@@ -285,7 +284,8 @@ impl Remote {
         request["path"] = args["path"].clone();
         match text(&args,"direction") {
             "upload" => {
-                let mut f = std::fs::File::open(&path)?;
+                use std::os::unix::fs::OpenOptionsExt;
+                let mut f = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(&path)?;
                 let size = f.metadata()?.len();
                 if !f.metadata()?.is_file() || size > MAX_FILE { bail!("input must be a regular file of at most 1 GiB"); }
                 let mut offset = 0;
@@ -304,7 +304,10 @@ impl Remote {
                 Ok(json!({"uploaded":path,"bytes":size}))
             }
             "download" => {
-                let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&path)?;
+                if path.exists() {bail!("local output already exists; choose another path");}
+                let mut nonce=[0u8;8];getrandom::fill(&mut nonce).map_err(|e|anyhow!("random: {e}"))?;
+                let temp=path.with_extension(format!("{}.part",hex::encode(nonce)));
+                let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
                 let result: Result<u64> = async {
                     let mut offset=0;
                     loop {
@@ -317,7 +320,10 @@ impl Remote {
                         if bytes.is_empty() { bail!("file transfer made no progress"); }
                     }
                 }.await;
-                match result { Ok(size)=>Ok(json!({"downloaded":path,"bytes":size})), Err(e)=>{ drop(f); let _=std::fs::remove_file(&path); Err(e) } }
+                drop(f);
+                let result=result.and_then(|size| {std::fs::hard_link(&temp,&path)?;Ok(json!({"downloaded":path,"bytes":size}))});
+                let _=std::fs::remove_file(&temp);
+                result
             }
             _ => bail!("direction must be upload or download"),
         }
@@ -346,7 +352,7 @@ mod task_tests {
         settings.update(|raw| {raw.rest.insert("remoteTasks".into(),json!({"allow":["peer-a","peer-b"]}));Ok(())}).unwrap();
         let store=Arc::new(Store::open(":memory:",None).unwrap());
         let jobs=Jobs::new(store.clone(),dir.path(),Arc::new(|_,_|{}),Arc::new(|_,_|None)).unwrap();
-        let remote=Remote::new(settings,store,jobs,Weak::new()).unwrap();
+        let remote=Remote::new(settings,store,jobs,Arc::new(|_,_|Ok(()))).unwrap();
         (dir,remote)
     }
     async fn call(r:&Remote, peer:&str, method:&str, more:Value)->Result<Value> {
@@ -389,5 +395,48 @@ mod task_tests {
         assert_eq!(call(&r,"peer-a","task.get",json!({})).await.unwrap()["job"]["state"],"stopped");
         assert_eq!(call(&r,"peer-b","task.get",json!({})).await.unwrap()["job"]["state"],"running");
         call(&r,"peer-b","task.stop",json!({})).await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+    #[tokio::test(start_paused=true)]
+    async fn a_persisted_receipt_reconnects_and_delivers_to_its_original_session() {
+        let dir=tempfile::tempdir().unwrap();
+        let settings=Settings::open(&dir.path().join("config.json"),dir.path()).unwrap();
+        let store=Arc::new(Store::open(":memory:",None).unwrap());
+        let jobs=Jobs::new(store.clone(),dir.path(),Arc::new(|_,_|{}),Arc::new(|_,_|None)).unwrap();
+        let remote=Remote::new(settings.clone(),store.clone(),jobs.clone(),Arc::new(|_,_|Ok(()))).unwrap();
+        let path=remote.outgoing("ws","original-session","target","stable-key");
+        write(&path,&json!({"workspace":"ws","session":"original-session","station":"target","key":"stable-key","delivered":false})).unwrap();
+        drop(remote);
+        let messages:Arc<Mutex<Vec<(String,String)>>>=Arc::default();
+        let told=messages.clone();
+        let restarted=Remote::new(settings,store,jobs,Arc::new(move |session,message|{told.lock().unwrap().push((session.into(),message));Ok(())})).unwrap();
+        let attempts=Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let calls=attempts.clone();
+        restarted.attach(Arc::new(move |station,request| {
+            let n=calls.fetch_add(1,std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async move {
+                assert_eq!(station,"target");
+                assert_eq!(request["workspace"],"ws");
+                assert_eq!(request["session"],"original-session");
+                assert_eq!(request["key"],"stable-key");
+                assert_eq!(request["method"],"task.get","recovery queries; it does not resubmit the command");
+                if n<2 {bail!("offline");}
+                Ok(json!({"job":{"state":"exited","exitCode":0},"log":"done","notices":[]}))
+            })
+        }));
+        for _ in 0..20 {
+            tokio::time::advance(std::time::Duration::from_secs(1)).await;
+            tokio::task::yield_now().await;
+            if read(&path).unwrap()["delivered"]==true {break;}
+        }
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst),3);
+        assert_eq!(messages.lock().unwrap().len(),1);
+        assert_eq!(messages.lock().unwrap()[0].0,"original-session");
+        assert!(messages.lock().unwrap()[0].1.contains("done"));
+        assert_eq!(read(&path).unwrap()["delivered"],true);
     }
 }

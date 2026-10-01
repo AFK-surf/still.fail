@@ -359,3 +359,20 @@ async fn a_watch_is_kept_by_its_session_while_it_runs_with_when_it_last_said_som
     assert!(watching(&r.store).is_empty(), "stopped: no longer watching");
     r.jobs.stop(&plain.id).await.unwrap();
 }
+
+#[tokio::test]
+async fn a_remote_task_whose_process_was_lost_is_not_run_again() {
+    let r=rig();
+    let job=r.jobs.start_id("remote:ws:peer:session","once","echo ran >> count; sleep 30",&r.work,None,Watch::default(),Some("remote_lost_test")).unwrap();
+    until("command started",||r.work.join("count").exists()).await;
+    r.jobs.shutdown().await;
+    end_group(job.pgid.unwrap() as i32,Duration::from_millis(50)).await;
+    let _=std::fs::remove_file(r.jobs.exit_file(&job.id));
+    let next=Jobs::new(r.store.clone(),r._dir.path(),Arc::new(|_,_|{}),Arc::new(|_,_|None)).unwrap();
+    next.relaunch();
+    assert_eq!(r.store.get_job(&job.id).unwrap().unwrap().state,"failed");
+    assert_eq!(std::fs::read_to_string(r.work.join("count")).unwrap(),"ran\n");
+    let repeat=next.start_id("remote:ws:peer:session","once","echo ran >> count",&r.work,None,Watch::default(),Some("remote_lost_test")).unwrap();
+    assert_eq!(repeat.state,"failed");
+    assert_eq!(std::fs::read_to_string(r.work.join("count")).unwrap(),"ran\n");
+}
