@@ -12,3 +12,6 @@ globalStyle("#demo", {
   fontFeatureSettings: "\"cv11\", \"ss01\"", lineBreak: "strict", textWrap: "pretty",
 });
 globalStyle(`#demo ${shell}`, { height: "100%" });
+// The app's lists keep a scroll that reaches their end to themselves (it is the whole page there); here a finger that
+// lands in the demo must still be able to scroll the page once a list in it is at its end.
+globalStyle("#demo *", { overscrollBehavior: "auto" });
