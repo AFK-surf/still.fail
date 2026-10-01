@@ -18,6 +18,8 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
 import androidx.test.platform.app.InstrumentationRegistry
 import fail.still.android.data.ChatDay
@@ -249,6 +251,15 @@ class ArchiveTest {
         assertTrue(buttons[0].boundsInRoot.top > bounds("这件做完了").top)
         tap(buttons[0].boundsInRoot.center)
         assertArchived(h, done.session)
+        assertEquals("back to the chat list", listOf<Screen>(Screen.Home), h.app.stack)
+    }
+
+    @Test fun chatArchiveSlidesBackToList() {
+        val h = chat()
+        val r = h.record("archive-back")
+        rule.onNodeWithText("归档这个 chat").performClick()
+        r.frames(32)
+        r.end()
         assertEquals("back to the chat list", listOf<Screen>(Screen.Home), h.app.stack)
     }
 
