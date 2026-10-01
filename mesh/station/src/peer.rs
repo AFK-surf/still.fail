@@ -104,6 +104,7 @@ mod tests {
         let target=Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).alpns(vec![ALPN.to_vec()]).bind().await?;
         let source_id=source.id().to_string();
         let state: CloudState=serde_json::from_value(json!({"origin":"http://localhost","station":target.id().to_string(),"workspace":"test-ws","workspace_name":"Test","name":"target","relay_url":"http://localhost:3340","grant_keys":{},"peers":[{"id":source_id}]}))?;
+        std::fs::create_dir_all(mesh_dir(dir.path()))?;
         save_state(dir.path(),&state)?;
         std::fs::write(dir.path().join("config.json"),json!({"http":{"host":"127.0.0.1","port":0},"agentHome":dir.path().join("agent"),"profiles":[],"remoteTasks":{"allow":[source_id]}}).to_string())?;
         let app=stillfail_app::server::App::start(stillfail_app::server::AppOptions {data:dir.path().into(),config:dir.path().join("config.json"),ui:dir.path().join("app/dist/admin"),handoff:None}).await?;
