@@ -1078,6 +1078,8 @@ data class LinkShown (
 /// An item's page: its chat (with the viewer's read position), or its agent before it has one.
 @Serializable
 data class ChatView (
+	/// The newest message asks for attention or gives a final result: dim earlier messages only at the scroll end.
+	val focusLast: Boolean? = null,
 	/// Archived chats must be restored before composing another message.
 	val archived: Boolean? = null,
 	/// Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned).

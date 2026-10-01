@@ -1,7 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { enterUpKeyframes, fadeKeyframes, nowInKeyframes, nowOutKeyframes, popInKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
-import { markdown, msgHead, msgTime } from "./styles/conversation.css.ts";
+import { markdown, msg, msgHead, msgTime } from "./styles/conversation.css.ts";
 import { chat, chatList } from "./styles/session.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
 import { composerBox } from "./styles/composer.css.ts";
@@ -12,6 +12,8 @@ import { onboardingCard } from "./cloud/settings.css.ts";
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
 export const chatMessages = style({});
+// The last important post stays fully legible; scrolling up restores the rest immediately.
+globalStyle(`${chatMessages}[data-at-end]:has(> [data-focus]) > ${msg}:not([data-focus])`, { opacity: 0.4 });
 export const chatToBottom = style({
   position: "absolute", right: "24px", bottom: "12px", zIndex: "5", display: "grid", placeItems: "center",
   width: "34px", height: "34px", borderRadius: "50%", border: `1px solid ${vars.line}`, background: vars.canvas,

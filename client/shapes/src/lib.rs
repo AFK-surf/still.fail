@@ -2529,6 +2529,8 @@ pub struct Person {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatView {
+    /// The newest message asks for attention or gives a final result: dim earlier messages only at the scroll end.
+    pub focus_last: Option<bool>,
     /// Archived chats must be restored before composing another message.
     #[serde(default)]
     pub archived: bool,

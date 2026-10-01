@@ -1133,8 +1133,11 @@ impl Views {
         // the rows not read, as its messages say.
         let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(&d))));
         crate::decisions::in_messages(&mut messages, pending);
+        let focus_last = page.get("end").and_then(Value::as_bool) != Some(false)
+            && outbox.is_empty() && messages.last().is_some_and(crate::present::focus_message);
         Some(Ok(json!({
             "me": self.me(scope),
+            "focusLast": focus_last,
             "place": place,
             "slackUrl": slack_url,
             // The same title the sidebar shows: the station's for its item, while it has one.

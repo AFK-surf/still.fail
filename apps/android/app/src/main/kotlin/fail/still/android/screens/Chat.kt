@@ -796,7 +796,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 // place, going on from where it is and its speed when pushed again (web useActivityGlide); folded to an
                 // avatar that is out flying it shows nothing, and is put there at once for the avatar to fly to.
                 val glides = row is Entry.Working && !motion.away(row.agent.key)
-                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = if (glides) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
+                Box(Modifier.graphicsLayer {
+                    alpha = if (view.focusLast == true && !list.canScrollForward && row is Entry.Said && row.m.seq != messages.lastOrNull()?.seq) 0.4f else 1f
+                }.animateItem(fadeInSpec = null, placementSpec = if (glides) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.

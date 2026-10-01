@@ -180,7 +180,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
         return (
           <Fragment key={m.seq}>
             {line}
-            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread}
+            <MessageRow message={m} focus={chat.focusLast === true && m.seq === messages.at(-1)?.seq} enter={enter} emitted={emitted} caught={caught} thread={thread}
               agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
               {...(archiveAt === m.seq ? { archive: onArchive } : {})} />
           </Fragment>
@@ -327,6 +327,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const mineOf = (m: ChatMessage) => m.mine;
   useStickToBottom(list, `.${conversationCss.msg}`, floor, short);
   useWindowMoves(list, messages);
+  useAtScrollEnd(list, messages);
   // Where the reader leaves it, the core keeps too, on the device (it opens there next, while nothing is unread, also
   // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
   // `chat.place` does not know it.
@@ -505,6 +506,21 @@ export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView
     pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 4 * text;
   }, [ref, target]);
   return target;
+}
+
+/** Exact scroll end, separate from the 120px threshold for the jump button and the following animation. */
+function useAtScrollEnd(ref: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
+  useLayoutEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
+    const check = () => pane.toggleAttribute("data-at-end", pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2);
+    check();
+    pane.addEventListener("scroll", check, { passive: true });
+    const resize = new ResizeObserver(check);
+    resize.observe(pane);
+    for (const child of pane.children) resize.observe(child);
+    return () => { pane.removeEventListener("scroll", check); resize.disconnect(); pane.removeAttribute("data-at-end"); };
+  }, [ref, messages]);
 }
 
 /** Whether the reader is scrolled up, away from the newest messages (more than a screenful's corner). */
@@ -760,7 +776,8 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive }: {
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, focus }: {
+  focus?: boolean;
   message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
   thread: number | null;
@@ -788,7 +805,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
   return (
-    <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+    <OthersMessage data-focus={focus || undefined} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
       name={agent

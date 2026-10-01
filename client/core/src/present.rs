@@ -1080,3 +1080,30 @@ mod tests {
         assert_eq!(marked, json!({"text": "监控中：盯 CI、relay 延迟", "ask": "「盯 CI」、「relay 延迟」还在监控。归档后它照常运行，有新消息时对话会回到列表。"}));
     }
 }
+
+/// Posts worth concentrating on at the end of a chat. Read receipts do not dismiss a final result.
+pub fn focus_message(message: &Value) -> bool {
+    if message["authorKind"] != "agent" || message["system"] == true { return false; }
+    let ending = message.get("ending").and_then(Value::as_str)
+        .or_else(|| message.get("declared").and_then(Value::as_str));
+    if matches!(ending, Some("all_done" | "final")) { return true; }
+    if message["decision"]["resolved"] == true || message["decision"]["dismissed"] == true { return false; }
+    matches!(ending, Some("need_human" | "need_help" | "need_decision" | "block"))
+        || message.get("decision").is_some_and(|d| d["resolved"] == false)
+}
+
+#[test]
+fn focus_message_results_and_pending_requests() {
+    for ending in ["all_done", "need_human", "need_help", "need_decision"] {
+        assert!(focus_message(&json!({"authorKind":"agent", "ending":ending})));
+    }
+    assert!(focus_message(&json!({"authorKind":"agent", "declared":"final"})));
+    assert!(focus_message(&json!({"authorKind":"agent", "decision":{"resolved":false}})));
+    for message in [
+        json!({"authorKind":"person", "ending":"all_done"}),
+        json!({"authorKind":"agent"}),
+        json!({"authorKind":"agent", "ending":"waiting"}),
+        json!({"authorKind":"agent", "ending":"need_human", "decision":{"resolved":true}}),
+        json!({"authorKind":"agent", "ending":"need_human", "decision":{"resolved":false,"dismissed":true}}),
+    ] { assert!(!focus_message(&message), "{message}"); }
+}
