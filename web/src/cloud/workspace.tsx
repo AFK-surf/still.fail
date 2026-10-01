@@ -14,7 +14,7 @@ import { useTopics } from "../core/react.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
-import { ChatList, StationTrouble } from "../Sidebar.tsx";
+import { ChatList, StationTrouble, useSidebarGlass } from "../Sidebar.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
 import { OpenJobs } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
@@ -186,8 +186,9 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
 // ── sidebar ─────────────────────────────────────────────────────────────
 
 function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
+  const glass = useSidebarGlass();
   return (
-    <nav className={nav.sidebar} aria-label="导航">
+    <nav ref={glass} className={`${nav.sidebar} ${nav.glassSide}`} aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />

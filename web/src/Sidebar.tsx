@@ -13,7 +13,7 @@ import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename } from "./Rename.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -56,6 +56,30 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
       </div>
     </>
   );
+}
+
+/**
+ * The chats' sidebar frosted (Sidebar.css.ts glassSide): put on its `nav`, it keeps `--side-top` (to the head's foot, the
+ * brand and 新建对话) and `--side-foot` (from the foot's top) on it as they change, for the list running under them.
+ */
+export function useSidebarGlass() {
+  const ref = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const side = ref.current;
+    if (!side) return;
+    const measure = () => {
+      const box = side.getBoundingClientRect();
+      const head = side.querySelector(`:scope > .${nav.navNew}`);
+      const foot = side.querySelector(`:scope > .${nav.navFoot}`);
+      if (head) side.style.setProperty("--side-top", `${Math.round(head.getBoundingClientRect().bottom - box.top)}px`);
+      if (foot) side.style.setProperty("--side-foot", `${Math.round(box.bottom - foot.getBoundingClientRect().top)}px`);
+    };
+    measure();
+    const watch = new ResizeObserver(measure);
+    for (const el of [side, ...side.children]) watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  return ref;
 }
 
 /**

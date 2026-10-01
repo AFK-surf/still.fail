@@ -190,3 +190,22 @@ export const waitingItem = style({ display: "grid", gap: 1 });
 export const waitingDetail = style({ opacity: 0.7 });
 /** Under a page's "loading…": quiet. */
 export const statusLine = style({ display: "block", marginTop: 4, fontSize: 12, color: vars.muted });
+
+/**
+ * The chats' sidebar: the list runs the sidebar's whole height, under its head (the brand, 新建对话) and its foot, which
+ * are frosted over it as the composer is over a chat. How tall the two are the page measures (Sidebar.tsx useSidebarGlass:
+ * `--side-top`, `--side-foot`).
+ */
+export const glassSide = style({ position: "relative" });
+const glass = {
+  position: "relative", zIndex: 1, background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`,
+  WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+} as const;
+globalStyle(`${glassSide} > :is(${brand}, ${navNew}, ${navFoot})`, glass);
+globalStyle(`${glassSide} > ${navFoot}`, { marginTop: "auto", borderTop: 0 });
+globalStyle(`${glassSide} > ${navSlider}`, { position: "absolute", inset: 0 });
+globalStyle(`${glassSide} ${navScroll}`, {
+  paddingTop: "calc(var(--side-top, 88px) + 4px)", paddingBottom: "calc(var(--side-foot, 48px) + 12px)",
+  // Its floating scrollbar stays clear of both (scrollbars.ts), as does a row scrolled into view.
+  scrollPaddingTop: "var(--side-top, 88px)", scrollPaddingBottom: "var(--side-foot, 48px)",
+});
