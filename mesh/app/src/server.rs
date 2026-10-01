@@ -107,6 +107,15 @@ impl Mesh for MeshFile {
     }
 }
 
+/// Why the station does no work, for the logs of the jobs it stops.
+fn out_why(status: &MeshStatus) -> String {
+    match (status.state.as_str(), &status.workspace) {
+        ("removed", Some(workspace)) => format!("the station was removed from its workspace ({workspace})"),
+        ("removed", None) => "the station was removed from its workspace".to_string(),
+        _ => "the station is in no workspace".to_string(),
+    }
+}
+
 /// The profiles as the agent home links them: id, runtimes, home.
 fn homes(config: &Config) -> Vec<(String, Vec<RuntimeKind>, PathBuf)> {
     config.profiles.iter().map(|p| (p.id.clone(), p.runtimes.clone(), p.home.clone())).collect()
@@ -353,6 +362,10 @@ impl App {
             unbound_warning(&status, &config);
             hub.hold(Hold::Unbound);
             app.owed.store(true, Ordering::SeqCst);
+            // Removed, and the station stopped before it stopped its jobs (or crashed): what still runs is ended now.
+            if status.state == "removed" {
+                jobs.stop_all(&out_why(&status)).await;
+            }
         }
         // Chats idle long enough go to the archive (Hub::auto_archive): looked at now and every hour.
         let archiving = hub.clone();
@@ -402,11 +415,7 @@ impl App {
         if !self.bound.swap(false, Ordering::SeqCst) {
             return;
         }
-        let why = match (status.state.as_str(), &status.workspace) {
-            ("removed", Some(workspace)) => format!("the station was removed from its workspace ({workspace})"),
-            ("removed", None) => "the station was removed from its workspace".to_string(),
-            _ => "the station is in no workspace".to_string(),
-        };
+        let why = out_why(status);
         warn!(why, "out of its workspace: stopping connects, turns, jobs and services");
         self.hub.hold(Hold::Unbound);
         self.connections.stop_all().await;
@@ -674,6 +683,36 @@ mod tests {
         assert!(!again.bound());
         assert!(again.hub.holds(Hold::Unbound));
         assert_eq!(again.mesh.status().state, "removed");
+        again.shutdown().await;
+    }
+
+    /// Removed while it was down (or it crashed between the removal and stopping its jobs): the next start finds the
+    /// mark and ends the jobs and services the last one left running, rather than leaving them on unwatched.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_station_starting_removed_stops_the_jobs_left_running_from_before() {
+        let r = Rig::start("removed-jobs", json!({})).await;
+        r.enroll(None);
+        r.until_bound(true).await;
+        let work = r.dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let job = r.app.jobs.start("s1", "long", "sleep 60", &work, None).unwrap();
+        let service = r.app.jobs.start("s1", "web", "sleep 60", &work, Some(47993)).unwrap();
+        r.app.shutdown().await;
+        let db = Store::open(&r.dir.join(DB_FILE).to_string_lossy(), None).unwrap();
+        let pgids: Vec<i32> = [&job.id, &service.id].iter().map(|id| db.get_job(id).unwrap().unwrap().pgid.unwrap() as i32).collect();
+        assert!(pgids.iter().all(|p| crate::runtime::process::group_alive(*p)), "a stop of the station leaves them running");
+        r.enroll(Some(1_790_000_000));
+        let options = AppOptions { data: r.dir.clone(), config: r.dir.join("config.json"), ui: r.dir.join("app").join("dist").join("admin"), handoff: None };
+        let again = App::start(options).await.unwrap();
+        assert!(!again.bound());
+        for (id, pgid) in [&job.id, &service.id].into_iter().zip(&pgids) {
+            let row = db.get_job(id).unwrap().unwrap();
+            assert_eq!(row.state, "stopped", "{id}");
+            assert!(!crate::runtime::process::group_alive(*pgid), "{id}'s group is ended");
+            let log = std::fs::read_to_string(&row.log).unwrap();
+            assert!(log.ends_with("[still.fail] stopped: the station was removed from its workspace (Dev)\n"), "{log}");
+        }
+        assert!(db.list_processes().unwrap().iter().all(|p| p.runtime != "job"), "their groups are off the record");
         again.shutdown().await;
     }
 }

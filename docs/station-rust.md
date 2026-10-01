@@ -14,7 +14,7 @@ station 是一个 Rust 程序：`ember-station`（mesh/station）一个进程运
 
 station 只在 workspace 里干活（mesh/app/src/server.rs `bind`/`unbind`）。`<数据目录>/mesh/cloud.json` 不存在（从没加入）或带着 `removed_at`（被移出）时：不连 Slack，不开新的轮次（Hub 的 `Unbound` 暂停，和更新排空的 `Drain` 分开计），启动时不恢复被打断的轮次、不重新拉起 job 和服务，消息照收照排队。加入（或重新被接纳）后：连上 Slack，恢复被打断的轮次，拉起 job，排队的消息开始处理。
 
-被移出：cloud 用 4004 关掉在线连接，或连接时回 404。`ember-station` 在 cloud.json 里记下 `removed_at`（和 `removed_code`），文件保留（旧桌面端看到文件在就不会自动再加入），station 随即打断正在跑的轮次、停掉在跑的 job 和服务（日志末尾写明原因）、断开 Slack，并拒绝客户端连接。之后每 10 分钟问一次 cloud，重新被接纳就自动去掉标记；`enroll` 会重写 cloud.json，不带标记。管理 API 的 `mesh.state` 是 `off`（没加入）/`running`（在 workspace 里）/`removed`；`MeshStatus::serves(workspace)` 留给以后一台 station 服务多个 workspace。`stillfail status` 说明这些。
+被移出：cloud 用 4004 关掉在线连接，或连接时回 404。`ember-station` 在 cloud.json 里记下 `removed_at`（和 `removed_code`），文件保留（旧桌面端看到文件在就不会自动再加入），station 随即打断正在跑的轮次、停掉在跑的 job 和服务（日志末尾写明原因）、断开 Slack，并拒绝客户端连接。被移出后才启动的 station（比如移出时恰好停着，或者在停掉 job 之前崩了）启动时看到标记，就结束上一个进程留下还在跑的 job 和服务（按 `processes` 表里记的进程组），记为 stopped，日志末尾写明原因。之后每 10 分钟问一次 cloud，重新被接纳就自动去掉标记；`enroll` 会重写 cloud.json，不带标记。管理 API 的 `mesh.state` 是 `off`（没加入）/`running`（在 workspace 里）/`removed`；`MeshStatus::serves(workspace)` 留给以后一台 station 服务多个 workspace。`stillfail status` 说明这些。
 
 ## 历史与兼容
 

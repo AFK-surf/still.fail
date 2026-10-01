@@ -321,3 +321,22 @@ async fn leaving_the_workspace_stops_every_job_and_service_and_says_why() {
     assert!(log.ends_with("[still.fail] stopped: the station was removed from its workspace\n"), "{log}");
     assert!(!r.said().iter().any(|t| t.contains("was stopped")), "agents are not woken for it");
 }
+
+/// A station that starts out of its workspace takes nothing up; stopping all then ends what the one before left running.
+#[tokio::test]
+async fn stopping_all_ends_jobs_an_earlier_station_left_running() {
+    let (_dir, store) = shared();
+    let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
+    let data = before._dir.path().to_path_buf();
+    let job = before.jobs.start("s1", "long", "sleep 30", &before.work, None).unwrap();
+    before.jobs.shutdown().await;
+    let pgid = before.store.get_job(&job.id).unwrap().unwrap().pgid.unwrap() as i32;
+    let after = restarted(&before, &data, store);
+    after.jobs.stop_all("the station was removed from its workspace").await;
+    assert_eq!(after.state(&job.id), "stopped");
+    assert!(!group_alive(pgid), "its group is ended, not only marked");
+    assert!(after.store.list_processes().unwrap().is_empty(), "and off the record");
+    let log = std::fs::read_to_string(after.store.get_job(&job.id).unwrap().unwrap().log).unwrap();
+    assert!(log.ends_with("[still.fail] stopped: the station was removed from its workspace\n"), "{log}");
+    assert!(after.said().is_empty());
+}

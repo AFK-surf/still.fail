@@ -346,8 +346,19 @@ impl Jobs {
                     signal_group(pgid, libc::SIGKILL);
                 }
             }
-            // A service waiting to start again, or one on record only: it stays stopped.
-            None if job.state == "running" || job.state == "exited" => self.store.job_ended(id, "stopped", job.exit_code)?,
+            // A service waiting to start again, or one on record only: it stays stopped. One an earlier station left
+            // running and this one does not follow (it started out of its workspace, so took nothing up): its group
+            // is ended too.
+            None if job.state == "running" || job.state == "exited" => {
+                if let Some(entry) = job.pgid.and_then(|pgid| self.left_behind(pgid)) {
+                    if still_ours(&entry) {
+                        warn!(job = job.id, pgid = entry.pgid, "ending a job an earlier station left running");
+                        end_group(entry.pgid as i32, Duration::from_secs(5)).await;
+                    }
+                    let _ = self.store.forget_process(entry.pgid);
+                }
+                self.store.job_ended(id, "stopped", job.exit_code)?
+            }
             None => {}
         }
         for _ in 0..30 {
@@ -357,6 +368,14 @@ impl Jobs {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         Ok(self.store.get_job(id)?.unwrap_or(job))
+    }
+
+    /// The record of a job's group an earlier station started (not one this station follows).
+    fn left_behind(&self, pgid: i64) -> Option<crate::store::ProcessRow> {
+        if self.running.lock().unwrap().values().any(|r| r.pgid as i64 == pgid) {
+            return None;
+        }
+        self.store.list_processes().unwrap_or_default().into_iter().find(|p| p.runtime == "job" && p.pgid == pgid)
     }
 
     /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it), if it was at work
@@ -370,7 +389,8 @@ impl Jobs {
     }
 
     /// Stops every job and service that runs or waits to start again, `why` written at the end of each one's log: the
-    /// station left its workspace, and does no work outside one. Agents are not told (no turn runs meanwhile, and
+    /// station left its workspace, and does no work outside one; or it starts already out of it, and what an earlier
+    /// station left running (it ended before it could stop them) is ended. Agents are not told (no turn runs meanwhile, and
     /// telling them once it is back would wake them all); a job's state and log say it when one looks.
     pub async fn stop_all(&self, why: &str) {
         let jobs = self.store.list_jobs(None).unwrap_or_default();
