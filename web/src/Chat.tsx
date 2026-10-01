@@ -1283,7 +1283,8 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
         }
         if (top === row.top) continue;
         row.top = top;
-        if (rewrapped || document.visibilityState !== "visible") row.y.jump(top);
+        // One folded to its avatar, out flying, shows nothing: it is where it is laid out, for the avatar to fly to.
+        if (rewrapped || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(top);
         else {
           row.y.to(top, GLIDE);
           // Laid out elsewhere, it is drawn where it was until the glide takes it.
@@ -1425,7 +1426,12 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame = 0;
     const go = (to: Pose) => setCurrent({ seq, agent, pose: to });
-    // Each frame the avatar is sent on to where it goes, read anew; `arrived`, once it has come to rest there.
+    // Where the message's avatar is once the message is out: waiting, the message takes back the list's gap above it.
+    const landed = () => {
+      const at = layoutSpot(pane, landing!);
+      return message!.hasAttribute("data-held") ? { x: at.x, y: at.y - parseFloat(getComputedStyle(message!).marginTop) } : at;
+    };
+    // Each frame the avatar is sent on to where it goes, read anew; `arrived`, once it is there (put exactly there).
     const follow = (to: () => { x: number; y: number }, arrived?: () => void) => {
       const step = () => {
         const f = flight.current;
@@ -1433,7 +1439,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
         const goal = to();
         f.x.to(goal.x, FLY);
         f.y.to(goal.y, FLY);
-        if (arrived && !f.x.moving && !f.y.moving && Math.abs(f.x.value - goal.x) < 0.5 && Math.abs(f.y.value - goal.y) < 0.5) {
+        if (arrived && Math.abs(f.x.value - goal.x) < 0.5 && Math.abs(f.y.value - goal.y) < 0.5) {
           f.x.jump(goal.x);
           f.y.jump(goal.y);
           arrived();
@@ -1446,13 +1452,13 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     if (pose === "fold") timer = setTimeout(() => go("float"), FOLD_MS);
     if (pose === "float") {
       flight.current ??= launch(pane, avatar);
-      follow(() => layoutSpot(pane, landing!), () => go("spit"));
+      follow(landed, () => go("spit"));
     }
     // A small swell as it lets the message out, staying on the message's avatar as the message grows.
     if (pose === "spit") {
       const f = flight.current;
       if (f) animate(f.s, [1, 1.16, 1], { duration: SPIT_MS / 1000, times: [0, 0.35, 0.7], ease: "easeInOut" });
-      follow(() => layoutSpot(pane, landing!));
+      follow(landed);
       timer = setTimeout(() => go("return"), SPIT_MS);
     }
     if (pose === "return") {
