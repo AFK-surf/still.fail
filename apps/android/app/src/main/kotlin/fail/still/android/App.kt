@@ -49,6 +49,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clipToBounds
+import fail.still.android.screens.WideCorners
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -266,6 +270,12 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat) madeChat = null; stack = stack + screen }
     fun pop() { if (stack.size > 1) { sheet = null; menu = null; forward = false; stack = stack.dropLast(1) } }
     /** The top page gives way to another (a new chat becomes the chat it made). */
+    /** From the latest chats on a wide screen (screens/Wide.kt): in place of the page open, or over the list. */
+    fun open(screen: Screen) {
+        sheet = null; menu = null; forward = true
+        if (screen == Screen.NewChat) madeChat = null
+        stack = (if (stack.size > 1) stack.dropLast(1) else stack) + screen
+    }
     fun replace(screen: Screen) { sheet = null; forward = true; stack = stack.dropLast(1) + screen }
     /**
      * The chat a new chat became (`made`): it is the same page as the new chat was (screens/ChatHost.kt), not another
@@ -497,6 +507,12 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         }
     }
     val saved = rememberSaveableStateHolder()
+    // Wider than a phone (screens/Wide.kt): the pages in a column, the latest chats and the new-chat button at the screen's corners.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    val wide = maxWidth >= fail.still.android.screens.WideAt
+    Box(Modifier.align(androidx.compose.ui.Alignment.TopCenter).fillMaxHeight()
+        .then(if (wide) Modifier.width(fail.still.android.screens.columnWidth(maxWidth)).clipToBounds() else Modifier.fillMaxWidth())) {
+    CompositionLocalProvider(fail.still.android.screens.LocalWide provides wide) {
     transition.AnimatedContent(
         transitionSpec = {
             // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
@@ -544,6 +560,10 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                 }
             }
         }
+    }
+    }
+    }
+    if (wide) WideCorners(current, top)
     }
 }
 
