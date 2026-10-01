@@ -165,6 +165,7 @@ export class Directory extends DurableObject<Env> {
    * too when what their lists show changed (a name, a role, a count).
    */
   #changed(workspace: string, list: boolean, also: Iterable<string> = []): void {
+    for (const row of this.#rows("SELECT id FROM stations WHERE workspace = ?", workspace)) this.#sendState(row.id as string);
     const subs = [...this.#members(workspace), ...also];
     this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace });
   }
@@ -924,7 +925,8 @@ export class Directory extends DurableObject<Env> {
     const row = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
     if (!row) return;
     const revocations = this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace as string, nowSeconds() - REVOCATION_DAYS * 86400);
-    const frame = JSON.stringify({ type: "state", ...row, origin: this.env.PUBLIC_ORIGIN, ...relays(this.env), grant_keys: grantKeys(this.env), revocations });
+    const peers = this.#rows("SELECT id, name, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", row.workspace as string);
+    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...relays(this.env), grant_keys: grantKeys(this.env), revocations });
     for (const ws of sockets) ws.send(frame);
   }
 

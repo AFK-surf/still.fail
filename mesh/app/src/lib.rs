@@ -38,3 +38,5 @@ pub mod transcript;
 pub mod updates;
 pub mod usage;
 pub mod footprint;
+
+pub mod remote;

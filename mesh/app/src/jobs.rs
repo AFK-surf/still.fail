@@ -195,6 +195,14 @@ impl Jobs {
 
     /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port.
     pub fn start(&self, session: &str, name: &str, command: &str, cwd: &Path, port: Option<u16>, watch: Watch) -> Result<JobRow> {
+        self.start_id(session, name, command, cwd, port, watch, None)
+    }
+
+    /// A remote task supplies a stable id. Its caller serializes starts; an existing record is never spawned again.
+    pub(crate) fn start_id(&self, session: &str, name: &str, command: &str, cwd: &Path, port: Option<u16>, watch: Watch, id: Option<&str>) -> Result<JobRow> {
+        if let Some(id) = id {
+            if let Some(job) = self.store.get_job(id)? { return Ok(job); }
+        }
         if command.trim().is_empty() {
             bail!("command is empty");
         }
@@ -218,7 +226,7 @@ impl Jobs {
                 bail!("port {port} is {}'s already", Self::named(&taken));
             }
         }
-        let id = format!("job_{}", random_hex(4));
+        let id = id.map(str::to_string).unwrap_or_else(|| format!("job_{}", random_hex(4)));
         let name = if name.trim().is_empty() { command.split_whitespace().next().unwrap_or("job").to_string() } else { name.trim().chars().take(60).collect() };
         let job = JobRow {
             log: self.dir.join("logs").join(format!("{id}.log")).to_string_lossy().into_owned(),
@@ -488,6 +496,12 @@ impl Jobs {
                     });
                     continue;
                 }
+            }
+            // A remote command may have external effects. A lost process is an uncertain result, not permission
+            // to execute it again. Its stable task id remains queryable and cannot be reused.
+            if job.id.starts_with("remote_") {
+                let _ = self.store.job_ended(&job.id, "failed", None);
+                continue;
             }
             match self.spawn(job, true) {
                 Ok(()) => self.tell(job, format!("The station restarted; {} was started again.", Self::named(job))),

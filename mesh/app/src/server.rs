@@ -141,6 +141,7 @@ pub struct App {
     connections: Arc<Connections>,
     hub: Arc<Hub>,
     jobs: Arc<crate::jobs::Jobs>,
+    pub remote: Arc<crate::remote::Remote>,
     logins: Arc<LoginManager>,
     admin: Arc<AdminApi>,
     up: AtomicBool,
@@ -265,10 +266,12 @@ impl App {
                 }
             }),
         )?;
+        let remote = crate::remote::Remote::new(settings.clone(), store.clone(), jobs.clone(), Arc::downgrade(&hub))?;
         hub.set_jobs(&jobs);
         jobs.set_notify_url(format!("http://{}:{port}/jobs/notify", config.http.host));
         let (tokens, homes_of) = (store.clone(), store.clone());
         let mut tools = hub.tools();
+        tools.extend(remote.tools());
         tools.extend(jobs.tools(Arc::new(move |key| homes_of.get_session(key).ok().flatten().map(|row| PathBuf::from(row.workspace)))));
         if feedback {
             let pages = mesh.clone();
@@ -367,6 +370,7 @@ impl App {
             connections: connections.clone(),
             hub: hub.clone(),
             jobs: jobs.clone(),
+            remote,
             logins,
             admin,
             up: AtomicBool::new(false),

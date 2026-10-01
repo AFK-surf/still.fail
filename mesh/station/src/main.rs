@@ -25,6 +25,7 @@
 mod errors;
 mod feedback;
 mod keep;
+mod peer;
 mod local;
 mod notify;
 mod telemetry;
@@ -88,6 +89,9 @@ struct CloudState {
     #[serde(default)]
     relay_urls: Vec<String>,
     grant_keys: Value,
+    /// Authenticated workspace roster; old control planes grant no peer access.
+    #[serde(default)]
+    peers: Vec<Value>,
     /// What the cloud took back (a member removed, a role changed, a session signed out): credentials of that
     /// account (`sub`) or session (`sid`) issued up to `at` are refused. Kept, so it holds with the cloud away.
     #[serde(default)]
@@ -183,6 +187,7 @@ async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
         relay_url: text("relay_url"),
         relay_urls: strings(&body["relay_urls"]),
         grant_keys: body["grant_keys"].clone(),
+        peers: Vec::new(),
         revocations: Vec::new(),
         removed_at: None,
         removed_code: None,
@@ -298,6 +303,7 @@ async fn write_line(send: &mut SendStream, value: &Value) -> Result<()> {
 struct Station {
     data: PathBuf,
     state: Mutex<CloudState>,
+    peers_current: std::sync::atomic::AtomicBool,
     /// Where its requests go, and whether that answers now.
     backend: local::Backend,
     ready: watch::Receiver<bool>,
@@ -691,7 +697,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     }
     let endpoint = Endpoint::builder(Minimal)
         .secret_key(key.clone())
-        .alpns(vec![ALPN.to_vec(), FORMER_ALPN.to_vec()])
+        .alpns(vec![ALPN.to_vec(), FORMER_ALPN.to_vec(), peer::ALPN.to_vec()])
         .relay_mode(RelayMode::Custom(relays))
         .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE))
         .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key))
@@ -700,7 +706,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
         .await?;
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "mesh listening");
     let traces = telemetry.enabled();
-    let station = Arc::new(Station { data, state: Mutex::new(state), backend, ready, telemetry: telemetry.clone() });
+    let station = Arc::new(Station { data, state: Mutex::new(state), peers_current: std::sync::atomic::AtomicBool::new(false), backend, ready, telemetry: telemetry.clone() });
     // Online at still.fail cloud only once the relay can reach us: a device that saw "online" and connected before
     // our relay link was up had its first packets dropped and waited out QUIC's retransmits (~3 s).
     if tokio::time::timeout(std::time::Duration::from_secs(15), endpoint.online()).await.is_err() {
@@ -715,12 +721,14 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     if traces {
         tokio::spawn(telemetry.export(station.clone(), endpoint.secret_key().clone()));
     }
+    peer::attach(endpoint.clone(), station.clone());
     while let Some(incoming) = endpoint.accept().await {
         let station = station.clone();
         tokio::spawn(async move {
             match incoming.await {
                 Ok(conn) => {
-                    if let Err(error) = serve(station, conn).await {
+                    let result = if conn.alpn() == peer::ALPN { peer::serve(station, conn).await } else { serve(station, conn).await };
+                    if let Err(error) = result {
                         info!(%error, "connection ended");
                     }
                 }
@@ -836,7 +844,9 @@ async fn presence(station: Arc<Station>, key: SecretKey) {
             }
         }
         let started = Instant::now();
+        station.peers_current.store(false, std::sync::atomic::Ordering::SeqCst);
         let ended = connect(&station, &key).await;
+        station.peers_current.store(false, std::sync::atomic::Ordering::SeqCst);
         write_presence(&station.data, false, Some(&match &ended {
             Ok(()) => "still.fail cloud closed the presence socket".to_string(),
             Err(error) => error.to_string(),
@@ -982,6 +992,9 @@ fn apply_state(station: &Station, text: &str) {
                     *field = value.to_string();
                 }
             }
+            // Missing roster means an old cloud: never retain peers from another binding.
+            s.peers = body["peers"].as_array().cloned().unwrap_or_default();
+            station.peers_current.store(body["peers"].is_array(), std::sync::atomic::Ordering::SeqCst);
             if body["relay_urls"].is_array() {
                 s.relay_urls = strings(&body["relay_urls"]);
             }
@@ -1486,7 +1499,7 @@ mod tests {
     fn enrolled(dir: &Path) -> Station {
         let state: CloudState = serde_json::from_value(json!({ "origin": "https://app.still.fail", "station": "abcdef0123456789", "workspace": "w", "workspace_name": "Dev", "name": "mac", "relay_url": "https://app.still.fail", "grant_keys": {} })).unwrap();
         save_state(dir, &state).unwrap();
-        Station { data: dir.to_path_buf(), state: Mutex::new(state), backend: local::Backend::default(), ready: watch::channel(true).1, telemetry: Telemetry::new(false) }
+        Station { data: dir.to_path_buf(), state: Mutex::new(state), peers_current: std::sync::atomic::AtomicBool::new(false), backend: local::Backend::default(), ready: watch::channel(true).1, telemetry: Telemetry::new(false) }
     }
 
     #[test]

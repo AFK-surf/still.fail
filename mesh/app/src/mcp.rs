@@ -16,7 +16,7 @@ use tracing::warn;
 /// not reliably say which it is) and job_start (jobs and services do not run then). The rest only read the station's
 /// own records (chat_history, chat_list, chat_read, session_history, job_list, job_log), record the turn's state
 /// (chat_state: nothing is sent), or stop something (job_stop), and stay open.
-pub const OUTWARD: &[&str] = &["chat_post", "slack_api", "job_start"];
+pub const OUTWARD: &[&str] = &["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file"];
 
 /// What a refused outward call says.
 pub const UNBOUND_REFUSAL: &str = "Refused: this station is not in a still.fail workspace right now (it was removed from it, or has not joined one), so it does not post to chats or Slack, call Slack, or start jobs. Nothing was sent. Stop here and do not retry: when the station is back in its workspace, the interrupted work resumes and you can post then.";
@@ -184,7 +184,7 @@ mod tests {
 
     #[tokio::test]
     async fn while_the_station_is_in_no_workspace_outward_tools_are_refused_and_the_rest_run() {
-        let names = ["chat_post", "slack_api", "job_start", "chat_state", "chat_history", "chat_list", "chat_read", "session_history", "job_list", "job_log", "job_stop"];
+        let names = ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file", "chat_state", "chat_history", "chat_list", "chat_read", "session_history", "job_list", "job_log", "job_stop"];
         let out = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let closed = out.clone();
         let e = McpEndpoint::new(|_| Some("s".to_string()), tools(&names))
@@ -201,7 +201,7 @@ mod tests {
                 assert_eq!(result, json!({ "content": [{ "type": "text", "text": format!("{name} ran") }] }), "{name}");
             }
         }
-        assert_eq!(OUTWARD, ["chat_post", "slack_api", "job_start"]);
+        assert_eq!(OUTWARD, ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file"]);
         // Listed all the same: an agent that read the list before keeps the same tools.
         let list = rpc(&e, Some("t"), json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" })).await.body.unwrap();
         assert_eq!(list["result"]["tools"].as_array().unwrap().len(), names.len());
