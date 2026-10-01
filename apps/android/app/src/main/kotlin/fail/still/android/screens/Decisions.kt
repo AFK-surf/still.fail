@@ -7,8 +7,8 @@
 // draws them, and at the foot its options, the hint and `1 / N`. The whole decision is swiped: left 待定 (set aside on
 // this device: last of the page, still waiting), right 不再提醒 (dismissed for the viewer). Let go past about a third
 // of the width, or flung, it flies off and the next comes in; short of that it springs back.
-// A card is options (the buttons above) or text: on the page a one-line field and a round send button where the options
-// go (the reply is the viewer's message quoting the post, `decision.reply`); a swipe never starts in the field. A card
+// Options and text cards both have a multiline reply field on the page, below any options
+// offered (the reply is the viewer's message quoting the post, `decision.reply`); a swipe never starts in the field. A card
 // of a type this app does not know is answered in its chat. In a chat only an options card has anything under it.
 package fail.still.android.screens
 
@@ -28,20 +28,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import fail.still.android.ui.keyboard
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -295,10 +292,13 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     val answer = { o: DecisionOption -> go(0) { local.gone.add(item.key); call("回答") { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
     // A text card's reply: it stays (a spinner on its send) until the core has it, then goes as an answer does; refused,
     // what was written stays and why is said.
+    val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
     val reply = { text: String ->
         app.scope.launch {
             try {
                 app.api(item.station).replyDecision(item.thread, item.seq, text)
+                replyDraft.text = ""
+                replyDraft.save()
                 go(0) { local.gone.add(item.key) }
             } catch (e: CoreException) { app.toast = "没能回复：${errorText(e)}" }
         }
@@ -439,7 +439,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
     Spacer(Modifier.height(4.dp))
     val card = item.card
     when (card?.type ?: "options") {
-        "options" -> DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 14.dp), onPick = onPick)
+        "options" -> {
+            DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 14.dp), onPick = onPick)
+            Spacer(Modifier.height(8.dp))
+            TextReply(item, null, onField, onReply)
+        }
         "text" -> TextReply(item, card?.placeholder, onField, onReply)
         // A card this app does not know: answered in its chat, at the post.
         else -> Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -454,32 +458,33 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
 }
 
 /**
- * A text card's foot: a one-line field (the agent's placeholder, else 写点什么…) and a round send button in ink; the
- * keyboard's send or the button replies. While the reply is under way, a spinner on the button and nothing pressed again;
+ * A card's foot: a multiline field (the agent's placeholder, else 写点什么…) and a round send button in ink; the
+ * send button replies. While the reply is under way, a spinner on the button and nothing pressed again;
  * refused, what was written stays.
  */
 @Composable
 private fun TextReply(item: DecisionItem, placeholder: String?, onField: (LayoutCoordinates) -> Unit, onReply: (String) -> Unit) {
     val app = LocalApp.current
-    var text by remember(item.key) { mutableStateOf("") }
+    val draft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
+    val text = draft.text
     val doing = app.isDoing("decision.reply", "station" to item.station, "thread" to item.thread, "seq" to item.seq)
     val ready = text.isNotBlank() && !doing
     val send = { if (ready) onReply(text.trim()) }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
-            Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp)).background(C.chip).onGloballyPositioned(onField)
-                .padding(horizontal = 16.dp),
+            Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(C.chip).onGloballyPositioned(onField)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            if (text.isEmpty()) Text(placeholder?.takeIf { it.isNotBlank() } ?: "写点什么…", fontSize = 15.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (text.isEmpty()) Text(placeholder?.takeIf { it.isNotBlank() } ?: "写点什么…", style = SendTextStyle.copy(color = C.subtle), maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicTextField(
-                text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = "回复" },
-                enabled = !doing, singleLine = true,
-                textStyle = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = C.ink), cursorBrush = SolidColor(C.accent),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { send() }),
+                text, { draft.text = it }, Modifier.fillMaxWidth().semantics { contentDescription = "回复" },
+                enabled = !doing, maxLines = 6,
+                textStyle = SendTextStyle.copy(color = C.ink), cursorBrush = SolidColor(C.accent),
+                
             )
         }
         // Nothing to send: the ink faint over the page (as the composer's).

@@ -19,7 +19,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -297,12 +296,23 @@ class DecisionsTest {
         rule.onNodeWithText(first.title).assertExists()
     }
 
-    @Test fun textCardKeyboardSendReplies() {
+    @Test fun textCardMultilineReply() {
         val h = textPage()
-        typeIn("sk_test_9")
-        rule.onNode(hasSetTextAction()).performImeAction()
+        typeIn("第一行\n第二行")
+        assertTrue(h.acted().isEmpty())
+        tap(sendButton().center)
         assertOneCall(h, "decision.reply", keyPost)
-        assertEquals("sk_test_9", h.acted()[0].second["text"]!!.jsonPrimitive.content)
+        assertEquals("第一行\n第二行", h.acted()[0].second["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun optionsCardFreeformReply() {
+        val h = page()
+        rule.onNodeWithText(both.label).assertExists()
+        typeIn("先调间距\n颜色不动")
+        tap(sendButton().center)
+        assertOneCall(h, "decision.reply", gap)
+        assertEquals("先调间距\n颜色不动", h.acted()[0].second["text"]!!.jsonPrimitive.content)
+        rule.onNodeWithText(second.title).assertExists()
     }
 
     @Test fun textCardEmptySendsNothing() {

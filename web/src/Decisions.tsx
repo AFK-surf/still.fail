@@ -13,12 +13,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import { useStations } from "./api.ts";
+import { useApi, useStations } from "./api.ts";
 import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoing, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
 import { reducedMotion } from "./motion.ts";
 import { StaticMessage } from "./Chat.tsx";
+import { useDraft } from "./draft.ts";
 import { ArrowUp } from "./icons.tsx";
 import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
@@ -78,7 +79,16 @@ export function DecisionReply({ station, thread, seq, placeholder, onSent }: {
   // Under way: the core's doing list says so, or (a core that does not list it) this call not yet answered.
   const [asked, setAsked] = useState(false);
   const sending = useDoing("decision.reply", { station, thread, seq }) || asked;
-  const [text, setText] = useState("");
+  const api = useApi();
+  const draft = useDraft({ key: `decision:${station}:${thread}:${seq}`, station, upload: (file) => api.uploadFile(file) });
+  const { text, setText } = draft;
+  const input = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const field = input.current;
+    if (!field) return;
+    field.style.height = "0px";
+    field.style.height = `${Math.min(field.scrollHeight, 144)}px`;
+  }, [text]);
   const ready = text.trim() !== "" && !sending;
   const send = () => {
     if (!ready) return;
@@ -91,9 +101,9 @@ export function DecisionReply({ station, thread, seq, placeholder, onSent }: {
     <form className={css.reply} onSubmit={(e) => { e.preventDefault(); send(); }}
       // A finger on the field writes in it: no swipe starts there.
       onPointerDown={(e) => e.stopPropagation()}>
-      <input className={css.replyInput} value={text} placeholder={placeholder || "写点什么…"} aria-label={placeholder || "回复"}
-        readOnly={sending} enterKeyHint="send" onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
+      <textarea ref={input} rows={1} className={css.replyInput} value={text} placeholder={placeholder || "写点什么…"} aria-label={placeholder || "回复"}
+        readOnly={sending} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia("(pointer: coarse)").matches) { e.preventDefault(); send(); } }} />
       <button type="submit" className={css.replySend} disabled={!ready} aria-label="发送" aria-busy={sending || undefined}>
         {sending ? <span className={`${waitingCss.spinner} ${css.replySpinner}`} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
       </button>
@@ -259,7 +269,10 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
             <div className={css.footColumn}>
               {(() => {
                 const type = cardType(d.card, d.options);
-                if (type === "options") return <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={() => answered(d)} />;
+                if (type === "options") return <>
+                  <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={() => answered(d)} />
+                  <DecisionReply key={keyOf(d)} station={d.station} thread={d.thread} seq={d.seq} onSent={() => answered(d)} />
+                </>;
                 if (type === "text") return <DecisionReply key={keyOf(d)} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} />;
                 return <button type="button" className={css.elsewhere} onClick={() => onOpen(path)}>去 chat 里回</button>;
               })()}

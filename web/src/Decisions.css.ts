@@ -133,16 +133,16 @@ export const page = style({ flex: "1", minHeight: "0", display: "flex", flexDire
 
 /** Its field and send button, where an options card's options are: the field a chip, the button round, in ink. */
 export const reply = style({
-  display: "flex", alignItems: "center", gap: "6px", padding: "4px 4px 4px 14px", borderRadius: vars.rField,
+  display: "flex", alignItems: "flex-end", gap: "6px", marginTop: "8px", padding: "6px 6px 6px 16px", borderRadius: "24px",
   cornerShape: vars.cornerShape, background: chip,
 });
 export const replyInput = style({
-  flex: "1", minWidth: "0", height: "32px", padding: "0", border: "0", outline: "none", background: "none",
-  color: vars.text, fontFamily: "inherit", fontSize: vars.textSm, lineHeight: "20px",
+  flex: "1", minWidth: "0", minHeight: "36px", maxHeight: "144px", resize: "none", textWrap: "wrap", height: "36px", padding: "6px 0", border: "0", outline: "none", background: "none",
+  color: vars.text, fontFamily: "inherit", fontSize: "16px", lineHeight: "24px",
   selectors: { "&::placeholder": { color: vars.subtle } },
 });
 export const replySend = style({
-  flex: "none", display: "grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0",
+  flex: "none", display: "grid", placeItems: "center", width: "36px", height: "36px", padding: "0", border: "0",
   borderRadius: "50%", background: vars.text, color: ground, cursor: "pointer",
   transition: `opacity ${vars.dur}`,
   selectors: {

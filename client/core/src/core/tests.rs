@@ -963,10 +963,12 @@ fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_t
         let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 4 | 5, .. })).count();
         assert_eq!(refused, 2);
         assert_eq!(posted(&host).len(), 1);
-        // An options card is not written in; a text card is, and is not picked from.
+        // Both options and text cards accept free-form replies; text cards have no choices.
         core.receive(ui, ClientMessage::Call { id: 8, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4, "text": "随便" }) });
         host.settle().await;
-        assert!(host.take_emitted().into_iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 8, .. })));
+        assert!(!host.take_emitted().into_iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 8, .. })));
+        assert_eq!(posted(&host)[1]["text"], "随便");
+        assert_eq!(posted(&host)[1]["quotes"][0]["ts"], "9.000004");
         let card = json!({ "seq": 6, "card": { "type": "text", "placeholder": "sk_" }, "message": { "seq": 6, "ts": "9.000006", "text": "key？", "authorName": "Claude" }, "before": [] });
         core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{ "id": "k1", "session": "k1", "thread": 7, "card": card }]));
         core.receive(ui, ClientMessage::Call { id: 9, call: "decision.answer".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 6, "option": "sk_" }) });
@@ -977,9 +979,9 @@ fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_t
         core.receive(ui, ClientMessage::Call { id: 11, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 6, "text": " sk_test_1 " }) });
         host.settle().await;
         let sent = posted(&host);
-        assert_eq!(sent.len(), 2);
-        assert_eq!(sent[1]["text"], "sk_test_1");
-        assert_eq!(sent[1]["quotes"], json!([{ "author": "Claude", "text": "key？", "comment": "", "role": "agent", "ts": "9.000006" }]));
+        assert_eq!(sent.len(), 3);
+        assert_eq!(sent[2]["text"], "sk_test_1");
+        assert_eq!(sent[2]["quotes"], json!([{ "author": "Claude", "text": "key？", "comment": "", "role": "agent", "ts": "9.000006" }]));
     });
 }
 
