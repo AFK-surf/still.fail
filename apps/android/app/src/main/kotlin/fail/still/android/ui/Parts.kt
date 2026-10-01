@@ -289,7 +289,7 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
     val c = C
     val tone = levelColor(c, level)
     val low = level == "amber" || level == "red"
-    val drawn by animateFloatAsState(fill.coerceIn(0L, 100L).toFloat(), if (level == "progress") tween(500) else snap(), label = "edge"
+    val drawn by animateFloatAsState(fill.coerceIn(0L, 100L).toFloat(), if (level == "progress") tween(500) else snap(), label = "edge")
     Box(Modifier.height(if (small) 16.dp else 20.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
             val sw = (if (small) 2.dp else 2.5.dp).toPx()
