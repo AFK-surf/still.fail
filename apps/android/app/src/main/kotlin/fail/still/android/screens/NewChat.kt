@@ -3,6 +3,7 @@
 // (or file) makes the session on that station; then the page becomes the chat.
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -115,7 +116,7 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
             view == null -> Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                 Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 240.dp)
                 Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text("在一台机器上打开 still.fail，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                Text("在一台机器上打开 ${BuildConfig.APP_NAME}，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             }
             else -> androidx.compose.runtime.key(view.station) { NewChatOn(scope, choice, view, online, onStation, host, leaving) }
         }
@@ -404,7 +405,7 @@ private fun openMachineSessions(app: AppState, view: StationView, sessions: List
                         Text(s.title ?: s.first ?: "", fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(s.meta ?: "", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    if (s.session != null) Text("已在 still.fail 里", fontSize = 12.sp, color = C.muted, maxLines = 1)
+                    if (s.session != null) Text("已在 ${BuildConfig.APP_NAME} 里", fontSize = 12.sp, color = C.muted, maxLines = 1)
                 }
             }
         }

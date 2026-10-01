@@ -26,6 +26,7 @@ import * as settingsCss from "./styles/settings.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
+import { NAME } from "../channel.ts";
 const BASE = import.meta.env.BASE_URL;
 
 /** The buddy's face for a station: at work, idle, or asleep. */
@@ -66,7 +67,7 @@ export function StationsScreen() {
               {s.net && <Net net={s.net} stacked />}
             </>
           ) : !s.online ? (
-            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 still.fail 了</span></span>
+            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 {NAME} 了</span></span>
           ) : null}
         </Card>
       ))}
@@ -95,7 +96,7 @@ function AddStationSheet({ known }: { known: string[] }) {
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         {!made ? (
           <>
-            <p className={partsCss.mMuted}>station 是一台运行 still.fail 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 still.fail 并加入。</p>
+            <p className={partsCss.mMuted}>station 是一台运行 {NAME} 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 {NAME} 并加入。</p>
             <b className={sheetsCss.mFormLabel}>名字</b>
             <Field value={name} onChange={setName} placeholder="比如机器名：studio、mac-mini" />
             {error && <p className={partsCss.mError}>{error}</p>}
@@ -138,7 +139,7 @@ export function StationScreen() {
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (
-            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 still.fail 就会重新连上</span><RetryPill /></span></Card>
+            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 {NAME} 就会重新连上</span><RetryPill /></span></Card>
           ) : null}
           {/* What runs on it is in settings' lists, every station's together; here, how much of it there is, and its versions. */}
           {s.overview && (
@@ -165,7 +166,7 @@ function EnrollSteps({ install }: { install: string }) {
     <>
       <p>在那台机器的终端里执行：</p>
       <CommandBox text={install} />
-      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>macOS（Apple 芯片）和 Linux 都行；装过 still.fail 的机器也用这条命令。它会装好 still.fail、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>macOS（Apple 芯片）和 Linux 都行；装过 {NAME} 的机器也用这条命令。它会装好 {NAME}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
       <p className={`${partsCss.mMuted} ${partsCss.mSmall} ${chatCss.mWaiting}`}><Spinner size={10} />等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效</p>
     </>
   );
@@ -232,7 +233,7 @@ function StationMenu({ s }: { s: StationView }) {
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast("已改名")) })} />
         <PickRow label="从 workspace 移除" accent onClick={() => confirm(app, {
           title: `移除「${s.name}」？`, action: "移除 station", danger: true,
-          text: "它会断开与 still.fail cloud 的连接，成员不能再从这里访问它。那台机器上的 still.fail 和数据不受影响，之后可以重新添加。",
+          text: `它会断开与 ${NAME} cloud 的连接，成员不能再从这里访问它。那台机器上的 ${NAME} 和数据不受影响，之后可以重新添加。`,
           run: () => cloud.removeStation(me.sub, app.entry.id, s.id).then(() => { app.toast("已移除 station"); app.pop(); }),
         })} />
       </div>

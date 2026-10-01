@@ -4,6 +4,7 @@
 // to go on with what cannot be undone, a name, a command to copy.
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -209,7 +210,7 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                 }
             }) { Text("退出这个 workspace", fontSize = 15.sp, color = C.red) }
             if (view.role == "owner") ListRow(onClick = {
-                confirm(app, "删除「${view.name}」？", "所有成员都会失去访问权限，${view.stations.size} 台 station 会断开和 still.fail cloud 的连接（station 本机上的数据不受影响）。", "删除 workspace", danger = true) {
+                confirm(app, "删除「${view.name}」？", "所有成员都会失去访问权限，${view.stations.size} 台 station 会断开和 ${BuildConfig.APP_NAME} cloud 的连接（station 本机上的数据不受影响）。", "删除 workspace", danger = true) {
                     cloud.deleteWorkspace(view.id); app.toast = "已删除 workspace"; app.home()
                 }
             }) { Text("删除 workspace", fontSize = 15.sp, color = C.red) }
@@ -316,7 +317,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
             Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.End) { Button("完成", primary = true) { app.sheet = null } }
             return@Column
         }
-        Text("直接加进「${view.name}」，不用对方接受：登录过 still.fail 的人马上加入，其他人第一次用这个邮箱登录时自动加入。", fontSize = 14.sp, color = C.muted)
+        Text("直接加进「${view.name}」，不用对方接受：登录过 ${BuildConfig.APP_NAME} 的人马上加入，其他人第一次用这个邮箱登录时自动加入。", fontSize = 14.sp, color = C.muted)
         Text("邮箱", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Field(text, { text = it }, "name@example.com，可以粘贴多个", lines = 3)
         val list = people
@@ -354,7 +355,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
                         val r = cloud.addMembers(view.id, role, emails)
                         done = listOf(
                             if (r.joined.isNotEmpty()) "${r.joined.size} 人已经加入" else "",
-                            if (r.added.isNotEmpty()) "${r.added.size} 人第一次登录 still.fail 时自动加入" else "",
+                            if (r.added.isNotEmpty()) "${r.added.size} 人第一次登录 ${BuildConfig.APP_NAME} 时自动加入" else "",
                             if (r.already.isNotEmpty()) "${r.already.size} 人本来就在" else "",
                         ).filter { it.isNotEmpty() }.joinToString("，") + "。"
                     } catch (e: CoreException) { error = errorText(e) } finally { busy = false }
@@ -408,7 +409,7 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>) 
         SheetGrab()
         SheetHead("添加 station")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("station 是一台运行 still.fail 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 still.fail 并加入。", fontSize = 14.sp, color = C.muted)
+            Text("station 是一台运行 ${BuildConfig.APP_NAME} 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ${BuildConfig.APP_NAME} 并加入。", fontSize = 14.sp, color = C.muted)
             AddStationSteps(current, known, onCancel = { app.sheet = null }) { app.sheet = null }
         }
     }
@@ -451,7 +452,7 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
             else -> {
                 Text("在那台机器的终端里执行：", fontSize = 14.sp, color = C.ink)
                 CommandBox(enrollment.install)
-                Text("macOS（Apple 芯片）和 Linux 都行；装过 still.fail 的机器也用这条命令。它会装好 still.fail、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。", fontSize = 13.sp, color = C.muted)
+                Text("macOS（Apple 芯片）和 Linux 都行；装过 ${BuildConfig.APP_NAME} 的机器也用这条命令。它会装好 ${BuildConfig.APP_NAME}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。", fontSize = 13.sp, color = C.muted)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Spinner(10.dp)
                     Text("等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效", fontSize = 13.sp, color = C.muted)
@@ -498,7 +499,7 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow("改名") { ask(app, "station 的名字", s.name, "比如机器名：studio", "保存") { cloud.renameStation(current.workspace.id, s.id, it); app.toast = "已改名" } }
             PickRow("从 workspace 移除", color = C.red) {
-                confirm(app, "移除「${s.name}」？", "它会断开与 still.fail cloud 的连接，成员不能再从这里访问它。那台机器上的 still.fail 和数据不受影响，之后可以重新添加。", "移除 station", danger = true) {
+                confirm(app, "移除「${s.name}」？", "它会断开与 ${BuildConfig.APP_NAME} cloud 的连接，成员不能再从这里访问它。那台机器上的 ${BuildConfig.APP_NAME} 和数据不受影响，之后可以重新添加。", "移除 station", danger = true) {
                     cloud.removeStation(current.workspace.id, s.id); app.toast = "已移除 station"; app.pop()
                 }
             }

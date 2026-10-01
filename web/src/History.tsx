@@ -23,6 +23,7 @@ import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as additionsCss from "./styles/additions.css.ts";
 
+import { NAME } from "./channel.ts";
 /**
  * The session as it ran: the main view of a session. `summary` says who it is (in the head), `actions` what can be done
  * to it right now (stop a turn, release the process), `details` unfolds under the head.
@@ -178,7 +179,7 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
 function Received({ from, text, place }: { from: ReactNode; text: string; place?: ReactNode }) {
   return (
     <div className={css.hReceived}>
-      <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "still.fail" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
+      <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />收到来自 <strong>{from === "ember" ? NAME : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
       <Fold className={css.hQuote}>{text}</Fold>
     </div>
   );

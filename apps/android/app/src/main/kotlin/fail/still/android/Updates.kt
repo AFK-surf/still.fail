@@ -73,7 +73,7 @@ class Updates(context: Context, private val origin: String, private val core: St
             context.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
-            return "允许 still.fail 安装应用后，再点一次更新"
+            return "允许 ${BuildConfig.APP_NAME} 安装应用后，再点一次更新"
         }
         return try {
             progress = "下载中"

@@ -61,7 +61,7 @@ export class StillFailCore {
   disconnect(client: number): void;
   receive(client: number, message: any): void;
 }
-export function start(emit: Function): Promise<StillFailCore>;
+export function start(emit: Function, test_channel?: boolean | null): Promise<StillFailCore>;
 export default function init(module_or_path?: any): Promise<unknown>;
 TS
   printf 'export declare const BUILT_AT: number;\n' > "$pkg/built.d.ts"

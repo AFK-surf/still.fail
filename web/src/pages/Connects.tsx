@@ -16,6 +16,7 @@ import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./Connects.css.ts";
 import * as cloudCss from "../styles/cloud.css.ts";
 
+import { NAME } from "../channel.ts";
 /** The connects of a workspace, from the core's `connects` view; `settings` is where the scope's settings live. */
 export function ConnectList({ scope, settings }: { scope: string; settings: string }) {
   const [onlyMine] = useOnlyMine();
@@ -54,7 +55,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
       <MobileBack to={settings} label="设置" />
       <header className={pagesCss.pageHead}>
         <div>
-          <h1>连接<About>连接是人找到 still.fail 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</About></h1>
+          <h1>连接<About>连接是人找到 {NAME} 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</About></h1>
         </div>
         {!first && add("添加连接")}
       </header>
@@ -137,7 +138,7 @@ function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName
       {onGo ? <Button onClick={onGo}>继续</Button> : <span className={css.navNote}>station 离线</span>}
       {onGo && <Menu items={[{ label: "从这里移除", danger: true, onSelect: () => setDropping(true) }]} />}
       <Confirm open={dropping} onClose={() => setDropping(false)} busy={drop.busy} onConfirm={() => void drop.run()} error={drop.error?.message}
-        title={`移除「${app.name}」？`} action="移除" description="只从 still.fail 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。" />
+        title={`移除「${app.name}」？`} action="移除" description={`只从 ${NAME} 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。`} />
     </div>
   );
 }

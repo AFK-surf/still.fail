@@ -33,6 +33,8 @@ pub struct FakeHost {
     pub origin: String,
     /// A beta app's host (`Host::beta`).
     pub beta: Cell<bool>,
+    /// On the test channel without being a beta app, as the web is on the test channel's host (`Host::test_channel`).
+    pub test_channel: Cell<bool>,
     storage: RefCell<HashMap<String, Vec<u8>>>,
     /// The core's database: (table, key) → bytes.
     pub db: RefCell<std::collections::BTreeMap<(String, String), Vec<u8>>>,
@@ -61,6 +63,7 @@ impl FakeHost {
         Rc::new(FakeHost {
             origin: "https://stillfail.test".into(),
             beta: Cell::new(false),
+            test_channel: Cell::new(false),
             storage: RefCell::default(),
             db: RefCell::default(),
             responder: RefCell::default(),
@@ -167,6 +170,10 @@ impl Host for FakeHost {
 
     fn beta(&self) -> bool {
         self.beta.get()
+    }
+
+    fn test_channel(&self) -> bool {
+        self.beta.get() || self.test_channel.get()
     }
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>> {

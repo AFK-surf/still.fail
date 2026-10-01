@@ -42,6 +42,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 
+import { NAME } from "../channel.ts";
 export function ChatScreen() {
   const { chat: address = "" } = useParams();
   // A chat made here keeps the key the core gave it when its address becomes its station's (below).
@@ -538,7 +539,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           </InfoList>
         )}
         <InfoList>
-          <InfoDetail label="来自" value={view.place ? `Slack · ${view.place}` : "still.fail 对话"} />
+          <InfoDetail label="来自" value={view.place ? `Slack · ${view.place}` : `${NAME} 对话`} />
           <InfoDetail label="发起" value={thread.creator?.shown?.display ?? "未记录"} />
           <InfoDetail label="参与" value={`${view.people.length} 人`} extra={<PeopleStack people={view.people} max={8} />} />
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />

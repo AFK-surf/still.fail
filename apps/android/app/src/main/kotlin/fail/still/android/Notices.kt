@@ -99,7 +99,7 @@ suspend fun showNotices(context: Context, app: AppState) {
 fun rememberNotificationAsk(app: AppState, once: Boolean): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted && !once) app.toast = "在系统设置里允许 still.fail 发通知"
+        if (!granted && !once) app.toast = "在系统设置里允许 ${BuildConfig.APP_NAME} 发通知"
     }
     val ask = { if (!Notifier.allowed(context) && Build.VERSION.SDK_INT >= 33) launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
     // Once the core says whether it was asked.

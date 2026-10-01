@@ -84,7 +84,7 @@ pub fn raw(link: &Value, status: Option<&Value>) -> Option<(Value, bool)> {
     let status = status?;
     let text = |or: &str| status.get("text").and_then(Value::as_str).unwrap_or(or).to_string();
     match status.get("state").and_then(Value::as_str) {
-        Some("trouble") => Some((json!({ "tone": "trouble", "text": text("连不上 still.fail cloud"), "items": items }), true)),
+        Some("trouble") => Some((json!({ "tone": "trouble", "text": text(&format!("连不上 {} cloud", crate::brand::name())), "items": items }), true)),
         Some("slow") => Some((json!({ "tone": "busy", "text": text(""), "items": items }), true)),
         _ => None,
     }

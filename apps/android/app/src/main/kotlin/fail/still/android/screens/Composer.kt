@@ -4,6 +4,7 @@
 // so and restores it (web/src/ArchiveNotice.tsx).
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import fail.still.android.ui.InComposer
@@ -393,7 +394,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
             if (query.isNotEmpty()) Text(query, fontSize = 13.sp, color = C.ink)
         }
         when {
-            search.value == null -> Text(if (search.error != null) "更新 still.fail 后才能引用对话" else "正在读取…", fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
+            search.value == null -> Text(if (search.error != null) "更新 ${BuildConfig.APP_NAME} 后才能引用对话" else "正在读取…", fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             items.isEmpty() -> Text(if (query.isNotEmpty()) "没有标题里带这些字的对话" else "这台 station 上没有别的对话", fontSize = 15.sp, color = C.muted,
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             else -> items.forEach { item ->

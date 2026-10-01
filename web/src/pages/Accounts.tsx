@@ -20,6 +20,7 @@ import * as additionsCss from "../styles/additions.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 
+import { NAME } from "../channel.ts";
 /** What can be added, by whose account it is; `runtime` only where the account is for one (a subscription, variables). */
 export const CHOICES = {
   "claude-sub": { kind: "subscription", runtime: "claude", title: "Claude 订阅", description: "Claude Pro / Max，跑 Claude Code。在浏览器里登录一次。" },
@@ -57,7 +58,7 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
           ? <Tip label="直接用这台机器的登录，不用再登录；在这台机器上换号或登出，它也跟着变"><Button disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button></Tip>
-          : <Tip label="这份登录在 station 读不到的钥匙串里，不能直接用：为 still.fail 单独登录一次，这台机器上原来的登录不受影响"><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button></Tip>} />
+          : <Tip label={`这份登录在 station 读不到的钥匙串里，不能直接用：为 ${NAME} 单独登录一次，这台机器上原来的登录不受影响`}><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button></Tip>} />
       ))}
       {use.error && <p className={controlsCss.fieldError} role="alert">{use.error.message}</p>}
     </div>
@@ -123,7 +124,7 @@ export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { op
               <input id="account-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
             </Field>
           )}
-          {kind === "subscription" && <p className={shellCss.muted}>登录在运行 still.fail 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
+          {kind === "subscription" && <p className={shellCss.muted}>登录在运行 {NAME} 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
           {(start.error ?? add.error) && <p className={controlsCss.fieldError} role="alert">{(start.error ?? add.error)!.message}</p>}
         </>
       )}
@@ -152,8 +153,8 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const remove = useAction(() => api.deleteProfile(profile.id), () => { toast(profile.machine ? "已停用" : "已删除 Profile"); navigate(profilesPage(station)); });
   // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
   const removal = profile.machine
-    ? { item: "停用", title: `停用「${profile.name}」？`, action: "停用", description: `still.fail 不再用这台机器上 ${MACHINE_RUNTIME[profile.runtime]} 的登录；这台机器上的登录不受影响，之后可以再用。` }
-    : { item: "删除 Profile", title: `删除「${profile.name}」？`, action: "删除 Profile", description: "只从 still.fail 的配置里移除；配置目录和里面的登录状态不会删除。" };
+    ? { item: "停用", title: `停用「${profile.name}」？`, action: "停用", description: `${NAME} 不再用这台机器上 ${MACHINE_RUNTIME[profile.runtime]} 的登录；这台机器上的登录不受影响，之后可以再用。` }
+    : { item: "删除 Profile", title: `删除「${profile.name}」？`, action: "删除 Profile", description: `只从 ${NAME} 的配置里移除；配置目录和里面的登录状态不会删除。` };
   const check = useAction(() => api.checkProfile(profile.id));
   const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
   const rename = () => {
@@ -352,7 +353,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
           <div className={pagesCss.cardRowText}>
             <strong>{needed ? `还没登录 ${provider} 账号` : `${provider} 订阅登录`}</strong>
             <span className={shellCss.muted}>
-              {job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : "登录在运行 still.fail 的机器上完成，你只需要在浏览器里授权。"}
+              {job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : `登录在运行 ${NAME} 的机器上完成，你只需要在浏览器里授权。`}
             </span>
           </div>
           <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
@@ -390,7 +391,7 @@ function DeviceCode({ url, code }: { url: string; code: string }) {
     <div className={css.deviceCode}>
       <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>
       <Button variant="primary" icon={External} onClick={go}>{copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"}</Button>
-      <p className={shellCss.muted}>在打开的 OpenAI 页面用要给 still.fail 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续，不用回来点。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
+      <p className={shellCss.muted}>在打开的 OpenAI 页面用要给 {NAME} 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续，不用回来点。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
     </div>
   );
 }
@@ -406,7 +407,7 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
       {job.state === "needs_code" && job.url && (
         <ol className={controlsCss.steps}>
           <li>
-            <span>打开授权页面，用要给 still.fail 使用的 Claude 账号登录并同意。</span>
+            <span>打开授权页面，用要给 {NAME} 使用的 Claude 账号登录并同意。</span>
             <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />打开授权页面</a>
           </li>
           <li>

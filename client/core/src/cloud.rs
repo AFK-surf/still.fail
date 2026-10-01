@@ -113,7 +113,7 @@ impl Cloud {
     pub async fn credential(&self, sub: &str, workspace: &str, device: &str) -> Result<Credential> {
         let path = format!("/v1/workspaces/{}/credential", encode_component(workspace));
         let answer = self.request(sub, "POST", &path, Some(json!({ "device": device }))).await?;
-        serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", format!("still.fail cloud 的回复无法解析：{e}")))
+        serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", format!("{} cloud 的回复无法解析：{e}", crate::brand::name())))
     }
 }
 
@@ -125,7 +125,11 @@ pub fn channel_header(host: &dyn Host) -> Option<(String, String)> {
 
 /// The error for a cloud error code, with its Chinese message when there is one.
 pub fn cloud_error(code: &str, status: u16) -> CoreError {
-    CoreError::new(code, message(code).unwrap_or(code)).with_status(status)
+    let text = match code {
+        "invalid_email" => format!("要填对方登录 {} 用的邮箱", crate::brand::name()),
+        _ => message(code).unwrap_or(code).to_string(),
+    };
+    CoreError::new(code, text).with_status(status)
 }
 
 fn message(code: &str) -> Option<&'static str> {
@@ -137,7 +141,6 @@ fn message(code: &str) -> Option<&'static str> {
         "invitation_for_other_email" => "这个邀请是发给另一个邮箱的，请换对应的账号接受",
         "forbidden" => "你在这个 workspace 里没有这个权限",
         "invalid_name" => "名字不能为空，最长 80 个字",
-        "invalid_email" => "要填对方登录 still.fail 用的邮箱",
         "already_member" => "这个邮箱的主人已经在 workspace 里了",
         "last_owner" => "workspace 至少要保留一个 owner",
         "too_many_workspaces" => "你创建的 workspace 太多了",

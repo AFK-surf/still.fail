@@ -8,16 +8,17 @@ import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
-import { BETA, NAME } from "./cloud/beta.tsx";
+import { NAME } from "./channel.ts";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
 
 const BASE = import.meta.env.BASE_URL;
 
-// On the test channel (app.youdid.wtf) the name is its own, drawn the same way.
-const WORDMARK = BETA ? { name: "wordmark-beta", width: 128 } : { name: "wordmark", width: 81 };
-const LOCKUP = BETA ? { name: "lockup-beta", width: 371 } : { name: "lockup", width: 264 };
+// On the test channel (app.youdid.wtf, the beta desktop app) the name is its own, drawn the same way.
+const OWN = NAME !== "still.fail";
+const WORDMARK = OWN ? { name: "wordmark-beta", width: 128 } : { name: "wordmark", width: 81 };
+const LOCKUP = OWN ? { name: "lockup-beta", width: 371 } : { name: "lockup", width: 264 };
 
 /** A light asset and its -dark twin, as the page's 外观 has it. */
 function Themed({ name, width, height, alt = "", className }: { name: string; width: number; height: number; alt?: string; className?: string | undefined }) {
@@ -137,7 +138,7 @@ function UpdateButton() {
   if (!updates || !state) return null;
   const label = state.phase === "downloading" ? `下载中 ${state.percent}%` : state.phase === "installing" ? "正在重启…" : state.phase === "failed" ? "更新失败，重试" : "更新";
   const busy = state.phase === "downloading" || state.phase === "installing";
-  const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 still.fail 会重启`;
+  const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 ${NAME} 会重启`;
   return onPage(
     <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
       {label}

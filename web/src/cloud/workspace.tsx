@@ -44,6 +44,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as chatMarkCss from "../ChatMark.css.ts";
 
+import { NAME } from "../channel.ts";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
 
@@ -178,7 +179,7 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
     <Empty>
       <Illustration name="no-station" />
       <h2>这个 workspace 还没有 station</h2>
-      <p>到 <Link className={chatCss.inlineLink} to={`/w/${id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 still.fail 的机器上执行一条命令即可。</p>
+      <p>到 <Link className={chatCss.inlineLink} to={`/w/${id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 {NAME} 的机器上执行一条命令即可。</p>
     </Empty>
   );
 }
@@ -328,7 +329,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
       )}
       {asking && (
         <Field label="邀请码" htmlFor="ws-code" error={create.error && needsInviteCode(create.error) && code.trim() ? errorText(create.error) : undefined}
-          hint="still.fail 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。">
+          hint={`${NAME} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。`}>
           <input id="ws-code" className={`${controlsCss.input} ${shellCss.mono}`} value={code} autoFocus onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && code.trim()) create.run(); }} />
         </Field>

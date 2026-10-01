@@ -5,6 +5,7 @@
 // (model, allowance, the station it runs on).
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.heightIn
@@ -267,7 +268,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
     when (val body = item.body) {
         is HistoryBody.Received -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             body.content.note?.let { note ->
-                Message(Icons.Received, { Text("收到来自 ", fontSize = 13.sp, color = C.muted); Strong("still.fail"); Text(" 的提醒", fontSize = 13.sp, color = C.muted) }, note) {
+                Message(Icons.Received, { Text("收到来自 ", fontSize = 13.sp, color = C.muted); Strong(BuildConfig.APP_NAME); Text(" 的提醒", fontSize = 13.sp, color = C.muted) }, note) {
                     Text(note, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
                 }
             }

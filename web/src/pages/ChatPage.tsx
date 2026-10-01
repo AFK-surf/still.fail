@@ -38,6 +38,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
+import { NAME } from "../channel.ts";
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
@@ -503,7 +504,7 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
           <dl className={css.details}>
             {row("来自", where
               ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
-              : "still.fail 对话")}
+              : `${NAME} 对话`)}
             {row("发起", thread.creator ? <CreatorText creator={thread.creator} verb="发起" /> : <span className={shellCss.muted}>未记录</span>)}
             {row("参与", <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{chat.people.length} 人</span>)}
             {row("创建", <Time stamp={thread.time?.createdAt} />)}

@@ -17,6 +17,7 @@ import * as chatCss from "../styles/chat.css.ts";
 import * as modelCss from "../ModelTriple.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 
+import { NAME } from "../channel.ts";
 /** Permission groups in plain words; mirrors SLACK_GROUPS on the server. */
 const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
   base: { label: "读取和回复消息", description: "被 @ 时收到消息，读取所在频道、私信和群聊的消息并回复。必须开启。" },
@@ -114,7 +115,7 @@ export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; o
       </li>
       <li>
         <strong>把 Refresh Token 粘贴到这里</strong>
-        <span className={shellCss.muted}>Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。still.fail 会自己续期，以后不用再管。</span>
+        <span className={shellCss.muted}>Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。{NAME} 会自己续期，以后不用再管。</span>
         <div className={additionsCss.inputRow}>
           <input className={`${controlsCss.input} ${shellCss.mono}`} type="password" autoComplete="off" spellCheck={false} value={token} aria-label="Refresh Token"
             onChange={(e) => setToken(e.target.value.trim())}
@@ -269,7 +270,7 @@ export function edgeColour(dataUrl: string): Promise<string> {
 
 /** What a new app starts as: every permission on; its colour and icon come from its first avatar. */
 export const NEW_APP: SlackAppSettings = {
-  name: "still.fail", displayName: "still.fail", description: "Coding agent in your threads (still.fail)", longDescription: "", backgroundColor: "#F3E3D3",
+  name: NAME, displayName: NAME, description: `Coding agent in your threads (${NAME})`, longDescription: "", backgroundColor: "#F3E3D3",
   groups: Object.fromEntries((Object.keys(GROUPS) as SlackGroup[]).map((g) => [g, true])) as Record<SlackGroup, boolean>,
 };
 

@@ -29,6 +29,7 @@ import { Tip } from "../ui.tsx";
 import { MeterChips, QuotaRing } from "../components.tsx";
 import * as chatPageCss from "../pages/ChatPage.css.ts";
 
+import { NAME } from "../channel.ts";
 /** Opens an agent's execution history over the item's page it belongs to; `entry`: the transcript entry to open at. */
 export function openHistory(app: MobileApp, station: string, chat: string, key: string, entry?: number) {
   app.sheet({ height: 0.55, draggable: true, content: () => <HistorySheet station={station} chat={chat} agentKey={key} entry={entry} /> });
@@ -160,7 +161,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "received":
       return (
         <div className={css.mHReceived}>
-          {body.content.note && <Message icon={Received} label={<>收到来自 <b>still.fail</b> 的提醒</>} text={body.content.note} full={<p className={chatCss.mPlain}>{body.content.note}</p>} />}
+          {body.content.note && <Message icon={Received} label={<>收到来自 <b>{NAME}</b> 的提醒</>} text={body.content.note} full={<p className={chatCss.mPlain}>{body.content.note}</p>} />}
           {body.content.messages.map((m) => (
             <Message key={m.key} icon={Received}
               label={<>收到来自 <b>{m.from.name}</b> 的消息{m.place && <> · <PlaceMark station={station} chat={chat} place={m.place} /></>}</>}

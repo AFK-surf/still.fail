@@ -1035,7 +1035,7 @@ impl Views {
                         "runtime": session.and_then(|s| s.get("runtime")).cloned(),
                     })
                 }
-                "ember" => json!({ "name": "still.fail" }),
+                "ember" => json!({ "name": crate::brand::name() }),
                 _ => {
                     let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
                     let name = crate::present::member_name(&members, &author).map(str::to_string).or(said_name)

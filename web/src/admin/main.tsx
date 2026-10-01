@@ -19,6 +19,7 @@ import { Button, Loading } from "../ui.tsx";
 import { Console, useAdminAccount } from "./console.tsx";
 import * as shellCss from "../styles/shell.css.ts";
 
+import { NAME } from "../channel.ts";
 function AdminApp() {
   return (
     <ToastProvider>
@@ -37,7 +38,7 @@ function AdminApp() {
 function Home() {
   const list = useAccounts();
   const account = useAdminAccount();
-  if (list?.length === 0) return <SignInPage title="still.fail 管理后台" lead="只有 still.fail 的管理员能用这里。用管理员的 Google 账号登录。" />;
+  if (list?.length === 0) return <SignInPage title={`${NAME} 管理后台`} lead={`只有 ${NAME} 的管理员能用这里。用管理员的 Google 账号登录。`} />;
   if (account === undefined) return <div className={shellCss.gate}><Loading /></div>;
   if (account === null) return <NoPermission />;
   return <Console account={account} />;
@@ -50,7 +51,7 @@ function NoPermission() {
     <div className={shellCss.gate}>
       <Illustration name="sign-in" />
       <h1>没有权限</h1>
-      <p>{list.map((a) => a.email).join("、")} 不是 still.fail 的管理员。</p>
+      <p>{list.map((a) => a.email).join("、")} 不是 {NAME} 的管理员。</p>
       <Button variant="primary" onClick={() => void Promise.all(list.map((a) => signOut(a.sub)))}>退出登录</Button>
       <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
     </div>

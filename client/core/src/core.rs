@@ -158,6 +158,7 @@ impl Core {
         // Everything the core asks of the host is given up or opened again when a UI comes back (wake.rs).
         let wakes = Rc::new(Wakes::default());
         let host: Rc<dyn Host> = WakingHost::new(host, wakes.clone());
+        crate::brand::set_test_channel(host.test_channel());
         let tracer = Tracer::new(host.clone(), sample);
         let accounts = Accounts::load(host.clone()).await;
         let status = Status::new(host.clone());
@@ -693,7 +694,7 @@ impl Inner {
         match call {
             Call::AuthBegin { redirect_uri, return_to, device_name } => {
                 // Named by the UI (those from before `client.device`), else as the device is.
-                let device_name = device_name.or_else(|| crate::prefs::device_name(&self.data)).unwrap_or_else(|| "still.fail".into());
+                let device_name = device_name.or_else(|| crate::prefs::device_name(&self.data)).unwrap_or_else(|| crate::brand::name().into());
                 let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name).await?;
                 Ok(json!({ "url": url }))
             }
@@ -741,7 +742,7 @@ impl Inner {
                 let data: Value = serde_json::from_slice(&response.body).unwrap_or_else(|_| json!({}));
                 match data.get("vapid").and_then(Value::as_str) {
                     Some(key) if response.status == 200 => Ok(json!({ "vapid": key })),
-                    _ => Err(CoreError::new("push_unavailable", "still.fail cloud 还不能推送")),
+                    _ => Err(CoreError::new("push_unavailable", format!("{} cloud 还不能推送", crate::brand::name()))),
                 }
             }
             Call::PushRegister { registration } => {

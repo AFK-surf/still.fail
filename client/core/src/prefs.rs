@@ -116,9 +116,9 @@ pub fn device(data: &Data, facts: &Value) -> Result<()> {
     let browser = if agent.contains("Edg/") { "Edge" } else if agent.contains("Chrome/") { "Chrome" } else if agent.contains("Firefox/") { "Firefox" } else if agent.contains("Safari/") { "Safari" } else { "浏览器" };
     let with = |s: &str| if s.is_empty() { String::new() } else { format!(" · {s}") };
     let name = match app.as_str() {
-        "android" => format!("still.fail Android{}", with(&model)),
-        "desktop" => format!("still.fail 桌面版{}", with(os)),
-        _ => format!("still.fail 网页版 · {browser}{}", with(os)),
+        "android" => format!("{} Android{}", crate::brand::name(), with(&model)),
+        "desktop" => format!("{} 桌面版{}", crate::brand::name(), with(os)),
+        _ => format!("{} 网页版 · {browser}{}", crate::brand::name(), with(os)),
     };
     let build = if build.is_empty() { String::new() } else { format!(" {build}") };
     let from = match app.as_str() {

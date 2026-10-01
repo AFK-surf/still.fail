@@ -35,6 +35,8 @@ if (DEV_URL) app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-sec
  * saying so to still.fail cloud (client/core Host::beta), its updates on the beta channel, its own link scheme.
  */
 const BETA = process.env.STILLFAIL_CHANNEL === "beta";
+/** The name the app goes by in what it says (its productName when packed; build.sh --beta names it so): still.fail's dual on the test channel. */
+const NAME = BETA ? "youdid.wtf" : "still.fail";
 /**
  * The app's link schemes: stillfail://, and ember:// as before the rename (links made then, pages that still make them);
  * the beta app's only stillfail-beta://, so a sign-in or a link comes back to the app that asked for it.
@@ -86,7 +88,7 @@ let core: UtilityProcess | null = null;
 /** The core's process, started when a page first asks for it and again after it exited. */
 function coreProcess(): UtilityProcess {
   if (core) return core;
-  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "stillfail_core.node"), BETA ? "beta" : ""], { serviceName: "still.fail core" });
+  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "stillfail_core.node"), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
   child.on("exit", (code) => {
     if (core === child) core = null;
     dropOwnLink("核心进程退出了");
@@ -195,7 +197,7 @@ ipcMain.handle("preview:host", (event, station: unknown, port: unknown) => {
 // is, and whether it can go back or on, is said back to the page as it loads and as a page moves itself.
 const FRAME = `<!doctype html>
 <meta charset="utf-8">
-<title>still.fail preview</title>
+<title>${NAME} preview</title>
 <style>
   html, body { margin: 0; height: 100%; background: #fff; }
   iframe { display: block; width: 100%; height: 100%; border: 0; }
@@ -353,7 +355,7 @@ async function preview(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const host = /^p(\d{1,5})-([0-9a-f]{12})$/.exec(url.hostname);
   const station = host ? previewStations.get(host[2]!) : undefined;
-  if (!host || !station) return plain(404, "预览已经失效：在 still.fail 里重新打开它。");
+  if (!host || !station) return plain(404, `预览已经失效：在 ${NAME} 里重新打开它。`);
   if (url.pathname === "/_ember/frame") return new Response(FRAME, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   if (url.pathname === "/_ember/annotate.js") return new Response(await readFile(join(__dirname, "annotate.js")).catch(() => ""), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
   if (url.pathname === "/_ember/socket.js") return new Response(SOCKET, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
@@ -516,10 +518,10 @@ async function checkFromMenu(): Promise<void> {
   if (found.error) {
     await show({ type: "warning", message: "检查更新失败", detail: found.error });
   } else if (!found.latest) {
-    await show({ message: "已是最新版本", detail: `still.fail ${found.current}` });
+    await show({ message: "已是最新版本", detail: `${NAME} ${found.current}` });
   } else {
     const { response } = await show({
-      message: `有新版本 ${found.latest}`, detail: `当前是 ${found.current}。更新会下载新版本，然后重启 still.fail`,
+      message: `有新版本 ${found.latest}`, detail: `当前是 ${found.current}。更新会下载新版本，然后重启 ${NAME}`,
       buttons: ["更新", "稍后"], defaultId: 0, cancelId: 1,
     });
     if (response === 0) startUpdate();

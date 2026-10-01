@@ -215,7 +215,7 @@ pub fn thread_name(threads: &[Value], channel: &str, thread_ts: &str, offset_min
             title.to_string()
         } else {
             let first = clean_text(text("firstText"));
-            if first.is_empty() { "still.fail 对话".into() } else { first }
+            if first.is_empty() { format!("{} 对话", crate::brand::name()) } else { first }
         }
     } else if channel.starts_with('D') {
         "私信".into()

@@ -1,6 +1,7 @@
 // A chat's info sheet (split from Chat.kt).
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.net.Uri
@@ -89,7 +90,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
             }
             if (open) Spacer(Modifier.height(10.dp))
             InfoList {
-                Detail("来自", view?.place?.let { "Slack · $it" } ?: "still.fail 对话")
+                Detail("来自", view?.place?.let { "Slack · $it" } ?: "${BuildConfig.APP_NAME} 对话")
                 Detail("发起", (view?.thread ?: thread).creator?.shown?.display ?: "未记录")
                 Detail("参与", "${view?.people?.size ?: 0} 人") { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
                 Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")

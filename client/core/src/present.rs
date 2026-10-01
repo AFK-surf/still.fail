@@ -185,7 +185,7 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
                 "state": agent.and_then(|a| badge(session_status(a))),
             })
         }
-        "ember" => json!({ "kind": "ember", "name": "still.fail", "mine": false }),
+        "ember" => json!({ "kind": "ember", "name": crate::brand::name(), "mine": false }),
         _ => {
             let mine = is_viewer(me, author, slack_users);
             let member = members.iter().find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(author)));
@@ -449,7 +449,7 @@ pub fn host(h: &mut Value) {
             (swap > 0.0).then(|| format!("swap {}", format::gb1(swap)))),
         meter("磁盘", "磁盘", if disk_total > 0.0 { (disk_total - disk_free) / disk_total * 100.0 } else { 0.0 }, format!("剩 {} / {}", format::gb1(disk_free), format::gb1(disk_total)), None),
     ]);
-    h["emberText"] = json!(format!("still.fail {} MB", (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
+    h["emberText"] = json!(format!("{} {} MB", crate::brand::name(), (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
 }
 
 /// A station's connection as its card shows it (shapes `StationNet`), from what `Topic::Net` read of it; None

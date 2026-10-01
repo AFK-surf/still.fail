@@ -5,6 +5,7 @@
 // Android). In the desktop app (apps/desktop) the core runs in a utility
 // process instead, reached through a MessagePort; the protocol is the same.
 import { BUILT_AT } from "./built.ts";
+import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
 import { captureException } from "../telemetry.ts";
 
@@ -405,6 +406,12 @@ export class CoreClient {
   }
 }
 
+/**
+ * The worker's name: its build, and on the test channel (app.youdid.wtf) a mark, by which the core there names the
+ * product youdid.wtf (worker.ts; a worker has no page to look at).
+ */
+const workerName = `stillfail-core-${BUILT_AT}${BETA ? "-test" : ""}`;
+
 /** Opens a channel to the core's worker: shared by every tab where the browser can. */
 export function workerOpener(): Opener {
   return (onMessage, onFail) => {
@@ -414,12 +421,12 @@ export function workerOpener(): Opener {
     // Both constructors spelled out: Vite bundles a worker only from a literal
     // `new (Shared)Worker(new URL(…, import.meta.url))`.
     if (typeof SharedWorker !== "undefined") {
-      const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: `stillfail-core-${BUILT_AT}` });
+      const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: workerName });
       worker.port.onmessage = receive;
       worker.onerror = () => onFail("共享 worker 没有启动");
       return { post: (message) => worker.port.postMessage(message), close: () => worker.port.close() };
     }
-    const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: `stillfail-core-${BUILT_AT}` });
+    const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: workerName });
     worker.onmessage = receive;
     worker.onerror = (event) => onFail(event.message || "worker 出错");
     return { post: (message) => worker.postMessage(message), close: () => worker.terminate() };

@@ -23,6 +23,7 @@ import * as additionsCss from "../styles/additions.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
+import { NAME } from "../channel.ts";
 export function ConnectPage() {
   const { id } = useParams();
   const station = useStation();
@@ -460,7 +461,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
       description={step === "team" && !gettingToken ? "用哪个 Slack 工作区的配置 token 建 app。" : undefined}>
       {gettingToken && (
         <div className={css.tokenStart}>
-          <p className={shellCss.muted}>有了它，still.fail 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
+          <p className={shellCss.muted}>有了它，{NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
           <ConfigTokenForm onSaved={(id) => { setTeam(id); setAdding(false); setStep("app"); }} />
           {teams.length === 0 && <p className={`${shellCss.muted} ${css.tokenManual}`}>不想用配置 token？<button type="button" className={chatCss.textButton} onClick={() => setStep("manual")}>自己在 Slack 建 app，再粘贴 token</button></p>}
         </div>
@@ -491,7 +492,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
       )}
       {step === "manual" && (
         <>
-          <CreateAppSteps name="still.fail" />
+          <CreateAppSteps name={NAME} />
           <TokenFields value={tokens} onChange={setTokens} check={check} />
         </>
       )}

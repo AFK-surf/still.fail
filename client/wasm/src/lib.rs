@@ -21,11 +21,12 @@ pub struct StillFailCore {
 }
 
 /// Starts the core (loads accounts, the device key, …). `emit` is called as
-/// `emit(clientId: number, message: object)`.
+/// `emit(clientId: number, message: object)`; `test_channel`: the page is the test channel's (app.youdid.wtf), so what
+/// the core says names the product youdid.wtf (stillfail_core::brand).
 #[wasm_bindgen]
-pub async fn start(emit: Function) -> Result<StillFailCore, JsValue> {
+pub async fn start(emit: Function, test_channel: Option<bool>) -> Result<StillFailCore, JsValue> {
     console_error_panic_hook::set_once();
-    let host = Rc::new(WebHost::new(emit));
+    let host = Rc::new(WebHost::new(emit, test_channel.unwrap_or(false)));
     let core = Core::new(host.clone() as Rc<dyn Host>).await;
     core.keep_time();
     Ok(StillFailCore { core: Rc::new(core), host })

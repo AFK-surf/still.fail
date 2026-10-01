@@ -27,6 +27,7 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 
+import { NAME } from "../channel.ts";
 export function NewChatScreen() {
   const app = useApp();
   // The station last started on (or picked) in this workspace and what it runs there, on either screen (../pick.ts).
@@ -42,7 +43,7 @@ export function NewChatScreen() {
             <div className={newChatCss.mNewNone}>
               <Illustration name="station-offline" width={240} />
               <b>没有在线的 station</b>
-              <p>在一台机器上打开 still.fail，它就会连上这个 workspace。</p>
+              <p>在一台机器上打开 {NAME}，它就会连上这个 workspace。</p>
             </div>
           )
         )

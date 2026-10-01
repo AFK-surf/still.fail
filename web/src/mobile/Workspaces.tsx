@@ -12,6 +12,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Workspaces.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 
+import { NAME } from "../channel.ts";
 export function openWorkspaces(app: MobileApp) {
   app.sheet({ height: 0.7, draggable: true, content: () => <WorkspacesSheet /> });
 }
@@ -106,7 +107,7 @@ function NewWorkspaceSheet() {
             <Field value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" mono />
             {create.error && code.trim()
               ? <p className={partsCss.mError}>{errorText(create.error)}</p>
-              : <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>still.fail 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。</p>}
+              : <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{NAME} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。</p>}
           </>
         )}
         {create.error && !asked && <p className={partsCss.mError}>{errorText(create.error)}</p>}

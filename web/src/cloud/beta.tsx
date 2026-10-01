@@ -1,36 +1,20 @@
 // The test channel (app.youdid.wtf): the same build as app.still.fail, served by ember-web-beta, which marks each page
 // with <meta name="stillfail-beta" content="<the stable origin>"> (cloud/src/web.ts). The core talks to the page's own
 // origin, so on that host it calls the API there, which lets in only the accounts the admin turned beta on for and
-// answers the others' calls 403 not_beta. Here the page says it is the test channel (a mark at the bottom left, the
-// title) and sends an account not let in to the same page on the stable one.
+// answers the others' calls 403 not_beta. Here the page goes by the test channel's name (youdid.wtf, which is all it
+// takes to tell the two apart) and sends an account not let in to the same page on the stable one.
 import { useEffect } from "react";
 import { useWorkspaces } from "./api.ts";
-import * as css from "./beta.css.ts";
+import { BETA, BETA_META, NAME } from "../channel.ts";
 
-const meta = typeof document === "undefined" ? null : document.querySelector<HTMLMetaElement>('meta[name="stillfail-beta"]');
-
-/** Whether this page is the test channel's. */
-export const BETA = Boolean(meta) || (typeof location !== "undefined" && location.host === "app.youdid.wtf");
-
-/** The name the page goes by: on the test channel its own (youdid.wtf, still.fail's dual). */
-export const NAME = BETA ? "youdid.wtf" : "still.fail";
+export { BETA, NAME };
 
 /** Where the stable channel is. */
-const STABLE = meta?.content || "https://app.still.fail";
+const STABLE = BETA_META?.content || "https://app.still.fail";
 
-const TITLE = "测试版 · ";
-
-/** On the test channel, every title the page sets starts with 「测试版 · 」. */
-export function markBetaTitle(): void {
-  if (!BETA) return;
-  const mark = () => { if (!document.title.startsWith(TITLE)) document.title = TITLE + document.title; };
-  mark();
-  new MutationObserver(mark).observe(document.head, { subtree: true, childList: true, characterData: true });
-}
-
-/** The test channel's mark, at the bottom left of every page. */
-export function BetaMark() {
-  return BETA ? <div className={css.mark} aria-hidden="true">测试版</div> : null;
+/** The title the page was served with (index.html's still.fail) in the page's own name, where that is another. */
+export function nameTitle(): void {
+  if (NAME !== "still.fail") document.title = document.title.replaceAll("still.fail", NAME);
 }
 
 /** Signed in on the test channel with no account let in: to the same page on the stable one. */

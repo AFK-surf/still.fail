@@ -125,10 +125,12 @@ test("signing in on the test channel starts on the main host, where Google retur
 });
 
 test("the test channel's pages are the web app's, not to be indexed, and say they are the test channel's", async () => {
-  const INDEX = "<!doctype html><html><head><title>still.fail</title></head><body></body></html>";
+  const INDEX = '<!doctype html><html><head><title>still.fail</title><meta property="og:title" content="still.fail — 编码 agent"><meta property="og:image" content="https://app.still.fail/og-image.png"></head><body></body></html>';
+  const MANIFEST = '{"name":"still.fail","short_name":"still.fail","start_url":"./"}';
   const assets = (request: Request) => {
     const path = new URL(request.url).pathname;
     if (path === "/web/index.html") return new MFResponse(INDEX, { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (path === "/web/site.webmanifest") return new MFResponse(MANIFEST, { headers: { "content-type": "application/manifest+json" } });
     if (path === "/web/assets/app.js") return new MFResponse("// the web app", { headers: { "content-type": "text/javascript" } });
     return new MFResponse("Not found", { status: 404 });
   };
@@ -138,8 +140,14 @@ test("the test channel's pages are the web app's, not to be indexed, and say the
       const page = await h.fetchBeta(path);
       assert.equal(page.status, 200);
       assert.equal(page.headers.get("x-robots-tag"), "noindex, nofollow");
-      assert.equal(await page.text(), INDEX.replace("<head>", `<head><meta name="stillfail-beta" content="${h.origin}">`), path);
+      // Named the test channel's before any script runs: the title and the link previews' tags, not the URLs.
+      const named = INDEX.replace("<title>still.fail", "<title>youdid.wtf").replace('content="still.fail —', 'content="youdid.wtf —');
+      assert.equal(await page.text(), named.replace("<head>", `<head><meta name="stillfail-beta" content="${h.origin}">`), path);
     }
+    const manifest = await h.fetchBeta("/site.webmanifest");
+    assert.equal(await manifest.text(), '{"name":"youdid.wtf","short_name":"youdid.wtf","start_url":"./"}');
+    assert.equal(manifest.headers.get("x-robots-tag"), "noindex, nofollow");
+    assert.equal(await (await h.fetch("/site.webmanifest")).text(), MANIFEST);
     const file = await h.fetchBeta("/assets/app.js");
     assert.equal(await file.text(), "// the web app");
     assert.equal(file.headers.get("x-robots-tag"), "noindex, nofollow");

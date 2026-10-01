@@ -14,6 +14,7 @@ import * as css from "./MachineSessions.css.ts";
 import * as uiCss from "./ui.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 
+import { NAME } from "./channel.ts";
 // Times in words, still worked out here (they were the job lists' until those moved into the core).
 
 /** A time span in words: 12 秒, 4 分钟, 3 小时, 2 天. */
@@ -106,7 +107,7 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
                     <span className={css.title}>{s.title ?? s.first}</span>
                     <span className={css.meta}>{meta(s)}</span>
                   </span>
-                  {s.session ? <span className={css.already}>已在 still.fail 里</span> : null}
+                  {s.session ? <span className={css.already}>已在 {NAME} 里</span> : null}
                 </button></Tip>
               </li>
             ))}

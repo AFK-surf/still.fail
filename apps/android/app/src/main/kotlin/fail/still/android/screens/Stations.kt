@@ -4,6 +4,7 @@
 // have them, SettingsHome.kt).
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.TextStyle
@@ -128,7 +129,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                     } else if (!s.online) {
                         Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                            Text("这台机器很久没联系 still.fail 了", fontSize = 13.sp, color = C.muted)
+                            Text("这台机器很久没联系 ${BuildConfig.APP_NAME} 了", fontSize = 13.sp, color = C.muted)
                         }
                     }
                 }
@@ -162,7 +163,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 Card {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                        Text("离线：在这台机器上打开 still.fail 就会重新连上", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
+                        Text("离线：在这台机器上打开 ${BuildConfig.APP_NAME} 就会重新连上", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
                         RetryPill(Modifier.padding(top = 6.dp))
                     }
                 }

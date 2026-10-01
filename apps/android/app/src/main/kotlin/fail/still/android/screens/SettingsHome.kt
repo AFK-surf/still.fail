@@ -156,7 +156,7 @@ private fun Version() {
     val busy = updates.progress != null || updates.checking
     ListRow(onClick = if (busy) null else ({ scope.launch { (if (newer == null) updates.checkNow() else updates.install())?.let { app.toast = it } } })) {
         // The beta app goes by its own name (app/build.gradle.kts).
-        Text("${if (BuildConfig.BETA) "youdid.wtf" else "still.fail"} ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+        Text("${BuildConfig.APP_NAME} ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
         Text(updates.progress ?: (if (updates.checking) "正在检查…" else null) ?: newer?.let { "更新到 ${it.versionName}" } ?: "检查更新", fontSize = 15.sp, color = if (newer != null && !busy) C.accent else C.muted)
     }
 }

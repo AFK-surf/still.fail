@@ -3,6 +3,7 @@
 // is done to it less often under "…"); how it runs, picked on a page of its own; a new one, a step a screen.
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -160,7 +161,7 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
             }, 20.dp)
         }) else null)
         LargeTitle(one?.let { "${it.name} 上的" } ?: "", "连接")
-        PageNote("连接是人找到 still.fail 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。")
+        PageNote("连接是人找到 ${BuildConfig.APP_NAME} 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。")
         Seg(listOf("全部", "我建的"), if (mine) 1 else 0, { mine = it == 1 }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
         if (stations == null || view == null) Text(connects.error?.message ?: "正在读取连接…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else stations.forEach { s ->
@@ -630,7 +631,7 @@ fun NewConnectScreen(station: String) {
             }
             else when (step) {
                 "team" -> if (teams.isEmpty()) {
-                    Text("有了 Slack 的配置 token，still.fail 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
+                    Text("有了 Slack 的配置 token，${BuildConfig.APP_NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("添加配置 token", primary = true) { step = "token" } }
                     Text("不用配置 token，自己在 Slack 建 app", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { step = "manual" })
                 } else {
@@ -641,7 +642,7 @@ fun NewConnectScreen(station: String) {
                     Text("＋ 添加工作区的配置 token", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { step = "token" })
                     chosen?.let { t ->
                         Text("移除「${t.name}」的配置 token", fontSize = 14.sp, color = C.muted, modifier = Modifier.clickable {
-                            confirm(app, "移除「${t.name}」的配置 token？", "still.fail 不再用它在这个 Slack 工作区建和改 app；已经建好的 app 和连接不受影响，之后可以再加上。", "移除", danger = true) {
+                            confirm(app, "移除「${t.name}」的配置 token？", "${BuildConfig.APP_NAME} 不再用它在这个 Slack 工作区建和改 app；已经建好的 app 和连接不受影响，之后可以再加上。", "移除", danger = true) {
                                 api.removeConfigToken(t.teamId); if (team == t.teamId) team = null; app.toast = "已移除配置 token"
                             }
                         })
@@ -652,7 +653,7 @@ fun NewConnectScreen(station: String) {
                 "token" -> ConfigTokenSteps(station) { team = it; step = "app" }
                 "app" -> {
                     FormLabel("名字")
-                    Field(draft.name, { draft.name = it }, "still.fail")
+                    Field(draft.name, { draft.name = it }, BuildConfig.APP_NAME)
                     FormLabel("描述")
                     Field(draft.description, { draft.description = it }, "Coding agent in your threads")
                     AppLook(draft, icon, { i, e -> icon = i; iconError = e }, fresh = true)
@@ -685,7 +686,7 @@ fun NewConnectScreen(station: String) {
                 }
                 "manual" -> {
                     Steps(listOf(
-                        "用 still.fail 的配置在 Slack 新建一个 app。" to { scope.launch { try { open(api.createAppUrl("still.fail")) } catch (e: CoreException) { error = e.message } }; Unit },
+                        "用 ${BuildConfig.APP_NAME} 的配置在 Slack 新建一个 app。" to { scope.launch { try { open(api.createAppUrl(BuildConfig.APP_NAME)) } catch (e: CoreException) { error = e.message } }; Unit },
                         "在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。" to null,
                         "在 Install App 页安装到工作区，复制 Bot User OAuth Token。" to null,
                         "把两个 token 填在下面。" to null,
@@ -764,7 +765,7 @@ private fun openWaitingMenu(app: AppState, station: String, a: MadeSlackApp) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow("继续连接") { openNewConnect(app, station, a.appId) }
             PickRow("从这里移除", color = C.red) {
-                confirm(app, "移除「${a.name}」？", "只从 still.fail 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。", "移除", danger = true) {
+                confirm(app, "移除「${a.name}」？", "只从 ${BuildConfig.APP_NAME} 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。", "移除", danger = true) {
                     app.api(station).dropSlackApp(a.appId); app.toast = "已移除"
                 }
             }

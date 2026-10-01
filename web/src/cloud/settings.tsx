@@ -39,6 +39,7 @@ import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./settings.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 
+import { NAME } from "../channel.ts";
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
 export const ROLE_HINT: Record<Role, string> = {
   owner: "管理一切，包括成员角色和删除 workspace",
@@ -102,7 +103,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <p className={pagesCss.identitySub}><span>{account.email}</span><span>Google 账号</span></p>
         </div>
       </header>
-      <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 still.fail。认不出来的可以让它退出。">
+      <Section title="登录的地方" description={`这个账号在哪些浏览器或设备上登录了 ${NAME}。认不出来的可以让它退出。`}>
         {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>读不到登录记录：{devices.error.message}</p> : <Loading label="正在读取…" fill={false} /> : (
           <ul className={pagesCss.list}>
             {devices.value.map((s) => (
@@ -173,7 +174,7 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
           </div>
           {view.role === "owner" && (
             <div className={pagesCss.cardRow}>
-              <div className={pagesCss.cardRowText}><strong>删除 workspace</strong><span className={shellCss.muted}>所有成员失去访问权限，station 断开与 still.fail cloud 的连接；station 本机的数据不受影响。</span></div>
+              <div className={pagesCss.cardRowText}><strong>删除 workspace</strong><span className={shellCss.muted}>所有成员失去访问权限，station 断开与 {NAME} cloud 的连接；station 本机的数据不受影响。</span></div>
               <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>删除</Button>
             </div>
           )}
@@ -183,7 +184,7 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
         title={`退出「${view.name}」？`} action="退出" description="退出后你就不能再访问里面的 station，需要重新被邀请才能回来。" error={leave.error?.message} />
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
         title={`删除「${view.name}」？`} action="删除 workspace"
-        description={`所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 still.fail cloud 的连接（station 本机上的数据不受影响）。`} error={remove.error?.message} />
+        description={`所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ${NAME} cloud 的连接（station 本机上的数据不受影响）。`} error={remove.error?.message} />
     </Page>
   );
 }
@@ -193,7 +194,7 @@ export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   const stations = useStations(entry.id).value;
   if (!view || !stations) return <Loading label="正在读取 workspace…" />;
   return (
-    <Page title="Station" lead="每台 station 是一台运行 still.fail 的机器：它的连接、会话和 Profile 都在那台机器上。" back={`/w/${entry.id}/settings`}>
+    <Page title="Station" lead={`每台 station 是一台运行 ${NAME} 的机器：它的连接、会话和 Profile 都在那台机器上。`} back={`/w/${entry.id}/settings`}>
       {/* None yet: adding the first, as the workspace's page does. */}
       {stations.length === 0 ? <FirstStation entry={entry} />
         : <Stations view={view} account={entry.account} manager={manager} stations={stations} />}
@@ -240,7 +241,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   // Not one profile on any station (each read): the page is about adding the first.
   const first = stations.length > 0 && stations.every((s) => s.overview && s.overview.profiles.length === 0);
   return (
-    <Page title="Profile" lead="Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行，能跑哪些运行时，still.fail 会自己配好。" back={`/w/${entry.id}/settings`}
+    <Page title="Profile" lead={`Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行，能跑哪些运行时，${NAME} 会自己配好。`} back={`/w/${entry.id}/settings`}
       actions={!first && online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>添加 Profile</Button>}>
       {addingTo && (
         <StationContext.Provider value={asStation(addingTo)}>
@@ -318,7 +319,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.busy} onConfirm={() => removing && remove.run(removing)}
         title={`移除「${removing?.name ?? ""}」？`} action="移除 station"
-        description="它会断开与 still.fail cloud 的连接，成员不能再从这里访问它。那台机器上的 still.fail 和数据不受影响，之后可以重新添加。" error={remove.error?.message} />
+        description={`它会断开与 ${NAME} cloud 的连接，成员不能再从这里访问它。那台机器上的 ${NAME} 和数据不受影响，之后可以重新添加。`} error={remove.error?.message} />
     </Section>
   );
 }
@@ -386,7 +387,7 @@ function JoinThisMac({ account, workspace, className }: { account: Account; work
 function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
   return (
     <>
-      <p>在那台机器的终端里执行<About>macOS（Apple 芯片）和 Linux 都行；装过 still.fail 的机器也用这条命令。</About></p>
+      <p>在那台机器的终端里执行<About>macOS（Apple 芯片）和 Linux 都行；装过 {NAME} 的机器也用这条命令。</About></p>
       <CopyCommand text={enrollment.install} />
       <div className={css.enrollWait} role="status">
         <span className={waitingCss.spinner} aria-hidden="true" />
@@ -458,7 +459,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
       {(setRole.error || remove.error) && <p className={controlsCss.fieldError} role="alert">{(setRole.error ?? remove.error)!.message}</p>}
       {manager && view.added.length > 0 && (
         <>
-          <div className={css.groupHead}><strong>还没登录过</strong><span className={shellCss.muted}>{view.added.length} 人 · 第一次登录 still.fail 时自动加入</span></div>
+          <div className={css.groupHead}><strong>还没登录过</strong><span className={shellCss.muted}>{view.added.length} 人 · 第一次登录 {NAME} 时自动加入</span></div>
           <ul className={pagesCss.list}>
             {view.added.map((a) => (
               <li key={a.email} className={pagesCss.listRow}>
@@ -515,14 +516,14 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
   });
   const done = add.result;
   return (
-    <Dialog open onClose={onClose} title="添加成员" description={`直接加进「${view.name}」，不用对方接受：已经登录过 still.fail 的人马上就是成员，其他人第一次用这个邮箱登录时自动加入。`}
+    <Dialog open onClose={onClose} title="添加成员" description={`直接加进「${view.name}」，不用对方接受：已经登录过 ${NAME} 的人马上就是成员，其他人第一次用这个邮箱登录时自动加入。`}
       footer={done ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
         <Button variant="primary" disabled={emails.length === 0} busy={add.busy} onClick={() => add.run()}>{emails.length > 1 ? `添加 ${emails.length} 人` : "添加"}</Button>
       </>}>
       {!done ? (
         <>
-          <Field label="邮箱" htmlFor="add-emails" hint="对方登录 still.fail 用的 Google 账号邮箱；一次可以粘贴多个。">
+          <Field label="邮箱" htmlFor="add-emails" hint={`对方登录 ${NAME} 用的 Google 账号邮箱；一次可以粘贴多个。`}>
             <textarea id="add-emails" className={controlsCss.input} rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="name@example.com" />
           </Field>
           {slack.available && (
@@ -558,7 +559,7 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
       ) : (
         <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{[
           done.joined.length ? `${done.joined.length} 人已经加入` : "",
-          done.added.length ? `${done.added.length} 人第一次登录 still.fail 时自动加入` : "",
+          done.added.length ? `${done.added.length} 人第一次登录 ${NAME} 时自动加入` : "",
           done.already.length ? `${done.already.length} 人本来就在` : "",
         ].filter(Boolean).join("，")}。</span></div>
       )}

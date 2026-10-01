@@ -11,6 +11,7 @@ import { stationBase } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
 import * as css from "./Switcher.css.ts";
 
+import { NAME } from "./channel.ts";
 /** Mounted once under a scope's pages (a workspace's): its new chat and settings are at these paths. */
 export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; newChat: string; settings: string }) {
   const navigate = useNavigate();
@@ -73,7 +74,7 @@ function Finder({ scope, onClose }: { scope: string; onClose(): void }) {
           else if (e.key === "Enter") { e.preventDefault(); go(found[at]); }
         }} />
       <div className={css.results} ref={list} role="listbox" aria-label="对话">
-        {search.error && !view && <p className={css.none}>更新 still.fail 后才能搜索对话</p>}
+        {search.error && !view && <p className={css.none}>更新 {NAME} 后才能搜索对话</p>}
         {view && found.length === 0 && <p className={css.none}>{query ? "没有找到对话" : "还没有对话"}</p>}
         {found.map((item, i) => (
           <div key={`${item.station}/${item.id}`} className={css.row} role="option" aria-selected={i === at} data-at={i}

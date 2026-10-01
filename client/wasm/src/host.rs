@@ -57,11 +57,13 @@ impl Drop for SocketGuard {
 pub struct WebHost {
     emit: Function,
     storage: Storage,
+    /// The page is the test channel's (app.youdid.wtf), as it told the worker (`Host::test_channel`).
+    test_channel: bool,
 }
 
 impl WebHost {
-    pub fn new(emit: Function) -> WebHost {
-        WebHost { emit, storage: Storage::default() }
+    pub fn new(emit: Function, test_channel: bool) -> WebHost {
+        WebHost { emit, storage: Storage::default(), test_channel }
     }
 }
 
@@ -149,6 +151,10 @@ async fn next_chunk(mut body: Body) -> Option<(Result<Vec<u8>, HostError>, Body)
 impl Host for WebHost {
     fn cloud_origin(&self) -> String {
         Reflect::get(&global("location"), &JsValue::from_str("origin")).ok().and_then(|o| o.as_string()).unwrap_or_default()
+    }
+
+    fn test_channel(&self) -> bool {
+        self.test_channel
     }
 
     fn fetch(&self, req: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>> {

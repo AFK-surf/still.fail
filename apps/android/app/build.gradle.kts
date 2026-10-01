@@ -46,7 +46,10 @@ android {
         buildConfigField("String", "FCM_API_KEY", "\"${fcm("fcmApiKey")}\"")
         buildConfigField("String", "FCM_SENDER_ID", "\"${fcm("fcmSenderId")}\"")
         buildConfigField("boolean", "BETA", "$beta")
-        resValue("string", "app_name", if (beta) "youdid.wtf" else "still.fail")
+        // The name the app goes by: its label, and every text in it that names the product (BuildConfig.APP_NAME).
+        val appName = if (beta) "youdid.wtf" else "still.fail"
+        buildConfigField("String", "APP_NAME", "\"$appName\"")
+        resValue("string", "app_name", appName)
         // The face: orange with dark eyes; the beta app's dark with white eyes (design/app-icon/face-beta.svg).
         resValue("color", "launcher_bg", if (beta) "#1C1D20" else "#E5704A")
         resValue("color", "launcher_eyes", if (beta) "#FFFFFF" else "#24272B")

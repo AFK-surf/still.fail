@@ -5,6 +5,7 @@
 // and a new one.
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -140,14 +141,14 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 else Button("不加入，建一个自己的 workspace", primary = false, busy = create.busy) { make("") }
             }
             asking -> {
-                Title("still.fail 目前只对受邀的人开放")
-                Lead("有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 still.fail 的人把 ${first.email} 邀请进他们的 workspace。")
+                Title("${BuildConfig.APP_NAME} 目前只对受邀的人开放")
+                Lead("有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 ${BuildConfig.APP_NAME} 的人把 ${first.email} 邀请进他们的 workspace。")
                 InviteCodeForm(create, make)
                 Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
             }
             else -> {
                 Title("你还不在任何 workspace 里")
-                Lead("可以请已经在用 still.fail 的人把 ${first.email} 邀请进他们的 workspace，也可以自己建一个。")
+                Lead("可以请已经在用 ${BuildConfig.APP_NAME} 的人把 ${first.email} 邀请进他们的 workspace，也可以自己建一个。")
                 Button("建一个 workspace", primary = true, busy = create.busy) { make("") }
                 create.error?.let { Error(errorText(it)) }
                 Button("用邀请链接加入", primary = false) { openInviteLink(app) }
@@ -349,7 +350,7 @@ private fun ColumnScope.NewWorkspaceSheet(app: AppState) {
             Field(code, { code = it }, "XXXX-XXXX-XXXX", mono = true)
             val error = create.error
             if (error != null && needsInviteCode(error) && code.isNotBlank()) Error(errorText(error))
-            else Text("still.fail 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。", fontSize = 12.sp, color = C.muted)
+            else Text("${BuildConfig.APP_NAME} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。", fontSize = 12.sp, color = C.muted)
         }
         create.error?.takeIf { !needsInviteCode(it) }?.let { Error(it.message) }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
@@ -412,9 +413,9 @@ private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
     if (accounts.value != null && list.isEmpty()) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
-        SheetHead("登录 still.fail")
+        SheetHead("登录 ${BuildConfig.APP_NAME}")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("你收到了一个 still.fail workspace 的邀请。先用 Google 账号登录，再决定是否加入。", fontSize = 14.sp, color = C.muted)
+            Text("你收到了一个 ${BuildConfig.APP_NAME} workspace 的邀请。先用 Google 账号登录，再决定是否加入。", fontSize = 14.sp, color = C.muted)
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }
                 Button("使用 Google 账号登录", primary = true) { scope.launch { signIn(app, context) } }
@@ -428,7 +429,7 @@ private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
         val t = token
         when {
             t == null -> {
-                Text("把收到的 still.fail 邀请链接粘贴在下面，先看看是哪个 workspace，再决定是否加入。", fontSize = 14.sp, color = C.muted)
+                Text("把收到的 ${BuildConfig.APP_NAME} 邀请链接粘贴在下面，先看看是哪个 workspace，再决定是否加入。", fontSize = 14.sp, color = C.muted)
                 Field(text, { text = it }, "https://app.still.fail/invite#…", lines = 2)
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                     Button("取消", primary = false) { app.sheet = null }

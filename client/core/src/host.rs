@@ -78,6 +78,12 @@ pub trait Host {
     fn beta(&self) -> bool {
         false
     }
+    /// On the test channel (youdid.wtf, still.fail's dual): what the core says to people names the product so
+    /// ([`crate::brand`]). A beta app is; so is the web page on the test channel's host, which is no beta app (its calls
+    /// say nothing: that host's API is the test channel's already).
+    fn test_channel(&self) -> bool {
+        self.beta()
+    }
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>>;
     fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>>;

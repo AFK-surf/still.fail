@@ -29,6 +29,7 @@ import * as historyCss from "./styles/history.css.ts";
 import * as css from "./Connects.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
+import { NAME } from "../channel.ts";
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
 export function Presence({ state }: { state: string }) {
   return <span className={settingsCss.mPresence} data-state={state} />;
@@ -90,7 +91,7 @@ function WaitingAppSheet({ made, online }: { made: MadeSlackApp; online: boolean
           onClick={() => { app.sheet(null); app.push(`${stationBase(station.address)}/connects/new?resume=${encodeURIComponent(made.appId)}`); }} />
         <PickRow label="从这里移除" accent onClick={() => confirm(app, {
           title: `移除「${made.name}」？`, action: "移除", danger: true,
-          text: "只从 still.fail 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。",
+          text: `只从 ${NAME} 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。`,
           run: () => api.dropSlackApp(made.appId).then(() => app.toast("已移除")),
         })} />
       </div>
@@ -137,7 +138,7 @@ export function ConnectsScreen() {
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={one?.name ?? "设置"} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加连接" onClick={add} /> : undefined} />
       <LargeTitle small={one ? `${one.name} 上的` : ""} big="连接" />
-      <p className={settingsCss.mPageNote}>连接是人找到 still.fail 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</p>
+      <p className={settingsCss.mPageNote}>连接是人找到 {NAME} 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</p>
       <div className={css.mListSeg}><Seg options={["全部", "我建的"]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>
       {!stations || !connects.value ? <Loading text={connects.error?.message ?? "正在读取连接…"} /> : stations.map((s) => {
         const here = items.filter((i) => i.station === s.station);
@@ -531,7 +532,7 @@ export function NewConnectScreen() {
           </div>
         ) : step === "team" && (teams.length === 0 ? (
           <>
-            <p className={partsCss.mMuted}>有了 Slack 的配置 token，still.fail 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
+            <p className={partsCss.mMuted}>有了 Slack 的配置 token，{NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
             <Button label="添加配置 token" primary onClick={() => setStep("token")} />
             <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</button>
           </>
@@ -549,7 +550,7 @@ export function NewConnectScreen() {
             <ol className={css.mStepsList}>
               <li>打开 <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a>，用要放 bot 的那个 Slack 工作区的账号登录。</li>
               <li>拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</li>
-              <li>把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。still.fail 会自己续期，以后不用再管。</li>
+              <li>把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。{NAME} 会自己续期，以后不用再管。</li>
             </ol>
             <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={config} placeholder="xoxe-1-…" onChange={(e) => setConfig(e.target.value.trim())} />
             {config.startsWith("xoxe.xoxp-") && <p className={partsCss.mError}>这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。</p>}
@@ -560,7 +561,7 @@ export function NewConnectScreen() {
         {step === "app" && (
           <>
             <b className={sheetsCss.mFormLabel}>名字</b>
-            <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder="still.fail" />
+            <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder={NAME} />
             <b className={sheetsCss.mFormLabel}>描述</b>
             <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder="Coding agent in your threads" />
             <AppLook settings={appSettings} onChange={setAppSettings} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
@@ -590,7 +591,7 @@ export function NewConnectScreen() {
         {step === "manual" && (
           <>
             <ol className={css.mStepsList}>
-              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl("still.fail").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 still.fail 的配置在 Slack 新建一个 app</button>。</li>
+              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl(NAME).then(({ url }) => window.open(url, "_blank", "noopener"))}>用 {NAME} 的配置在 Slack 新建一个 app</button>。</li>
               <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
               <li>把两个 token 填在下面。</li>

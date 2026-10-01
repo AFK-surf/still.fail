@@ -241,7 +241,7 @@ impl Status {
     /// Where a wait is, in words; `None` for a station with no name (the page's own).
     fn place_name(&self, place: &Place) -> Option<String> {
         match place {
-            Place::Cloud => Some("still.fail cloud".into()),
+            Place::Cloud => Some(format!("{} cloud", crate::brand::name())),
             Place::Relay => Some("relay".into()),
             Place::Station(address) => {
                 let name_of = self.name_of.borrow().clone();
@@ -321,7 +321,7 @@ pub fn value(parts: &[(&Status, Take)]) -> Value {
         let when = if wait > 0 { format!("{wait} 秒后重试") } else { "正在重试".to_string() };
         let tries = if d.tries > 1 { format!("（第 {} 次）", d.tries) } else { String::new() };
         let why = if d.message.is_empty() { String::new() } else { format!("：{}", d.message) };
-        items.push(json!({ "state": "trouble", "text": format!("连不上 still.fail cloud，{when}{tries}"), "detail": format!("实时更新暂停{why}") }));
+        items.push(json!({ "state": "trouble", "text": format!("连不上 {} cloud，{when}{tries}", crate::brand::name()), "detail": format!("实时更新暂停{why}") }));
     }
     // What has been waited on for a while: the connections first (the requests wait on them), the oldest first.
     let mut slow: Vec<&Slow> = all.slow.iter().collect();

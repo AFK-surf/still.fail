@@ -96,5 +96,3 @@ import "../ChatMark.css.ts";
 import "../Switcher.css.ts";
 import "../Shortcuts.css.ts";
 import "../madeChat.css.ts";
-// Last: it builds on the sidebar's (Sidebar.css.ts), whose place in the cascade it must not move.
-import "../cloud/beta.css.ts";

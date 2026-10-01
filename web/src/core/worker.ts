@@ -114,7 +114,8 @@ function retire(): void {
 
 const ready: Promise<StillFailCore> = (async () => {
   await init();
-  core = await start(emit);
+  // On the test channel the page names the worker so (core/client.ts workerName): the core's words say youdid.wtf.
+  core = await start(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false);
   return core;
 })();
 ready.catch((error: unknown) => fatal(`核心没有启动：${String(error)}`));

@@ -8,6 +8,7 @@ import { ModelLogo, Time } from "./ui.tsx";
 import { REF_LINK, REF_MARK, splitBy } from "./chatRefs.ts";
 import * as css from "./ChatRef.css.ts";
 
+import { NAME } from "./channel.ts";
 /** How many chats the menu offers at once. */
 const SHOWN = 8;
 
@@ -67,7 +68,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
   return (
     <div ref={list} className={css.refMenu} role="listbox" aria-label="引用对话" onMouseDown={(e) => e.preventDefault()}>
       <div className={css.refHead}>引用对话{query && <span className={css.refQuery}>{query}</span>}</div>
-      {!items ? <p className={css.refEmpty}>{search.error ? "更新 still.fail 后才能引用对话" : "正在读取…"}</p>
+      {!items ? <p className={css.refEmpty}>{search.error ? `更新 ${NAME} 后才能引用对话` : "正在读取…"}</p>
         : items.length === 0 ? <p className={css.refEmpty}>{query ? "没有标题里带这些字的对话" : "这台 station 上没有别的对话"}</p>
         : items.map((item, i) => {
           const agent = item.agents[0];

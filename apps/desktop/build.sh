@@ -59,7 +59,7 @@ else
     b.productName = name;
     b.extraMetadata = { ...b.extraMetadata, version, productName: name };
     b.protocols = [{ name, schemes: ["stillfail-beta"] }];
-    b.mac = { ...b.mac, extendInfo: { ...b.mac.extendInfo, CFBundleName: name, CFBundleDisplayName: name }, artifactName: "stillfail-beta-${version}-${arch}-mac.${ext}", icon: "icon-beta.png" };
+    b.mac = { ...b.mac, extendInfo: { ...b.mac.extendInfo, CFBundleName: name, CFBundleDisplayName: name, NSLocalNetworkUsageDescription: b.mac.extendInfo.NSLocalNetworkUsageDescription.replace("still.fail", name) }, artifactName: "stillfail-beta-${version}-${arch}-mac.${ext}", icon: "icon-beta.png" };
     b.publish = { ...b.publish, channel: "stillfail-beta" };
     // UNSIGNED=1: only to see it packs (ssh studio has no keychain for codesign).
     if (process.env.UNSIGNED) b.mac.identity = null;

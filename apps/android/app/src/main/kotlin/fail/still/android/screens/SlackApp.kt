@@ -5,6 +5,7 @@
 // way when it is made (Connects.kt → NewConnectScreen, as web/src/mobile/Connects.tsx → AppLook).
 package fail.still.android.screens
 
+import fail.still.android.BuildConfig
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -157,7 +158,7 @@ internal class AppDraft(start: SlackAppSettings) {
 
 /** What a new app starts as: every permission on; its colour and icon come from its first avatar. */
 internal val NEW_APP = SlackAppSettings(
-    name = "still.fail", displayName = "still.fail", description = "Coding agent in your threads (still.fail)", backgroundColor = "#F3E3D3",
+    name = BuildConfig.APP_NAME, displayName = BuildConfig.APP_NAME, description = "Coding agent in your threads (${BuildConfig.APP_NAME})", backgroundColor = "#F3E3D3",
     groups = SLACK_GROUP_WORDS.associate { (g, _) -> g to true },
 )
 
@@ -525,7 +526,7 @@ internal fun ConfigTokenSteps(station: String, onSaved: (String) -> Unit) {
     Steps(listOf(
         "打开 api.slack.com/apps，用要放 bot 的那个 Slack 工作区的账号登录。" to { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://api.slack.com/apps"))) },
         "拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。" to null,
-        "把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。still.fail 会自己续期，以后不用再管。" to null,
+        "把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。${BuildConfig.APP_NAME} 会自己续期，以后不用再管。" to null,
     ))
     SecretField(config, { config = it }, "xoxe-1-…")
     if (config.startsWith("xoxe.xoxp-")) Text("这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
