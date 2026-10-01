@@ -8,7 +8,6 @@
 //!   OAuth login is renewed directly, under Claude Code's locks, in its original store. It is read from there as claude
 //!   reads it: on macOS the keychain first, then the file (a claude run by hand saves to the keychain and deletes the
 //!   file; reading only the file, a stale one would be handed over while claude refreshed the keychain's).
-//! Only logins kept in files: one in the macOS keychain cannot be used so (the pages offer a sign-in instead).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -16,7 +15,7 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use base64::Engine;
 use stillfail_shapes::RuntimeKind;
 use futures_util::future::BoxFuture;
