@@ -171,10 +171,10 @@ class Flight internal constructor(
     }
 
     /**
-     * How far the row's top is from where it will be (the list put in place frame by frame meanwhile, Chat.kt), or null
-     * when the list is not (it is not following): then reckoned from the composer (Host.drop).
+     * The final row bottom in overlay coordinates while the list follows. An absolute destination stays independent
+     * of requestScrollToItem, which takes effect in a later layout. Null when not following.
      */
-    internal var toFinal: Float? = null
+    internal var finalBottom: Float? = null
 
     /**
      * The words cut into the pieces that fly on their own: runs that are on one line both in the field and in the
@@ -457,7 +457,9 @@ private fun FlightLayer(host: Host) {
         // Where its letters are now (the list carrying them, a new chat's), and where they would be in place (the
         // composer down: in an open chat it still holds the list up as they go).
         val now = overlay.localPositionOf(bubble, Offset.Zero) + flight.inBubble
-        val drop = if (flight.carried) 0f else flight.toFinal ?: host.drop()
+        val drop = if (flight.carried) 0f else flight.finalBottom?.let {
+            it - row.size.height - overlay.localPositionOf(row, Offset.Zero).y
+        } ?: host.drop()
         val place = now - Offset(0f, flight.shift() - drop)
         // Followed, not jumped to: the list going to its end and the composer coming down move it by fits and starts.
         val to = if (flight.carried) place else flight.follow(place) + (place - flight.follow(place)) * settle

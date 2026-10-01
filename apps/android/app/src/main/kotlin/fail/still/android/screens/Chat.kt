@@ -643,6 +643,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // ended); as the words go up, it makes room for what of it they show, at the composer's own foot (not the composer
     // held tall, nor on its way down); as they settle, the rest of it (what the field did not show) comes in above,
     // its foot where it is.
+    var box by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     val flying = host.flight
     val room by rememberUpdatedState(with(LocalDensity.current) { (bottom + 10.dp).roundToPx() })
     LaunchedEffect(flying) {
@@ -657,16 +658,18 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 val index = key?.let(follow.indexOf)?.takeIf { it >= 0 }
                 // Not following: nothing is put in place (the words go where the row is). Following, the list is not
                 // glided after the row as it comes in either: it is put in place from the first frame it is laid out.
-                if (!follow.on || short) { follow.paused = false; flying.toFinal = null; continue }
+                if (!follow.on || short) { follow.paused = false; flying.finalBottom = null; continue }
                 follow.paused = true
-                if (!flying.placed || item == null || full == null || index == null) { flying.toFinal = null; continue }
+                if (!flying.placed || item == null || full == null || index == null) { flying.finalBottom = null; continue }
                 val top = from ?: item.offset.also { from = it }
                 // Where its foot will be: above the composer's own room (and what else the list keeps clear of).
                 val foot = list.layoutInfo.viewportEndOffset - (room - host.listRoom + host.naturalRoom())
                 val cut = flying.reserve().roundToInt()
                 val at = if (flying.settle() > 0f) foot - (full - cut) else (top + (foot - (full - flying.hidden().roundToInt()) - top) * flying.up()).roundToInt()
                 list.requestScrollToItem(index, -at)
-                flying.toFinal = ((foot - full) - (at - cut)).toFloat()
+                // Resolve the destination in the overlay, not as a delta from the requested scroll offset.
+                // That offset has not been laid out yet; mixing it with current coordinates makes the words recoil.
+                flying.finalBottom = host.overlayY(box)?.plus(list.layoutInfo.beforeContentPadding + foot)
             }
         } finally { follow.paused = false }
     }
@@ -741,7 +744,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
 
     // A new chat's first words on their way (ChatHost.kt): the list comes up after them, out of the composer's top edge.
     val flight = host.flight
-    var box by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     Box(modifier.fillMaxWidth().onGloballyPositioned { motion.pane = it; box = it }) {
       CompositionLocalProvider(LocalChatMotion provides motion) {
         // The list is what the bars and capsules over it frost (the button over it too, so it is not in it).
