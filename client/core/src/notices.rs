@@ -29,6 +29,8 @@ struct Seen {
     seq: i64,
     /// The decision waiting for the viewer in it (its post's seq), if any.
     decision: Option<u64>,
+    /// A new message seen while running, held until the agents settle.
+    pending: bool,
 }
 
 /// What a workspace has heard of its chats: how each of its stations' rows stood when last looked at, by id, and
@@ -94,7 +96,17 @@ impl Notices {
                 .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned()).unwrap_or_default()
                 .iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
             let now: HashMap<String, Seen> = rows.iter().filter_map(|row| Some((row.get("id")?.as_str()?.to_string(), seen(row)))).collect();
-            let before = its.heard.borrow_mut().seen.insert(station.clone(), now);
+            let mut now = now;
+            let mut heard = its.heard.borrow_mut();
+            if let Some(before) = heard.seen.get(station) {
+                for (id, next) in &mut now {
+                    if next.state == Some("run") {
+                        next.pending = before.get(id).is_some_and(|old| old.pending || next.seq > old.seq);
+                    }
+                }
+            }
+            let before = heard.seen.insert(station.clone(), now);
+            drop(heard);
             // Its first rows are where it starts from.
             let Some(before) = before else { continue };
             for row in &rows {
@@ -139,7 +151,7 @@ impl Notices {
 fn seen(row: &Value) -> Seen {
     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
     let decision = crate::decisions::of_row(row).filter(|d| !crate::decisions::dismissed(d)).and_then(|d| d.get("seq")?.as_u64());
-    Seen { state: crate::present::row_state(&agents), seq: last_seq(row), decision }
+    Seen { state: crate::present::row_state(&agents), seq: last_seq(row), decision, pending: false }
 }
 
 fn last_seq(row: &Value) -> i64 {
@@ -154,7 +166,7 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
         return None;
     }
     let now = seen(row);
-    let then = then.cloned().unwrap_or(Seen { state: None, seq: 0, decision: None });
+    let then = then.cloned().unwrap_or(Seen { state: None, seq: 0, decision: None, pending: false });
     let by = crate::present::last_by(row, me, slack_users, members);
     let mine = by.as_ref().and_then(|b| b.get("mine")).and_then(Value::as_bool) == Some(true);
     // A decision waiting for the viewer anew: its first line.
@@ -180,7 +192,7 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
     }
     // Something new to read, said by someone else, with nobody at work.
     let unread = row.get("unread").and_then(Value::as_bool) == Some(true);
-    if !unread || !fresh || mine || now.state == Some("run") || last.is_none() {
+    if !unread || !(fresh || then.pending) || mine || now.state == Some("run") || last.is_none() {
         return None;
     }
     let kind = match kind {
@@ -274,6 +286,39 @@ mod tests {
 
     fn kinds(notices: &Notices) -> Vec<String> {
         notices.value(None)["items"].as_array().unwrap().iter().map(|n| n["kind"].as_str().unwrap().to_string()).collect()
+    }
+
+    #[test]
+    fn a_reply_seen_while_running_is_noticed_once_when_the_turn_settles() {
+        run(async {
+            let (_host, store, notices) = setup();
+            let rows = Topic::ChatRows { station: "ws/st".into() };
+            let stations = ["ws/st".to_string()];
+            let _watch = store.watch(&rows, Rc::new(|| {}));
+            let by = ("agent", "ds:C1:1.2");
+            store.set(&rows, Ok(json!([row(None, 3, true, by)])));
+            notices.look(&stations);
+            // Running without a new message must not re-notify an old unread reply.
+            for state in [Some("run"), None] {
+                store.set(&rows, Ok(json!([row(state, 3, true, by)])));
+                notices.look(&stations);
+            }
+            assert!(kinds(&notices).is_empty());
+            store.set(&rows, Ok(json!([row(Some("run"), 4, true, by)])));
+            notices.look(&stations);
+            notices.look(&stations);
+            assert!(kinds(&notices).is_empty());
+            store.set(&rows, Ok(json!([row(None, 4, true, by)])));
+            notices.look(&stations);
+            notices.look(&stations);
+            assert_eq!(kinds(&notices), ["done"]);
+            // A reply read before completion should not be announced.
+            store.set(&rows, Ok(json!([row(Some("run"), 5, true, by)])));
+            notices.look(&stations);
+            store.set(&rows, Ok(json!([row(None, 5, false, by)])));
+            notices.look(&stations);
+            assert_eq!(kinds(&notices), ["done"]);
+        });
     }
 
     #[test]
