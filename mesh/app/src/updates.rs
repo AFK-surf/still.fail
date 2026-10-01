@@ -16,7 +16,7 @@
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
@@ -37,6 +37,8 @@ const EVERY: Duration = Duration::from_secs(6 * 3600);
 const RUNTIME_LIMIT: Duration = Duration::from_secs(10 * 60);
 /// How long the station's installer is waited for: a drain alone may take 10 minutes (install.ts).
 const STATION_LIMIT_MS: i64 = 20 * 60_000;
+/// How long how an update of the station went is shown after it ended.
+const DONE_SHOWN: Duration = Duration::from_secs(10 * 60);
 
 /// The station's version as its release says it (`0.1.<n>`); None for a build that is not a release (a clone).
 pub fn station_version(app: &Path) -> Option<String> {
@@ -198,6 +200,10 @@ struct Item {
     note: Option<String>,
     /// When an update started, while it runs.
     updating: Option<i64>,
+    /// The station's, while it updates: where it is, as the pages say it.
+    progress: Option<String>,
+    /// The station's, a while after an update ended well: how it went.
+    done: Option<String>,
     failed: Option<String>,
     /// The station's: the channel whose latest `latest` is.
     channel: Option<Channel>,
@@ -218,6 +224,16 @@ pub struct Updates {
     items: Mutex<[Item; 3]>,
     checked: Mutex<(Option<i64>, bool)>,
     changes: watch::Sender<u64>,
+    /// How many turns run now (the hub's), for what a drain waits on.
+    running: OnceLock<Box<dyn Fn() -> usize + Send + Sync>>,
+}
+
+/// What the station's update started from the pages leaves in <data>/run/update.started, for whichever process runs
+/// the station when it ends (after a handover or a restart, not the one that started it).
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Started {
+    at: i64,
+    from: Option<String>,
 }
 
 impl Updates {
@@ -230,7 +246,7 @@ impl Updates {
         let items = Default::default();
         // Read before an update can replace the release.
         let installed = release_channel(&app).unwrap_or_else(|| channel_of(&settings.raw(), &app));
-        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0 })
+        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0, running: OnceLock::new() })
     }
 
     /// The channel the station is updated on now.
@@ -262,8 +278,15 @@ impl Updates {
         Ok(())
     }
 
-    /// Reads them at once and every few hours after.
+    /// How many turns run now, for what an update waits on when it has to restart the station.
+    pub fn count_running(&self, running: impl Fn() -> usize + Send + Sync + 'static) {
+        let _ = self.running.set(Box::new(running));
+    }
+
+    /// Reads them at once and every few hours after; an update of the station started before this process (by the
+    /// one it took over from, or the one before a restart) is followed to its end.
     pub fn start(self: &Arc<Self>) {
+        self.follow_started();
         let me = Arc::downgrade(self);
         tokio::spawn(async move {
             loop {
@@ -320,6 +343,8 @@ impl Updates {
                     latest: item.latest,
                     note: item.note,
                     state: if item.updating.is_some() { "updating" } else if item.failed.is_some() { "failed" } else { "idle" }.into(),
+                    progress: item.updating.and(item.progress),
+                    done: item.done,
                     message: item.failed,
                     checked_at: checked,
                 }
@@ -345,9 +370,12 @@ impl Updates {
             let mut items = self.items.lock().unwrap();
             for (kind, read) in [(Kind::Station, station), (Kind::Claude, claude), (Kind::Codex, codex)] {
                 let item = &mut items[kind as usize];
-                // One that is updating keeps what it was until it is done.
+                // One that is updating keeps what it was until it is done; but one not yet read (an update this
+                // process took over following) is read.
                 if item.updating.is_none() {
-                    *item = Item { failed: item.failed.take(), ..read };
+                    *item = Item { failed: item.failed.take(), done: item.done.take(), ..read };
+                } else if !item.installed {
+                    *item = Item { updating: item.updating, progress: item.progress.take(), ..read };
                 }
             }
         }
@@ -424,6 +452,7 @@ impl Updates {
         self.set(kind, |i| {
             i.updating = Some(now_ms());
             i.failed = None;
+            i.done = None;
         });
         let me = self.clone();
         tokio::spawn(async move {
@@ -451,14 +480,15 @@ impl Updates {
         Ok(())
     }
 
-    /// Runs the cloud's installer apart from the station, as `stillfail update` does; it says how it ended in
-    /// run/update.exit (and what it said in run/update.log), read here while this process is still the one running.
+    /// Runs the cloud's installer apart from the station, as `stillfail update` does, and follows it (`follow`): by
+    /// this process, and after a handover or a restart by the one that runs then (run/update.started says to).
     fn update_station(self: &Arc<Self>) -> Result<()> {
         let origin = (self.origin)().ok_or_else(|| anyhow!("还没加入 workspace，无从更新"))?;
         let run_dir = self.data.join("run");
         std::fs::create_dir_all(&run_dir)?;
-        let exit = run_dir.join("update.exit");
-        let _ = std::fs::remove_file(&exit);
+        for file in ["update.exit", "update.step"] {
+            let _ = std::fs::remove_file(run_dir.join(file));
+        }
         // In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a
         // handover (this process becomes another binary) and a restart (the service's processes are stopped).
         let script = r#"( curl -fsSL "$1/install.sh" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &"#;
@@ -480,32 +510,109 @@ impl Updates {
             bail!("没能开始更新");
         }
         info!(origin, channel = channel.id(), "updating the station");
-        let started = now_ms();
+        let started = Started { at: now_ms(), from: station_version(&self.app) };
+        if let Err(e) = std::fs::write(run_dir.join("update.started"), serde_json::to_vec(&started)?) {
+            warn!(error = %e, "update.started not written; a handover or restart will not say how the update went");
+        }
+        self.follow(started);
+        Ok(())
+    }
+
+    /// An update started before this process, when one is: followed as if started here.
+    fn follow_started(self: &Arc<Self>) {
+        let run_dir = self.data.join("run");
+        let Some(started) = std::fs::read(run_dir.join("update.started")).ok().and_then(|b| serde_json::from_slice::<Started>(&b).ok()) else { return };
+        if now_ms() - started.at > STATION_LIMIT_MS {
+            for file in ["update.started", "update.step"] {
+                let _ = std::fs::remove_file(run_dir.join(file));
+            }
+            return;
+        }
+        info!("following the station's update started before this process");
+        self.follow(started);
+    }
+
+    /// Shows how the station's update goes (the installer's steps, in run/update.step) until it says how it ended in
+    /// run/update.exit (and what it said in run/update.log), then how it went for a while.
+    fn follow(self: &Arc<Self>, started: Started) {
         self.set(Kind::Station, |i| {
-            i.updating = Some(started);
+            i.updating = Some(started.at);
+            i.progress = None;
             i.failed = None;
+            i.done = None;
         });
-        let me = Arc::downgrade(self);
-        let log = run_dir.join("update.log");
+        let run_dir = self.data.join("run");
+        let weak = Arc::downgrade(self);
         tokio::spawn(async move {
+            let (exit, log, step_file) = (run_dir.join("update.exit"), run_dir.join("update.log"), run_dir.join("update.step"));
             loop {
-                tokio::time::sleep(Duration::from_secs(2)).await;
-                let Some(me) = me.upgrade() else { return };
-                let failed = match std::fs::read_to_string(&exit) {
-                    Ok(code) if code.trim() == "0" => None,
-                    Ok(code) => Some(tail(&std::fs::read_to_string(&log).unwrap_or_else(|_| format!("安装脚本退出码 {}", code.trim())))),
-                    Err(_) if now_ms() - started > STATION_LIMIT_MS => Some("安装脚本 20 分钟没有结束，看 ~/.stillfail/run/update.log".to_string()),
-                    Err(_) => continue,
+                let Some(me) = weak.upgrade() else { return };
+                let step = std::fs::read_to_string(&step_file).map(|s| s.trim().to_string()).unwrap_or_default();
+                let (failed, done) = match std::fs::read_to_string(&exit) {
+                    Ok(code) if code.trim() == "0" => (None, Some(me.done(&started, &step))),
+                    Ok(code) => (Some(tail(&std::fs::read_to_string(&log).unwrap_or_else(|_| format!("安装脚本退出码 {}", code.trim())))), None),
+                    Err(_) if now_ms() - started.at > STATION_LIMIT_MS => (Some("安装脚本 20 分钟没有结束，看 ~/.stillfail/run/update.log".to_string()), None),
+                    Err(_) => {
+                        let progress = me.progress(&step);
+                        if me.items.lock().unwrap()[Kind::Station as usize].progress != progress {
+                            me.set(Kind::Station, |i| i.progress = progress);
+                        }
+                        drop(me);
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        continue;
+                    }
                 };
+                for file in ["update.started", "update.step"] {
+                    let _ = std::fs::remove_file(run_dir.join(file));
+                }
+                info!(failed = failed.is_some(), "the station's update ended");
                 me.set(Kind::Station, |i| {
                     i.updating = None;
+                    i.progress = None;
                     i.failed = failed;
+                    i.done = done.clone();
                 });
                 me.check().await;
+                drop(me);
+                if let Some(done) = done {
+                    tokio::time::sleep(DONE_SHOWN).await;
+                    let Some(me) = weak.upgrade() else { return };
+                    // Unless another update has said something since.
+                    if me.items.lock().unwrap()[Kind::Station as usize].done.as_ref() == Some(&done) {
+                        me.set(Kind::Station, |i| i.done = None);
+                    }
+                }
                 return;
             }
         });
-        Ok(())
+    }
+
+    /// Where the update is, by the installer's step, as the pages say it.
+    fn progress(&self, step: &str) -> Option<String> {
+        Some(match step {
+            "download" => "正在下载新版本…".to_string(),
+            "handoff" => "正在交接给新版本（agent 不中断）…".to_string(),
+            "drain" => match self.running.get().map(|running| running()).unwrap_or(0) {
+                0 => "正在重启…".to_string(),
+                n => format!("等 {n} 个 agent 跑完这一轮再重启（新消息先排队）…"),
+            },
+            "restart" => "正在重启…".to_string(),
+            _ => return None,
+        })
+    }
+
+    /// How an update that ended well went, by the step it ended on.
+    fn done(&self, started: &Started, step: &str) -> String {
+        let now = station_version(&self.app);
+        if now.is_some() && now == started.from {
+            return "已经是最新版".to_string();
+        }
+        let to = now.map(|v| format!("到 {v}")).unwrap_or_default();
+        match step {
+            "handoff" => format!("已更新{to}，agent 没有中断"),
+            "drain" | "restart" => format!("已更新{to}（重启了一次 station）"),
+            _ => format!("已更新{to}"),
+        }
     }
 }
 
@@ -675,6 +782,35 @@ pub(crate) mod tests {
         let nowhere = "http://127.0.0.1:1".to_string();
         let env: Env = [("PATH".to_string(), "/nowhere".to_string())].into();
         Updates::with_registry(app, data.to_path_buf(), env, settings, Box::new(move || Some("http://127.0.0.1:1".into())), nowhere)
+    }
+
+    #[tokio::test]
+    async fn an_update_started_before_a_handover_is_followed_to_its_end() {
+        let dir = tempfile::tempdir().unwrap();
+        let run = dir.path().join("run");
+        std::fs::create_dir_all(&run).unwrap();
+        // Started by the binary this one took over from, which was 0.1.1299; the installer is handing over.
+        std::fs::write(run.join("update.started"), serde_json::to_vec(&Started { at: now_ms(), from: Some("0.1.1299".into()) }).unwrap()).unwrap();
+        std::fs::write(run.join("update.step"), "handoff\n").unwrap();
+        let updates = installed(dir.path(), "1300", None, None);
+        updates.count_running(|| 2);
+        updates.follow_started();
+        let station = || updates.get().remove(0);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!((station().state.as_str(), station().progress.as_deref()), ("updating", Some("正在交接给新版本（agent 不中断）…")));
+        // Had it had to restart: what the drain waits on.
+        std::fs::write(run.join("update.step"), "drain\n").unwrap();
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert_eq!(station().progress.as_deref(), Some("等 2 个 agent 跑完这一轮再重启（新消息先排队）…"));
+        std::fs::write(run.join("update.step"), "handoff\n").unwrap();
+        std::fs::write(run.join("update.exit"), "0\n").unwrap();
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        let line = station();
+        assert_eq!((line.state.as_str(), line.progress, line.done.as_deref()), ("idle", None, Some("已更新到 0.1.1300，agent 没有中断")));
+        assert!(!run.join("update.started").exists() && !run.join("update.step").exists());
+        // Read again (the next check), it still says so.
+        updates.check().await;
+        assert_eq!(station().done.as_deref(), Some("已更新到 0.1.1300，agent 没有中断"));
     }
 
     /// What the station's line says, its latest read as `latest` (as if from the channel it is on).

@@ -281,8 +281,13 @@ impl Hub {
 
     /// Whether any turn is running.
     pub fn any_running(&self) -> bool {
+        self.running() > 0
+    }
+
+    /// How many turns are running.
+    pub fn running(&self) -> usize {
         let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
-        actors.iter().any(|a| a.process_state() == "running")
+        actors.iter().filter(|a| a.process_state() == "running").count()
     }
 
     /// Resolves once no actor has a task queued or running (and has stayed so a moment: a runtime's last events may

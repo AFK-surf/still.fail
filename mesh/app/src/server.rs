@@ -308,6 +308,8 @@ impl App {
             settings.clone(),
             Box::new(move || origin_of.status().origin),
         );
+        let counted = Arc::downgrade(&hub);
+        updates.count_running(move || counted.upgrade().map_or(0, |hub| hub.running()));
         updates.start();
         let (quota_codex, models_codex) = (codex.clone(), codex.clone());
         let admin = AdminApi::new(AdminDeps {

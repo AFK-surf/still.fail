@@ -91,6 +91,9 @@ if [ "$data" = "$HOME/.stillfail" ] && { [ -e "$old_data" ] || [ -L "$old_data" 
 fi
 cur="$data"
 [ -n "$migrate" ] && cur="$old_data"
+# Where the update is, for the station to show on its pages (mesh/app/src/updates.rs): download, handoff, drain,
+# restart. Only for a station that is there to read it.
+step() { [ -d "$cur/run" ] && printf '%s\n' "$1" > "$cur/run/update.step" 2>/dev/null || true; }
 # A station already in a workspace is only updated: no token, and it stays the same station.
 if [ -z "$token" ] && [ ! -f "$cur/mesh/cloud.json" ]; then
   echo "用法：curl -fsSL $origin/install.sh | sh -s -- <token>（token 在 still.fail 的「添加 station」里生成）" >&2
@@ -123,6 +126,7 @@ case "$channel" in
   beta) release="beta/stillfail-station-$platform.tar.gz"; echo "下载 still.fail station（测试版）…" ;;
   *) channel=stable; release="stillfail-station-$platform.tar.gz"; echo "下载 still.fail station…" ;;
 esac
+step download
 curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz"
 tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
 # Which channel the release came from, for the station (mesh/app/src/updates.rs: where it goes back from the beta).
@@ -236,6 +240,7 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   started=$(said startedAt)
   swap_app
   rm -f "$data/run/handoff-failed"
+  step handoff
   echo "把运行中的 station 交接给新版本（agent 不中断）…"
   kill -USR2 "$pid"
   for _ in $(seq 1 120); do
@@ -264,6 +269,7 @@ restart_and_finish() {
 if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${STILLFAIL_NO_DRAIN:-\${EMBER_NO_DRAIN:-}}" ]; then
   # Restarted: once no turn runs, so none is cut off (at most 10 minutes; it takes no new ones meanwhile).
   rm -f "$cur/run/drained"
+  step drain
   kill -USR1 "$pid"
   echo "等 agent 正在跑的这一轮结束再重启（最多 10 分钟；新消息会排队，重启后处理）…"
   for _ in $(seq 1 630); do
@@ -273,6 +279,7 @@ if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${STILL
 fi
 
 if [ -z "$handed" ]; then
+step restart
 # One running at a time: the old one stops before the new one takes its place (under either name).
 if [ "$os" = Darwin ]; then
   for l in "$label" "$old_label"; do

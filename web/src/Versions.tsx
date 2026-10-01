@@ -54,15 +54,16 @@ export function useSoftware(station: string) {
 
 /**
  * How a piece of software is said: its version as shown, what updating it is called, what is said about it on hover,
- * and whether it is the test channel's (a 测试版 tag beside its version).
+ * whether it is the test channel's (a 测试版 tag beside its version), and while it updates where that is (the station
+ * says; one older than that, nothing more than 正在更新).
  */
 export function describe(v: SoftwareVersion): { shown: string; verb: string; tip: string; updating: string; beta: boolean } {
   return {
     shown: v.installed ? (v.version ?? (v.id === "station" ? "开发版" : "版本未知")) : "未安装",
     verb: v.installed ? "更新" : "安装",
-    tip: [v.note, v.installed && !v.newer && !v.downgrade && v.latest ? "已是最新" : null, v.installed && !v.latest && v.checkedAt ? "查不到最新版本" : null].filter(Boolean).join("；"),
+    tip: [v.note, v.installed && !v.newer && !v.downgrade && v.latest ? "已是最新" : null, v.installed && !v.latest && v.checkedAt ? "检查更新失败，点「检查更新」重试" : null].filter(Boolean).join("；"),
     beta: v.channel === "beta",
-    updating: v.installed ? `正在更新${v.id === "station" ? "（等 agent 这一轮跑完）" : ""}…` : "正在安装…",
+    updating: v.progress ?? (v.installed ? "正在更新…" : "正在安装…"),
   };
 }
 
@@ -77,6 +78,7 @@ function Item({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boo
   else if (!v.installed) rest = button("安装");
   else if (v.newer && v.latest) rest = <><span className={css.newer}>→ {v.latest}</span>{button("更新")}</>;
   else if (v.downgrade && v.latest) rest = <><span className={css.newer}>→ {v.latest}</span>{button("回到正式版")}</>;
+  else if (v.done) rest = <span className={css.newer}>{v.done}</span>;
   return (
     <span className={css.item}>
       <Tip label={tip}><span>{v.name} <span className={css.version}>{shown}</span></span></Tip>

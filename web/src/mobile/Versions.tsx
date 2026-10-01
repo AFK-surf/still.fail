@@ -43,7 +43,7 @@ export function Versions({ station, updates, manager, beta = false }: { station:
 
 function Row({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boolean; busy: boolean; onUpdate(): void }) {
   const { shown, verb, tip, updating, beta } = describe(v);
-  const note = [tip, v.state === "failed" ? v.message : null].filter(Boolean).join("；");
+  const note = [v.state === "idle" ? v.done : null, tip, v.state === "failed" ? v.message : null].filter(Boolean).join("；");
   const action = (label: string) => manager && v.updatable && (
     busy ? <Spinner size={13} /> : <button type="button" className={css.mVersionAction} onClick={onUpdate}>{label}</button>
   );

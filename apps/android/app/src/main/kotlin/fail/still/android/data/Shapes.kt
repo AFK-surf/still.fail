@@ -1608,6 +1608,11 @@ data class SoftwareVersion (
 	val note: String? = null,
 	/// idle | updating | failed
 	val state: String,
+	/// The station's, while it is updating: where the update is, in a line (正在下载新版本…). None from a station
+	/// older than it, or an installer that does not say.
+	val progress: String? = null,
+	/// The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断).
+	val done: String? = null,
 	/// What the last update that failed said.
 	val message: String? = null,
 	/// When what is out was last read.

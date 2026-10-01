@@ -848,6 +848,11 @@ pub struct SoftwareVersion {
     pub note: Option<String>,
     /// idle | updating | failed
     pub state: String,
+    /// The station's, while it is updating: where the update is, in a line (正在下载新版本…). None from a station
+    /// older than it, or an installer that does not say.
+    pub progress: Option<String>,
+    /// The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断).
+    pub done: Option<String>,
     /// What the last update that failed said.
     pub message: Option<String>,
     /// When what is out was last read.

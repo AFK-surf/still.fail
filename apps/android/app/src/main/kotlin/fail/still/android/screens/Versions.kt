@@ -93,9 +93,10 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
     val shown = if (v.installed) v.version ?: (if (v.id == "station") "开发版" else "版本未知") else "未安装"
     // What the web says on hover, said under the name.
     val note = listOfNotNull(
+        if (v.state == "idle") v.done else null,
         v.note,
         if (v.installed && !v.newer && v.downgrade != true && v.latest != null) "已是最新" else null,
-        if (v.installed && v.latest == null && v.checkedAt != null) "查不到最新版本" else null,
+        if (v.installed && v.latest == null && v.checkedAt != null) "检查更新失败，点「检查更新」重试" else null,
         if (v.state == "failed") v.message else null,
     ).filter { it.isNotBlank() }.joinToString("；")
     val action = @Composable { label: String ->
@@ -119,7 +120,8 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
         when {
             v.state == "updating" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Spinner(12.dp)
-                Text(if (v.installed) "正在更新${if (v.id == "station") "（等 agent 这一轮跑完）" else ""}…" else "正在安装…", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                // Where it is, as the station says (one older than that: nothing more than 正在更新).
+                Text(v.progress ?: if (v.installed) "正在更新…" else "正在安装…", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
             }
             v.state == "failed" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("${verb}失败", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.red)
