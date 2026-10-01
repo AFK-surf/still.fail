@@ -25,7 +25,7 @@ import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
-import { doingMatches, useDoing, useDoingList } from "../doing.ts";
+import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import type { ChatJobsView, Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
@@ -380,7 +380,7 @@ function JobsNow({ here }: { here: Here }) {
   const shown = all ? jobs : jobs.filter((j) => j.current);
   const clear = useClearEnded(here.station);
   // Clearing: under way while any of its sessions' is.
-  const clearing = useDoingList().some((d) => view.clear.some((session) => doingMatches(d, "job.clearEnded", { station: here.station, session })));
+  const clearing = useDoingList().some((d) => !failed(d) && view.clear.some((session) => doingMatches(d, "job.clearEnded", { station: here.station, session })));
   return (
     <>
       <SheetGrab />
@@ -465,6 +465,7 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
   const tab = service ? 1 : picked;
   const running = job?.state === "running";
   const stopping = useDoing("job.stop", { station, id: jobId });
+  const stopFailed = useDoingFailed("job.stop", { station, id: jobId });
   // Its last line, as it grows.
   const last = useJobLog(station, job && tab === 0 ? job.id : null, 1);
   if (!job) return <><SheetGrab /><SheetHead title="任务" />{jobs.value && <p className={homeCss.mNote}>这个任务已经不在了。</p>}</>;
@@ -489,6 +490,7 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
           : <JobOutput station={station} job={job} />}
         {tab === 0 && said && <div className={css.mJobLast}><span>{said}</span>{last?.last && <code>{last.last}</code>}</div>}
         {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner size={16} color="var(--m-red)" /> : <Stop size={16} />}{stopping ? "正在停止…" : "停止"}</button>}
+        {running && !stopping && stopFailed !== undefined && <p className={partsCss.mError}>没能停止：{stopFailed}</p>}
       </div>
     </>
   );
@@ -524,6 +526,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const thread = view.thread ?? first;
   const call = useStationCall(here.station);
   const pinning = useDoing("chat.pin", { station: here.station, session: here.key });
+  const pinFailed = useDoingFailed("chat.pin", { station: here.station, session: here.key });
   return (
     <>
       <SheetGrab />
@@ -539,7 +542,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             </InfoRow>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {view.pinned != null && (
-              <InfoRow busy={pinning} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
+              <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
                 .catch((error) => app.toast(`没能${view.pinned ? "取消固定" : "固定"}：${error instanceof Error ? error.message : String(error)}`)); }}>
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? "取消固定" : "固定到列表顶部"}</span>
               </InfoRow>

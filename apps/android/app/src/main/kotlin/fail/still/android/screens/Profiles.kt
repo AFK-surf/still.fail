@@ -174,7 +174,8 @@ internal fun ProfileRow(station: String, p: Profile) {
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
-        if (app.isDoing(setOf("profile.check", "profile.quota"), "station" to station, "id" to p.id)) Spinner(14.dp)
+        val calls = setOf("profile.check", "profile.quota")
+        DoingMark(app.isDoing(calls, "station" to station, "id" to p.id), app.failedOf(calls, "station" to station, "id" to p.id))
         QuotaRings(p.quota)
         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
     }
@@ -229,7 +230,9 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TonePill(p.checkText, p.checkTone)
+                            // Its check or allowance refresh (asked from its menu, gone) failed a moment ago: a red mark, a tap says why.
                             if (app.isDoing("profile.check", "station" to address, "id" to p.id)) { Spinner(12.dp); Text("正在检查…", fontSize = 12.sp, color = C.muted) }
+                            else DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id), 12.dp)
                         }
                         Text(
                             (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: "还没检查过") + (p.check?.time?.get("checkedAt")?.let { " · ${it.ago}检查" } ?: ""),
@@ -330,8 +333,8 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
         SheetHead(p.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             if (p.machine != true) PickRow("改名") { ask(app, "Profile 的名字", p.name, "名字", "保存") { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = "已改名" } }
-            PickRow("重新检查", busy = checking) { run("检查", "已检查") { api.checkProfile(p.id) } }
-            PickRow("刷新额度", busy = refreshing) { run("刷新额度", "已刷新额度") { api.refreshQuota(p.id) } }
+            PickRow("重新检查", busy = checking, failed = app.failedOf("profile.check", "station" to station, "id" to p.id)) { run("检查", "已检查") { api.checkProfile(p.id) } }
+            PickRow("刷新额度", busy = refreshing, failed = app.failedOf("profile.quota", "station" to station, "id" to p.id)) { run("刷新额度", "已刷新额度") { api.refreshQuota(p.id) } }
             // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
             val machine = p.machine == true
             PickRow((if (machine) "停用" else "删除 Profile") + if (p.usedBy.isNotEmpty()) "（还有连接在用）" else "", color = C.red, enabled = p.usedBy.isEmpty()) {

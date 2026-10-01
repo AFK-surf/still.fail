@@ -2,7 +2,7 @@
 // (client/core/src/history.rs): messages in and out, state marks and the agent's words stand alone; the tool calls and
 // thinking between them fold into one group. Here it is only drawn.
 import { failure, useToast } from "./toast.tsx";
-import { useDoing } from "./doing.ts";
+import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { ChevronDown, ChevronRight, Hourglass, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -23,7 +23,6 @@ import * as controlsCss from "./styles/controls.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as additionsCss from "./styles/additions.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 
 import { NAME } from "./channel.ts";
 /**
@@ -166,12 +165,13 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
 function SlackName({ user, name, bound }: { user: string; name: string; bound: boolean }) {
   const api = useApi();
   const toast = useToast();
-  // Said to the station: the name turns until it answers.
-  const saying = useDoing("slack.identity", { station: useStation().address, user });
+  // Said to the station: the name turns until it answers; a red mark beside it a few seconds if that failed.
+  const state = useDoingState("slack.identity", { station: useStation().address, user });
+  const saying = state.running;
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger className={css.hPerson} disabled={saying} aria-busy={saying || undefined}>
-        {name}{saying && <span className={`${waitingCss.spinner} ${css.hPersonSpinner}`} aria-hidden="true" />}
+        {name}<DoingShown state={state} className={css.hPersonSpinner} size={11} />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align="start" sideOffset={4} collisionPadding={8}>

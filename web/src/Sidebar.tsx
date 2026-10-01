@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
 import { useDoing } from "./doing.ts";
+import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
 import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
@@ -171,7 +172,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const [editing, setEditing] = useState(false);
   // Pinned, renamed (its new name shown meanwhile) or brought back from the archive, until the station answers.
   const renamingTo = useRenaming(item.station, item.session);
-  const saving = useDoing(["chat.pin", "chat.rename", "chat.archive"], { station: item.station, session: item.session });
+  // Failed: a red mark in the spinner's place a few seconds more, why on hover (the menu that asked has closed).
+  const saving = useDoingState(["chat.pin", "chat.rename", "chat.archive"], { station: item.station, session: item.session });
   const goingTo = useGoing();
   const here = decodeURIComponent(useLocation().pathname) === decodeURIComponent(to);
   // A new chat its station has not made yet, or one on a station offline, is neither renamed nor archived.
@@ -195,7 +197,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
-          {saving && !editing && <span className={nav.sessionKind} role="status" aria-label="正在保存"><span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" /></span>}
+          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} className={nav.rowSpinner} label="正在保存" side="right" /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
           {/* Its station offline: greyed, and marked there instead (the core says so, row by row). */}

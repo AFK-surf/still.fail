@@ -127,12 +127,16 @@ fun AppState.stopJob(station: String, job: Job) {
 /** Whether a job's stop was asked and not answered yet: its 停止 shows a spinner, not pressed again. */
 fun AppState.stopping(station: String, job: Job): Boolean = isDoing("job.stop", "station" to station, "id" to job.id)
 
+/** Why a job's stop failed a moment ago, if it did: its 停止 shows a red mark (DoingMark). */
+fun AppState.stopFailed(station: String, job: Job): String? = failedOf("job.stop", "station" to station, "id" to job.id)
+
 /** Clears a chat's jobs that are over (each session's, as the station keeps them: `clear`); a failure in a toast. */
 fun AppState.clearEnded(station: String, sessions: List<String>) {
     if (!clearing(station)) act("清掉已结束的任务") { sessions.forEach { api(station).clearEndedJobs(it) } }
 }
 
 fun AppState.clearing(station: String): Boolean = isDoing("job.clearEnded", "station" to station)
+fun AppState.clearFailed(station: String): String? = failedOf("job.clearEnded", "station" to station)
 
 /** A job's row: its dot on its name's line, what it is up to under it; over ones faded. */
 @Composable
@@ -199,7 +203,7 @@ fun openJobs(app: AppState, station: String, of: ChatOf) {
             if (view.ended > 0) SheetLink({ app.clearEnded(station, view.clear) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(view.clearText, fontSize = 14.sp, color = C.accent)
-                    if (app.clearing(station)) Spinner(12.dp)
+                    DoingMark(app.clearing(station), app.clearFailed(station), 12.dp)
                 }
             }
         }
@@ -284,7 +288,8 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
             Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.red.copy(alpha = 0.12f)).clickable(enabled = !app.stopping(station, job)) { app.stopJob(station, job) },
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (app.stopping(station, job)) Spinner(16.dp) else IconIn(Icons.Stop, 16.dp, C.red)
+            val stopFailed = app.stopFailed(station, job)
+            if (app.stopping(station, job) || stopFailed != null) DoingMark(app.stopping(station, job), stopFailed, 16.dp) else IconIn(Icons.Stop, 16.dp, C.red)
             Text("停止", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.red)
         }
     }

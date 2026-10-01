@@ -3,7 +3,7 @@
 // signed in, starts and finishes a sign-in, and signs out; tokens never reach it.
 import { useCallback } from "react";
 import { core, useTopic } from "../core/react.ts";
-import { doingMatches, useDoing, useDoingList } from "../doing.ts";
+import { doingMatches, failed, useDoing, useDoingList } from "../doing.ts";
 import { failure, useToast } from "../toast.tsx";
 import { signedOut, telemetrySettled, track } from "../telemetry.ts";
 
@@ -64,5 +64,5 @@ export function useSignOut(): { signOut(sub: string): Promise<boolean>; busy(sub
   const doing = useDoingList();
   const go = useCallback((sub: string) => signOut(sub)
     .then(() => true, (e: unknown) => { toast(`没能退出登录：${failure(e)}`); return false; }), [toast]);
-  return { signOut: go, busy: (sub) => doing.some((item) => doingMatches(item, "auth.signOut", { account: sub })) };
+  return { signOut: go, busy: (sub) => doing.some((item) => !failed(item) && doingMatches(item, "auth.signOut", { account: sub })) };
 }

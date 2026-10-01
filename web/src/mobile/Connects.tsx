@@ -30,7 +30,7 @@ import * as css from "./Connects.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
-import { useDoing } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
 export function Presence({ state }: { state: string }) {
   return <span className={settingsCss.mPresence} data-state={state} />;
@@ -243,10 +243,14 @@ function ConnectMenu({ connect }: { connect: Connect }) {
   const api = useApi();
   const workspace = connect.connection.workspace;
   const station = useStation().address;
-  // What is under way shows on its row; the sheet stays until it answers (a failure says so and leaves it open).
+  // What is under way shows on its row; the sheet stays until it answers (a failure says so and leaves it open, its row
+  // with the failure mark a few seconds).
   const reconnecting = useDoing("connect.reconnect", { station, id: connect.id });
   const putting = useDoing("connect.put", { station, id: connect.id });
   const deleting = useDoing("connect.delete", { station, id: connect.id });
+  const reconnectFailed = useDoingFailed("connect.reconnect", { station, id: connect.id });
+  const putFailed = useDoingFailed("connect.put", { station, id: connect.id });
+  const deleteFailed = useDoingFailed("connect.delete", { station, id: connect.id });
   const busy = reconnecting || putting || deleting;
   const done = (text: string) => () => { app.toast(text); app.sheet(null); };
   const failed = (what: string) => (e: Error) => app.toast(`没能${what}：${e.message}`);
@@ -255,14 +259,14 @@ function ConnectMenu({ connect }: { connect: Connect }) {
       <SheetGrab />
       <SheetHead title={connect.name} />
       <div className={sheetsCss.mSheetScroll}>
-        <PickRow label="重新连接" busy={reconnecting} enabled={!busy} onClick={() => { api.reconnect(connect.id).then(done("已重新连接"), failed("重新连接")); }} />
+        <PickRow label="重新连接" busy={reconnecting} failed={reconnectFailed} enabled={!busy} onClick={() => { api.reconnect(connect.id).then(done("已重新连接"), failed("重新连接")); }} />
         <PickRow label="更换 token" onClick={() => openTokens(app, connect)} />
         {workspace?.url && <PickRow label="打开 Slack" onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
         {connect.enabled
-          ? <PickRow label="停用" sub="Slack 连接会断开" busy={putting} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: false }).then(done("已停用，Slack 连接已断开"), failed("停用")); }} />
-          : <PickRow label="启用" busy={putting} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: true }).then(done("已启用"), failed("启用")); }} />}
+          ? <PickRow label="停用" sub="Slack 连接会断开" busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: false }).then(done("已停用，Slack 连接已断开"), failed("停用")); }} />
+          : <PickRow label="启用" busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: true }).then(done("已启用"), failed("启用")); }} />}
         <PickRow label="更改所属用户" sub={connect.createdBy?.shown?.display ?? connect.createdBy?.name} enabled={!busy} onClick={() => app.sheet({ height: 0.6, content: () => <OwnerSheet connect={connect} /> })} />
-        <PickRow label="删除连接" accent busy={deleting} enabled={!busy} onClick={() => confirm(app, {
+        <PickRow label="删除连接" accent busy={deleting} failed={deleteFailed} enabled={!busy} onClick={() => confirm(app, {
           title: `删除「${connect.name}」？`, action: "删除连接", danger: true,
           text: `Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`,
           run: () => api.deleteConnect(connect.id).then(() => { app.toast("已删除连接"); app.pop(); }),
@@ -279,7 +283,9 @@ function OwnerSheet({ connect }: { connect: Connect }) {
   const members = useWorkspace(app.entry.id).value?.members ?? [];
   // The one picked, its row busy while the station changes it (connect.put says not which field: this sheet knows).
   const [picked, setPicked] = useState<string | null>(null);
-  const putting = useDoing("connect.put", { station: useStation().address, id: connect.id });
+  const station = useStation().address;
+  const putting = useDoing("connect.put", { station, id: connect.id });
+  const putFailed = useDoingFailed("connect.put", { station, id: connect.id });
   const asked = putting ? picked : null;
   return (
     <>
@@ -289,7 +295,7 @@ function OwnerSheet({ connect }: { connect: Connect }) {
         <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>连接属于谁，决定它出现在谁的「我添加的」里。</p>
         {members.map((m) => (
           <PickRow key={m.sub} label={m.name || m.email} sub={m.email} checked={m.email.toLowerCase() === connect.createdBy?.id.toLowerCase()}
-            busy={asked === m.email} enabled={!putting}
+            busy={asked === m.email} failed={picked === m.email ? putFailed : undefined} enabled={!putting}
             onClick={() => {
               setPicked(m.email);
               api.putConnect(connect.id, { owner: { id: m.email, name: m.name || m.email } })

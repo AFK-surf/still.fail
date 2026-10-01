@@ -4,10 +4,10 @@
 // and what the archive is is said at the top.
 import { Retry, Trash } from "../icons.tsx";
 import type { ArchiveItem } from "../core/shapes.ts";
-import { useDoing } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
 import { ABOUT, DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";
 import { useApp } from "./app.tsx";
-import { LargeTitle, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { FailedMark, LargeTitle, SectionHeader, Spinner, TopBack } from "./parts.tsx";
 import { confirm } from "./sheets.tsx";
 import * as css from "./Archive.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -33,12 +33,15 @@ export function ArchiveScreen() {
   );
 }
 
-/** A row, with its actions; while one is under way its spinner stands for both (it says how it ended in the toast). */
+/** A row, with its actions; while one is under way its spinner stands for both (it says how it ended in the toast), and
+ *  one that failed leaves the failure mark before them a few seconds. */
 function Row({ item, restore, remove }: { item: ArchiveItem; restore: (item: ArchiveItem) => Promise<void>; remove: (item: ArchiveItem) => Promise<void> }) {
   const app = useApp();
   const restoring = useDoing("chat.archive", { station: item.station, session: item.session, thread: item.thread ?? undefined, archived: false });
   const deleting = useDoing("session.delete", { station: item.station, key: item.session });
   const busy = restoring || deleting;
+  const failed = useDoingFailed("chat.archive", { station: item.station, session: item.session, thread: item.thread ?? undefined, archived: false })
+    ?? useDoingFailed("session.delete", { station: item.station, key: item.session });
   return (
     <div className={css.mArchiveRow}>
       <div className={css.mArchiveHead}>
@@ -47,6 +50,7 @@ function Row({ item, restore, remove }: { item: ArchiveItem; restore: (item: Arc
           {item.place && <span>{item.place}</span>}{item.clock}
         </span>
         <span className={css.mArchiveActions}>
+          {!busy && failed !== undefined && <FailedMark error={failed} />}
           {/* restore says how it went itself (../pages/Archive.tsx useArchive) */}
           <button type="button" className={css.mArchiveAction} aria-label={`恢复「${item.title}」`} disabled={busy} aria-busy={restoring || undefined} onClick={() => void restore(item)}>
             {restoring ? <Spinner size={16} /> : <Retry size={16} />}

@@ -8,7 +8,7 @@ import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Pin, Settings,
 import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
+import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -24,7 +24,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { Tip } from "../ui.tsx";
-import { useDoing } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
 
 export function Home() {
   const app = useApp();
@@ -199,10 +199,13 @@ function Empty({ view, filter }: { view: ChatsView; filter: ChatFilter }) {
 function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const app = useApp();
   const [held, setHeld] = useState(false);
-  // Pinned, renamed or archived from its menu (closed by then): the row says it is under way until it answers.
+  // Pinned, renamed or archived from its menu (closed by then): the row says it is under way until it answers, and a
+  // few seconds that it failed (the toast said why too).
   const pinning = useDoing("chat.pin", { station: item.station, session: item.session });
   const changing = useDoing(["chat.rename", "chat.archive"], { station: item.station, session: item.session, thread: item.thread });
   const busy = pinning || changing;
+  const failed = useDoingFailed(["chat.rename", "chat.archive"], { station: item.station, session: item.session, thread: item.thread })
+    ?? useDoingFailed("chat.pin", { station: item.station, session: item.session });
   const menu = useRowMenu(item, busy);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const longPressed = useRef(false);
@@ -241,6 +244,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
         {busy ? <span className={css.mChatMark} aria-label="正在处理"><Spinner size={12} /></span>
+          : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>
           : item.offline ? <Tip label={item.offline}><span className={css.mChatMark}><Unplug size={14} /></span></Tip>
           : item.reconnecting ? <Tip label={item.reconnecting}><span className={css.mChatMark} aria-label={item.reconnecting}><Spinner size={12} /></span></Tip>
           : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark size={14} /></span></Tip>}</span>}

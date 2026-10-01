@@ -14,7 +14,7 @@ import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, useTokenCheck, type TokenState } from "../slack.tsx";
 import { useAct, useToast } from "../toast.tsx";
-import { useDoing } from "../doing.ts";
+import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import * as waitingCss from "../styles/waiting.css.ts";
 import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -69,11 +69,16 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const [replacing, setReplacing] = useState(false);
   const remove = useAction(() => api.deleteConnect(connect.id), () => { toast("已删除连接"); navigate(`${station.settings}/connects`); });
   const reconnect = useAction(() => api.reconnect(connect.id), () => toast("已重新连接"));
-  // Reconnecting, or its settings on their way (from the menu or a section below): said in its status line meanwhile.
-  const reconnecting = useDoing("connect.reconnect", { station: station.address, id: connect.id });
-  const saving = useDoing("connect.put", { station: station.address, id: connect.id });
+  // Reconnecting, or its settings on their way (from the menu or a section below): said in its status line meanwhile;
+  // failed, a red mark and so for a few seconds, why on hover (the menu that asked has closed).
+  const reconnectState = useDoingState("connect.reconnect", { station: station.address, id: connect.id });
+  const saveState = useDoingState("connect.put", { station: station.address, id: connect.id });
+  const reconnecting = reconnectState.running;
+  const saving = saveState.running;
   const switching = save.busy && save.args?.[0].enabled !== undefined;
   const doing = reconnecting ? "正在重新连接…" : switching ? (connect.enabled ? "正在停用…" : "正在启用…") : saving ? "正在保存…" : null;
+  const failing = reconnectState.error !== undefined ? { error: reconnectState.error, text: "没能重新连接" }
+    : saveState.error !== undefined ? { error: saveState.error, text: "没能保存" } : null;
   const c = connect.connection;
   const workspace = c.state === "connected" || c.state === "reconnecting" ? c.workspace : null;
 
@@ -87,7 +92,9 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
           <h1 className={pagesCss.identityName}>{connect.name}</h1>
           <p className={pagesCss.identitySub}>
             <span className={css.connectStatus} role="status">
-              {doing ? <><span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />{doing}</> : <><StatusDot state={connect.presence} />{connect.statusText}</>}
+              {doing ? <><span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />{doing}</>
+                : failing ? <><DoingShown state={{ running: false, error: failing.error }} size={14} />{failing.text}</>
+                : <><StatusDot state={connect.presence} />{connect.statusText}</>}
             </span>
             <span className={css.kindTag}><SlackLogo size={13} />{connect.team ?? "Slack"}</span>
             {station.name && <span className={cloudCss.stationTag}>{station.name}</span>}

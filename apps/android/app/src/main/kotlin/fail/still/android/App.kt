@@ -221,8 +221,16 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
      * asked: the row or button it is about shows it at once (a spinner, not pressed again), the menu that asked gone.
      */
     fun isDoing(calls: Set<String>, vararg on: Pair<String, Any?>): Boolean =
-        doing.any { item -> item.call in calls && on.all { (k, v) -> v == null || item.params[k] == v.toString() } }
+        doing.any { item -> item.stage != "failed" && item.matches(calls, on) }
     fun isDoing(call: String, vararg on: Pair<String, Any?>): Boolean = isDoing(setOf(call), *on)
+
+    /** Why one of `calls` about what `on` names failed a moment ago (the core shows it a few seconds); null when none did. */
+    fun failedOf(calls: Set<String>, vararg on: Pair<String, Any?>): String? =
+        doing.lastOrNull { item -> item.stage == "failed" && item.matches(calls, on) }?.let { it.error ?: "失败了" }
+    fun failedOf(call: String, vararg on: Pair<String, Any?>): String? = failedOf(setOf(call), *on)
+
+    private fun DoingItem.matches(calls: Set<String>, on: Array<out Pair<String, Any?>>): Boolean =
+        call in calls && on.all { (k, v) -> v == null || params[k] == v.toString() }
 
     /**
      * Lets what a person did go on by itself (past the page or menu that asked it), and says how it ended:

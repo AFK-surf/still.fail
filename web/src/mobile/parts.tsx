@@ -7,6 +7,9 @@ import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
 import { QuotaBars } from "../components.tsx";
+import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../doing.ts";
+import type { DoingItem } from "../core/shapes.ts";
+import { useApp } from "./app.tsx";
 import * as css from "./parts.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -155,6 +158,30 @@ export function Spinner({ size, color }: { size: number; color?: string }) {
 // ── navigation ─────────────────────────────────────────────────────────
 
 /** Back, in the accent colour, with where it goes back to. */
+/** What was asked failed a moment ago (`error`, why): a small red mark; tapped, it says why (and not the row's own tap). */
+export function FailedMark({ error, size = 14 }: { error: string; size?: number }) {
+  const app = useApp();
+  return (
+    <span role="img" className={css.mFailed} style={{ width: size, height: size, fontSize: size - 4 }} aria-label={`失败了：${error}`} title={error}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); app.toast(error); }}>!</span>
+  );
+}
+
+/** Why one of `calls` about what `on` names failed a moment ago, in `doing` (../doing.ts useDoingList, read once for many
+ *  rows); undefined when none did. As useDoingFailed. */
+export function failedIn(doing: readonly DoingItem[], calls: string | readonly string[], on: Parameters<typeof doingMatches>[2]): string | undefined {
+  const item = doing.findLast((d) => itFailed(d) && doingMatches(d, calls, on));
+  return item ? (item.error ?? "失败了") : undefined;
+}
+
+/** Where `calls` about what `on` names stand on this device (../doing.ts): a spinner while under way, the failure mark a few
+ *  seconds after one failed, nothing otherwise. For a row whose menu or sheet that asked it may be closed by then. */
+export function DoingMark({ calls, on, size = 14, color }: { calls: string | readonly string[]; on?: Parameters<typeof useDoing>[1]; size?: number; color?: string }) {
+  const running = useDoing(calls, on);
+  const error = useDoingFailed(calls, on);
+  return running ? <Spinner size={size} {...(color ? { color } : {})} /> : error !== undefined ? <FailedMark error={error} size={size} /> : null;
+}
+
 export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
   return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} />{label}</button>;
 }
@@ -209,9 +236,10 @@ export function ListRow({ onClick, children }: { onClick?: (() => void) | undefi
 }
 
 /** A row of a picking sheet: what, a line under it, two short notes at its end (each by one of those lines), and a check on the chosen one. */
-/** `mark`: a small mark after the label (what a workspace has waiting); `busy`: what it asked is under way (a spinner at its end, not pressed again). */
-export function PickRow({ label, sub, aside, checked = false, enabled = true, busy = false, accent = false, leading, mark, onClick }: {
-  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; busy?: boolean; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
+/** `mark`: a small mark after the label (what a workspace has waiting); `busy`: what it asked is under way (a spinner at its end, not pressed again);
+ *  `failed`: why what it asked failed a moment ago (the failure mark at its end). */
+export function PickRow({ label, sub, aside, checked = false, enabled = true, busy = false, failed, accent = false, leading, mark, onClick }: {
+  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; busy?: boolean; failed?: string | undefined; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
 }) {
   const title = mark ? <span className={css.mPickLabel}><span className={css.mPickLabelText}>{label}</span>{mark}</span> : <span>{label}</span>;
   return (
@@ -225,7 +253,7 @@ export function PickRow({ label, sub, aside, checked = false, enabled = true, bu
             {sub !== undefined ? <small>{sub}</small> : <span />}<small className={css.mPickAside}>{aside[1]}</small>
           </span>
         )}
-      {busy ? <Spinner size={14} /> : checked && <Check size={14} className={partsCss.mAccent} />}
+      {busy ? <Spinner size={14} /> : failed !== undefined ? <FailedMark error={failed} /> : checked && <Check size={14} className={partsCss.mAccent} />}
     </button>
   );
 }
@@ -238,10 +266,14 @@ export function InfoList({ children }: { children: ReactNode }) {
   return <div className={css.mInfoList}>{children}</div>;
 }
 
-/** `busy`: what it asked is under way (a spinner at its end, not pressed again). */
-export function InfoRow({ onClick, busy = false, children }: { onClick?: () => void; busy?: boolean; children: ReactNode }) {
+/** `busy`: what it asked is under way (a spinner at its end, not pressed again); `failed`: why it failed a moment ago (the failure mark there). */
+export function InfoRow({ onClick, busy = false, failed, children }: { onClick?: () => void; busy?: boolean; failed?: string | undefined; children: ReactNode }) {
   return onClick
-    ? <button type="button" className={listsCss.mInfoRow} disabled={busy} aria-busy={busy || undefined} onClick={onClick}>{children}{busy && <Spinner size={14} />}</button>
+    ? (
+      <button type="button" className={listsCss.mInfoRow} disabled={busy} aria-busy={busy || undefined} onClick={onClick}>
+        {children}{busy ? <Spinner size={14} /> : failed !== undefined && <FailedMark error={failed} />}
+      </button>
+    )
     : <div className={listsCss.mInfoRow}>{children}</div>;
 }
 
@@ -258,11 +290,14 @@ export function Button({ label, primary, busy = false, enabled = true, onClick }
   );
 }
 
-/** A link's button (in the accent, no frame); `busy`: what it asked is under way, a spinner before its words, not pressed again. */
-export function LinkButton({ label, busy = false, enabled = true, className, onClick }: { label: ReactNode; busy?: boolean; enabled?: boolean; className?: string; onClick: () => void }) {
+/** A link's button (in the accent, no frame); `busy`: what it asked is under way, a spinner before its words, not pressed again;
+ *  `failed`: why it failed a moment ago (the failure mark before its words). */
+export function LinkButton({ label, busy = false, failed, enabled = true, className, onClick }: {
+  label: ReactNode; busy?: boolean; failed?: string | undefined; enabled?: boolean; className?: string; onClick: () => void;
+}) {
   return (
     <button type="button" className={`${partsCss.mLink} ${css.mLinkButton}${className ? ` ${className}` : ""}`} disabled={!enabled || busy} aria-busy={busy || undefined} onClick={onClick}>
-      {busy && <Spinner size={13} />}{label}
+      {busy ? <Spinner size={13} /> : failed !== undefined && <FailedMark error={failed} size={13} />}{label}
     </button>
   );
 }

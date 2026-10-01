@@ -1,6 +1,6 @@
 import { useStatus, type StatusView } from "./api.ts";
 import { core } from "./core/react.ts";
-import { useDoing } from "./doing.ts";
+import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { StatusDot, Tip } from "./ui.tsx";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -14,7 +14,7 @@ export function Waiting({ status }: { status: StatusView }) {
           {status.state === "trouble" ? <StatusDot state="offline" /> : <span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" />}
         </span>
         <span className={nav.stationTroubleText}>{status.text}</span>
-        {status.state === "trouble" && <Retry />}
+        {status.state === "trouble" && <Retry inTip />}
       </div>
     </Tip>
   );
@@ -34,12 +34,16 @@ export function WaitingItems({ status }: { status: StatusView }) {
   );
 }
 
-/** Tried again at once: no more waiting, the connections tried against new ones (client/core/src/wake.rs `retry`). */
-export function Retry() {
-  const trying = useDoing("client.wake", { retry: true });
+/**
+ * Tried again at once: no more waiting, the connections tried against new ones (client/core/src/wake.rs `retry`).
+ * Failed: a red mark before it a few seconds, why on hover (`inTip`: in a row whose own tip shows instead, none).
+ */
+export function Retry({ inTip = false }: { inTip?: boolean }) {
+  const state = useDoingState("client.wake", { retry: true });
+  const trying = state.running;
   return (
     <button type="button" className={nav.waitingRetry} disabled={trying} aria-busy={trying || undefined} onClick={() => core().retry()}>
-      {trying ? <><span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" />正在重试</> : "重试"}
+      {trying ? <><DoingShown state={state} className={nav.rowSpinner} />正在重试</> : <><DoingShown state={state} size={12} bare={inTip} />重试</>}
     </button>
   );
 }

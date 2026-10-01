@@ -13,8 +13,8 @@ import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
-import { doingMatches, useDoing, useDoingList } from "../doing.ts";
+import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
@@ -139,9 +139,11 @@ function ProfilePage({ p }: { p: Profile }) {
   const station = useStation();
   const overview = useOverview(station.address).value;
   const users = p.usedBy.map((id) => overview?.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
-  // Asked from its menu, which has closed by then: the card says it is under way.
+  // Asked from its menu, which has closed by then: the card says it is under way, and a few seconds why it failed.
   const checking = useDoing("profile.check", { station: station.address, id: p.id });
   const refreshing = useDoing("profile.quota", { station: station.address, id: p.id });
+  const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
+  const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
   const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
   const keyed = KEYED.has(p.access.kind);
   return (
@@ -155,6 +157,8 @@ function ProfilePage({ p }: { p: Profile }) {
             <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
             <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}{p.check?.time?.checkedAt ? ` · ${p.check.time.checkedAt.ago}检查` : ""}</span>
             {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner size={12} />{checking ? "正在检查…" : "正在刷新额度…"}</span>}
+            {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />没能检查：{checkFailed}</span>}
+            {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />没能刷新额度：{quotaFailed}</span>}
           </span>
         </div>
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
@@ -214,14 +218,16 @@ function ProfileMenu({ p }: { p: Profile }) {
   // The sheet closes at once; the profile's card says it is under way (ProfilePage), and these rows if opened again.
   const checking = useDoing("profile.check", { station, id: p.id });
   const refreshing = useDoing("profile.quota", { station, id: p.id });
+  const checkFailed = useDoingFailed("profile.check", { station, id: p.id });
+  const quotaFailed = useDoingFailed("profile.quota", { station, id: p.id });
   return (
     <>
       <SheetGrab />
       <SheetHead title={p.name} />
       <div className={sheetsCss.mSheetScroll}>
         {!p.machine && <PickRow label="改名" onClick={() => ask(app, { title: "Profile 的名字", value: p.name, placeholder: "名字", action: "保存", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast("已改名")) })} />}
-        <PickRow label="重新检查" busy={checking} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed("检查")); }} />
-        <PickRow label="刷新额度" busy={refreshing} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed("刷新额度")); }} />
+        <PickRow label="重新检查" busy={checking} failed={checkFailed} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed("检查")); }} />
+        <PickRow label="刷新额度" busy={refreshing} failed={quotaFailed} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed("刷新额度")); }} />
         <PickRow label={`${p.machine ? "停用" : "删除 Profile"}${p.usedBy.length ? "（还有连接在用）" : ""}`} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
           title: `停用「${p.name}」？`, text: `${NAME} 不再用这台机器上的这份登录；机器上的登录不受影响，之后可以再用。`, action: "停用", danger: true,
           run: () => api.deleteProfile(p.id).then(() => { app.toast("已停用"); app.pop(); }),
@@ -568,8 +574,9 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
   const app = useApp();
   const api = useApi();
   const station = useStation();
-  // The one asked spins till the station has made its profile; the others wait.
-  const doing = useDoingList().filter((d) => doingMatches(d, "profile.useMachineLogin", { station: station.address }));
+  // The one asked spins till the station has made its profile; the others wait. One that failed has the failure mark a few seconds.
+  const list = useDoingList();
+  const doing = list.filter((d) => !failed(d) && doingMatches(d, "profile.useMachineLogin", { station: station.address }));
   const offers = machineOffers(logins);
   if (!offers.length) return null;
   const use = (l: MachineLogin) => {
@@ -596,7 +603,8 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
               </span>
               <QuotaRings quota={l.quota} />
               {blocked ? null : l.usable
-                ? <LinkButton label="用这个账号" busy={doing.some((d) => d.params.runtime === l.runtime)} enabled={doing.length === 0} onClick={() => use(l)} />
+                ? <LinkButton label="用这个账号" busy={doing.some((d) => d.params.runtime === l.runtime)}
+                  failed={failedIn(list, "profile.useMachineLogin", { station: station.address, runtime: l.runtime })} enabled={doing.length === 0} onClick={() => use(l)} />
                 : <button type="button" className={partsCss.mLink} onClick={() => onSignIn(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</button>}
             </ListRow>
           );

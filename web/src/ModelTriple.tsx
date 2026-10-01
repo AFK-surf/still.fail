@@ -14,7 +14,7 @@ import * as css2 from "./ModelTriple.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
+import { DoingShown } from "./DoingMark.tsx";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
@@ -96,8 +96,9 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
               )}
             </>
           )}
-          {/* What was picked on its way: a ring in place of the chevron, not opened again meanwhile. */}
-          {pick.saving ? <span className={`${waitingCss.spinner} ${css2.tripleSpinner}`} role="status" aria-label="正在保存" /> : <ChevronDown size={12} className={chatCss.chooserChevron} />}
+          {/* What was picked on its way: a ring in place of the chevron, not opened again meanwhile; failed, a red mark there a few seconds. */}
+          <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} className={css2.tripleSpinner} label="正在保存" side="top"
+            idle={<ChevronDown size={12} className={chatCss.chooserChevron} />} />
         </Popover.Trigger>
       </span>
       <Popover.Portal>

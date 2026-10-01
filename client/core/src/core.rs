@@ -366,11 +366,27 @@ impl Core {
                                 span.set("error.type", error.code.clone());
                             }
                             span.end();
-                            if let Some(at) = doing {
-                                inner.doing.end(at);
+                            // Done, it goes; failed, it says why where it was asked a while first.
+                            let failed = match (doing, &result) {
+                                (Some(at), Err(error)) => {
+                                    inner.doing.fail(at, &error.message);
+                                    Some(at)
+                                }
+                                (Some(at), Ok(_)) => {
+                                    inner.doing.end(at);
+                                    None
+                                }
+                                (None, _) => None,
+                            };
+                            if doing.is_some() {
                                 inner.store.invalidate(&Topic::Doing);
                             }
                             inner.host.emit(client, answer(id, result));
+                            if let Some(at) = failed {
+                                inner.host.sleep(crate::doing::FAILED_SHOWN_MS).await;
+                                inner.doing.end(at);
+                                inner.store.invalidate(&Topic::Doing);
+                            }
                         }));
                     }
                 }

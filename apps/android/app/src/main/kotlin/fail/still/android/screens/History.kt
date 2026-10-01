@@ -394,8 +394,9 @@ private fun Place(station: String, of: ChatOf, place: fail.still.android.data.Pl
 private fun SlackName(station: String, user: String, name: String, mine: Boolean) {
     val app = LocalApp.current
     var bounds by remember { mutableStateOf(Rect.Zero) }
-    // Said and not answered yet: a spinner beside the name, the menu not offered again meanwhile.
+    // Said and not answered yet: a spinner beside the name, the menu not offered again meanwhile; failed: a red mark a moment.
     val binding = app.isDoing("slack.identity", "station" to station, "user" to user)
+    val failed = app.failedOf("slack.identity", "station" to station, "user" to user)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             name, fontSize = 13.sp, color = C.accentInk, fontWeight = FontWeight.SemiBold,
@@ -405,7 +406,7 @@ private fun SlackName(station: String, user: String, name: String, mine: Boolean
                 }))
             },
         )
-        if (binding) Spinner(10.dp)
+        DoingMark(binding, failed, 10.dp)
     }
 }
 

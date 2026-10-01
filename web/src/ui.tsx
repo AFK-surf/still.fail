@@ -20,6 +20,7 @@ import * as css from "./ui.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
+import * as doingCss from "./DoingMark.css.ts";
 import { failure, useToast } from "./toast.tsx";
 
 
@@ -41,14 +42,20 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
   },
 );
 
-/** An icon-only button; its label shows as a tooltip and names it for screen readers. `busy`: a spinner in its place, not pressed again. */
-export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType; shortcut?: Action; busy?: boolean | undefined }>(
-  function IconButton({ label, icon: Icon, className, shortcut, busy, ...rest }, ref) {
+/**
+ * An icon-only button; its label shows as a tooltip and names it for screen readers. `busy`: a spinner in its place, not
+ * pressed again; `failed`: why what it set going failed a moment ago (useDoingFailed), a red mark in its place and the
+ * tip saying so (as DoingMark.tsx does).
+ */
+export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType; shortcut?: Action; busy?: boolean | undefined; failed?: string | undefined }>(
+  function IconButton({ label, icon: Icon, className, shortcut, busy, failed, ...rest }, ref) {
     return (
-      <Tip label={label} {...(shortcut ? { shortcut } : {})}>
+      <Tip label={!busy && failed !== undefined ? failed : label} {...(shortcut ? { shortcut } : {})}>
         <button ref={ref} type="button" aria-label={label} {...rest} aria-busy={busy || undefined} disabled={rest.disabled || busy}
           className={`${pagesCss.iconBtn}${className ? ` ${className}` : ""}`}>
-          {busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Icon {...ICON} />}
+          {busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />
+            : failed !== undefined ? <span className={doingCss.failedMark} style={{ width: 14, height: 14, fontSize: 10 }} role="img" aria-label={`失败：${failed}`}>!</span>
+            : <Icon {...ICON} />}
         </button>
       </Tip>
     );

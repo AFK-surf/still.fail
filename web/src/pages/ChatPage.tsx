@@ -25,11 +25,11 @@ import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady } from "../core/react.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
-import { useDoing } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
+import { DoingShown } from "../DoingMark.tsx";
 import { AgentMark, Confirm, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
 import { TitleInput, useRenaming } from "../Rename.tsx";
-import * as waitingCss from "../styles/waiting.css.ts";
 import * as renameCss from "../Rename.css.ts";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
@@ -603,13 +603,17 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   );
 }
 
-/** The chat's name in its bar: while a new one goes (`chat.rename`), that one, a turning ring beside it; its own again if it did not. */
+/**
+ * The chat's name in its bar: while a new one goes (`chat.rename`), that one, a turning ring beside it; its own again if
+ * it did not, a red mark there a few seconds saying why.
+ */
 function ChatTitle({ station, session, title, onRename }: { station: string; session: string | null; title: string; onRename: (() => void) | undefined }) {
   const renamingTo = useRenaming(station, session);
+  const renameFailed = useDoingFailed("chat.rename", { station, session: session ?? "" });
   return (
     <>
       <h1 onDoubleClick={onRename}>{renamingTo ?? title}</h1>
-      {renamingTo !== undefined && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在改名" />}
+      <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label="正在改名" />
     </>
   );
 }
@@ -619,14 +623,16 @@ function SessionActions({ session, status }: { session: Session; status: Status 
   const api = useApi();
   const act = useAct();
   const station = useStation().address;
-  // Under way: the button turns, wherever it was asked from (the shortcut too).
+  // Under way: the button turns, wherever it was asked from (the shortcut too); failed, a red mark there a few seconds.
   const stopping = useDoing("session.stop", { station, key: session.key });
   const evicting = useDoing("session.evict", { station, key: session.key });
+  const stopFailed = useDoingFailed("session.stop", { station, key: session.key });
+  const evictFailed = useDoingFailed("session.evict", { station, key: session.key });
   return (
     <>
-      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} shortcut="chat.stop" busy={stopping}
+      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} shortcut="chat.stop" busy={stopping} failed={stopFailed}
         onClick={() => act(api.stop(session.key), "停止", "已请求停止")} />}
-      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} busy={evicting} onClick={() => act(api.evict(session.key), "释放进程", "已释放进程")} />}
+      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} busy={evicting} failed={evictFailed} onClick={() => act(api.evict(session.key), "释放进程", "已释放进程")} />}
     </>
   );
 }

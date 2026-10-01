@@ -278,14 +278,17 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
         // Under way: a spinner on the row tapped, and neither tapped again; the sheet closes once it is done.
         val reconnecting = app.isDoing("connect.reconnect", "station" to station, "id" to connect.id)
         val switching = app.isDoing("connect.put", "station" to station, "id" to connect.id)
+        // Failed a moment ago (the sheet may have been closed meanwhile): a red mark on its row, a tap says why.
+        val reconnectFailed = app.failedOf("connect.reconnect", "station" to station, "id" to connect.id)
+        val switchFailed = app.failedOf("connect.put", "station" to station, "id" to connect.id)
         SheetGrab()
         SheetHead(connect.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("重新连接", enabled = !switching, busy = reconnecting) { act("已重新连接") { api.reconnect(connect.id) } }
+            PickRow("重新连接", enabled = !switching, busy = reconnecting, failed = reconnectFailed) { act("已重新连接") { api.reconnect(connect.id) } }
             PickRow("更换 token") { openTokens(app, station, connect) }
             connect.connection.workspace?.url?.let { url -> PickRow("打开 Slack") { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-            if (connect.enabled) PickRow("停用", "Slack 连接会断开", enabled = !reconnecting, busy = switching) { act("已停用，Slack 连接已断开") { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
-            else PickRow("启用", enabled = !reconnecting, busy = switching) { act("已启用") { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
+            if (connect.enabled) PickRow("停用", "Slack 连接会断开", enabled = !reconnecting, busy = switching, failed = switchFailed) { act("已停用，Slack 连接已断开") { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
+            else PickRow("启用", enabled = !reconnecting, busy = switching, failed = switchFailed) { act("已启用") { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
             PickRow("更改所属用户", connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
             PickRow("删除连接", color = C.red) {
                 confirm(app, "删除「${connect.name}」？",

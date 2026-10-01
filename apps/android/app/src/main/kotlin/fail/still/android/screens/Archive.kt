@@ -71,17 +71,19 @@ fun ArchiveScreen(current: WorkspaceEntry) {
         view?.days?.forEach { day ->
             SectionHeader(day.label)
             day.items.forEach { item ->
-                // Restoring or deleting it under way: a spinner in place of its actions.
+                // Restoring or deleting it under way: a spinner in place of its actions; failed: a red mark beside them a moment.
                 val busy = app.isDoing("chat.archive", "station" to item.station, "session" to item.session) ||
                     app.isDoing("session.delete", "station" to item.station, "key" to item.session)
-                ArchiveRow(item, busy, { restore(item) }, { delete(item) })
+                val failed = app.failedOf("chat.archive", "station" to item.station, "session" to item.session)
+                    ?: app.failedOf("session.delete", "station" to item.station, "key" to item.session)
+                ArchiveRow(item, busy, failed, { restore(item) }, { delete(item) })
             }
         }
     }
 }
 
 @Composable
-private fun ArchiveRow(item: ArchiveItem, busy: Boolean, onRestore: () -> Unit, onDelete: () -> Unit) {
+private fun ArchiveRow(item: ArchiveItem, busy: Boolean, failed: String?, onRestore: () -> Unit, onDelete: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
         Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.title, fontSize = 16.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -92,7 +94,8 @@ private fun ArchiveRow(item: ArchiveItem, busy: Boolean, onRestore: () -> Unit, 
                 modifier = Modifier.semantics { contentDescription = item.how },
             )
             if (busy) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
-            else Row {
+            else Row(verticalAlignment = Alignment.CenterVertically) {
+                if (failed != null) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { DoingMark(false, failed) }
                 Action(Icons.Retry, "恢复「${item.title}」", onRestore)
                 if (item.deletable) Action(Icons.Trash, "删除「${item.title}」", onDelete)
             }

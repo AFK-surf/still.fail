@@ -8,8 +8,7 @@ import { stationApi, stationCall, useArchiveView } from "../api.ts";
 import { useCall } from "../core/react.ts";
 import type { ArchiveItem } from "../core/shapes.ts";
 import { useToast } from "../toast.tsx";
-import { doingMatches, useDoingList } from "../doing.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
+import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { About, Confirm, MobileBack, Tip } from "../ui.tsx";
 import { Retry, Trash } from "../icons.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -53,9 +52,6 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
   const [deleting, setDeleting] = useState<ArchiveItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  // Being put back in the list: its button turns until the station answers.
-  const doing = useDoingList();
-  const restoring = (item: ArchiveItem) => doing.some((d) => doingMatches(d, "chat.archive", { station: item.station, session: item.session, archived: false }));
   const remove = async () => {
     if (!deleting) return;
     setBusy(true);
@@ -86,10 +82,7 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
                   {item.place && <span>{item.place}</span>}{item.clock}
                 </span></Tip>
                 <div className={css.archiveActions}>
-                  <Tip label="恢复到列表"><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction}`} aria-label={`恢复「${item.title}」`}
-                    disabled={restoring(item)} aria-busy={restoring(item) || undefined} onClick={() => void restore(item)}>
-                    {restoring(item) ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Retry size={14} />}
-                  </button></Tip>
+                  <RestoreButton item={item} restore={restore} />
                   {item.deletable && (
                     <Tip label="删除"><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction} ${css.archiveDelete}`} aria-label={`删除「${item.title}」`} onClick={() => { setDeleteError(null); setDeleting(item); }}><Trash size={14} /></button></Tip>
                   )}
@@ -104,6 +97,20 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
         description={DELETE_TEXT} action="删除"
         onConfirm={() => void remove()} onClose={() => setDeleting(null)} busy={busy} error={deleteError} />
     </div>
+  );
+}
+
+/**
+ * Puts a row back in the list: it turns until the station answers (the core's `doing`), and when that failed a red
+ * mark stays in its place a few seconds, its tip saying why.
+ */
+function RestoreButton({ item, restore }: { item: ArchiveItem; restore: (item: ArchiveItem) => Promise<void> }) {
+  const state = useDoingState("chat.archive", { station: item.station, session: item.session, archived: false });
+  return (
+    <Tip label={state.error ?? "恢复到列表"}><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction}`} aria-label={`恢复「${item.title}」`}
+      disabled={state.running} aria-busy={state.running || undefined} onClick={() => void restore(item)}>
+      <DoingShown state={state} className={controlsCss.iconSpinner} size={14} idle={<Retry size={14} />} bare />
+    </button></Tip>
   );
 }
 

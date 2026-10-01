@@ -37,7 +37,7 @@ import * as controlsCss from "./styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
 import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
-import { useDoing } from "./doing.ts";
+import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast } from "./toast.tsx";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
@@ -186,12 +186,15 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
  * end, goes there at once, turning while the latest page comes (`chat.latest`), not pressed again meanwhile.
  */
 function ToLatest({ station, thread, waiting, onClick }: { station: string; thread: number | null; waiting: number; onClick(): void }) {
-  const coming = useDoing("chat.latest", { station, thread: thread ?? "" }) && thread !== null;
+  // Failed: a red mark in the arrow's place a few seconds, the tip saying why.
+  const asked = useDoingState("chat.latest", { station, thread: thread ?? "" });
+  const state = thread === null ? { running: false } : asked;
+  const coming = state.running;
   return (
-    <Tip label="跳到最新" shortcut="chat.latest" side="top">
+    <Tip label={state.error ?? "跳到最新"} shortcut="chat.latest" side="top">
       <button type="button" className={css.chatToBottom} aria-label="跳到最新" data-count={waiting > 0 || undefined}
         disabled={coming} aria-busy={coming || undefined} onClick={onClick}>
-        {coming ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <ArrowDown size={16} strokeWidth={2} />}
+        <DoingShown state={state} className={controlsCss.iconSpinner} size={16} idle={<ArrowDown size={16} strokeWidth={2} />} bare />
         {waiting > 0 && <span>{waiting} 条新消息</span>}
       </button>
     </Tip>
@@ -205,8 +208,11 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
   const sending = useChatSend();
   const station = useStation().address;
   const toast = useToast();
-  const retrying = useDoing("chat.retry", { station, id: o.id });
-  const dropping = useDoing("chat.discard", { station, id: o.id });
+  // Each turns in its icon's place while it goes; failed, a red mark there a few seconds, why on hover.
+  const retry = useDoingState("chat.retry", { station, id: o.id });
+  const drop = useDoingState("chat.discard", { station, id: o.id });
+  const retrying = retry.running;
+  const dropping = drop.running;
   const busy = retrying || dropping;
   // "正在发送" shows once it has been on its way a while, counted from when it was sent: the row is drawn anew as a chat
   // made here takes the page, and copies of it fly in (madeChat.ts, by `data-shows-at`), all showing it at one time.
@@ -223,10 +229,10 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
             </Tip>
             <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
               onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(`没能重新发送：${failure(e)}`)); }}>
-              {retrying ? <span className={`${waitingCss.spinner} ${css.msgUnsentSpinner}`} aria-hidden="true" /> : <Retry size={12} strokeWidth={2} />}重试</button>
+              <DoingShown state={retry} className={css.msgUnsentSpinner} idle={<Retry size={12} strokeWidth={2} />} />重试</button>
             <button type="button" className={css.msgUnsentBtn} disabled={busy} aria-busy={dropping || undefined}
               onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(`没能删除：${failure(e)}`)); }}>
-              {dropping ? <span className={`${waitingCss.spinner} ${css.msgUnsentSpinner}`} aria-hidden="true" /> : <Trash size={12} strokeWidth={2} />}删除</button>
+              <DoingShown state={drop} className={css.msgUnsentSpinner} idle={<Trash size={12} strokeWidth={2} />} />删除</button>
           </div>
         : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
     </MineMessage>

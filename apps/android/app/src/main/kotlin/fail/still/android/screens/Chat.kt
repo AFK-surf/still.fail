@@ -1058,10 +1058,10 @@ private fun Out(ctx: Here, o: Outgoing) {
             // Either under way: a spinner on it, neither pressed again.
             val retrying = app.isDoing("chat.retry", "station" to ctx.station, "id" to o.id)
             val discarding = app.isDoing("chat.discard", "station" to ctx.station, "id" to o.id)
-            UnsentButton(Icons.Retry, "重试", enabled = !ctx.view.offline && ctx.view.archived != true && !discarding, busy = retrying) {
+            UnsentButton(Icons.Retry, "重试", enabled = !ctx.view.offline && ctx.view.archived != true && !discarding, busy = retrying, failed = app.failedOf("chat.retry", "station" to ctx.station, "id" to o.id)) {
                 app.act("重新发送") { if (thread != null) app.api(ctx.station).retry(thread.id, o.id) else pending?.let { app.api(ctx.station).retryIn(it, o.id) } }
             }
-            UnsentButton(Icons.Trash, "删除", enabled = !retrying, busy = discarding) {
+            UnsentButton(Icons.Trash, "删除", enabled = !retrying, busy = discarding, failed = app.failedOf("chat.discard", "station" to ctx.station, "id" to o.id)) {
                 app.act("删除") { if (thread != null) app.api(ctx.station).discard(thread.id, o.id) else pending?.let { app.api(ctx.station).discardIn(it, o.id) } }
             }
         } else if (slow) Waiting("正在发送")
@@ -1069,13 +1069,13 @@ private fun Out(ctx: Here, o: Outgoing) {
 }
 
 @Composable
-private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, busy: Boolean = false, onClick: () -> Unit) {
+private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, onClick: () -> Unit) {
     val muted = chatMuted()
     Row(
         Modifier.alpha(if (enabled) 1f else 0.5f).clip(RoundedCornerShape(7.dp)).clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        if (busy) Spinner(12.dp) else IconIn(icon, 12.dp, muted)
+        if (busy || failed != null) DoingMark(busy, failed, 12.dp) else IconIn(icon, 12.dp, muted)
         Text(label, fontSize = 13.sp, color = muted)
     }
 }

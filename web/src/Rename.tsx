@@ -2,7 +2,7 @@
 // typed, Escape leaves the name as it was. An empty name gives the chat back its own (its agent's, else its first message).
 import { useEffect, useRef } from "react";
 import { stationApi, useStationCall } from "./api.ts";
-import { doingMatches, useDoingList } from "./doing.ts";
+import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { failure, useToast } from "./toast.tsx";
 import * as css from "./Rename.css.ts";
 
@@ -49,6 +49,6 @@ export function useRename(station: string) {
  * new one is empty (null); undefined when none.
  */
 export function useRenaming(station: string, session: string | null | undefined): string | null | undefined {
-  const asked = useDoingList().find((item) => session != null && doingMatches(item, "chat.rename", { station, session }));
+  const asked = useDoingList().find((item) => session != null && !failed(item) && doingMatches(item, "chat.rename", { station, session }));
   return asked && (asked.params.title?.trim() || null);
 }

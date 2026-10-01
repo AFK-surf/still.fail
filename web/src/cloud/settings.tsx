@@ -27,6 +27,7 @@ import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
 import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
+import { DoingMark } from "../DoingMark.tsx";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import type { CarriedStation } from "../core/client.ts";
@@ -317,9 +318,9 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const renaming = (s: StationView) => rename.busy && rename.arg?.id === s.id;
   return (
     <Section title={`${stations.length} 台`} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button></>}>
-      {/* A name on its way shows at once, a ring beside its menu until the cloud has it. */}
+      {/* A name on its way shows at once, a ring beside its menu until the cloud has it (a red mark a moment if not). */}
       <StationList stations={stations.map((s) => (renaming(s) ? { ...s, name: rename.arg!.name } : s))} manager={manager} menu={(s) => manager && <>
-        {renaming(s) && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在改名" />}
+        <DoingMark calls="workspace.renameStation" on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14} label="正在改名" />
         <Menu items={[
           { label: "改名", disabled: renaming(s), onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim() && n.trim() !== s.name) rename.run({ id: s.id, name: n.trim() }); } },
           { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
@@ -461,9 +462,9 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
                   options={(["owner", "admin", "member"] as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
               </div>
             ) : <Pill>{ROLE_LABEL[m.role]}</Pill>}
-            {(setRole.busy && setRole.arg?.sub === m.sub) || (remove.busy && remove.arg === m.sub)
-              ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={remove.busy && remove.arg === m.sub ? "正在移出" : "正在更改角色"} />
-              : null}
+            {/* Its role or its removal on the way, wherever asked; failed: a red mark a few seconds, why on hover. */}
+            <DoingMark calls={["workspace.setRole", "workspace.removeMember"]} on={{ account: account.sub, workspace: view.id, member: m.sub }}
+              className={controlsCss.iconSpinner} size={14} label={remove.busy && remove.arg === m.sub ? "正在移出" : "正在更改角色"} />
             {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && !(remove.busy && remove.arg === m.sub) && (
               <Menu items={[{ label: "移出 workspace", icon: Trash, danger: true, onSelect: () => { if (window.confirm(`把 ${m.email} 移出「${view.name}」？`)) remove.run(m.sub); } }]} />
             )}

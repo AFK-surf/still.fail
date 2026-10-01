@@ -93,9 +93,10 @@ private fun OpenRow(job: Job) {
             Text("${job.whereText.orEmpty()} · ${job.age.orEmpty()}", fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         val stopping = app.stopping(station, job)
+        val stopFailed = app.stopFailed(station, job)
         Box(
             Modifier.size(32.dp).clip(CircleShape).clickable(enabled = !stopping) { app.stopJob(station, job) }.semantics { contentDescription = "停止「${job.name}」" },
             contentAlignment = Alignment.Center,
-        ) { if (stopping) Spinner(14.dp) else IconIn(Icons.Stop, 15.dp, C.muted) }
+        ) { if (stopping || stopFailed != null) DoingMark(stopping, stopFailed) else IconIn(Icons.Stop, 15.dp, C.muted) }
     }
 }

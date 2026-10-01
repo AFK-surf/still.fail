@@ -358,7 +358,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
-    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
+    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
         detectTapGestures(
             onPress = { tryAwaitRelease(); held = false },
             onLongPress = { at ->
@@ -402,9 +402,13 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
 private fun rowBusy(app: AppState, item: ChatItem): Boolean =
     app.isDoing(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
 
-/** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`; `busy`: a spinner where its mark goes. */
+/** Why the row's menu's pin or archive failed a moment ago, if it did. */
+private fun rowFailed(app: AppState, item: ChatItem): String? =
+    app.failedOf(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
+
+/** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
-internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, modifier: Modifier = Modifier) {
+internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, modifier: Modifier = Modifier) {
     Box(
         Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
             .then(modifier),
@@ -423,7 +427,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                 // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                     val reconnecting = item.reconnecting
-                    if (busy) Spinner(11.dp)
+                    if (busy || failed != null) DoingMark(busy, failed, 11.dp)
                     else if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { Spinner(11.dp) }
                     else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }

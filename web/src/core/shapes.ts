@@ -1148,12 +1148,15 @@ export interface DiskRoom {
 
 /**
  * A call under way: its name (`job.stop`), its params that are words, numbers or yes/no, as words (what a page
- * matches it by), and since when.
+ * matches it by), and since when; `stage` running, or failed (kept a few seconds, `error` saying why). A core from
+ * before stages gives none: running.
  */
 export interface DoingItem {
 	call: string;
 	params: Record<string, string>;
 	since: number;
+	stage?: string;
+	error?: string;
 }
 
 /**

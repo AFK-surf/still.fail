@@ -7,9 +7,9 @@ import type { Job } from "../core/shapes.ts";
 import { chatPath, SHOWN, useLongJobs } from "../OpenJobs.tsx";
 import { JobDot } from "../Jobs.tsx";
 import { Stop } from "../icons.tsx";
-import { doingMatches, useDoingList } from "../doing.ts";
+import { doingMatches, failed, useDoingList } from "../doing.ts";
 import { useApp } from "./app.tsx";
-import { Spinner } from "./parts.tsx";
+import { FailedMark, failedIn, Spinner } from "./parts.tsx";
 import * as css from "./OpenJobs.css.ts";
 
 export function OpenJobs({ scope }: { scope: string }) {
@@ -17,8 +17,10 @@ export function OpenJobs({ scope }: { scope: string }) {
   const { groups, stop } = useLongJobs(scope, app.toast);
   const [all, setAll] = useState<Record<string, boolean>>({});
   const doing = useDoingList();
-  // Stopping: its spinner in the button's place until the station answers (the toast says if it could not).
-  const stopping = (job: Job) => doing.some((d) => doingMatches(d, "job.stop", { station: job.station, id: job.id }));
+  // Stopping: its spinner in the button's place until the station answers (the toast says if it could not), and the
+  // failure mark before the button a few seconds after it could not.
+  const stopping = (job: Job) => doing.some((d) => !failed(d) && doingMatches(d, "job.stop", { station: job.station, id: job.id }));
+  const stopFailed = (job: Job) => failedIn(doing, "job.stop", { station: job.station, id: job.id });
   if (groups.length === 0) return null;
   const open = (job: Job) => {
     const path = chatPath(job);
@@ -40,6 +42,7 @@ export function OpenJobs({ scope }: { scope: string }) {
                   <span className={css.mOpenName}>{job.name}</span>
                   <span className={css.mOpenWhere}>{job.whereText} · {job.age}</span>
                 </span>
+                {!stopping(job) && stopFailed(job) !== undefined && <FailedMark error={stopFailed(job)!} />}
                 <button type="button" className={css.mOpenStop} aria-label={`停止「${job.name}」`} disabled={stopping(job)} aria-busy={stopping(job) || undefined}
                   onClick={(e) => { e.stopPropagation(); stop(job); }}>
                   {stopping(job) ? <Spinner size={15} /> : <Stop size={15} />}

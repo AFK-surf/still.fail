@@ -33,6 +33,11 @@ export const mAvatar = style({
 });
 /** Laid out as a box wherever it is put (its look is the wide screen's spinner). */
 export const mSpinner = style({ display: "inline-block", flex: "none", boxSizing: "border-box" });
+/** What was asked failed a moment ago (FailedMark): a small red round "!", tapped to say why. */
+export const mFailed = style({
+  display: "inline-grid", placeItems: "center", flex: "none", alignSelf: "center", boxSizing: "border-box", borderRadius: "50%",
+  background: "var(--m-red)", color: "#fff", fontWeight: "700", lineHeight: "1", cursor: "pointer",
+});
 /** A segmented choice: a track that tints what it sits on, and a thumb that slides to the chosen option. */
 export const mSeg = style({
   position: "relative", boxSizing: "border-box", overflow: "hidden",

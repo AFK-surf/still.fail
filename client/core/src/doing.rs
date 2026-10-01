@@ -1,7 +1,8 @@
 //! What a person set going on this device and the core has not finished (the `doing` topic): every call that changes
 //! something (a chat pinned, a job stopped, a member's role) from the moment it is asked until its answer, whichever
 //! page or menu asked it. The pages show it where it is, on the row or button it is about, at once: a person sees
-//! that what they did is under way, and does not do it again.
+//! that what they did is under way, and does not do it again. One that failed stays a few seconds more, with why
+//! (`stage` failed, `error`), so the place that turned says so too, whoever asked it.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -16,7 +17,12 @@ struct Entry {
     /// Its params that are words, numbers or yes/no, as words: what a page matches it by (`station`, `id`, `session`…).
     params: HashMap<String, String>,
     since: f64,
+    /// Why it failed, while that is still shown.
+    failed: Option<String>,
 }
+
+/// How long a failure stays where it was asked.
+pub const FAILED_SHOWN_MS: u64 = 6_000;
 
 #[derive(Default)]
 pub struct Doing {
@@ -30,7 +36,7 @@ impl Doing {
         let id = self.next.get() + 1;
         self.next.set(id);
         let params = params.as_object().into_iter().flatten().filter_map(|(k, v)| words(v).map(|v| (k.clone(), v))).collect();
-        self.list.borrow_mut().push(Entry { id, call: call.to_string(), params, since: now });
+        self.list.borrow_mut().push(Entry { id, call: call.to_string(), params, since: now, failed: None });
         id
     }
 
@@ -38,9 +44,22 @@ impl Doing {
         self.list.borrow_mut().retain(|e| e.id != id);
     }
 
+    /// It failed: shown so, with why, until it is `end`ed (`FAILED_SHOWN_MS` later).
+    pub fn fail(&self, id: u64, why: &str) {
+        if let Some(e) = self.list.borrow_mut().iter_mut().find(|e| e.id == id) {
+            e.failed = Some(why.to_string());
+        }
+    }
+
     /// The topic's value: what is under way, oldest first.
     pub fn value(&self) -> Value {
-        let doing: Vec<Value> = self.list.borrow().iter().map(|e| json!({ "call": e.call, "params": e.params, "since": e.since as i64 })).collect();
+        let doing: Vec<Value> = self.list.borrow().iter().map(|e| {
+            let mut item = json!({ "call": e.call, "params": e.params, "since": e.since as i64, "stage": if e.failed.is_some() { "failed" } else { "running" } });
+            if let Some(why) = &e.failed {
+                item["error"] = json!(why);
+            }
+            item
+        }).collect();
         json!({ "doing": doing })
     }
 }
@@ -85,9 +104,11 @@ mod tests {
         let a = doing.start("job.stop", &json!({ "station": "w/s", "id": "j1", "input": { "x": 1 } }), 1000.5);
         let b = doing.start("chat.pin", &json!({ "station": "w/s", "session": "k", "pinned": true, "thread": 7 }), 2000.0);
         assert_eq!(doing.value(), json!({ "doing": [
-            { "call": "job.stop", "params": { "station": "w/s", "id": "j1" }, "since": 1000 },
-            { "call": "chat.pin", "params": { "station": "w/s", "session": "k", "pinned": "true", "thread": "7" }, "since": 2000 },
+            { "call": "job.stop", "params": { "station": "w/s", "id": "j1" }, "since": 1000, "stage": "running" },
+            { "call": "chat.pin", "params": { "station": "w/s", "session": "k", "pinned": "true", "thread": "7" }, "since": 2000, "stage": "running" },
         ] }));
+        doing.fail(a, "连不上这台 station：没有回应");
+        assert_eq!(doing.value()["doing"][0], json!({ "call": "job.stop", "params": { "station": "w/s", "id": "j1" }, "since": 1000, "stage": "failed", "error": "连不上这台 station：没有回应" }));
         doing.end(a);
         doing.end(b);
         assert_eq!(doing.value(), json!({ "doing": [] }));

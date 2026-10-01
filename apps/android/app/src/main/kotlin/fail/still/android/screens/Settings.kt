@@ -183,7 +183,8 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                         Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1)
                         Text("${ROLE_LABEL[a.role] ?: a.role} · 还没登录过，第一次登录时自动加入", fontSize = 13.sp, color = C.muted)
                     }
-                    RowAction("移除", C.accent, app.isDoing("workspace.removeAdded", "workspace" to view.id, "email" to a.email)) {
+                    val on = arrayOf<Pair<String, Any?>>("workspace" to view.id, "email" to a.email)
+                    RowAction("移除", C.accent, app.isDoing("workspace.removeAdded", *on), app.failedOf("workspace.removeAdded", *on)) {
                         app.act("移除", "已移除") { cloud.removeAdded(view.id, a.email) }
                     }
                 }
@@ -195,7 +196,8 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                         Text(i.email ?: "任何拿到链接的人", fontSize = 15.sp, color = C.ink)
                         Text("${ROLE_LABEL[i.role] ?: i.role} · 邀请 · ${i.time?.get("expires_at")?.until ?: ""}过期", fontSize = 13.sp, color = C.muted)
                     }
-                    RowAction("撤回", C.accent, app.isDoing("workspace.revokeInvitation", "workspace" to view.id, "invitation" to i.id)) {
+                    val on = arrayOf<Pair<String, Any?>>("workspace" to view.id, "invitation" to i.id)
+                    RowAction("撤回", C.accent, app.isDoing("workspace.revokeInvitation", *on), app.failedOf("workspace.revokeInvitation", *on)) {
                         app.act("撤回邀请", "已撤回邀请") { cloud.revokeInvitation(view.id, i.id) }
                     }
                 }
@@ -232,15 +234,21 @@ private fun MemberRow(view: WorkspaceView, m: Member, me: String, cloud: Cloud) 
             }
             Text(m.email, fontSize = 13.sp, color = C.muted, maxLines = 1)
         }
+        // Its role being set or it being moved out (the sheet that asked may be gone): a spinner, or a red mark a moment.
+        val calls = setOf("workspace.setRole", "workspace.removeMember")
+        DoingMark(app.isDoing(calls, "workspace" to view.id, "member" to m.sub), app.failedOf(calls, "workspace" to view.id, "member" to m.sub))
         Text(ROLE_LABEL[m.role] ?: m.role, fontSize = 13.sp, color = C.muted)
     }
 }
 
-/** A word at a row's end that does something (移除, 撤回, 退出): a spinner in its place while it is under way. */
+/** A word at a row's end that does something (移除, 撤回, 退出): a spinner in its place while it is under way; a red mark before it a moment after it failed. */
 @Composable
-private fun RowAction(label: String, color: androidx.compose.ui.graphics.Color, busy: Boolean, onClick: () -> Unit) {
+private fun RowAction(label: String, color: androidx.compose.ui.graphics.Color, busy: Boolean, failed: String? = null, onClick: () -> Unit) {
     if (busy) Spinner(14.dp)
-    else Text(label, fontSize = 14.sp, color = color, modifier = Modifier.clickable(onClick = onClick))
+    else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        DoingMark(false, failed)
+        Text(label, fontSize = 14.sp, color = color, modifier = Modifier.clickable(onClick = onClick))
+    }
 }
 
 @Composable
@@ -257,7 +265,8 @@ private fun ColumnScope.MemberSheet(view: WorkspaceView, m: Member, cloud: Cloud
         // A role being set: a spinner on the one tapped, none tapped meanwhile; the sheet closes once it is done.
         val setting = { r: String? -> app.isDoing("workspace.setRole", "workspace" to view.id, "member" to m.sub, "role" to r) }
         if (view.role == "owner") listOf("owner", "admin", "member").forEach { r ->
-            PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = m.role == r, enabled = !setting(null), busy = setting(r)) {
+            val failed = app.failedOf("workspace.setRole", "workspace" to view.id, "member" to m.sub, "role" to r)
+            PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = m.role == r, enabled = !setting(null), busy = setting(r), failed = failed) {
                 scope.launch { try { cloud.setRole(view.id, m.sub, r); app.toast = "已更改角色"; app.sheet = null } catch (e: CoreException) { app.toast = "没能更改角色：${errorText(e)}" } }
             }
         }
@@ -394,9 +403,12 @@ fun Devices(current: WorkspaceEntry) {
                 }
                 if (!s.current) {
                     if (app.isDoing("loginSession.revoke", "id" to s.id)) Spinner(14.dp)
-                    else Text("退出", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
-                        app.act("让那台设备退出", "已让那台设备退出") { cloud.revokeLoginSession(s.id) }
-                    })
+                    else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        DoingMark(false, app.failedOf("loginSession.revoke", "id" to s.id))
+                        Text("退出", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                            app.act("让那台设备退出", "已让那台设备退出") { cloud.revokeLoginSession(s.id) }
+                        })
+                    }
                 }
             }
         }

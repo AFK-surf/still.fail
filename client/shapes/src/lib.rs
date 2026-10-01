@@ -1410,8 +1410,10 @@ pub struct DoingView {
 }
 
 /// A call under way: its name (`job.stop`), its params that are words, numbers or yes/no, as words (what a page
-/// matches it by), and since when.
+/// matches it by), and since when; `stage` running, or failed (kept a few seconds, `error` saying why). A core from
+/// before stages gives none: running.
 #[typeshare]
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DoingItem {
@@ -1419,6 +1421,8 @@ pub struct DoingItem {
     pub params: HashMap<String, String>,
     #[typeshare(serialized_as = "I54")]
     pub since: i64,
+    pub stage: Option<String>,
+    pub error: Option<String>,
 }
 
 /// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.

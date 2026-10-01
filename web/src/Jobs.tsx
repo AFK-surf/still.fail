@@ -9,10 +9,9 @@ import { useTopic } from "./core/react.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "./icons.tsx";
 import { Empty, Segmented, Tip } from "./ui.tsx";
 import { useAct } from "./toast.tsx";
-import { useDoing } from "./doing.ts";
+import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import * as css from "./Jobs.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core/src/
 // jobs.rs): `tone` (up, live, restart, fail, off), `meta`, `detail`, a notice's `ago` and `clock`; a chat's all
@@ -73,24 +72,26 @@ export function useClearEnded(station: string): (sessions: string[]) => void {
 
 /**
  * A job's stop button (`children` after its icon): turning in its icon's place, not pressed again, while the job is
- * being stopped, wherever that was asked (the core's `doing`).
+ * being stopped, wherever that was asked (the core's `doing`); a red mark there a few seconds when that failed.
  */
 export function JobStop({ station, job, stop, className, label, size = 14, children }:
   { station: string; job: Job; stop: (job: Job) => void; className: string; label?: string; size?: number; children?: ReactNode }) {
-  const stopping = useDoing("job.stop", { station, id: job.id });
+  const state = useDoingState("job.stop", { station, id: job.id });
+  const stopping = state.running;
   return (
     <button type="button" className={className} aria-label={label} disabled={stopping} aria-busy={stopping || undefined} onClick={() => stop(job)}>
-      {stopping ? <span className={`${waitingCss.spinner} ${css.jobSpinner}`} aria-hidden="true" /> : <Stop size={size} />}{children}
+      <DoingShown state={state} className={css.jobSpinner} size={size} idle={<Stop size={size} />} />{children}
     </button>
   );
 }
 
-/** Clearing a chat's jobs that are over: the button says how many, turning while they go. */
+/** Clearing a chat's jobs that are over: the button says how many, turning while they go (a red mark a moment if not). */
 function ClearEnded({ station, view, clear }: { station: string; view: ChatJobsView; clear: (sessions: string[]) => void }) {
-  const clearing = useDoing("job.clearEnded", { station });
+  const state = useDoingState("job.clearEnded", { station });
+  const clearing = state.running;
   return (
     <button type="button" className={css.jobsClear} disabled={clearing} aria-busy={clearing || undefined} onClick={() => clear(view.clear)}>
-      {clearing && <span className={`${waitingCss.spinner} ${css.jobSpinner}`} aria-hidden="true" />}{view.clearText}
+      <DoingShown state={state} className={css.jobSpinner} />{view.clearText}
     </button>
   );
 }
