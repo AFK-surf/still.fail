@@ -367,7 +367,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     // Its state line (in the root, as `bounds`): tapped while it names a message (`stateAbout`), the chat opens there.
     var line by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
-    // Nothing left in it: archived with one tap on the 归档 at its end (as its menu's 归档), or swiped away to the left.
+    // Nothing left in it: archived with one tap on the 归档 at its start (as its menu's 归档), or swiped away to the left.
     val archivable = live && item.archivable == true && item.offline == null && item.pending != true
     val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
     val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending, item.stateAbout) {
@@ -536,8 +536,14 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
         val offline = item.offline
         val dim = if (offline != null) 0.45f else 1f
         // Nothing left in it (its agents all done, nothing at work, waiting or unread): the row faded (the core says so),
-        // its 归档 at its end not.
+        // its 归档 at its start not.
         Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // A small 归档 at its start (a tap archives it; swiping it left does too, SwipeToArchive).
+        if (onArchive != null) Box(
+            Modifier.clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !busy, onClick = onArchive)
+                .padding(horizontal = 10.dp, vertical = 4.dp).semantics { contentDescription = "归档「${item.title}」" },
+            contentAlignment = Alignment.Center,
+        ) { Text("归档", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.muted) }
         Column(Modifier.weight(1f).alpha(if (item.settled == true) 0.45f else 1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChatMark(item, Modifier)
@@ -565,12 +571,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                 else RowAside(item, lead, Modifier.alpha(dim))
             }
         }
-        // A small 归档 at its end (a tap archives it; swiping it left does too, SwipeToArchive).
-        if (onArchive != null) Box(
-            Modifier.clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !busy, onClick = onArchive)
-                .padding(horizontal = 10.dp, vertical = 4.dp).semantics { contentDescription = "归档「${item.title}」" },
-            contentAlignment = Alignment.Center,
-        ) { Text("归档", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.muted) }
+
         }
     }
 }

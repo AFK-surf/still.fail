@@ -282,7 +282,7 @@ const TAKES = 0.35;
 const FLING = 0.6;
 
 /**
- * A row whose chat has nothing left in it (the core's `archivable`): 归档 in words at its end, and swiped left it is
+ * A row whose chat has nothing left in it (the core's `archivable`): 归档 in words at its start, and swiped left it is
  * archived. The row follows the finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and
  * the list closes over it, else it springs back. Read on the frame, which does not move (going up or down first is the
  * list's scrolling).
@@ -367,8 +367,8 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
       onClickCapture={(e) => { if (swiped.current) { swiped.current = false; e.preventDefault(); e.stopPropagation(); } }}>
       <div ref={under} className={css.mSwipeUnder} aria-hidden="true"><span>归档</span></div>
       <div ref={slide} className={css.mSwipeSlide}>
-        {children}
         <button type="button" className={css.mRowArchive} aria-label={`归档「${item.title}」`} disabled={busy} onClick={() => archive()}>归档</button>
+        {children}
       </div>
     </div>
   );

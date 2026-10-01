@@ -159,7 +159,7 @@ globalStyle(`${mRecentRows} ${mChatRow}[data-open] ${mChatTitle}`, { color: "var
 globalStyle(`${mNewChat}[data-small]`, { width: "32px", height: "32px" });
 
 /**
- * A row with 归档 at its end (the core's `archivable`, Home.tsx SwipeArchive): a frame that stays put, reading the swipe;
+ * A row with 归档 at its start (the core's `archivable`, Home.tsx SwipeArchive): a frame that stays put, reading the swipe;
  * in it the row and its 归档 sliding together, and what they uncover on the right.
  */
 export const mChatRowWrap = style({
@@ -167,10 +167,10 @@ export const mChatRowWrap = style({
   selectors: { "&[data-leaving]": { overflow: "hidden", pointerEvents: "none" } },
 });
 export const mSwipeSlide = style({ position: "relative" });
-globalStyle(`${mChatRow}[data-archivable]`, { paddingRight: "72px" });
-/** 归档 in words: a small chip, centred on the row's height, at its end. */
+globalStyle(`${mChatRow}[data-archivable]`, { paddingLeft: "72px" });
+/** 归档 in words: a small chip, centred on the row's height, at its start. */
 export const mRowArchive = style({
-  position: "absolute", top: "0", bottom: "0", right: "14px", margin: "auto 0", height: "28px", padding: "0 12px",
+  position: "absolute", top: "0", bottom: "0", left: "14px", margin: "auto 0", height: "28px", padding: "0 12px",
   border: "0", borderRadius: "14px", background: "var(--m-chip)", cursor: "pointer", WebkitTapHighlightColor: "transparent",
   selectors: { "&:disabled": { opacity: ".4" }, "&:active:not(:disabled)": { filter: "brightness(.94)" } },
 });
