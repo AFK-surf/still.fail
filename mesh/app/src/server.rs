@@ -786,8 +786,8 @@ mod tests {
         r.until_bound(true).await;
         let work = r.dir.join("work");
         std::fs::create_dir_all(&work).unwrap();
-        let job = r.app.jobs.start("s1", "long", "sleep 60", &work, None).unwrap();
-        let service = r.app.jobs.start("s1", "web", "sleep 60", &work, Some(47993)).unwrap();
+        let job = r.app.jobs.start("s1", "long", "sleep 60", &work, None, crate::jobs::Watch::default()).unwrap();
+        let service = r.app.jobs.start("s1", "web", "sleep 60", &work, Some(47993), crate::jobs::Watch::default()).unwrap();
         r.app.shutdown().await;
         let db = Store::open(&r.dir.join(DB_FILE).to_string_lossy(), None).unwrap();
         let pgids: Vec<i32> = [&job.id, &service.id].iter().map(|id| db.get_job(id).unwrap().unwrap().pgid.unwrap() as i32).collect();

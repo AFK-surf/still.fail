@@ -215,10 +215,10 @@ impl AdminApi {
         let stats = self.deps.store.session_stats(Some(key))?;
         let bindings = self.deps.store.list_bindings()?;
         let participants = self.deps.store.participants(Some(key))?;
-        self.summary_with(key, &stats, &bindings, &participants)
+        self.summary_with(key, &stats, &bindings, &participants, &crate::jobs::watching(&self.deps.store))
     }
 
-    fn summary_with(&self, key: &str, stats: &BTreeMap<String, SessionStats>, bindings: &BTreeMap<String, Vec<String>>, participants: &BTreeMap<String, Vec<String>>) -> Result<Value> {
+    fn summary_with(&self, key: &str, stats: &BTreeMap<String, SessionStats>, bindings: &BTreeMap<String, Vec<String>>, participants: &BTreeMap<String, Vec<String>>, watches: &HashMap<String, Value>) -> Result<Value> {
         let row = self.session_row(key)?;
         let mut v = serde_json::to_value(&row)?;
         v["boundTo"] = json!(bindings.get(key).cloned().unwrap_or_default());
@@ -230,6 +230,10 @@ impl AdminApi {
         v["lastTurn"] = stat.and_then(|s| s.last_turn.as_ref()).map(turn_summary).unwrap_or(Value::Null);
         v["creator"] = json!(self.creator(row.created_by.as_deref()));
         v["participants"] = json!(self.people(participants.get(key).map(Vec::as_slice).unwrap_or_default()));
+        // Keeping watch (jobs::watching): the pages say so, and list it under 监控中.
+        if let Some(watch) = watches.get(key) {
+            v["watch"] = watch.clone();
+        }
         Ok(v)
     }
 
@@ -237,11 +241,12 @@ impl AdminApi {
     pub(super) fn sessions(&self, connect: Option<&str>, archived: bool) -> Result<Vec<Value>> {
         let store = &self.deps.store;
         let (stats, bindings, participants) = (store.session_stats(None)?, store.list_bindings()?, store.participants(None)?);
+        let watches = crate::jobs::watching(store);
         store
             .list_sessions()?
             .into_iter()
             .filter(|s| connect.is_none_or(|c| s.connect == c) && s.archived_at.is_some() == archived)
-            .map(|s| self.summary_with(&s.key, &stats, &bindings, &participants))
+            .map(|s| self.summary_with(&s.key, &stats, &bindings, &participants, &watches))
             .collect()
     }
 
@@ -376,13 +381,18 @@ impl AdminApi {
         let archived_of = |s: &crate::store::SessionRow| {
             json!({ "at": s.archived_at.unwrap_or(0), "by": s.archived_by.as_deref().unwrap_or(crate::store::MANUAL), "alone": false })
         };
+        let watches = crate::jobs::watching(store);
         let agent = |key: &str| {
             let s = &all[key];
             let stat = stats.get(key);
-            json!({
+            let mut v = json!({
                 "key": key, "runtime": s.runtime, "model": s.model, "effort": s.effort, "process": self.deps.hub.process_state(key),
                 "pending": stat.map(|s| s.pending).unwrap_or(0), "lastTurn": stat.and_then(|s| s.last_turn.as_ref()).map(turn_summary),
-            })
+            });
+            if let Some(watch) = watches.get(key) {
+                v["watch"] = watch.clone();
+            }
+            v
         };
         let threads = store.list_threads(&viewer.id(), None, None)?;
         // Per agent: the Slack thread it came from (the latest one it is in), and whether it has an internal chat.

@@ -1,12 +1,12 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
-// at the bottom. Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
+// at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
 import { useRef, useState } from "react";
 import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
 import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Pin, Settings, Unplug } from "../icons.tsx";
-import { ask } from "./sheets.tsx";
-import { stationBase, useOnlyMine } from "../station.tsx";
+import { ask, confirm } from "./sheets.tsx";
+import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
@@ -30,7 +30,8 @@ export function Home() {
   const scope = app.entry.id;
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
-  const [onlyMine, setOnlyMine] = useOnlyMine();
+  const watching = useChats(scope, false, true);
+  const [filter, setFilter] = useChatFilter();
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
   // The other workspaces have something waiting: its dot by the name, before an invitation's.
   const marks = useWorkspaceMarks(scope);
@@ -41,9 +42,10 @@ export function Home() {
       {none ? (
         <div className={css.mHomePanes}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
-        <div className={css.mHomePanes} data-mine={onlyMine || undefined}>
-          <ChatPane chats={all} onlyMine={false} />
-          <ChatPane chats={mine} onlyMine />
+        <div className={css.mHomePanes} data-filter={filter}>
+          <ChatPane chats={all} filter="all" />
+          <ChatPane chats={mine} filter="mine" />
+          <ChatPane chats={watching} filter="watching" />
         </div>
       )}
       {/* The lists run under both bars, which are frosted glass over them. */}
@@ -59,7 +61,7 @@ export function Home() {
           <ChevronDown size={16} />
         </button>
         {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
-        {(all.value?.stations.length ?? 0) > 0 && <FilterButton onlyMine={onlyMine} setOnlyMine={setOnlyMine} />}
+        {(all.value?.stations.length ?? 0) > 0 && <FilterButton filter={filter} setFilter={setFilter} />}
         {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
         <StationButton view={all.value} />
       </header>
@@ -96,19 +98,20 @@ export function Recent() {
   );
 }
 
-/** 全部 or 我参与的, and the archive, from a menu under it; marked in the accent while it narrows the list. */
-function FilterButton({ onlyMine, setOnlyMine }: { onlyMine: boolean; setOnlyMine: (on: boolean) => void }) {
+/** 全部, 我参与的 or 监控中, and the archive, from a menu under it; marked in the accent while it narrows the list. */
+function FilterButton({ filter, setFilter }: { filter: ChatFilter; setFilter: (value: ChatFilter) => void }) {
   const app = useApp();
   const mark = (on: boolean) => on ? <Check size={16} /> : <span style={{ width: 16 }} />;
   return (
-    <button type="button" className={`${barsCss.mNavButton} ${css.mFilter}`} data-on={onlyMine || undefined}
-      aria-label={`筛选会话：${onlyMine ? "我参与的" : "全部"}`}
+    <button type="button" className={`${barsCss.mNavButton} ${css.mFilter}`} data-on={filter !== "all" || undefined}
+      aria-label={`筛选会话：${filter === "mine" ? "我参与的" : filter === "watching" ? "监控中" : "全部"}`}
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
         // The menu is 180 wide (app.tsx MenuHost): its right edge under the button's.
         app.menu({ anchor: new DOMRect(r.right - 180, r.top, 0, r.height), items: [
-          { label: "全部", icon: mark(!onlyMine), action: () => setOnlyMine(false) },
-          { label: "我参与的", icon: mark(onlyMine), action: () => setOnlyMine(true) },
+          { label: "全部", icon: mark(filter === "all"), action: () => setFilter("all") },
+          { label: "我参与的", icon: mark(filter === "mine"), action: () => setFilter("mine") },
+          { label: "监控中", icon: mark(filter === "watching"), action: () => setFilter("watching") },
           { label: "已归档", icon: <Archive size={16} />, action: () => app.push(app.at("/archive")) },
         ] });
       }}>
@@ -138,7 +141,7 @@ function reading(status: StatusView | undefined): string {
 }
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days. */
-function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine: boolean }) {
+function ChatPane({ chats, filter }: { chats: TopicState<ChatsView>; filter: ChatFilter }) {
   const view = chats.value;
   const scope = useApp().entry.id;
   const status = useStatus(scope);
@@ -152,7 +155,7 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
           {/* A station's link coming back is said on its rows; only with no rows to show does the list say it. */}
           {view.note?.reading && <Note text={reading(status)} />}
           {view.note?.failing.map((s) => <Note key={`e/${s.station}`} text={s.text} error />)}
-          {view.note?.empty && <Empty view={view} onlyMine={onlyMine} />}
+          {view.note?.empty && <Empty view={view} filter={filter} />}
           {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
           <OpenJobs scope={scope} />
           {view.days.map((day) => (
@@ -171,13 +174,14 @@ function Note({ text, error = false }: { text: string; error?: boolean }) {
   return <p className={homeCss.mNote} data-error={error || undefined}>{text}</p>;
 }
 
-function Empty({ view, onlyMine }: { view: ChatsView; onlyMine: boolean }) {
+function Empty({ view, filter }: { view: ChatsView; filter: ChatFilter }) {
   const app = useApp();
   const any = view.stations.length > 0;
   return (
     <div className={css.mEmpty}>
       <Illustration name={any ? "new-chat" : "station-offline"} width={240} />
-      {onlyMine ? <p>没有你参与的会话。</p>
+      {filter === "mine" ? <p>没有你参与的会话。</p>
+        : filter === "watching" ? <p>没有在监控的会话。</p>
         : any ? <><p>还没有会话。在 Slack 里 @ {view.stations.length > 1 ? "它们" : "它"}，或者</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/new"))}>新建对话</button></>
         : <><p>还没有 station。</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/settings/stations"))}>看看 Station</button></>}
     </div>
@@ -261,7 +265,12 @@ function useRowMenu(item: ChatItem) {
       title: "重命名对话", value: item.title, placeholder: "对话名称", action: "保存", empty: true, hint: "留空则用第一句话作名字",
       run: (title) => api.rename(item, title),
     }) },
-    { label: "归档", icon: <Archive size={16} />, action: () => void api.archive(item, true).then(() => app.toast("已归档"), failed("归档")) },
+    // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+    { label: "归档", icon: <Archive size={16} />, action: () => {
+      const archive = () => api.archive(item, true).then(() => app.toast("已归档"), failed("归档"));
+      if (item.watch) confirm(app, { title: `归档「${item.title}」？`, text: item.watch.ask, action: "归档", run: archive });
+      else void archive();
+    } },
   ] });
 }
 

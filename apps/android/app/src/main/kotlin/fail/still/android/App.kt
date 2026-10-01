@@ -204,7 +204,13 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
 
     val onlyMine: Boolean get() = kept.onlyMine ?: false
-    fun showOnlyMine(on: Boolean) = setPrefs(kept.copy(onlyMine = on), buildJsonObject { put("onlyMine", on) })
+
+    /** What the chat list shows: "all", "mine" (我参与的) or "watching" (监控中); the core keeps the last two apart. */
+    val chatFilter: String get() = if (kept.onlyWatching == true) "watching" else if (onlyMine) "mine" else "all"
+    fun showChats(filter: String) = setPrefs(
+        kept.copy(onlyMine = filter == "mine", onlyWatching = filter == "watching"),
+        buildJsonObject { put("onlyMine", filter == "mine"); put("onlyWatching", filter == "watching") },
+    )
 
     /** A Slack app made for a new connect on `station`, to go on with (screens/Connects.kt); null lets it go. */
     fun resume(station: String): String? = kept.resume?.get(station)

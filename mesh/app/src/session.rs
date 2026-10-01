@@ -1008,6 +1008,12 @@ impl SessionActor {
                 if a.st().waiting.take_if(|w| *w == wait).is_none() {
                     return Ok(());
                 }
+                // Keeping watch: the watch brings it back (its notices, its end), not the clock; it waits on.
+                let watching = a.deps()?.store().list_jobs(Some(&a.key))?.iter().any(|j| j.watch && j.state == "running");
+                if watching {
+                    a.wait(seconds);
+                    return Ok(());
+                }
                 info!(session = a.key, seconds, "the wait is over without word; asking again");
                 a.start_turn(&a.deps()?, "nudge", &wait_over(seconds)).await
             });

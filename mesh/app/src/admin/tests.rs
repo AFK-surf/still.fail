@@ -1708,6 +1708,7 @@ async fn a_jobs_log_asked_for_on_the_events_stream_comes_at_once_and_again_as_it
         ended_at: None,
         restarts: 0,
         log: log.to_string_lossy().into_owned(),
+        watch: false,
     };
     t.store.insert_job(&job).unwrap();
     // Read by itself, it says the stream follows it (a client that knows needs no reading again).

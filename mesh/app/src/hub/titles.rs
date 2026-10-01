@@ -79,10 +79,21 @@ impl Hub {
         if given.changes >= CHANGES {
             return Ok(Err("it has been changed as often as it may be"));
         }
-        if self.store.people_said_after(thread, given.n)? < SAID_BEFORE_CHANGE {
+        // A watch started since: the name may say so at once (job_start's watch), not only once the talk moved on.
+        if self.store.people_said_after(thread, given.n)? < SAID_BEFORE_CHANGE && !self.watching_in(thread)? {
             return Ok(Err("people have said too little since it was given; change it only when it no longer says what the chat is about"));
         }
         Ok(Ok(true))
+    }
+
+    /// Whether one of the chat's agents keeps watch (a watch job of its runs).
+    fn watching_in(&self, thread: i64) -> Result<bool> {
+        for member in self.store.thread_sessions(thread)? {
+            if self.store.list_jobs(Some(&member.session))?.iter().any(|j| j.watch && j.state == "running") {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn is_open(&self, thread: i64) -> Result<bool> {

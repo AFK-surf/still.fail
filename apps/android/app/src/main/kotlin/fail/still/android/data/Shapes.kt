@@ -255,6 +255,15 @@ data class Stamp (
 	val past: Boolean
 )
 
+/// What a session keeps watch with (its watches running): their names, oldest first; since when the first runs; when
+/// one last gave word (a notice, else its start).
+@Serializable
+data class Watching (
+	val names: List<String>,
+	val since: Long,
+	val at: Long
+)
+
 /// A session, with what the clients show of it. Before its details are read an agent is only what the sidebar's rows
 /// say of it (key, runtime, model, effort, process, pending, last turn): the rest is absent then.
 @Serializable
@@ -307,7 +316,9 @@ data class Session (
 	/// is the one now.
 	val chat: Long? = null,
 	val description: String? = null,
-	val current: Boolean? = null
+	val current: Boolean? = null,
+	/// Keeping watch (a `job_start` watch of its runs): its chat is a watching one. A station from before watches says none.
+	val watch: Watching? = null
 )
 
 /// Where an agent stands.
@@ -657,6 +668,8 @@ data class Job (
 	val restarts: Long? = null,
 	/// What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to.
 	val notices: List<JobNotice>? = null,
+	/// Started to keep watch (`job_start` watch). A station from before watches says none.
+	val watch: Boolean? = null,
 	/// When its output last grew; absent when it has none.
 	val outputAt: Long? = null,
 	/// Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over).
@@ -726,7 +739,9 @@ data class RowAgent (
 	val maker: Maker? = null,
 	val mark: Badge? = null,
 	val statusText: String,
-	val badgeText: String? = null
+	val badgeText: String? = null,
+	/// Keeping watch, as its session's `watch`.
+	val watch: Watching? = null
 )
 
 /// Who said a row's last thing: an agent (its state riding on its picture), a person, or ember.
@@ -780,6 +795,14 @@ data class Person (
 	val shown: PersonShown
 )
 
+/// A watching chat (core, present.rs): what it watches in words (监控中：盯 CI), and what archiving it by hand asks
+/// first (`ask`: it runs on in the archive).
+@Serializable
+data class RowWatch (
+	val text: String,
+	val ask: String
+)
+
 /// An item of the sidebar, as its station puts it together for the viewer, and where it is.
 @Serializable
 data class ChatItem (
@@ -819,7 +842,9 @@ data class ChatItem (
 	/// The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it.
 	val clientKey: String? = null,
 	/// Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned).
-	val pinned: Boolean? = null
+	val pinned: Boolean? = null,
+	/// A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise.
+	val watch: RowWatch? = null
 )
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
@@ -976,6 +1001,8 @@ data class ChatView (
 	val outbox: List<Outgoing>,
 	val link: Link,
 	val offline: Boolean,
+	/// One of its agents keeps watch: archiving it by hand asks first. Absent otherwise.
+	val watch: RowWatch? = null,
 	/// A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox.
 	val pending: Boolean? = null,
 	/// The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it.
@@ -1807,6 +1834,8 @@ typealias RowPictureSetting = String
 data class PrefsView (
 	/// The lists show only the chats and connects the viewer takes part in.
 	val onlyMine: Boolean? = null,
+	/// The chat list shows only the watching chats (监控中); never with `only_mine`.
+	val onlyWatching: Boolean? = null,
 	val appearance: Appearance? = null,
 	val rowPicture: RowPictureSetting? = null,
 	/// Times are shown as dates rather than "3 分钟前".

@@ -433,6 +433,9 @@ pub struct JobRow {
     pub restarts: i64,
     /// Its output, as a file.
     pub log: String,
+    /// Started to keep watch (`job_start` with watch): while it runs, its chat is a watching one (not archived when
+    /// idle, its agent not asked again when its wait is over, apart in the lists).
+    pub watch: bool,
 }
 
 /// How many of a job's notices are kept.
@@ -475,6 +478,7 @@ fn job_row(r: &rusqlite::Row) -> rusqlite::Result<JobRow> {
         ended_at: r.get("ended_at")?,
         restarts: r.get("restarts")?,
         log: r.get("log")?,
+        watch: r.get::<_, i64>("watch")? != 0,
     })
 }
 
@@ -629,7 +633,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   started_at INTEGER NOT NULL,
   ended_at INTEGER,
   restarts INTEGER NOT NULL DEFAULT 0,
-  log TEXT NOT NULL
+  log TEXT NOT NULL,
+  watch INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
 CREATE TABLE IF NOT EXISTS job_notices (
@@ -798,6 +803,16 @@ fn add_auto_title_columns(db: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// The column watching jobs came with (jobs.watch), added to a database made before them the same way as
+/// add_archive_columns' (a station without them reads the database as it is, and its jobs are not watches).
+fn add_watch_column(db: &Connection) -> Result<()> {
+    let mut stmt = db.prepare("SELECT 1 FROM pragma_table_info('jobs') WHERE name = 'watch'")?;
+    if !stmt.exists([])? {
+        db.execute_batch("ALTER TABLE jobs ADD COLUMN watch INTEGER NOT NULL DEFAULT 0")?;
+    }
+    Ok(())
+}
+
 fn to_session_thread(r: &Row) -> rusqlite::Result<SessionThread> {
     Ok(SessionThread { thread: to_thread(r)?, connect: r.get("connect")? })
 }
@@ -942,6 +957,7 @@ impl Store {
         add_archive_columns(&db)?;
         add_client_column(&db)?;
         add_auto_title_columns(&db)?;
+        add_watch_column(&db)?;
         db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
         let (archive_dir, temp) = match archive {
             Some(dir) => (dir.to_path_buf(), None),
@@ -1902,8 +1918,8 @@ impl Store {
     pub fn insert_job(&self, job: &JobRow) -> Result<()> {
         self.with(|i, changes| {
             i.db.execute(
-                "INSERT INTO jobs (id, session_key, name, command, cwd, port, token, state, pgid, exit_code, started_at, ended_at, restarts, log) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                params![job.id, job.session_key, job.name, job.command, job.cwd, job.port, job.token, job.state, job.pgid, job.exit_code, job.started_at, job.ended_at, job.restarts, job.log],
+                "INSERT INTO jobs (id, session_key, name, command, cwd, port, token, state, pgid, exit_code, started_at, ended_at, restarts, log, watch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params![job.id, job.session_key, job.name, job.command, job.cwd, job.port, job.token, job.state, job.pgid, job.exit_code, job.started_at, job.ended_at, job.restarts, job.log, job.watch as i64],
             )?;
             changes.push(StoreChange::Session(job.session_key.clone()));
             changes.push(StoreChange::Job(job.id.clone()));

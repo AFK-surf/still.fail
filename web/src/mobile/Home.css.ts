@@ -10,8 +10,13 @@ export const mHomePane = style({
   padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 84px)", transition: "transform 240ms var(--m-standard)",
   selectors: {
     "&:nth-child(2)": { transform: "translateX(100%)" },
-    [`${mHomePanes}[data-mine] &:nth-child(1)`]: { transform: "translateX(-100%)" },
-    [`${mHomePanes}[data-mine] &:nth-child(2)`]: { transform: "none" },
+    "&:nth-child(3)": { transform: "translateX(200%)" },
+    [`${mHomePanes}[data-filter=mine] &:nth-child(1)`]: { transform: "translateX(-100%)" },
+    [`${mHomePanes}[data-filter=mine] &:nth-child(2)`]: { transform: "none" },
+    [`${mHomePanes}[data-filter=mine] &:nth-child(3)`]: { transform: "translateX(100%)" },
+    [`${mHomePanes}[data-filter=watching] &:nth-child(1)`]: { transform: "translateX(-200%)" },
+    [`${mHomePanes}[data-filter=watching] &:nth-child(2)`]: { transform: "translateX(-100%)" },
+    [`${mHomePanes}[data-filter=watching] &:nth-child(3)`]: { transform: "none" },
   },
   "@media": {
     "(prefers-reduced-motion: reduce)": {

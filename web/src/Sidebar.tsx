@@ -1,5 +1,5 @@
 import { Archive, Edit, Compose, Pin, Unplug } from "./icons.tsx";
-import { stationBase, useOnlyMine } from "./station.tsx";
+import { stationBase, useChatFilter, type ChatFilter } from "./station.tsx";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
@@ -7,7 +7,7 @@ import { prime } from "./core/react.ts";
 import { RowAside } from "./RowPicture.tsx";
 import { Retry, Waiting, WaitingItems } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
-import { ConnectKindIcon, ICON, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { Confirm, ConnectKindIcon, ICON, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
@@ -31,13 +31,14 @@ import * as pagesCss from "./styles/pages.css.ts";
  * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
  */
 export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
-  const [onlyMine] = useOnlyMine();
+  const [filter] = useChatFilter();
   const move = useComposerMove();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
-  // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
+  // The lists are followed at once, side by side: switching slides from one to another with nothing to wait for.
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
+  const watching = useChats(scope, false, true);
   // The page it was going to is there (or another took its place).
   const path = useLocation().pathname;
   useEffect(() => setGoing(null), [path]);
@@ -46,12 +47,13 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
       <div className={nav.navNew}>
         <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />新建对话</NavLink>
         {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
-        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} />}
+        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} watching />}
       </div>
       <div className={nav.navSlider}>
-        <div className={nav.navTrack} data-mine={onlyMine || undefined}>
-          <ChatPane chats={all} scope={scope} onlyMine={false} stationsPage={stationsPage} hidden={onlyMine} />
-          <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} hidden={!onlyMine} />
+        <div className={nav.navTrack} data-filter={filter}>
+          <ChatPane chats={all} scope={scope} filter="all" stationsPage={stationsPage} hidden={filter !== "all"} />
+          <ChatPane chats={mine} scope={scope} filter="mine" stationsPage={stationsPage} hidden={filter !== "mine"} />
+          <ChatPane chats={watching} scope={scope} filter="watching" stationsPage={stationsPage} hidden={filter !== "watching"} />
         </div>
       </div>
     </>
@@ -89,8 +91,8 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   );
 }
 
-/** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
-function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; hidden: boolean }) {
+/** One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
+function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; filter: ChatFilter; stationsPage: string; hidden: boolean }) {
   const view = chats.value;
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
@@ -111,7 +113,8 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
       {days.length === 0 && note.failing.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>{s.text}</p></Tip>)}
       {days.length === 0 && note.reading && !chats.error && <SkeletonRows />}
       {days.length === 0 && view && note.empty && (
-        <p className={nav.navEmpty}>{onlyMine ? "没有你参与的会话。"
+        <p className={nav.navEmpty}>{filter === "mine" ? "没有你参与的会话。"
+          : filter === "watching" ? "没有在监控的会话。"
           : stations.length ? "还没有会话。"
           : <>还没有 station，到 <NavLink className={chatCss.inlineLink} to={stationsPage}>设置 → Station</NavLink> 添加。</>}</p>
       )}
@@ -159,6 +162,9 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
   const archive = useArchive(item, to);
+  // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+  const [asking, setAsking] = useState(false);
+  const archiveAsked = () => { if (item.watch) setAsking(true); else void archive(); };
   const pin = usePin(item);
   const rename = useRename(item.station);
   const [editing, setEditing] = useState(false);
@@ -214,12 +220,14 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? "取消固定" : "固定"}</ContextMenu.Item>}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />重命名</ContextMenu.Item>
-            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void archive()}><Archive size={14} />归档</ContextMenu.Item>
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={archiveAsked}><Archive size={14} />归档</ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
     ) : row}
-    {menu && !editing && <ArchiveButton item={item} archive={archive} />}
+    {menu && !editing && <ArchiveButton item={item} archive={archiveAsked} />}
+    {item.watch && <Confirm open={asking} title={`归档「${item.title}」？`} description={item.watch.ask} action="归档"
+      onConfirm={() => { setAsking(false); void archive(); }} onClose={() => setAsking(false)} />}
     </div>
   );
 }
@@ -279,10 +287,10 @@ function usePin(item: ChatItem) {
 }
 
 /** Beside a chat's row while pointed at: puts it in the archive. */
-function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => Promise<void> }) {
+function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void }) {
   return (
     <Tip label="归档" side="right">
-      <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={() => void archive()}>
+      <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
         <Archive size={16} />
       </button>
     </Tip>

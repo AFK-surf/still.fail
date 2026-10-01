@@ -55,6 +55,15 @@ export function useOnlyMine(): [boolean, (value: boolean) => void] {
   return [usePrefs().onlyMine, (onlyMine) => setPrefs({ onlyMine })];
 }
 
+/** What the chat list shows: all, the viewer's (我参与的) or the watching ones (监控中), kept on this device (prefs.ts). */
+export type ChatFilter = "all" | "mine" | "watching";
+
+export function useChatFilter(): [ChatFilter, (value: ChatFilter) => void] {
+  const prefs = usePrefs();
+  const filter: ChatFilter = prefs.onlyWatching ? "watching" : prefs.onlyMine ? "mine" : "all";
+  return [filter, (value) => setPrefs({ onlyMine: value === "mine", onlyWatching: value === "watching" })];
+}
+
 /** People by email, from ember cloud's member list. */
 export interface Person { name: string; email: string; picture: string }
 export const PeopleContext = createContext<ReadonlyMap<string, Person>>(new Map());

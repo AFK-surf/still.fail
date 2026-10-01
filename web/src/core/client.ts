@@ -33,7 +33,7 @@ export type Topic =
   | { topic: "adminItem"; account: string; list: "users" | "workspaces" | "feedback"; id: string }
   | { topic: "adminOverview"; account: string }
   // Views: put together by the core from the topics above.
-  | { topic: "chats"; scope: string; mine: boolean }
+  | { topic: "chats"; scope: string; mine: boolean; watching?: boolean }
   | { topic: "stations"; scope: string }
   | { topic: "connects"; scope: string; mine: boolean }
   // An item's page: its chat, or its agent before it has one.

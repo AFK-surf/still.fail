@@ -467,9 +467,9 @@ impl Views {
 
     fn chat_view(&self, view: &Topic) -> Option<Result<Value>> {
         match view {
-            Topic::Chats { scope, mine } => self.chats(scope, *mine),
+            Topic::Chats { scope, mine, watching } => self.chats(scope, *mine, *watching),
             Topic::ChatSearch { scope, query, station, exclude, limit } => {
-                self.chats(scope, false).map(|chats| chats.map(|c| crate::refs::search(&c, query, station.as_deref(), exclude.as_deref(), *limit)))
+                self.chats(scope, false, false).map(|chats| chats.map(|c| crate::refs::search(&c, query, station.as_deref(), exclude.as_deref(), *limit)))
             }
             Topic::Stations { scope } => self.stations_view(scope),
             Topic::Connects { scope, mine } => self.connects(scope, *mine),
@@ -720,7 +720,8 @@ impl Views {
 
     /// The stations' sidebar rows side by side: each station puts its own together for the viewer (`/chats`);
     /// here they only get their station, the `mine` filter, and days.
-    fn chats(&self, scope: &str, mine: bool) -> Option<Result<Value>> {
+    /// A scope's chat list: all, the viewer's (`mine`), or the watching ones (`watching`).
+    fn chats(&self, scope: &str, mine: bool, watching: bool) -> Option<Result<Value>> {
         let stations = match self.stations(scope)? {
             Ok(stations) => stations,
             Err(error) => return Some(Err(error)),
@@ -766,6 +767,12 @@ impl Views {
                     }
                     // What the clients draw of it, decided here (present.rs).
                     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+                    // Keeping watch: alone under 监控中, and archived by hand only once asked.
+                    match crate::present::row_watch(&agents) {
+                        Some(watch) => row["watch"] = watch,
+                        None if watching => continue,
+                        None => {}
+                    }
                     row["state"] = json!(crate::present::row_state(&agents));
                     for agent in row.get_mut("agents").and_then(Value::as_array_mut).into_iter().flatten() {
                         crate::present::session(agent);
@@ -1138,6 +1145,11 @@ impl Views {
             if let Some(pinned) = row.as_ref().and_then(|r| r.get("pinned")) {
                 view["pinned"] = json!(pinned.is_number());
             }
+            // Keeping watch: archiving it by hand asks first.
+            let sessions: Vec<Value> = view["agents"].as_array().into_iter().flatten().filter_map(|a| a.get("session").cloned()).collect();
+            if let Some(watch) = crate::present::row_watch(&sessions) {
+                view["watch"] = watch;
+            }
             view
         }))
     }
@@ -1219,8 +1231,8 @@ impl Views {
             .unwrap_or(Value::Null);
         Some(json!({
             // Where it stands, and its mark: decided here for every client (present.rs).
-            "status": crate::present::session_status(&session),
-            "badge": crate::present::badge(crate::present::session_status(&session)),
+            "status": crate::present::shown_status(&session),
+            "badge": crate::present::mark_of(&session),
             "session": session,
             "connect": connect,
             "profile": profile,
@@ -1236,7 +1248,8 @@ impl Views {
             "since": detail.get("turns").and_then(Value::as_array).and_then(|t| t.last())
                 .filter(|t| t.get("endedAt").is_none_or(Value::is_null)).and_then(|t| t.get("startedAt")).cloned().unwrap_or(Value::Null),
             // While it waits on work it started: since when, and for how long at most.
-            "wait": crate::present::waiting(&session),
+            // (None while it watches: the watch brings it back, not a wait running out.)
+            "wait": if crate::present::watching(&session) { Value::Null } else { crate::present::waiting(&session) },
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
             "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
             // Its background jobs and web services (a station yet to update says none).
@@ -1931,7 +1944,7 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.read(&mut ui, 1).await;
             assert_eq!(sorted(t.started()), sorted(vec![workspace(), Topic::Prefs]), "the workspace, and the device's prefs (whose pictures lead)");
             assert!(ui.value.is_none(), "nothing to show before the workspace is read");
@@ -2037,7 +2050,7 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
             t.started();
@@ -2066,7 +2079,7 @@ mod tests {
             let midnight = ((now + offset) / DAY_MS).floor() * DAY_MS - offset;
             let today = midnight + (now - midnight) / 2.0;
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), one_station());
             t.host.settle().await;
             t.set(rows("ws/st"), json!([
@@ -2098,7 +2111,7 @@ mod tests {
             let t = setup();
             let now = t.host.now_ms();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), one_station());
             t.host.settle().await;
             let pinned = |id: &str, at: f64, pinned: Value| {
@@ -2127,7 +2140,7 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), one_station());
             t.host.settle().await;
             t.set(rows("ws/st"), json!([]));
@@ -2146,7 +2159,7 @@ mod tests {
             let t = setup();
             let mut all = Ui::default();
             let mut mine = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), stations(t.now_s()));
             t.read(&mut all, 1).await;
             let now = t.host.now_ms();
@@ -2158,7 +2171,7 @@ mod tests {
             t.set(rows("ws/a"), json!([with("1", now - 1.0, true), with("k", now - 2.0, false)]));
             t.set(rows("ws/b"), json!([with("1", now - 3.0, false), with("j", now - 4.0, true)]));
             t.read(&mut all, 1).await;
-            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true, watching: false });
             t.read(&mut mine, 2).await;
             assert_eq!(ids(all.value.as_ref().unwrap()), vec!["1", "k", "1", "j"]);
             let mine = mine.value.unwrap();
@@ -2168,11 +2181,35 @@ mod tests {
     }
 
     #[test]
+    fn watching_keeps_the_rows_one_of_whose_agents_keeps_watch_marked_so() {
+        run(async {
+            let t = setup();
+            let mut all = Ui::default();
+            let mut watching = Ui::default();
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
+            t.set(workspace(), stations(t.now_s()));
+            t.read(&mut all, 1).await;
+            let now = t.host.now_ms();
+            let mut ci = row("ci", now - 1.0);
+            ci["agents"][0]["watch"] = json!({"names": ["盯 CI"], "since": now as i64 - 10, "at": now as i64 - 5});
+            t.set(rows("ws/a"), json!([ci, row("plain", now - 2.0)]));
+            t.read(&mut all, 1).await;
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: false, watching: true });
+            t.read(&mut watching, 2).await;
+            let all = all.value.unwrap();
+            assert_eq!(ids(&all), vec!["ci", "plain"]);
+            assert_eq!(all["days"][0]["items"][0]["watch"]["text"], "监控中：盯 CI");
+            assert!(all["days"][0]["items"][1].get("watch").is_none());
+            assert_eq!(ids(&watching.value.unwrap()), vec!["ci"]);
+        });
+    }
+
+    #[test]
     fn a_chats_unread_is_a_mark_and_its_title_comes_from_what_was_said() {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), one_station());
             t.host.settle().await;
             let now = t.host.now_ms();
@@ -2203,7 +2240,7 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
             let (computed, messages) = (t.router.computed.get(), ui.messages);
@@ -2385,7 +2422,7 @@ mod tests {
             t.host.set_utc_offset_min(480);
             t.store.set_clock();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
             t.set(workspace(), one_station());
             t.host.settle().await;
             t.read(&mut ui, 1).await;
@@ -2394,7 +2431,7 @@ mod tests {
             let count = || t.host.sleeps.borrow().iter().filter(|ms| clock(ms)).count();
             let before = count();
             assert!(before >= 1, "{:?}", t.host.sleeps.borrow());
-            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true, watching: false });
             assert_eq!(count(), before, "a second view shares it");
         });
     }
@@ -2715,7 +2752,7 @@ mod tests {
             t.subscribe(1, agent_page("ws/st", &key));
             t.set(workspace(), one_station());
             t.host.settle().await;
-            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true, watching: false });
             t.set(rows("ws/st"), json!([row("7", t.host.now_ms() - 1000.0)]));
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let v = screen.value.clone().unwrap();
@@ -2775,7 +2812,7 @@ mod tests {
             let t = setup();
             let views = t.router.views();
             let mut list = Ui::default();
-            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true, watching: false });
             t.set(workspace(), one_station());
             t.host.settle().await;
             let mut old = row("ember:c-0", t.host.now_ms() - 5000.0);

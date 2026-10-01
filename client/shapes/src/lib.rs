@@ -256,6 +256,22 @@ pub struct Session {
     pub chat: Option<i64>,
     pub description: Option<String>,
     pub current: Option<bool>,
+    /// Keeping watch (a `job_start` watch of its runs): its chat is a watching one. A station from before watches says none.
+    pub watch: Option<Watching>,
+}
+
+/// What a session keeps watch with (its watches running): their names, oldest first; since when the first runs; when
+/// one last gave word (a notice, else its start).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Watching {
+    pub names: Vec<String>,
+    #[typeshare(serialized_as = "I54")]
+    pub since: i64,
+    #[typeshare(serialized_as = "I54")]
+    pub at: i64,
 }
 
 #[typeshare]
@@ -1388,6 +1404,9 @@ pub struct PrefsView {
     /// The lists show only the chats and connects the viewer takes part in.
     #[serde(default)]
     pub only_mine: bool,
+    /// The chat list shows only the watching chats (监控中); never with `only_mine`.
+    #[serde(default)]
+    pub only_watching: bool,
     #[serde(default)]
     pub appearance: Appearance,
     #[serde(default)]
@@ -1693,6 +1712,8 @@ pub struct RowAgent {
     pub mark: Option<Badge>,
     pub status_text: String,
     pub badge_text: Option<String>,
+    /// Keeping watch, as its session's `watch`.
+    pub watch: Option<Watching>,
 }
 
 /// Who said a row's last thing: an agent (its state riding on its picture), a person, or ember.
@@ -1792,6 +1813,19 @@ pub struct ChatItem {
     pub client_key: Option<String>,
     /// Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned).
     pub pinned: Option<bool>,
+    /// A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise.
+    pub watch: Option<RowWatch>,
+}
+
+/// A watching chat (core, present.rs): what it watches in words (监控中：盯 CI), and what archiving it by hand asks
+/// first (`ask`: it runs on in the archive).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RowWatch {
+    pub text: String,
+    pub ask: String,
 }
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
@@ -1970,6 +2004,8 @@ pub struct Job {
     /// What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to.
     #[serde(default)]
     pub notices: Vec<JobNotice>,
+    /// Started to keep watch (`job_start` watch). A station from before watches says none.
+    pub watch: Option<bool>,
     /// When its output last grew; absent when it has none.
     #[typeshare(serialized_as = "Option<I54>")]
     pub output_at: Option<i64>,
@@ -2172,6 +2208,8 @@ pub struct ChatView {
     pub outbox: Vec<Outgoing>,
     pub link: Link,
     pub offline: bool,
+    /// One of its agents keeps watch: archiving it by hand asks first. Absent otherwise.
+    pub watch: Option<RowWatch>,
     /// A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox.
     #[serde(default)]
     pub pending: bool,

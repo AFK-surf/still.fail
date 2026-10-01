@@ -153,7 +153,10 @@ inline fun <reified T> rememberTopic(core: StillFailCore, topic: JsonObject?): S
 object Topics {
     val accounts = buildJsonObject { put("topic", "accounts") }
     val workspaces = buildJsonObject { put("topic", "workspaces") }
-    fun chats(scope: String, mine: Boolean) = buildJsonObject { put("topic", "chats"); put("scope", scope); put("mine", mine) }
+    /** A scope's chat list: all, the viewer's (`mine`), or the watching ones (`watching`). */
+    fun chats(scope: String, mine: Boolean, watching: Boolean = false) = buildJsonObject {
+        put("topic", "chats"); put("scope", scope); put("mine", mine); if (watching) put("watching", true)
+    }
     fun stations(scope: String) = buildJsonObject { put("topic", "stations"); put("scope", scope) }
     /** The archived chats of a scope's stations online, newest first by the day archived (client/core/src/views/archive.rs). */
     fun archive(scope: String) = buildJsonObject { put("topic", "archive"); put("scope", scope) }

@@ -89,7 +89,14 @@ pub enum Topic {
     AdminItem { account: String, list: String, id: String },
     AdminOverview { account: String },
     // Views: put together from the topics above (see views.rs). `scope` is a workspace id.
-    Chats { scope: String, #[serde(default)] mine: bool },
+    Chats {
+        scope: String,
+        #[serde(default)]
+        mine: bool,
+        /// Only the watching chats (监控中: one of their agents keeps watch).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        watching: bool,
+    },
     Stations { scope: String },
     Connects { scope: String, #[serde(default)] mine: bool },
     /// One item's page: its chat (`thread`: the thread, its messages and its agents), or, before its agent has a

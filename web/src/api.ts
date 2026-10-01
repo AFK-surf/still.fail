@@ -76,8 +76,9 @@ export function stamp(of: object, field: string): Stamp | undefined {
   return (of as { time?: Record<string, Stamp> }).time?.[field];
 }
 
-export function useChats(scope: string, mine: boolean): TopicState<ChatsView> {
-  return useTopic<ChatsView>({ topic: "chats", scope, mine });
+/** A scope's chat list: all, the viewer's (`mine`), or the watching ones (`watching`). */
+export function useChats(scope: string, mine: boolean, watching = false): TopicState<ChatsView> {
+  return useTopic<ChatsView>({ topic: "chats", scope, mine, ...(watching ? { watching } : {}) });
 }
 
 /**

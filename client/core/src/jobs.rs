@@ -49,6 +49,11 @@ pub fn tone(job: &Value) -> &'static str {
     }
 }
 
+/// Whether it keeps watch (`job_start` watch): meant to run a long while, so not among those left up too long.
+pub fn is_watch(job: &Value) -> bool {
+    job.get("watch").and_then(Value::as_bool) == Some(true)
+}
+
 /// Whether clearing takes it away: over (stopped, failed, ended by itself), not a service being started again.
 pub fn is_ended(job: &Value) -> bool {
     matches!(str_of(job, "state"), "stopped" | "failed") || (str_of(job, "state") == "exited" && !is_service(job))
@@ -80,6 +85,7 @@ fn word(job: &Value) -> &'static str {
         return match tone { "up" => "在线", "restart" => "正在重启", "fail" => "没能启动", _ => "已停止" };
     }
     match tone {
+        "live" if is_watch(job) => "监控中",
         "live" => "在盯着",
         "fail" => if state == "failed" { "没能启动" } else { "意外退出" },
         _ => if state == "stopped" { "已停止" } else { "已结束" },
@@ -251,10 +257,10 @@ pub fn chat_jobs(chat: &Value, c: Clock) -> (Value, f64) {
 }
 
 /// Those of the stations' open jobs (each station's `jobs` topic, with its name when there are several) up longer
-/// than `LONG`, oldest first, web services and background jobs apart (`LongJobsView`).
+/// than `LONG`, watches aside (they are meant to), oldest first, web services and background jobs apart (`LongJobsView`).
 pub fn long_jobs(stations: &[(String, Option<String>, Vec<Value>)], c: Clock) -> Value {
     let mut long: Vec<Value> = stations.iter().flat_map(|(address, name, jobs)| {
-        jobs.iter().filter(|j| c.now - ms_of(j, "startedAt").unwrap_or(c.now) >= LONG).map(move |j| {
+        jobs.iter().filter(|j| !is_watch(j) && c.now - ms_of(j, "startedAt").unwrap_or(c.now) >= LONG).map(move |j| {
             let mut job = shown(j, c);
             let chat = j.get("chat").filter(|c| c.is_object());
             let title = chat.map(|c| str_of(c, "title")).filter(|t| !t.is_empty()).unwrap_or(if chat.is_some() { "对话" } else { "不在任何对话里" });
@@ -486,6 +492,10 @@ mod tests {
         assert_eq!((g[1]["head"].as_str(), g[1]["jobs"][0]["id"].as_str(), g[1]["jobs"][0]["whereText"].as_str(), g[1]["jobs"][0]["age"].as_str()), (Some("一直在跑的后台任务 · 2"), Some("j1"), Some("studio · 对话"), Some("3 小时")));
         assert_eq!(g[1]["jobs"][1]["whereText"], "studio · 修登录 · 已归档");
         assert_eq!(long_jobs(&[st(None, vec![job("new", json!({}))])], c()), json!({"groups": []}));
+        // A watch is meant to run long: not among them, and said as one.
+        let watch = job("w", json!({"startedAt": NOW - 5.0 * LONG, "watch": true}));
+        assert_eq!(long_jobs(&[st(None, vec![watch.clone()])], c()), json!({"groups": []}));
+        assert_eq!(shown(&watch, c())["word"], "监控中");
     }
 
     #[test]

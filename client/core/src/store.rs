@@ -805,7 +805,7 @@ mod tests {
     fn an_invalidated_topic_is_computed_once_as_it_goes_out() {
         run(async {
             let (host, store, source) = setup();
-            let chats = Topic::Chats { scope: "ws".into(), mine: false };
+            let chats = Topic::Chats { scope: "ws".into(), mine: false, watching: false };
             store.subscribe(1, 1, chats.clone());
             source.take();
             // Nothing to show yet: nothing goes out.

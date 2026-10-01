@@ -3,7 +3,7 @@ import { useAppearance } from "./theme.ts";
 import { useRef, type ComponentProps, type ReactNode } from "react";
 import type { Level, PersonShown, Quota } from "./api.ts";
 import type { Meter } from "./core/shapes.ts";
-import { useOnlyMine } from "./station.tsx";
+import { useChatFilter, useOnlyMine, type ChatFilter } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { Archive, Check, Filter } from "./icons.tsx";
 import { useNavigate } from "react-router";
@@ -15,30 +15,36 @@ import * as cloudCss from "./styles/cloud.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 
 /**
- * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu. `compact`: a filter
- * button alone, marked while it filters; else the filter's name beside it. `archive`: the archive's page, the menu's
- * last item under a line.
+ * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu; for chats (`watching`)
+ * also the watching ones (监控中). `compact`: a filter button alone, marked while it filters; else the filter's name
+ * beside it. `archive`: the archive's page, the menu's last item under a line.
  */
-export function MineFilter({ label = "筛选", mine = "我创建的", compact, archive }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined }) {
+export function MineFilter({ label = "筛选", mine = "我创建的", compact, archive, watching }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
+  const [chatFilter, setChatFilter] = useChatFilter();
+  // Chats: one of three (the core keeps 我参与的 and 监控中 apart); connects: all or mine.
+  const filter: ChatFilter = watching ? chatFilter : onlyMine ? "mine" : "all";
+  const setFilter = (value: ChatFilter) => watching ? setChatFilter(value) : setOnlyMine(value === "mine");
+  const named = filter === "mine" ? mine : filter === "watching" ? "监控中" : "全部";
   const navigate = useNavigate();
   // Gone to the archive, the focus is not brought back to the button (it would be ringed there, over the page left).
   const leaving = useRef(false);
-  const item = (value: boolean, text: string) => (
-    <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => setOnlyMine(value)}>
-      <span className={chatCss.chooserCheck}>{onlyMine === value && <Check size={14} />}</span>{text}
+  const item = (value: ChatFilter, text: string) => (
+    <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => setFilter(value)}>
+      <span className={chatCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
     </DropdownMenu.Item>
   );
   return (
     <DropdownMenu.Root modal={false}>
-      <Tip label={`筛选${label}`}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={`筛选${label}：${onlyMine ? mine : "全部"}`} data-on={onlyMine || undefined}>
-        <Filter size={16} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
+      <Tip label={`筛选${label}`}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={`筛选${label}：${named}`} data-on={filter !== "all" || undefined}>
+        <Filter size={16} strokeWidth={1.8} />{!compact && <span>{named}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
           onCloseAutoFocus={(e) => { if (leaving.current) { leaving.current = false; e.preventDefault(); } }}>
-          {item(false, `全部${label}`)}
-          {item(true, mine)}
+          {item("all", `全部${label}`)}
+          {item("mine", mine)}
+          {watching && item("watching", "监控中")}
           {archive && <>
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(archive); }}>

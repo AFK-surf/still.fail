@@ -712,8 +712,9 @@ impl Hub {
     }
 
     /// Archives what has idled past auto_archive_ms (counted from its last activity, or from being shown again by hand)
-    /// and is done: nothing running or waiting to be heard, not stopped at a block for someone, nothing its chat's
-    /// starter has not read, and no single-session connect feeding it. Anything new said brings it back
+    /// and is done: nothing running or waiting to be heard, no background job or service of its own still up (a watch
+    /// above all), not stopped at a block for someone, nothing its chat's starter has not read, and no single-session
+    /// connect feeding it. Anything new said brings it back
     /// (Store::bring_back).
     pub fn auto_archive(&self, now: i64) -> Result<()> {
         let after = self.config().auto_archive_ms as i64;
@@ -729,11 +730,16 @@ impl Hub {
         };
         let bound = self.store.list_bindings()?;
         let stats = self.store.session_stats(None)?;
+        let jobs: HashSet<String> = self.store.list_jobs(None)?.into_iter()
+            .filter(|j| j.state == "running" || (j.port.is_some() && j.state == "exited"))
+            .map(|j| j.session_key)
+            .collect();
         let busy = |key: &str| -> Result<bool> {
             let Some(row) = self.store.get_session(key)? else { return Ok(true) };
             let stat = stats.get(key);
             let last = stat.and_then(|s| s.last_turn.as_ref());
             Ok(row.running
+                || jobs.contains(key)
                 || self.process_state(key) == "running"
                 || stat.is_some_and(|s| s.pending > 0)
                 || last.is_some_and(|t| t.declared.as_deref() == Some("block") || t.ended_at.is_none()))
@@ -1269,7 +1275,7 @@ impl Hub {
                     "type": "object",
                     "properties": {
                         "kind": { "type": "string", "enum": ["final", "block", "waiting"] },
-                        "seconds": { "type": "integer", "minimum": MIN_WAIT_SECONDS, "maximum": MAX_WAIT_SECONDS, "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again." },
+                        "seconds": { "type": "integer", "minimum": MIN_WAIT_SECONDS, "maximum": MAX_WAIT_SECONDS, "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch)." },
                     },
                     "required": ["kind"],
                     "additionalProperties": false,

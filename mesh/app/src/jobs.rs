@@ -62,6 +62,12 @@ pub type Notify = Arc<dyn Fn(&str, String) + Send + Sync>;
 /// when the station is in a workspace.
 pub type Link = Arc<dyn Fn(&str, &str) -> Option<String> + Send + Sync>;
 
+/// Whether a job keeps watch (`job_start`'s watch).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Watch {
+    pub on: bool,
+}
+
 struct Running {
     pgid: i32,
     /// Stopped by request: its end is not news, nor restarted.
@@ -95,6 +101,28 @@ pub fn shown(store: &Store, job: &JobRow) -> Value {
         o.insert("outputAt".into(), json!(output_at(Path::new(&job.log))));
     }
     v
+}
+
+/// The watches running, by session: what the pages show of a watching chat's agent (its session's `watch`): the
+/// watches' names (oldest first), since when the first runs, when one last gave word (`at`: its latest notice, else its
+/// start; a notice is news to the pages, output is not).
+pub fn watching(store: &Store) -> HashMap<String, Value> {
+    let mut by: HashMap<String, Vec<JobRow>> = HashMap::new();
+    for job in store.list_jobs(None).unwrap_or_default().into_iter().filter(|j| j.watch && j.state == "running") {
+        by.entry(job.session_key.clone()).or_default().push(job);
+    }
+    by.into_iter()
+        .map(|(key, mut jobs)| {
+            jobs.sort_by_key(|j| j.started_at);
+            let at = jobs.iter().map(|j| {
+                let said = store.job_notices(&j.id, 1).ok().and_then(|n| n.first().map(|n| n.at));
+                said.unwrap_or(j.started_at).max(j.started_at)
+            }).max();
+            let names: Vec<&str> = jobs.iter().map(|j| j.name.as_str()).collect();
+            let value = json!({ "names": names, "since": jobs[0].started_at, "at": at });
+            (key, value)
+        })
+        .collect()
 }
 
 /// When a log last grew (ms), if it has anything in it.
@@ -166,7 +194,7 @@ impl Jobs {
     }
 
     /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port.
-    pub fn start(&self, session: &str, name: &str, command: &str, cwd: &Path, port: Option<u16>) -> Result<JobRow> {
+    pub fn start(&self, session: &str, name: &str, command: &str, cwd: &Path, port: Option<u16>, watch: Watch) -> Result<JobRow> {
         if command.trim().is_empty() {
             bail!("command is empty");
         }
@@ -175,6 +203,9 @@ impl Jobs {
         }
         if port.is_some_and(|p| p < 1024) {
             bail!("a service's port is 1024 or above");
+        }
+        if watch.on && port.is_some() {
+            bail!("a watch is a job, not a web service: give it no port");
         }
         let jobs = self.store.list_jobs(Some(session))?;
         if jobs.iter().filter(|j| j.state == "running").count() >= MAX_RUNNING {
@@ -204,6 +235,7 @@ impl Jobs {
             started_at: now_ms(),
             ended_at: None,
             restarts: 0,
+            watch: watch.on,
         };
         self.store.insert_job(&job)?;
         if let Err(e) = self.spawn(&job, false) {
@@ -525,7 +557,7 @@ impl Jobs {
         vec![
             Tool {
                 name: "job_start".into(),
-                description: "Start a background job: a shell command the station runs apart from your turns, with its output kept in a log. You are told when it ends, and whatever it says on the way: inside the job, `ember-job notify <words>` sends you a message (use it for milestones or problems in a long run). Give a port for a web service: it is kept up (started again if it ends), gets PORT in its environment, and the workspace's members can open it through the returned link (post the link where people should see it). Jobs keep running across your turns and across restarts of the station (one that did not survive, say the machine restarted, is started again).".into(),
+                description: "Start a background job: a shell command the station runs apart from your turns, with its output kept in a log. You are told when it ends, and whatever it says on the way: inside the job, `ember-job notify <words>` sends you a message (use it for milestones or problems in a long run). Give a port for a web service: it is kept up (started again if it ends), gets PORT in its environment, and the workspace's members can open it through the returned link (post the link where people should see it). Jobs keep running across your turns and across restarts of the station (one that did not survive, say the machine restarted, is started again). For keeping watch over something for a long while (a CI run, a deploy, a metric, a review queue), set watch: while the watch runs, its chat is a watching chat, found under the chat list's 监控中 filter and never archived for being idle; when you then end your turn waiting, you are not asked again when the wait is over, only when the watch says something (`ember-job notify`), ends, or someone writes. Watch with a loop that checks and notifies on changes. Name the chat for it: give your next chat_post in a still.fail chat a title that says what it watches (e.g. 「监控 · PR #482 的 CI」); a chat with a watch running may be renamed so at once.".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -533,6 +565,7 @@ impl Jobs {
                         "name": { "type": "string", "description": "A short name for it." },
                         "cwd": { "type": "string", "description": "Where it runs; default this session's workspace." },
                         "port": { "type": "integer", "minimum": 1024, "maximum": 65535, "description": "For a web service: the port it listens on (127.0.0.1 is enough)." },
+                        "watch": { "type": "boolean", "description": "It keeps watch for a long while (see above). Not with a port." },
                     },
                     "required": ["command"],
                     "additionalProperties": false,
@@ -549,7 +582,10 @@ impl Jobs {
                             None | Some(Value::Null) => None,
                             Some(p) => Some(p.as_u64().filter(|p| *p <= 65535).ok_or_else(|| anyhow!("port must be a number from 1024 to 65535"))? as u16),
                         };
-                        let job = jobs.start(&key, &text("name"), &text("command"), &cwd, port)?;
+                        let watch = Watch {
+                            on: args.get("watch").and_then(Value::as_bool).unwrap_or(false),
+                        };
+                        let job = jobs.start(&key, &text("name"), &text("command"), &cwd, port, watch)?;
                         Ok(serde_json::to_string_pretty(&jobs.view(&job))?)
                     })
                 }),

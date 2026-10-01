@@ -17,7 +17,7 @@ import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, M
 import { stationBase, useStation } from "../station.tsx";
 import { PENDING } from "../lastChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { ask } from "./sheets.tsx";
+import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
 import { annotatePath } from "./Annotate.tsx";
 import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
@@ -597,7 +597,8 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
     <>
       <GroupLabel>归档</GroupLabel>
       <InfoList>
-        <InfoRow onClick={() => void archive()}><Archive size={16} /><span className={partsCss.mGrow}>归档对话</span></InfoRow>
+        {/* A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words). */}
+        <InfoRow onClick={() => view.watch ? confirm(app, { title: `归档「${view.title}」？`, text: view.watch.ask, action: "归档", run: archive }) : void archive()}><Archive size={16} /><span className={partsCss.mGrow}>归档对话</span></InfoRow>
       </InfoList>
     </>
   );

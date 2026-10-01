@@ -136,13 +136,18 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 GroupLabel("归档")
                 InfoList {
                     InfoRow(onClick = {
-                        app.sheet = null
-                        app.pop()
                         val session = view!!.agents.firstOrNull()?.session?.key ?: (of as? ChatOf.Session)?.key ?: ""
-                        app.scope.launch {
-                            try { app.api(station).setArchived(thread.id, session, true); app.toast = "已归档" }
-                            catch (e: CoreException) { app.toast = "没能归档：${e.message}" }
+                        val archive = {
+                            app.sheet = null
+                            app.pop()
+                            app.scope.launch {
+                                try { app.api(station).setArchived(thread.id, session, true); app.toast = "已归档" }
+                                catch (e: CoreException) { app.toast = "没能归档：${e.message}" }
+                            }
                         }
+                        // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+                        val watch = view.watch
+                        if (watch != null) confirm(app, "归档「${view.title}」？", watch.ask, "归档") { archive() } else archive()
                     }) {
                         IconIn(Icons.Archive, 16.dp, C.ink)
                         Text("归档对话", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))

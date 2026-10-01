@@ -134,12 +134,16 @@ import fail.still.android.ui.initial
 fun HomeScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     val scope = current.workspace.id
-    // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
+    // The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with
+    // nothing to wait for.
     val all by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false))
     val mine by rememberTopic<ChatsView>(app.core, Topics.chats(scope, true))
+    val watching by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false, watching = true))
     val allList = rememberLazyListState()
     val mineList = rememberLazyListState()
-    val shift by animateFloatAsState(if (app.onlyMine) 1f else 0f, tween(240, easing = FastOutSlowInEasing), label = "mine")
+    val watchingList = rememberLazyListState()
+    val filter = app.chatFilter
+    val shift by animateFloatAsState(when (filter) { "mine" -> 1f; "watching" -> 2f; else -> 0f }, tween(240, easing = FastOutSlowInEasing), label = "filter")
     // The lists run under both bars, which are frosted glass over them.
     val haze = remember { HazeState() }
     val density = LocalDensity.current
@@ -149,8 +153,9 @@ fun HomeScreen(current: WorkspaceEntry) {
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
             val width = constraints.maxWidth
-            ChatPane(current, all, false, allList, padding, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
-            ChatPane(current, mine, true, mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
+            ChatPane(current, all, "all", allList, padding, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
+            ChatPane(current, mine, "mine", mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
+            ChatPane(current, watching, "watching", watchingList, padding, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
         }
         Row(
             Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze)
@@ -189,13 +194,14 @@ fun HomeScreen(current: WorkspaceEntry) {
                         // The menu is 180 wide (Sheet.kt MenuHost): its right edge under the button's.
                         val left = at.right - with(density) { 180.dp.toPx() }
                         app.menu = MenuSpec(Rect(left, at.top, left, at.bottom), listOf(
-                            MenuItem("全部", if (!app.onlyMine) Icons.Check else null) { app.showOnlyMine(false) },
-                            MenuItem("我参与的", if (app.onlyMine) Icons.Check else null) { app.showOnlyMine(true) },
+                            MenuItem("全部", if (filter == "all") Icons.Check else null) { app.showChats("all") },
+                            MenuItem("我参与的", if (filter == "mine") Icons.Check else null) { app.showChats("mine") },
+                            MenuItem("监控中", if (filter == "watching") Icons.Check else null) { app.showChats("watching") },
                             MenuItem("已归档", Icons.Archive) { app.push(Screen.Archive) },
                         ))
-                    }.semantics { contentDescription = "筛选会话：" + if (app.onlyMine) "我参与的" else "全部" },
+                    }.semantics { contentDescription = "筛选会话：" + when (filter) { "mine" -> "我参与的"; "watching" -> "监控中"; else -> "全部" } },
                     contentAlignment = Alignment.Center,
-                ) { IconIn(Icons.Filter, 20.dp, if (app.onlyMine) C.accent else C.ink) }
+                ) { IconIn(Icons.Filter, 20.dp, if (filter != "all") C.accent else C.ink) }
             }
             // The stations at a glance (ui/StationGlyph.kt); its page says which is which. The core reaching nothing
             // at all (`status` in trouble) puts it to sleep.
@@ -213,9 +219,9 @@ fun HomeScreen(current: WorkspaceEntry) {
     }
 }
 
-/** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
+/** One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 @Composable
-private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
+private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
     val view = chats.value
     val app = LocalApp.current
     val status by rememberTopic<StatusView>(app.core, Topics.status(current.workspace.id))
@@ -255,7 +261,7 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine:
             val note = view.note
             if (note?.reading == true) item(key = "loading") { Note(reading) }
             note?.failing?.forEach { s -> item(key = "e/${s.station}") { Note(s.text, error = true) } }
-            if (note?.empty == true) item(key = "empty") { Empty(current, view, onlyMine) }
+            if (note?.empty == true) item(key = "empty") { Empty(current, view, filter) }
             // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
             item(key = "open-jobs") { OpenJobs(current.workspace.id) }
             for (day in days) {
@@ -321,13 +327,14 @@ private fun Note(text: String, error: Boolean = false) =
     Text(text, color = if (error) C.red else C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
 
 @Composable
-private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
+private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {
     val app = LocalApp.current
     // No station yet: nothing else works, so adding the first one is the page.
-    if (view.stations.isEmpty() && !onlyMine) return FirstStation(current)
+    if (view.stations.isEmpty() && filter == "all") return FirstStation(current)
     Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 240.dp)
-        if (onlyMine) Text("没有你参与的会话。", fontSize = 14.sp, color = C.muted)
+        if (filter == "mine") Text("没有你参与的会话。", fontSize = 14.sp, color = C.muted)
+        else if (filter == "watching") Text("没有在监控的会话。", fontSize = 14.sp, color = C.muted)
         else {
             Text("还没有会话。在 Slack 里 @ ${if (view.stations.size > 1) "它们" else "它"}，或者", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             Text("新建对话", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.NewChat) })
@@ -381,7 +388,12 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
         // A station from before pins says nothing of them: its chats are not pinned from here.
         item.pinned?.let { pinned -> MenuItem(if (pinned) "取消固定" else "固定", Icons.Pin) { run(if (pinned) "取消固定" else "固定") { api.setPinned(item.session, !pinned) } } },
         MenuItem("重命名", Icons.Edit) { askTitle(app, item.station, item.thread, item.session, item.title) },
-        MenuItem("归档", Icons.Archive) { run("归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" } },
+        MenuItem("归档", Icons.Archive) {
+            // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+            val watch = item.watch
+            if (watch != null) confirm(app, "归档「${item.title}」？", watch.ask, "归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
+            else run("归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
+        },
     )
 }
 

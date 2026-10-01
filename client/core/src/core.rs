@@ -2311,9 +2311,9 @@ mod tests {
         assert_eq!(bare, ClientMessage::Call { id: 1, call: "auth.signOut".into(), params: Value::Null });
         let subscribe: ClientMessage = serde_json::from_value(json!({"id": 8, "subscribe": {"topic": "session", "station": "ws1/st1", "key": "k"}})).unwrap();
         let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "w", "mine": true}})).unwrap();
-        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "w".into(), mine: true } });
+        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "w".into(), mine: true, watching: false } });
         let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "ws"}})).unwrap();
-        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "ws".into(), mine: false } });
+        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "ws".into(), mine: false, watching: false } });
         let chat: ClientMessage = serde_json::from_value(json!({"id": 5, "subscribe": {"topic": "chat", "station": "w/s", "thread": 7}})).unwrap();
         assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), thread: Some(7), session: None } });
         let agent: ClientMessage = serde_json::from_value(json!({"id": 6, "subscribe": {"topic": "chat", "station": "w/s", "session": "ds:C1:1.0"}})).unwrap();
@@ -2593,7 +2593,7 @@ mod tests {
             let mut values = HashMap::new();
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
             core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Workspace { workspace: "ws".into() } });
-            core.receive(ui, ClientMessage::Subscribe { id: 3, subscribe: Topic::Chats { scope: "ws".into(), mine: false } });
+            core.receive(ui, ClientMessage::Subscribe { id: 3, subscribe: Topic::Chats { scope: "ws".into(), mine: false, watching: false } });
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!(values[&1][0]["workspaces"][0]["id"], "ws");
@@ -3124,6 +3124,15 @@ mod tests {
             apply(&host, &mut values);
             assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone()), (json!(true), json!("dark")));
             assert_eq!(values[&1]["chatTabs"]["ws/st:t"], json!({ "tabs": ["k1"], "active": "k1" }));
+            // The chat list shows 我参与的 or 监控中: choosing one lets go of the other.
+            set(20, json!({ "onlyWatching": true }));
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["onlyWatching"].clone()), (json!(false), json!(true)));
+            set(21, json!({ "onlyMine": true }));
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["onlyWatching"].clone()), (json!(true), json!(false)));
             // A map by entry: one gone, the other kept.
             set(3, json!({ "lastChat": { "ws": null } }));
             // What a device kept before, moved in: only what is not chosen here yet.
@@ -3765,7 +3774,7 @@ mod tests {
                 }
             });
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chats { scope: "ws".into(), mine: false } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chats { scope: "ws".into(), mine: false, watching: false } });
             host.settle().await;
             let mut values = HashMap::new();
             answers(&host, &mut values);

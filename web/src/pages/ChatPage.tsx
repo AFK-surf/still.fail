@@ -25,7 +25,7 @@ import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
-import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
+import { AgentMark, Confirm, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
 import { TitleInput } from "../Rename.tsx";
 import * as renameCss from "../Rename.css.ts";
@@ -263,7 +263,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
-  useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper ? async () => {
+  const archive = async () => {
+    if (!keeper) return;
     // On to the chat below it in the list (or above, at the end), so the keys go on working; the list page if none.
     if (!goToNeighbour(1) && !goToNeighbour(-1)) navigate(link("/chats"));
     try {
@@ -272,7 +273,11 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     } catch (error) {
       toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
     }
-  } : null);
+  };
+  // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+  const [askArchive, setAskArchive] = useState(false);
+  useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper
+    ? () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); } : null);
   // The chat's name, changed where it is shown: double-click it, or F2.
   const [renaming, setRenaming] = useState(false);
   const renamable = !!(chatView.value && !chatView.value.archived && !chatView.value.offline && !chatView.value.pending && keeper);
@@ -310,6 +315,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   };
   return (
     <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
+      {chat.watch && <Confirm open={askArchive} title={`归档「${chat.title}」？`} description={chat.watch.ask} action="归档"
+        onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={jobsCss.sessionMain}>
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label="对话" />

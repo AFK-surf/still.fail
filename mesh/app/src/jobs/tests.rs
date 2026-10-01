@@ -50,7 +50,7 @@ impl Rig {
 #[tokio::test]
 async fn a_job_runs_apart_its_output_logged_and_its_agent_told_how_it_ended() {
     let r = rig();
-    let job = r.jobs.start("s1", "build", "echo compiling; echo done >&2; exit 3", &r.work, None).unwrap();
+    let job = r.jobs.start("s1", "build", "echo compiling; echo done >&2; exit 3", &r.work, None, Watch::default()).unwrap();
     assert_eq!(job.state, "running");
     until("it ends", || r.state(&job.id) == "exited").await;
     let ended = r.store.get_job(&job.id).unwrap().unwrap();
@@ -66,7 +66,7 @@ async fn a_job_runs_apart_its_output_logged_and_its_agent_told_how_it_ended() {
 #[tokio::test]
 async fn a_job_tells_its_agent_on_the_way_through_its_token() {
     let r = rig();
-    let job = r.jobs.start("s1", "long", "sleep 5", &r.work, None).unwrap();
+    let job = r.jobs.start("s1", "long", "sleep 5", &r.work, None, Watch::default()).unwrap();
     r.jobs.notified(&job.token, "  half way  ").unwrap();
     assert_eq!(r.said(), [format!("Job \"long\" ({}) says: half way", job.id)]);
     assert!(r.jobs.notified("wrong", "x").is_err());
@@ -86,7 +86,7 @@ async fn a_job_tells_its_agent_on_the_way_through_its_token() {
 #[tokio::test]
 async fn a_job_has_its_command_under_the_new_name_and_the_old_and_its_variables_under_both() {
     let r = rig();
-    let job = r.jobs.start("s1", "names", r#"stillfail-job 2>&1; ember-job 2>&1; [ "$STILLFAIL_JOB_ID" = "$EMBER_JOB_ID" ] && [ "$STILLFAIL_JOB_TOKEN" = "$EMBER_JOB_TOKEN" ] && echo same"#, &r.work, None).unwrap();
+    let job = r.jobs.start("s1", "names", r#"stillfail-job 2>&1; ember-job 2>&1; [ "$STILLFAIL_JOB_ID" = "$EMBER_JOB_ID" ] && [ "$STILLFAIL_JOB_TOKEN" = "$EMBER_JOB_TOKEN" ] && echo same"#, &r.work, None, Watch::default()).unwrap();
     // Three shells in a row: given longer than `until` gives, for a machine busy with the other tests.
     for _ in 0..400 {
         if r.state(&job.id) != "running" {
@@ -149,7 +149,7 @@ fn session_active(store: &Store, key: &str, ago: Duration) {
 async fn a_job_stopped_from_the_pages_tells_its_agent_who_did() {
     let r = rig();
     session_active(&r.store, "s1", Duration::from_secs(60));
-    let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
+    let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None, Watch::default()).unwrap();
     let stopped = r.jobs.stop_for(&job.id, "ann@example.com").await.unwrap();
     assert_eq!(stopped.state, "stopped");
     assert_eq!(r.said(), [format!("Job \"watch\" ({}) was stopped by ann@example.com from still.fail's page.", job.id)]);
@@ -159,10 +159,10 @@ async fn a_job_stopped_from_the_pages_tells_its_agent_who_did() {
 async fn a_job_stopped_from_the_pages_does_not_wake_an_idle_agent() {
     let r = rig();
     session_active(&r.store, "s1", Duration::from_secs(6 * 60));
-    let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
+    let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None, Watch::default()).unwrap();
     assert_eq!(r.jobs.stop_for(&job.id, "ann@example.com").await.unwrap().state, "stopped");
     // Once it is at work again, it is told.
-    let other = r.jobs.start("s1", "again", "sleep 5", &r.work, None).unwrap();
+    let other = r.jobs.start("s1", "again", "sleep 5", &r.work, None, Watch::default()).unwrap();
     r.store.set_running("s1", true).unwrap();
     r.jobs.stop_for(&other.id, "ann@example.com").await.unwrap();
     assert_eq!(r.said(), [format!("Job \"again\" ({}) was stopped by ann@example.com from still.fail's page.", other.id)]);
@@ -171,10 +171,10 @@ async fn a_job_stopped_from_the_pages_does_not_wake_an_idle_agent() {
 #[tokio::test]
 async fn clearing_a_sessions_ended_jobs_takes_them_and_their_logs_away_and_leaves_the_rest() {
     let r = rig();
-    let failed = r.jobs.start("s1", "boom", "echo x; exit 2", &r.work, None).unwrap();
-    let done = r.jobs.start("s1", "done", "true", &r.work, None).unwrap();
-    let live = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
-    let other = r.jobs.start("s2", "boom", "exit 2", &r.work, None).unwrap();
+    let failed = r.jobs.start("s1", "boom", "echo x; exit 2", &r.work, None, Watch::default()).unwrap();
+    let done = r.jobs.start("s1", "done", "true", &r.work, None, Watch::default()).unwrap();
+    let live = r.jobs.start("s1", "watch", "sleep 5", &r.work, None, Watch::default()).unwrap();
+    let other = r.jobs.start("s2", "boom", "exit 2", &r.work, None, Watch::default()).unwrap();
     until("they end", || [&failed, &done, &other].iter().all(|j| r.state(&j.id) == "exited")).await;
     r.store.add_job_notice(&failed.id, "broke").unwrap();
     let mut cleared = r.jobs.clear_ended("s1").unwrap();
@@ -193,11 +193,11 @@ async fn clearing_a_sessions_ended_jobs_takes_them_and_their_logs_away_and_leave
 #[tokio::test]
 async fn a_service_is_kept_up_and_stays_down_once_stopped() {
     let r = rig();
-    let job = r.jobs.start("s1", "web", "echo up on $PORT; exit 1", &r.work, Some(4999)).unwrap();
+    let job = r.jobs.start("s1", "web", "echo up on $PORT; exit 1", &r.work, Some(4999), Watch::default()).unwrap();
     until("it is started again", || r.store.get_job(&job.id).unwrap().unwrap().restarts >= 1).await;
     assert!(r.said()[0].contains("ended with exit code 1; the station starts it again in 1 s."), "{}", r.said()[0]);
     assert!(tail(Path::new(&job.log), 5).contains("up on 4999"));
-    assert!(r.jobs.start("s2", "other", "true", &r.work, Some(4999)).is_err_and(|e| e.to_string().contains("port 4999")), "one service per port");
+    assert!(r.jobs.start("s2", "other", "true", &r.work, Some(4999), Watch::default()).is_err_and(|e| e.to_string().contains("port 4999")), "one service per port");
     r.jobs.stop(&job.id).await.unwrap();
     until("it is stopped", || r.state(&job.id) == "stopped").await;
     let restarts = r.store.get_job(&job.id).unwrap().unwrap().restarts;
@@ -225,7 +225,7 @@ async fn a_job_goes_on_through_a_restart_of_the_station_and_is_followed_to_its_e
     let (dir, store) = shared();
     let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
     let data = before._dir.path().to_path_buf();
-    let job = before.jobs.start("s1", "build", "sleep 1; echo built; exit 4", &before.work, None).unwrap();
+    let job = before.jobs.start("s1", "build", "sleep 1; echo built; exit 4", &before.work, None, Watch::default()).unwrap();
     before.jobs.shutdown().await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     let pgid = before.store.get_job(&job.id).unwrap().unwrap().pgid.unwrap() as i32;
@@ -247,7 +247,7 @@ async fn a_job_that_ended_while_no_station_ran_is_told_as_ended_not_run_again() 
     let (_dir, store) = shared();
     let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
     let data = before._dir.path().to_path_buf();
-    let job = before.jobs.start("s1", "quick", "sleep 0.3; exit 5", &before.work, None).unwrap();
+    let job = before.jobs.start("s1", "quick", "sleep 0.3; exit 5", &before.work, None, Watch::default()).unwrap();
     before.jobs.shutdown().await;
     tokio::time::sleep(Duration::from_millis(1000)).await;
     assert_eq!(before.state(&job.id), "running", "still running on record");
@@ -265,7 +265,7 @@ async fn a_job_gone_without_a_word_runs_again_when_the_station_starts() {
     let (_dir, store) = shared();
     let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
     let data = before._dir.path().to_path_buf();
-    let job = before.jobs.start("s1", "watch", "sleep 30", &before.work, None).unwrap();
+    let job = before.jobs.start("s1", "watch", "sleep 30", &before.work, None, Watch::default()).unwrap();
     before.jobs.shutdown().await;
     // What a restart of the machine does to it.
     let pgid = before.store.get_job(&job.id).unwrap().unwrap().pgid.unwrap() as i32;
@@ -310,9 +310,9 @@ impl Rig {
 #[tokio::test]
 async fn leaving_the_workspace_stops_every_job_and_service_and_says_why() {
     let r = rig();
-    let job = r.jobs.start("s1", "long", "sleep 30", &r.work, None).unwrap();
-    let service = r.jobs.start("s2", "web", "sleep 30", &r.work, Some(47991)).unwrap();
-    let done = r.jobs.start("s1", "done", "exit 0", &r.work, None).unwrap();
+    let job = r.jobs.start("s1", "long", "sleep 30", &r.work, None, Watch::default()).unwrap();
+    let service = r.jobs.start("s2", "web", "sleep 30", &r.work, Some(47991), Watch::default()).unwrap();
+    let done = r.jobs.start("s1", "done", "exit 0", &r.work, None, Watch::default()).unwrap();
     until("the short one ends", || r.state(&done.id) == "exited").await;
     r.jobs.stop_all("the station was removed from its workspace").await;
     until("both are stopped", || r.state(&job.id) == "stopped" && r.state(&service.id) == "stopped").await;
@@ -328,7 +328,7 @@ async fn stopping_all_ends_jobs_an_earlier_station_left_running() {
     let (_dir, store) = shared();
     let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
     let data = before._dir.path().to_path_buf();
-    let job = before.jobs.start("s1", "long", "sleep 30", &before.work, None).unwrap();
+    let job = before.jobs.start("s1", "long", "sleep 30", &before.work, None, Watch::default()).unwrap();
     before.jobs.shutdown().await;
     let pgid = before.store.get_job(&job.id).unwrap().unwrap().pgid.unwrap() as i32;
     let after = restarted(&before, &data, store);
@@ -339,4 +339,23 @@ async fn stopping_all_ends_jobs_an_earlier_station_left_running() {
     let log = std::fs::read_to_string(after.store.get_job(&job.id).unwrap().unwrap().log).unwrap();
     assert!(log.ends_with("[still.fail] stopped: the station was removed from its workspace\n"), "{log}");
     assert!(after.said().is_empty());
+}
+
+#[tokio::test]
+async fn a_watch_is_kept_by_its_session_while_it_runs_with_when_it_last_said_something() {
+    let r = rig();
+    assert!(r.jobs.start("s1", "w", "sleep 5", &r.work, Some(4998), Watch { on: true }).is_err_and(|e| e.to_string().contains("no port")), "a watch is no service");
+    let plain = r.jobs.start("s2", "build", "sleep 5", &r.work, None, Watch::default()).unwrap();
+    let watch = r.jobs.start("s1", "盯 CI", "sleep 5", &r.work, None, Watch { on: true }).unwrap();
+    assert!(!plain.watch && watch.watch);
+    assert_eq!(r.store.get_job(&watch.id).unwrap().unwrap().watch, true, "kept as a watch");
+    let now = watching(&r.store);
+    assert_eq!(now.keys().collect::<Vec<_>>(), ["s1"], "only the watch's session");
+    assert_eq!((now["s1"]["names"].clone(), now["s1"]["at"].clone()), (json!(["盯 CI"]), json!(watch.started_at)));
+    r.jobs.notified(&watch.token, "build ✓").unwrap();
+    let at = r.store.job_notices(&watch.id, 1).unwrap()[0].at;
+    assert_eq!(watching(&r.store)["s1"]["at"], json!(at), "its latest word");
+    r.jobs.stop(&watch.id).await.unwrap();
+    assert!(watching(&r.store).is_empty(), "stopped: no longer watching");
+    r.jobs.stop(&plain.id).await.unwrap();
 }

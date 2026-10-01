@@ -243,6 +243,16 @@ export interface Stamp {
 }
 
 /**
+ * What a session keeps watch with (its watches running): their names, oldest first; since when the first runs; when
+ * one last gave word (a notice, else its start).
+ */
+export interface Watching {
+	names: string[];
+	since: number;
+	at: number;
+}
+
+/**
  * A session, with what the clients show of it. Before its details are read an agent is only what the sidebar's rows
  * say of it (key, runtime, model, effort, process, pending, last turn): the rest is absent then.
  */
@@ -298,6 +308,8 @@ export interface Session {
 	chat?: number;
 	description?: string;
 	current?: boolean;
+	/** Keeping watch (a `job_start` watch of its runs): its chat is a watching one. A station from before watches says none. */
+	watch?: Watching;
 }
 
 /** Where an agent stands. */
@@ -634,6 +646,8 @@ export interface Job {
 	restarts?: number;
 	/** What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to. */
 	notices?: JobNotice[];
+	/** Started to keep watch (`job_start` watch). A station from before watches says none. */
+	watch?: boolean;
 	/** When its output last grew; absent when it has none. */
 	outputAt?: number;
 	/** Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over). */
@@ -704,6 +718,8 @@ export interface RowAgent {
 	mark?: Badge;
 	statusText: string;
 	badgeText?: string;
+	/** Keeping watch, as its session's `watch`. */
+	watch?: Watching;
 }
 
 /** Who said a row's last thing: an agent (its state riding on its picture), a person, or ember. */
@@ -753,6 +769,15 @@ export interface Person {
 	shown: PersonShown;
 }
 
+/**
+ * A watching chat (core, present.rs): what it watches in words (监控中：盯 CI), and what archiving it by hand asks
+ * first (`ask`: it runs on in the archive).
+ */
+export interface RowWatch {
+	text: string;
+	ask: string;
+}
+
 /** An item of the sidebar, as its station puts it together for the viewer, and where it is. */
 export interface ChatItem {
 	id: string;
@@ -796,6 +821,8 @@ export interface ChatItem {
 	clientKey?: string;
 	/** Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned). */
 	pinned?: boolean;
+	/** A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise. */
+	watch?: RowWatch;
 }
 
 /**
@@ -964,6 +991,8 @@ export interface ChatView {
 	outbox: Outgoing[];
 	link: Link;
 	offline: boolean;
+	/** One of its agents keeps watch: archiving it by hand asks first. Absent otherwise. */
+	watch?: RowWatch;
 	/** A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox. */
 	pending?: boolean;
 	/** The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it. */
@@ -1767,6 +1796,8 @@ export type RowPictureSetting = "auto" | "agents" | "people";
 export interface PrefsView {
 	/** The lists show only the chats and connects the viewer takes part in. */
 	onlyMine?: boolean;
+	/** The chat list shows only the watching chats (监控中); never with `only_mine`. */
+	onlyWatching?: boolean;
 	appearance?: Appearance;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */

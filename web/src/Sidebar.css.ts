@@ -48,13 +48,16 @@ export const navScroll = style({ position: "relative", flex: 1, minHeight: 0, ov
 /** 全部 and 我参与的 side by side on one track; the switch slides it, as its thumb slides. */
 export const navSlider = style({ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" });
 export const navTrack = style({
-  flex: "none", width: "200%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
-  selectors: { "&[data-mine]": { transform: "translateX(-50%)" } },
+  flex: "none", width: "300%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
+  selectors: {
+    "&[data-filter=mine]": { transform: "translateX(calc(-100% / 3))" },
+    "&[data-filter=watching]": { transform: "translateX(calc(-200% / 3))" },
+  },
   "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 // Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
 // row (the time shown on hover) lays out every row of both lists again, a frame dropped per row passed while scrolling.
-globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "50%", contain: "strict" });
+globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "calc(100% / 3)", contain: "strict" });
 
 export const navFoot = style({ padding: 8, borderTop: `1px solid ${vars.line}` });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });

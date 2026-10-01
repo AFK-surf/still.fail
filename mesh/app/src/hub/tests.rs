@@ -519,6 +519,32 @@ async fn a_turn_ending_waiting_is_not_nudged_nor_evicted_and_is_asked_again_when
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_wait_does_not_run_out_while_a_watch_of_its_session_runs() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let watch = crate::store::JobRow {
+        id: "job_w".into(), session_key: key.clone(), name: "盯 CI".into(), command: "sleep 600".into(), cwd: "/".into(), port: None,
+        token: "tw".into(), state: "running".into(), pgid: None, exit_code: None, started_at: now_ms(), ended_at: None, restarts: 0,
+        log: "/dev/null".into(), watch: true,
+    };
+    r.store.insert_job(&watch).unwrap();
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 10 })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    tokio::time::sleep(Duration::from_secs(35)).await;
+    settle().await;
+    assert_eq!(r.claude.last().prompts().len(), 1, "the watch brings it back, not the clock");
+    // The watch over, the wait runs out as any other.
+    r.store.job_ended(&watch.id, "stopped", None).unwrap();
+    tokio::time::sleep(Duration::from_secs(11)).await;
+    settle().await;
+    assert_eq!(r.claude.last().prompts().len(), 2);
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_turn_that_starts_before_the_wait_is_over_ends_it() {
     let r = setup();
     let m = message();
@@ -1218,6 +1244,16 @@ async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unrea
     assert_eq!(r.session(&web).archived_at, None, "unread");
     assert_eq!(r.session(&bound).archived_at, None, "a single-session connect's");
     r.store.set_read("local", thread.id, r.store.last_entry(thread.id).unwrap()).unwrap();
+    // A job of its own still up (a watch above all): it stays until the job is over.
+    let watch = crate::store::JobRow {
+        id: "job_w".into(), session_key: web.clone(), name: "盯 CI".into(), command: "sleep 600".into(), cwd: "/".into(), port: None,
+        token: "tw".into(), state: "running".into(), pgid: None, exit_code: None, started_at: now_ms(), ended_at: None, restarts: 0,
+        log: "/dev/null".into(), watch: true,
+    };
+    r.store.insert_job(&watch).unwrap();
+    r.hub.auto_archive(later).unwrap();
+    assert_eq!(r.session(&web).archived_at, None, "its watch runs");
+    r.store.job_ended(&watch.id, "stopped", None).unwrap();
     // Pinned by anyone, it stays in the lists.
     r.store.set_pin("dev@example.com", &web, true).unwrap();
     r.hub.auto_archive(later).unwrap();
@@ -1604,6 +1640,25 @@ async fn an_agent_names_its_chat_once_and_again_only_after_people_said_enough_ne
     let said = r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "ok", "title": "x" })).await.unwrap();
     assert!(said.contains("a Slack thread is named in Slack"), "{said}");
     assert_eq!(r.thread("C1", &m.thread_ts).auto_title, None);
+}
+
+#[tokio::test]
+async fn a_chat_that_starts_a_watch_may_be_renamed_for_it_at_once() {
+    let r = setup();
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
+    r.hub.say(thread.id, "local", "帮我盯着 CI", vec![], vec![], None).unwrap();
+    settle().await;
+    let to = format!("EMBER/{}", thread.thread_ts);
+    let post = |title: &str| r.call(&web, "chat_post", json!({ "to": to, "text": "ok", "title": title }));
+    assert!(post("CI").await.unwrap().ends_with("Titled the chat \"CI\"."));
+    assert!(post("监控 · CI").await.unwrap().contains("Title not changed: people have said too little"));
+    let watch = crate::store::JobRow {
+        id: "job_w".into(), session_key: web.clone(), name: "盯 CI".into(), command: "sleep 600".into(), cwd: "/".into(), port: None,
+        token: "tw".into(), state: "running".into(), pgid: None, exit_code: None, started_at: now_ms(), ended_at: None, restarts: 0,
+        log: "/dev/null".into(), watch: true,
+    };
+    r.store.insert_job(&watch).unwrap();
+    assert!(post("监控 · CI").await.unwrap().ends_with("Titled the chat \"监控 · CI\"."), "a watch runs: at once");
 }
 
 #[test]

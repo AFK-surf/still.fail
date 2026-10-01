@@ -46,6 +46,39 @@ pub fn waiting(s: &Value) -> Value {
     }
 }
 
+/// A chat's watch (`RowWatch`), when one of its agents keeps watch (their sessions' `watch`): what it watches, and what
+/// archiving it by hand says first (it runs on in the archive, and anything new brings the chat back).
+pub fn row_watch(agents: &[Value]) -> Option<Value> {
+    let names: Vec<&str> = agents.iter()
+        .filter_map(|a| a.get("watch").filter(|w| w.is_object()))
+        .flat_map(|w| w.get("names").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str))
+        .collect();
+    if names.is_empty() {
+        return None;
+    }
+    let named = names.iter().map(|n| format!("「{n}」")).collect::<Vec<_>>().join("、");
+    Some(json!({
+        "text": format!("监控中：{}", names.join("、")),
+        "ask": format!("{named}还在监控。归档后它照常运行，有新消息时对话会回到列表。"),
+    }))
+}
+
+/// Whether it waits on a watch of its own: then it is not at work for as long as it watches (no ring, no activity;
+/// its row has the watch's own mark), and no wait runs out.
+pub fn watching(s: &Value) -> bool {
+    s.get("watch").is_some_and(Value::is_object) && !waiting(s).is_null()
+}
+
+/// Where a session stands as the clients show it: as `session_status`, but idle while it watches.
+pub fn shown_status(s: &Value) -> &'static str {
+    if watching(s) { "idle" } else { session_status(s) }
+}
+
+/// A session's small mark (`badge` of its shown status): none while it watches.
+pub fn mark_of(s: &Value) -> Option<&'static str> {
+    badge(shown_status(s))
+}
+
 /// A status as a client's small mark: run (at work), block, failed; none for the rest.
 pub fn badge(status: &str) -> Option<&'static str> {
     match status {
@@ -58,7 +91,7 @@ pub fn badge(status: &str) -> Option<&'static str> {
 
 /// A row's state, from its agents': one that is blocked comes first, then one at work, then one that failed.
 pub fn row_state(agents: &[Value]) -> Option<&'static str> {
-    let marks: Vec<&str> = agents.iter().filter_map(|a| badge(session_status(a))).collect();
+    let marks: Vec<&str> = agents.iter().filter_map(mark_of).collect();
     ["block", "run", "failed"].into_iter().find(|b| marks.contains(b))
 }
 
@@ -182,7 +215,7 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
                 "model": model,
                 "runtime": agent.and_then(|a| a.get("runtime")).cloned().unwrap_or(json!("claude")),
                 "mine": false,
-                "state": agent.and_then(|a| badge(session_status(a))),
+                "state": agent.and_then(mark_of),
             })
         }
         "ember" => json!({ "kind": "ember", "name": crate::brand::name(), "mine": false }),
@@ -285,10 +318,11 @@ pub fn session(s: &mut Value) {
     if !s.is_object() {
         return;
     }
-    let status = session_status(s);
+    let status = shown_status(s);
     let (mut text, tone) = format::status_text(status);
     if !waiting(s).is_null() {
-        text = "等待中";
+        // Waiting on a watch of its own: the watch brings it back, however long (the station does not ask it again).
+        text = if s.get("watch").is_some_and(Value::is_object) { "监控中" } else { "等待中" };
     }
     let fields = s.clone();
     let str_of = |k: &str| fields.get(k).and_then(Value::as_str).map(str::to_string);
@@ -297,7 +331,7 @@ pub fn session(s: &mut Value) {
     let title = str_of("title").filter(|t| !t.is_empty())
         .or_else(|| str_of("firstText").map(|t| format::clean_text(&t)).filter(|t| !t.is_empty()))
         .unwrap_or_else(|| "（还没有消息）".into());
-    let badge = badge(status);
+    let badge = mark_of(s);
     s["statusText"] = json!(text);
     s["tone"] = json!(tone);
     s["mark"] = json!(badge);
@@ -639,6 +673,13 @@ mod tests {
         let waits = json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitSeconds": 600}});
         assert_eq!(waiting(&waits), json!({"since": 5, "seconds": 600}));
         assert_eq!(waiting(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5}})), json!({"since": 5, "seconds": null}));
+        // Waiting on a watch of its own: said so.
+        let mut watching = json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitSeconds": 600}, "watch": {"names": ["盯 CI"], "since": 1, "at": 5}});
+        session(&mut watching);
+        assert_eq!((watching["statusText"].clone(), watching["mark"].clone()), (json!("监控中"), Value::Null), "not at work");
+        let mut plain = waits.clone();
+        session(&mut plain);
+        assert_eq!(plain["statusText"], "等待中");
         assert_eq!(waiting(&json!({"process": "running", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5}})), Value::Null);
         assert_eq!(waiting(&json!({"process": "warm", "pending": 1, "lastTurn": {"declared": "waiting", "endedAt": 5}})), Value::Null);
         assert_eq!(session_status(&json!({})), "idle");
@@ -752,4 +793,12 @@ mod tests {
                 assert_eq!((h["meters"][2]["level"].as_str(), h["meters"][2]["value"].as_str(), h["emberText"].as_str()), (Some("red"), Some("剩 50.0 GB / 1000 GB"), Some("still.fail 100 MB")));
     }
 
+
+    #[test]
+    fn a_watching_chat_says_what_it_watches_and_what_archiving_it_means() {
+        let agent = |watch: Value| json!({"key": "a", "watch": watch});
+        assert_eq!(row_watch(&[json!({"key": "a"})]), None);
+        let marked = row_watch(&[agent(json!({"names": ["盯 CI"], "since": 0, "at": 1})), json!({"key": "b"}), agent(json!({"names": ["relay 延迟"], "since": 0, "at": 0}))]).unwrap();
+        assert_eq!(marked, json!({"text": "监控中：盯 CI、relay 延迟", "ask": "「盯 CI」、「relay 延迟」还在监控。归档后它照常运行，有新消息时对话会回到列表。"}));
+    }
 }
