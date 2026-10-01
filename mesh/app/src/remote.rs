@@ -36,7 +36,8 @@ fn write(path: &Path, value: &Value) -> Result<()> {
     let mut nonce=[0u8;8];
     getrandom::fill(&mut nonce).map_err(|e|anyhow!("random: {e}"))?;
     let temp = path.with_extension(format!("{}.tmp",hex::encode(nonce)));
-    let mut file = std::fs::File::create(&temp)?;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temp)?;
     file.write_all(&serde_json::to_vec(value)?)?;
     file.sync_all()?;
     std::fs::rename(temp, path)?;
