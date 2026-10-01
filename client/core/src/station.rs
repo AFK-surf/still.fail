@@ -3593,11 +3593,11 @@ mod tests {
             assert!(stations.older(&remote(), 7).await.unwrap());
             assert_eq!(window_of(&sink, 7), (102, 251, false));
             assert_eq!(numbers(&sink, 7).len() as u64, WINDOW);
-            // To the end: its latest page in place of the window, from the device.
+            // To the end: its latest page in place of the window, from the device; then asked what came after it.
             let asked = wire.paths().len();
             stations.latest(&remote(), 7).await.unwrap();
             assert_eq!(window_of(&sink, 7), (252, 301, true));
-            assert_eq!(wire.paths().len(), asked, "{:?}", wire.paths());
+            assert_eq!(wire.paths()[asked..], ["GET /admin/api/threads/7/entries?after=301".to_string()], "{:?}", wire.paths());
             // At its end, what is said joins it.
             wire.event("thread", json!({"id": 7, "entries": [entry(302, "m302")]}));
             host.settle().await;
@@ -3700,12 +3700,13 @@ mod tests {
             wire.event("thread", json!({"id": 7, "entries": [entry(303, "m303")]}));
             host.settle().await;
             assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?after=301"), 1, "asked only for what came after what was kept");
-            // Opened: whole from the device, nothing asked.
+            // Opened: whole from the device, then only asked what came after it.
             let asked = wire.paths().len();
             stations.start(&thread(7));
             host.settle().await;
             assert_eq!(texts(&sink, 7).last().unwrap(), "m303");
-            assert_eq!(wire.paths().iter().skip(asked).filter(|p| p.contains("entries?after") || p.contains("entries?limit")).count(), 0, "{:?}", wire.paths());
+            let read: Vec<String> = wire.paths()[asked..].iter().filter(|p| p.contains("entries?")).cloned().collect();
+            assert_eq!(read, ["GET /admin/api/threads/7/entries?after=303"], "{:?}", wire.paths());
             assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 303);
         });
     }
