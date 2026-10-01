@@ -28,7 +28,9 @@ fn text<'a>(v: &'a Value, key: &str) -> &'a str { v[key].as_str().unwrap_or("") 
 fn hash(v: &Value) -> String { hex::encode(Sha256::digest(v.to_string().as_bytes())) }
 fn read(path: &Path) -> Result<Value> { Ok(serde_json::from_slice(&std::fs::read(path)?)?) }
 fn write(path: &Path, value: &Value) -> Result<()> {
-    let temp = path.with_extension("tmp");
+    let mut nonce=[0u8;8];
+    getrandom::fill(&mut nonce).map_err(|e|anyhow!("random: {e}"))?;
+    let temp = path.with_extension(format!("{}.tmp",hex::encode(nonce)));
     let mut file = std::fs::File::create(&temp)?;
     file.write_all(&serde_json::to_vec(value)?)?;
     file.sync_all()?;
@@ -101,10 +103,11 @@ impl Remote {
             }
             return Ok(json!({"key":key,"prepared":true}));
         }
-        let meta = read(&record).map_err(|_| anyhow!("unknown task"))?;
+        let mut meta = read(&record).map_err(|_| anyhow!("unknown task"))?;
         let job = self.store.get_job(&job_id)?;
         match method {
             "task.start" => {
+                if meta["uploads"].as_object().is_some_and(|m|m.values().any(|v|v!=true)) {bail!("input upload is incomplete; finish it before starting");}
                 let spec = &meta["spec"];
                 let job = self.jobs.start_id(&owner, text(spec,"name"), text(spec,"command"), &work, None, Watch::default(), Some(&job_id))?;
                 Ok(json!({"key":key,"job":job}))
@@ -120,6 +123,9 @@ impl Remote {
                 let bytes = B64.decode(text(&request,"data"))?;
                 if bytes.len() > CHUNK || offset.saturating_add(bytes.len() as u64) > MAX_FILE { bail!("file limit exceeded"); }
                 let path = file_path(&work, text(&request,"path"), true)?;
+                if !meta["uploads"].is_object() {meta["uploads"]=json!({});}
+                meta["uploads"][text(&request,"path")]=json!(false);
+                write(&record,&meta)?;
                 let mut options = std::fs::OpenOptions::new();
                 options.create(true).write(true);
                 use std::os::unix::fs::OpenOptionsExt;
@@ -129,6 +135,10 @@ impl Remote {
                 f.seek(SeekFrom::Start(offset))?;
                 f.write_all(&bytes)?;
                 if request["final"] == true { f.set_len(offset + bytes.len() as u64)?; f.sync_all()?; }
+                if request["final"] == true {
+                    meta["uploads"][text(&request,"path")]=json!(true);
+                    write(&record,&meta)?;
+                }
                 Ok(json!({"bytes":bytes.len()}))
             }
             "file.get" => {
@@ -303,5 +313,60 @@ mod tests {
         std::os::unix::fs::symlink("/tmp",dir.path().join("link")).unwrap();
         assert!(file_path(dir.path(),"link/file",true).is_err());
         assert!(file_path(dir.path(),"nested/file",true).unwrap().starts_with(dir.path()));
+    }
+}
+
+#[cfg(test)]
+mod task_tests {
+    use super::*;
+    fn rig() -> (tempfile::TempDir, Arc<Remote>) {
+        let dir=tempfile::tempdir().unwrap();
+        let settings=Settings::open(&dir.path().join("config.json"),dir.path()).unwrap();
+        settings.update(|raw| {raw.rest.insert("remoteTasks".into(),json!({"allow":["peer-a","peer-b"]}));Ok(())}).unwrap();
+        let store=Arc::new(Store::open(":memory:",None).unwrap());
+        let jobs=Jobs::new(store.clone(),dir.path(),Arc::new(|_,_|{}),Arc::new(|_,_|None)).unwrap();
+        let remote=Remote::new(settings,store,jobs,Weak::new()).unwrap();
+        (dir,remote)
+    }
+    async fn call(r:&Remote, peer:&str, method:&str, more:Value)->Result<Value> {
+        let mut args=json!({"session":"s","key":"build-1","method":method});
+        for (key,value) in more.as_object().unwrap() {args[key]=value.clone();}
+        r.handle("ws",peer,args).await
+    }
+    #[tokio::test]
+    async fn tasks_are_owned_idempotent_and_return_files() {
+        let (_dir,r)=rig();
+        let spec=json!({"spec":{"command":"cat input > output; echo ran >> count","name":"copy"}});
+        call(&r,"peer-a","task.prepare",spec.clone()).await.unwrap();
+        call(&r,"peer-a","file.put",json!({"path":"input","offset":0,"data":B64.encode("hello"),"final":true})).await.unwrap();
+        let first=call(&r,"peer-a","task.start",json!({})).await.unwrap();
+        for _ in 0..200 {
+            if call(&r,"peer-a","task.get",json!({})).await.unwrap()["job"]["state"]!="running" {break;}
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+        let again=call(&r,"peer-a","task.start",json!({})).await.unwrap();
+        assert_eq!(first["job"]["id"],again["job"]["id"]);
+        assert_eq!(again["job"]["exitCode"],0);
+        for (path,expected) in [("output","hello"),("count","ran\n")] {
+            let file=call(&r,"peer-a","file.get",json!({"path":path})).await.unwrap();
+            assert_eq!(B64.decode(text(&file,"data")).unwrap(),expected.as_bytes());
+        }
+        assert!(call(&r,"peer-b","task.get",json!({})).await.is_err());
+        assert!(call(&r,"peer-c","task.prepare",spec).await.is_err());
+        assert!(call(&r,"peer-a","task.get",json!({"session":"other"})).await.is_err());
+        assert!(call(&r,"peer-a","task.prepare",json!({"spec":{"command":"echo wrong"}})).await.is_err());
+        assert!(call(&r,"peer-a","file.put",json!({"path":"input","offset":0,"data":"","final":true})).await.is_err());
+    }
+    #[tokio::test]
+    async fn withdrawal_stops_only_the_revoked_peers_task() {
+        let (_dir,r)=rig();
+        for peer in ["peer-a","peer-b"] {
+            call(&r,peer,"task.prepare",json!({"spec":{"command":"sleep 30"}})).await.unwrap();
+            call(&r,peer,"task.start",json!({})).await.unwrap();
+        }
+        r.revoke("ws",&["peer-b".into()]).await;
+        assert_eq!(call(&r,"peer-a","task.get",json!({})).await.unwrap()["job"]["state"],"stopped");
+        assert_eq!(call(&r,"peer-b","task.get",json!({})).await.unwrap()["job"]["state"],"running");
+        call(&r,"peer-b","task.stop",json!({})).await.unwrap();
     }
 }
