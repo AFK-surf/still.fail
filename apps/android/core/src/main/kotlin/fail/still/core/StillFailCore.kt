@@ -256,7 +256,9 @@ class StillFailCore internal constructor(
 
     private fun restart(reason: String) {
         android.util.Log.e("StillFailCore", "the core failed: $reason")
-        engine?.close()
+        // Outgoing FFI calls may still hold this engine. Dispose on that same FIFO lane, after those calls,
+        // rather than racing a native receive with freeing its pointer on the state lane.
+        engine?.let { previous -> scope.launch(outgoing) { previous.close() } }
         engine = null
         // Whether they ran is unknown: the caller decides whether to try again.
         val failed = calls.values.toList()
@@ -282,13 +284,22 @@ class StillFailCore internal constructor(
         val target = engine
         val to = client
         if (target == null) queue.add(message)
-        else scope.launch(outgoing) { target.receive(to, message.toString()) }
+        else transmit(target, to) { message.toString() }
     }
 
     private fun post(json: String) {
         val target = engine ?: return
         val to = client
-        scope.launch(outgoing) { target.receive(to, json) }
+        transmit(target, to) { json }
+    }
+
+    private fun transmit(target: Engine, to: Long, json: () -> String) {
+        scope.launch(outgoing) {
+            try { target.receive(to, json()) }
+            catch (e: Exception) {
+                withContext(confined) { if (target === engine) restart(e.message ?: "无法向核心发送消息") }
+            }
+        }
     }
 
     private fun receive(message: JsonObject) {
