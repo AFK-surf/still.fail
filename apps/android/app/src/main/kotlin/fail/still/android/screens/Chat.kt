@@ -609,10 +609,18 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         list.requestScrollToItem(lastRow, 1_000_000)
         follow.on = true
     }
+    // A message sent from up the list takes the reader to its end at once, following again (web Chat.tsx useToEnd). Told
+    // by the composer as it sends, not by the outbox growing: on a quick link the station has the message before the
+    // outbox ever shows it.
+    val sends = host.sends
+    val sentCount = remember { intArrayOf(sends) }
     SideEffect {
         val was = lastHead[0]
         lastHead[0] = headKey
+        val sent = sends > sentCount[0]
+        sentCount[0] = sends
         if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }
+        if (sent && !short && follow.placed && !follow.on) { atLatest(); return@SideEffect }
         if (was == null || was == headKey || !follow.placed || reveal.revealing) return@SideEffect
         // Not laid out anew yet: what is in view is what was.
         val shown = list.layoutInfo.visibleItemsInfo

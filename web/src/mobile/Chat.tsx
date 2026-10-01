@@ -339,6 +339,7 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
     const into = list.current;
     const host = into?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
     const field = host?.querySelector<HTMLElement>(`[data-made-composer] textarea:not([aria-hidden])`);
+    into?.dispatchEvent(new Event("sent"));
     if (into && host && field) sendingHere(field, draft.text, { layer: host, z: "7", list: into });
     void sendDraft(draft, to, async () => ({ thread: (await stationApi(call).chatFor(here.key)).id }));
   };

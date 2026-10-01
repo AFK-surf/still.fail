@@ -127,6 +127,9 @@ class Host {
         internal set
     internal val leave = Animatable(0f)
     internal var still = false
+    /** How many messages the composer has sent: the list goes to its end with each (Chat.kt). */
+    var sends by mutableIntStateOf(0)
+        private set
 
     /**
      * `text` is sent from the composer (before the draft is emptied): its words stay where they are until their row is in
@@ -134,6 +137,7 @@ class Host {
      * comes into it is what was just sent from here).
      */
     fun sending(text: String, carried: Boolean, before: Set<String> = rows) {
+        sends++
         flight = null
         val field = field?.takeIf { it.isAttached }
         val overlay = overlay?.takeIf { it.isAttached }

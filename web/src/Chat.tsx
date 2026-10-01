@@ -342,20 +342,31 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
  * The way to a chat's end, from the button over the list or its shortcut: down the list, gliding, as always; from a
  * window short of the end (`chat.newer`), its latest page in its place first (`latest`), then straight to its bottom,
  * with nothing gliding or coming in. A message sent from such a window takes the reader there the same way (the core
- * puts the latest page in place as it sends).
+ * puts the latest page in place as it sends); sent from up the list, straight to its bottom.
  */
 function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: () => Promise<unknown>): () => void {
   const short = !!chat.newer;
   // Going to the end: once the latest page is in, the list goes to its bottom.
   const going = useRef(false);
-  const sent = useRef(chat.outbox.length);
+  const isShort = useRef(short);
+  isShort.current = short;
   useLayoutEffect(() => {
-    if (short && chat.outbox.length > sent.current) going.current = true;
-    sent.current = chat.outbox.length;
     if (short || !going.current) return;
     going.current = false;
     list.current?.dispatchEvent(new CustomEvent("to-bottom", { detail: "at-once" }));
   });
+  // A message sent (the composer says so as it sends, `sent`, rather than the outbox growing: on a quick link the
+  // station has it before the outbox ever shows it): from up the list, to its bottom at once, following again.
+  useEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const sent = () => {
+      if (isShort.current) going.current = true;
+      else if (el.hasAttribute("data-reading-up")) el.dispatchEvent(new CustomEvent("to-bottom", { detail: "at-once" }));
+    };
+    el.addEventListener("sent", sent);
+    return () => el.removeEventListener("sent", sent);
+  }, [list]);
   return () => {
     if (!short) {
       list.current?.dispatchEvent(new Event("to-bottom"));
@@ -1095,6 +1106,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     const dock = field?.closest<HTMLElement>(`.${dockCss.composerDock}`);
     const layer = dock?.offsetParent;
     const list = document.querySelector<HTMLElement>(`.${css.chatMessages}`);
+    list?.dispatchEvent(new Event("sent"));
     if (!onSending && field && list && layer instanceof HTMLElement) sendingHere(field, draft.text, { layer, z: OVER_DOCK, list });
     const to = await sendDraft(draft, thread, ensureChat, onSending);
     if (to !== null) onSent?.(to);

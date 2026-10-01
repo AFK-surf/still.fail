@@ -65,6 +65,7 @@
   - 顺序：web/admin 先随部署上（新页面接旧 station 没问题：只是不再有本机页面这条路），再发 station 包（`release.sh station`，studio 的 station 由 ember-deploy 用 `stillfail update` 交接），再发桌面和安卓。`pnpm build` 现在只编 wasm core 和写 `dist/admin/posthog.json`（scripts/posthog-key.ts），不再出本机页面；station-bundle.sh 打包前自己重写 dist/admin（用 ember-deploy 已 export 的 `STILLFAIL_POSTHOG`），部署检出里旧的页面文件不会再进发布包。
   - 新旧混跑：旧 station 照旧有本机页面、不认 `removed_at`（被移出后仍会每隔一阵重连 cloud，和以前一样）；新 station 读得了旧的 cloud.json（没有新字段）。旧桌面端只看 cloud.json 在不在，所以被移出的新 station 留着文件，旧桌面端也不会自动再加入。旧 core 里存的 `local` 站点地址（草稿、上次打开的 chat、`/admin/chats/…` 的引用）新 core 读到会当成「已经没有」，不会崩。
   - 上线后验：`curl -sI http://127.0.0.1:4760/admin/chats/<key>` 返回 302，location 是 `https://app.still.fail/w/<ws>/s/<station>/chats/<key>`（cloud.json 里是旧域名的就是 ember.3720.org，那边再 302 到新域名）；`curl -s http://127.0.0.1:4760/admin/api/overview` 是 404；`stillfail status` 显示 workspace、cloud、在线。
+- 发送时先跳到底（send-scrolls-to-bottom）：只改了客户端（web、手机 web、安卓），station 和 cloud 不用动。web 跟部署走，安卓要发一版。往上翻着发消息，列表先一下到底，接着跟新消息；由 composer 发送时通知（web 列表上的 `sent` 事件，安卓 `Host.sends`），不看 outbox。上线后验：PC 和手机上往上翻一大段再发消息，要直接到底、气泡落在最下面。
 
 ## 2026-10-01
 
