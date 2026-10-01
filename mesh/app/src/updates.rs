@@ -1013,10 +1013,11 @@ pub(crate) mod tests {
     async fn an_install_says_where_it_is_as_it_goes() {
         let env: Env = [("PATH".to_string(), "/usr/bin:/bin".to_string())].into_iter().collect();
         let mut steps = vec![];
-        let (ok, said) = run_lines("/bin/sh", &["-c", "echo '==> Downloading https://x'; echo '==> Pouring codex' >&2; exit 3"], &env, Duration::from_secs(10), |line| steps.extend(step_of(line))).await.unwrap();
+        let (ok, said) = run_lines("/bin/sh", &["-c", "echo '==> Downloading https://x'; echo '==> Pouring codex'; echo 'Warning: x' >&2; exit 3"], &env, Duration::from_secs(10), |line| steps.extend(step_of(line))).await.unwrap();
         assert!(!ok);
         assert_eq!(steps, ["正在下载…", INSTALLING]);
-        assert!(said.contains("==> Pouring codex"));
+        // Both streams kept (their order between them is not known).
+        assert!(said.contains("==> Pouring codex") && said.contains("Warning: x"));
         assert_eq!(step_of("Setting up Claude Code..."), Some(INSTALLING));
         assert_eq!(step_of("added 2 packages in 4s"), None);
         assert_eq!(downloading("0.159.3", 60_000_000, Some(133_847_481)), "正在下载 0.159.3：44%（共 134 MB）");
