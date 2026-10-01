@@ -63,6 +63,9 @@ fn write(path: &Path, value: &Value) -> Result<()> {
 /// Relative paths only; transfers must not follow links planted by a task. Task commands themselves are trusted
 /// shell execution, so separate working directories are organizational isolation, not an OS security boundary.
 fn file_path(root: &Path, relative: &str, create: bool) -> Result<PathBuf> {
+    if std::fs::symlink_metadata(root)?.file_type().is_symlink() {
+        bail!("transfer root is a symbolic link");
+    }
     let path = Path::new(relative);
     if relative.is_empty() || path.components().any(|c| !matches!(c, Component::Normal(_))) {
         bail!("file path must be relative, without . or ..");
@@ -230,8 +233,9 @@ impl Remote {
                 let mut options = std::fs::OpenOptions::new();
                 options.create(true).write(true);
                 use std::os::unix::fs::OpenOptionsExt;
-                options.custom_flags(libc::O_NOFOLLOW);
+                options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
                 let mut f = options.open(&path)?;
+                if !f.metadata()?.is_file() { bail!("only regular files can be transferred"); }
                 if offset > f.metadata()?.len() {
                     bail!("file offset leaves a gap");
                 }
@@ -533,6 +537,7 @@ mod tests {
         }
         std::os::unix::fs::symlink("/tmp", dir.path().join("link")).unwrap();
         assert!(file_path(dir.path(), "link/file", true).is_err());
+        assert!(file_path(&dir.path().join("link"), "file", true).is_err());
         assert!(file_path(dir.path(), "nested/file", true).unwrap().starts_with(dir.path()));
     }
 }
