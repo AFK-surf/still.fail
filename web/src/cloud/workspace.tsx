@@ -190,8 +190,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={glass} className={`${nav.sidebar} ${nav.glassSide}`} aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
-      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
-      <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
+      <ChatList brand={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
       <div className={nav.navFoot}>
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
         <WorkspaceOpenJobs scope={entry.id} />

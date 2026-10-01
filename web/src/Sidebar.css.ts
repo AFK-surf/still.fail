@@ -191,21 +191,31 @@ export const waitingDetail = style({ opacity: 0.7 });
 /** Under a page's "loading…": quiet. */
 export const statusLine = style({ display: "block", marginTop: 4, fontSize: 12, color: vars.muted });
 
+/** The chats' sidebar's head: the brand and 新建对话, one piece (one glass, below). */
+export const navHead = style({});
+
 /**
  * The chats' sidebar: the list runs the sidebar's whole height, under its head (the brand, 新建对话) and its foot, which
- * are frosted over it as the composer is over a chat. How tall the two are the page measures (Sidebar.tsx useSidebarGlass:
+ * float over it as cards of the composer's glass. How tall the two are the page measures (Sidebar.tsx useSidebarGlass:
  * `--side-top`, `--side-foot`).
  */
 export const glassSide = style({ position: "relative" });
-const glass = {
-  position: "relative", zIndex: 1, background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`,
-  WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
-} as const;
-globalStyle(`${glassSide} > :is(${brand}, ${navNew}, ${navFoot})`, glass);
+globalStyle(`${glassSide} > :is(${navHead}, ${navFoot})`, {
+  position: "relative", zIndex: 1, margin: 8, borderRadius: vars.rCard, cornerShape: vars.cornerShape,
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
+  backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
+  "@media": { [wide]: { minWidth: `calc(${fallbackVar(vars.sidebarW, "240px")} - 17px)` } },
+});
 globalStyle(`${glassSide} > ${navFoot}`, { marginTop: "auto", borderTop: 0 });
+// In the card the brand keeps its place: 8px in from the card is 16px in from the sidebar, as before.
+globalStyle(`${glassSide} ${navHead} > ${brand}`, { height: 44, padding: "0 8px" });
+// The desktop window's buttons, 22px down the window, stay centred on the card's top row.
+globalStyle(`[data-desktop] ${glassSide} ${navHead} > ${brand}`, { height: 28, paddingLeft: 78 });
+globalStyle(`[data-desktop][data-fullscreen] ${glassSide} ${navHead} > ${brand}`, { paddingLeft: 8 });
+globalStyle(`${glassSide} ${navHead} > ${navNew}`, { padding: "0 0 8px" });
 globalStyle(`${glassSide} > ${navSlider}`, { position: "absolute", inset: 0 });
 globalStyle(`${glassSide} ${navScroll}`, {
-  paddingTop: "calc(var(--side-top, 88px) + 4px)", paddingBottom: "calc(var(--side-foot, 48px) + 12px)",
+  paddingTop: "calc(var(--side-top, 96px) + 4px)", paddingBottom: "calc(var(--side-foot, 56px) + 12px)",
   // Its floating scrollbar stays clear of both (scrollbars.ts), as does a row scrolled into view.
-  scrollPaddingTop: "var(--side-top, 88px)", scrollPaddingBottom: "var(--side-foot, 48px)",
+  scrollPaddingTop: "var(--side-top, 96px)", scrollPaddingBottom: "var(--side-foot, 56px)",
 });

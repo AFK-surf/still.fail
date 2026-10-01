@@ -13,7 +13,7 @@ import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename } from "./Rename.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -27,10 +27,10 @@ import * as pagesCss from "./styles/pages.css.ts";
 /**
  * The chats of a workspace, newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
- * ones the viewer started, with `newChat` above them and the way to the `archive` in the filter's menu beside it. With no station its empty
+ * ones the viewer started, with `newChat` above them (in one head with the sidebar's `brand`) and the way to the `archive` in the filter's menu beside it. With no station its empty
  * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
  */
-export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
+export function ChatList({ scope, newChat, stationsPage, archive, brand }: { scope: string; newChat: string; stationsPage: string; archive: string; brand?: ReactNode }) {
   const [onlyMine] = useOnlyMine();
   const move = useComposerMove();
   useShortcut("chat.prev", () => goToNeighbour(-1));
@@ -43,10 +43,13 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
   useEffect(() => setGoing(null), [path]);
   return (
     <>
-      <div className={nav.navNew}>
-        <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />新建对话</NavLink>
-        {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
-        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} />}
+      <div className={nav.navHead}>
+        {brand}
+        <div className={nav.navNew}>
+          <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />新建对话</NavLink>
+          {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
+          {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} />}
+        </div>
       </div>
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-mine={onlyMine || undefined}>
@@ -69,7 +72,7 @@ export function useSidebarGlass() {
     if (!side) return;
     const measure = () => {
       const box = side.getBoundingClientRect();
-      const head = side.querySelector(`:scope > .${nav.navNew}`);
+      const head = side.querySelector(`:scope > .${nav.navHead}`);
       const foot = side.querySelector(`:scope > .${nav.navFoot}`);
       if (head) side.style.setProperty("--side-top", `${Math.round(head.getBoundingClientRect().bottom - box.top)}px`);
       if (foot) side.style.setProperty("--side-foot", `${Math.round(box.bottom - foot.getBoundingClientRect().top)}px`);
