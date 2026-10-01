@@ -232,15 +232,16 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
 
     /**
      * Lets what a person did go on by itself (past the page or menu that asked it), and says how it ended:
-     * `没能<what>：<why>` when it failed, `done` (if any) when it went through.
+     * `没能<what>：<why>` when it failed (and `failed`, if any, is run), `done` (if any) when it went through.
      */
-    fun act(what: String, done: String? = null, run: suspend () -> Unit) {
+    fun act(what: String, done: String? = null, failed: (() -> Unit)? = null, run: suspend () -> Unit) {
         scope.launch {
             try {
                 run()
                 done?.let { toast = it }
             } catch (e: CoreException) {
                 toast = "没能$what：${errorText(e)}"
+                failed?.invoke()
             }
         }
     }

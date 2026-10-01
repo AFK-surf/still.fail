@@ -53,6 +53,8 @@ internal class ListMotion {
     /** Rows that went ahead of others, and when: they pass over them. */
     val lifted = mutableStateMapOf<String, Long>()
     val ghosts = mutableStateListOf<Ghost>()
+    /** Rows swiped off to be archived (Home.kt SwipeToArchive): already gone from sight, they leave no copy behind. */
+    val swiped = HashSet<String>()
     private var closeUntil = 0L
 
     /**
@@ -85,12 +87,13 @@ internal class ListMotion {
         kept.forEachIndexed { i, key -> if (!key.startsWith("h/") && (rank[key] ?: i) > i) lifted[key] = t }
         for (key in gone) {
             val y = placed[key] ?: continue
-            if (key !in visible) continue
+            if (key !in visible || swiped.remove(key)) continue
             val what = old[key]
             ghosts += Ghost(key, y, what as? ChatItem, what as? String, t)
         }
         if (gone.isNotEmpty()) closeUntil = t + 50
         placed.keys.retainAll(newSet)
+        swiped.retainAll(newSet)
         arrived.keys.retainAll { t - (arrived[it] ?: 0) < 500 }
     }
 

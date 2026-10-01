@@ -171,10 +171,21 @@ globalStyle(`${sessionKind} ${kindMark}`, { margin: -1 });
 export const rowArchive = style({
   position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
   selectors: { [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" } },
-  // Nothing left in it (the core's `archivable`): on a touch screen, always there to archive it with one tap.
-  "@media": { "(hover: none)": { selectors: { [`${navSessionWrap}[data-archivable] &`]: { opacity: 1, pointerEvents: "auto" } } } },
 });
-globalStyle(`${navSessionWrap}[data-archivable] ${navSessionHead}`, { "@media": { "(hover: none)": { paddingRight: 24 } } });
+/** 归档 in words, for a chat with nothing left in it (the core's `archivable`): a small chip on the title line, in the
+ * icon's place, while the row is pointed at (always, on a touch screen). */
+export const rowArchiveChip = style({
+  position: "absolute", top: 7, right: 8, height: 20, padding: "0 8px", border: 0, borderRadius: 10,
+  background: `color-mix(in srgb, ${vars.text} 8%, transparent)`, color: vars.text, fontFamily: "inherit",
+  fontSize: vars.textXs, lineHeight: "20px", fontWeight: 500, cursor: "pointer", opacity: 0, pointerEvents: "none",
+  selectors: {
+    [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" },
+    "&:hover": { background: `color-mix(in srgb, ${vars.text} 13%, transparent)` },
+  },
+  "@media": { "(hover: none)": { opacity: 1, pointerEvents: "auto" } },
+});
+globalStyle(`${navSessionWrap}[data-archivable]:hover ${navSessionHead}`, { paddingRight: 48 });
+globalStyle(`${navSessionWrap}[data-archivable] ${navSessionHead}`, { "@media": { "(hover: none)": { paddingRight: 48 } } });
 
 /** Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
 export const stationTrouble = style({ marginBottom: 4, color: vars.text });

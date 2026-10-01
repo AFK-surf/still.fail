@@ -158,14 +158,30 @@ globalStyle(`${mRecentRows} ${mChatRow}[data-open]`, { background: "var(--m-acce
 globalStyle(`${mRecentRows} ${mChatRow}[data-open] ${mChatTitle}`, { color: "var(--m-accent-ink)", fontWeight: "600" });
 globalStyle(`${mNewChat}[data-small]`, { width: "32px", height: "32px" });
 
-/** A row with 归档 at its end (the core's `archivable`): the button beside the row's own, not in it. */
-export const mChatRowWrap = style({ position: "relative" });
-globalStyle(`${mChatRow}[data-archivable]`, { paddingRight: "56px" });
-export const mRowArchive = style({
-  position: "absolute", top: "15px", right: "12px", display: "grid", placeItems: "center", width: "36px", height: "36px",
-  padding: "0", border: "0", borderRadius: "50%", background: "none", color: "var(--m-muted)", cursor: "pointer",
-  selectors: { "&:disabled": { opacity: ".4" } },
+/**
+ * A row with 归档 at its end (the core's `archivable`, Home.tsx SwipeArchive): a frame that stays put, reading the swipe;
+ * in it the row and its 归档 sliding together, and what they uncover on the right.
+ */
+export const mChatRowWrap = style({
+  position: "relative", overflowX: "clip", touchAction: "pan-y",
+  selectors: { "&[data-leaving]": { overflow: "hidden", pointerEvents: "none" } },
 });
-globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-muted)" });
+export const mSwipeSlide = style({ position: "relative" });
+globalStyle(`${mChatRow}[data-archivable]`, { paddingRight: "72px" });
+/** 归档 in words: a small chip, centred on the row's height, at its end. */
+export const mRowArchive = style({
+  position: "absolute", top: "0", bottom: "0", right: "14px", margin: "auto 0", height: "28px", padding: "0 12px",
+  border: "0", borderRadius: "14px", background: "var(--m-chip)", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+  selectors: { "&:disabled": { opacity: ".4" }, "&:active:not(:disabled)": { filter: "brightness(.94)" } },
+});
+// The phone's buttons take their page's font (root.css.ts): its size and colour, as strong as that.
+globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-ink)", fontSize: "13px", lineHeight: "28px", fontWeight: "500" });
+/** What a row swiped left uncovers, as wide as it has gone: 归档, in ink. */
+export const mSwipeUnder = style({
+  position: "absolute", top: "0", bottom: "0", right: "0", width: "0", display: "flex", alignItems: "center",
+  overflow: "hidden", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: "15px", fontWeight: "600",
+  whiteSpace: "nowrap",
+});
+globalStyle(`${mSwipeUnder} span`, { paddingLeft: "24px" });
 globalStyle(`${mDecisions} b`, { fontSize: "17px", fontWeight: "600", lineHeight: "24px" });
 globalStyle(`${mDecisions} span`, { fontSize: "16px", lineHeight: "24px", fontVariantNumeric: "tabular-nums" });

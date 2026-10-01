@@ -47,6 +47,13 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
 import fail.still.android.data.Topic
 import kotlin.math.roundToInt
+import kotlin.math.abs
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.runtime.rememberCoroutineScope
+import fail.still.android.ui.MoveSpring
+import fail.still.android.ui.Ease
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.lazy.LazyListState
@@ -268,7 +275,7 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
             item(key = "open-jobs") { OpenJobs(current.workspace.id) }
             for (day in days) {
                 item(key = dayKey(day)) { Moving(motion, dayKey(day), still) { SectionHeader(day.label) } }
-                items(day.items, key = ::rowKey) { Moving(motion, rowKey(it), still) { ChatRow(it, view) } }
+                items(day.items, key = ::rowKey) { Moving(motion, rowKey(it), still) { ChatRow(it, view, motion = motion) } }
             }
         }
     }
@@ -351,16 +358,17 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {
  * time shows only while the row is held.
  */
 @Composable
-private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
+private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motion: ListMotion? = null) {
     val app = LocalApp.current
     val haptics = LocalHapticFeedback.current
     var held by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
-    // Nothing left in it: archived with one tap at its end (as its menu's 归档).
-    val onArchive = if (live && item.archivable == true && item.offline == null && item.pending != true) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
-    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
+    // Nothing left in it: archived with one tap on the 归档 at its end (as its menu's 归档), or swiped away to the left.
+    val archivable = live && item.archivable == true && item.offline == null && item.pending != true
+    val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
+    val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
         detectTapGestures(
             onPress = { tryAwaitRelease(); held = false },
             onLongPress = { at ->
@@ -375,7 +383,108 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
             },
             onTap = { app.push(Screen.Chat(item.station, item.page)) },
         )
-    }))
+    })
+    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), modifier = body)
+    SwipeToArchive(item, motion) {
+        ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, modifier = body)
+    }
+}
+
+/** Let go past this share of its width (or flung left), a row is archived. */
+private const val ARCHIVE_AT = 0.35f
+
+/**
+ * An archivable row, swiped left to archive it (web mobile/Home.tsx): it follows the finger, uncovering 归档 at the
+ * right edge (filled in ink once letting go would archive it); let go past [ARCHIVE_AT] of its width or flung left, it
+ * goes off to the left and is archived (no copy left behind as it leaves the list, ListMotion.swiped), else it springs
+ * back. Archiving refused, it comes back. The drag is read on the row's frame, which does not move, before the row
+ * itself (PointerEventPass.Initial): across first it is the swipe and the row's tap and hold let go; up or down first
+ * it is the list's (it scrolls). One keeping watch springs back and asks first, as its menu's 归档.
+ */
+@Composable
+private fun SwipeToArchive(item: ChatItem, motion: ListMotion?, content: @Composable () -> Unit) {
+    val app = LocalApp.current
+    val haptics = LocalHapticFeedback.current
+    val still = reducedMotion()
+    val scope = rememberCoroutineScope()
+    val key = rowKey(item)
+    val drag = remember { Animatable(0f) }
+    var width by remember { mutableIntStateOf(1) }
+    var gone by remember { mutableStateOf(false) }
+    val past = drag.value < -width * ARCHIVE_AT
+    val fill by animateFloatAsState(if (past) 1f else 0f, tween(140), label = "archive-fill")
+
+    fun back(v: Float = 0f) { scope.launch { if (still) drag.snapTo(0f) else drag.animateTo(0f, MoveSpring, v) } }
+    fun archive(v: Float) {
+        if (gone || rowBusy(app, item)) return back(v)
+        if (item.watch != null) { back(v); archiveRow(app, item); return }
+        gone = true
+        motion?.swiped?.add(key)
+        scope.launch {
+            if (!still) drag.animateTo(-width.toFloat(), tween(200, easing = Ease.Standard), v) else drag.snapTo(-width.toFloat())
+            app.act("归档", failed = { motion?.swiped?.remove(key); gone = false; back() }) {
+                app.api(item.station).setArchived(item.thread, item.session, true); app.toast = "已归档"
+            }
+        }
+    }
+
+    Box(
+        Modifier.fillMaxWidth().clipToBounds().onSizeChanged { width = it.width.coerceAtLeast(1) }
+            .pointerInput(key) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    if (gone) return@awaitEachGesture
+                    val tracker = VelocityTracker()
+                    var pos = drag.value
+                    var across = 0f
+                    var upDown = 0f
+                    var swiping = false
+                    var wasPast = false
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                            if (swiping) {
+                                change.consume()
+                                val v = tracker.calculateVelocity().x
+                                val at = drag.value
+                                val fling = v < -500.dp.toPx() && at < -16.dp.toPx()
+                                if (at < -width * ARCHIVE_AT || fling) archive(v) else back(v)
+                            }
+                            break
+                        }
+                        val dx = change.position.x - change.previousPosition.x
+                        if (!swiping) {
+                            across += dx
+                            upDown += change.position.y - change.previousPosition.y
+                            // Up or down first: the list's (it scrolls), not a swipe.
+                            if (abs(upDown) > viewConfiguration.touchSlop && abs(upDown) > abs(across)) break
+                            if (abs(across) <= viewConfiguration.touchSlop) continue
+                            // Right from where it rests: nothing there.
+                            if (across > 0 && pos >= 0f) break
+                            swiping = true
+                            tracker.resetTracking()
+                        }
+                        change.consume()
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                        pos = (pos + dx).coerceIn(-width.toFloat(), 0f)
+                        val to = pos
+                        val nowPast = to < -width * ARCHIVE_AT
+                        if (nowPast != wasPast) { wasPast = nowPast; if (nowPast) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+                        scope.launch { drag.snapTo(to) }
+                    }
+                }
+            }
+            .semantics { customActions = listOf(CustomAccessibilityAction("归档") { archive(0f); true }) },
+    ) {
+        // Under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink.
+        if (drag.value != 0f) Box(
+            Modifier.matchParentSize().background(lerp(C.chip, C.ink, fill)).padding(horizontal = 22.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            Text("归档", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = lerp(C.muted, C.bg, fill), modifier = Modifier.semantics { hideFromAccessibility() })
+        }
+        Box(Modifier.fillMaxWidth().graphicsLayer { translationX = drag.value }.background(if (drag.value != 0f) C.bg else Color.Transparent)) { content() }
+    }
 }
 
 /**
@@ -422,8 +531,8 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
         val offline = item.offline
         val dim = if (offline != null) 0.45f else 1f
         // Nothing left in it (its agents all done, nothing at work, waiting or unread): the row faded (the core says so),
-        // its archive button at its end not.
-        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = if (onArchive != null) 6.dp else 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // its 归档 at its end not.
+        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.weight(1f).alpha(if (item.settled == true) 0.45f else 1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChatMark(item, Modifier)
@@ -451,10 +560,12 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                 else RowAside(item, lead, Modifier.alpha(dim))
             }
         }
+        // A small 归档 at its end (a tap archives it; swiping it left does too, SwipeToArchive).
         if (onArchive != null) Box(
-            Modifier.size(34.dp).clip(CircleShape).clickable(enabled = !busy, onClick = onArchive).semantics { contentDescription = "归档「${item.title}」" },
+            Modifier.clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !busy, onClick = onArchive)
+                .padding(horizontal = 10.dp, vertical = 4.dp).semantics { contentDescription = "归档「${item.title}」" },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Archive, 17.dp, C.muted) }
+        ) { Text("归档", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.muted) }
         }
     }
 }

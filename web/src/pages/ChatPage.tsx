@@ -306,6 +306,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }
   const chat = chatView.value;
   const panel = open.length > 0;
+  // A chat keeping watch is archived only once asked.
+  const archiveAsked = () => { if (chat.watch) setAskArchive(true); else void archive(); };
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
   const slackUrl = chat.slackUrl;
@@ -339,7 +341,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         </div>
         <div className={css.pageBarActions}>
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
-          {chat.archivable && keeper && <IconButton label="归档" icon={Archive} shortcut="chat.archive" onClick={() => { if (chat.watch) setAskArchive(true); else void archive(); }} />}
+          {chat.archivable && keeper && <IconButton label="归档" icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} view={jobsView} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
@@ -353,7 +355,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
       <OpenFile.Provider value={(session, file) => openTab(fileTab(session, file.path, file.name))}>
-        <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} {...(made ? { made } : {})} />
+        <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} onArchive={chat.archivable && keeper ? archiveAsked : undefined} {...firstMessage} {...(made ? { made } : {})} />
       </OpenFile.Provider>
       </div>
         {side && (

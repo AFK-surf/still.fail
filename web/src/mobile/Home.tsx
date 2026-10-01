@@ -1,7 +1,9 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { motionValue } from "motion";
+import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
 import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Pin, Settings, Unplug } from "../icons.tsx";
@@ -270,24 +272,127 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     </button>
   );
   if (!archivable) return row;
-  return <div className={css.mChatRowWrap}>{row}<RowArchive item={item} busy={busy} /></div>;
+  // Swiped: not a long press, and not held.
+  const dragged = () => { clearTimeout(timer.current); longPressed.current = true; setHeld(false); };
+  return <SwipeArchive item={item} busy={busy} onDrag={dragged}>{row}</SwipeArchive>;
 }
 
-/** A row's 归档, at its end while nothing is left in its chat; the row says it is under way, the toast how it ended. */
-function RowArchive({ item, busy }: { item: ChatItem; busy: boolean }) {
-  const app = useApp();
-  const api = stationApi(useStationCall(item.station));
-  const archive = () => {
-    const go = () => api.archive(item, true).then(() => app.toast("已归档"));
-    // A chat keeping watch is archived only once asked (the core's words).
-    if (item.watch) confirm(app, { title: `归档「${item.title}」？`, text: item.watch.ask, action: "归档", run: go });
-    else go().catch((error: unknown) => app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`));
+/** How far (of its width) a row is swiped before letting go archives it, and how fast a fling has to be (px/ms). */
+const TAKES = 0.35;
+const FLING = 0.6;
+
+/**
+ * A row whose chat has nothing left in it (the core's `archivable`): 归档 in words at its end, and swiped left it is
+ * archived. The row follows the finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and
+ * the list closes over it, else it springs back. Read on the frame, which does not move (going up or down first is the
+ * list's scrolling).
+ */
+function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: boolean; onDrag: () => void; children: ReactNode }) {
+  const archive = useRowArchive(item);
+  const frame = useRef<HTMLDivElement>(null);
+  const slide = useRef<HTMLDivElement>(null);
+  const under = useRef<HTMLDivElement>(null);
+  const [x] = useState(() => motionValue(0));
+  const run = useRef<AnimationPlaybackControls | null>(null);
+  const go = useRef<{ id: number; x: number; y: number; dragging: boolean; last: { x: number; t: number }[] } | null>(null);
+  const swiped = useRef(false);
+  useEffect(() => x.on("change", (v) => {
+    const dx = Math.min(0, Math.round(v));
+    if (slide.current) slide.current.style.transform = dx ? `translateX(${dx}px)` : "";
+    if (under.current) under.current.style.width = `${-dx}px`;
+  }), [x]);
+  const back = () => {
+    run.current?.stop();
+    run.current = reducedMotion() ? (x.jump(0), null) : animate(x, 0, { ...MOVE, velocity: x.getVelocity() });
+  };
+  /** Off to the left, then the row closes up; archived once it is gone (the core takes it out of the list then). */
+  const leave = async () => {
+    const el = frame.current;
+    if (!el || reducedMotion()) return;
+    run.current?.stop();
+    const off = animate(x, -el.offsetWidth, { type: "spring", visualDuration: 0.2, bounce: 0, velocity: Math.min(x.getVelocity(), 0) });
+    run.current = off;
+    await off.finished;
+    el.dataset.leaving = "";
+    await el.animate([{ height: `${el.offsetHeight}px` }, { height: "0px" }], { duration: 200, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "forwards" }).finished;
+  };
+  /** Not archived after all (asked first and kept, or it failed): back where it rests. */
+  const stay = () => {
+    const el = frame.current;
+    if (el) { delete el.dataset.leaving; for (const a of el.getAnimations()) a.cancel(); }
+    back();
+  };
+  const end = (e: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const g = go.current;
+    if (!g || g.id !== e.pointerId) return;
+    go.current = null;
+    const el = frame.current;
+    if (!g.dragging || !el) return;
+    swiped.current = true;
+    delete el.dataset.dragging;
+    const dx = e.clientX - g.x;
+    const first = g.last[0];
+    const v = first && e.timeStamp > first.t ? (e.clientX - first.x) / (e.timeStamp - first.t) : 0;
+    if (!cancelled && !busy && dx < 0 && (-dx > el.offsetWidth * TAKES || v < -FLING)) archive(leave, stay);
+    else back();
   };
   return (
-    <button type="button" className={css.mRowArchive} aria-label={`归档「${item.title}」`} disabled={busy} onClick={archive}>
-      <Archive size={18} />
-    </button>
+    <div ref={frame} className={css.mChatRowWrap}
+      onPointerDown={(e) => {
+        if (e.pointerType === "mouse") return;
+        swiped.current = false;
+        go.current = { id: e.pointerId, x: e.clientX, y: e.clientY, dragging: false, last: [{ x: e.clientX, t: e.timeStamp }] };
+      }}
+      onPointerMove={(e) => {
+        const g = go.current;
+        if (!g || g.id !== e.pointerId) return;
+        const dx = e.clientX - g.x, dy = e.clientY - g.y;
+        if (!g.dragging) {
+          if (Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx)) { go.current = null; return; }
+          if (Math.abs(dx) < 8) return;
+          if (busy) { go.current = null; return; }
+          g.dragging = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          e.currentTarget.dataset.dragging = "";
+          run.current?.stop();
+          onDrag();
+        }
+        g.last.push({ x: e.clientX, t: e.timeStamp });
+        // Its speed over the last 80 ms.
+        while (g.last.length > 2 && e.timeStamp - g.last[0]!.t > 80) g.last.shift();
+        // Only to the left: to the right it stays where it is.
+        x.set(dx < 0 ? dx : 0);
+      }}
+      onPointerUp={(e) => end(e, false)} onPointerCancel={(e) => end(e, true)}
+      onClickCapture={(e) => { if (swiped.current) { swiped.current = false; e.preventDefault(); e.stopPropagation(); } }}>
+      <div ref={under} className={css.mSwipeUnder} aria-hidden="true"><span>归档</span></div>
+      <div ref={slide} className={css.mSwipeSlide}>
+        {children}
+        <button type="button" className={css.mRowArchive} aria-label={`归档「${item.title}」`} disabled={busy} onClick={() => archive()}>归档</button>
+      </div>
+    </div>
   );
+}
+
+/**
+ * Archives a row's chat (a chat keeping watch once asked, the core's words): `leave` first takes the row away, `stay`
+ * puts it back when it was not archived after all. The row says it is under way, the toast how it ended.
+ */
+function useRowArchive(item: ChatItem) {
+  const app = useApp();
+  const api = stationApi(useStationCall(item.station));
+  const go = () => api.archive(item, true).then(() => app.toast("已归档"));
+  return (leave?: () => Promise<void>, stay?: () => void) => {
+    if (item.watch) {
+      stay?.();
+      confirm(app, { title: `归档「${item.title}」？`, text: item.watch.ask, action: "归档", run: go });
+      return;
+    }
+    void (leave ? leave() : Promise.resolve()).then(go).catch((error: unknown) => {
+      stay?.();
+      app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
+    });
+  };
 }
 
 /**

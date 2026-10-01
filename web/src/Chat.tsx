@@ -40,6 +40,8 @@ import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
+import * as decisionsCss from "./Decisions.css.ts";
+import { useDoing } from "./doing.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -61,12 +63,14 @@ export function toMadeChat(go: () => void): void {
  * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
  * `ensureChat` makes the chat with the first message, which `onSent` then follows.
  */
-export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made }: {
+export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made, onArchive }: {
   /** Whose draft the composer shows here. */
   chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: ChatTo }>; onSent?: (to: ChatTo) => void;
   /** The core's key of a chat made here (`chat.create`): sent to by it until its thread is known. */
   made?: string;
+  /** Archives the chat, as its bar's 归档 does: offered under the agent's last post once it is all done (ChatRows). */
+  onArchive?: (() => void) | undefined;
 }) {
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
@@ -86,9 +90,10 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
   // function, the latest one behind it, and `owners` says when whose files are whose has changed.
   const images = () => chatImages([...rows.messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))], ownerOf);
-  const latest = useRef({ ownerOf, onOpenHistory, images });
-  latest.current = { ownerOf, onOpenHistory, images };
-  const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images() }));
+  const latest = useRef({ ownerOf, onOpenHistory, images, onArchive });
+  latest.current = { ownerOf, onOpenHistory, images, onArchive };
+  const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images(),
+    archive: () => latest.current.onArchive?.() }));
   useShortcut("chat.latest", rows.toEnd);
   const askedFile = useAskedFile(list, rows.messages, ownerOf);
   // Selecting text inside one message offers to quote it.
@@ -111,7 +116,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
         }}>
         <DraftKey.Provider value={draftKey}>
-          <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} />
+          <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} onArchive={onArchive ? stable.archive : undefined} />
         </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
@@ -144,14 +149,20 @@ export function ownersOf(chat: ChatView): string {
  * `owner` and `onOpenHistory` stay the same functions while the page lasts; `owners` says when whose files are whose
  * has changed.
  */
-export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
+export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchive }: {
   chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null; owners: string;
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
+  /** Archives the chat (its page's 归档). */
+  onArchive?: (() => void) | undefined;
 }) {
   const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
   const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
+  // Nothing left in it (the core's `archivable`) and its agent's last post said it is all done: 归档 right under that
+  // post, as a decision's options are (only at the chat's end, not in an older window).
+  const last = chat.newer ? undefined : messages.findLast((m) => m.authorKind === "agent" && !m.system);
+  const archiveAt = onArchive && chat.archivable && !chat.offline && last?.ending === "all_done" ? last.seq : null;
   return (
     <>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
@@ -169,7 +180,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
           <Fragment key={m.seq}>
             {line}
             <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread}
-              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory} />
+              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
+              {...(archiveAt === m.seq ? { archive: onArchive } : {})} />
           </Fragment>
         );
       })}
@@ -711,7 +723,7 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true }: {
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive }: {
   message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
   thread: number | null;
@@ -720,6 +732,8 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   /** Whose files are whose, in a word: when it changes, the files are drawn again. */
   owners: string;
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
+  /** Its chat is all done: 归档 under it (ArchiveOption). */
+  archive?: (() => void) | undefined;
 }) {
   if (m.mine) {
     return (
@@ -749,10 +763,29 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {options && m.options && <MessageDecision message={m} thread={thread} />}
+      {archive && <ArchiveOption thread={m.thread} onArchive={archive} />}
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
-  && a.options === b.options && sameMessage(a.message, b.message));
+  && a.options === b.options && a.archive === b.archive && sameMessage(a.message, b.message));
+
+/**
+ * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the
+ * message, in ink as a decision's recommended option is. Turns while the archive is under way (doing.ts).
+ */
+function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () => void }) {
+  const station = useStation().address;
+  const busy = useDoing("chat.archive", { station, thread, archived: true });
+  return (
+    <div className={decisionsCss.options}>
+      <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy}
+        aria-busy={busy || undefined} onClick={onArchive}>
+        <span className={decisionsCss.optionLabel}>归档这个 chat</span>
+        {busy && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
 
 /** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
 export function StaticMessage({ message, owner }: { message: ChatMessage; owner: (file: Attachment) => string | null }) {

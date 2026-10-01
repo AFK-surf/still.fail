@@ -279,13 +279,13 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
     val jobs by rememberTopic<ChatJobsView>(app.core, Topics.chatJobs(station, of))
     val alarm = jobs.value?.alarm?.let(::toneOf)
     // Nothing left in it: archived with one tap from its bar (as its row's 归档).
-    val session = (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
+    val session = archiveSession(of, view, agents)
     BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier, trailing = {
         if (view.archivable == true && view.archived != true && session != null) {
             val archiving = app.isDoing("chat.archive", "station" to station, "session" to session)
             Box(Modifier.semantics { contentDescription = "归档" }) {
                 if (archiving) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
-                else NavButton(Icons.Archive, { app.act("归档") { app.api(station).setArchived(thread?.id, session, true); app.toast = "已归档" } })
+                else NavButton(Icons.Archive, { archiveChat(app, station, view, session) })
             }
         }
         if (jobs.value?.jobs?.isNotEmpty() == true) Box {
@@ -368,6 +368,11 @@ class AgentAtWork(val key: String, val who: String, val runtime: String, val mak
 internal class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>, val orOwner: String? = null) {
     fun agent(key: String) = agents.firstOrNull { it.key == key }
     fun mine(m: ChatMessage) = m.mine
+    /** The post 归档这个 chat goes under: the agents' latest that ended all done, while the chat can be archived. */
+    val archiveUnder: Long? by lazy {
+        if (view.archivable != true || view.archived == true || view.pending == true) null
+        else view.messages.lastOrNull { it.authorKind == "agent" && it.ending == "all_done" }?.seq
+    }
     /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key ?: orOwner
 }
@@ -1009,8 +1014,34 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             if (m.authorKind == "person") Files(ctx, m.attachments)
             // A decision it asks (its options): them under it, a line saying how it went once it has.
             if (decide) DecisionUnder(ctx, m)
+            // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.
+            if (decide && ctx.archiveUnder == m.seq) ArchiveUnder(ctx)
         }
     }
+}
+
+/** The session a chat is archived by: the page's, the one its station made of it, else its first agent's. */
+private fun archiveSession(of: ChatOf, view: ChatView, agents: List<AgentHere>): String? =
+    (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
+
+/** Archives the chat (its bar's 归档, and the one under its last 做完了). */
+private fun archiveChat(app: fail.still.android.AppState, station: String, view: ChatView, session: String) =
+    app.act("归档") { app.api(station).setArchived(view.thread?.id, session, true); app.toast = "已归档" }
+
+/**
+ * 归档这个 chat, full width under the agent's latest post that ended its turn all done, while nothing is left in the
+ * chat (the core's `archivable`): drawn as a decision's recommended option (Decisions.kt), a spinner on it meanwhile.
+ */
+@Composable
+private fun ArchiveUnder(ctx: Here) {
+    val app = LocalApp.current
+    val session = archiveSession(ctx.of, ctx.view, ctx.agents) ?: return
+    val label = "归档这个 chat"
+    val busy = app.isDoing("chat.archive", "station" to ctx.station, "session" to session)
+    DecisionOptions(
+        listOf(fail.still.android.data.DecisionOption(label, recommended = true)), Modifier.padding(top = 6.dp),
+        enabled = !ctx.view.offline, busy = if (busy) label else null,
+    ) { archiveChat(app, ctx.station, ctx.view, session) }
 }
 
 /**

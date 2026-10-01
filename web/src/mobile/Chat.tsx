@@ -158,14 +158,16 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
   const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))], (f) => ownerIn(view, f));
   // The messages are kept as they are while nothing they show changes: what they are handed stays the same function,
   // the latest one behind it.
-  const latest = useRef({ here, draft, images, app });
-  latest.current = { here, draft, images, app };
+  const archive = useArchiveChat(here, view, view.thread ?? null);
+  const latest = useRef({ here, draft, images, app, archive });
+  latest.current = { here, draft, images, app, archive };
   const [stable] = useState(() => ({
     owner: (file: Parameters<typeof ownerIn>[1]) => ownerIn(latest.current.here.view, file),
     open: (key: string) => { const { app, here } = latest.current; openHistory(app, here.station, here.key, key); },
     quote: (q: Omit<Quote, "comment">) => latest.current.draft.quote(q),
     images: () => latest.current.images(),
     hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
+    archive: () => latest.current.archive(),
   }));
   // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
   const quoting = useSelectionQuote(list, stable.quote);
@@ -199,7 +201,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
-          <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} />
+          <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} onArchive={view.thread ? stable.archive : undefined} />
         </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
@@ -622,11 +624,17 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
 
 /** In the bar while nothing is left in the chat: archives it with one tap, back to the list at once (as ArchiveRow). */
 function ArchiveButton({ here, view, thread }: { here: Here; view: ChatView; thread: ChatThread }) {
+  const archive = useArchiveChat(here, view, thread);
+  return <NavButton icon={Archive} label="归档" onClick={archive} />;
+}
+
+/** Archives the chat and leaves its page (a chat keeping watch once asked): the bar's 归档, and the one in the list. */
+function useArchiveChat(here: Here, view: ChatView, thread: ChatThread | null) {
   const app = useApp();
   const call = useStationCall(here.station);
   const api = useMemo(() => stationApi(call), [call]);
-  const of = { thread: thread.id, session: view.agents[0]?.session.key ?? here.key };
-  const archive = () => {
+  const of = { thread: thread?.id ?? null, session: view.agents[0]?.session.key ?? here.key };
+  return () => {
     if (view.watch) {
       confirm(app, { title: `归档「${view.title}」？`, text: view.watch.ask, action: "归档", run: () => api.archive(of, true).then(() => { app.pop(); app.toast("已归档"); }) });
       return;
@@ -634,7 +642,6 @@ function ArchiveButton({ here, view, thread }: { here: Here; view: ChatView; thr
     app.pop();
     api.archive(of, true).then(() => app.toast("已归档"), (error) => app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`));
   };
-  return <NavButton icon={Archive} label="归档" onClick={archive} />;
 }
 
 function InfoDetail({ label, value, extra }: { label: string; value: string; extra?: ReactNode }) {

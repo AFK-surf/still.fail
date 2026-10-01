@@ -235,7 +235,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     </NavLink>
   );
   return (
-    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)} data-archivable={item.archivable || undefined}>
+    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)} data-archivable={(menu && !editing && item.archivable) || undefined}>
     {menu ? (
       // Right-clicking a row: what can be done to the chat.
       <ContextMenu.Root modal={false}>
@@ -250,7 +250,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         </ContextMenu.Portal>
       </ContextMenu.Root>
     ) : row}
-    {menu && !editing && <ArchiveButton item={item} archive={archiveAsked} />}
+    {menu && !editing && (item.archivable ? <ArchiveChip item={item} archive={archiveAsked} /> : <ArchiveButton item={item} archive={archiveAsked} />)}
     {item.watch && <Confirm open={asking} title={`归档「${item.title}」？`} description={item.watch.ask} action="归档"
       onConfirm={() => { setAsking(false); void archive(); }} onClose={() => setAsking(false)} />}
     </div>
@@ -324,6 +324,14 @@ function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void 
   );
 }
 
+/** Nothing left in its chat (the core's `archivable`): 归档 in words at the row's end while it is pointed at. */
+function ArchiveChip({ item, archive }: { item: ChatItem; archive: () => void }) {
+  return (
+    <button type="button" className={nav.rowArchiveChip} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
+      归档
+    </button>
+  );
+}
 
 /** The last thing said in a chat, on one line (the row's picture says who is in it). */
 function LastMessage({ item }: { item: ChatItem }) {
