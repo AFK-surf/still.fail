@@ -1836,6 +1836,7 @@ fn connect_wizard_configuration_and_oauth_install_keep_one_draft() {
         let topic = Topic::ConnectFlow { station: "ws/st".into(), form: "oauth".into() };
         let flow = &core.inner.connect_flow;
         flow.open(&topic, ui, &json!({"mobile":true})).unwrap();
+        host.settle().await;
         flow.go(&topic, ui, "token").unwrap();
         flow.edit(&topic, ui, &json!({"config":"xoxe-1-a-refresh-token-for-test"})).unwrap();
         let (generation, _, _) = flow.begin(&topic, ui, "config", &json!({}), false).unwrap();
@@ -1843,7 +1844,7 @@ fn connect_wizard_configuration_and_oauth_install_keep_one_draft() {
         let overview_topic = Topic::Overview { station: "ws/st".into() };
         let mut overview = core.inner.store.get(&overview_topic).unwrap();
         overview["slackTeams"] = json!([{"teamId":"T","teamName":"Team"}]);
-        core.inner.store.set(&overview_topic, Ok(overview.clone()));
+        core.inner.data.set(&overview_topic, overview.clone());
         assert_eq!(flow.value(&topic).unwrap()["config"], "");
         let (generation, name, params) = flow.begin(&topic, ui, "make", &json!({}), false).unwrap();
         assert_eq!(name, "slack.makeApp");
@@ -1854,7 +1855,7 @@ fn connect_wizard_configuration_and_oauth_install_keep_one_draft() {
         let (generation, _, _) = flow.begin(&topic, ui, "make", &json!({}), false).unwrap();
         flow.finish(&topic, generation, "make", &Ok(json!({"appId":"A"})));
         overview["slackApps"] = json!([{"appId":"A","state":"oauth-state","installed":true}]);
-        core.inner.store.set(&overview_topic, Ok(overview));
+        core.inner.data.set(&overview_topic, overview);
         let tokens = json!({"appToken":"app-token","botToken":""});
         let (generation, name, params) = flow.begin(&topic, ui, "verify", &tokens, false).unwrap();
         assert_eq!(name, "slack.verify");

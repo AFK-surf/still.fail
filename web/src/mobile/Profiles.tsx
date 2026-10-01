@@ -4,7 +4,7 @@
 // key or variables; renaming, checking and deleting under "…"), and a new one.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useOverview, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
+import { stationApi, useAction, useOverview, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, ChevronRight, More, Plus } from "../icons.tsx";
@@ -415,8 +415,9 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
 function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown> }) {
   const app = useApp();
   const [code, setCode] = useState("");
-  const busy = useDoing(["profile.loginCode", "login.code"], { station: useStation().address });
-  const [error, setError] = useState<string | null>(null);
+  const operation = useAction(send, () => setCode(""));
+  const busy = operation.busy;
+  const error = operation.error?.message;
   const [copied, setCopied] = useState(false);
   if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在生成 {provider} 的登录链接…</p>;
   if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在完成登录…</p>;
@@ -439,7 +440,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
         <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder="粘贴授权码" onChange={(e) => setCode(e.target.value)} />
         {error && <p className={partsCss.mError}>{error}</p>}
         <Button label="完成登录" primary busy={busy} enabled={!!code.trim()}
-          onClick={() => { setError(null); send(code.trim()).then(() => setCode(""), (e: Error) => setError(e.message)); }} />
+          onClick={() => { void operation.run(code.trim()); }} />
       </>
     );
   }
