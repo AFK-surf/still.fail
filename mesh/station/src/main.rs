@@ -801,6 +801,11 @@ async fn keep_relays(endpoint: Endpoint, station: Arc<Station>) {
 /// How often a station removed from its workspace asks the cloud whether it is taken back.
 const REMOVED_RETRY: Duration = Duration::from_secs(600);
 
+/// REMOVED_RETRY, or the seconds in STILLFAIL_REMOVED_RETRY_SECS (for tests against a dev cloud; not set otherwise).
+fn removed_retry() -> Duration {
+    std::env::var("STILLFAIL_REMOVED_RETRY_SECS").ok().and_then(|v| v.trim().parse().ok()).map(Duration::from_secs).unwrap_or(REMOVED_RETRY)
+}
+
 /// Keeps the presence socket open, reconnecting with backoff; removed from its workspace, only now and then
 /// (`REMOVED_RETRY`), or at once when it is enrolled again meanwhile.
 async fn presence(station: Arc<Station>, key: SecretKey) {
@@ -815,8 +820,10 @@ async fn presence(station: Arc<Station>, key: SecretKey) {
         }
         station.reload();
         if station.removed() {
-            write_presence(&station.data, false, Some("removed from its workspace; the cloud is asked again every 10 minutes"));
-            let until = Instant::now() + REMOVED_RETRY;
+            let retry = removed_retry();
+            let every = if retry == REMOVED_RETRY { "every 10 minutes".to_string() } else { format!("every {} s", retry.as_secs()) };
+            write_presence(&station.data, false, Some(&format!("removed from its workspace; the cloud is asked again {every}")));
+            let until = Instant::now() + retry;
             while Instant::now() < until {
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 station.reload();
