@@ -232,6 +232,8 @@ pub struct Updates {
     running: OnceLock<Box<dyn Fn() -> usize + Send + Sync>>,
     /// The version the station's last update in this process went for: updating by itself, not tried again.
     tried: Mutex<Option<String>>,
+    /// Told when a runtime was installed or updated here (the machine's logins read again).
+    runtime_changed: OnceLock<Box<dyn Fn() + Send + Sync>>,
 }
 
 /// What the station's update started from the pages leaves in <data>/run/update.started, for whichever process runs
@@ -252,7 +254,7 @@ impl Updates {
         let items = Default::default();
         // Read before an update can replace the release.
         let installed = release_channel(&app).unwrap_or_else(|| channel_of(&settings.raw(), &app));
-        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0, running: OnceLock::new(), tried: Mutex::new(None) })
+        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0, running: OnceLock::new(), tried: Mutex::new(None), runtime_changed: OnceLock::new() })
     }
 
     /// The channel the station is updated on now.
@@ -312,6 +314,19 @@ impl Updates {
     /// How many turns run now, for what an update waits on when it has to restart the station.
     pub fn count_running(&self, running: impl Fn() -> usize + Send + Sync + 'static) {
         let _ = self.running.set(Box::new(running));
+    }
+
+    /// What to do when a runtime was installed or updated from here (read the machine's logins again).
+    pub fn on_runtime_changed(&self, f: impl Fn() + Send + Sync + 'static) {
+        let _ = self.runtime_changed.set(Box::new(f));
+    }
+
+    /// The runtime being installed or updated now, when one is: the station is not updated meanwhile, as its update
+    /// hands over to another process or restarts, and the install would go on unfollowed (or be stopped) — its line
+    /// back to 未安装 with nothing said.
+    fn runtime_updating(&self) -> Option<Kind> {
+        let items = self.items.lock().unwrap();
+        [Kind::Claude, Kind::Codex].into_iter().find(|k| items[*k as usize].updating.is_some())
     }
 
     /// Reads them at once and every few hours after (every ten minutes while the station updates itself); an update
@@ -435,7 +450,7 @@ impl Updates {
             return None;
         }
         let item = self.items.lock().unwrap()[Kind::Station as usize].clone();
-        if item.note.is_some() || item.updating.is_some() || item.channel != Some(self.channel()) {
+        if item.note.is_some() || item.updating.is_some() || item.channel != Some(self.channel()) || self.runtime_updating().is_some() {
             return None;
         }
         let latest = item.latest?;
@@ -506,7 +521,13 @@ impl Updates {
             bail!("{}：{note}", kind.name());
         }
         if kind == Kind::Station {
+            if let Some(runtime) = self.runtime_updating() {
+                bail!("{} 正在安装或更新，等它完成再更新 station", runtime.name());
+            }
             return self.update_station();
+        }
+        if self.items.lock().unwrap()[Kind::Station as usize].updating.is_some() {
+            bail!("station 正在更新，等它完成再{}{}", if item.installed { "更新" } else { "安装" }, kind.name());
         }
         let how = item.how.ok_or_else(|| anyhow!("{} 没法在这里更新", kind.name()))?;
         self.set(kind, |i| {
@@ -528,14 +549,25 @@ impl Updates {
                 warn!(runtime = kind.id(), failed, "the runtime not updated");
             }
             let read = me.read_runtime(kind).await;
-            // Done without an error but not newer: installed somewhere the station's PATH does not find.
+            // Done without an error but not there, or not newer: installed somewhere the station's PATH does not find.
             let failed = failed.or_else(|| match (&read.version, &read.latest) {
+                _ if !read.installed => Some(format!("{} 跑完了，但 station 的 PATH 上还是找不到 {}：可能装到了别处", how.program.display(), kind.command())),
                 (Some(version), Some(latest)) if newer(version, latest) => {
                     Some(format!("{} 跑完了，但 {} 还是 {version}（最新 {latest}）：可能装到了别处，PATH 上的不是它", how.program.display(), kind.command()))
                 }
                 _ => None,
             });
             me.set(kind, |i| *i = Item { failed, ..read });
+            if let Some(changed) = me.runtime_changed.get() {
+                changed();
+            }
+            // The station's own update waited for this one.
+            if let Some(to) = me.to_update_to() {
+                info!(to, "a newer release out, waited for a runtime: the station updates itself");
+                if let Err(e) = me.update_station() {
+                    warn!(error = %e, "the station not updated by itself");
+                }
+            }
         });
         Ok(())
     }
@@ -937,9 +969,16 @@ pub(crate) mod tests {
         assert_eq!(updates.to_update_to(), None);
         station_with(&updates, "0.1.1320");
         assert_eq!(updates.to_update_to().as_deref(), Some("0.1.1320"));
-        // While an update goes on: nothing more.
+        // While a runtime installs: not yet, nor by hand (a handover or restart would leave it unfollowed).
+        updates.items.lock().unwrap()[Kind::Codex as usize].updating = Some(now_ms());
+        assert_eq!(updates.to_update_to(), None);
+        assert!(updates.update("station").unwrap_err().to_string().contains("Codex 正在安装"));
+        updates.items.lock().unwrap()[Kind::Codex as usize].updating = None;
+        assert_eq!(updates.to_update_to().as_deref(), Some("0.1.1320"));
+        // While an update goes on: nothing more, nor a runtime installed meanwhile.
         updates.items.lock().unwrap()[Kind::Station as usize].updating = Some(now_ms());
         assert_eq!(updates.to_update_to(), None);
+        assert!(updates.update("codex").unwrap_err().to_string().contains("station 正在更新"));
 
         // Switched back from the beta, the older stable release is offered, but not gone to by itself.
         let other = tempfile::tempdir().unwrap();

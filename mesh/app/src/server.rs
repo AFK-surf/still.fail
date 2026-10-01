@@ -311,6 +311,12 @@ impl App {
         );
         let counted = Arc::downgrade(&hub);
         updates.count_running(move || counted.upgrade().map_or(0, |hub| hub.running()));
+        // A runtime installed or updated from the pages: its login line (没有装 Codex…) read again.
+        let reread = machine_logins.clone();
+        updates.on_runtime_changed(move || {
+            let reread = reread.clone();
+            tokio::spawn(async move { reread.refresh().await });
+        });
         updates.start();
         // What the agents spent, read from their transcripts as they grow.
         let usage = crate::usage::Usage::new(store.clone(), settings.clone());
