@@ -16,15 +16,25 @@
 // Scrolling by anyone else (the reader: wheel, touch and its momentum, keys,
 // the scrollbar; a jump to a message) sets the new position, and whether it is
 // at the bottom; the pane carries `data-reading-up` while it is not. A
-// `to-bottom` event on the pane glides to the bottom and follows it again.
+// `to-bottom` event on the pane glides to the bottom and follows it again
+// (taken at once with `detail: "at-once"`).
+// A pane `short` of its end (it shows a window of a chat, more of it to load
+// below) has no end in view to follow: its bottom is read like anywhere else,
+// the reader's place kept as pages come in below it and leave above it. A
+// `trimmed` event on the pane says messages left its ends that way (a window
+// moving along): the floor lets go of what it held, or the space they took
+// would stay behind as blank room.
 // With a `floor` (an empty last child), the content never gets shorter: what
 // leaves the bottom (an activity folding away) leaves its space behind, filled
 // by the floor, so nothing above it drops down. A change of the width its
 // content is laid out in (the pane's, or its padding) lays everything out anew, so the floor lets go of what it was holding.
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
-/** `messages` selects which of the pane's children count as messages. */
-export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = "*", floor?: RefObject<HTMLElement | null>): void {
+/** `messages` selects which of the pane's children count as messages; `short`: its bottom is not the end (above). */
+export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = "*", floor?: RefObject<HTMLElement | null>, short = false): void {
+  // Read as the pane changes, without starting over.
+  const isShort = useRef(short);
+  isShort.current = short;
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -52,7 +62,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       if (f.style.height !== height) f.style.height = height;
     };
     /** Following the bottom (or `anchor`, a new message, from its top), or holding the reader's place (`reading`). */
-    let following = true;
+    let following = !isShort.current;
     let anchor: Element | null = null;
     /** Where the reader is: the message at the pane's top, and how far below the pane's top it sat. */
     let reading: { el: Element; offset: number } | null = null;
@@ -147,7 +157,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       stop();
       anchor = null;
       placed = el.scrollTop;
-      following = distance() <= 2;
+      following = !isShort.current && distance() <= 2;
       if (following) reading = null;
       else note();
       el.toggleAttribute("data-reading-up", !following);
@@ -174,8 +184,15 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       el.toggleAttribute("data-reading-up", true);
     };
     el.addEventListener("click", click, true);
-    const toBottom = () => { anchor = null; reading = null; following = true; smooth = true; el.removeAttribute("data-reading-up"); hold(); };
+    const toBottom = (event: Event) => {
+      // At once: what came in meanwhile (a chat's latest page in place of its window) is not followed from its top.
+      const atOnce = event instanceof CustomEvent && event.detail === "at-once";
+      if (atOnce) { mutations.takeRecords(); watch(); }
+      anchor = null; reading = null; following = true; smooth = !atOnce; el.removeAttribute("data-reading-up"); hold();
+    };
     el.addEventListener("to-bottom", toBottom);
+    const trimmed = () => { reached = 0; };
+    el.addEventListener("trimmed", trimmed);
     el.addEventListener("scroll", onScroll, { passive: true });
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, input, { passive: true });
     // The pane's width changing re-wraps every message: that is taken at once, not glided after (it would lag behind
@@ -207,11 +224,13 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     // An image loading in a message grows it.
     const onLoad = (event: Event) => { smooth = grown() && messageOf(event.target as Node) !== null; hold(); };
     el.addEventListener("load", onLoad, true);
+    el.toggleAttribute("data-reading-up", !following);
     hold();
     settled = true;
     return () => {
       stop();
       el.removeEventListener("to-bottom", toBottom);
+      el.removeEventListener("trimmed", trimmed);
       el.removeEventListener("scroll", onScroll);
       el.removeEventListener("click", click, true);
       for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, input);

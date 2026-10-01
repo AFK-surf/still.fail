@@ -46,6 +46,17 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Brings the page before the chat's first loaded message into the view. */
     suspend fun older(thread: Long) { chat("chat.older", thread) }
 
+    /** Brings the page after the chat's last loaded message into the view (it shows a window short of its end), as many
+     *  going at its start; they are read, not said: none comes in with a motion. */
+    suspend fun newer(thread: Long) { chat("chat.newer", thread) }
+
+    /** The chat's latest page in place of what it shows: the reader goes to its end. */
+    suspend fun latest(thread: Long) { chat("chat.latest", thread) }
+
+    /** Where the reader leaves the chat: the message at the top of what shows, or none at its end (it opens there next,
+     *  while nothing is unread). */
+    suspend fun place(thread: Long, seq: Long?) { chat("chat.place", thread) { seq?.let { put("seq", it) } } }
+
     /** Brings the page of an agent's execution history before what it shows into the view. */
     suspend fun historyOlder(key: String) { core.call("history.older", buildJsonObject { put("station", station); put("key", key) }) }
 

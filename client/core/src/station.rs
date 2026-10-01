@@ -26,7 +26,7 @@
 //! (entries.rs).
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::rc::{Rc, Weak};
 
@@ -75,12 +75,17 @@ pub const NET_EVERY_MS: u64 = 2_000;
 const NET_KEPT: usize = 30;
 /// Entries per page of a thread.
 pub const PAGE: u64 = 50;
+/// A chat shows a window of its thread's entries (docs: a chat opens where it is to be read, pages come in either way):
+/// at most this many; a page coming in at one end lets as many go at the other.
+pub const WINDOW: u64 = 3 * PAGE;
 /// Entries per page of a session's transcript (a step is a call and its result, so more of them).
 pub const TRANSCRIPT_PAGE: u64 = 200;
-/// How many of a station's chats (the latest active) are brought onto the device ahead of being opened.
-const WARM_CHATS: usize = 30;
+/// How many of a station's chats (the latest active) are kept current on the device ahead of being opened.
+const WARM_CHATS: usize = 200;
 /// The pause between two of them.
 const WARM_GAP_MS: u64 = 150;
+/// How long a chat opening waits for its station's list of threads being read (where reading stopped), at most.
+const LIST_WAIT_MS: u64 = 3_000;
 
 const EVENT_STREAM: &str = "text/event-stream";
 /// How a stream ends whose link was replaced by another (it is opened again on it at once).
@@ -575,9 +580,21 @@ fn first_of(live: &Value) -> u64 {
 /// and rows are read.
 /// `caught`: the last entry that came by reading (what is kept, a page, `?after=`) rather than as it was said (an event):
 /// clients show what is caught up at once, and bring in only what comes after it.
-fn thread_value(first: u64, entries: Vec<Value>, summary: Value, title: Value) -> Value {
+/// `end`: the window reaches the thread's latest entry, so what is said next joins it; short of it, what is said waits
+/// on the device until the window comes down to it.
+fn thread_value(first: u64, entries: Vec<Value>, summary: Value, title: Value, end: bool) -> Value {
     let last = first + entries.len() as u64 - 1;
-    json!({ "first": first, "last": last, "caught": last, "entries": entries, "thread": summary, "title": title })
+    json!({ "first": first, "last": last, "caught": last, "entries": entries, "thread": summary, "title": title, "end": end })
+}
+
+/// Whether a thread topic's window reaches its latest entry (a value from before windows always did).
+fn at_end(value: &Value) -> bool {
+    value.get("end").and_then(Value::as_bool) != Some(false)
+}
+
+/// The entries of an answer numbered `from ..= to`.
+fn entries_in(answer: &Value, from: u64, to: u64) -> Vec<Value> {
+    answer.get("entries").and_then(Value::as_array).into_iter().flatten().filter(|e| n_of(e).is_some_and(|n| (from..=to).contains(&n))).cloned().collect()
 }
 
 /// A station stream that ends (with an error) when nothing, not even its keepalive, came for [`STREAM_IDLE_MS`].
@@ -641,6 +658,16 @@ pub struct Stations {
     kept: Rc<Kept>,
     /// Where each station's state is kept, and what is waited on for it (the `status` topic): its workspace.
     workspaces: Rc<Workspaces>,
+    /// Where each chat was left, not at its end (`chat.place`): the entry it opens at next, while nothing is unread.
+    places: RefCell<HashMap<(String, u64), u64>>,
+    /// Entries of a thread read apart from what is kept of it (a window far from its end, and the pages ahead of it,
+    /// which the one run a log keeps does not take): held while its topic is, for the window to move through at once.
+    loose: RefCell<HashMap<(String, u64), BTreeMap<u64, Value>>>,
+    /// Stations whose chats are being brought up to date on the device now (`warm`), and threads caught up on after a
+    /// gap an event showed.
+    warming: RefCell<HashSet<String>>,
+    /// (Whether another event came while it was caught up on: it looks again.)
+    catching: RefCell<HashMap<(String, u64), bool>>,
     me: Weak<Stations>,
 }
 
@@ -663,7 +690,7 @@ fn answered(span: &mut Span, reply: &WireReply) {
 
 impl Stations {
     pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>, workspaces: Rc<Workspaces>) -> Rc<Stations> {
-        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, workspaces, me: me.clone() })
+        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, workspaces, places: RefCell::default(), loose: RefCell::default(), warming: RefCell::default(), catching: RefCell::default(), me: me.clone() })
     }
 
     /// The workspace a station is in: where its state is kept and its waits go.
@@ -1047,10 +1074,17 @@ impl Stations {
             Topic::Jobs { .. } => "/jobs".to_string(),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
             Topic::JobLog { job, lines, .. } => format!("/jobs/{}/log?lines={lines}", encode(job)),
-            // A thread already read only asks for what came after it.
-            Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("last")?.as_u64()) {
-                Some(last) => format!("/threads/{thread}/entries?after={last}"),
-                None => format!("/threads/{thread}/entries?limit={PAGE}"),
+            // A thread shown at its end only asks for what came after it; one short of its end has nothing to catch up
+            // on (what comes waits on the device); one not shown yet opens.
+            Topic::Thread { thread, .. } => match self.sink.get(topic) {
+                Some(value) if !at_end(&value) => return,
+                Some(value) => format!("/threads/{thread}/entries?after={}", value.get("last").and_then(Value::as_u64).unwrap_or(0)),
+                None => {
+                    let (this, station, thread) = (self.rc(), topic.station().unwrap_or_default().to_string(), *thread);
+                    // Boxed: this is inside reload.
+                    let open: LocalBoxFuture<'static, ()> = async move { this.open_thread(&station, thread).await }.boxed_local();
+                    return open.await;
+                }
             },
             _ => return,
         };
@@ -1061,11 +1095,7 @@ impl Stations {
         match (topic, result) {
             (Topic::Thread { station, thread }, Ok(answer)) => {
                 let entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
-                if path.contains("after=") {
-                    self.put_entries(station, *thread, entries, false);
-                } else {
-                    self.first_page(station, *thread, entries, answer.get("last").and_then(Value::as_u64).unwrap_or(0));
-                }
+                self.put_entries(station, *thread, entries, false);
             }
             (Topic::JobLog { station, .. }, Ok(answer)) => {
                 let follows = answer.get("follows").and_then(Value::as_bool) == Some(true);
@@ -1111,14 +1141,20 @@ impl Stations {
         }
     }
 
-    /// Once a station's sidebar rows are read, the chats they list come onto the device in the background, one after
-    /// another, the latest active first: each one's latest page (or, for one kept, what came after it) with its
-    /// summary and title, so a chat opens from what is kept rather than waiting for the station. Chats open meanwhile
-    /// read themselves; it stops when the station is no longer in use.
+    /// Once a station's sidebar rows are read, and each time its link is back, the chats they list are brought up to
+    /// date on the device in the background, one after another, the latest active first: those behind the station's
+    /// list only (the rest ask nothing), each by what came after what is kept (its latest page when that is more than a
+    /// page, or nothing is kept), with its summary and title. So a chat opens whole from the device rather than waiting
+    /// for the station. Chats open meanwhile read themselves; it stops when the station is no longer in use.
     async fn warm(&self, station: &str) {
-        if !self.reachable(station) {
+        if !self.reachable(station) || !self.warming.borrow_mut().insert(station.to_string()) {
             return;
         }
+        self.warm_all(station).await;
+        self.warming.borrow_mut().remove(station);
+    }
+
+    async fn warm_all(&self, station: &str) {
         let Some(addr) = self.addr(station) else { return };
         let rows = self.sink.get(&Topic::ChatRows { station: station.into() }).unwrap_or(Value::Null);
         let mut chats: Vec<(f64, u64, Value)> = rows.as_array().into_iter().flatten()
@@ -1129,10 +1165,10 @@ impl Stations {
         if chats.is_empty() {
             return;
         }
-        // The summaries a chat opens with (as the station lists its threads).
+        // The summaries a chat opens with, and how far each thread goes (as the station lists its threads).
         let threads = self.call_as(&addr, "GET", "/threads", Vec::new(), Vec::new(), true).await.ok();
         for (_, id, title) in chats {
-            if self.addr(station).is_none() {
+            if self.addr(station).is_none() || !self.reachable(station) {
                 return;
             }
             let topic = Topic::Thread { station: station.into(), thread: id };
@@ -1140,21 +1176,63 @@ impl Stations {
                 continue;
             }
             let log = Log::thread(station, id);
-            let kept_last = self.kept.open(&log, 0).await.map(|(held, _)| held.last);
+            let summary = threads.as_ref().and_then(|t| t.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned());
+            let listed = summary.as_ref().and_then(|t| t.get("last")?.as_u64());
+            let kept_last = self.kept.held_of(&log).await.map(|held| held.last);
+            let title = title.is_string().then_some(title);
+            if kept_last.is_some_and(|k| listed.is_some_and(|l| k >= l)) {
+                self.kept.summary(&log, summary, title).await;
+                continue;
+            }
             let path = match kept_last {
-                Some(last) => format!("/threads/{id}/entries?after={last}"),
-                None => format!("/threads/{id}/entries?limit={PAGE}"),
+                Some(last) if listed.is_some_and(|l| l - last <= PAGE) => format!("/threads/{id}/entries?after={last}"),
+                _ => format!("/threads/{id}/entries?limit={PAGE}"),
             };
             let Ok(answer) = self.call_as(&addr, "GET", &path, Vec::new(), Vec::new(), true).await else { continue };
-            let summary = threads.as_ref().and_then(|t| t.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned());
             let entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
             if let Some(first) = entries.first().and_then(n_of) {
                 self.kept.write(&log, first, entries, false, summary.clone()).await;
             }
-            self.kept.summary(&log, summary, title.is_string().then_some(title)).await;
+            self.kept.summary(&log, summary, title).await;
             // Gently: one chat at a time, with room between for what the viewer asks.
             self.host.sleep(WARM_GAP_MS).await;
         }
+    }
+
+    /// Said in a chat not shown (or shown short of its end), past a gap in what is kept of it: what came after what
+    /// is kept is read, once at a time, so it stays whole on the device.
+    fn catch_up_kept(&self, station: &str, id: u64, from: u64) {
+        let key = (station.to_string(), id);
+        if !self.reachable(station) {
+            return;
+        }
+        if let Some(again) = self.catching.borrow_mut().get_mut(&key) {
+            *again = true;
+            return;
+        }
+        let Some(addr) = self.addr(station) else { return };
+        let this = self.rc();
+        self.catching.borrow_mut().insert(key.clone(), false);
+        self.spawn(async move {
+            let log = Log::thread(&key.0, id);
+            // What was said last, as far as told: past what is kept, a gap.
+            let mut told = from;
+            loop {
+                if let Some(held) = this.kept.held_of(&log).await
+                    && told > held.last + 1
+                    && let Ok(answer) = this.call_as(&addr, "GET", &format!("/threads/{id}/entries?after={}", held.last), Vec::new(), Vec::new(), true).await
+                {
+                    let entries: Vec<Value> = answer.get("entries").and_then(Value::as_array).into_iter().flatten().filter(|e| n_of(e).is_some_and(|n| n > held.last)).cloned().collect();
+                    this.kept.extend(&log, held.last + 1, entries).await;
+                }
+                let again = this.catching.borrow_mut().get_mut(&key).is_some_and(|a| std::mem::replace(a, false));
+                if !again {
+                    break;
+                }
+                told = this.latest_known(&key.0, id).await.map_or(told, |l| l.max(told));
+            }
+            this.catching.borrow_mut().remove(&key);
+        });
     }
 
     /// After the events stream was down: everything it may have missed is read once, as part of `span` (the
@@ -1164,9 +1242,12 @@ impl Stations {
             matches!(t, Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::ArchivedRows { .. } | Topic::Session { .. } | Topic::Thread { .. })
         });
         let this = self.rc();
+        let name = station.to_string();
         self.spawn_in(Some(span.context()), async move {
             join_all(topics.iter().map(|topic| this.reload(topic))).await;
             span.end();
+            // What each chat missed meanwhile, onto the device.
+            this.warm(&name).await;
         });
     }
 
@@ -1509,7 +1590,19 @@ impl Stations {
             }
             "thread" => {
                 let Some(id) = data.get("id").and_then(Value::as_u64) else { return };
-                self.put_entries(station, id, data.get("entries").and_then(Value::as_array).cloned().unwrap_or_default(), true);
+                let entries = data.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
+                // How far the thread goes, at once (a chat opens whole by it: `latest_known`); the rest of its summary
+                // is read below.
+                if let Some(newest) = entries.iter().filter_map(n_of).max() {
+                    self.sink.update(&Topic::Threads { station: station.into() }, &mut |list| {
+                        for t in list.as_array_mut().into_iter().flatten() {
+                            if t.get("id").and_then(Value::as_u64) == Some(id) && t.get("last").and_then(Value::as_u64).is_some_and(|l| l < newest) {
+                                t["last"] = json!(newest);
+                            }
+                        }
+                    });
+                }
+                self.put_entries(station, id, entries, true);
                 // The summaries (last message, unread) are not in the event.
                 self.mark_dirty(station, id);
             }
@@ -1684,30 +1777,186 @@ impl Stations {
 
     // ── threads ──
 
-    /// Opens a `thread` topic: what is kept of it at once (its latest page), then the entries after it.
-    async fn open_thread(&self, station: &str, id: u64) {
-        let topic = Topic::Thread { station: station.into(), thread: id };
-        if let Some((held, entries)) = self.kept.open(&Log::thread(station, id), PAGE).await
-            && self.is_live(&topic)
-            && self.sink.get(&topic).is_none()
-        {
-            self.sink.set(&topic, Ok(thread_value(held.first, entries, held.thread, held.title)));
-        }
-        self.reload(&topic).await;
-        // What it shows is on the device; so is the page before it, for when the viewer goes back.
-        if let Some(first) = self.sink.get(&topic).and_then(|v| v.get("first")?.as_u64()) {
-            self.prefetch_before(station, id, first);
-        }
+    /// Keeps entries read of a thread: with what is kept where they join it, else held loose.
+    fn keep_entries(&self, station: &str, id: u64, entries: Vec<Value>) {
+        let Some(first) = entries.first().and_then(n_of) else { return };
+        let (this, station) = (self.rc(), station.to_string());
+        self.host.spawn(async move {
+            if this.kept.join(&Log::thread(&station, id), first, entries.clone()).await {
+                return;
+            }
+            let mut loose = this.loose.borrow_mut();
+            let held = loose.entry((station, id)).or_default();
+            // Far more than a window moves through: what was held goes.
+            if held.len() as u64 + entries.len() as u64 > 4 * WINDOW {
+                held.clear();
+            }
+            held.extend(entries.into_iter().filter_map(|e| Some((n_of(&e)?, e))));
+        }.boxed_local());
     }
 
-    /// A thread's latest page, read with nothing kept: its topic's first value, and kept.
-    fn first_page(&self, station: &str, id: u64, entries: Vec<Value>, last: u64) {
-        let topic = Topic::Thread { station: station.into(), thread: id };
-        let first = entries.first().and_then(n_of).unwrap_or(last + 1);
-        if !entries.is_empty() {
-            self.host.spawn(self.kept.write(&Log::thread(station, id), first, entries.clone(), false, self.summary(station, id)));
+    /// Entries `from ..= to` of a thread, if all of them are on the device (kept, or held loose).
+    async fn have(&self, station: &str, id: u64, from: u64, to: u64) -> Option<Vec<Value>> {
+        if from > to {
+            return None;
         }
-        self.sink.set(&topic, Ok(thread_value(first, entries, Value::Null, Value::Null)));
+        if let Some(entries) = self.kept.range(&Log::thread(station, id), from, to).await {
+            return Some(entries);
+        }
+        let loose = self.loose.borrow();
+        let held = loose.get(&(station.to_string(), id))?;
+        (from..=to).map(|n| held.get(&n).cloned()).collect()
+    }
+
+    /// Up to `count` entries just before `before`, if they are on the device: kept (as far as it goes), or held loose.
+    async fn have_before(&self, station: &str, id: u64, before: u64, count: u64) -> Option<Vec<Value>> {
+        if let Some(entries) = self.kept.before(&Log::thread(station, id), before, count).await {
+            return Some(entries);
+        }
+        self.have(station, id, before.saturating_sub(count).max(1), before.checked_sub(1)?).await
+    }
+
+    /// Opens a `thread` topic where the chat is to be read, whole from the first value on (nothing is filled in under
+    /// the reader afterwards): at the first entry not read while something is unread, else where it was left (not at
+    /// its end: `place`), else at its end. Then the page on either side is brought onto the device ahead.
+    async fn open_thread(&self, station: &str, id: u64) {
+        let topic = Topic::Thread { station: station.into(), thread: id };
+        if self.sink.get(&topic).is_some() {
+            return self.reload(&topic).await;
+        }
+        // Where reading stopped, as the station's list says: while it is being read (the app just opened), once it is;
+        // with no list read, asked for this one.
+        let threads = Topic::Threads { station: station.into() };
+        let mut summary = self.summary(station, id);
+        let mut waited = 0;
+        while summary.is_none() && self.is_live(&threads) && self.sink.get(&threads).is_none() && self.reachable(station) && waited < LIST_WAIT_MS {
+            self.host.sleep(50).await;
+            waited += 50;
+            summary = self.summary(station, id);
+        }
+        if summary.is_none()
+            && self.reachable(station)
+            && let Some(addr) = self.addr(station)
+            && let Ok(view) = self.call(&addr, "GET", &format!("/threads/{id}"), Vec::new(), Vec::new()).await
+        {
+            self.put_thread(station, &view);
+            summary = Some(view);
+        }
+        let unread = summary.as_ref().and_then(|t| t.get("unread")?.as_u64()).unwrap_or(0);
+        let read = summary.as_ref().and_then(|t| t.get("read")?.as_u64());
+        let place = self.places.borrow().get(&(station.to_string(), id)).copied();
+        let at = match read {
+            Some(read) if unread > 0 => Some(read + 1),
+            _ => place,
+        };
+        let Some(value) = self.window(station, id, at).await else { return };
+        if !self.is_live(&topic) || self.sink.get(&topic).is_some() {
+            return;
+        }
+        self.sink.set(&topic, Ok(value));
+        // Said while it was being read, kept meanwhile: onto it, as said.
+        if let Some(last) = self.sink.get(&topic).filter(at_end).and_then(|v| v.get("last")?.as_u64())
+            && let Some(held) = self.kept.held_of(&Log::thread(station, id)).await
+            && held.last > last
+            && let Some(told) = self.kept.range(&Log::thread(station, id), last + 1, held.last).await
+        {
+            self.put_entries(station, id, told, true);
+        }
+        self.ahead(station, id);
+    }
+
+    /// A thread's latest entry, as the station's list says (it follows its events, a moment behind), or as far as what
+    /// is kept goes past it (events carry on what is kept at once); unknown while the list is not read.
+    async fn latest_known(&self, station: &str, id: u64) -> Option<u64> {
+        let listed = self.summary(station, id).and_then(|t| t.get("last")?.as_u64())?;
+        let kept = self.kept.held_of(&Log::thread(station, id)).await.map_or(0, |h| h.last);
+        Some(listed.max(kept))
+    }
+
+    /// The window a chat shows around entry `at` (a page before it and a page from it on), or its latest page: from
+    /// what is kept when all of it is and it is known to be current, else read from the station (and kept). Offline,
+    /// the latest page kept is all there is. None while nothing can be had.
+    async fn window(&self, station: &str, id: u64, at: Option<u64>) -> Option<Value> {
+        let log = Log::thread(station, id);
+        let held = self.kept.held_of(&log).await;
+        let summary = self.summary(station, id);
+        let latest = self.latest_known(station, id).await;
+        let (thread, title) = held.as_ref().map_or((Value::Null, Value::Null), |h| (h.thread.clone(), h.title.clone()));
+        let thread = summary.clone().unwrap_or(thread);
+        let reachable = self.reachable(station);
+        let addr = self.addr(station).filter(|_| reachable);
+        if let Some(at) = at.filter(|&at| latest.is_none_or(|l| at <= l)) {
+            let from = at.saturating_sub(PAGE).max(1);
+            let to = latest.map_or(at + PAGE - 1, |l| l.min(at + PAGE - 1));
+            let placed = |mut value: Value| {
+                value["at"] = json!(at);
+                value
+            };
+            if let Some(latest) = latest
+                && let Some(entries) = self.have(station, id, from, to).await
+            {
+                return Some(placed(thread_value(from, entries, thread, title, to >= latest)));
+            }
+            if let Some(addr) = &addr
+                && let Ok(answer) = self.call(addr, "GET", &format!("/threads/{id}/entries?from={from}&to={to}"), Vec::new(), Vec::new()).await
+            {
+                let entries = entries_in(&answer, from, to);
+                let last = answer.get("last").and_then(Value::as_u64).unwrap_or(to);
+                if let Some(first) = entries.first().and_then(n_of) {
+                    self.keep_entries(station, id, entries.clone());
+                    let end = first + entries.len() as u64 > last;
+                    return Some(placed(thread_value(first, entries, thread, title, end)));
+                }
+            }
+        }
+        // At its end.
+        if let Some(h) = &held
+            && latest.is_some_and(|l| l == h.last)
+            && let Some((held, entries)) = self.kept.open(&log, PAGE).await
+        {
+            return Some(thread_value(held.first, entries, thread, title, true));
+        }
+        if let Some(addr) = &addr {
+            // What came after what is kept, when that is less than a page; else the latest page.
+            let near = held.as_ref().filter(|h| latest.is_none_or(|l| l.saturating_sub(h.last) < PAGE));
+            let path = match near {
+                Some(h) => format!("/threads/{id}/entries?after={}", h.last),
+                None => format!("/threads/{id}/entries?limit={PAGE}"),
+            };
+            if let Ok(answer) = self.call(addr, "GET", &path, Vec::new(), Vec::new()).await {
+                let mut entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
+                let last = answer.get("last").and_then(Value::as_u64).unwrap_or(0);
+                if let Some(h) = near {
+                    entries.retain(|e| n_of(e).is_some_and(|n| n > h.last));
+                    if let Some(first) = entries.first().and_then(n_of) {
+                        self.kept.write(&log, first, entries.clone(), false, summary.clone()).await;
+                    }
+                    let (held, kept) = self.kept.open(&log, PAGE).await?;
+                    return Some(thread_value(held.first, kept, thread, title, true));
+                }
+                let first = entries.first().and_then(n_of).unwrap_or(last + 1);
+                if !entries.is_empty() {
+                    self.host.spawn(self.kept.write(&log, first, entries.clone(), false, summary.clone()));
+                }
+                return Some(thread_value(first, entries, thread, title, true));
+            }
+            return None;
+        }
+        // Offline: its latest page kept, as it was.
+        let (held, entries) = self.kept.open(&log, PAGE).await?;
+        Some(thread_value(held.first, entries, thread, title, true))
+    }
+
+    /// What a thread shows is on the device; so is the page on either side of it, for when the reader goes on.
+    fn ahead(&self, station: &str, id: u64) {
+        let topic = Topic::Thread { station: station.into(), thread: id };
+        let Some(value) = self.sink.get(&topic) else { return };
+        if let Some(first) = value.get("first").and_then(Value::as_u64) {
+            self.prefetch_before(station, id, first);
+        }
+        if !at_end(&value) && let Some(last) = value.get("last").and_then(Value::as_u64) {
+            self.prefetch_after(station, id, last);
+        }
     }
 
     /// New entries (an event, or `?after=`) onto a live thread topic, and kept. Those it has are skipped; entries
@@ -1715,11 +1964,13 @@ impl Stations {
     /// up on by reading (see `thread_value`).
     fn put_entries(&self, station: &str, id: u64, entries: Vec<Value>, told: bool) {
         let topic = Topic::Thread { station: station.into(), thread: id };
-        // Until it has a value, what it reads next covers these. A chat not open meanwhile keeps up on the device: it
-        // opens from there as it is, rather than what came since landing after it (warm only reads once).
-        let Some(last) = self.sink.get(&topic).and_then(|v| v.get("last")?.as_u64()) else {
-            if told && !self.is_live(&topic) && let Some(first) = entries.first().and_then(n_of) {
+        // A chat not shown, or its window still being read, or short of its end: what is said carries on what is kept,
+        // where the window takes it from when it comes down to it (or opens).
+        let value = self.sink.get(&topic);
+        let Some(last) = value.as_ref().filter(|v| at_end(v)).and_then(|v| v.get("last")?.as_u64()) else {
+            if told && let Some(first) = entries.first().and_then(n_of) {
                 self.host.spawn(self.kept.extend(&Log::thread(station, id), first, entries));
+                self.catch_up_kept(station, id, first);
             }
             return;
         };
@@ -1970,6 +2221,10 @@ impl Stations {
         let answer = self.json(station, "POST", &format!("/threads/{thread}/messages"), Some(message)).await?;
         let n = answer.get("n").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有消息序号"))?;
         let topic = Topic::Thread { station: station.to_string(), thread };
+        // Sent from a window short of its end: the reader goes to the end, where it is.
+        if self.sink.get(&topic).is_some_and(|v| !at_end(&v)) {
+            let _ = self.latest(station, thread).await;
+        }
         if self.sink.get(&topic).and_then(|v| v.get("last")?.as_u64()).is_some_and(|last| last < n) {
             self.reload(&topic).await;
         }
@@ -1981,19 +2236,16 @@ impl Stations {
     pub async fn older(&self, station: &StationAddr, thread: u64) -> Result<bool> {
         let name = station.to_string();
         let topic = Topic::Thread { station: name.clone(), thread };
-        let log = Log::thread(&name, thread);
         let Some(before) = self.sink.get(&topic).and_then(|v| v.get("first")?.as_u64()) else { return Ok(false) };
         if before <= 1 {
             return Ok(false);
         }
-        let older = match self.kept.before(&log, before, PAGE).await {
+        let older = match self.have_before(&name, thread, before, PAGE).await {
             Some(older) => older,
             None => {
                 let page = self.json(station, "GET", &format!("/threads/{thread}/entries?before={before}&limit={PAGE}"), None).await?;
                 let older: Vec<Value> = page.get("entries").and_then(Value::as_array).into_iter().flatten().filter(|e| n_of(e).is_some_and(|n| n < before)).cloned().collect();
-                if let Some(first) = older.first().and_then(n_of) {
-                    self.host.spawn(self.kept.write(&log, first, older.clone(), false, None));
-                }
+                self.keep_entries(&name, thread, older.clone());
                 older
             }
         };
@@ -2008,6 +2260,14 @@ impl Stations {
             }
             let Some(list) = value.get_mut("entries").and_then(Value::as_array_mut) else { return };
             list.splice(0..0, older.iter().cloned());
+            // As many go at the other end: the window is short of its end from then on.
+            let over = list.len().saturating_sub(WINDOW as usize);
+            if over > 0 {
+                list.truncate(WINDOW as usize);
+                let last = first + WINDOW - 1;
+                value["last"] = json!(last);
+                value["end"] = json!(false);
+            }
             value["first"] = json!(first);
             still = first > 1;
         });
@@ -2016,6 +2276,82 @@ impl Stations {
             self.prefetch_before(&name, thread, first);
         }
         Ok(still)
+    }
+
+    /// The page of entries after those loaded, into the thread's topic: from what is kept, else from the station (and
+    /// kept); as many go at its start. Answers whether still newer ones exist (the window is short of the end).
+    pub async fn newer(&self, station: &StationAddr, thread: u64) -> Result<bool> {
+        let name = station.to_string();
+        let topic = Topic::Thread { station: name.clone(), thread };
+        let Some(value) = self.sink.get(&topic) else { return Ok(false) };
+        if at_end(&value) {
+            return Ok(false);
+        }
+        let Some(after) = value.get("last").and_then(Value::as_u64) else { return Ok(false) };
+        let latest = self.latest_known(&name, thread).await;
+        let (from, to) = (after + 1, after + PAGE);
+        let have = match latest {
+            Some(latest) => self.have(&name, thread, from, latest.min(to)).await,
+            None => None,
+        };
+        let (newer, last) = match have {
+            Some(newer) => (newer, latest.unwrap_or(to)),
+            None => {
+                let answer = self.json(station, "GET", &format!("/threads/{thread}/entries?from={from}&to={to}"), None).await?;
+                let newer = entries_in(&answer, from, to);
+                self.keep_entries(&name, thread, newer.clone());
+                (newer, answer.get("last").and_then(Value::as_u64).unwrap_or(to))
+            }
+        };
+        let mut still = false;
+        self.sink.update(&topic, &mut |value| {
+            // Another page came first: this one does not follow what is loaded any more.
+            if value.get("last").and_then(Value::as_u64) != Some(after) || at_end(value) {
+                still = !at_end(value);
+                return;
+            }
+            let Some(list) = value.get_mut("entries").and_then(Value::as_array_mut) else { return };
+            list.extend(newer.iter().cloned());
+            let over = list.len().saturating_sub(WINDOW as usize);
+            list.drain(..over);
+            let first = value.get("first").and_then(Value::as_u64).unwrap_or(1) + over as u64;
+            let now = after + newer.len() as u64;
+            value["first"] = json!(first);
+            value["last"] = json!(now);
+            // Read, not said: it shows at once.
+            value["caught"] = json!(now);
+            value["end"] = json!(now >= last);
+            still = now < last;
+        });
+        if still {
+            self.prefetch_after(&name, thread, after + newer.len() as u64);
+        }
+        Ok(still)
+    }
+
+    /// The thread's latest page in place of its window (the reader goes to its end), read as `open_thread` reads it.
+    pub async fn latest(&self, station: &StationAddr, thread: u64) -> Result<()> {
+        let name = station.to_string();
+        let topic = Topic::Thread { station: name.clone(), thread };
+        if self.sink.get(&topic).is_some_and(|v| at_end(&v)) {
+            return Ok(());
+        }
+        let value = self.window(&name, thread, None).await.ok_or_else(|| CoreError::new("offline", "连不上 station"))?;
+        if self.is_live(&topic) {
+            self.sink.set(&topic, Ok(value));
+            self.ahead(&name, thread);
+        }
+        Ok(())
+    }
+
+    /// Where the reader leaves a chat: at entry `at`, short of its end (it opens there next, while nothing is unread),
+    /// or at its end (none).
+    pub fn place(&self, station: &str, thread: u64, at: Option<u64>) {
+        let key = (station.to_string(), thread);
+        match at {
+            Some(at) => self.places.borrow_mut().insert(key, at),
+            None => self.places.borrow_mut().remove(&key),
+        };
     }
 
     /// The page of a session's transcript before what its `live` topic has, into it: from what is kept, else from the
@@ -2068,15 +2404,30 @@ impl Stations {
         let Ok(addr) = StationAddr::parse(station) else { return };
         let (this, name) = (self.rc(), station.to_string());
         self.spawn(async move {
-            let log = Log::thread(&name, thread);
-            if this.kept.before(&log, before, PAGE).await.is_some() {
+            if this.have_before(&name, thread, before, PAGE).await.is_some() {
                 return;
             }
             let Ok(page) = this.json(&addr, "GET", &format!("/threads/{thread}/entries?before={before}&limit={PAGE}"), None).await else { return };
             let older: Vec<Value> = page.get("entries").and_then(Value::as_array).into_iter().flatten().filter(|e| n_of(e).is_some_and(|n| n < before)).cloned().collect();
-            if let Some(first) = older.first().and_then(n_of) {
-                this.kept.write(&log, first, older, false, None).await;
+            this.keep_entries(&name, thread, older);
+        });
+    }
+
+    /// Keeps a page ahead after what a thread shows, as `prefetch_before` does before it.
+    fn prefetch_after(&self, station: &str, thread: u64, after: u64) {
+        if !self.reachable(station) {
+            return;
+        }
+        let Ok(addr) = StationAddr::parse(station) else { return };
+        let (this, name) = (self.rc(), station.to_string());
+        self.spawn(async move {
+            let latest = this.latest_known(&name, thread).await;
+            let to = latest.map_or(after + PAGE, |l| l.min(after + PAGE));
+            if to <= after || this.have(&name, thread, after + 1, to).await.is_some() {
+                return;
             }
+            let Ok(page) = this.json(&addr, "GET", &format!("/threads/{thread}/entries?from={}&to={}", after + 1, after + PAGE), None).await else { return };
+            this.keep_entries(&name, thread, entries_in(&page, after + 1, after + PAGE));
         });
     }
 
@@ -2302,6 +2653,9 @@ impl Source for Stations {
             let mut stations = workspace.stations.borrow_mut();
             let Some(state) = stations.get_mut(station) else { return };
             state.topics.remove(topic);
+            if let Topic::Thread { thread, .. } = topic {
+                self.loose.borrow_mut().remove(&(station.to_string(), *thread));
+            }
             if let Some(task) = state.tasks.remove(topic) {
                 task.abort();
             }
@@ -2801,7 +3155,8 @@ mod tests {
             stations.request(&remote(), "GET", "/overview", None).await.unwrap();
             let trace = hex::encode(root.context().trace);
             let (paths, parents) = (wire.paths(), wire.traceparents.borrow().clone());
-            assert_eq!(paths.len(), 4, "{paths:?}");
+            // (With no list of threads to say where reading stopped, the chat asks for its own summary.)
+            assert_eq!(paths.len(), 5, "{paths:?}");
             for (path, parent) in paths.iter().zip(&parents) {
                 assert!(parent.starts_with("00-") && parent.ends_with("-01") && parent.len() == 55, "{path}: {parent}");
                 // Each request is a span of its own under the trace.
@@ -2821,7 +3176,8 @@ mod tests {
             host.settle().await;
             assert_eq!(wire.open(), vec!["/admin/api/events?host=1&live=a&from=0&last=200"]);
             let requests = wire.calls.borrow().len();
-            assert_eq!(requests, 7, "{:?}", wire.paths());
+            // (With no list of threads to say where reading stopped, the chat asks for its own summary.)
+            assert_eq!(requests, 8, "{:?}", wire.paths());
             host.sleeps.borrow_mut().clear();
             wait(RECONNECT_MS * 2).await;
             assert_eq!(wire.calls.borrow().len(), requests, "idle: no request");
@@ -3011,14 +3367,15 @@ mod tests {
             host.settle().await;
             // Its latest page came from what is kept (the station was asked only for what came after it).
             let shown = sink.get(&thread(7)).expect("shown from what is kept");
-            assert_eq!((shown["first"].clone(), shown["last"].clone(), shown["thread"]["id"].clone()), (json!(252), json!(302), json!(7)));
+            assert_eq!((shown["first"].clone(), shown["last"].clone(), shown["thread"]["id"].clone()), (json!(253), json!(302), json!(7)));
             // All of it caught up on (kept, then read): none of it was said while the chat was open.
             assert_eq!(shown["caught"], 302);
             assert_eq!(wire.paths().iter().filter(|p| p.contains("/entries")).cloned().collect::<Vec<_>>(), vec!["GET /admin/api/threads/7/entries?after=301"]);
             // Scrolling up reads what is kept first; past it, the station (and what it answers is kept too).
             assert!(stations.older(&remote(), 7).await.unwrap());
             assert_eq!(sink.get(&thread(7)).unwrap()["first"], 251);
-            assert_eq!(wire.calls.borrow().len(), 2, "{:?}", wire.paths());
+            // (Its summary, with no list read to say where reading stopped; the entries after what is kept; the stream.)
+            assert_eq!(wire.calls.borrow().len(), 3, "{:?}", wire.paths());
             wire.answer("GET /admin/api/threads/7/entries?before=251&limit=50", 200, json!({"last": 302, "entries": entries(201, 250)}));
             assert!(stations.older(&remote(), 7).await.unwrap());
             assert_eq!(numbers(&sink, 7).first(), Some(&201));
@@ -3034,6 +3391,94 @@ mod tests {
         });
     }
 
+    fn window_of(sink: &FakeSink, id: u64) -> (u64, u64, bool) {
+        let v = sink.get(&thread(id)).unwrap();
+        (v["first"].as_u64().unwrap(), v["last"].as_u64().unwrap(), at_end(&v))
+    }
+
+    #[test]
+    fn a_chat_with_something_unread_opens_whole_at_it_and_pages_either_way() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            // 300 entries, read up to 200: the window is the page before the first unread and the page from it.
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 200, 100)]));
+            stations.start(&threads());
+            host.settle().await;
+            wire.answer("GET /admin/api/threads/7/entries?from=151&to=250", 200, json!({"last": 300, "entries": entries(151, 250)}));
+            wire.answer("GET /admin/api/threads/7/entries?before=151&limit=50", 200, json!({"last": 300, "entries": entries(101, 150)}));
+            wire.answer("GET /admin/api/threads/7/entries?from=251&to=300", 200, json!({"last": 300, "entries": entries(251, 300)}));
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7), (151, 250, false));
+            assert_eq!(wire.paths().iter().filter(|p| p.contains("/entries")).count(), 3, "the window, then a page ahead either way: {:?}", wire.paths());
+            // Said meanwhile, past the window: it waits (kept for when the window comes down to it).
+            wire.event("thread", json!({"id": 7, "entries": [entry(301, "m301")]}));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7), (151, 250, false));
+            // Down: the page after, from what was brought ahead, read (not said); then what waited, and the window is
+            // at its end, as many gone at its start.
+            assert!(stations.newer(&remote(), 7).await.unwrap());
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?from=251&to=300"), 1, "not asked again");
+            assert_eq!(window_of(&sink, 7), (151, 300, false));
+            host.settle().await;
+            assert!(!stations.newer(&remote(), 7).await.unwrap());
+            assert_eq!(window_of(&sink, 7), (152, 301, true));
+            assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 301);
+            // Up: the page before comes in, and as many go at the other end.
+            assert!(stations.older(&remote(), 7).await.unwrap());
+            assert_eq!(window_of(&sink, 7), (102, 251, false));
+            assert_eq!(numbers(&sink, 7).len() as u64, WINDOW);
+            // To the end: its latest page in place of the window, from the device.
+            let asked = wire.paths().len();
+            stations.latest(&remote(), 7).await.unwrap();
+            assert_eq!(window_of(&sink, 7), (252, 301, true));
+            assert_eq!(wire.paths().len(), asked, "{:?}", wire.paths());
+            // At its end, what is said joins it.
+            wire.event("thread", json!({"id": 7, "entries": [entry(302, "m302")]}));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7).1, 302);
+        });
+    }
+
+    #[test]
+    fn a_chat_opens_from_the_device_when_what_is_kept_is_current_and_else_waits_to_be_whole() {
+        run(async {
+            let (host, _sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 300, 0)]));
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 300, "entries": entries(251, 300)}));
+            stations.start(&threads());
+            stations.start(&thread(7));
+            host.settle().await;
+            // Opened again, nothing new: from the device alone.
+            let (sink, wire, stations) = reopened(&host);
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 300, 0)]));
+            stations.start(&threads());
+            host.settle().await;
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7), (251, 300, true));
+            assert!(wire.paths().iter().all(|p| !p.contains("/threads/7/entries?after") && !p.contains("entries?limit=50")), "{:?}", wire.paths());
+            // Opened again with 20 new (read): what came after is read first; the first value is whole.
+            let (sink, wire, stations) = reopened(&host);
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 320, 320, 0)]));
+            wire.answer("GET /admin/api/threads/7/entries?after=300", 200, json!({"last": 320, "entries": entries(301, 320)}));
+            stations.start(&threads());
+            host.settle().await;
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7), (271, 320, true));
+            assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 320, "read, not said");
+            // Left short of its end and opened again: there.
+            stations.place(ST, 7, Some(120));
+            stations.stop(&thread(7));
+            sink.values.borrow_mut().remove(&thread(7));
+            wire.answer("GET /admin/api/threads/7/entries?from=70&to=169", 200, json!({"last": 320, "entries": entries(70, 169)}));
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(window_of(&sink, 7), (70, 169, false));
+        });
+    }
+
     #[test]
     fn a_chat_not_open_keeps_up_on_the_device() {
         run(async {
@@ -3044,17 +3489,20 @@ mod tests {
             stations.start(&threads());
             host.settle().await;
             // Closed (let go by the store, its value with it); what is said meanwhile carries on what is kept. Past a
-            // gap it does not: that is read when it opens.
+            // gap, what came after what is kept is read then, so it stays whole.
             stations.stop(&thread(7));
             sink.values.borrow_mut().remove(&thread(7));
+            wire.answer("GET /admin/api/threads/7/entries?after=301", 200, json!({"last": 303, "entries": [entry(302, "m302"), entry(303, "m303")]}));
             wire.event("thread", json!({"id": 7, "entries": [entry(301, "m301")]}));
             wire.event("thread", json!({"id": 7, "entries": [entry(303, "m303")]}));
             host.settle().await;
-            wire.answer("GET /admin/api/threads/7/entries?after=301", 200, json!({"last": 303, "entries": [entry(302, "m302"), entry(303, "m303")]}));
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?after=301"), 1, "asked only for what came after what was kept");
+            // Opened: whole from the device, nothing asked.
+            let asked = wire.paths().len();
             stations.start(&thread(7));
             host.settle().await;
             assert_eq!(texts(&sink, 7).last().unwrap(), "m303");
-            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?after=301"), 1, "asked only for what came after what was kept");
+            assert_eq!(wire.paths().iter().skip(asked).filter(|p| p.contains("entries?after") || p.contains("entries?limit")).count(), 0, "{:?}", wire.paths());
             assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 303);
         });
     }

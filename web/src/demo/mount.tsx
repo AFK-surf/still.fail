@@ -118,6 +118,8 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   // Drafts (draft.ts) are the core's: none kept here, as a core answers for a chat nothing was written in (null, not an
   // object without text, quotes and files).
   if (name === "draft.get" || name === "draft.put") return null;
+  // Its chats are whole, never a window short of their end: nothing to move along, nowhere to keep a place.
+  if (name === "chat.newer" || name === "chat.latest" || name === "chat.place") return name === "chat.newer" ? { more: false } : null;
   const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
   if (name === "chat.send" && chat && typeof params.text === "string" && params.text.trim()) {
     const text = params.text;

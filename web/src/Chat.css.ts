@@ -30,6 +30,12 @@ export const chatToBottom = style({
       backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
       vars: { "--composer-inset": "32px" },
     },
+    // With how many new messages wait at the end (a window short of it): a pill, growing leftwards from where it sits.
+    "&[data-count]": {
+      width: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "0 12px 0 9px", borderRadius: "17px",
+      fontSize: vars.textSm, whiteSpace: "nowrap",
+    },
+    [`${chat}[data-under-composer] &[data-count]`]: { width: "auto", borderRadius: "16px" },
   },
   "@media": {
     "(max-width: 700px)": {
@@ -146,6 +152,7 @@ export const msgFiles = style({
   },
 });
 export const chatOlder = style({ display: "flex", justifyContent: "center", padding: "4px 0 8px", color: vars.muted });
+export const chatNewer = style({ display: "flex", justifyContent: "center", padding: "8px 0 4px", color: vars.muted });
 export const msgUnsent = style({
   display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "2px", marginTop: "4px",
   fontSize: vars.textXs,

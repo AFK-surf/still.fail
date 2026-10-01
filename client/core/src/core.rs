@@ -552,7 +552,6 @@ impl Router {
             for due in due {
                 let Some(core) = me.upgrade() else { return };
                 let done = match due {
-                    Due::Older { thread } => core.stations.older(&addr, thread).await.map(|_| ()),
                     Due::Read { thread, seq } => core.stations.read(&addr, thread, seq).await,
                 };
                 if done.is_err() {
@@ -882,6 +881,15 @@ impl Inner {
                 Ok(Value::Null)
             }
             Call::ChatOlder { station, thread } => Ok(json!({ "more": self.stations.older(&StationAddr::parse(&station)?, thread).await? })),
+            Call::ChatNewer { station, thread } => Ok(json!({ "more": self.stations.newer(&StationAddr::parse(&station)?, thread).await? })),
+            Call::ChatLatest { station, thread } => {
+                self.stations.latest(&StationAddr::parse(&station)?, thread).await?;
+                Ok(Value::Null)
+            }
+            Call::ChatPlace { station, thread, seq } => {
+                self.stations.place(&station, thread, seq);
+                Ok(Value::Null)
+            }
             Call::HistoryOlder { station, key } => Ok(json!({ "more": self.stations.history_older(&StationAddr::parse(&station)?, &key).await? })),
             Call::ChatRead { station, thread, seq } => {
                 self.stations.read(&StationAddr::parse(&station)?, thread, seq).await?;
@@ -1806,6 +1814,11 @@ enum Call {
     ChatRetry { station: String, thread: u64, id: String },
     ChatDiscard { station: String, thread: u64, id: String },
     ChatOlder { station: String, thread: u64 },
+    /// The page after a chat's window (it is short of its end), and the chat at its end.
+    ChatNewer { station: String, thread: u64 },
+    ChatLatest { station: String, thread: u64 },
+    /// Where the reader leaves a chat: the entry at the top of what shows, or none at its end (it opens there next).
+    ChatPlace { station: String, thread: u64, seq: Option<u64> },
     HistoryOlder { station: String, key: String },
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
@@ -1859,7 +1872,7 @@ impl Call {
             },
             Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
-            Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
+            Call::ChatOlder { station, .. } | Call::ChatNewer { station, .. } | Call::ChatLatest { station, .. } | Call::ChatPlace { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
@@ -2104,6 +2117,20 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "chat.older" => {
             let p: Chat = read(params)?;
             Call::ChatOlder { station: p.station, thread: p.thread }
+        }
+        "chat.newer" => {
+            let p: Chat = read(params)?;
+            Call::ChatNewer { station: p.station, thread: p.thread }
+        }
+        "chat.latest" => {
+            let p: Chat = read(params)?;
+            Call::ChatLatest { station: p.station, thread: p.thread }
+        }
+        "chat.place" => {
+            #[derive(Deserialize)]
+            struct P { station: String, thread: u64, #[serde(default)] seq: Option<u64> }
+            let p: P = read(params)?;
+            Call::ChatPlace { station: p.station, thread: p.thread, seq: p.seq }
         }
         "history.older" => {
             let p: Session = read(params)?;
@@ -3491,9 +3518,9 @@ mod tests {
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "ws/st".into(), thread: Some(7), session: None } });
             host.settle().await;
             apply(&host, &mut values);
-            // Not shown by any page yet: no line.
+            // Not shown by any page yet: the line as it will be (its first value opens there).
             assert_eq!(values[&1]["messages"].as_array().unwrap().len(), 3);
-            assert_eq!(values[&1].get("unreadLine"), None);
+            assert_eq!(values[&1]["unreadLine"], 2);
             // Shown: the line over the first not read when it was opened; not read while its end is out of view.
             core.receive(ui, ClientMessage::Call { id: 2, call: "client.focus".into(), params: json!({ "visible": true, "focused": true, "chat": { "station": "ws/st", "thread": 7, "end": false } }) });
             host.settle().await;

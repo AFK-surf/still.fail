@@ -348,7 +348,8 @@ export type Api = ReturnType<typeof stationApi>;
 
 /**
  * A chat's calls, by its thread (or, for a chat made here, the key the core gave it: `chat.create`). Sending: the
- * message shows at once from the core's outbox; a failed one can be sent again or dropped. `older` loads the page before the messages shown; `read` records how far the viewer has read.
+ * message shows at once from the core's outbox; a failed one can be sent again or dropped. `older` / `newer` load the page before / after the messages shown, `latest` goes to the chat's end, `place` says
+ * where the reader left it; `read` records how far the viewer has read.
  * The station is the one in context, or `address` (a page outside its StationContext, the phone's ChatHost).
  */
 export function useChatSend(address?: string) {
@@ -362,6 +363,12 @@ export function useChatSend(address?: string) {
     /** A new chat: there at once under the key answered (its page, its row); the station makes it behind it. */
     create: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => call("chat.create", { station, ...input }) as Promise<{ key: string }>,
     older: (thread: number) => call("chat.older", { station, thread }) as Promise<{ more: boolean }>,
+    /** The page after them, while the chat shows a window short of its end (`chat.newer`); as many go at its start. */
+    newer: (thread: number) => call("chat.newer", { station, thread }) as Promise<{ more: boolean }>,
+    /** The chat's latest page in place of what it shows: the reader goes to its end. */
+    latest: (thread: number) => call("chat.latest", { station, thread }),
+    /** Where the reader leaves the chat: the message at the top of what shows (`seq`), or none at its end. */
+    place: (thread: number, seq: number | null) => call("chat.place", { station, thread, seq }),
     /** Only for a core from before `client.focus` (an older desktop app's), which does not read chats itself. */
     read: (thread: number, seq: number) => call("chat.read", { station, thread, seq }),
   }), [call, station]);

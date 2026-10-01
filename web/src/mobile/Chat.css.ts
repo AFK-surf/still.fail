@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { jobDot } from "../Jobs.css.ts";
-import { mMessages } from "./styles/chat.css.ts";
+import { mChat, mMessages } from "./styles/chat.css.ts";
 
 export const mCenter = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: "14px",
@@ -35,6 +35,8 @@ export const mJump = style({
       opacity: "1", transform: "none", pointerEvents: "auto",
       transition: "opacity 180ms, transform 220ms var(--m-standard)",
     },
+    // With how many new messages wait at the end: a pill, growing leftwards from where it sits.
+    "&[data-count]": { width: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "0 14px 0 10px", borderRadius: "18px", whiteSpace: "nowrap" },
   },
   "@media": {
     "(prefers-reduced-motion: reduce)": {
@@ -122,3 +124,5 @@ globalStyle(`${mJobHead} span > span`, {
 globalStyle(`${mJobHead} > ${jobDot}`, { marginTop: "7px" });
 globalStyle(`${mJobNotices} p`, { margin: "0", display: "grid", gridTemplateColumns: "3.4em 1fr", gap: "10px" });
 globalStyle(`${mJobNotices} time`, { color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });
+// The phone's buttons take the page's font (root.css.ts), stronger than a class alone: the count's size is set as strongly.
+globalStyle(`${mChat} button${mJump}[data-count]`, { fontSize: "14px" });

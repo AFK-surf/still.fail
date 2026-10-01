@@ -162,6 +162,31 @@ impl Kept {
         .boxed_local()
     }
 
+    /// What is kept of a log (its run, summary and title), without its entries.
+    pub fn held_of(&self, log: &Log) -> LocalBoxFuture<'static, Option<Held>> {
+        let log = log.clone();
+        self.queued(async move |kept| kept.held(&log).await).map(Option::flatten).boxed_local()
+    }
+
+    /// Entries `from ..= to`, if all of them are kept, noting that the log was opened.
+    pub fn range(&self, log: &Log, from: u64, to: u64) -> LocalBoxFuture<'static, Option<Vec<Value>>> {
+        let log = log.clone();
+        self.queued(async move |kept| {
+            let held = kept.held(&log).await?;
+            if from > to || from < held.first || to > held.last {
+                return None;
+            }
+            let entries = kept.read(&log, &held, from, to).await?;
+            if let Some(item) = kept.index().get_mut(&log.name()) {
+                item.opened = kept.host.now_ms();
+            }
+            kept.save_index().await;
+            Some(entries)
+        })
+        .map(Option::flatten)
+        .boxed_local()
+    }
+
     /// Up to `count` kept entries just before `before`, if the entry before it is kept.
     pub fn before(&self, log: &Log, before: u64, count: u64) -> LocalBoxFuture<'static, Option<Vec<Value>>> {
         let log = log.clone();
@@ -181,6 +206,22 @@ impl Kept {
     pub fn write(&self, log: &Log, from: u64, entries: Vec<Value>, truncate: bool, thread: Option<Value>) -> LocalBoxFuture<'static, ()> {
         let log = log.clone();
         self.queued(async move |kept| kept.put(&log, from, entries, truncate, thread).await).map(|_| ()).boxed_local()
+    }
+
+    /// Keeps `entries`, numbered from `from` on, if they touch what is kept of the log or nothing is: the one run a log
+    /// keeps is not given up for them. Answers whether they are kept.
+    pub fn join(&self, log: &Log, from: u64, entries: Vec<Value>) -> LocalBoxFuture<'static, bool> {
+        let log = log.clone();
+        self.queued(async move |kept| {
+            let to = from + entries.len() as u64;
+            if entries.is_empty() || kept.held(&log).await.is_some_and(|h| from > h.last + 1 || to < h.first) {
+                return false;
+            }
+            kept.put(&log, from, entries, false, None).await;
+            true
+        })
+        .map(|kept| kept == Some(true))
+        .boxed_local()
     }
 
     /// Adds `entries`, numbered from `from` on, to what is kept of a log, if they carry on from it: nothing kept, or a

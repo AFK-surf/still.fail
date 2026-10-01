@@ -200,8 +200,9 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
       </div>
       </Gallery.Provider>
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
-      <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} aria-label="跳到最新"
-        onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}><ArrowDown size={18} /></button>
+      {/* Short of the chat's end (a window of it), with how many new messages wait there. */}
+      <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} data-count={rows.waiting > 0 || undefined}
+        aria-label="跳到最新" onClick={rows.toEnd}><ArrowDown size={18} />{rows.waiting > 0 && <span>{rows.waiting} 条新消息</span>}</button>
     </OpenFile.Provider>
   );
 }

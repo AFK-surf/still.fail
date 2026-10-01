@@ -2049,6 +2049,14 @@ pub struct ChatView {
     pub agents: Vec<ChatAgent>,
     pub messages: Vec<ChatMessage>,
     pub more: bool,
+    /// Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
+    /// `chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`.
+    #[serde(default)]
+    pub newer: bool,
+    /// The entry the chat opened at when not at its end (its first unread, or where it was left): the list shows it
+    /// at its top. Absent when it opened at its end.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub at: Option<i64>,
     /// The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
     /// chat is open. The core decides from it which come in (`ChatMessage::said`); clients go by that.
     #[typeshare(serialized_as = "Option<I54>")]

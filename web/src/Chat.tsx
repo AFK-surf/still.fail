@@ -86,7 +86,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const latest = useRef({ ownerOf, onOpenHistory, images });
   latest.current = { ownerOf, onOpenHistory, images };
   const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images() }));
-  useShortcut("chat.latest", () => { list.current?.dispatchEvent(new Event("to-bottom")); });
+  useShortcut("chat.latest", rows.toEnd);
   const askedFile = useAskedFile(list, rows.messages, ownerOf);
   // Selecting text inside one message offers to quote it.
   const quoting = useSelectionQuote(list, (q) => {
@@ -101,10 +101,11 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       <div className={sessionCss.chatPane}>
       {rows.away && (
         <Tip label="跳到最新" shortcut="chat.latest" side="top">
-        <button type="button" className={css.chatToBottom} aria-label="跳到最新"
-          // Glides down, and follows new messages again (scroll.ts).
-          onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}>
+        <button type="button" className={css.chatToBottom} aria-label="跳到最新" data-count={rows.waiting > 0 || undefined}
+          // Glides down, and follows new messages again (scroll.ts); from a window short of the end, goes there at once.
+          onClick={rows.toEnd}>
           <ArrowDown size={16} strokeWidth={2} />
+          {rows.waiting > 0 && <span>{rows.waiting} 条新消息</span>}
         </button>
         </Tip>
       )}
@@ -176,6 +177,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
           </Fragment>
         );
       })}
+      {/* The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it. */}
+      {chat.newer && <div className={css.chatNewer} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
       {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
       {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
       {shown.map(({ agent, leaving }) => (
@@ -266,26 +269,44 @@ export interface RowState { enter: true | undefined; emitted: "held" | "emitting
 
 /**
  * A chat's list as both screens run it (this page, and the phone's, mobile/Chat.tsx): it follows its bottom, loads
- * older pages near its top, records what is read, keeps the reader's place (`place`: whose it is), draws the unread
+ * older pages near its top and newer ones near its bottom (the core holds a window of the chat, `chat.newer` while it
+ * is short of the end), records what is read, keeps the reader's place (`place`: whose it is), draws the unread
  * line, and shows its agents at work, their replies coming out of their activity. Answers what the list shows: its
- * messages, where the unread line goes, whether the reader is away from the bottom, the agents at work, and how each
- * message comes in.
+ * messages, where the unread line goes, whether to offer the way to the end (`away`, with what waits there:
+ * `waiting`; `toEnd` takes it), the agents at work, and how each message comes in.
  */
 export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: RefObject<HTMLDivElement | null>, chat: ChatView, place: string, lives: ReadonlyMap<string, Live>) {
   const sending = useChatSend();
   const station = useStation().address;
   const id = chat.thread?.id ?? null;
   const messages = chat.messages;
+  // The window shown is short of the chat's end: its bottom is not the end, and what is said waits beyond it.
+  const short = !!chat.newer;
   // Whose a message is, the core says.
   const mineOf = (m: ChatMessage) => m.mine;
-  useStickToBottom(list, `.${conversationCss.msg}`, floor);
-  // Without a chat there is nothing older to load.
+  useStickToBottom(list, `.${conversationCss.msg}`, floor, short);
+  useWindowMoves(list, messages);
+  // Where the reader leaves it, the core keeps too (it opens there next, while nothing is unread): the message at the
+  // top of the pane, or none at its end. A core from before `chat.place` does not know it.
+  const seqOf = useRef(new Map<string, number>());
+  seqOf.current = new Map(messages.map((m) => [m.ts, m.seq]));
+  const leave = (ts: string | null) => {
+    const seq = ts === null ? null : seqOf.current.get(ts);
+    if (id !== null && seq !== undefined) void sending.place(id, seq).catch(() => undefined);
+  };
+  // Taken to where it was left or to the unread line before anything loads by where the pane is.
+  // With nothing unread, the core may open it short of its end where it was left (`at`): that message goes at the top.
+  const at = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!)?.ts ?? null : null;
+  useRememberPlace(list, place, messages.length > 0, short, leave, at);
+  const divider = useUnreadLine(list, chat);
+  // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
+  const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
+  useNewerOnScroll(list, short, chat.messages.at(-1)?.seq, newer);
   useShowing(floor, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
-  useRememberPlace(list, place, messages.length > 0);
-  const divider = useUnreadLine(list, chat);
   const away = useAwayFromBottom(list);
+  const toEnd = useToEnd(list, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of chat.outbox) sentHere.current.add(o.text);
@@ -309,7 +330,55 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
     return { enter, emitted: told ? emissions.stateOf(m.seq) : null, caught: saidHere(m.seq) ? undefined : true };
   };
   const caughtAgent = (key: string) => (started.has(key) ? undefined : true);
-  return { messages, divider, away, shown, rowOf, caughtAgent, poseOf: emissions.poseOf };
+  // Short of the end, the way there shows wherever the reader is, with how many wait there.
+  const waiting = short ? chat.thread?.unread ?? 0 : 0;
+  return { messages, divider, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf };
+}
+
+/**
+ * The way to a chat's end, from the button over the list or its shortcut: down the list, gliding, as always; from a
+ * window short of the end (`chat.newer`), its latest page in its place first (`latest`), then straight to its bottom,
+ * with nothing gliding or coming in. A message sent from such a window takes the reader there the same way (the core
+ * puts the latest page in place as it sends).
+ */
+function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: () => Promise<unknown>): () => void {
+  const short = !!chat.newer;
+  // Going to the end: once the latest page is in, the list goes to its bottom.
+  const going = useRef(false);
+  const sent = useRef(chat.outbox.length);
+  useLayoutEffect(() => {
+    if (short && chat.outbox.length > sent.current) going.current = true;
+    sent.current = chat.outbox.length;
+    if (short || !going.current) return;
+    going.current = false;
+    list.current?.dispatchEvent(new CustomEvent("to-bottom", { detail: "at-once" }));
+  });
+  return () => {
+    if (!short) {
+      list.current?.dispatchEvent(new Event("to-bottom"));
+      return;
+    }
+    going.current = true;
+    void latest().catch(() => { going.current = false; });
+  };
+}
+
+/**
+ * Tells the list (scroll.ts) when messages leave its ends as the core's window moves along the chat (a page in at one
+ * end, as many out at the other): it lets go of the room it held at its foot. Told as the change is laid out, before
+ * the list puts the reader's message back in place.
+ */
+function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
+  const first = messages[0]?.seq;
+  const last = messages.at(-1)?.seq;
+  const was = useRef({ first, last });
+  useLayoutEffect(() => {
+    const before = was.current;
+    was.current = { first, last };
+    const moved = (before.first !== undefined && first !== undefined && first > before.first)
+      || (before.last !== undefined && last !== undefined && last < before.last);
+    if (moved) list.current?.dispatchEvent(new Event("trimmed"));
+  }, [list, first, last]);
 }
 
 /** The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too). */
@@ -367,7 +436,7 @@ export function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
 
 /**
  * Where each chat was left: the message at the top of its pane, and how far below the pane's top it sat; and, if it
- * was left at its bottom, the last message then (`bottom`).
+ * was left at its end (the bottom of a pane not short of it), the last message then (`bottom`).
  */
 const leftAt = new Map<string, { ts: string; offset: number; bottom: string | null }>();
 
@@ -376,38 +445,71 @@ const leftAt = new Map<string, { ts: string; offset: number; bottom: string | nu
  * they return, instead of opening it from the bottom again. The place is kept
  * as the message at the top and its offset, so what arrived meanwhile below
  * does not move it. The unread line, when there is one, goes over it (useUnreadLine).
+ * With no place of its own here, a chat the core opened short of its end
+ * (`opensAt`: the message at the entry it opened at, where it was left) shows
+ * that message at the top. `short`: the pane shows a window short of the chat's
+ * end, so its bottom is not the end. Leaving, `onLeave` is told where, as the
+ * pane is then: the message at its top (its `ts`), or none at the end (the core
+ * opens the chat there next: `chat.place`).
  */
-export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean): void {
+export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean, short = false, onLeave?: (ts: string | null) => void, opensAt: string | null = null): void {
   const [saved] = useState(() => leftAt.get(key));
   const restored = useRef(false);
+  const latest = useRef({ short, onLeave });
+  latest.current = { short, onLeave };
+  /** Where the reader is: the message at the pane's top and its offset, and the last message if at the end. */
+  const where = useCallback((pane: HTMLElement) => {
+    const top = pane.getBoundingClientRect().top;
+    const first = [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].find((m) => m.getBoundingClientRect().bottom > top);
+    const end = !latest.current.short && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
+    return first ? { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom: end ? lastTs(pane) : null } : null;
+  }, []);
   useEffect(() => {
     const pane = ref.current;
     if (!pane) return;
     const record = () => {
-      const top = pane.getBoundingClientRect().top;
-      const first = [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].find((m) => m.getBoundingClientRect().bottom > top);
-      const bottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2 ? lastTs(pane) : null;
-      if (first) leftAt.set(key, { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom });
+      const at = where(pane);
+      if (at) leftAt.set(key, at);
     };
     pane.addEventListener("scroll", record, { passive: true });
+    return () => pane.removeEventListener("scroll", record);
+  }, [ref, key, where]);
+  // Told as the page goes, while the pane is still laid out (a layout effect's cleanup runs before it is taken away).
+  useLayoutEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
     return () => {
-      record();
-      pane.removeEventListener("scroll", record);
+      if (!pane.isConnected) return;
+      const at = where(pane);
+      if (at) leftAt.set(key, at);
+      if (at) latest.current.onLeave?.(at.bottom !== null ? null : at.ts);
+      else if (!latest.current.short) latest.current.onLeave?.(null);
     };
-  }, [ref, key]);
+  }, [ref, key, where]);
   useEffect(() => {
-    if (!saved || !ready || restored.current) return;
+    if (!ready || restored.current) return;
     restored.current = true;
     const pane = ref.current;
+    if (!pane) return;
+    if (!saved) {
+      // Opened where it was left, short of its end: that message at the top, below what floats over the pane there
+      // (the phone's bar: its scroll padding).
+      const at = opensAt === null ? null : pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${opensAt}"]`);
+      if (!at) return;
+      pane.dispatchEvent(new WheelEvent("wheel"));
+      const covered = parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0;
+      pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered;
+      return;
+    }
     // Left at the bottom with nothing new since: it opens at the bottom, following it (the top message's offset would
     // not land there once what is below it is laid out otherwise: images still loading, an activity come or gone).
-    if (pane && saved.bottom !== null && lastTs(pane) === saved.bottom) return;
-    const at = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${saved.ts}"]`);
-    if (!pane || !at) return;
+    if (saved.bottom !== null && lastTs(pane) === saved.bottom) return;
+    const at = pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${saved.ts}"]`);
+    if (!at) return;
     // A reader's move: the pane keeps it rather than holding its bottom.
     pane.dispatchEvent(new WheelEvent("wheel"));
     pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
-  }, [ref, saved, ready]);
+  }, [ref, saved, ready, opensAt]);
 }
 
 /** The last message's `ts` in a pane. */
@@ -417,27 +519,65 @@ function lastTs(pane: HTMLElement): string | null {
 
 /**
  * Loads the page before what is shown (`more`: there is one; `first`: what is
- * shown first) when the reader comes near the top (or when what is loaded does
- * not fill the pane). What is on screen stays put: the pane keeps its distance
- * from the bottom as content grows above (scroll.ts).
+ * shown first) when the reader comes within about a screenful of the top (or
+ * when what is loaded does not fill the pane). What is on screen stays put: the
+ * pane keeps the reader's message in place as content grows above (scroll.ts).
  */
 export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, more: boolean, first: number | string | undefined, older: () => Promise<unknown>): void {
-  // What was shown first when a page was asked before it: one request per page.
+  useLoadNear(ref, "top", more, first, older);
+}
+
+/**
+ * Loads the page after what is shown while the chat shows a window short of its end (`newer`; `last`: what is shown
+ * last) when the reader comes within about a screenful of its bottom (or when what is loaded does not fill the pane).
+ * What is on screen stays put as it comes in below and as many messages leave above (scroll.ts).
+ */
+export function useNewerOnScroll(ref: RefObject<HTMLElement | null>, newer: boolean, last: number | string | undefined, load: () => Promise<unknown>): void {
+  useLoadNear(ref, "bottom", newer, last, load);
+}
+
+/**
+ * One page per approach to an edge of the pane: a page is asked when the reader is within a screenful of `edge`
+ * (`can`: there is one; `at`: what is shown at that edge, asked after once). The pane is judged as the reader
+ * scrolls, not as the page comes in: until the pane has put the reader's message back (scroll.ts, as it is laid out),
+ * it still looks near the edge, and would ask for another page at once. So after a page, nothing is asked until a
+ * frame after it is in, and then only as the reader scrolls (or while what is loaded does not fill the pane).
+ */
+function useLoadNear(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
+  const latest = useRef({ load, at });
+  latest.current = { load, at };
   const asked = useRef<number | string | undefined>(undefined);
-  const load = useRef(older);
-  load.current = older;
+  /** Judges the pane now; set while it is up. */
+  const fill = useRef<(() => void) | null>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el || !more) return;
+    if (!el || !can) return;
+    let live = true;
+    let busy = false;
+    const near = () => (edge === "top" ? el.scrollTop : el.scrollHeight - el.scrollTop - el.clientHeight) <= el.clientHeight;
     const check = () => {
-      if (asked.current === first || el.scrollTop > 300) return;
-      asked.current = first;
-      void load.current().catch(() => { asked.current = undefined; });
+      const { load, at } = latest.current;
+      if (busy || asked.current === at || !near()) return;
+      asked.current = at;
+      busy = true;
+      // Two frames on, the page is laid out and the reader's place put back (or the page never came: asked again).
+      const settle = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+        busy = false;
+        if (live && el.scrollHeight <= el.clientHeight) check();
+      }));
+      void load().then(settle, () => { asked.current = undefined; settle(); });
     };
+    fill.current = () => { if (el.scrollHeight <= el.clientHeight) check(); };
     check();
     el.addEventListener("scroll", check, { passive: true });
-    return () => el.removeEventListener("scroll", check);
-  }, [ref, more, first]);
+    return () => {
+      live = false;
+      fill.current = null;
+      el.removeEventListener("scroll", check);
+    };
+  }, [ref, can, edge]);
+  // A page in that does not fill the pane leaves nothing to scroll: the next is asked without waiting for the reader.
+  useEffect(() => fill.current?.(), [at]);
 }
 
 /**
@@ -454,10 +594,13 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
   const known = chat.thread?.read ?? 0;
   const latest = useRef({ newest, known, read });
   latest.current = { newest, known, read };
+  // The end of a window short of the chat's end is not its end: nothing past it has shown.
+  const short = useRef(false);
+  short.current = chat.newer === true;
   const readHere = useCallback(() => {
     const { newest, known, read } = latest.current;
     const o = old.current;
-    if (!o.on || !o.end || document.visibilityState !== "visible" || newest <= known || o.sent >= newest) return;
+    if (!o.on || !o.end || short.current || document.visibilityState !== "visible" || newest <= known || o.sent >= newest) return;
     o.sent = newest;
     void read(newest).catch(() => { o.sent = 0; });
   }, []);
@@ -465,7 +608,7 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
   useEffect(() => {
     const el = floor.current;
     const of = { station, thread, session };
-    const tell = () => void core().focus({ chat: { ...of, end: old.current.end } }).catch((e: unknown) => {
+    const tell = () => void core().focus({ chat: { ...of, end: old.current.end && !short.current } }).catch((e: unknown) => {
       if ((e as { code?: string }).code === "unknown_call") { old.current.on = true; readHere(); }
     });
     tell();
@@ -481,6 +624,15 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
       void core().focus({ left: of }).catch(() => undefined);
     };
   }, [floor, station, thread, session, readHere]);
+  // The window reaching the chat's end with its end in view, or leaving it: said again.
+  const isShort = chat.newer === true;
+  const told = useRef(isShort);
+  useEffect(() => {
+    if (told.current === isShort) return;
+    told.current = isShort;
+    if (old.current.on) return readHere();
+    void core().focus({ chat: { station, thread, session, end: old.current.end && !isShort } }).catch(() => undefined);
+  }, [isShort, station, thread, session, readHere]);
 }
 
 /**

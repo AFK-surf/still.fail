@@ -7,6 +7,8 @@
 // list is at rest, at the end it follows again, elsewhere it stays put.
 // Something the reader opens in the list (stay) is not new: it is not followed.
 // The list growing shorter (the keyboard) keeps its bottom in place.
+// A list whose end is not where it ends (short: a chat's window short of its
+// newest) is never followed: what comes in below is a page read, not said.
 // Following glides (scroll.ts glide): each frame covers the same share of what
 // is left, 1 - e^(-dt/100ms), so a long way is quick and a goal that moves on
 // (a reply still growing) is followed without a restart; the reader's finger
@@ -44,6 +46,10 @@ class Follow(val list: LazyListState, private val margin: Int) {
     /** Half a second after it was placed: from then on what comes in is glided after. */
     internal var grown = false
     var on by mutableStateOf(false)
+    /** Its end is not where it ends (a chat's window short of the newest): not followed, whatever is in view. */
+    var short by mutableStateOf(false)
+    /** The list at its end, and that the end: once at rest there, it follows. */
+    fun atEnd() = !short && !list.canScrollForward
     /** The message being followed, by key: kept in view from its top. */
     var anchor by mutableStateOf<Any?>(null)
     /** Where an item is, by key (-1: not in the list). */
@@ -156,7 +162,14 @@ fun rememberFollow(list: LazyListState): Follow {
         launch {
             snapshotFlow { list.isScrollInProgress to (follow.own > 0) }.collect { (scrolling, own) ->
                 if (scrolling && !own && follow.placed) { follow.touched = true; follow.anchor = null }
-                if (!scrolling && follow.touched) { follow.touched = false; follow.on = !list.canScrollForward }
+                if (!scrolling && follow.touched) { follow.touched = false; follow.on = follow.atEnd() }
+            }
+        }
+        // Short of its end, nothing is followed; back at it (the last page in), at rest at the end it follows again.
+        launch {
+            snapshotFlow { follow.short }.collect { short ->
+                if (short) { follow.on = false; follow.anchor = null }
+                else if (follow.placed && !follow.on && !list.isScrollInProgress) follow.on = !list.canScrollForward
             }
         }
         // The list itself grew shorter or taller (the keyboard coming up, or going): what was at its bottom stays at
@@ -174,9 +187,9 @@ fun rememberFollow(list: LazyListState): Follow {
             val last = info.visibleItemsInfo.lastOrNull()
             listOf(info.totalItemsCount, last?.index, last?.size, follow.placed && follow.on, follow.anchor)
         }.collect {
-            if (!follow.placed || !follow.on || list.isScrollInProgress) return@collect
+            if (!follow.placed || !follow.on || follow.short || list.isScrollInProgress) return@collect
             // A glide the reader's finger took over ends here; one another scroll (the keyboard's) cut short goes on.
-            while (follow.on && !follow.touched) {
+            while (follow.on && !follow.short && !follow.touched) {
                 try { follow.hold(); break } catch (e: CancellationException) { currentCoroutineContext().ensureActive(); withFrameNanos { } }
             }
         }

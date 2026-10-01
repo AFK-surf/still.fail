@@ -5,6 +5,7 @@
 // the time over their words. Long-press quotes or copies a message; ＋ adds files.
 package fail.still.android.screens
 
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.content.ClipData
@@ -230,12 +231,18 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     val view = chat.value
     // The chat's own draft, kept as the chat is left and the app closed (Composer.kt → Drafts).
     val draft = rememberDraft(station, of)
+    // The bar's height, which the list keeps its top clear of: from the first frame what the bar is laid out as (the
+    // status bar, and its row: 6 + 40 + 8dp), and measured from the bar itself, the loading one's too, so the list's
+    // first frame is not laid out under a bar of no height and pushed down the next.
+    val density = LocalDensity.current
+    val statusTop = WindowInsets.statusBars.getTop(density)
+    var topBar by remember { mutableIntStateOf(statusTop + with(density) { 54.dp.roundToPx() }) }
     if (view == null) {
         // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in
         // place instead of replacing another page. Its composer is there, not sending yet.
         host.spec = ComposerSpec(station, null, draft, "发消息", onPlus = {}, onSend = {})
         Column(Modifier.fillMaxSize()) {
-            BarFrame("", more = false) {}
+            BarFrame("", more = false, modifier = Modifier.background(C.bg).onSizeChanged { topBar = it.height }) {}
             val error = chat.error
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (error != null) Text("读不到这个对话：${error.message}", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp))
@@ -253,8 +260,6 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     host.spec = chatComposer(host, station, of, view, agents, draft)
     // The messages run under the bar and the composer, which are frosted glass over them.
     val haze = host.haze
-    val density = LocalDensity.current
-    var topBar by remember { mutableIntStateOf(0) }
     // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
     Box(Modifier.fillMaxSize().background(C.bg)) {
         Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { host.composerHeight.toDp() }, host)
@@ -326,6 +331,8 @@ private fun Modifier.rise(on: Boolean): Modifier {
 private sealed interface Entry {
     val id: String
     data object Older : Entry { override val id = "older" }
+    /** The page after what shows coming in (the chat's window short of its end). */
+    data object Newer : Entry { override val id = "newer" }
     data object Empty : Entry { override val id = "empty" }
     data object Line : Entry { override val id = "line" }
     /** `sent`: the outbox entry it was sent from here as, whose row it goes on being (its key kept: not a row leaving and another coming). */
@@ -424,6 +431,10 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // it (Outgoing.seq), which the outbox says before it lets the message go.
     val sentAs = remember { HashMap<Long, String>() }
     view.outbox.forEach { o -> o.seq?.let { sentAs[it] = o.id } }
+    // The chat shows a window short of its end (the core's `newer`): the page after comes in as the reader nears the
+    // list's end, which is not the chat's; what goes on at the chat's end (its activity) is not here, and nothing said
+    // joins the list meanwhile (it waits, counted in the thread's `unread`).
+    val short = view.newer == true
     val all = buildList {
         if (view.more) add(Entry.Older)
         if (messages.isEmpty() && view.outbox.isEmpty()) add(Entry.Empty)
@@ -432,10 +443,13 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             if (m.seq == lineAt) add(Entry.Line)
             add(Entry.Said(m, sentAs[m.seq]))
         }
+        if (short) add(Entry.Newer)
         view.outbox.forEach { add(Entry.Out(it)) }
         // The activity is always the last thing in the chat (a reply comes whole, as a message).
-        atWork.forEach { add(Entry.Working(it)) }
-        if (floor > 0) add(Entry.Floor(floor))
+        if (!short) {
+            atWork.forEach { add(Entry.Working(it)) }
+            if (floor > 0) add(Entry.Floor(floor))
+        }
     }
 
     val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
@@ -444,12 +458,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // (images still loading, an activity come or gone).
     val place = app.places[placeKey]?.takeUnless { it.bottom != null && it.bottom == messages.lastOrNull()?.ts }
     // A long chat opened at its newest: the newest few first, at the bottom, and the rest rising in above them a
-    // few a frame, rather than one frame building a screenful. (Opened elsewhere, at a place or the unread line,
-    // it is all there at once, to be put in place.)
+    // few a frame, rather than one frame building a screenful. (Opened elsewhere, at a place or the unread line, or
+    // a window short of the chat's end, it is all there at once, to be put in place.)
     val reveal = remember { Reveal() }
     if (!reveal.decided && messages.isNotEmpty()) {
         reveal.decided = true
-        if (all.size > 8 && place == null && all.none { it is Entry.Line }) reveal.count = 3
+        if (all.size > 8 && place == null && !short && view.at == null && all.none { it is Entry.Line }) reveal.count = 3
     }
     val allSize by rememberUpdatedState(all.size)
     LaunchedEffect(reveal.decided) {
@@ -473,26 +487,42 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         }
     }
     // What is new is told here, as the list is composed: its rows are composed later (as it is laid out), after the
-    // SideEffect below has counted them in. Nothing is new on the first draw.
+    // SideEffect below has counted them in. Nothing is new on the first draw, nor with the reader away from the end
+    // (not following it): what arrives out of view is there when scrolled to, not coming in then.
     val arrived = remember { HashSet<String>() }
     val drawn = remember { booleanArrayOf(false) }
-    if (drawn[0]) rows.forEach { if (it.id !in known && !caught(it)) arrived += it.id }
+    val following = remember { arrayOfNulls<fail.still.android.ui.Follow>(1) }
+    if (drawn[0] && following[0]?.on != false) rows.forEach { if (it.id !in known && !caught(it)) arrived += it.id }
     SideEffect { rows.forEach { known += it.id }; drawn[0] = true }
     val density = LocalDensity.current
     // The unread line near the top, below the bar, with about four lines of what came before it still in view (web
     // Chat.tsx → useUnreadLine: the bar's room and four of the list's 23px lines).
     val lineOffset = with(density) { -85.dp.roundToPx() }
+    // Where the core opened the chat, short of its end (its first unread, where it was left: `at`): that message at the
+    // top, when nothing here says otherwise (a place kept here, the unread line).
+    val atIndex = view.at?.let { at -> rows.indexOfFirst { it is Entry.Said && it.m.seq >= at } }?.takeIf { it >= 0 }
     // The list starts where it is going (the unread line, where the chat was left, or the newest), rather than
     // composing its top only to jump away from it.
-    val list = rememberLazyListState(
-        initialFirstVisibleItemIndex = rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 }
-            ?: place?.let { p -> rows.indexOfFirst { it.place == p.id } }?.takeIf { it >= 0 } ?: rows.lastIndex.coerceAtLeast(0),
-    )
+    // Its first frame is where it is put (the unread line with what came before it, the place with its offset), so
+    // putting it there once it has laid out moves nothing.
+    val start = rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 }?.let { it to lineOffset }
+        ?: place?.let { p -> rows.indexOfFirst { it.place == p.id }.takeIf { it >= 0 }?.let { it to -p.offset } }
+        ?: atIndex?.let { it to 0 } ?: (rows.lastIndex.coerceAtLeast(0) to 0)
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = start.first)
+    // An offset above the item (the line's) is not taken as the initial one: asked for before the list first lays out.
+    val begun = remember { booleanArrayOf(false) }
+    if (!begun[0] && messages.isNotEmpty()) {
+        begun[0] = true
+        SideEffect { list.requestScrollToItem(start.first, start.second) }
+    }
     val follow = rememberFollow(list)
+    following[0] = follow
+    SideEffect { follow.short = short }
     motion.follow = follow
-    motion.scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
+    motion.scope = scope
     // Put in place once: at the unread line (even coming back: something unread goes over where the chat was left),
-    // else back where the chat was left, else at the newest.
+    // else back where the chat was left, else where the core opened it (`at`), else at the newest.
     val lineShown = remember { mutableStateOf(false) }
     LaunchedEffect(above, messages.isNotEmpty()) {
         if (follow.placed || above) return@LaunchedEffect
@@ -502,11 +532,13 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         when {
             line != null -> list.scrollToItem(line, lineOffset)
             back != null -> list.scrollToItem(back, -saved.offset)
+            atIndex != null -> list.scrollToItem(atIndex)
             else -> follow.toEnd()
         }
         lineShown.value = line != null
+        follow.short = short
         follow.placed = true
-        follow.on = !list.canScrollForward
+        follow.on = follow.atEnd()
     }
     // Something unread that shows only after opening (from the station, after what was kept): the chat jumps to it once.
     val lineIndex = rows.indexOfFirst { it is Entry.Line }
@@ -515,11 +547,11 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         lineShown.value = true
         follow.anchor = null
         list.scrollToItem(lineIndex, lineOffset)
-        follow.on = !list.canScrollForward
+        follow.on = follow.atEnd()
     }
     // A message arriving at the end while it is followed is kept in view from its top (the activity never is: it folds away).
     follow.indexOf = { key -> rows.indexOfFirst { it.id == key } }
-    val newestKey = rows.lastOrNull { it !is Entry.Working && it !is Entry.Floor }?.id
+    val newestKey = rows.lastOrNull { it !is Entry.Working && it !is Entry.Floor && it !is Entry.Newer }?.id
     val knownNewest = remember { mutableStateOf<String?>(null) }
     LaunchedEffect(newestKey, follow.placed) {
         if (!follow.placed) return@LaunchedEffect
@@ -527,13 +559,53 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         knownNewest.value = newestKey
     }
     // Remember where the chat is left: the message at the top and its offset, so what arrives below does not move it;
-    // and whether it was left at its end.
+    // and whether it was left at its end (not a window short of it). The core is told too (`chat.place`): the message
+    // at the top short of the end, none at it; it opens the chat's window there next, while nothing is unread.
     val rowsNow by rememberUpdatedState(rows)
     val newestNow by rememberUpdatedState(messages.lastOrNull()?.ts)
+    val shortNow by rememberUpdatedState(short)
+    val threadNow by rememberUpdatedState(thread?.id)
     DisposableEffect(placeKey) {
         onDispose {
-            val bottom = if (follow.on || !list.canScrollForward) newestNow else null
-            list.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item -> rowsNow.firstOrNull { it.id == item.key && it is Entry.Said }?.let { AppState.Place(it.place, item.offset, bottom) } }?.let { app.places[placeKey] = it }
+            val atEnd = !shortNow && (follow.on || !list.canScrollForward)
+            val bottom = if (atEnd) newestNow else null
+            val top = list.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item -> (rowsNow.firstOrNull { it.id == item.key && it is Entry.Said } as Entry.Said?)?.let { it to item.offset } }
+            top?.let { (row, offset) -> app.places[placeKey] = AppState.Place(row.place, offset, bottom) }
+            val id = threadNow
+            if (id != null && follow.placed) {
+                val seq = if (atEnd) null else top?.first?.m?.seq
+                app.scope.launch { try { api.place(id, seq) } catch (_: CoreException) {} }
+            }
+        }
+    }
+    // A page coming in at either end (or going at the other) leaves what is in view where it is. The list keeps its
+    // first item in view by its key; when that is a page's spinner, the first row after it is kept where it is instead.
+    // The window put back at the chat's end in place of what showed (`chat.latest`; sending from short of it): the list
+    // goes to its end.
+    // Both happen in the frame the new rows are laid out in: no frame of the list elsewhere first.
+    val headKey = rows.firstOrNull { it is Entry.Said }?.id
+    val lastHead = remember { arrayOfNulls<String>(1) }
+    // The reader asked for the chat's end (the jump button short of it): the window put there shows at its end at once.
+    val toLatest = remember { booleanArrayOf(false) }
+    val lastRow = rows.lastIndex
+    fun atLatest() {
+        follow.anchor = null
+        // Past the last row's top by more than it can be: the list lays out its end.
+        list.requestScrollToItem(lastRow, 1_000_000)
+        follow.on = true
+    }
+    SideEffect {
+        val was = lastHead[0]
+        lastHead[0] = headKey
+        if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }
+        if (was == null || was == headKey || !follow.placed || reveal.revealing) return@SideEffect
+        // Not laid out anew yet: what is in view is what was.
+        val shown = list.layoutInfo.visibleItemsInfo
+        val at = shown.firstOrNull { it.key != Entry.Older.id && it.key != Entry.Newer.id } ?: return@SideEffect
+        val index = rows.indexOfFirst { it.id == at.key }
+        when {
+            index < 0 -> if (!short) atLatest()
+            shown.first().key != at.key && index != at.index -> list.requestScrollToItem(index, -at.offset)
         }
     }
     // Near the top: the page before comes in (once per page); what is on screen stays put.
@@ -547,9 +619,26 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             }
         }
     }
+    // Near the end, short of the chat's: the page after comes in (once per page), read rather than said (no motion);
+    // as many go at the start, and what is on screen stays put.
+    val lastSeq = messages.lastOrNull()?.seq
+    val askedNewer = remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(short, lastSeq, follow.placed, reveal.revealing) {
+        if (!short || thread == null || !follow.placed || reveal.revealing) return@LaunchedEffect
+        snapshotFlow { list.layoutInfo.let { (it.visibleItemsInfo.lastOrNull()?.index ?: -1) >= it.totalItemsCount - 3 } }.collect { near ->
+            if (near && askedNewer.value != lastSeq) {
+                askedNewer.value = lastSeq
+                try { api.newer(thread.id) } catch (_: CoreException) { askedNewer.value = null }
+            }
+        }
+    }
     // What is shown is read: up to the newest message, once the end is in view on a page in front.
     val resumed by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    val seen = endInView(list) && follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED)
+    // (The end of a window short of the chat's end is not its end: nothing past it has shown. Nor is the end of the
+    // list as last laid out while rows that came since are not: a page landing at the end would be read unseen.)
+    val lastRowKey = rememberUpdatedState(rows.lastOrNull()?.id)
+    val lastLaidOut by remember(list) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.key == lastRowKey.value } }
+    val seen = !short && endInView(list) && lastLaidOut && follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED)
     // Only what is watched comes out of an avatar: the page in front, the reader at the end; else all shows at once.
     val watched = follow.on && resumed.isAtLeast(Lifecycle.State.RESUMED)
     SideEffect { motion.watched = watched; motion.start() }
@@ -591,7 +680,10 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 val flew = remember(row.id) { booleanArrayOf(false) }
                 if (flies) flew[0] = true
                 val eases = fresh && !flew[0] && row !is Entry.Working && !(row is Entry.Said && motion.emits(row.m.seq))
-                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = tween(200)).rise(eases).flying(host, f).onSizeChanged { size ->
+                // Only what goes from the chat fades out (an activity done, a message dropped from the outbox); rows going
+                // because the window moved or was put elsewhere (a page in at the other end, the latest page) are gone at once.
+                val fades = row is Entry.Working || row is Entry.Out || row is Entry.Floor
+                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.
@@ -599,6 +691,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 }) {
                     CompositionLocalProvider(LocalFlight provides f, LocalFlightHost provides host) { when (row) {
                         Entry.Older -> Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) }
+                        Entry.Newer -> Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) }
                         Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = chatMuted(), fontSize = 15.sp, lineHeight = 24.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
                         Entry.Line -> UnreadLine()
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
@@ -612,7 +705,13 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         // Over the send button, in line with it (the composer's capsule insets it 18dp from the edge); it comes up
         // growing and goes the way it came (web mobile/Chat.css.ts → mJump: from translateY(18px) scale(.6), its
         // opacity 180ms and the rest 220ms --m-standard; going, 150ms and 180ms; turned back mid-way from where it is).
-        JumpToLatest(awayFromEnd(list), haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp)) { follow.jump() }
+        // Short of the chat's end it shows at the list's end too, saying how many new messages wait there; it puts the
+        // chat's latest page in place of what shows and goes to its end at once.
+        JumpToLatest(awayFromEnd(list) || short, thread?.unread?.takeIf { short && it > 0 }, haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp)) {
+            if (!short || thread == null) return@JumpToLatest follow.jump()
+            toLatest[0] = true
+            try { api.latest(thread.id) } catch (_: CoreException) { toLatest[0] = false }
+        }
       }
         // The avatar flying with a message out of it: over the list, under the bars and the composer (as the web's, in
         // the pane).
@@ -644,8 +743,11 @@ private fun Flyer(motion: ChatMotion, atWork: List<AgentAtWork>) {
 }
 
 @Composable
-private fun JumpToLatest(shown: Boolean, haze: HazeState, modifier: Modifier, onJump: suspend () -> Unit) {
+private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier: Modifier, onJump: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
+    // What it says stays as it goes.
+    val said = remember { mutableStateOf<Long?>(null) }
+    if (shown) said.value = count
     val fade by animateFloatAsState(if (shown) 1f else 0f, tween(if (shown) 180 else 150, easing = Ease.Css), label = "jump-fade")
     val grow by animateFloatAsState(if (shown) 1f else 0f, tween(if (shown) 220 else 180, easing = Ease.Standard), label = "jump-grow")
     val rise = with(LocalDensity.current) { 18.dp.toPx() }
@@ -655,11 +757,18 @@ private fun JumpToLatest(shown: Boolean, haze: HazeState, modifier: Modifier, on
             alpha = fade
             translationY = rise * (1f - grow)
             scaleX = 0.6f + 0.4f * grow; scaleY = scaleX
-        }.size(36.dp).floating(haze, CircleShape)
+        }.height(36.dp).widthIn(min = 36.dp).floating(haze, CircleShape)
             .clickable(enabled = shown) { scope.launch { onJump() } }
             .semantics { contentDescription = "跳到最新" },
         contentAlignment = Alignment.Center,
-    ) { IconIn(Icons.ArrowDown, 18.dp, C.ink) }
+    ) {
+        val n = said.value
+        if (n == null) IconIn(Icons.ArrowDown, 18.dp, C.ink)
+        else Row(Modifier.padding(start = 10.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconIn(Icons.ArrowDown, 18.dp, C.ink)
+            Text("$n 条新消息", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)
+        }
+    }
 }
 
 /** Over the first message that was unread when the chat opened: the accent, a rule each side (web Chat.css.ts → chatUnreadLine). */
@@ -941,7 +1050,7 @@ private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, r
             val pane = motion.pane
             val mid = pane?.let { p -> motion.mark?.middleIn(p) }
             if (pane != null && mid != null) list.scrollBy(mid.y - pane.size.height / 2f)
-            follow?.on = !list.canScrollForward
+            follow?.on = follow?.atEnd() == true
             motion.flash()
         }
     }

@@ -3,8 +3,9 @@
 //! Each UI says whether its page is in view (`visible`), looked at (`focused`), and which chat it shows with its end
 //! in view or not (`client.focus`). From that the core decides:
 //! - a chat's unread line (`unreadLine`): over the first message the viewer had not read when the chat was opened
-//!   (not theirs, said before it opened), held for the visit, which lasts while some UI shows the chat; older pages
-//!   are loaded first when it lies above them (`unreadAbove`);
+//!   (not theirs, said before it opened), held for the visit, which lasts while some UI shows the chat. The chat opens
+//!   at it (station.rs `open_thread`), so it is in its first value, before a UI says it shows it; nothing is loaded to
+//!   find it (`unreadAbove` stays false);
 //! - what is read: a chat is read up to its newest message while a UI shows its end on a page in view;
 //! - what comes in while a chat shows (`said` on a message, `started` on an agent): a message the station told as it
 //!   was said (an event, past what the chat caught up on by reading: what was kept, a page, what was missed while the
@@ -86,8 +87,6 @@ struct Visit {
     at: f64,
     read: u64,
     session: Option<String>,
-    /// The first message shown when older ones were last asked for (once per page).
-    asked: Option<u64>,
     /// The newest message decided on (`said` or not), and those said while it shows.
     top: u64,
     said: HashSet<u64>,
@@ -154,10 +153,9 @@ pub fn parse(name: &str, params: &Value) -> Option<Result<Call>> {
     })
 }
 
-/// What a chat's value asks of the core once computed: its older page loaded, or a read position recorded.
+/// What a chat's value asks of the core once computed: a read position recorded.
 #[derive(Debug, PartialEq)]
 pub enum Due {
-    Older { thread: u64 },
     Read { thread: u64, seq: u64 },
 }
 
@@ -289,17 +287,33 @@ impl Attend {
         let mut due = Vec::new();
         let Some(thread) = value.get("thread").and_then(|t| t.get("id")).and_then(Value::as_u64) else { return due };
         let shown = self.showing(station, Some(thread), session);
-        if shown.is_empty() {
-            return due;
-        }
         let known = value["thread"].get("read").and_then(Value::as_u64).unwrap_or(0);
         let messages = value.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
         let seq = |m: &Value| m.get("seq").and_then(Value::as_u64).unwrap_or(0);
         let now = self.host.now_ms();
+        // Over the first unread message, when the window reaches back to where reading stopped (one past it, gone to
+        // the end, has no line: what is above it is unread too).
+        let more = value.get("more").and_then(Value::as_bool) == Some(true);
+        let unread_line = |read: u64, opened: f64| {
+            if more && messages.first().is_none_or(|m| seq(m) > read + 1) {
+                return Value::Null;
+            }
+            messages.iter().find(|m| {
+                seq(m) > read
+                    && m.get("createdAt").and_then(Value::as_f64).is_some_and(|at| at <= opened)
+                    && m.get("mine").and_then(Value::as_bool) != Some(true)
+            }).map_or(Value::Null, |m| json!(seq(m)))
+        };
+        value["unreadAbove"] = json!(false);
+        // Not shown yet (its first value, before a UI says it shows it): the line as it will be.
+        if shown.is_empty() {
+            value["unreadLine"] = unread_line(known, now);
+            return due;
+        }
         let mut visits = self.visits.borrow_mut();
         let newest = messages.last().map(seq).unwrap_or(0);
         let visit = visits.entry((station.to_string(), thread)).or_insert_with(|| Visit {
-            at: now, read: known, session: session.map(str::to_string), asked: None, top: newest, said: HashSet::new(), statuses: HashMap::new(), started: HashSet::new(),
+            at: now, read: known, session: session.map(str::to_string), top: newest, said: HashSet::new(), statuses: HashMap::new(), started: HashSet::new(),
         });
         let (read, opened) = (visit.read, visit.at);
         // Said while it shows: past what it had when the visit began, and past what was caught up on (station.rs
@@ -331,24 +345,12 @@ impl Attend {
                 a["started"] = json!(true);
             }
         }
-        let unread = |m: &Value| {
-            seq(m) > read
-                && m.get("createdAt").and_then(Value::as_f64).is_some_and(|at| at <= opened)
-                && m.get("mine").and_then(Value::as_bool) != Some(true)
-        };
-        let first = messages.first().map(seq);
-        // Those not loaded yet may hold it: the pages before are loaded first.
-        let above = value.get("more").and_then(Value::as_bool) == Some(true)
-            && first.is_some_and(|f| f > read + 1) && messages.iter().any(unread);
-        value["unreadLine"] = if above { Value::Null } else { messages.iter().find(|m| unread(m)).map_or(Value::Null, |m| json!(seq(m))) };
-        value["unreadAbove"] = json!(above);
-        if above && visit.asked != first {
-            visit.asked = first;
-            due.push(Due::Older { thread });
-        }
         drop(visits);
-        // Read: up to the newest, while its end is in view on a page in view.
-        if shown.iter().any(|f| f.visible && f.chat.as_ref().is_some_and(|c| c.end)) && newest > known {
+        value["unreadLine"] = unread_line(read, opened);
+        // Read: up to the newest, while its end is in view on a page in view. A window short of the chat's end is not
+        // read by its end showing: a page can land after it between the UI saying so and this (station.rs `newer`).
+        let short = value.get("newer").and_then(Value::as_bool) == Some(true);
+        if !short && shown.iter().any(|f| f.visible && f.chat.as_ref().is_some_and(|c| c.end)) && newest > known {
             let mut reads = self.reads.borrow_mut();
             let sent = reads.entry((station.to_string(), thread)).or_default();
             if *sent < newest {
@@ -362,11 +364,6 @@ impl Attend {
     /// What was due could not be done: asked again the next time.
     pub fn failed(&self, station: &str, due: &Due) {
         match *due {
-            Due::Older { thread } => {
-                if let Some(v) = self.visits.borrow_mut().get_mut(&(station.to_string(), thread)) {
-                    v.asked = None;
-                }
-            }
             Due::Read { thread, .. } => {
                 self.reads.borrow_mut().remove(&(station.to_string(), thread));
             }
@@ -440,14 +437,15 @@ mod tests {
     }
 
     #[test]
-    fn the_unread_line_holds_for_the_visit_and_older_pages_come_first() {
+    fn the_unread_line_holds_for_the_visit_and_is_there_from_the_first_value() {
         run(async {
             let host = FakeHost::new();
             let attend = Attend::load(host.clone()).await;
-            // Not shown anywhere: no line, nothing due.
+            // Not shown yet (its first value): the line as it will be, over the first unread not mine (3 is mine);
+            // nothing due.
             let mut v = chat(2, false, &[(1, 0.0, false), (2, 0.0, false), (3, 0.0, true), (4, 0.0, false)]);
             assert!(attend.chat("ws/st", None, &mut v).is_empty());
-            assert!(v.get("unreadLine").is_none());
+            assert_eq!(v["unreadLine"], 4);
             // Opened: over the first unread not mine (3 is mine).
             attend.focus(1, focus(json!({ "visible": true, "focused": true, "chat": { "station": "ws/st", "thread": 7 } })));
             attend.chat("ws/st", None, &mut v);
@@ -466,14 +464,15 @@ mod tests {
             // A page of the chat another leaves does not end the visit.
             attend.focus(1, focus(json!({ "left": { "station": "ws/st", "thread": 8 } })));
             assert_eq!(attend.visits.borrow().len(), 1);
-            // Unread above what is loaded: the older page first, asked once per page.
+            // A window past what was read (the chat went to its end): no line (what is above it is unread too), and
+            // nothing is loaded to find it.
             attend.focus(1, focus(json!({ "chat": null })));
             attend.focus(2, focus(json!({ "chat": { "station": "ws/st", "thread": 7 } })));
             let mut v = chat(1, true, &[(10, 0.0, false), (11, 0.0, false)]);
-            assert_eq!(attend.chat("ws/st", None, &mut v), [Due::Older { thread: 7 }]);
-            assert_eq!((v["unreadLine"].clone(), v["unreadAbove"].clone()), (Value::Null, json!(true)));
             assert!(attend.chat("ws/st", None, &mut v).is_empty());
-            let mut v = chat(1, false, &[(1, 0.0, false), (2, 0.0, false), (10, 0.0, false)]);
+            assert_eq!((v["unreadLine"].clone(), v["unreadAbove"].clone()), (Value::Null, json!(false)));
+            // One reaching back to it: over the first unread.
+            let mut v = chat(1, true, &[(1, 0.0, false), (2, 0.0, false)]);
             attend.chat("ws/st", None, &mut v);
             assert_eq!(v["unreadLine"], 2);
         });
@@ -550,6 +549,10 @@ mod tests {
             assert_eq!(attend.chat("ws/st", None, &mut v), [Due::Read { thread: 7, seq: 2 }]);
             // Read already: nothing.
             let mut v = chat(2, false, &[(1, 0.0, false), (2, 0.0, false)]);
+            assert!(attend.chat("ws/st", None, &mut v).is_empty());
+            // A window short of the chat's end: its end showing reads nothing.
+            let mut v = chat(2, false, &[(1, 0.0, false), (2, 0.0, false), (3, 0.0, false)]);
+            v["newer"] = json!(true);
             assert!(attend.chat("ws/st", None, &mut v).is_empty());
         });
     }

@@ -1114,6 +1114,10 @@ impl Views {
             "messages": messages,
             // Entries before those loaded (the thread counts from 1).
             "more": page.get("first").and_then(Value::as_u64).is_some_and(|first| first > 1),
+            // Entries after those loaded: the window is short of the thread's end (station.rs `WINDOW`).
+            "newer": page.get("end").and_then(Value::as_bool) == Some(false),
+            // The entry it opened at, short of its end (the first unread, or where it was left): shown at the top.
+            "at": page.get("at").cloned().unwrap_or(Value::Null),
             // Up to where its messages were caught up on rather than said while it was open (station.rs thread_value).
             "caught": page.get("caught").cloned().unwrap_or(Value::Null),
             "outbox": outbox,
