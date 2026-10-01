@@ -88,7 +88,7 @@ function Act({ icon: I, label, run }: { icon: Icon; label: string; run: () => Pr
   </button>;
 }
 
-/** A station's API by its address: a sheet lies over the page, outside its station's context. */
+/** A station's API by its explicit address. */
 function useStationApi(station: string) {
   const call = useStationCall(station);
   return useMemo(() => stationApi(call), [call]);
@@ -234,7 +234,7 @@ function PlaceMark({ station, chat, place }: { station: string; chat: string; pl
   // An ember chat is its agent's item: opened by the session it is bound to.
   // A Slack thread opens in Slack.
   const open = place.url ? () => { window.open(place.url!, "_blank", "noopener"); }
-    : place.session ? () => { if (place.session !== chat) app.push(`${stationBase(station)}/chats/${encodeURIComponent(place.session!)}`); else app.sheet(null); } : undefined;
+    : place.session ? () => { if (place.session !== chat) app.push(`${stationBase(station)}/chats/${encodeURIComponent(place.session!)}`); else app.pop(); } : undefined;
   return (
     <button type="button" className={css.mHPlace} data-link={open ? true : undefined} disabled={!open} onClick={open}>
       {place.surface === "ember" ? <Mark size={12} /> : <SlackMark size={12} />}<b>{place.name}</b>

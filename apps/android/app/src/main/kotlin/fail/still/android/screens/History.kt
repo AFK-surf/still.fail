@@ -372,7 +372,7 @@ private fun Place(station: String, of: ChatOf, place: fail.still.android.data.Pl
     val app = LocalApp.current
     val context = androidx.compose.ui.platform.LocalContext.current
     // A still.fail chat (surface "ember") is its agent's item: opened by the session it is bound to.
-    val chat = place.session?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.sheet = null } }
+    val chat = place.session?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.pop() } }
     // A Slack thread by its link: the Slack app takes it when installed, the browser otherwise.
     val slack = place.url?.takeIf { place.surface == "slack" }?.let { url ->
         {
