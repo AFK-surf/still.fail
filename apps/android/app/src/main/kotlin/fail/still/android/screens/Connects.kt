@@ -69,6 +69,7 @@ import fail.still.android.data.SlackTokenForm
 import fail.still.android.data.StillFailJson
 import fail.still.android.data.SlackTokensView
 import fail.still.android.data.StationView
+import fail.still.android.data.PickView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.WorkspaceView
@@ -548,36 +549,38 @@ fun ConnectRunScreen(station: String, id: String) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val (item, note) = rememberConnect(station, id)
-    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(station.substringBefore('/')))
+    val pickOf = "connect:$id"
+    val picking by rememberTopic<PickView>(app.core, Topics.pick(station, pickOf))
+    val v = picking.value
+    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> app.act("选择模型") { app.api(station).pickSet(pickOf, fill) }; Unit }
+    LaunchedEffect(station, id) { pick { put("open", true) } }
     var list by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
     Column(Modifier.fillMaxSize()) {
         NavBar(if (list != null) "换模型" else "返回", { if (list != null) list = null else app.pop() }, when (list) { "model" -> "选模型"; "account" -> "选账号"; else -> "换模型" })
-        if (item == null) return Loading(note ?: "")
+        if (item == null || v == null) return Loading(note ?: "正在读取…")
         val connect = item.connect
         val runtime = connect.bind.runtime
-        val models = stations.value?.firstOrNull { it.station == station }?.models.orEmpty().filter { runtime in it.runtimes }
-        var model by remember { mutableStateOf(connect.bind.model) }
-        var effort by remember { mutableStateOf(connect.bind.effort ?: "") }
-        var profile by remember { mutableStateOf(connect.bind.profile) }
+        val models = v.options
+        val model = v.draft.model
+        val effort = v.draft.effort
+        val profile = v.draft.profile
         var busy by remember { mutableStateOf(false) }
-        val choice = models.optionOf(model)
-        val named = { m: String? -> m?.let { if (it == connect.bind.model) connect.modelName ?: it else models.optionOf(it)?.name ?: it } }
-        val accounts = choice?.accounts?.get(runtime).orEmpty()
-        val efforts = choice?.efforts?.get(runtime).orEmpty()
-        val changed = (model != connect.bind.model && (choice == null || choice != models.optionOf(connect.bind.model))) || effort != (connect.bind.effort ?: "") || profile != connect.bind.profile
-        if (list == "model") return ModelList(models, runtime, model) { model = it; profile = null; list = null }
-        if (list == "account") return AccountList(accounts, runtime, profile) { profile = it; list = null }
+        val accounts = v.accounts
+        val efforts = v.efforts
+        val changed = v.changed
+        if (list == "model") return ModelList(models, runtime, model) { m -> pick { put("model", m) }; list = null }
+        if (list == "account") return AccountList(accounts, runtime, profile) { p -> pick { put("profile", p) }; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             if (models.isEmpty()) Text("${connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。", fontSize = 13.sp, color = C.warn, modifier = Modifier.padding(top = 8.dp))
             GroupLabel("模型")
-            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(choice?.maker, runtime, 18.dp) }) { Text(named(model) ?: "选一个模型", fontSize = 15.sp, color = C.ink) }
+            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, runtime, 18.dp) }) { Text(v.modelText, fontSize = 15.sp, color = C.ink) }
             GroupLabel("思考深度")
-            EffortChips(listOf<String?>(null) + efforts, effort.ifEmpty { null }) { effort = it ?: "" }
+            EffortChips(listOf<String?>(null) + efforts, effort) { e -> pick { put("effort", e) } }
             GroupLabel("账号")
             SettingRow(onClick = { list = "account" }) {
-                Text(profile?.let { p -> accounts.firstOrNull { it.id == p }?.name ?: p } ?: "自动分配", fontSize = 15.sp, color = C.ink)
-                Text(if (profile == null) "额度用完或登录失效时换一个" else "固定用它", fontSize = 12.sp, color = C.muted)
+                Text(v.accountText, fontSize = 15.sp, color = C.ink)
+                Text(v.accountNote, fontSize = 12.sp, color = C.muted)
             }
             Text("新开的会话会用新的设置；进行中的会话继续用开始时的。", fontSize = 12.sp, color = C.subtle, modifier = Modifier.padding(vertical = 12.dp))
         }
@@ -589,7 +592,7 @@ fun ConnectRunScreen(station: String, id: String) {
                     busy = true
                     scope.launch {
                         try {
-                            app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("bind") { put("model", model ?: ""); put("effort", effort); put("profile", profile) } })
+                            app.api(station).pickSave(pickOf)
                             app.toast = "已保存，新会话会用新的设置"; app.pop()
                         } catch (e: CoreException) { app.toast = "没能保存：${errorText(e)}" } finally { busy = false }
                     }
@@ -598,7 +601,7 @@ fun ConnectRunScreen(station: String, id: String) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = if (changed) C.bg else C.muted, strokeWidth = 1.5.dp)
-                Text(if (changed) "改成 ${named(model) ?: "默认模型"} · ${effort.ifEmpty { "默认深度" }}" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink)
+                Text(v.saveText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink)
             }
         }
     }

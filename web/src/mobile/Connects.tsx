@@ -3,12 +3,12 @@
 // Slack link, what is done to it less often under "…"); how it runs, picked on a page of its own; a new one, in steps.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useConnects, useOverview, useStationCall, useStations, type Connect, type ConnectItem, type ConnectMode, type MadeSlackApp, type ModelOption, type RunnableProfile, type RuntimeKind, type SlackAppSettings, type SlackIdentity } from "../api.ts";
+import { stationApi, useConnects, useOverview, useStationCall, useStations, type Connect, type ConnectItem, type ConnectMode, type MadeSlackApp, type ModelOption, type RuntimeKind, type SlackAppSettings, type SlackIdentity } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { MODE, RUNTIME_LABEL } from "../format.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, More, Plus } from "../icons.tsx";
-import { modelName, optionOf } from "../ModelTriple.tsx";
+import { usePick } from "../pick.ts";
 import { consequences } from "../pages/Connect.tsx";
 import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
 import { useSlackTokens, type TokenCheck } from "../slack.tsx";
@@ -439,29 +439,28 @@ function TokenFields({ value, onChange, masked, install, check }: { value: Token
 /** The model a connect runs, how hard it thinks and who runs it: picked like an agent's (./History.tsx), saved for new sessions. */
 export function ConnectRunScreen() {
   const app = useApp();
-  const api = useApi();
   const station = useStation();
   const { item } = useItem();
-  const view = useStations(station.address.split("/")[0]!).value?.find((s) => s.station === station.address);
+  const pick = usePick(station.address, `connect:${item?.connect.id ?? ""}`);
+  const v = pick.view;
+  const { set: pickSet } = pick;
+  useEffect(() => { if (item) pickSet({ open: true }); }, [item?.connect.id, pickSet]);
   const [list, setList] = useState<"model" | "account" | null>(null);
-  const [draft, setDraft] = useState<{ model: string | null; effort: string; profile: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const title = list === "model" ? "选模型" : list === "account" ? "选账号" : "换模型";
   const bar = <NavBar back={list ? "换模型" : "返回"} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!item) return <div className={pagesCss.mScreen}>{bar}<Loading text="正在读取连接…" /></div>;
+  if (!item || !v) return <div className={pagesCss.mScreen}>{bar}<Loading text="正在读取连接…" /></div>;
   const { connect } = item;
   const runtime = connect.bind.runtime;
-  const models = (view?.models ?? []).filter((m) => m.runtimes.includes(runtime));
-  const model = draft ? draft.model : connect.bind.model ?? null;
-  const effort = draft ? draft.effort : connect.bind.effort ?? "";
-  const profile = draft ? draft.profile : connect.bind.profile ?? null;
-  const set = (next: Partial<{ model: string | null; effort: string; profile: string | null }>) => setDraft({ model, effort, profile, ...next });
-  const choice = optionOf(models, model);
-  const named = (m: string | null) => (m === null ? null : m === connect.bind.model ? connect.modelName ?? m : modelName(models, m));
-  const accounts: RunnableProfile[] = choice?.accounts[runtime] ?? [];
-  const efforts = choice?.efforts[runtime] ?? [];
-  const changed = (model !== (connect.bind.model ?? null) && (!choice || choice !== optionOf(models, connect.bind.model))) || effort !== (connect.bind.effort ?? "") || profile !== (connect.bind.profile ?? null);
-  if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={models} runtime={runtime} picked={model} onPick={(m) => { set({ model: m, profile: null }); setList(null); }} /></div>;
+  const models = v.options;
+  const model = v.draft.model ?? null;
+  const effort = v.draft.effort ?? "";
+  const profile = v.draft.profile ?? null;
+  const accounts = v.accounts;
+  const efforts = v.efforts;
+  const changed = v.changed;
+  const set = pick.set;
+  if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={models} runtime={runtime} picked={model} onPick={(m) => { set({ model: m }); setList(null); }} /></div>;
   if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={accounts} runtime={runtime} picked={profile} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
   return (
     <div className={pagesCss.mScreen}>
@@ -469,15 +468,15 @@ export function ConnectRunScreen() {
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
         {models.length === 0 && <p className={settingsCss.mCallout}>{connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p>}
         <GroupLabel>模型</GroupLabel>
-        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={choice?.maker} runtime={runtime} size={18} />}><span className={historyCss.mSettingMain}>{named(model) ?? "选一个模型"}</span></SettingRow>
+        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={runtime} size={18} />}><span className={historyCss.mSettingMain}>{v.modelText}</span></SettingRow>
         <GroupLabel>思考深度</GroupLabel>
         <div className={historyCss.mChips}>
           {["", ...efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || "默认"}</button>)}
         </div>
         <GroupLabel>账号</GroupLabel>
         <SettingRow onClick={() => setList("account")}>
-          <span className={historyCss.mSettingMain}>{profile ? accounts.find((a) => a.id === profile)?.name ?? profile : "自动分配"}</span>
-          <small className={partsCss.mMuted}>{profile ? "固定用它" : "额度用完或登录失效时换一个"}</small>
+          <span className={historyCss.mSettingMain}>{v.accountText}</span>
+          <small className={partsCss.mMuted}>{v.accountNote}</small>
         </SettingRow>
         <p className={`${partsCss.mSmall} ${partsCss.mSubtle} ${historyCss.mEffortNote}`}>新开的会话会用新的设置；进行中的会话继续用开始时的。</p>
       </div>
@@ -485,9 +484,9 @@ export function ConnectRunScreen() {
         onClick={() => {
           if (!changed) return app.pop();
           setBusy(true);
-          api.putConnect(connect.id, { bind: { model: model ?? "", effort, profile } }).then(() => { app.toast("已保存，新会话会用新的设置"); app.pop(); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false));
+          pick.save().then(() => { app.toast("已保存，新会话会用新的设置"); app.pop(); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false));
         }}>
-        {busy && <Spinner size={14} />}{changed ? `改成 ${named(model) ?? "默认模型"} · ${effort || "默认深度"}` : "不变"}
+        {busy && <Spinner size={14} />}{v.saveText}
       </button>
     </div>
   );

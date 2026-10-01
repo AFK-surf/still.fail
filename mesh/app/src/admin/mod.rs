@@ -154,7 +154,7 @@ pub struct AdminDeps {
     pub quota: Option<QuotaFn>,
     /// How a profile is checked; tests replace it so no real CLI runs.
     pub check_profile: CheckFn,
-    /// The models a ChatGPT subscription runs in Codex (its app-server's list); its sign-in check does not say.
+    /// Codex model ids and reasoning capabilities, as each account's app-server reports them.
     pub codex_models: Option<ModelsFn>,
     /// Slack's app API and Web API as the pages need them; defaults to Slack itself with the configuration tokens in
     /// the config.
