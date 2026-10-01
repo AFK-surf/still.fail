@@ -23,7 +23,7 @@ export const betaTag = style({
   fontSize: "10px", fontWeight: "500", lineHeight: "16px",
 });
 /** The 测试版 switch, with its name before it. */
-export const channel = style({ display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "center", cursor: "pointer", whiteSpace: "nowrap" });
+export const channel = style({ selectors: { [`${rows} &`]: { alignSelf: "flex-start" } }, display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "center", cursor: "pointer", whiteSpace: "nowrap" });
 
 /** A single overview line; version numbers and settings live in the station detail. */
 export const summary = style({ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px", fontSize: vars.textSm, color: vars.muted });

@@ -25,7 +25,7 @@ export function Versions({ station, updates, manager, beta = false, rows = false
       {updates.map((v) => <Item key={v.id} v={v} manager={manager} busy={batch || (update.busy && update.args?.[0] === v.id)} onUpdate={() => void update.run(v.id)} />)}
       {beta && manager && on != null && (
         <label className={css.channel}>
-          测试版
+          {rows ? "接收 station 测试版" : "测试版"}
           <Switch small checked={on} disabled={batch || channel.busy} label="测试版" onChange={(next) => void channel.run(next ? "beta" : "stable")} />
         </label>
       )}
@@ -51,7 +51,7 @@ export function UpdateSummary({ station, updates, manager }: { station: string; 
   const api = stationApi(useStationCall(station));
   const update = useAction(() => api.updateAllSoftware<SoftwareVersion[]>());
   const busy = useDoing(["software.updateAll", "software.update"], { station });
-  const visible = (updates ?? []).filter((v) => v.installed && (v.newer || v.downgrade || v.state === "updating" || v.state === "failed"));
+  const visible = (updates ?? []).filter((v) => v.installed && ((v.updatable && (v.newer || v.downgrade)) || v.state === "updating" || v.state === "failed"));
   const updating = visible.some((v) => v.state === "updating");
   const failed = visible.some((v) => v.state === "failed");
   if (!visible.length && !busy && !update.error) return null;

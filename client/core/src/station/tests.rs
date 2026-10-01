@@ -1368,3 +1368,27 @@ fn an_existing_update_is_not_started_twice_by_a_batch() {
         assert_eq!(wire.count("POST", "/admin/api/updates"), 0);
     });
 }
+
+#[test]
+fn a_batch_waits_for_a_runtime_to_finish_before_starting_station() {
+    run(async {
+        let (_, _, wire, stations) = setup();
+        let items = json!([
+            {"id":"station", "installed":true, "updatable":true, "newer":true},
+            {"id":"claude", "installed":true, "updatable":true, "newer":true}
+        ]);
+        wire.answer("GET /admin/api/overview", 200, json!({"updates":items}));
+        wire.answer("POST /admin/api/updates", 200, json!([{"id":"claude","state":"updating"}]));
+        let op = crate::ops::request("software.updateAll", &json!({"station":ST})).unwrap().unwrap();
+        let finish = async {
+            while wire.count("POST", "/admin/api/updates") == 0 { wait(1).await; }
+            wait(10).await;
+            assert_eq!(wire.count("POST", "/admin/api/updates"), 1, "station cannot restart during a runtime update");
+            wire.answer("GET /admin/api/overview", 200, json!({"updates":[{"id":"claude","state":"idle"}]}));
+        };
+        let addr = remote();
+        let (result, ()) = futures::join!(stations.perform(&addr, &op), finish);
+        result.unwrap();
+        assert_eq!(wire.count("POST", "/admin/api/updates"), 2);
+    });
+}
