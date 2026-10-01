@@ -86,6 +86,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -147,8 +148,10 @@ fun HomeScreen(current: WorkspaceEntry) {
     // The lists run under both bars, which are frosted glass over them.
     val haze = remember { HazeState() }
     val density = LocalDensity.current
-    var topBar by remember { mutableIntStateOf(0) }
-    var bottomBar by remember { mutableIntStateOf(0) }
+    // Their heights kept with the page's state: coming back to the list, it is laid out with them at once, so a list
+    // left at its end is not first clamped short of it (with no room under the bars) and stays there.
+    var topBar by rememberSaveable { mutableIntStateOf(0) }
+    var bottomBar by rememberSaveable { mutableIntStateOf(0) }
     val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = bottomBar.toDp() + 8.dp) }
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
