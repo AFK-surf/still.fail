@@ -86,7 +86,8 @@ function wayOf(path: string): Way {
   return "side";
 }
 
-interface Page { key: string; location: Location }
+/** `way`: how the page came in, and so how it goes (a new chat become its chat still sinks back down). */
+interface Page { key: string; location: Location; way: Way }
 
 /** The workspace's pages, one route each; `routes` draws the one a location is. */
 export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (location: Location) => ReactNode; recent: () => ReactNode }) {
@@ -96,12 +97,12 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   const home = `/w/${entry.id}`;
   useInWorkspace(entry.id);
   // The pages as the browser's history has them, from the first one opened here to the one in view.
-  const [pages, setPages] = useState<Page[]>(() => [{ key: location.key, location }]);
+  const [pages, setPages] = useState<Page[]>(() => [{ key: location.key, location, way: wayOf(location.pathname) }]);
   const [moving, setMoving] = useState<{ from: Page; to: Page; forward: boolean } | null>(null);
   const top = pages.at(-1)!;
   useLayoutEffect(() => {
     if (location.key === top.location.key) return;
-    const page = { key: location.key, location };
+    const page = { key: location.key, location, way: wayOf(location.pathname) };
     const at = pages.findIndex((p) => p.location.key === location.key);
     let next: Page[];
     let forward = true;
@@ -114,7 +115,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     } else if (type === "REPLACE") {
       // The page becoming another in place (a new chat its chat) stays the same page: what is on it that both have (the
       // composer, with what is typed) is kept.
-      next = [...pages.slice(0, -1), { key: top.key, location }];
+      next = [...pages.slice(0, -1), { key: top.key, location, way: top.way }];
     } else {
       next = [...pages, page];
     }
@@ -211,7 +212,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
             const isTop = p.key === top.key;
             const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
             const role = !moving ? (isTop ? "top" : swipe !== null && p.key === below ? "peek" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
-            const way = moving ? wayOf((moving.forward ? moving.to : moving.from).location.pathname) : "side";
+            const way = moving ? (moving.forward ? moving.to : moving.from).way : "side";
             const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
             if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
             if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;

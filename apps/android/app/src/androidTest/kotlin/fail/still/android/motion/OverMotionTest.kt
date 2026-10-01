@@ -130,6 +130,38 @@ class OverMotionTest {
         back.end()
     }
 
+    /**
+     * A new chat rises from the bottom; become its chat, it sinks back down when tapped back, and when swiped back it
+     * goes down with the finger (both went out sideways, unlike how it came).
+     */
+    @Test
+    fun newChatInAndOut() {
+        val h = Harness(rule)
+        h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(Fixtures.talk))
+        h.launch(listOf(Screen.Home))
+        val rise = h.record("new-chat-in")
+        rise.frame { rule.runOnUiThread { h.app.push(Screen.NewChat) } }
+        rise.frames(28)
+        rise.end()
+        rule.runOnUiThread { h.app.made(chat) }
+        h.settle()
+        val sink = h.record("made-chat-out")
+        sink.frame { rule.runOnUiThread { h.app.pop() } }
+        sink.frames(28)
+        sink.end()
+        rule.runOnUiThread { h.app.push(Screen.NewChat) }
+        h.settle()
+        rule.runOnUiThread { h.app.made(chat) }
+        h.settle()
+        val d = rule.activity.onBackPressedDispatcher
+        val go = h.record("made-chat-swiped")
+        go.frame { rule.runOnUiThread { d.dispatchOnBackStarted(back(20f)) } }
+        for (i in 1..20) go.frame { rule.runOnUiThread { d.dispatchOnBackProgressed(back(20f + 27f * i)) } }
+        go.frame { rule.runOnUiThread { d.onBackPressed() } }
+        go.frames(24)
+        go.end()
+    }
+
     private fun Harness.sheet(draggable: Boolean, height: Float) {
         launch(listOf(Screen.Home))
         rule.runOnUiThread {

@@ -332,13 +332,14 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     fun strings(name: String): List<String> = prefs.getString(name, null)?.split('\u0000')?.filter { it.isNotEmpty() } ?: emptyList()
     fun setStrings(name: String, values: List<String>) = prefs.edit().putString(name, values.joinToString("\u0000")).apply()
 
-    fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat) madeChat = null; stack = stack + screen }
+    fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat || screen == madeChat) madeChat = null; stack = stack + screen }
     fun pop() { if (stack.size > 1) { sheet = null; menu = null; forward = false; stack = stack.dropLast(1) } }
     /** The top page gives way to another (a new chat becomes the chat it made). */
     /** From the latest chats on a wide screen (screens/Wide.kt): in place of the page open, or over the list. */
     fun open(screen: Screen) {
         sheet = null; menu = null; forward = true
-        if (screen == Screen.NewChat) madeChat = null
+        // A chat a new chat made, opened again from the list, is a page of its own (it slides, not rises).
+        if (screen == Screen.NewChat || screen == madeChat) madeChat = null
         stack = (if (stack.size > 1) stack.dropLast(1) else stack) + screen
     }
     fun replace(screen: Screen) { sheet = null; forward = true; stack = stack.dropLast(1) + screen }
@@ -604,7 +605,10 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             val z = app.stack.indexOfLast { app.pageOf(it) == app.pageOf(targetState) }.coerceAtLeast(0).toFloat()
             if (targetState is Screen.Annotate || initialState is Screen.Annotate) (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished)
                 .apply { targetContentZIndex = z }
-            else if (swiped) swipe(toLeft = initialState == Screen.Settings, z) else transition(initialState, targetState, app.forward, z)
+            else {
+                val rose = app.pageOf(initialState) == "new-chat"
+                if (swiped) swipe(toLeft = initialState == Screen.Settings, z, rose) else transition(initialState, targetState, app.forward, z, rose)
+            }
         },
         // A new chat and the chat it becomes are one page (ChatHost.kt): it stays, rather than slide in again.
         contentKey = { app.pageOf(it) },
@@ -682,12 +686,14 @@ private suspend fun seekAlong(from: Float, to: Float, ms: Float, easing: Easing,
 /**
  * Swiped back: the page goes right with the finger (linear in the seek, so it is where the finger is) and the one under
  * it comes along beside it, edge to edge, as a tapped back moves them. Settings came from the left (`toLeft`): they go
- * back that way, the list coming from the right.
+ * back that way, the list coming from the right. A new chat (`rose`, or the chat it became) rose from the bottom: it
+ * sinks back down with the finger over the page under it, as a tapped back takes it.
  */
-private fun swipe(toLeft: Boolean, z: Float): ContentTransform {
+private fun swipe(toLeft: Boolean, z: Float, rose: Boolean): ContentTransform {
     val linear = tween<IntOffset>(300, easing = LinearEasing)
     val way = if (toLeft) -1 else 1
-    return (slideInHorizontally(linear) { -way * it } togetherWith slideOutHorizontally(linear) { way * it })
+    return (if (rose) EnterTransition.None togetherWith slideOutVertically(linear) { it }
+        else slideInHorizontally(linear) { -way * it } togetherWith slideOutHorizontally(linear) { way * it })
         .apply { targetContentZIndex = z }
 }
 
@@ -696,12 +702,13 @@ private fun swipe(toLeft: Boolean, z: Float): ContentTransform {
  * the old goes out whole to the left (and back the other way), nothing fading. Settings (from the gear at the top left)
  * come from the left instead; a new chat rises from the bottom.
  */
-private fun transition(from: Screen, to: Screen, forward: Boolean, z: Float): ContentTransform {
+private fun transition(from: Screen, to: Screen, forward: Boolean, z: Float, rose: Boolean): ContentTransform {
     val time = 380
     val slide = tween<IntOffset>(300, easing = FastOutSlowInEasing)
     return when {
         forward && to == Screen.NewChat -> slideInVertically(tween(time, easing = Ease)) { it } togetherWith fadeOut(tween(time), 0.99f)
-        !forward && from == Screen.NewChat -> fadeIn(tween(1), 0.99f) togetherWith slideOutVertically(tween(time, easing = Ease)) { it }
+        // A new chat become its chat (`made`) is still the page that rose: it sinks back down.
+        !forward && rose -> fadeIn(tween(1), 0.99f) togetherWith slideOutVertically(tween(time, easing = Ease)) { it }
         // Settings are to the left of the list (the gear is at the list's left): they come and go that way.
         forward && to == Screen.Settings -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
         !forward && from == Screen.Settings -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
