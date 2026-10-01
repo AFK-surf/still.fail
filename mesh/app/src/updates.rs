@@ -191,6 +191,14 @@ struct How {
 }
 
 impl How {
+    fn pin_npm_version(&mut self, package: &str, version: &str) {
+        // Keep the destination and other install options when using the prefetched build.
+        if let Some(arg) = self.args.iter_mut().find(|arg| **arg == format!("{package}@latest")) {
+            *arg = format!("{package}@{version}");
+        }
+        self.args.push("--prefer-offline".into());
+    }
+
     fn new(program: impl Into<PathBuf>, args: &[&str]) -> How {
         How { program: program.into(), args: args.iter().map(|a| a.to_string()).collect() }
     }
@@ -586,7 +594,7 @@ impl Updates {
         if kind == Kind::Codex && npm {
             if let Some(version) = self.fetch_codex(&how.program).await {
                 // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
-                how.args = vec!["install".into(), "-g".into(), format!("{}@{version}", kind.package()), "--prefer-offline".into()];
+                how.pin_npm_version(kind.package(), &version);
             }
         }
         let installing = Arc::new(AtomicBool::new(false));
@@ -951,7 +959,13 @@ fn how_to_update(kind: Kind, found: &Found, env: &Env) -> Result<How, String> {
         Kind::Claude => Ok(How::new(&found.on_path, &["update"])),
         Kind::Codex if real.contains("/Caskroom/") => Ok(How::new(brew()?, &["upgrade", "--cask", "codex"])),
         Kind::Codex if real.contains("/Cellar/") => Ok(How::new(brew()?, &["upgrade", "codex"])),
-        Kind::Codex if real.contains("/node_modules/") => Ok(How::new(npm()?, &["install", "-g", &package])),
+        Kind::Codex if real.contains("/node_modules/") => {
+            // npm's shebang uses PATH's node; even the right npm can therefore choose another
+            // Node's global prefix. Explicitly target the installation the station actually uses.
+            let (prefix, _) = real.split_once("/lib/node_modules/")
+                .ok_or_else(|| format!("无法确定 {real} 的 npm 全局安装目录，要在那台机器上自己更新"))?;
+            Ok(How::new(npm()?, &["install", "-g", &package, "--prefix", prefix]))
+        },
         Kind::Codex => Err(format!("装在 {real}，不是 npm 或 Homebrew 装的，要在那台机器上自己更新")),
     }
 }
@@ -1241,13 +1255,17 @@ pub(crate) mod tests {
         assert_eq!(how_to_update(Kind::Claude, &found("/opt/homebrew/Caskroom/claude-code/2.1.284/claude"), &env).unwrap(), How::new(&brew, &["upgrade", "--cask", "claude-code"]));
         assert_eq!(how_to_update(Kind::Codex, &found("/opt/homebrew/Cellar/codex/0.46.0/bin/codex"), &env).unwrap(), How::new(&brew, &["upgrade", "codex"]));
         let by_npm = how_to_update(Kind::Codex, &found("/Users/a/.nvm/versions/node/v24/lib/node_modules/@openai/codex/bin/codex.js"), &env).unwrap();
-        assert_eq!(by_npm, How::new(&npm, &["install", "-g", "@openai/codex@latest"]));
+        assert_eq!(by_npm, How::new(&npm, &["install", "-g", "@openai/codex@latest", "--prefix", "/Users/a/.nvm/versions/node/v24"]));
         // Linked from a directory beside another Node's npm: its own Node's npm, not that one.
         let node = dir.path().join("node/v24.3.0");
         std::fs::create_dir_all(node.join("bin")).unwrap();
         std::fs::write(node.join("bin/npm"), "").unwrap();
         let linked = Found { on_path: dir.path().join("codex"), real: node.join("lib/node_modules/@openai/codex/bin/codex.js") };
-        assert_eq!(how_to_update(Kind::Codex, &linked, &env).unwrap(), How::new(node.join("bin/npm"), &["install", "-g", "@openai/codex@latest"]));
+        let mut how = how_to_update(Kind::Codex, &linked, &env).unwrap();
+        assert_eq!(how, How::new(node.join("bin/npm"), &["install", "-g", "@openai/codex@latest", "--prefix", &node.to_string_lossy()]));
+        how.pin_npm_version("@openai/codex", "0.159.3");
+        assert_eq!(how.args, ["install", "-g", "@openai/codex@0.159.3", "--prefix", &node.to_string_lossy(), "--prefer-offline"]);
+        assert!(how_to_update(Kind::Codex, &found("/project/node_modules/@openai/codex/bin/codex.js"), &env).unwrap_err().contains("全局安装目录"));
         assert!(how_to_update(Kind::Codex, &found("/usr/local/bin/codex"), &env).unwrap_err().contains("自己更新"));
         assert_eq!(how_to_install(Kind::Codex, &env).unwrap(), How::new(&npm, &["install", "-g", "@openai/codex@latest"]));
         let bare: Env = [("PATH".to_string(), "/nowhere".to_string())].into();
