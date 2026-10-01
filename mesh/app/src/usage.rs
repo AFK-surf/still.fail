@@ -67,10 +67,11 @@ const PRICES: &[(&str, Price)] = &[
 /// The very same table used by `cost`, for inspecting a station's calculation from the usage page.
 pub fn price_table() -> Value {
     serde_json::json!({
-        "note": "美元 / 100 万 token · 标准短上下文单价；费用 = 各类 token × 对应单价 ÷ 100 万；记录为 fast 的调用乘 2。未计长上下文和其他服务等级加价。价目核对于 2026-10-02",
+        "note": "美元 / 100 万 token · 各类 token × 单价后相加；Claude fast ×2。GPT 按标准短上下文估算，仅记录输入、缓存读取和输出。GPT 价目核对于 2026-10-02，Claude 沿用 2026-09 价目",
         "rows": PRICES.iter().map(|(model, p)| serde_json::json!({
             "model": model, "input": p.input, "cacheRead": p.cache_read,
-            "cacheWrite": p.input * 1.25, "cacheWriteLong": p.input * 2.0, "output": p.output,
+            "cacheWrite": model.starts_with("claude-").then_some(p.input * 1.25),
+            "cacheWriteLong": model.starts_with("claude-").then_some(p.input * 2.0), "output": p.output,
         })).collect::<Vec<_>>()
     })
 }

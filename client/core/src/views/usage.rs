@@ -204,7 +204,7 @@ fn price_tables(sources: &[Source]) -> Vec<Value> {
         } else { table.and_then(|t| t.get("note")).and_then(Value::as_str).unwrap_or("美元 / 100 万 token") };
         let rows: Vec<Value> = if s.online { table.and_then(|t| t.get("rows")).and_then(Value::as_array).into_iter().flatten().map(|r| {
             let rates: Vec<Value> = [("input", "输入"), ("cacheRead", "缓存读取"), ("cacheWrite", "缓存写入 / 5 分钟"), ("cacheWriteLong", "缓存写入 / 1 小时"), ("output", "输出")]
-                .into_iter().map(|(key, label)| json!({"label": label, "value": r.get(key).and_then(Value::as_f64).map(|n| format!("${n}")).unwrap_or_else(|| "—".into())})).collect();
+                .into_iter().filter_map(|(key, label)| r.get(key).and_then(Value::as_f64).map(|n| json!({"label": label, "value": format!("${n}")}))).collect();
             json!({"model": r.get("model").and_then(Value::as_str).unwrap_or("未知模型"), "rates": rates})
         }).collect() } else { vec![] };
         json!({"station": s.name, "note": note, "rows": rows})
