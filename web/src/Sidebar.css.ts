@@ -128,7 +128,9 @@ export const navSessionTitle = style({
   },
 });
 export const navSessionMeta = style({
-  display: "flex", alignItems: "center", gap: 6, fontSize: vars.textXs, color: vars.muted, whiteSpace: "nowrap", overflow: "hidden",
+  display: "flex", alignItems: "center", gap: 6, fontSize: vars.textXs, color: vars.muted, whiteSpace: "nowrap",
+  // Not clipped: the starter's ring (RowPicture.css.ts) stands 2.5px out of its 16px face, past this 18px line. The last
+  // message ellipsizes itself.
   // Every row is two lines high, message or not, so a row that gains its first message does not grow.
   height: 18, lineHeight: "18px",
   selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },

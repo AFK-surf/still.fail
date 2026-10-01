@@ -5,12 +5,14 @@ import { vars } from "./styles/tokens.css.ts";
 
 /** A person, round; who started the chat ringed in ink, a gap of the row's ground between. */
 export const face = style({
-  display: "inline-grid", flex: "none", borderRadius: "50%", overflow: "hidden", position: "relative",
+  // One cell the face's own size: an auto row would grow to the letter's line (18px in a 16px face), off its ring's centre.
+  display: "inline-grid", gridTemplate: "100% / 100%", flex: "none", borderRadius: "50%", overflow: "hidden", position: "relative",
   selectors: { "&[data-starter]": { overflow: "visible" } },
 });
 globalStyle(`${face} > *`, { width: "100% !important", height: "100% !important", borderRadius: "50% !important", display: "grid", placeItems: "center" });
 globalStyle(`${face}[data-starter]::after`, {
-  content: "\"\"", position: "absolute", inset: -2, borderRadius: "50%", pointerEvents: "none",
+  // 1px of ground showing between face and ring, the same all round: the ring's 1.5px from 1px to 2.5px out.
+  content: "\"\"", position: "absolute", inset: -2.5, borderRadius: "50%", pointerEvents: "none",
   boxShadow: `inset 0 0 0 1.5px ${vars.text}`,
 });
 globalStyle(`${face}[data-starter] > *`, { boxShadow: `0 0 0 1px var(--mark-around)` });
