@@ -976,6 +976,8 @@ data class MessageBy (
 /// it, and whether its agents have yet to take it.
 @Serializable
 data class ChatMessage (
+	/// The local outbox identity this message replaced, when sent from this core.
+	val outgoing: String? = null,
 	val seq: Long,
 	val thread: Long,
 	val ts: String,

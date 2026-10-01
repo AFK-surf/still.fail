@@ -474,9 +474,10 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // turn out of the list.
     motion.take(messages, atWork.map { it.key }.toSet())
     // A message sent from here stays the row it was in the outbox once the chat shows it: by the seq the station gave
-    // it (Outgoing.seq), which the outbox says before it lets the message go.
+    // it (Outgoing.seq), or the identity carried by the message if the UI skipped that acknowledgement.
     val sentAs = remember { HashMap<Long, String>() }
     view.outbox.forEach { o -> o.seq?.let { sentAs[it] = o.id } }
+    messages.forEach { m -> m.outgoing?.let { sentAs[m.seq] = it } }
     // The chat shows a window short of its end (the core's `newer`): the page after comes in as the reader nears the
     // list's end, which is not the chat's; what goes on at the chat's end (its activity) is not here, and nothing said
     // joins the list meanwhile (it waits, counted in the thread's `unread`).

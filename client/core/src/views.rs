@@ -12,7 +12,7 @@
 //! shown (store.rs, `tick`).
 
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::rc::{Rc, Weak};
 
 use serde_json::{Value, json};
@@ -50,6 +50,8 @@ pub struct Views {
     /// Messages sent from here that the chat does not show yet, per (station, thread), oldest first.
     outbox: RefCell<HashMap<(String, u64), Vec<Value>>>,
     sent: Cell<u64>,
+    /// Recent outbox-to-message identities, kept across emissions (the UI may skip the acknowledgement frame).
+    delivered: RefCell<VecDeque<((String, u64, u64), String)>>,
     /// Chats asked for here (`chat.create`) by the key the core gave them, until the station has made them and ever
     /// after (a page that opened one keeps its key).
     pending: RefCell<HashMap<String, Pending>>,
@@ -120,6 +122,7 @@ impl Views {
             views: RefCell::default(),
             outbox: RefCell::default(),
             sent: Cell::new(0),
+            delivered: RefCell::default(),
             pending: RefCell::default(),
             archiving: Default::default(),
             again: Rc::default(),
@@ -1079,6 +1082,16 @@ impl Views {
             .map(|(seq, text)| (*seq, text.as_str())).collect();
         let at = (station.to_string(), id);
         let outbox = {
+            let mut delivered = self.delivered.borrow_mut();
+            let mut remember = |seq: u64, m: &Value| {
+                if let Some(outgoing) = m.get("id").and_then(Value::as_str) {
+                    let key = (station.to_string(), id, seq);
+                    if !delivered.iter().any(|(k, _)| *k == key) {
+                        delivered.push_back((key, outgoing.to_string()));
+                        if delivered.len() > 512 { delivered.pop_front(); }
+                    }
+                }
+            };
             let mut all = self.outbox.borrow_mut();
             let list = all.entry(at.clone()).or_default();
             // Sent in order, they arrive in order: one found as entry S, those sent after it come after S.
@@ -1086,13 +1099,15 @@ impl Views {
             list.retain_mut(|m| {
                 if let Some(seq) = m.get("seq").and_then(Value::as_u64) {
                     past = past.max(seq);
-                    return !newest.is_some_and(|n| n >= seq);
+                    let arrived = newest.is_some_and(|n| n >= seq);
+                    if arrived { remember(seq, m); }
+                    return !arrived;
                 }
                 let after = m.get("after").and_then(Value::as_u64).unwrap_or(0).max(past);
                 m["after"] = json!(after);
                 let text = m.get("text").and_then(Value::as_str).unwrap_or("");
                 match mine.iter().find(|(seq, said)| *seq > after && *said == text) {
-                    Some((seq, _)) => { past = *seq; false }
+                    Some((seq, _)) => { past = *seq; remember(*seq, m); false }
                     None => true,
                 }
             });
@@ -1102,6 +1117,15 @@ impl Views {
             }
             shown
         };
+        // The identity must travel with the message in the same emission that removes its outbox row, and on
+        // later emissions too. Remembering only Outgoing.seq in a view loses it when that emission is coalesced.
+        for m in messages.iter_mut() {
+            if let Some(seq) = m.get("seq").and_then(Value::as_u64) {
+                if let Some((_, outgoing)) = self.delivered.borrow().iter().find(|((s, t, n), _)| s == station && *t == id && *n == seq) {
+                    m["outgoing"] = json!(outgoing);
+                }
+            }
+        }
         // Its people, and who started it, named as the workspace knows them.
         let mut people = thread.get("people").cloned().unwrap_or_else(|| json!([]));
         for p in people.as_array_mut().into_iter().flatten() {
@@ -2919,6 +2943,33 @@ mod tests {
     }
 
     #[test]
+    fn outgoing_identity_survives_a_coalesced_acknowledgement() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            let topic = chat_topic("ws/a", 7);
+            t.subscribe(1, topic.clone());
+            t.set(threads("ws/a"), json!([thread(7, &[], t.host.now_ms())]));
+            t.set(page_of("ws/a", 7), page(5, &["早"], Value::Null));
+            t.read(&mut ui, 1).await;
+            let views = t.router.views();
+            let id = views.outbox_add("ws/a", 7, json!({"text": "你好", "attachments": [], "quotes": []}));
+            t.read(&mut ui, 1).await;
+            // Both changes before the next emission: no UI ever sees Outgoing.seq.
+            views.outbox_sent("ws/a", 7, &id, 6);
+            t.store.update(&page_of("ws/a", 7), &mut |p| {
+                p["entries"].as_array_mut().unwrap().push(entry(6, "你好"));
+                p["last"] = json!(6);
+            });
+            t.read(&mut ui, 1).await;
+            let current = ui.value.as_ref().unwrap();
+            assert_eq!(current["outbox"], json!([]));
+            assert_eq!(current["messages"].as_array().unwrap().iter().find(|m| m["seq"] == 6).unwrap()["outgoing"], id);
+            assert!(current["messages"].as_array().unwrap().iter().find(|m| m["seq"] == 5).unwrap()["outgoing"].is_null());
+        });
+    }
+
+    #[test]
     fn a_sent_message_that_arrives_before_its_seq_leaves_the_outbox_with_it() {
         run(async {
             let t = setup();
@@ -2942,7 +2993,13 @@ mod tests {
             t.read(&mut ui, 1).await;
             let out = ui.value.clone().unwrap()["outbox"].clone();
             assert_eq!(out.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect::<Vec<_>>(), vec![second.as_str()]);
+            let messages = ui.value.as_ref().unwrap()["messages"].as_array().unwrap();
+            assert_eq!(messages.iter().find(|m| m["seq"] == 7).unwrap()["outgoing"], first);
+            assert!(messages.iter().find(|m| m["seq"] == 6).unwrap()["outgoing"].is_null());
             assert!(views.outbox_get("ws/a", 7, &first).is_none());
+            // A later view emission still carries the identity; an Android frame may have skipped the first.
+            let current = views.compute(&chat_topic("ws/a", 7)).unwrap().unwrap();
+            assert_eq!(current["messages"].as_array().unwrap().iter().find(|m| m["seq"] == 7).unwrap()["outgoing"], first);
             // The station's answer for the one already gone changes nothing.
             views.outbox_sent("ws/a", 7, &first, 7);
             t.read(&mut ui, 1).await;

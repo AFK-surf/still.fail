@@ -966,6 +966,8 @@ export interface MessageBy {
  * it, and whether its agents have yet to take it.
  */
 export interface ChatMessage {
+	/** The local outbox identity this message replaced, when sent from this core. */
+	outgoing?: string;
 	seq: number;
 	thread: number;
 	ts: string;

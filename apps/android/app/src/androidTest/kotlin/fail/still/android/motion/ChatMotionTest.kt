@@ -73,6 +73,32 @@ class ChatMotionTest {
         r.end()
     }
 
+    /** The stream can replace the outbox before the post response supplies its seq. */
+    @Test
+    fun sentMessageBeforeAck() = sentMessageBeforeAck(dark = false)
+
+    @Test
+    fun sentMessageBeforeAckDark() = sentMessageBeforeAck(dark = true)
+
+    private fun sentMessageBeforeAck(dark: Boolean) {
+        val h = Harness(rule)
+        val text = "那顺便加一个单元测试，覆盖 Safari 和 Chrome 两种情况"
+        h.fake.put(topic, Fixtures.chat(talk))
+        h.fake.answer = { name, _ ->
+            if (name == "chat.send") h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text))))
+            JsonNull
+        }
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))), dark = dark)
+        h.type(text)
+        h.keyboard()
+        val r = h.record(if (dark) "sent-before-ack-dark" else "sent-before-ack")
+        r.frame { h.send() }
+        r.frames(2)
+        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true).copy(outgoing = "out-1")))
+        r.frames(55)
+        r.end()
+    }
+
     /** Sent in a chat, written over several lines (one wrapping): each line from where it was typed to its place in the bubble. */
     @Test
     fun sentManyLines() {

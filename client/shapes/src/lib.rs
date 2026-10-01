@@ -367,6 +367,8 @@ pub struct Message {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
+    /// The local outbox identity this message replaced, when sent from this core.
+    pub outgoing: Option<String>,
     #[typeshare(serialized_as = "I54")]
     pub seq: i64,
     #[typeshare(serialized_as = "I54")]
