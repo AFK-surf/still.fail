@@ -392,7 +392,7 @@ impl Polls {
         };
         let (Some(stations), Some(store)) = (self.stations.upgrade(), self.store.upgrade()) else { return f64::INFINITY };
         let result = match StationAddr::parse(station) {
-            Ok(addr) => stations.request(&addr, "GET", &path, None).await,
+            Ok(addr) => stations.get(&addr, &path).await,
             Err(error) => Err(error),
         };
         let every = match &result {

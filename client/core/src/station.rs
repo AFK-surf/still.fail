@@ -41,6 +41,7 @@ use crate::host::Host;
 use crate::kept::{Kept, Log};
 use crate::mesh::{CredentialSource, Link, LinkNet, Mesh, RequestHead};
 use crate::protocol::Topic;
+use crate::ops::{Effect, Request};
 use crate::status::{Place, StatusOf, Waiting, station_what};
 use crate::store::{Source, Store};
 use crate::trace::{Kind, Span, SpanContext, Tracer, route};
@@ -509,23 +510,6 @@ pub fn encode(text: &str) -> String {
     out
 }
 
-fn decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Some(b) = std::str::from_utf8(&bytes[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
-                out.push(b);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
 
 /// A station's non-2xx answer as an error.
 fn http_error(status: u16, data: &Value) -> CoreError {
@@ -763,14 +747,25 @@ impl Stations {
         self.workspaces.of_station(station)
     }
 
-    /// One JSON call to the admin API (path without the `/admin/api` prefix); a write answers once the live topics
-    /// it changes are current.
-    pub async fn request(&self, station: &StationAddr, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
-        let value = self.json(station, method, path, body).await?;
-        if !method.eq_ignore_ascii_case("GET") {
-            self.after_write(station, path, &value).await;
+    /// A JSON read of the admin API; writes use `perform` with an explicit update policy.
+    pub async fn get(&self, station: &StationAddr, path: &str) -> Result<Value> {
+        self.json(station, "GET", path, None).await
+    }
+
+    /// An operation and its compatibility fallback both carry their own effects. The result is returned only once
+    /// the topics changed by the successful request are current.
+    pub async fn perform(&self, station: &StationAddr, op: &Request) -> Result<Value> {
+        let mut current = op;
+        loop {
+            match self.json(station, current.method, &current.path, current.body.clone()).await {
+                Err(error) if error.status == Some(404) && current.fallback.is_some() => current = current.fallback.as_deref().unwrap(),
+                Err(error) => return Err(error),
+                Ok(value) => {
+                    self.after_write(station, &current.effect, &value).await;
+                    return Ok(value);
+                }
+            }
         }
-        Ok(value)
     }
 
     async fn json(&self, station: &StationAddr, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
@@ -1008,14 +1003,13 @@ impl Stations {
     /// Brings the topics a successful write changed up to date before the write answers, so a page that moves on
     /// right away finds what it wrote: from the answer where it says (an overview, a thread, a read position),
     /// else by reading them again. The station's events would bring the same a moment later.
-    async fn after_write(&self, station: &StationAddr, path: &str, answer: &Value) {
+    async fn after_write(&self, station: &StationAddr, effect: &Effect, answer: &Value) {
         let name = station.to_string();
-        let path = path.split('?').next().unwrap_or("");
-        let parts: Vec<String> = path.split('/').filter(|p| !p.is_empty()).map(decode).collect();
+        if *effect == Effect::None { return; }
         let mut touched = Vec::new();
-        match parts.first().map(String::as_str) {
-            Some("sessions") => {
-                if let Some(key) = parts.get(1) {
+        match effect {
+            Effect::Session(key) => {
+                if let Some(key) = key {
                     touched.push(Topic::Session { station: name.clone(), key: key.clone() });
                 }
                 touched.push(Topic::Sessions { station: name.clone() });
@@ -1029,7 +1023,7 @@ impl Stations {
                     self.put_thread(&name, thread);
                 }
             }
-            Some("threads") => {
+            Effect::Thread { archived } => {
                 if answer.get("surface").is_some() {
                     self.put_thread(&name, answer);
                     // A new chat, or an agent more in one: the sidebar's rows change.
@@ -1037,40 +1031,35 @@ impl Stations {
                 } else if let (Some(thread), Some(n)) = (answer.get("thread").and_then(Value::as_u64), answer.get("n").and_then(Value::as_u64)) {
                     self.put_read(&name, thread, n);
                 }
-                if let (Some(id), Some("messages")) = (parts.get(1).and_then(|id| id.parse().ok()), parts.get(2).map(String::as_str)) {
-                    touched.push(Topic::Thread { station: name.clone(), thread: id });
-                }
                 // Into the archive or back: out of one list and into the other.
-                if parts.get(2).map(String::as_str) == Some("archive") {
+                if *archived {
                     touched.retain(|t| !matches!(t, Topic::ChatRows { .. }));
                     touched.push(Topic::ChatRows { station: name.clone() });
                     touched.push(Topic::ArchivedRows { station: name.clone() });
                 }
             }
-            Some("connects") => {
+            Effect::Connect(connect) => {
                 touched.push(Topic::Overview { station: name.clone() });
                 touched.push(Topic::Sessions { station: name.clone() });
-                if let Some(connect) = parts.get(1) {
+                if let Some(connect) = connect {
                     touched.push(Topic::SlackApp { station: name.clone(), connect: connect.clone() });
                 }
             }
-            Some("profiles") => touched.push(Topic::Overview { station: name.clone() }),
+            Effect::Overview => touched.push(Topic::Overview { station: name.clone() }),
             // Cleaned up or measured again: the footprint page, and the overview's line of it.
-            Some("footprint") => {
+            Effect::Footprint => {
                 touched.push(Topic::Footprint { station: name.clone() });
                 touched.push(Topic::Overview { station: name.clone() });
             }
-            // The station's software: updated, checked, or put on another channel (its versions are the overview's).
-            Some("updates") => touched.push(Topic::Overview { station: name.clone() }),
             // The workspace's Slack settings (its app configuration token): every connect's app reads through them.
-            Some("slack") => {
+            Effect::Slack => {
                 touched.push(Topic::Overview { station: name.clone() });
                 touched.extend(self.live_topics(&name, |t| matches!(t, Topic::SlackApp { .. })));
             }
             // A job stopped: it answers the job as it is now.
-            Some("jobs") if answer.get("id").is_some() && answer.get("state").is_some() => self.on_job(&name, answer),
+            Effect::Job if answer.get("id").is_some() && answer.get("state").is_some() => self.on_job(&name, answer),
             // Who the viewer is on Slack: it answers the overview, and changes which rows are theirs.
-            Some("me") => {
+            Effect::Identity => {
                 touched.push(Topic::Overview { station: name.clone() });
                 touched.push(Topic::ChatRows { station: name.clone() });
             }
@@ -3059,8 +3048,6 @@ mod tests {
     #[test]
     fn encodes_like_the_web() {
         assert_eq!(encode("a b/ç!"), "a%20b%2F%C3%A7!");
-        assert_eq!(decode("a%20b%2F%C3%A7!"), "a b/ç!");
-        assert_eq!(decode("100%"), "100%");
     }
 
     #[test]
@@ -3070,13 +3057,13 @@ mod tests {
             wire.answer("GET /admin/api/overview", 200, json!({"connects": []}));
             wire.answer("POST /admin/api/sessions/k/stop", 403, json!({"error": "没有权限"}));
             wire.answer("GET /admin/api/host", 500, json!("oops"));
-            assert_eq!(stations.request(&remote(), "GET", "/overview", None).await.unwrap(), json!({"connects": []}));
-            let e = stations.request(&remote(), "POST", "/sessions/k/stop", Some(json!({}))).await.unwrap_err();
+            assert_eq!(stations.get(&remote(), "/overview").await.unwrap(), json!({"connects": []}));
+            let e = stations.perform(&remote(), &crate::ops::request("session.stop", &json!({"station": ST, "key":"k"})).unwrap().unwrap()).await.unwrap_err();
             assert_eq!((e.code.as_str(), e.message.as_str(), e.status), ("http_403", "没有权限", Some(403)));
-            let e = stations.request(&remote(), "GET", "/host", None).await.unwrap_err();
+            let e = stations.get(&remote(), "/host").await.unwrap_err();
             assert_eq!((e.code.as_str(), e.message.as_str(), e.status), ("http_500", "请求失败（500）", Some(500)));
-            // The body goes as JSON.
-            assert_eq!(wire.calls.borrow()[1].3, b"{}".to_vec());
+            // A bodyless named operation stays bodyless.
+            assert!(wire.calls.borrow()[1].3.is_empty());
         });
     }
 
@@ -3164,7 +3151,7 @@ mod tests {
             assert!(sink.get(&session("k 1")).is_some());
             let before = |p: &str| wire.count("GET", p);
             let (s, k, o, other) = (before("/admin/api/sessions"), before("/admin/api/sessions/k%201"), before("/admin/api/overview"), before("/admin/api/sessions/other"));
-            stations.request(&remote(), "POST", "/sessions/k%201/stop", None).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("session.stop", &json!({"station": ST, "key":"k 1"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/sessions"), s + 1);
             assert_eq!(wire.count("GET", "/admin/api/sessions/k%201"), k + 1);
             assert_eq!(wire.count("GET", "/admin/api/sessions/other"), other);
@@ -3172,24 +3159,24 @@ mod tests {
             // A profile edit answers the overview: that is the topic's value, nothing is read again.
             let edited = json!({"viewer": {}, "connects": [], "profiles": [{"id": "p"}]});
             wire.answer("PUT /admin/api/profiles/p", 200, edited.clone());
-            stations.request(&remote(), "PUT", "/profiles/p", Some(json!({}))).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("profile.put", &json!({"station": ST, "id":"p", "input":{}})).unwrap().unwrap()).await.unwrap();
             assert_eq!(sink.get(&overview()), Some(edited));
             assert_eq!(wire.count("GET", "/admin/api/overview"), o);
-            stations.request(&remote(), "POST", "/profiles/p/check", None).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("profile.check", &json!({"station": ST, "id":"p"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
             // Put on another update channel: its versions (the overview's) read again.
             wire.answer("POST /admin/api/updates/channel", 200, json!([]));
-            stations.request(&remote(), "POST", "/updates/channel", Some(json!({"channel": "beta"}))).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("software.channel", &json!({"station": ST, "channel":"beta"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/overview"), o + 2);
             // Another chat on a session answers its thread, which goes into the lists without a request.
             let reads = wire.calls.borrow().len();
             wire.answer("POST /admin/api/threads", 200, thread_view(9, &["k 1"], 0, 0, 0));
-            stations.request(&remote(), "POST", "/threads", Some(json!({"session": "k 1"}))).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("chat.forSession", &json!({"station": ST, "session":"k 1"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(sink.get(&session("k 1")).unwrap()["threads"][0]["id"], 9);
             assert_eq!(sink.get(&threads()).unwrap()[0]["id"], 9);
             assert_eq!(wire.calls.borrow().len(), reads + 1);
             // A read changes nothing.
-            stations.request(&remote(), "GET", "/slack/config-token", None).await.unwrap();
+            stations.get(&remote(), "/slack/config-token").await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/overview"), o + 2);
             // The workspace's app configuration token: every connect's app shown is read again, as it now reads.
             let app = Topic::SlackApp { station: ST.into(), connect: "ds".into() };
@@ -3197,7 +3184,7 @@ mod tests {
             stations.start(&app);
             host.settle().await;
             wire.answer("GET /admin/api/connects/ds/slack-app", 200, json!({"state": "ok"}));
-            stations.request(&remote(), "PUT", "/slack/config-token", Some(json!({"refreshToken": "x"}))).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("slack.addConfigToken", &json!({"station": ST, "refreshToken": "x"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(sink.get(&app).unwrap()["state"], "ok");
         });
     }
@@ -3217,7 +3204,7 @@ mod tests {
             // Stopped from a page: the answer is the job as it is now, in its chat and gone from the open ones, with
             // nothing read again.
             wire.answer("POST /admin/api/jobs/j1/stop", 200, job("j1", "stopped"));
-            stations.request(&remote(), "POST", "/jobs/j1/stop", None).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("job.stop", &json!({"station": ST, "id":"j1"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(sink.get(&session("a")).unwrap()["jobs"][0]["state"], "stopped");
             assert_eq!(sink.get(&open).unwrap(), json!([]));
             assert_eq!(wire.calls.borrow().len(), reads + 1);
@@ -3317,7 +3304,7 @@ mod tests {
             });
             host.settle().await;
             // Outside every trace: a trace of its own.
-            stations.request(&remote(), "GET", "/overview", None).await.unwrap();
+            stations.get(&remote(), "/overview").await.unwrap();
             let trace = hex::encode(root.context().trace);
             let (paths, parents) = (wire.paths(), wire.traceparents.borrow().clone());
             // (With no list of threads to say where reading stopped, the chat asks for its own summary.)
@@ -3762,12 +3749,12 @@ mod tests {
             // A new chat is written: the rows are current when the write answers.
             wire.answer("GET /admin/api/chats", 200, json!([row("9", Some(9), 0, false)]));
             wire.answer("POST /admin/api/threads", 200, thread_view(9, &["k"], 0, 0, 0));
-            stations.request(&remote(), "POST", "/threads", Some(json!({"session": "k"}))).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("chat.forSession", &json!({"station": ST, "session":"k"})).unwrap().unwrap()).await.unwrap();
             assert_eq!(ids(&sink), vec!["9"]);
             // So is saying who one is on Slack.
             wire.answer("PUT /admin/api/me/slack/U7", 200, json!({"viewer": {}, "connects": [], "profiles": [], "slackUsers": ["U7"]}));
             let before = wire.count("GET", "/admin/api/chats");
-            stations.request(&remote(), "PUT", "/me/slack/U7", None).await.unwrap();
+            stations.perform(&remote(), &crate::ops::request("slack.identity", &json!({"station": ST, "user":"U7", "bound":true})).unwrap().unwrap()).await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/chats"), before + 1);
         });
     }

@@ -1,6 +1,6 @@
 //! What the UIs can have done on a station or on still.fail cloud, each by its name (`session.stop`, `profile.put`,
 //! `workspace.rename`…). A UI never makes a request itself: it names what it wants done and with what, and the core
-//! knows the request that does it and what it changes (station.rs `after_write`, core.rs for still.fail cloud), so every
+//! knows the request that does it and what it changes (the effects declared beside each operation), so every
 //! topic that shows it is current when the call answers. See docs/client-core.md, Calls.
 
 use serde_json::{Map, Value, json};
@@ -15,6 +15,20 @@ pub enum Target {
     Cloud(String),
 }
 
+/// How a successful station operation updates its live topics. Declared with the request, never inferred from a URL.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Effect {
+    None,
+    Session(Option<String>),
+    Thread { archived: bool },
+    Connect(Option<String>),
+    Overview,
+    Footprint,
+    Slack,
+    Job,
+    Identity,
+}
+
 /// The request an operation makes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Request {
@@ -23,7 +37,8 @@ pub struct Request {
     pub path: String,
     pub body: Option<Value>,
     /// Made instead when the first one is a 404: what a station from before the first one knew.
-    pub fallback: Option<(&'static str, String)>,
+    pub fallback: Option<Box<Request>>,
+    pub effect: Effect,
 }
 
 /// The request of the operation `name`, with its params; `None` when there is no such operation.
@@ -39,6 +54,9 @@ struct P<'a>(&'a Value);
 impl P<'_> {
     fn str(&self, name: &str) -> Result<String> {
         self.0.get(name).and_then(Value::as_str).map(str::to_string).ok_or_else(|| CoreError::invalid(format!("参数不对：缺少 {name}")))
+    }
+    fn word(&self, name: &str) -> Option<String> {
+        self.0.get(name).and_then(Value::as_str).map(str::to_string)
     }
     fn at(&self, name: &str) -> Result<String> {
         self.str(name).map(|s| encode(&s))
@@ -66,104 +84,105 @@ impl P<'_> {
 
 fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
     let p = P(params);
-    let op = |method: &'static str, path: Result<String>, body: Option<Value>| -> Result<Request> {
-        Ok(Request { target: Target::Station(p.str("station")?), method, path: path?, body, fallback: None })
+    let op = |method: &'static str, path: Result<String>, body: Option<Value>, effect: Effect| -> Result<Request> {
+        Ok(Request { target: Target::Station(p.str("station")?), method, path: path?, body, fallback: None, effect })
     };
     let r = match name {
         // ── sessions and chats ──
-        "session.stop" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/stop")), None),
-        "session.warm" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/warm")), None),
-        "session.evict" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/evict")), None),
-        "session.delete" => op("DELETE", p.at("key").map(|k| format!("/sessions/{k}")), None),
+        "session.stop" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/stop")), None, Effect::Session(p.word("key"))),
+        "session.warm" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/warm")), None, Effect::Session(p.word("key"))),
+        "session.evict" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/evict")), None, Effect::Session(p.word("key"))),
+        "session.delete" => op("DELETE", p.at("key").map(|k| format!("/sessions/{k}")), None, Effect::Session(p.word("key"))),
         // How it runs from its next turn on: any of profile, model, effort (null: the default).
-        "session.settings" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/settings")), Some(p.pick(&["profile", "model", "effort"]))),
+        "session.settings" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/settings")), Some(p.pick(&["profile", "model", "effort"])), Effect::Session(p.word("key"))),
         // A chat into the archive or back: its thread (with its session when it is that session's own), or an agent
         // with no chat yet. A station from before chats were archived by themselves archives its session instead.
         "chat.archive" => (|| {
             let method = if p.bool("archived") { "POST" } else { "DELETE" };
             let by_session = format!("/sessions/{}/archive", p.at("session")?);
             match p.0.get("thread").and_then(Value::as_u64) {
-                Some(thread) => op(method, Ok(format!("/threads/{thread}/archive")), None).map(|r| Request { fallback: Some((method, by_session)), ..r }),
-                None => op(method, Ok(by_session), None),
+                Some(thread) => op(method, Ok(format!("/threads/{thread}/archive")), None, Effect::Thread { archived: true }).and_then(|r| Ok(Request { fallback: Some(Box::new(op(method, Ok(by_session), None, Effect::Session(Some(p.str("session")?)))?)), ..r })),
+                None => op(method, Ok(by_session), None, Effect::Session(p.word("session"))),
             }
         })(),
         // A chat named by hand (an empty name: named by its first message again): its thread, or an agent with no chat yet.
         "chat.rename" => (|| match p.0.get("thread").and_then(Value::as_u64) {
-            Some(thread) => op("PUT", Ok(format!("/threads/{thread}/title")), Some(p.pick(&["title"]))),
-            None => op("POST", p.at("session").map(|k| format!("/sessions/{k}/title")), Some(p.pick(&["title"]))),
+            Some(thread) => op("PUT", Ok(format!("/threads/{thread}/title")), Some(p.pick(&["title"])), Effect::Thread { archived: false }),
+            None => op("POST", p.at("session").map(|k| format!("/sessions/{k}/title")), Some(p.pick(&["title"])), Effect::Session(p.word("session"))),
         })(),
         // A chat kept at the top of the viewer's list, or let go: by its item's id, its session's key.
-        "chat.pin" => op(if p.bool("pinned") { "PUT" } else { "DELETE" }, p.at("session").map(|k| format!("/sessions/{k}/pin")), None),
+        "chat.pin" => op(if p.bool("pinned") { "PUT" } else { "DELETE" }, p.at("session").map(|k| format!("/sessions/{k}/pin")), None, Effect::Session(p.word("session"))),
         // A new chat: its session and its thread, made before its first message (`chat.create` makes one behind the page).
-        "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort"]))),
-        "chats.archived" => op("GET", Ok("/chats?archived=1".into()), None),
+        "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort"])), Effect::Session(None)),
+        "chats.archived" => op("GET", Ok("/chats?archived=1".into()), None, Effect::None),
         // The chat of an agent that has none yet, bound to its session: answers the thread.
-        "chat.forSession" => op("POST", Ok("/threads".into()), Some(p.pick(&["session"]))),
+        "chat.forSession" => op("POST", Ok("/threads".into()), Some(p.pick(&["session"])), Effect::Thread { archived: false }),
         // What an inline visualization kept, by the session that sent its file and the file's path.
-        "widget.state" => op("GET", (|| Ok(format!("/sessions/{}/widget-state?path={}", p.at("key")?, p.at("path")?)))(), None),
-        "widget.setState" => op("PUT", p.at("key").map(|k| format!("/sessions/{k}/widget-state")), Some(p.pick(&["path", "state"]))),
+        "widget.state" => op("GET", (|| Ok(format!("/sessions/{}/widget-state?path={}", p.at("key")?, p.at("path")?)))(), None, Effect::None),
+        "widget.setState" => op("PUT", p.at("key").map(|k| format!("/sessions/{k}/widget-state")), Some(p.pick(&["path", "state"])), Effect::Session(p.word("key"))),
         // ── the machine's own sessions (Claude Code, Codex in a terminal) ──
-        "machineSessions.list" => op("GET", Ok("/machine-sessions".into()), None),
+        "machineSessions.list" => op("GET", Ok("/machine-sessions".into()), None, Effect::None),
         "machineSessions.read" => op(
             "GET",
             (|| Ok(format!("/machine-sessions/{}/{}?limit={}", p.at("runtime")?, p.at("id")?, p.0.get("limit").and_then(Value::as_u64).unwrap_or(200))))(),
             None,
+            Effect::None,
         ),
-        "machineSessions.continue" => op("POST", Ok("/machine-sessions".into()), Some(p.pick(&["runtime", "id"]))),
+        "machineSessions.continue" => op("POST", Ok("/machine-sessions".into()), Some(p.pick(&["runtime", "id"])), Effect::None),
         // ── connects ──
-        "connect.create" => op("POST", Ok("/connects".into()), p.value("input").map(Some).unwrap_or(None)),
-        "connect.put" => op("PUT", p.at("id").map(|id| format!("/connects/{id}")), Some(p.value("input").unwrap_or(json!({})))),
-        "connect.delete" => op("DELETE", p.at("id").map(|id| format!("/connects/{id}")), None),
-        "connect.reconnect" => op("POST", p.at("id").map(|id| format!("/connects/{id}/reconnect")), None),
+        "connect.create" => op("POST", Ok("/connects".into()), p.value("input").map(Some).unwrap_or(None), Effect::Connect(p.word("id"))),
+        "connect.put" => op("PUT", p.at("id").map(|id| format!("/connects/{id}")), Some(p.value("input").unwrap_or(json!({}))), Effect::Connect(p.word("id"))),
+        "connect.delete" => op("DELETE", p.at("id").map(|id| format!("/connects/{id}")), None, Effect::Connect(p.word("id"))),
+        "connect.reconnect" => op("POST", p.at("id").map(|id| format!("/connects/{id}/reconnect")), None, Effect::Connect(p.word("id"))),
         // A single-session connect's session: `session` null makes a new one (named `title`).
-        "connect.bindSession" => op("POST", p.at("connect").map(|c| format!("/connects/{c}/session")), Some(p.pick(&["session", "title"]))),
-        "connect.putSlackApp" => op("PUT", p.at("connect").map(|c| format!("/connects/{c}/slack-app")), Some(p.value("input").unwrap_or(json!({})))),
+        "connect.bindSession" => op("POST", p.at("connect").map(|c| format!("/connects/{c}/session")), Some(p.pick(&["session", "title"])), Effect::Connect(p.word("connect"))),
+        "connect.putSlackApp" => op("PUT", p.at("connect").map(|c| format!("/connects/{c}/slack-app")), Some(p.value("input").unwrap_or(json!({}))), Effect::Connect(p.word("connect"))),
         // ── Slack ──
-        "slack.verify" => op("POST", Ok("/slack/verify".into()), Some(p.pick(&["connect", "install", "appToken", "botToken"]))),
-        "slack.makeApp" => op("POST", Ok("/slack/apps".into()), Some(p.pick(&["team", "settings", "icon"]))),
-        "slack.dropApp" => op("DELETE", p.at("appId").map(|a| format!("/slack/apps/{a}")), None),
-        "slack.installed" => op("POST", Ok("/slack/installs".into()), Some(p.pick(&["code", "state"]))),
-        "slack.addConfigToken" => op("POST", Ok("/slack/config-tokens".into()), Some(p.pick(&["refreshToken"]))),
-        "slack.removeConfigToken" => op("DELETE", p.at("team").map(|t| format!("/slack/config-tokens/{t}")), None),
-        "slack.people" => op("GET", Ok("/slack/people".into()), None),
-        "slack.createAppUrl" => op("GET", p.at("name").map(|n| format!("/slack/create-app-url?name={n}")), None),
+        "slack.verify" => op("POST", Ok("/slack/verify".into()), Some(p.pick(&["connect", "install", "appToken", "botToken"])), Effect::Slack),
+        "slack.makeApp" => op("POST", Ok("/slack/apps".into()), Some(p.pick(&["team", "settings", "icon"])), Effect::Slack),
+        "slack.dropApp" => op("DELETE", p.at("appId").map(|a| format!("/slack/apps/{a}")), None, Effect::Slack),
+        "slack.installed" => op("POST", Ok("/slack/installs".into()), Some(p.pick(&["code", "state"])), Effect::Slack),
+        "slack.addConfigToken" => op("POST", Ok("/slack/config-tokens".into()), Some(p.pick(&["refreshToken"])), Effect::Slack),
+        "slack.removeConfigToken" => op("DELETE", p.at("team").map(|t| format!("/slack/config-tokens/{t}")), None, Effect::Slack),
+        "slack.people" => op("GET", Ok("/slack/people".into()), None, Effect::None),
+        "slack.createAppUrl" => op("GET", p.at("name").map(|n| format!("/slack/create-app-url?name={n}")), None, Effect::None),
         // "这是我" (bound) or "不是我" on a Slack user.
-        "slack.identity" => op(if p.bool("bound") { "PUT" } else { "DELETE" }, p.at("user").map(|u| format!("/me/slack/{u}")), None),
+        "slack.identity" => op(if p.bool("bound") { "PUT" } else { "DELETE" }, p.at("user").map(|u| format!("/me/slack/{u}")), None, Effect::Identity),
         // ── profiles and sign-ins ──
-        "profile.add" => op("POST", Ok("/profiles".into()), Some(p.pick(&["runtime", "access"]))),
-        "profile.useMachineLogin" => op("POST", Ok("/profiles/machine".into()), Some(p.pick(&["runtime"]))),
-        "profile.put" => op("PUT", p.at("id").map(|id| format!("/profiles/{id}")), Some(p.value("input").unwrap_or(json!({})))),
-        "profile.delete" => op("DELETE", p.at("id").map(|id| format!("/profiles/{id}")), None),
-        "profile.quota" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/quota")), None),
-        "profile.check" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/check")), None),
-        "profile.login" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/login")), None),
-        "profile.cancelLogin" => op("DELETE", p.at("id").map(|id| format!("/profiles/{id}/login")), None),
-        "profile.loginCode" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/login-code")), Some(p.pick(&["code"]))),
+        "profile.add" => op("POST", Ok("/profiles".into()), Some(p.pick(&["runtime", "access"])), Effect::Overview),
+        "profile.useMachineLogin" => op("POST", Ok("/profiles/machine".into()), Some(p.pick(&["runtime"])), Effect::Overview),
+        "profile.put" => op("PUT", p.at("id").map(|id| format!("/profiles/{id}")), Some(p.value("input").unwrap_or(json!({}))), Effect::Overview),
+        "profile.delete" => op("DELETE", p.at("id").map(|id| format!("/profiles/{id}")), None, Effect::Overview),
+        "profile.quota" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/quota")), None, Effect::Overview),
+        "profile.check" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/check")), None, Effect::Overview),
+        "profile.login" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/login")), None, Effect::Overview),
+        "profile.cancelLogin" => op("DELETE", p.at("id").map(|id| format!("/profiles/{id}/login")), None, Effect::Overview),
+        "profile.loginCode" => op("POST", p.at("id").map(|id| format!("/profiles/{id}/login-code")), Some(p.pick(&["code"])), Effect::Overview),
         // A subscription signed in before its profile exists: the station makes the profile when it succeeds.
-        "login.new" => op("POST", Ok("/logins".into()), Some(p.pick(&["runtime"]))),
-        "login.code" => op("POST", p.at("id").map(|id| format!("/logins/{id}/code")), Some(p.pick(&["code"]))),
-        "login.drop" => op("DELETE", p.at("id").map(|id| format!("/logins/{id}")), None),
+        "login.new" => op("POST", Ok("/logins".into()), Some(p.pick(&["runtime"])), Effect::None),
+        "login.code" => op("POST", p.at("id").map(|id| format!("/logins/{id}/code")), Some(p.pick(&["code"])), Effect::None),
+        "login.drop" => op("DELETE", p.at("id").map(|id| format!("/logins/{id}")), None, Effect::None),
         // ── background jobs and web services ──
-        "job.get" => op("GET", p.at("id").map(|id| format!("/jobs/{id}")), None),
-        "job.log" => op("GET", (|| Ok(format!("/jobs/{}/log?lines={}", p.at("id")?, p.u64("lines")?)))(), None),
-        "job.stop" => op("POST", p.at("id").map(|id| format!("/jobs/{id}/stop")), None),
+        "job.get" => op("GET", p.at("id").map(|id| format!("/jobs/{id}")), None, Effect::None),
+        "job.log" => op("GET", (|| Ok(format!("/jobs/{}/log?lines={}", p.at("id")?, p.u64("lines")?)))(), None, Effect::None),
+        "job.stop" => op("POST", p.at("id").map(|id| format!("/jobs/{id}/stop")), None, Effect::Job),
         // A chat's jobs that are over, taken off its record (its session is read again).
-        "job.clearEnded" => op("DELETE", p.at("session").map(|key| format!("/sessions/{key}/jobs")), None),
+        "job.clearEnded" => op("DELETE", p.at("session").map(|key| format!("/sessions/{key}/jobs")), None, Effect::Session(p.word("session"))),
         // ── the station itself ──
-        "memory.get" => op("GET", Ok("/memory".into()), None),
+        "memory.get" => op("GET", Ok("/memory".into()), None, Effect::None),
         // How much it takes (the `footprint` topic): measured again; what can be made again in chats' workspaces removed,
         // archived chats deleted, idle agents' processes ended; each for `keys` (the footprint page's choices say which).
-        "footprint.scan" => op("POST", Ok("/footprint/scan".into()), None),
-        "footprint.rebuild" => op("POST", Ok("/footprint/rebuild".into()), Some(p.pick(&["keys"]))),
-        "footprint.delete" => op("POST", Ok("/footprint/delete".into()), Some(p.pick(&["keys"]))),
-        "footprint.evict" => op("POST", Ok("/footprint/evict".into()), Some(p.pick(&["keys"]))),
-        "software.update" => op("POST", Ok("/updates".into()), Some(p.pick(&["id"]))),
-        "software.check" => op("POST", Ok("/updates/check".into()), None),
+        "footprint.scan" => op("POST", Ok("/footprint/scan".into()), None, Effect::Footprint),
+        "footprint.rebuild" => op("POST", Ok("/footprint/rebuild".into()), Some(p.pick(&["keys"])), Effect::Footprint),
+        "footprint.delete" => op("POST", Ok("/footprint/delete".into()), Some(p.pick(&["keys"])), Effect::Footprint),
+        "footprint.evict" => op("POST", Ok("/footprint/evict".into()), Some(p.pick(&["keys"])), Effect::Footprint),
+        "software.update" => op("POST", Ok("/updates".into()), Some(p.pick(&["id"])), Effect::Overview),
+        "software.check" => op("POST", Ok("/updates/check".into()), None, Effect::Overview),
         // The station's update channel: { channel: "stable" | "beta" }. Back to stable from a beta, the stable release
         // is then offered to go back to (`downgrade`), older or not.
-        "software.channel" => op("POST", Ok("/updates/channel".into()), Some(p.pick(&["channel"]))),
+        "software.channel" => op("POST", Ok("/updates/channel".into()), Some(p.pick(&["channel"])), Effect::Overview),
         // The station updating itself when a newer release of its channel is out: { on }.
-        "software.auto" => op("POST", Ok("/updates/auto".into()), Some(json!({ "on": p.bool("on") }))),
+        "software.auto" => op("POST", Ok("/updates/auto".into()), Some(json!({ "on": p.bool("on") })), Effect::Overview),
         _ => return None,
     };
     Some(r)
@@ -173,7 +192,7 @@ fn cloud_op(name: &str, params: &Value) -> Option<Result<Request>> {
     let p = P(params);
     let ws = || p.at("workspace").map(|w| format!("/v1/workspaces/{w}"));
     let op = |method: &'static str, path: Result<String>, body: Option<Value>| -> Result<Request> {
-        Ok(Request { target: Target::Cloud(p.str("account")?), method, path: path?, body, fallback: None })
+        Ok(Request { target: Target::Cloud(p.str("account")?), method, path: path?, body, fallback: None, effect: Effect::None })
     };
     let r = match name {
         // `invite_code`: for an account not let in yet (still.fail is invite-only).
@@ -253,7 +272,9 @@ mod tests {
     #[test]
     fn archiving_a_chat_falls_back_to_its_session() {
         let r = req("chat.archive", json!({ "station": "ws/st", "thread": 7, "session": "k", "archived": true }));
-        assert_eq!((r.method, r.path.as_str(), r.fallback), ("POST", "/threads/7/archive", Some(("POST", "/sessions/k/archive".to_string()))));
+        assert_eq!((r.method, r.path.as_str()), ("POST", "/threads/7/archive"));
+        let fallback = r.fallback.unwrap();
+        assert_eq!((fallback.method, fallback.path.as_str(), fallback.effect), ("POST", "/sessions/k/archive", Effect::Session(Some("k".into()))));
         let r = req("chat.archive", json!({ "station": "ws/st", "session": "k", "archived": false }));
         assert_eq!((r.method, r.path.as_str(), r.fallback), ("DELETE", "/sessions/k/archive", None));
     }

@@ -629,11 +629,13 @@ impl Router {
 fn check_profile(core: Weak<Inner>) -> crate::choose::Check {
     Rc::new(move |station: &str, profile: &str| {
         let Some(core) = core.upgrade() else { return };
-        let (station, path) = (station.to_string(), format!("/profiles/{}/check", encode(profile)));
+        let (station, profile) = (station.to_string(), profile.to_string());
         let run = core.clone();
         core.host.spawn(async move {
             if let Ok(addr) = StationAddr::parse(&station) {
-                let _ = run.stations.request(&addr, "POST", &path, None).await;
+                if let Some(Ok(op)) = crate::ops::request("profile.check", &json!({ "station": station, "id": profile })) {
+                    let _ = run.stations.perform(&addr, &op).await;
+                }
             }
         }.boxed_local());
     })
@@ -836,7 +838,7 @@ impl Inner {
                 }
                 Ok(Value::Null)
             }
-            Call::Op(op) => match op.target {
+            Call::Op(op) => match &op.target {
                 crate::ops::Target::Cloud(account) => {
                     let made = op.method == "POST" && op.path == "/v1/workspaces";
                     let result = self.cloud.request(&account, op.method, &op.path, op.body).await?;
@@ -854,11 +856,7 @@ impl Inner {
                     let addr = StationAddr::parse(&station)?;
                     let path = op.path.clone();
                     let machine = op.method == "GET" && op.path.starts_with("/machine-sessions");
-                    let mut result = match (self.stations.request(&addr, op.method, &op.path, op.body.clone()).await, op.fallback) {
-                        // A station from before the request knew another way.
-                        (Err(e), Some((method, path))) if e.status == Some(404) => self.stations.request(&addr, method, &path, op.body).await,
-                        (result, _) => result,
-                    };
+                    let mut result = self.stations.perform(&addr, &op).await;
                     // The machine's own sessions, each in a line (choose.rs).
                     if let (true, Ok(answer)) = (machine, result.as_mut()) {
                         let now = self.host.now_ms();
@@ -1182,7 +1180,10 @@ impl Inner {
         let Some((station, ask)) = self.views.pending_try(key) else { return };
         let (Some(core), key) = (self.me.upgrade(), key.to_string()) else { return };
         self.host.spawn(async move {
-            let made = async { core.stations.request(&StationAddr::parse(&station)?, "POST", "/sessions", Some(ask)).await }.await;
+            let made = async {
+                let op = crate::ops::Request { target: crate::ops::Target::Station(station.clone()), method: "POST", path: "/sessions".into(), body: Some(ask), fallback: None, effect: crate::ops::Effect::Session(None) };
+                core.stations.perform(&StationAddr::parse(&station)?, &op).await
+            }.await;
             let made = made.and_then(|answer| {
                 let session = answer.get("key").and_then(Value::as_str).map(str::to_string);
                 let thread = answer.get("thread").and_then(|t| t.get("id")).and_then(Value::as_u64);
@@ -1833,17 +1834,7 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
     }
 }
 
-/// A path segment, percent-encoded like `encodeURIComponent`.
-pub(crate) fn encode(segment: &str) -> String {
-    let mut out = String::new();
-    for byte in segment.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')' => out.push(byte as char),
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
-}
+pub(crate) use crate::station::encode;
 
 /// Where a preview socket's messages from its page go (`preview.socket.send`).
 type SocketInbox = futures::channel::mpsc::UnboundedSender<station::SocketFrame>;
