@@ -69,7 +69,7 @@ export function Net({ net, stacked = false }: { net: StationNet; stacked?: boole
           <span>{net.path}</span>
           {net.loss && <Figure f={net.loss} />}
         </span>
-        {net.rtt && <span>当前 <Figure f={net.rtt} /></span>}
+        {net.rtt && <span>当前延时 <Figure f={net.rtt} /></span>}
       </span>
       <span className={css.netRates}>
         <span>↑</span><b>{net.up}</b><span>{net.upTotal && `共 ${net.upTotal}`}</span>

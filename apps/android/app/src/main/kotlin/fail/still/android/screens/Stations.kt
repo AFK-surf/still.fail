@@ -216,7 +216,7 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
             }
             net.rtt?.let { rtt ->
                 Row {
-                    Text("当前 ", Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1)
+                    Text("当前延时 ", Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1)
                     Text(rtt.text, Modifier.alignByBaseline(), style = figure, color = tone(rtt), maxLines = 1)
                 }
             }
