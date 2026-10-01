@@ -393,6 +393,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // Agents' messages coming out of their activity's avatar (ChatMotion.kt), and a quoted message flashing.
     val reduced = fail.still.android.ui.reducedMotion()
     val motion = remember { ChatMotion(reduced) }
+    motion.ring = androidx.compose.animation.core.rememberInfiniteTransition(label = "ring")
+        .animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(tween(1100, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
     // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
     val lastBusy = remember { mutableStateOf<List<AgentAtWork>>(emptyList()) }
     // Only an agent that has taken a message and runs is at work (not one with messages waiting for it): until then
@@ -747,7 +749,7 @@ private fun Flyer(motion: ChatMotion, atWork: List<AgentAtWork>) {
         contentAlignment = Alignment.Center,
     ) {
         AgentAvatar(agent.maker, agent.runtime)
-        WorkRing(waiting = agent.wait != null, leaving = false)
+        WorkRing(waiting = agent.wait != null, leaving = false, shared = motion.ring)
     }
 }
 
@@ -1125,7 +1127,6 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
     // A message coming out of its avatar: the line folds to its avatar (what it does, 200ms --ease-out; faded by 160ms),
     // and the avatar is away while its copy flies (ChatMotion.kt).
     val folded = motion?.folded(agent.key) == true
-    val away = motion?.away(agent.key) == true
     val tail by animateFloatAsState(if (folded) 0f else 1f, tween(200, easing = Ease.Out), label = "tail")
     val tailFade by animateFloatAsState(if (folded) 0f else 1f, tween(160, easing = Ease.Out), label = "tail-fade")
     // Coming in, its room opens from nothing (web activityIn: grid rows 0fr → 1fr, 220ms --ease-out) as it fades in and grows.
@@ -1160,9 +1161,10 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         // The avatar where its message lands (the messages' 18dp), its ring 3dp round it.
-        Box(Modifier.size(24.dp).offset(x = (-3).dp).graphicsLayer { alpha = if (away) 0f else 1f }, contentAlignment = Alignment.Center) {
+        // Read as it is drawn: hidden and shown in the very frame its flying copy takes over and lets go.
+        Box(Modifier.size(24.dp).offset(x = (-3).dp).graphicsLayer { alpha = if (motion?.away(agent.key) == true) 0f else 1f }, contentAlignment = Alignment.Center) {
             Box(Modifier.onGloballyPositioned { motion?.activityAvatars?.set(agent.key, it) }) { AgentAvatar(agent.maker, agent.runtime) }
-            WorkRing(waiting = wait != null, leaving = leaving)
+            WorkRing(waiting = wait != null, leaving = leaving, shared = motion?.ring)
         }
       Row(
           Modifier.weight(1f, fill = false)
@@ -1190,11 +1192,14 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
 
 /** The ring round an agent at work: half of it in the accent, turning; waiting on work it started, a still, quiet one. */
 @Composable
-private fun WorkRing(waiting: Boolean, leaving: Boolean) {
+private fun WorkRing(waiting: Boolean, leaving: Boolean, shared: androidx.compose.runtime.State<Float>? = null) {
     val accent = chatInk().accent
     val line = C.line
+    // The chat's own turning (ChatMotion.ring), when there is one: the flying avatar's ring and its activity's turn as one,
+    // and do not jump as the one hands over to the other.
     val turning = androidx.compose.animation.core.rememberInfiniteTransition(label = "ring")
-    val angle by turning.animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(tween(1100, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
+    val own = turning.animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(tween(1100, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
+    val angle by shared ?: own
     val shown by animateFloatAsState(if (leaving) 0f else 1f, tween(160), label = "ring-out")
     androidx.compose.foundation.Canvas(Modifier.size(24.dp).alpha(shown)) {
         val w = 1.5.dp.toPx()

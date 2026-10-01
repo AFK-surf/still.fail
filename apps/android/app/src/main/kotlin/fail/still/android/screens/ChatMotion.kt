@@ -65,6 +65,8 @@ internal class ChatMotion(private val reduced: Boolean) {
     private val done = HashSet<Long>()
     /** Waiting messages: seq, agent, and since when (ms; the agent's activity folds from then). */
     private val queue = ArrayDeque<Triple<Long, String, Long>>()
+    /** The rings round the agents' avatars turning, one for the chat (Chat.kt WorkRing). */
+    var ring: androidx.compose.runtime.State<Float>? = null
     /** Where the flying avatar last let a message out (in the pane): where it drops on from to the same agent's next. */
     private var landed: Offset? = null
     /** Bumped when what waits changes without the current turn changing (all let out at once). */

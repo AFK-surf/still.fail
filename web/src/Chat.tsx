@@ -1518,6 +1518,11 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     el.classList.add(css.avatarFlying);
     Object.assign(el.style, { left: "0", top: "0", width: `${avatar.offsetWidth}px`, height: `${avatar.offsetHeight}px` });
     pane.append(el);
+    // Its ring turning as the real one does (the copy's would start over): they hand over to each other unmoved.
+    const ring = (n: Element) => n.getAnimations({ subtree: true }).find((x) => (x.effect as KeyframeEffect | null)?.pseudoElement === "::after");
+    const turning = ring(avatar);
+    const copied = ring(el);
+    if (turning && copied) copied.currentTime = turning.currentTime;
     // Squashed and stretched (sx, sy) from its foot; swelling (s) from its middle.
     const at = { ...home(avatar), s: 1, sx: 1, sy: 1 };
     const h = avatar.offsetHeight;
