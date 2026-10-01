@@ -40,6 +40,39 @@ export const mEdge = style({
   },
 });
 export const mOverlay = style({ position: "fixed", inset: "0", zIndex: "50" });
+/**
+ * WIDE (app.tsx): the button for the latest chats, at the screen's bottom left as high as the composer is (ChatHost.css.ts:
+ * 10 from the foot, 52 tall on one line), frosted as it is.
+ */
+export const mRecentButton = style({
+  position: "fixed", left: "10px", bottom: "calc(10px + var(--m-foot))", zIndex: "46", display: "grid", placeItems: "center",
+  width: "52px", height: "52px", padding: "0", borderRadius: "50%", color: "var(--m-ink) !important",
+  boxShadow: "0 1px 3px rgb(0 0 0 / .04), 0 4px 16px rgb(0 0 0 / .08)", cursor: "pointer",
+  transition: "background 160ms",
+  selectors: { "&[data-open]": { background: "var(--m-ink)", color: "var(--m-bg) !important" } },
+});
+/** The latest chats over the page, not dimming it: a press anywhere outside them puts them away. */
+export const mRecentLayer = style({
+  position: "fixed", inset: "0", zIndex: "45", pointerEvents: "none",
+  selectors: { "&[data-open]": { pointerEvents: "auto" } },
+});
+export const mRecentCatch = style({ position: "absolute", inset: "0" });
+export const mRecent = style({
+  position: "absolute", left: "10px", bottom: "calc(72px + var(--m-foot))", display: "flex", flexDirection: "column",
+  width: "min(340px, calc(100vw - 20px))", maxHeight: "min(560px, calc(100vh - 100px - var(--m-foot)))", overflow: "hidden",
+  borderRadius: "22px", background: "color-mix(in srgb, var(--m-surface) 88%, transparent)", WebkitBackdropFilter: "blur(24px)",
+  backdropFilter: "blur(24px)", boxShadow: "0 14px 44px rgb(0 0 0 / .2), 0 0 0 .5px rgb(0 0 0 / .06)",
+  transformOrigin: "26px calc(100% + 36px)", opacity: "0", transform: "scale(.6)",
+  transition: "opacity 160ms, transform 200ms var(--m-ease)",
+  selectors: {
+    [`${mRecentLayer}[data-open] &`]: { opacity: "1", transform: "none", transition: "opacity 180ms, transform 280ms var(--m-ease)" },
+  },
+  "@media": {
+    "(prefers-reduced-motion: reduce)": {
+      animation: "none !important", transition: "none !important",
+    },
+  },
+});
 export const mScrim = style({
   position: "absolute", inset: "0", background: "#000", opacity: "0", transition: "opacity 300ms",
   selectors: {
@@ -48,7 +81,7 @@ export const mScrim = style({
 });
 export const mSheet = style({
   position: "absolute", left: "0", right: "0", bottom: "0", display: "flex", flexDirection: "column",
-  boxSizing: "border-box", maxHeight: "94vh", maxWidth: "720px", marginInline: "auto", paddingBottom: "var(--m-foot)", borderRadius: "26px 26px 0 0",
+  boxSizing: "border-box", maxHeight: "94vh", maxWidth: "680px", marginInline: "auto", paddingBottom: "var(--m-foot)", borderRadius: "26px 26px 0 0",
   background: "color-mix(in srgb, var(--m-surface) 80%, transparent)", WebkitBackdropFilter: "blur(28px)",
   backdropFilter: "blur(28px)", boxShadow: "0 -6px 36px rgba(0, 0, 0, .18)", transform: "translateY(100%)",
   // Its height is moved from script (app.tsx SheetHost): on from where a finger lets go of it, at that speed.

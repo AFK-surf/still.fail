@@ -4,12 +4,18 @@
 // gear at the top left) come from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
 // link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed). What
 // lies over a page (a sheet, the menu, the reader) is closed by back first.
+//
+// Wider (WIDE: an opened foldable, a phone on its side), the pages keep a column with a little room at either side, and
+// a button at the bottom left of the screen, level with the composer, opens the latest chats over the page: another chat
+// from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
 import { afterBack, useBackClose } from "../backClose.ts";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
+import { Chats } from "../icons.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
 import { follower, type Follower } from "../motion.ts";
@@ -30,6 +36,10 @@ export interface MobileApp {
   /** Where a path of this workspace is: `/w/<id><path>`. */
   at: (path: string) => string;
   push: (path: string) => void;
+  /** From the list: pushed; from the latest chats (WIDE), in place of the page open. */
+  open: (path: string) => void;
+  /** The page in view's path (`/w/<id>…`, as the address has it): the latest chats mark its row. */
+  current: string;
   pop: () => void;
   /** The top page gives way to another (a new chat becomes the chat it made). */
   replace: (path: string) => void;
@@ -53,6 +63,20 @@ export function useApp(): MobileApp {
   return app;
 }
 
+/** Wider than a phone: the pages in a column, the latest chats from the bottom left (styles/root.css.ts has the same width). */
+export const WIDE = "(min-width: 680px)";
+
+function useWide(): boolean {
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE).matches);
+  useEffect(() => {
+    const query = window.matchMedia(WIDE);
+    const update = () => setWide(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return wide;
+}
+
 /** How a page comes in and goes: side by side, from the left (settings, from the gear at the top left), or rising (a new chat). */
 type Way = "side" | "left" | "rise";
 function wayOf(path: string): Way {
@@ -64,7 +88,7 @@ function wayOf(path: string): Way {
 interface Page { key: string; location: Location }
 
 /** The workspace's pages, one route each; `routes` draws the one a location is. */
-export function MobileShell({ entry, routes }: { entry: Entry; routes: (location: Location) => ReactNode }) {
+export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (location: Location) => ReactNode; recent: () => ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const type = useNavigationType();
@@ -83,6 +107,9 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
     if (type === "POP" && at >= 0) {
       next = pages.slice(0, at + 1);
       forward = false;
+    } else if (type === "REPLACE" && (location.state as { fresh?: boolean } | null)?.fresh) {
+      // Another chat from the latest chats: a page of its own in place of the one that was open.
+      next = [...pages.slice(0, -1), page];
     } else if (type === "REPLACE") {
       // The page becoming another in place (a new chat its chat) stays the same page: what is on it that both have (the
       // composer, with what is typed) is kept.
@@ -103,14 +130,29 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
   const [menu, setMenu] = useState<MenuSpec | null>(null);
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
   const [reader, setReader] = useState<ReaderSpec | null>(null);
+  const wide = useWide();
+  // The latest chats over the page (WIDE).
+  const [drawer, setDrawer] = useState(false);
+  useBackClose(drawer, () => setDrawer(false));
   // A move to another page leaves what lay over this one.
-  useEffect(() => { setSheet(null); setMenu(null); setReader(null); }, [location.key]);
+  useEffect(() => { setSheet(null); setMenu(null); setReader(null); setDrawer(false); }, [location.key]);
+  const isHome = (p: Page) => p.location.pathname.replace(/\/$/, "") === home;
 
   const app: MobileApp = {
     entry,
     at: (path) => `${home}${path}`,
     // Each after the back that a sheet or menu closed just before takes (../backClose.ts), or that back would undo it.
     push: (path) => afterBack(() => navigate(path)),
+    open: (path) => {
+      if (!drawer) return afterBack(() => navigate(path));
+      setDrawer(false);
+      if (path === top.location.pathname) return;
+      // In place of the page under them, once their own entry of the history is gone back off (its back is
+      // started a task after it closes, ../backClose.ts): or the page would take that entry, and back would come to the old one.
+      const go = () => afterBack(() => (isHome(top) ? navigate(path) : navigate(path, { replace: true, state: { fresh: true } })));
+      setTimeout(() => setTimeout(go));
+    },
+    current: top.location.pathname,
     // Back through the pages opened here; from the first one (opened by a link), to the list.
     pop: () => afterBack(() => (pages.length > 1 ? navigate(-1) : navigate(home, { replace: true }))),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
@@ -124,7 +166,7 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
 
   // With a finger, the page is swiped back from the screen's left edge: it follows the finger, the page under it shows,
   // and past a third of the way (or flung) it goes, from where the finger left it.
-  const home_ = top.location.pathname.replace(/\/$/, "") === home;
+  const home_ = isHome(top);
   const [swipe, setSwipe] = useState<number | null>(null);
   const swiping = useRef<{ x: number; at: number; dx: number } | null>(null);
   const from = useRef(0);
@@ -175,6 +217,15 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
         })}
         {/* Where a swipe back starts: a strip along the left edge that the browser leaves to it (a finger only). */}
         {!home_ && !moving && <div className={css.mEdge} {...swipeProps} />}
+        {/* The latest chats, from the screen's bottom left, level with the composer; over the page, rising from the button. */}
+        {wide && !home_ && <>
+          <button type="button" className={`${pagesCss.mFloating} ${css.mRecentButton}`} data-open={drawer || undefined}
+            onClick={() => setDrawer((open) => !open)} aria-label="最近的会话" aria-expanded={drawer}><Chats size={22} /></button>
+          <div className={css.mRecentLayer} data-open={drawer || undefined} inert={!drawer}>
+            <div className={css.mRecentCatch} onClick={() => setDrawer(false)} />
+            <div className={css.mRecent}>{drawer && recent()}</div>
+          </div>
+        </>}
         <SheetHost spec={sheet} close={() => setSheet(null)} />
         <ReaderHost spec={reader} close={() => setReader(null)} />
         <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
