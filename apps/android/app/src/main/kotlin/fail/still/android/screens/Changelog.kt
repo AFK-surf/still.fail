@@ -90,13 +90,15 @@ fun ChangelogScreen() {
 }
 
 /** One change: its lines, then where it is and whether this app has it (in the accent: an update would bring it). */
+/** The place and the note each stay on one line; when both don't fit, the note moves below whole. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun Change(item: ChangelogItem) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         item.text.forEach { Text(it, fontSize = 15.sp, lineHeight = 21.sp, color = C.ink) }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (item.place.isNotEmpty()) Text(item.place, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
-            Text(item.note, fontSize = 13.sp, lineHeight = 18.sp, color = if (item.has == false) C.accentInk else C.muted)
+            Text(item.note, fontSize = 13.sp, lineHeight = 18.sp, color = if (item.has == false) C.accentInk else C.muted, softWrap = false)
         }
     }
 }
