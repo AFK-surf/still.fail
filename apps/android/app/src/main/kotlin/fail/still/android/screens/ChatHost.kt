@@ -8,7 +8,7 @@
 // bubble and time coming in around it; the composer's hint comes back once the words have left the composer. Its words
 // go piece by piece (cut where the field's lines break and where the bubble's do): each from where it was typed to its
 // place in the bubble, so a message of many lines leaves the field as it was, its lines neither spreading nor rewrapping
-// at once (the field's lines and the bubble's are not as tall, nor as wide). A new
+// at once. Both now share the field's typography and wrapping width. A new
 // chat's scene leaves first (up out of view, its choices fading where they are), and the chat's list comes up after the
 // words, out of the composer's top edge. Nothing is crossfaded over anything.
 package fail.still.android.screens
@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -237,6 +238,7 @@ class Host {
     internal fun naturalRoom(): Int = morph?.let { composerHeight - (it.height() - contentHeight) } ?: composerHeight
     internal var field: LayoutCoordinates? = null
     internal var fieldText: TextLayoutResult? = null
+    internal var fieldWidth by mutableIntStateOf(0)
     internal var capsule: LayoutCoordinates? = null
     internal var overlay: LayoutCoordinates? = null
     internal var layer: GraphicsLayer? = null
@@ -271,12 +273,12 @@ class Host {
         if (still || text.isEmpty() || field == null || overlay == null || capsule == null) return
         val at = overlay.localPositionOf(field, Offset.Zero)
         val d = density ?: return
-        // The field's letters sit in its 21sp line as the bubble's in its 23sp one: centred.
-        val from = at + Offset(0f, with(d) { (21.sp.toPx() - 16.sp.toPx()) / 2 })
+        // The field and bubble share the same line metrics.
+        val from = at + Offset(0f, with(d) { (SendTextStyle.lineHeight.toPx() - SendTextStyle.fontSize.toPx()) / 2 })
         val typed = fieldText
         if (!carried) hold = contentHeight
         flight = Flight(
-            text, from, with(d) { 16.sp.toPx() }, at, field.size.width, field.size.height, overlay.localPositionOf(capsule, Offset.Zero).y,
+            text, from, with(d) { SendTextStyle.fontSize.toPx() }, at, field.size.width, field.size.height, overlay.localPositionOf(capsule, Offset.Zero).y,
             carried, before, typed, typed?.layoutInput?.text?.text?.indexOf(text) ?: -1,
         )
         hintAway = true
@@ -366,12 +368,14 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     host.still = reducedMotion()
     host.density = LocalDensity.current
     val chat = screen as? Screen.Chat
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+    CompositionLocalProvider(LocalSendTextWidth provides host.fieldWidth) {
+      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         if (chat != null) key(chat.id) { ChatScreen(chat.station, chat.of, host) }
         // A new chat's scene stays over its chat while it leaves.
         if (chat == null || host.leaving) key("new") { NewChatScreen(current, host, leaving = chat != null) }
         HostComposer(host, Modifier.align(Alignment.BottomCenter))
         FlightLayer(host)
+      }
     }
     LaunchedEffect(host.leaving) {
         if (!host.leaving) return@LaunchedEffect
@@ -415,7 +419,7 @@ private fun HostComposer(host: Host, modifier: Modifier) {
                 DraftExtras(draft)
                 ComposerBar(
                     draft, spec.placeholder, onPlus = spec.onPlus, onType = spec.onType, onSend = spec.onSend,
-                    hint = { if (host.hintAway) 0f else hint.value }, morph = morph, onField = { host.field = it }, onFieldText = { host.fieldText = it },
+                    hint = { if (host.hintAway) 0f else hint.value }, morph = morph, onField = { host.field = it; host.fieldWidth = it.size.width }, onFieldText = { host.fieldText = it },
                 )
                 draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
             }
@@ -532,7 +536,7 @@ private fun FlightLayer(host: Host) {
         ) {
             // As the field showed them: scrolled to its last lines when there were more than it holds.
             Text(
-                f.text, style = TextStyle(color = C.ink, fontSize = 16.sp, lineHeight = 21.sp),
+                f.text, style = SendTextStyle.copy(color = C.ink),
                 modifier = Modifier.wrapContentHeight(Alignment.Top, unbounded = true).offset { IntOffset(0, -f.scroll.roundToInt()) },
             )
         }

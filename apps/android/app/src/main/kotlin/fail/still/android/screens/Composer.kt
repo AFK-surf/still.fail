@@ -581,7 +581,7 @@ fun ComposerBar(
     onFieldText: (TextLayoutResult) -> Unit = {},
 ) {
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
-    val style = TextStyle(color = C.ink, fontSize = 16.sp, lineHeight = 21.sp)
+    val style = SendTextStyle.copy(color = C.ink)
     val locked = draft.locked
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(

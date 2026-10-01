@@ -1073,16 +1073,17 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
     val flight = LocalFlight.current
     val host = LocalFlightHost.current
     val density = LocalDensity.current
+    val fieldWidth = LocalSendTextWidth.current
     if (flight != null) flight.groundColor = ink.neutral
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         val words = fail.still.android.ui.withRefs(text)
         val (mark, laid) = passageMark(words.text)
         Text(
-            words, fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = { laid(it); flight?.words = it },
-            modifier = Modifier.widthIn(max = maxWidth * 0.78f).then(hold)
+            words, style = SendTextStyle.copy(color = ink.text), onTextLayout = { laid(it); flight?.words = it },
+            modifier = Modifier.widthIn(max = if (fieldWidth > 0) with(density) { fieldWidth.toDp() } + 28.dp else maxWidth * 0.78f).then(hold)
                 .let { m ->
                     if (flight == null || host == null) m else m.onGloballyPositioned {
-                        with(density) { flight.bubbleAt(it, host, androidx.compose.ui.geometry.Offset(14.dp.toPx(), 8.dp.toPx()), 23.sp.toPx(), 15.sp.toPx()) }
+                        with(density) { flight.bubbleAt(it, host, androidx.compose.ui.geometry.Offset(14.dp.toPx(), 8.dp.toPx()), SendTextStyle.lineHeight.toPx(), SendTextStyle.fontSize.toPx()) }
                     }
                 }
                 .clip(RoundedCornerShape(18.dp)).drawBehind {
