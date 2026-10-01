@@ -208,7 +208,8 @@ fun HomeScreen(current: WorkspaceEntry) {
                 StationGlyph(counts)
             }
         }
-        Toolbar(app, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
+        // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
+        if (!LocalWide.current) Toolbar(app, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
     }
 }
 
