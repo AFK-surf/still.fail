@@ -4,6 +4,9 @@ package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.text.TextLayoutResult
+import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
@@ -29,6 +32,45 @@ class ChatMotionTest {
 
     // Its click action, not a touch: no input injected (which fails while the window is busy, e.g. an IME coming up).
     private fun Harness.send() = rule.onNode(hasContentDescription("发送")).performSemanticsAction(SemanticsActions.OnClick)
+
+    @Test
+    fun sentTextKeepsItsLines() = sentTextKeepsItsLines(false)
+
+    @Test
+    fun sentTextKeepsItsLinesDark() = sentTextKeepsItsLines(true)
+
+    private fun sentTextKeepsItsLines(dark: Boolean) {
+        val h = Harness(rule)
+        val text = "发送时这段文字应该保持原来的换行位置，Safari 和 Chrome 都要检查。\n" +
+            "1. 登录页\n2. 注册页\n3. 忘记密码的邮件模板也要跟着一起改掉，不然用户收到的还是旧的文案\n4. 单元测试\n5. 截图\n6. 发版说明"
+        h.fake.put(topic, Fixtures.chat(talk))
+        h.fake.answer = { name, _ ->
+            if (name == "chat.send") h.fake.put(topic, Fixtures.chat(talk, listOf(Fixtures.outgoing("out-1", text))))
+            JsonNull
+        }
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))), dark = dark)
+        h.type(text)
+        h.keyboard()
+        val typed = mutableListOf<TextLayoutResult>()
+        rule.onAllNodes(hasSetTextAction())[0].performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(typed) }
+        val r = h.record(if (dark) "same-lines-dark" else "same-lines-light")
+        r.frame { h.send() }
+        r.frames(14)
+        h.fake.put(topic, Fixtures.chat(talk + Fixtures.mine(5, text, said = true).copy(outgoing = "out-1")))
+        r.frames(44)
+        r.end()
+        val sent = mutableListOf<TextLayoutResult>()
+        rule.onNode(hasText(text)).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(sent) }
+        val a = typed.single()
+        val b = sent.single()
+        assertEquals(a.layoutInput.style.fontSize, b.layoutInput.style.fontSize)
+        assertEquals(a.lineCount, b.lineCount)
+        for (line in 0 until a.lineCount) {
+            assertEquals("line $line starts", a.getLineStart(line), b.getLineStart(line))
+            assertEquals("line $line ends", a.getLineEnd(line), b.getLineEnd(line))
+            assertEquals("line $line baseline", a.getLineBaseline(line), b.getLineBaseline(line), 0.01f)
+        }
+    }
 
     /** A message in the outbox that the station takes (its seq), then shows as the chat's: the row stays the same one. */
     @Test
