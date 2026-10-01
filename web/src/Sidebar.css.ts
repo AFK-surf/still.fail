@@ -115,7 +115,8 @@ export const rowAside = style({
 /** A station's link coming back: a small turning ring (the global spinner) where the row's mark goes. */
 export const rowSpinner = style({ width: 12, height: 12, borderWidth: 1.5 });
 
-export const navSessionText = style({ display: "grid", gap: 2, minWidth: 0, flex: 1 });
+// One column, as wide as the row leaves it: an auto one grows to a long title's whole length, and the row with it.
+export const navSessionText = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, minWidth: 0, flex: 1 });
 export const navSessionHead = style({
   display: "flex", alignItems: "center", gap: 6, minWidth: 0, height: 20, lineHeight: "20px",
   selectors: { [`${navSessionWrap}:hover &`]: { paddingRight: 24 } },
