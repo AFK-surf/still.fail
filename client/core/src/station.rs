@@ -399,7 +399,7 @@ impl StationWire for MeshWire {
 
     fn net(&self, station: &StationAddr) -> Option<LinkNet> {
         let Some(Ok(mesh)) = (self.mesh)().now_or_never() else { return None };
-        mesh.current(&station.station).map(|link| LinkNet { measured: mesh.measured(&station.station), ..link.net() })
+        mesh.current(&station.station).map(|link| LinkNet { measured: mesh.measured(&station.station), today: Some(mesh.today(&station.station)), ..link.net() })
     }
 
     fn measure(&self, station: &StationAddr) -> LocalBoxFuture<'static, Result<()>> {
@@ -1357,8 +1357,9 @@ impl Stations {
     }
 
     /// Reads the connection to the station every [`NET_EVERY_MS`] while `topic` is watched, and keeps the last
-    /// [`NET_KEPT`] readings: `{ path, relay, rttMs, rxBytes, txBytes, samples: [{ at, rttMs, rxBps, txBps, sent, lost }] }`,
-    /// or null while there is no connection. Bytes are the connection's since it opened; a new one starts over.
+    /// [`NET_KEPT`] readings: `{ path, relay, rttMs, rxBytes, txBytes, todayRxBytes, todayTxBytes, samples: [{ at, rttMs,
+    /// rxBps, txBps, sent, lost }] }`, or null while there is no connection. Bytes are the connection's since it opened
+    /// (a new one starts over); today's are all of the station's links' on this device today, where the wire counts them.
     async fn sample_net(self: Rc<Self>, topic: Topic, addr: StationAddr) {
         let mut last: Option<(f64, LinkNet)> = None;
         let mut samples: VecDeque<Value> = VecDeque::new();
@@ -1401,6 +1402,7 @@ impl Stations {
                     let value = json!({
                         "path": net.path, "relay": net.relay, "rttMs": net.rtt_ms,
                         "rxBytes": net.rx_bytes, "txBytes": net.tx_bytes, "samples": samples, "measured": measured,
+                        "todayRxBytes": net.today.map(|t| t.0), "todayTxBytes": net.today.map(|t| t.1),
                     });
                     last = Some((now, net));
                     value

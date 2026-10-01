@@ -1906,7 +1906,7 @@ data class StationNet (
 	/// Bytes a second now, each way: 1.4 MB/s.
 	val down: String,
 	val up: String,
-	/// What went over it since it opened: 本次共 ↓ 212 MB · ↑ 9.6 MB.
+	/// What went over it today on this device: 今天共 ↓ 212 MB · ↑ 9.6 MB (a core from before: 本次共, since it opened).
 	val total: String,
 	/// The same each way: 212 MB. Missing from a core from before.
 	val downTotal: String? = null,

@@ -62,6 +62,11 @@ pub const MEASURE_AFTER_MS: u64 = 3_000;
 pub const MEASURE_EVERY_MS: u64 = 4 * 60_000;
 /// A link moves to another relay only if the way through it is quicker by both this many milliseconds and this share of
 /// the link's round trip: a few milliseconds either way is no reason to move what is on it.
+/// Where what each station's links carried today is kept (`Mesh::today`).
+pub const NET_DAY_KEY: &str = "net-day";
+/// How often what the open links carried is added to the day's tally and kept (`tally`): so the day counts what went
+/// while no card showed it, and holds across restarts.
+pub const TALLY_EVERY_MS: u64 = 60_000;
 const QUICKER_MS: f64 = 30.0;
 const QUICKER_SHARE: f64 = 0.2;
 const NO_ANSWER: &str = "连不上这台 station：没有回应";
@@ -136,6 +141,18 @@ pub struct Mesh {
     probing: Cell<usize>,
     /// Each station's last measurement of the ways there (`quickest`), for its card.
     measured: RefCell<HashMap<String, Measured>>,
+    /// What each station's links carried on this device, by local day (`Mesh::today`), kept under [`NET_DAY_KEY`].
+    days: RefCell<HashMap<String, Day>>,
+    /// Whether `days` changed since it was last kept.
+    days_changed: Cell<bool>,
+}
+
+/// What a station's links carried on one local day, both ways.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+struct Day {
+    day: i64,
+    rx: u64,
+    tx: u64,
 }
 
 /// The ways to a station as last measured (`Mesh::quickest`).
@@ -164,6 +181,7 @@ impl Mesh {
                 secret
             }
         };
+        let days = host.storage_get(NET_DAY_KEY).await.ok().flatten().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
         let endpoint = bind(&secret, relays).await?;
         let mesh = Rc::new_cyclic(|me| Mesh {
             host: host.clone(),
@@ -184,8 +202,11 @@ impl Mesh {
             measuring: RefCell::default(),
             probing: Cell::new(0),
             measured: RefCell::default(),
+            days: RefCell::new(days),
+            days_changed: Cell::new(false),
         });
         host.spawn(watch(host.clone(), Rc::downgrade(&mesh)).boxed_local());
+        host.spawn(tally(host.clone(), Rc::downgrade(&mesh)).boxed_local());
         Ok(mesh)
     }
 
@@ -210,6 +231,49 @@ impl Mesh {
     /// The station's link now, if one is open.
     pub fn current(&self, station_id: &str) -> Option<Rc<Link>> {
         self.links.borrow().get(station_id).and_then(|o| o.peek().and_then(|l| l.as_ref().ok().cloned()))
+    }
+
+    /// What the station's links carried on this device today, both ways (rx, tx): the one open now up to now.
+    pub fn today(&self, station_id: &str) -> (u64, u64) {
+        if let Some(link) = self.current(station_id) {
+            self.count(station_id, &link);
+        }
+        let today = self.local_day();
+        self.days.borrow().get(station_id).filter(|d| d.day == today).map_or((0, 0), |d| (d.rx, d.tx))
+    }
+
+    /// Adds what `link` carried since it was last counted to the station's tally for today.
+    fn count(&self, station_id: &str, link: &Link) {
+        let (rx, tx) = link.uncounted();
+        if rx == 0 && tx == 0 {
+            return;
+        }
+        let today = self.local_day();
+        let mut days = self.days.borrow_mut();
+        let day = days.entry(station_id.to_string()).or_default();
+        if day.day != today {
+            *day = Day { day: today, ..Day::default() };
+        }
+        day.rx += rx;
+        day.tx += tx;
+        self.days_changed.set(true);
+    }
+
+    /// Keeps the tally if it changed; what is from another day goes.
+    fn keep_days(&self) {
+        if !self.days_changed.replace(false) {
+            return;
+        }
+        let today = self.local_day();
+        self.days.borrow_mut().retain(|_, d| d.day == today);
+        let Ok(bytes) = serde_json::to_vec(&*self.days.borrow()) else { return };
+        let host = self.host.clone();
+        self.host.spawn(async move { let _ = host.storage_set(NET_DAY_KEY, bytes).await; }.boxed_local());
+    }
+
+    fn local_day(&self) -> i64 {
+        let now = self.host.now_ms();
+        crate::format::local_day(now, self.host.utc_offset_min(now))
     }
 
     /// Whether `link` is the station's link now.
@@ -266,11 +330,14 @@ impl Mesh {
         let _ = ready.clone().now_or_never();
         self.links.borrow_mut().insert(station_id.to_string(), ready);
         self.notify();
-        let (host, old) = (self.host.clone(), old.clone());
+        let (host, old, mesh, id) = (self.host.clone(), old.clone(), self.me.clone(), station_id.to_string());
         self.host.spawn(
             async move {
                 host.sleep(RETIRE_MS).await;
                 old.conn.close(0u32.into(), b"replaced");
+                if let Some(mesh) = mesh.upgrade() {
+                    mesh.count(&id, &old);
+                }
             }
             .boxed_local(),
         );
@@ -392,7 +459,10 @@ impl Mesh {
         }
         .boxed_local()
         .shared();
-        self.links.borrow_mut().insert(station_id.to_string(), opening.clone());
+        let before = self.links.borrow_mut().insert(station_id.to_string(), opening.clone());
+        if let Some(Ok(before)) = before.as_ref().and_then(|o| o.peek()) {
+            self.count(station_id, before);
+        }
         self.notify();
         let link = opening.await;
         if link.is_ok() {
@@ -408,6 +478,7 @@ impl Mesh {
         self.notify();
         if let Some(Ok(link)) = opening.as_ref().and_then(|o| o.peek()) {
             link.conn.close(0u32.into(), b"woke");
+            self.count(station_id, link);
         }
     }
 
@@ -433,11 +504,12 @@ impl Mesh {
                 self.host.spawn(async move { endpoint.close().await }.boxed_local());
             }
         }
-        let links: Vec<Opening> = self.links.borrow_mut().drain().map(|(_, opening)| opening).collect();
+        let links: Vec<(String, Opening)> = self.links.borrow_mut().drain().collect();
         self.notify();
-        for opening in links {
+        for (id, opening) in links {
             if let Some(Ok(link)) = opening.peek() {
                 link.conn.close(0u32.into(), b"device key replaced");
+                self.count(&id, link);
             }
         }
         self.host.spawn(async move { old.close().await }.boxed_local());
@@ -666,6 +738,20 @@ async fn watch(host: Rc<dyn Host>, mesh: Weak<Mesh>) {
     }
 }
 
+/// Adds what the links carried to the day's tally every [`TALLY_EVERY_MS`], and keeps it.
+async fn tally(host: Rc<dyn Host>, mesh: Weak<Mesh>) {
+    loop {
+        host.sleep(TALLY_EVERY_MS).await;
+        let Some(this) = mesh.upgrade() else { return };
+        let links: Vec<(String, Rc<Link>)> =
+            this.links.borrow().iter().filter_map(|(id, opening)| opening.peek().and_then(|l| l.as_ref().ok().cloned()).map(|l| (id.clone(), l))).collect();
+        for (id, link) in links {
+            this.count(&id, &link);
+        }
+        this.keep_days();
+    }
+}
+
 /// A link tried beside an opening still under way: on an endpoint bound anew if nothing is open on this one (then it
 /// is as likely the endpoint as the station that does not answer), else on this one. It is the opening's if it opens
 /// first; opened after, it is let go.
@@ -861,6 +947,7 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, stati
         credential: RefCell::new(credential.credential.clone()),
         credentials: credentials.clone(),
         pinned,
+        counted: Cell::new((0, 0)),
     });
     // The station's answer to the first credential, while requests already go: a refusal closes the link.
     let answered = link.clone();
@@ -969,6 +1056,8 @@ pub struct Link {
     credentials: CredentialSource,
     /// The relay whose own endpoint it is on (`Mesh::pinned_endpoint`); None on the main one.
     pinned: Option<String>,
+    /// Its bytes both ways as last added to the day's tally (`Mesh::count`).
+    counted: Cell<(u64, u64)>,
 }
 
 impl Link {
@@ -1061,11 +1150,20 @@ impl Link {
             relay,
             rtt_ms: selected.as_ref().map(|p| p.rtt().as_secs_f64() * 1000.0),
             measured: None,
+            today: None,
             rx_bytes: stats.udp_rx.bytes,
             tx_bytes: stats.udp_tx.bytes,
             tx_packets: stats.udp_tx.datagrams,
             lost_packets: stats.lost_packets,
         }
+    }
+
+    /// What went over it, both ways, since this was last asked (`Mesh::count`).
+    fn uncounted(&self) -> (u64, u64) {
+        let stats = self.conn.stats();
+        let (rx, tx) = (stats.udp_rx.bytes, stats.udp_tx.bytes);
+        let (was_rx, was_tx) = self.counted.replace((rx, tx));
+        (rx.saturating_sub(was_rx), tx.saturating_sub(was_tx))
     }
 
     /// Whether the station answers on it within [`PROBE_MS`]: the credential presented again (any station answers
@@ -1096,6 +1194,8 @@ pub struct LinkNet {
     pub rtt_ms: Option<f64>,
     /// The ways to the station as last measured (`Mesh::measured`), where the mesh says.
     pub measured: Option<Measured>,
+    /// What the station's links carried on this device today, both ways (rx, tx), where the mesh says.
+    pub today: Option<(u64, u64)>,
     pub rx_bytes: u64,
     pub tx_bytes: u64,
     pub tx_packets: u64,

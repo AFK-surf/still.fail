@@ -55,7 +55,7 @@ pub(crate) fn local(ms: f64, offset_min: i32) -> (i64, u32, u32, u32, u32, u32) 
     (y, m, d, weekday, (in_day / 60) as u32, (in_day % 60) as u32)
 }
 
-fn local_day(ms: f64, offset_min: i32) -> i64 {
+pub(crate) fn local_day(ms: f64, offset_min: i32) -> i64 {
     ((ms + offset_min as f64 * MINUTE) / DAY).floor() as i64
 }
 

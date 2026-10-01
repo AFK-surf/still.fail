@@ -530,6 +530,9 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
     let (sent, lost) = samples.iter().fold((0.0, 0.0), |(sent, lost), s| {
         (sent + s.get("sent").and_then(Value::as_f64).unwrap_or(0.0), lost + s.get("lost").and_then(Value::as_f64).unwrap_or(0.0))
     });
+    // Today's over all its links where the wire counts them (the mesh), else this connection's since it opened.
+    let daily = raw.get("todayRxBytes").is_some_and(Value::is_number);
+    let (rx, tx) = if daily { (n("todayRxBytes"), n("todayTxBytes")) } else { (n("rxBytes"), n("txBytes")) };
     // Over enough packets to say, and enough of them lost to matter.
     let loss = (sent >= 20.0 && lost / sent >= 0.01).then(|| {
         let pct = lost / sent * 100.0;
@@ -538,9 +541,9 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
     Some(json!({
         "path": path, "rtt": rtt, "rttHistory": history,
         "down": rate("rxBps"), "up": rate("txBps"),
-        "total": format!("本次共 ↓ {} · ↑ {}", format::bytes(n("rxBytes")), format::bytes(n("txBytes"))),
-        "downTotal": format::bytes(n("rxBytes")),
-        "upTotal": format::bytes(n("txBytes")),
+        "total": format!("{} ↓ {} · ↑ {}", if daily { "今天共" } else { "本次共" }, format::bytes(rx), format::bytes(tx)),
+        "downTotal": format::bytes(rx),
+        "upTotal": format::bytes(tx),
         "loss": loss,
         "measured": measured,
     }))
@@ -660,6 +663,13 @@ mod tests {
         assert_eq!(shown["total"], "本次共 ↓ 212 MB · ↑ 9.6 MB");
         assert_eq!((shown["downTotal"].as_str(), shown["upTotal"].as_str()), (Some("212 MB"), Some("9.6 MB")));
         assert_eq!(shown["loss"], Value::Null);
+        // Where the wire counts the day (the mesh): today's over all the station's links, not this one's.
+        let mut daily = raw.clone();
+        daily["todayRxBytes"] = json!(1_073_741_824u64);
+        daily["todayTxBytes"] = json!(52_428_800u64);
+        let shown = net(&daily, &unnamed).unwrap();
+        assert_eq!(shown["total"], "今天共 ↓ 1.0 GB · ↑ 50 MB");
+        assert_eq!((shown["downTotal"].as_str(), shown["upTotal"].as_str()), (Some("1.0 GB"), Some("50 MB")));
 
         let raw = json!({ "path": "relay", "relay": "relay.still.fail", "rttMs": 286.0, "rxBytes": 0, "txBytes": 0, "samples": [sample(1200.0, 40, 2)] });
         let shown = net(&raw, &unnamed).unwrap();

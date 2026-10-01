@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- station 卡片流量按天算（net-total-by-day）：卡片上 ↑↓ 后面的「共 …」从「这次连接以来」改成「这台设备今天连这台 station 的总量」。只改了 core（mesh.rs 每分钟、以及连接断开或被换掉时把各连接的字节记进当天的账，存在设备存储 `net-day`，过了本地零点重新算）和 shapes 的注释，station、cloud、界面代码都没动。新旧混跑：旧 core 不给 `todayRxBytes`，照旧显示这次连接的量。web 跟部署走，安卓、桌面要各发一版。上线后验：开着卡片重连一次或换个中继，「共」的数字不会回到 0；重启 app 后还在。
 - 安卓页面栈过渡（android-stack-transition）：页面层级按栈深度定（原来按前进/后退定，点返回回来的页再侧滑会被下面那页盖住），侧滑返回改成两页并排平移（去掉 -30% 视差和阴影），状态栏底色跟着各自的页走。只改了安卓 App.kt，要发一版。上线后验：打开 chat → 进一个设置页 → 点返回 → 侧滑返回列表，chat 全程在上面、和列表贴着平移；在不是 chat/列表的页上切页时状态栏那条不闪。motion 测试 `OverMotionTest#swipedBackAfterBack` 能复现原来的问题。
 - 连接按整条路最快的中继走，可手动重新测量（relay-by-station-rtt）：只改了客户端（core、shapes、web、手机 web、安卓），station 和 cloud 不用动。core 在连上 3 秒后测一次，之后只要还走中继，每 4 分钟测一次：每个中继起一个只挂这个中继的小端点（密钥从设备密钥派生），各握一次手，量出到 station 的整条往返；有一个明显更快的（快 30ms 以上且快 20% 以上），就换过去（`switch`）。卡片上的网络行下面列出各中继的实测往返，旁边是「重新测量」（`station.measure`）。新旧混跑：station 会把这台设备的每个中继端点当成不同的设备 id（凭证用的还是同一个账号和会话，撤销照常）；探测连接没有凭证，station 日志会记一行 info `connection ended`。中继端点的凭证存在 `credential/<account>/<workspace>/others`，设备密钥那份位置不变，旧 core 照读。web 和 wasm 跟部署走，安卓、桌面要各发一版。上线后验：手机连 bft，Axiom 里看 `mesh.measure`（`stillfail.rtt.<中继 host>` 是各中继的往返，`stillfail.moved` 是换到了哪个），station 卡片的延时从秒级降到一两百毫秒以内；点「重新测量」，各中继的数字会刷新。
 - 手机 web 切换 workspace（fix-mobile-workspace-switch）：触屏上从 workspace 弹层点另一个 workspace 会退回原来的那个（弹层关闭的 back 和带淡入淡出的 replace 抢先后），现在 `app.replace` 在淡入淡出里等弹层的 back 落地再跳。只改了手机 web 的 `mobile/app.tsx`，web 跟部署走。上线后验：手机浏览器里点左上 workspace 名 → 选另一个，停在新 workspace；按返回不会落到弹层的空记录上。
