@@ -1,3 +1,4 @@
+import { StatusText } from "../ui.tsx";
 import { useConnectFlow } from "../connect-flow.ts";
 // Connects on a narrow screen (what the desktop's ../pages/Connects.tsx and Connect.tsx do, in the Android app's
 // manner): the list, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its
@@ -228,7 +229,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
           {sessions.map((s) => (
             <ListRow key={s.key} onClick={() => app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(s.key)}`)}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.titleText}</span>
-              <span className={listsCss.mRowNote}>{s.statusText}</span>
+              <span className={listsCss.mRowNote}><StatusText text={s.statusText} /></span>
             </ListRow>
           ))}
         </ListCard>

@@ -220,6 +220,14 @@ export function Select({ value, onChange, options, id, placeholder, disabled, la
 
 export type Tone = "neutral" | "green" | "blue" | "amber" | "red" | "accent";
 
+/** Keep a completed state compact while retaining its explanation and accessible name. */
+export function StatusText({ text }: { text: string }) {
+  const done = text === "做完了" || text.startsWith("做完了：");
+  if (!done) return <>{text}</>;
+  const reason = text.slice("做完了".length).replace(/^：/, "");
+  return <><Tip label="做完了"><span className={css.doneMark} role="img" aria-label="做完了"><Check size={14} strokeWidth={1.7} /></span></Tip>{reason && <> {reason}</>}</>;
+}
+
 export function Pill({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
   return <span className={css.pill} data-tone={tone}>{children}</span>;
 }

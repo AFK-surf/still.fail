@@ -18,7 +18,7 @@ import { CreateAppSteps, emptyTokens, TokenFields, useSlackTokens } from "../sla
 import { useAct, useToast } from "../toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import * as waitingCss from "../styles/waiting.css.ts";
-import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, StatusText, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Connect.css.ts";
 import * as cloudCss from "../styles/cloud.css.ts";
@@ -347,7 +347,7 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
             const row = (
               <>
                 <span className={pagesCss.listRowTitle}>{s.titleText}</span>
-                <Pill tone={s.tone}>{s.statusText}</Pill>
+                <Pill tone={s.tone}><StatusText text={s.statusText} /></Pill>
                 <Time className={`${shellCss.muted} ${css.listRowTime}`} stamp={s.time?.lastActiveAt} />
               </>
             );

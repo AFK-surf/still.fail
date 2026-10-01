@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
 import type { WorkspaceMark } from "./core/shapes.ts";
 import { reducedMotion } from "./motion.ts";
+import { StatusText } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 
@@ -73,7 +74,7 @@ export function WaitingText({ text, className }: { text: string; className: stri
   const turn = lead !== "" || text.startsWith("要你帮忙");
   return (
     <span className={className} data-turn={turn || undefined} data-state-line="">
-      {lead && <b className={css.waitingLead}>{lead}</b>}{text.slice(lead.length)}
+      {lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} />
     </span>
   );
 }

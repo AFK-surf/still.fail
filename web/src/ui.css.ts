@@ -338,3 +338,6 @@ globalStyle(`${skeletonRow} span`, {
     },
   },
 });
+
+/** Inline completion mark, aligned with the state explanation's text. */
+export const doneMark = style({ display: "inline-flex", width: 14, height: 14, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
