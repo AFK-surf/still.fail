@@ -769,7 +769,7 @@ async fn claude_auth_recovers_without_replaying_input_and_a_later_turn_can_recov
         settle().await;
         assert_eq!(r.claude.count(), expected);
         assert_eq!(r.claude.last().prompts(), vec![crate::instructions::GO_ON_AFTER_AUTH.to_string()]);
-        r.call(&key, "chat_state", json!({ "kind": "all_done" })).await.unwrap();
+        r.call(&key, "chat_state", json!({ "kind": "all_done", "done": "测试任务已完成，没有剩余工作" })).await.unwrap();
         r.claude.last().complete();
         settle().await;
         assert!(!r.chat.texts().iter().any(|t| t.contains("认证失败")));
@@ -790,7 +790,7 @@ async fn claude_auth_does_not_restart_stopped_held_or_declared_work() {
         match mode {
             "stop" => r.accept(&InboundMessage { addressed: true, ..reply(&m, "9999.2", "<@UBOT> -stop") }).await,
             "hold" => r.hub.hold(Hold::Drain),
-            _ => { r.call(&r.claude.last().options.route, "chat_state", json!({ "kind": "all_done" })).await.unwrap(); }
+            _ => { r.call(&r.claude.last().options.route, "chat_state", json!({ "kind": "all_done", "done": "测试任务已完成，没有剩余工作" })).await.unwrap(); }
         }
         settle().await;
         r.claude.last().end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401".into() });
