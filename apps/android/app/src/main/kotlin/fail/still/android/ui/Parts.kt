@@ -16,6 +16,8 @@ import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
@@ -223,7 +225,7 @@ fun PeopleStack(people: List<Person>, size: Dp = 18.dp, ring: Color = C.bg) {
 // ── rings ──────────────────────────────────────────────────────────────
 
 /** How full, as a colour: the core's level (ok | amber | red). */
-private fun levelColor(c: StillFailColors, level: String): Color = when (level) { "red" -> c.red; "amber" -> c.warn; else -> c.green }
+private fun levelColor(c: StillFailColors, level: String): Color = when (level) { "red" -> c.red; "amber" -> c.warn; "progress" -> c.accent; else -> c.green }
 
 /**
  * An allowance as a ring, as the web draws it: what is left, eaten clockwise from the top as it is used; coloured by
@@ -272,16 +274,22 @@ fun MeterChips(meters: List<fail.still.android.data.Meter>, modifier: Modifier =
     }
 }
 
+/** How much of what a runtime's install downloads is in: the allowance's rounded box, its edge going round as it comes. As the web's DownloadChip (Versions.tsx). */
+@Composable
+fun DownloadChip(percent: Long) = EdgeChip(percent, "progress", null)
+
 /**
  * A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
  * clockwise from the top left, in the colour of the core's level; the figure grey while it is ok, in that colour once
- * it is not. As the web's EdgeChip (components.tsx).
+ * it is not. Level `progress`: a download's share, in the accent, its edge moving smoothly to each new one. As the
+ * web's EdgeChip (components.tsx).
  */
 @Composable
 private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = false) {
     val c = C
     val tone = levelColor(c, level)
     val low = level == "amber" || level == "red"
+    val drawn by animateFloatAsState(fill.coerceIn(0L, 100L).toFloat(), if (level == "progress") tween(500) else snap(), label = "edge"
     Box(Modifier.height(if (small) 16.dp else 20.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
             val sw = (if (small) 2.dp else 2.5.dp).toPx()
@@ -301,8 +309,8 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
                 close()
             }
             drawPath(path, c.line, style = Stroke(sw))
-            val p = fill.coerceIn(0L, 100L)
-            if (p > 0) {
+            val p = drawn
+            if (p > 0f) {
                 val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
                 val part = androidx.compose.ui.graphics.Path()
                 measure.getSegment(0f, measure.length * p / 100f, part, true)

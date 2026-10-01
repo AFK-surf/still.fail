@@ -35,6 +35,7 @@ export const quotaChip = style({
   selectors: {
     "&[data-level=\"amber\"]": { color: vars.amber },
     "&[data-level=\"red\"]": { color: vars.red },
+    "&[data-level=\"progress\"]": { color: vars.accent },
     "&[data-small]": { height: "16px", padding: "0 5px", fontSize: "10px" },
   },
 });
@@ -42,7 +43,10 @@ export const quotaChipEdge = style({
   position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none",
 });
 export const quotaChipTrack = style({ stroke: vars.line });
-export const quotaChipLeft = style({ stroke: "currentColor", strokeLinecap: "round" });
+export const quotaChipLeft = style({
+  stroke: "currentColor", strokeLinecap: "round",
+  selectors: { [`${quotaChip}[data-level="progress"] &`]: { transition: "stroke-dasharray .5s ease-out" } },
+});
 /** Its number quiet while there is plenty; in its colour once it runs low. */
 export const quotaChipText = style({
   position: "relative", display: "inline-flex", gap: "4px", color: vars.muted,

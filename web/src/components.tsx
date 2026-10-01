@@ -117,9 +117,10 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
 }
 
 /** A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
- * clockwise from the top left, in the colour of the core's `level`: an allowance's window, a machine's meter. What else
+ * clockwise from the top left, in the colour of the core's `level`: an allowance's window, a machine's meter; or, as
+ * level `progress`, how much of a download is in (in the accent, its edge moving smoothly to each new share). What else
  * it is given (a tip's trigger props and ref) goes on the box. */
-function EdgeChip({ fill, level, mark, label, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
+export function EdgeChip({ fill, level, mark, label, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
   const p = Math.max(0, Math.min(100, fill));
   return (
     <span {...rest} className={css.quotaChip} data-level={level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={label}>

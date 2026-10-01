@@ -2,6 +2,7 @@
 // and Codex, each updated (or a runtime installed) from here by whoever may. Grey but for what wants doing.
 import type { SoftwareVersion } from "./core/shapes.ts";
 import { stationApi, useAction, useStationCall } from "./api.ts";
+import { EdgeChip } from "./components.tsx";
 import { Switch, Tip } from "./ui.tsx";
 import * as css from "./Versions.css.ts";
 
@@ -93,7 +94,7 @@ function Item({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boo
     <button type="button" className={css.action} disabled={busy} onClick={onUpdate}>{label}</button>
   );
   let rest;
-  if (v.state === "updating") rest = <span className={css.newer}>{updating}</span>;
+  if (v.state === "updating") rest = <>{v.percent != null && <DownloadChip percent={v.percent} />}<span className={css.newer}>{updating}</span></>;
   else if (v.state === "failed") rest = <><Tip label={v.message ?? ""}><span className={css.failed}>{verb}失败</span></Tip>{button("重试")}</>;
   else if (!v.installed) rest = button("安装");
   else if (v.newer && v.latest) rest = <><span className={css.newer}>→ {v.latest}</span>{button("更新")}</>;
@@ -106,4 +107,9 @@ function Item({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boo
       {rest}
     </span>
   );
+}
+
+/** How much of what a runtime's install downloads is in: the allowance's rounded box, its edge going round as it comes. */
+export function DownloadChip({ percent }: { percent: number }) {
+  return <EdgeChip fill={percent} level="progress" label={`已下载 ${percent}%`} bare />;
 }

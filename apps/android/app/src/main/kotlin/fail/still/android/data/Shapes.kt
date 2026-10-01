@@ -1870,6 +1870,9 @@ data class SoftwareVersion (
 	/// The station's, while it is updating: where the update is, in a line (正在下载新版本…). None from a station
 	/// older than it, or an installer that does not say.
 	val progress: String? = null,
+	/// A runtime's, while what its install or update downloads comes in: how much of it is, 0–100 (drawn as a bar
+	/// beside `progress`). None when that is not known, and from a station older than it.
+	val percent: Long? = null,
 	/// The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断).
 	val done: String? = null,
 	/// What the last update that failed said.

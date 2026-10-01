@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
 import fail.still.android.data.SoftwareVersion
 import fail.still.android.ui.C
+import fail.still.android.ui.DownloadChip
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
@@ -135,7 +136,8 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
         }
         when {
             v.state == "updating" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Spinner(12.dp)
+                val percent = v.percent
+                if (percent != null) DownloadChip(percent) else Spinner(12.dp)
                 // Where it is, as the station says (one older than that: nothing more than 正在更新).
                 Text(v.progress ?: if (v.installed) "正在更新…" else "正在安装…", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
             }

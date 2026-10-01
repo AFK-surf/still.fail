@@ -208,6 +208,8 @@ struct Item {
     updating: Option<i64>,
     /// The station's, while it updates: where it is, as the pages say it.
     progress: Option<String>,
+    /// A runtime's, while what it downloads comes in: how much of it is (0–100).
+    percent: Option<u64>,
     /// The station's, a while after an update ended well: how it went.
     done: Option<String>,
     failed: Option<String>,
@@ -398,6 +400,7 @@ impl Updates {
                     note: item.note,
                     state: if item.updating.is_some() { "updating" } else if item.failed.is_some() { "failed" } else { "idle" }.into(),
                     progress: item.updating.and(item.progress),
+                    percent: item.updating.and(item.percent).map(|p| p as i64),
                     done: item.done,
                     message: item.failed,
                     checked_at: checked,
@@ -430,7 +433,7 @@ impl Updates {
                 if item.updating.is_none() {
                     *item = Item { failed: item.failed.take(), done: item.done.take(), ..read };
                 } else if !item.installed {
-                    *item = Item { updating: item.updating, progress: item.progress.take(), ..read };
+                    *item = Item { updating: item.updating, progress: item.progress.take(), percent: item.percent, ..read };
                 }
             }
         }
@@ -535,6 +538,7 @@ impl Updates {
         self.set(kind, |i| {
             i.updating = Some(now_ms());
             i.progress = None;
+            i.percent = None;
             i.failed = None;
             i.done = None;
         });
@@ -594,7 +598,7 @@ impl Updates {
                 if step == INSTALLING {
                     installing.store(true, Ordering::SeqCst);
                 }
-                self.say(kind, step);
+                self.say(kind, step, None);
             }
         })
         .await;
@@ -604,16 +608,22 @@ impl Updates {
         said
     }
 
-    /// Where a runtime's update is, as the pages say it (while it updates).
-    fn say(&self, kind: Kind, progress: &str) {
+    /// Where a runtime's update is, as the pages say it (while it updates), and how much of a download is in.
+    fn say(&self, kind: Kind, progress: &str, percent: Option<u64>) {
         let mut items = self.items.lock().unwrap();
         let item = &mut items[kind as usize];
-        if item.updating.is_none() || item.progress.as_deref() == Some(progress) {
+        if item.updating.is_none() || (item.progress.as_deref() == Some(progress) && item.percent == percent) {
             return;
         }
         item.progress = Some(progress.to_string());
+        item.percent = percent;
         drop(items);
         self.changed();
+    }
+
+    fn say_downloading(&self, kind: Kind, version: &str, got: u64, total: Option<u64>) {
+        let (said, percent) = downloading(version, got, total);
+        self.say(kind, &said, percent);
     }
 
     /// Codex's build for this machine (nearly all its install downloads), fetched here so how much is in can be said,
@@ -629,7 +639,7 @@ impl Updates {
         let file = std::env::temp_dir().join(format!("stillfail-codex-{version}-{platform}.tgz"));
         let cached = match self.download(Kind::Codex, &version, &url, &file).await {
             Ok(()) => {
-                self.say(Kind::Codex, INSTALLING);
+                self.say(Kind::Codex, INSTALLING, None);
                 run(npm, &["cache", "add", &file.to_string_lossy()], &self.env, Duration::from_secs(120)).await
             }
             Err(e) => Err(e),
@@ -658,11 +668,11 @@ impl Updates {
         let total = response.content_length();
         let mut file = tokio::fs::File::create(to).await?;
         let mut got = 0;
-        self.say(kind, &downloading(version, got, total));
+        self.say_downloading(kind, version, got, total);
         while let Some(chunk) = tokio::time::timeout(Duration::from_secs(60), response.chunk()).await.map_err(|_| anyhow!("下载一分钟没有动静"))?? {
             file.write_all(&chunk).await?;
             got += chunk.len() as u64;
-            self.say(kind, &downloading(version, got, total));
+            self.say_downloading(kind, version, got, total);
         }
         file.flush().await?;
         Ok(())
@@ -691,7 +701,7 @@ impl Updates {
                     _ => None,
                 };
                 if let Some((got, total)) = got {
-                    me.say(Kind::Claude, &downloading(&version, got, Some(total)));
+                    me.say_downloading(Kind::Claude, &version, got, Some(total));
                 }
                 tokio::time::sleep(Duration::from_millis(500)).await;
             }
@@ -857,12 +867,12 @@ fn step_of(line: &str) -> Option<&'static str> {
     }
 }
 
-/// How much of a download is in, as the pages say it.
-fn downloading(version: &str, got: u64, total: Option<u64>) -> String {
+/// How much of a download is in, as the pages say it: a line, and the share (drawn as a bar) when its size is known.
+fn downloading(version: &str, got: u64, total: Option<u64>) -> (String, Option<u64>) {
     let mb = |b: u64| (b as f64 / 1_000_000.0).round() as u64;
     match total {
-        Some(total) if total > 0 => format!("正在下载 {version}：{}%（共 {} MB）", (got.min(total) * 100 / total), mb(total)),
-        _ => format!("正在下载 {version}：已下 {} MB", mb(got)),
+        Some(total) if total > 0 => (format!("正在下载 {version}（{} MB）", mb(total)), Some(got.min(total) * 100 / total)),
+        _ => (format!("正在下载 {version}：已下 {} MB", mb(got)), None),
     }
 }
 
@@ -1020,8 +1030,8 @@ pub(crate) mod tests {
         assert!(said.contains("==> Pouring codex") && said.contains("Warning: x"));
         assert_eq!(step_of("Setting up Claude Code..."), Some(INSTALLING));
         assert_eq!(step_of("added 2 packages in 4s"), None);
-        assert_eq!(downloading("0.159.3", 60_000_000, Some(133_847_481)), "正在下载 0.159.3：44%（共 134 MB）");
-        assert_eq!(downloading("0.159.3", 60_000_000, None), "正在下载 0.159.3：已下 60 MB");
+        assert_eq!(downloading("0.159.3", 60_000_000, Some(133_847_481)), ("正在下载 0.159.3（134 MB）".to_string(), Some(44)));
+        assert_eq!(downloading("0.159.3", 60_000_000, None), ("正在下载 0.159.3：已下 60 MB".to_string(), None));
     }
 
     #[test]

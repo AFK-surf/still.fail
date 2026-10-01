@@ -1830,6 +1830,11 @@ export interface SoftwareVersion {
 	 * older than it, or an installer that does not say.
 	 */
 	progress?: string;
+	/**
+	 * A runtime's, while what its install or update downloads comes in: how much of it is, 0–100 (drawn as a bar
+	 * beside `progress`). None when that is not known, and from a station older than it.
+	 */
+	percent?: number;
 	/** The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断). */
 	done?: string;
 	/** What the last update that failed said. */

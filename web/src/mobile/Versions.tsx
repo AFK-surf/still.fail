@@ -2,7 +2,7 @@
 // the wide screen's versions (../Versions.tsx: useSoftware, describe), one to a row on a card, then the check. What the
 // wide screen says on hover is said under the name.
 import type { SoftwareVersion } from "../core/shapes.ts";
-import { autoUpdating, describe, onBeta, useSoftware } from "../Versions.tsx";
+import { autoUpdating, describe, DownloadChip, onBeta, useSoftware } from "../Versions.tsx";
 import { ListCard, ListRow, SectionHeader, Spinner } from "./parts.tsx";
 import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Versions.css.ts";
@@ -65,7 +65,7 @@ function Row({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: bool
         <span className={css.mVersionHead}><span className={css.mVersionName}>{v.name}</span><span className={css.mVersionShown}>{shown}</span>{beta && <span className={css.mVersionBeta}>测试版</span>}</span>
         {note && <span className={css.mVersionNote} data-failed={v.state === "failed" || undefined}>{note}</span>}
       </span>
-      {v.state === "updating" ? <span className={css.mVersionState}><Spinner size={12} />{updating}</span>
+      {v.state === "updating" ? <span className={css.mVersionState}>{v.percent != null ? <DownloadChip percent={v.percent} /> : <Spinner size={12} />}{updating}</span>
         : v.state === "failed" ? <span className={css.mVersionState}><span className={css.mVersionNote} data-failed style={{ fontWeight: 500 }}>{verb}失败</span>{action("重试")}</span>
         : !v.installed ? <span className={css.mVersionState}>{action("安装")}</span>
         : v.newer && v.latest ? <span className={css.mVersionState}>→ {v.latest}{action("更新")}</span>
