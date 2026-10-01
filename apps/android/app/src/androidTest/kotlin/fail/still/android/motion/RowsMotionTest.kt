@@ -29,14 +29,17 @@ class RowsMotionTest {
     private val topic = Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))
     private val key = "ember:c-1"
 
-    private fun session() = Session(
-        key = key, runtime = "claude", process = "running", pending = 0, statusText = "工作中", tone = "accent", titleText = "修一下登录",
-        agentText = "Claude", maker = Fixtures.anthropic, runtimeText = "Claude Code", efforts = listOf("high"),
+    private val key2 = "ember:c-2"
+    private val openai = fail.still.android.data.Maker("openai", "OpenAI")
+
+    private fun session(k: String = key) = Session(
+        key = k, runtime = if (k == key) "claude" else "codex", process = "running", pending = 0, statusText = "工作中", tone = "accent", titleText = "修一下登录",
+        agentText = if (k == key) "Claude" else "Codex", maker = if (k == key) Fixtures.anthropic else openai, runtimeText = if (k == key) "Claude Code" else "Codex", efforts = listOf("high"),
     )
 
     /** `started`: seen starting while the chat shows, as the core marks it (attend.rs): its activity comes in. */
-    private fun agentAt(running: Boolean, started: Boolean = running) = ChatAgent(
-        session = session(), status = if (running) "running" else "idle", profiles = emptyList(), choices = emptyList(), attention = emptyList(),
+    private fun agentAt(running: Boolean, started: Boolean = running, k: String = key) = ChatAgent(
+        session = session(k), status = if (running) "running" else "idle", profiles = emptyList(), choices = emptyList(), attention = emptyList(),
         since = if (running) System.currentTimeMillis() - 42_000 else null, started = if (started) true else null, turns = emptyList(), threads = emptyList(), jobs = emptyList(),
     )
 
@@ -90,6 +93,67 @@ class RowsMotionTest {
         h.fake.put(topic, chat(asked + Fixtures.mine(6, "顺便看一下 Safari 上那个按钮", later(), said = true), running = false))
         h.deliver()
         r.frames(40)
+        r.end()
+    }
+
+    /** The second agent's reply: as Fixtures.agent, by Codex. */
+    private fun codex(seq: Long, text: String) = Fixtures.agent(seq, text, later(), said = true).copy(
+        author = key2, authorName = "Codex", by = fail.still.android.data.MessageBy("Codex", agent = key2, maker = openai, runtime = "codex"),
+    )
+
+    private fun two(messages: List<ChatMessage>, running: Boolean) =
+        Fixtures.chat(messages).copy(agents = listOf(agentAt(running), agentAt(running, k = key2)))
+
+    /** Replies one after another while the first is still coming out: each waits its turn, the avatar going straight on. */
+    @Test
+    fun repliesKeepComing() {
+        val h = open(asked)
+        val r = h.record("emit-stream")
+        h.fake.put(topic, chat(asked, running = true))
+        h.deliver()
+        r.frames(30)
+        var said = asked
+        for ((i, text) in listOf("先说结果：都过了。", "42 个通过，0 个失败。", "登录页的三个用例也在里面，Safari 那个现在是绿的。").withIndex()) {
+            said = said + Fixtures.agent(6L + i, text, later(), said = true)
+            h.fake.put(topic, chat(said, running = true))
+            h.deliver()
+            r.frames(14)
+        }
+        r.frames(120)
+        h.fake.put(topic, chat(said, running = false))
+        h.deliver()
+        r.frames(60)
+        r.end()
+    }
+
+    /** Two agents at work, their replies interleaved: each comes out of its own avatar, one at a time. */
+    @Test
+    fun twoAgentsInterleaved() {
+        val h = Harness(rule)
+        h.fake.put(Topics.live(Fixtures.STATION, key), live("运行测试"))
+        h.fake.put(Topics.live(Fixtures.STATION, key2), live("读取 login.css"))
+        h.fake.put(topic, two(asked, running = false))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        val r = h.record("emit-two-agents")
+        h.fake.put(topic, two(asked, running = true))
+        h.deliver()
+        r.frames(30)
+        var said = asked
+        for (m in listOf(
+            Fixtures.agent(6, "测试都过了：42 个通过。", later(), said = true),
+            codex(7, "样式我看了：按钮在 375px 下溢出了 12px。"),
+            Fixtures.agent(8, "Safari 那个用例现在也是绿的。", later(), said = true),
+            codex(9, "改成了 width: 100%，截图核对过。"),
+        )) {
+            said = said + m
+            h.fake.put(topic, two(said, running = true))
+            h.deliver()
+            r.frames(12)
+        }
+        r.frames(160)
+        h.fake.put(topic, two(said, running = false))
+        h.deliver()
+        r.frames(60)
         r.end()
     }
 
