@@ -44,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Layout
@@ -194,7 +196,9 @@ internal val webMuted @Composable get() = if (C.dark) Color(0xFFA3A5A9) else Col
 internal val webSubtle @Composable get() = if (C.dark) Color(0xFF8C8F94) else Color(0xFF73787D)
 /** The web's --line (a table's rules). */
 internal val webLine @Composable get() = if (C.dark) Color(0xFF2D2E32) else Color(0xFFE3E1DE)
-/** A code block's ground: the text at 4% in the canvas. */
+/** A table's ground: the text at 2% in the canvas. */
+private val tableGround @Composable get() = if (C.dark) Color(0xFF232427) else Color(0xFFFAFAFA)
+/** A code block's ground: the text at 4% in the canvas; a table's header row too. */
 internal val codeGround @Composable get() = if (C.dark) Color(0xFF26272A) else Color(0xFFF5F5F5)
 private val codeInline @Composable get() = if (C.dark) Color(0xFFC9A2E6) else Color(0xFF7C3FA0)
 
@@ -431,7 +435,8 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
 val CodeWeight = FontWeight.SemiBold
 
 /**
- * A table as the web draws it: small type (13), cells ruled, their words kept whole (a cell wraps between words), at
+ * A table as the web draws it: in a card's frame (20 round, a faint ground), small type (13), the header row tinted
+ * and its words muted (12), rows ruled between them only, their words kept whole (a cell wraps between words), at
  * least 4em wide. Columns are as wide as their content until the message is full (the browser's automatic layout);
  * past what its words allow, it scrolls sideways within the message.
  */
@@ -442,26 +447,35 @@ private fun Table(table: TableBlock, ctx: Ctx) {
     val columns = cells.maxOfOrNull { it.size } ?: 0
     if (columns == 0) return
     val line = webLine
+    val head = codeGround
+    val muted = webMuted
+    val frame = RoundedCornerShape(20.dp)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val avail = constraints.maxWidth
-        Box(Modifier.horizontalScroll(rememberScrollState())) {
+        val avail = constraints.maxWidth - with(androidx.compose.ui.platform.LocalDensity.current) { 2.dp.roundToPx() }
+        Box(Modifier.clip(frame).border(1.dp, line, frame).background(tableGround).padding(1.dp).horizontalScroll(rememberScrollState())) {
             Layout(
                 content = {
-                    cells.forEach { row ->
+                    cells.forEachIndexed { r, row ->
+                        val header = row.firstOrNull()?.isHeader == true
                         for (c in 0 until columns) {
                             val cell = row.getOrNull(c)
-                            // Middle-aligned, as the browser's cells are.
-                            Box(Modifier.border(0.5.dp, line).padding(horizontal = 8.dp, vertical = 4.dp), contentAlignment = Alignment.CenterStart) {
+                            // Middle-aligned, as the browser's cells are; a rule under every row but the last.
+                            Box(
+                                Modifier.then(if (header) Modifier.background(head) else Modifier)
+                                    .then(if (r < cells.lastIndex) Modifier.drawBehind { drawLine(line, Offset(0f, size.height - 0.5.dp.toPx()), Offset(size.width, size.height - 0.5.dp.toPx()), 1.dp.toPx()) } else Modifier)
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
                                 val images = cell?.let { cellImages(it, ctx) }
                                 if (images != null) CellImageRow(images, ctx.placing!!)
-                                else if (cell != null) Words(cell, ctx, 13f, if (cell.isHeader) FontWeight.Bold else null)
+                                else if (cell != null && header) androidx.compose.runtime.CompositionLocalProvider(LocalMdInk provides muted) { Words(cell, ctx, 12f, FontWeight.Medium) }
+                                else if (cell != null) Words(cell, ctx, 13f, null)
                             }
                         }
                     }
                 },
-                modifier = Modifier.border(0.5.dp, line),
             ) { measurables, _ ->
-                val least = (4 * 13).dp.roundToPx() + 16.dp.roundToPx()
+                val least = (4 * 13).dp.roundToPx() + 24.dp.roundToPx()
                 val mins = IntArray(columns); val maxs = IntArray(columns)
                 measurables.forEachIndexed { i, m ->
                     val c = i % columns

@@ -18,6 +18,8 @@
 
 ## 待部署
 
+- 消息里的表格换新样式（table-style）：外面一圈卡片的平滑圆角框（web 用 `--r-card` + `corner-shape`，安卓用 20dp 普通圆角），去掉竖线，只在行之间画线，表头浅底灰字。只改客户端样式（web、手机 web、安卓 `ui/Markdown.kt`），web 跟部署走，安卓要发一版，cloud 和 station 不用动。上线后验：让 agent 回一个 Markdown 表格，PC 和手机上都是圆角框加浅底表头；表格很宽时在框里横向滚动。
+
 - 切换 workspace 时的标记和「回到上次的 chat」挪进 core（workspace-attention）：core 加了 `workspaceMarks` topic（views/marks.rs），按 workspace 算你参与的 chat 里有几个需要处理（被 block 或出错）、几个未读，还有上次打开的 chat（core 从 `client.focus` 记进 prefs 的 `openChat`，设置页不改它；旧的 `lastChat` 路径也会读）。PC 切换菜单、手机 web 和安卓的 workspace sheet 里，名字后面是红点加数字、蓝点加数字，切换按钮和手机首页名字旁边是一个点。只改了客户端（core、shapes、web、手机 web、安卓），cloud 和 station 不用动。web 和 wasm 跟部署走；桌面 app 自带的 core 是旧版时没有这个 topic，页面退回原来自己记路径的做法，不显示标记、不会卡住；安卓要发一版。上线后验：有两个 workspace，在 W2 里让一个自己参与的 chat 出新消息，在 W1 打开左下角切换菜单，W2 后面应该有蓝点和 1；进 W1 的设置再切到 W2、再切回 W1，应该回到 W1 原来那个 chat。
 
 - chat 改成窗口、双向加载（chat-window）：只改了客户端（core、web、手机 web、安卓），station 和 cloud 不用动。core 的 `thread` topic 是最多 150 条的窗口，打开锚在第一条未读（或 `chat.place` 记的位置），第一个值就是完整的；新调用 `chat.newer`/`chat.latest`/`chat.place`；窗口不在底部时新消息只进本地，不标已读；后台把最近 200 个 chat 和本地对齐。走测试通道：部署只上 app.youdid.wtf，安卓/桌面发测试版（`release.sh --beta android desktop`）；用一阵没问题再 `~/bin/ember-promote web`，正式版安卓/桌面照常发。验证：在测试版打开一个有很多未读的 chat，直接落在未读线；上下翻页不跳、一次一页；翻到上面时来新消息只有「↓ N 条新消息」，点了直接到底；快速往下甩不会提前标已读。

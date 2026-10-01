@@ -53,8 +53,14 @@ export const codeCopy = style({
   },
 });
 export const codeShiki = style({});
-/** A table in its own sideways scroll: the message's `overflow-wrap: anywhere` would else break its cells' words to fit. */
-export const tableScroll = style({ maxWidth: "100%", overflowX: "auto", margin: "0 0 8px" });
+/**
+ * A table in its own sideways scroll: the message's `overflow-wrap: anywhere` would else break its cells' words to fit.
+ * Framed as a card (its corners, a faint ground), the rows ruled between them only.
+ */
+export const tableScroll = style({
+  width: "fit-content", maxWidth: "100%", overflowX: "auto", margin: "0 0 8px", border: `1px solid ${vars.line}`,
+  borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: `color-mix(in oklch, ${vars.text} 2%, ${vars.canvas})`,
+});
 globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} > table`, { margin: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
