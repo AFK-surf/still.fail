@@ -10,7 +10,7 @@ import { ArchiveScreen } from "./Archive.tsx";
 import { DecisionsScreen } from "./Decisions.tsx";
 import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
-import { RunSettingsScreen } from "./History.tsx";
+import { HistoryScreen, RunSettingsScreen } from "./History.tsx";
 import { Home, Recent } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
 import { MemoriesScreen, MemoryScreen } from "./Memory.tsx";
@@ -52,6 +52,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/members" element={<WorkspaceScreen />} />
       <Route path="settings/leave" element={<WorkspaceScreen />} />
       <Route path="s/:station/chats/:chat" element={<ChatHost stations={stations} />} />
+      <Route path="s/:station/chats/:chat/history/:agent" element={<InStation stations={stations}><HistoryScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/messages/:ts" element={<InStation stations={stations}><AnnotateScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />

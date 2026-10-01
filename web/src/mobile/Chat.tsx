@@ -1,5 +1,5 @@
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
-// agent's execution history as a sheet opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
+// agent's execution history as a page opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
 // the same rows, avatars, names, quotes, files, activity and list behaviour), with the avatar and name in line with the
 // words rather than out in a margin. Long-press opens a message on its own page (Annotate.tsx); ＋ adds files.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";

@@ -1,10 +1,10 @@
 import { useAction } from "../action.ts";
 // An agent's execution history on a narrow screen, as the Android app has it (apps/android/…/screens/History.kt): a
-// sheet that drags between half and full height. What it received and what it sent are drawn alike (a line, then the
+// full-screen page. What it received and what it sent are drawn alike (a line, then the
 // words beside a bar); what it did in between is grouped, each group opening to its commands and output; its details
 // (how it runs, what it used, the station). Changing how it runs is a page of its own.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { stationApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { ArrowRight, Check, ChevronDown, ChevronRight, Hourglass, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
@@ -13,7 +13,7 @@ import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
 import { useOlderOnScroll, Waited } from "../Chat.tsx";
 import { stationBase, useStation } from "../station.tsx";
-import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
+import { useApp, type MobileApp } from "./app.tsx";
 import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, type Icon } from "./parts.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./History.css.ts";
@@ -33,19 +33,27 @@ import * as chatPageCss from "../pages/ChatPage.css.ts";
 import { NAME } from "../channel.ts";
 /** Opens an agent's execution history over the item's page it belongs to; `entry`: the transcript entry to open at. */
 export function openHistory(app: MobileApp, station: string, chat: string, key: string, entry?: number) {
-  app.sheet({ height: 0.55, draggable: true, content: () => <HistorySheet station={station} chat={chat} agentKey={key} entry={entry} /> });
+  app.sheet(null);
+  app.push(`${stationBase(station)}/chats/${encodeURIComponent(chat)}/history/${encodeURIComponent(key)}${entry === undefined ? "" : `?entry=${entry}`}`);
 }
 
-function HistorySheet({ station, chat, agentKey, entry }: { station: string; chat: string; agentKey: string; entry: number | undefined }) {
+export function HistoryScreen() {
+  const app = useApp();
+  const station = useStation().address;
+  const { chat = "", agent: agentKey = "" } = useParams();
+  const [search] = useSearchParams();
+  const raw = search.get("entry");
+  const entry = raw !== null && /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : undefined;
+  const bar = <NavBar back="返回" onBack={app.pop} title="执行历史" />;
   const view = useChat(station, { session: chat });
   const history = useHistory(station, agentKey).value;
   const [tab, setTab] = useState(0);
   const agent = view.value?.agents.find((a) => a.session.key === agentKey);
-  if (!agent) return <><SheetGrab /><p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? "正在读取…"}</p></>;
+  if (!agent) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? "正在读取…"}</p></div>;
   const s = agent.session;
   return (
-    <>
-      <SheetGrab />
+    <div className={pagesCss.mScreen}>
+      {bar}
       <div className={css.mHHead}>
         <ModelMark maker={s.maker} runtime={s.runtime} size={20} state={stateOf(agent.badge)} />
         <b>{s.agentText}</b>
@@ -56,7 +64,7 @@ function HistorySheet({ station, chat, agentKey, entry }: { station: string; cha
       <div className={css.mHBody}>
         {tab === 0 ? <Steps station={station} chat={chat} agent={agent} history={history} entry={entry} /> : <Details station={station} chat={chat} agent={agent} history={history} />}
       </div>
-    </>
+    </div>
   );
 }
 

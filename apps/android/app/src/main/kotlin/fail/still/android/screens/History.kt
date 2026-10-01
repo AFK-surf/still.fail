@@ -1,5 +1,4 @@
-// An agent's execution history (web/src/History.tsx), as a sheet that drags
-// between half and full height: what it received and what it sent, drawn
+// An agent's execution history (web/src/mobile/History.tsx), as a full-screen page: what it received and what it sent, drawn
 // alike (a line, then the words beside a bar); what it did in between,
 // grouped, each group opening to its commands and output; and its details
 // (model, allowance, the station it runs on).
@@ -101,8 +100,6 @@ import fail.still.android.ui.Mono
 import fail.still.android.ui.ReaderSpec
 import fail.still.android.ui.MeterChips
 import fail.still.android.ui.Seg
-import fail.still.android.ui.SheetGrab
-import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Follow
 import fail.still.android.ui.rememberFollow
@@ -116,18 +113,26 @@ import kotlinx.serialization.json.put
 /** Opens an agent's execution history, over the item's page it belongs to. */
 /** `entry`: the transcript entry to open at (an activity row's), else its newest. */
 fun openHistory(app: AppState, station: String, of: ChatOf, key: String, entry: Long? = null) {
-    app.sheet = SheetSpec(0.55f, draggable = true) { HistorySheet(station, of, key, entry) }
+    app.push(Screen.History(station, of, key, entry))
 }
 
 @Composable
-private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, entry: Long? = null) {
+fun HistoryScreen(station: String, of: ChatOf, key: String, entry: Long? = null) {
+    val app = LocalApp.current
+    Column(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars)) {
+        NavBar("返回", { app.pop() }, "执行历史")
+        HistoryContent(station, of, key, entry)
+    }
+}
+
+@Composable
+private fun ColumnScope.HistoryContent(station: String, of: ChatOf, key: String, entry: Long? = null) {
     val app = LocalApp.current
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val history by rememberTopic<HistoryView>(app.core, Topics.history(station, key))
     val host by rememberTopic<Host>(app.core, Topics.host(station))
     val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
     var tab by rememberSaveable { mutableStateOf(0) }
-    SheetGrab()
     if (agent == null) {
         Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         return
@@ -135,7 +140,7 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, e
     val s = agent.session
     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         ModelMark(s.maker, s.runtime, 20.dp, agent.state)
-        // The sheet is the agent's history; its head is the agent, with the room its name needs.
+        // The page is the agent's history; its head is the agent, with the room its name needs.
         Text(s.agentText, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Actions(station, agent)
         Seg(listOf("步骤", "详情"), tab, { tab = it })
