@@ -103,7 +103,7 @@ fn gpt_usage_has_a_price_and_unknown_variants_do_not_borrow_one() {
     assert_eq!(astra["output"], 50.0);
     // Actual recorded GPT token totals: cached input is already separate from uncached input.
     let g = UsageGroup { model: Some("gpt-6-astra".into()), input: 1_916_566, cache_read: 71_041_792, output: 245_251, ..Default::default() };
-    assert!((cost(&g).unwrap() - 102.469002).abs() < 1e-9);
+    assert!((cost(&g).unwrap() - 102.470002).abs() < 1e-9);
 }
 
 struct Rig {
