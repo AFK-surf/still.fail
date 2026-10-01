@@ -2,6 +2,27 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { mRiseKeyframes } from "../../styles/keyframes.css.ts";
 import { vars } from "../../styles/tokens.css.ts";
 
+/** The narrow screen's colours in the dark (root.css.ts m, mDark). */
+const darkVars = {
+  "--m-bg": "#1B1C1F",
+  "--m-surface": "#26272B",
+  "--m-surface2": "#2C2D31",
+  "--raised": "#2A2C31",
+  "--m-ink": "#ECECED",
+  "--m-muted": "#9A9DA3",
+  "--m-subtle": "#6E7177",
+  "--m-line": "#34353A",
+  "--m-accent": "#EF7A55",
+  "--m-accent-bg": "#4A2F25",
+  "--m-accent-ink": "#F6A383",
+  "--m-green": "#5CC08A",
+  "--m-red": "#EB6B58",
+  "--m-blue": "#81AEFA",
+  "--m-chip": "#313237",
+  "--m-bubble": "#313237",
+  "--m-thumb": "#3A3B40",
+};
+
 /**
  * The narrow screen, as the Android app draws it (apps/android/…/ui/Theme.kt, Glass.kt, Parts.kt, Sheet.kt and the
  * screens): warm paper, ink, and one ember orange that means "this needs you". A dp or an sp is a pixel here.
@@ -39,25 +60,7 @@ export const m = style({
   selectors: {
     ":root[data-theme=\"dark\"] &": {
       colorScheme: "dark",
-      vars: {
-        "--m-bg": "#1B1C1F",
-        "--m-surface": "#26272B",
-        "--m-surface2": "#2C2D31",
-        "--raised": "#2A2C31",
-        "--m-ink": "#ECECED",
-        "--m-muted": "#9A9DA3",
-        "--m-subtle": "#6E7177",
-        "--m-line": "#34353A",
-        "--m-accent": "#EF7A55",
-        "--m-accent-bg": "#4A2F25",
-        "--m-accent-ink": "#F6A383",
-        "--m-green": "#5CC08A",
-        "--m-red": "#EB6B58",
-        "--m-blue": "#81AEFA",
-        "--m-chip": "#313237",
-        "--m-bubble": "#313237",
-        "--m-thumb": "#3A3B40",
-      },
+      vars: darkVars,
     },
     // In the desktop app the window has no title bar: its buttons sit at the top left, over where a phone's status bar is,
     // and the bars at the top move the window.
@@ -68,25 +71,7 @@ export const m = style({
       selectors: {
         ":root:not([data-theme=\"light\"]) &": {
           colorScheme: "dark",
-          vars: {
-            "--m-bg": "#1B1C1F",
-            "--m-surface": "#26272B",
-            "--m-surface2": "#2C2D31",
-            "--raised": "#2A2C31",
-            "--m-ink": "#ECECED",
-            "--m-muted": "#9A9DA3",
-            "--m-subtle": "#6E7177",
-            "--m-line": "#34353A",
-            "--m-accent": "#EF7A55",
-            "--m-accent-bg": "#4A2F25",
-            "--m-accent-ink": "#F6A383",
-            "--m-green": "#5CC08A",
-            "--m-red": "#EB6B58",
-            "--m-blue": "#81AEFA",
-            "--m-chip": "#313237",
-            "--m-bubble": "#313237",
-            "--m-thumb": "#3A3B40",
-          },
+          vars: darkVars,
         },
       },
     },
@@ -102,6 +87,18 @@ export const m = style({
  * the wide screen's styles hold there, the phone's resets below do not reach in, and its type is a size up for the
  * narrow screen.
  */
+/**
+ * The narrow screen's parts drawn where its root is not (over the dark image viewer, which is in a portal of the
+ * document's): its colours, the dark ones, and its curves and insets.
+ */
+export const mDark = style({
+  colorScheme: "dark",
+  vars: {
+    ...darkVars, "--m-ease": "cubic-bezier(.2, .8, .2, 1)", "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
+    "--m-top": "env(safe-area-inset-top, 0px)", "--m-foot": "env(safe-area-inset-bottom, 0px)",
+  },
+});
+
 export const wide = style({
   color: vars.text, fontSize: vars.textBody, lineHeight: "1.55",
   vars: { [vars.textXs]: "13px", [vars.textSm]: "15px", [vars.textBody]: "15px", [vars.neutralBg]: "var(--m-bubble)" },

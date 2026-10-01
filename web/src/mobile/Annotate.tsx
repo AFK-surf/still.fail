@@ -7,11 +7,12 @@ import { useParams } from "react-router";
 import { useChat, type ChatMessage } from "../api.ts";
 import { AgentWords, PersonWords } from "../Chat.tsx";
 import { offerToDraft, type DraftQuote } from "../draft.ts";
-import { Check, Copy, Edit, Quote as QuoteIcon, Send, Trash } from "../icons.tsx";
+import { Copy, Edit, Quote as QuoteIcon, Send } from "../icons.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { draftKeyOf } from "./ChatHost.tsx";
 import { NavBar } from "./parts.tsx";
+import { NoteBox, NoteCard } from "./Notes.tsx";
 import * as css from "./Annotate.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
@@ -162,7 +163,7 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
               aria-label={`批注 ${x.n}`} onClick={() => { setPicked(null); setEditing(x.n === editing ? null : x.n); }}>{x.n}</button>;
           })}
           {open && openRects.length > 0 && (
-            <NoteBox key={open.n} note={open} top={openRects[openRects.length - 1]!.bottom + 10}
+            <NoteBox key={open.n} note={open} style={{ top: openRects[openRects.length - 1]!.bottom + 10 }}
               onComment={(comment) => setNotes((all) => all.map((x) => (x.n === open.n ? { ...x, comment } : x)))}
               onDone={() => setEditing(null)} onRemove={() => remove(open.n)} />
           )}
@@ -175,10 +176,7 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
           <ol className={css.mTray} ref={tray}>
             {notes.map((x) => (
               <li key={x.n}>
-                <button type="button" className={`${css.mCard} ${pagesCss.mFloating}`} data-open={x.n === editing || undefined} onClick={() => reveal(x.n)}>
-                  <span className={css.mCardHead}><span className={css.mCardPin}>{x.n}</span>{x.comment.trim() || <span data-empty>只引用</span>}</span>
-                  <q className={css.mCardQuote}>{x.text}</q>
-                </button>
+                <NoteCard note={x} open={x.n === editing} onClick={() => reveal(x.n)} />
               </li>
             ))}
           </ol>
@@ -194,37 +192,6 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
   );
 }
 
-/** Saying something about a passage: a frosted composer floating under it, as the chat's is, the passage over what is written. */
-function NoteBox({ note, top, onComment, onDone, onRemove }: { note: Note; top: number; onComment(comment: string): void; onDone(): void; onRemove(): void }) {
-  const input = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    const el = input.current;
-    if (!el) return;
-    el.focus({ preventScroll: true });
-    el.setSelectionRange(el.value.length, el.value.length);
-    el.closest("div")?.parentElement?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, []);
-  useLayoutEffect(() => {
-    const el = input.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [note.comment]);
-  return (
-    <div className={`${css.mNote} ${pagesCss.mFloating}`} style={{ top }} onPointerDown={(e) => e.stopPropagation()}>
-      <div className={css.mNoteQuote}><span className={css.mNotePin}>{note.n}</span><q>{note.text}</q></div>
-      <div className={css.mNoteBar}>
-        <button type="button" className={css.mNoteBtn} aria-label="删掉这条批注" onClick={onRemove}><Trash size={17} /></button>
-        <textarea ref={input} className={css.mNoteInput} rows={1} value={note.comment} placeholder="写批注（可以不写）" aria-label={`批注 ${note.n}`}
-          onChange={(e) => onComment(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && window.matchMedia("(hover: hover)").matches) { e.preventDefault(); onDone(); } }} />
-        <button type="button" className={css.mNoteDone} aria-label="写好了" onClick={onDone}><Check size={18} /></button>
-      </div>
-    </div>
-  );
-}
-
-/** The picked passage's two ends, each a handle a finger moves. */
 function Handles({ words, rects, picked, setPicked, setDragging }: {
   words: RefObject<HTMLDivElement | null>; rects: DOMRect[]; picked: Span; setPicked(span: Span): void; setDragging(on: boolean): void;
 }) {

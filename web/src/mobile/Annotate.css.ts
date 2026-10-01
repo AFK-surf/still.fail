@@ -68,11 +68,14 @@ export const mPin = style({
 });
 
 /** Saying something about a passage: floating under it, frosted as the chat's composer is (ChatHost.css.ts). */
-export const mNote = style({
-  position: "absolute", zIndex: "3", left: "12px", right: "12px", scrollMarginBottom: "calc(var(--m-foot) + 160px)",
+/** Its look, wherever it is (an image's marks put it at their foot: ../annotate/ImageMarks.tsx). */
+export const mNoteBox = style({
   boxShadow: "0 1px 3px rgb(0 0 0 / .06)", display: "flex", flexDirection: "column", gap: "6px", padding: "10px 8px 8px", borderRadius: "26px",
   animation: `${popKeyframes} 140ms var(--m-ease)`,
 });
+export const mNote = style([mNoteBox, {
+  position: "absolute", zIndex: "3", left: "12px", right: "12px", scrollMarginBottom: "calc(var(--m-foot) + 160px)",
+}]);
 export const mNoteQuote = style({
   display: "flex", alignItems: "center", gap: "6px", minWidth: "0", padding: "0 8px", color: "var(--m-muted)", fontSize: "13px",
   lineHeight: "18px",
@@ -110,6 +113,7 @@ export const mCardHead = style({
   display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontSize: "14px", lineHeight: "20px", whiteSpace: "nowrap",
   overflow: "hidden", textOverflow: "ellipsis",
 });
+export const mCardSaid = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${mCardHead} [data-empty]`, { color: "var(--m-muted)" });
 export const mCardPin = style([mPin, { minWidth: "16px", height: "16px", padding: "0 4px", borderRadius: "8px 8px 2px 8px", fontSize: "10px", lineHeight: "16px", position: "static", flex: "none", boxShadow: "none", border: "0", animation: "none" }]);
 export const mCardQuote = style({

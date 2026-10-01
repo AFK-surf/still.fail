@@ -89,3 +89,12 @@ export const note = style([marksNote, { ...glass, boxShadow: "0 2px 10px rgb(0 0
 export const said = style([marksSaid, { ...glass, boxShadow: "0 2px 10px rgb(0 0 0 / .25)", color: "rgba(255, 255, 255, .94)" }]);
 globalStyle(`${note} input`, { color: "inherit" });
 globalStyle(`${note} input::placeholder, ${note} span`, { color: "rgba(255, 255, 255, .5)" });
+
+/** A phone's foot while marking (as a message's notes page's): the notes' cards over the tools, or the note being written. */
+export const foot = style({
+  position: "absolute", zIndex: "3", left: "0", right: "0", bottom: "max(16px, env(safe-area-inset-bottom))", display: "flex",
+  flexDirection: "column", alignItems: "stretch", gap: "10px", padding: "0 12px", pointerEvents: "none", color: "var(--m-ink)",
+  "@media": { "(max-width: 640px)": { bottom: "max(8px, env(safe-area-inset-bottom))" } },
+});
+globalStyle(`${foot} > *`, { pointerEvents: "auto" });
+globalStyle(`${foot} ${toolbar}[data-in-foot]`, { position: "static", transform: "none", alignSelf: "center" });

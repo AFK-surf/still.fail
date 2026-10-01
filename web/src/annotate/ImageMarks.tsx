@@ -10,6 +10,10 @@ import { Tip } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./ImageMarks.css.ts";
 import * as marksCss from "./Marks.css.ts";
+import { useNarrow } from "../mobile/app.tsx";
+import { NoteBox, NoteCard, type NoteView } from "../mobile/Notes.tsx";
+import * as annotateCss from "../mobile/Annotate.css.ts";
+import * as rootCss from "../mobile/styles/root.css.ts";
 
 type Tool = "select" | "rect" | "arrow" | "pen" | "text";
 interface P { x: number; y: number }
@@ -216,6 +220,7 @@ type Drag =
 export function useImageMarks({ url, name, natural, scale, pass, onDone }:
   { url: string | null; name: string; natural: { w: number; h: number } | null; scale: number; pass: Pass; onDone(): void }) {
   const draftKey = useContext(DraftKey);
+  const phone = useNarrow();
   const [on, setOn] = useState(false);
   const [tool, setTool] = useState<Tool>("rect");
   const [color, setColor] = useState(css.INK);
@@ -515,8 +520,8 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
 
   const pickedShape = picked === null ? undefined : shapes.find((s) => s.id === picked);
   const shownColor = writing?.color ?? pickedShape?.color ?? color;
-  const tools = on ? (
-    <div className={css.toolbar} data-floats onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+  const toolbar = on ? (
+    <div className={css.toolbar} data-floats={phone ? undefined : true} data-in-foot={phone || undefined} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
       {TOOLS.map((t) => (
         <Tip key={t.tool} label={`${t.label}（${t.key}）`}><button type="button" className={pagesCss.iconBtn} aria-label={t.label}
           aria-pressed={tool === t.tool} onClick={() => pickTool(t.tool)}>{t.icon}</button></Tip>
@@ -559,7 +564,8 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     return r && natural ? window.innerWidth - (r.left + (p.x / natural.w) * r.width) : Infinity;
   };
   // The numbered marks' pins, over the sheet and placed as it is, each drawn at its own size whatever the zoom: its
-  // number, and what is said about it beside it (being written: open, in a bubble).
+  // number, and (on a wide screen) what is said about it beside it (being written: open, in a bubble). A phone says
+  // them at the foot instead, as a message's notes page does (`foot`).
   const pins = (place: CSSProperties) => natural && numbers.size > 0 ? (
     <div className={css.pins} style={place}>
       {shapes.map((s) => {
@@ -570,10 +576,10 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
         return (
           <div key={s.id} className={css.pinAt} style={{ left: p.x, top: p.y, transform: `scale(${1 / scale})` }}
             onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-            <Tip label={open ? undefined : comment || "写点什么"}><button type="button" className={marksCss.pin} data-open={open || undefined}
+            <Tip label={open || phone ? undefined : comment || "写点什么"}><button type="button" className={marksCss.pin} data-open={open || undefined}
               style={{ left: 0, top: 0, background: s.color, borderColor: halo, color: halo }} aria-label={`标注 ${n}`}
               onClick={() => { putDown(); setPicked(null); setNote(open ? null : s.id); }}>{n}</button></Tip>
-            {open
+            {phone ? null : open
               ? <div className={css.note} style={right ? { left: 28, top: -28 } : { right: 8, top: -28 }}>
                   <input className={marksCss.noteInput} autoFocus value={comment} placeholder="对这处说点什么" aria-label={`标注 ${n} 的说明`}
                     onChange={(e) => { const v = e.target.value; setComments((all) => new Map(all).set(s.id, v)); }}
@@ -642,5 +648,46 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     {pins(place)}
   </>) : null;
 
+  // On a phone, the foot as a message's notes page has it (../mobile/Annotate.tsx): the note being written in its box
+  // over the keyboard, else the notes as cards over the tools (a tap opens one again). In the narrow screen's dark.
+  const notes: (NoteView & { id: number })[] = shapes.flatMap((s) => {
+    const n = numbers.get(s.id);
+    return n === undefined ? [] : [{ id: s.id, n, text: s.tool === "rect" ? "框" : "箭头", comment: comments.get(s.id) ?? "", color: s.color }];
+  }).sort((a, b) => a.n - b.n);
+  const openNote = notes.find((x) => x.id === note);
+  const keyboard = useKeyboard(phone && openNote !== undefined);
+  const tools = !on ? null : !phone ? toolbar : (
+    <div className={`${css.foot} ${rootCss.mDark}`} data-floats style={{ bottom: keyboard ? keyboard + 8 : undefined }}
+      onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      {openNote
+        ? <NoteBox key={openNote.id} note={openNote} className={annotateCss.mNoteBox} reveal={false}
+            onComment={(comment) => setComments((all) => new Map(all).set(openNote.id, comment))}
+            onDone={() => setNote(null)} onRemove={() => remove(openNote.id)} />
+        : <>
+            {notes.length > 0 && (
+              <ol className={annotateCss.mTray}>
+                {notes.map((x) => <li key={x.id}><NoteCard note={x} open={false} onClick={() => { putDown(); setPicked(null); setNote(x.id); }} /></li>)}
+              </ol>
+            )}
+            {toolbar}
+          </>}
+    </div>
+  );
+
   return { on, bar, tools, sheet };
+}
+
+/** How much of the window's foot the keyboard takes (px) while `on`: what is written stays over it. */
+function useKeyboard(on: boolean): number {
+  const [taken, setTaken] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!on || !vv) { setTaken(0); return; }
+    const measure = () => setTaken(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    measure();
+    vv.addEventListener("resize", measure);
+    vv.addEventListener("scroll", measure);
+    return () => { vv.removeEventListener("resize", measure); vv.removeEventListener("scroll", measure); };
+  }, [on]);
+  return taken;
 }

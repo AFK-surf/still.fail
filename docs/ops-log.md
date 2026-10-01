@@ -33,6 +33,7 @@
 - 图片预览左右切换（image-viewer-swipe）：PC 和安卓切换时前后两张像胶片一样滑动，拖动跟手（拖动时旁边那张也露出来），松手翻页或弹回；修了安卓切图后画面一直停在第一张（`produceState` 留着上一张的数据）。只改客户端：web 跟部署走，安卓要发一版，cloud、station 不动。验证：打开一个有几张图的 chat，点开一张，PC 按 ← → 或用鼠标拖、手机左右滑，图跟着走，松手滑到下一张，标题的「2 / 3」和画面一致。
 - 图片标注带编号和评论（image-marks-comments）：PC/手机 web 的图片标注里，框和箭头带编号圆点和评论气泡；放进对话时除了画好的图，每处编号一张引用卡片（quote 的 role 新加 `image`）。改了 web 和 station（`admin/files.rs` 收下 role `image`，`instructions.rs` 告诉 agent 这是图片上的第 N 处）。新页面配旧 station：role 被丢掉，卡片当普通引用显示，agent 读到「a message from 图片 … 标注 N」，位置和评论都还在；旧页面配新 station 不受影响。web 跟部署走，station 要发包（`stillfail update`）。验证：在 chat 里点开一张图 → 标注 → 画个框写句评论 → 放进对话 → 发送，消息里的卡片带橙色编号，agent 收到的引用是「From an image marked in the chat (…)」。
 - 安卓图片标注带编号和评论（android-image-marks-comments）：框和箭头带编号圆点；评论用批注页同一套底部输入框和卡片（Annotate.kt 的 NoteBox/Card）；放进对话时除了画好编号的图，每处一张 role `image` 的引用卡片。只改了 app，要发一版安卓；station 认 `image` 要随上面「图片标注带编号和评论」那条发的 station 包，旧 station 下卡片当普通引用。验证：安卓上点开图片 → 标注 → 画框，底部弹出批注输入框，写完 ✓ 后工具栏上方出现卡片；放进对话后 composer 里有图和每处一张引用。
+- 手机 web 图片标注用批注页的输入框和卡片（mobile-web-image-marks-notes）：手机 web 上框和箭头的评论改成和批注页同一套底部输入框 + 卡片（抽成 `web/src/mobile/Notes.tsx`，批注页也用它），PC 不变；批注卡片里长评论显示省略号。只改 web，跟部署走。上线后验：手机浏览器打开图片 → 标注 → 画框，底部输入框浮在键盘上方没被挡住（visualViewport 算的，harness 里没键盘没验到）；写完工具栏上方出现卡片。
 
 下面各条的 cloud、web、admin 部分已经随 1bf61c4 上线（2026-10-01 11:13），剩下的是要发版的安卓和桌面部分。
 

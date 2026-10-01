@@ -42,6 +42,11 @@ export interface MobileApp {
 
 const Context = createContext<MobileApp | null>(null);
 
+/** Whether this is drawn in the narrow app (a phone's way of doing things: ../annotate/ImageMarks.tsx). */
+export function useNarrow(): boolean {
+  return useContext(Context) !== null;
+}
+
 export function useApp(): MobileApp {
   const app = useContext(Context);
   if (!app) throw new Error("outside the narrow app");
