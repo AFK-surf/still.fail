@@ -69,6 +69,9 @@ internal class ChatMotion(private val reduced: Boolean) {
     var copied by mutableStateOf<String?>(null)
     /** The rings round the agents' avatars turning, one for the chat (Chat.kt WorkRing). */
     var ring: androidx.compose.runtime.State<Float>? = null
+    /** Where the flying avatar was last sent, for which message. */
+    private var aimed: Offset? = null
+    private var aimedAt = -1L
     /** Where the flying avatar last let a message out (in the pane): where it drops on from to the same agent's next. */
     private var landed: Offset? = null
     /** Bumped when what waits changes without the current turn changing (all let out at once). */
@@ -207,7 +210,12 @@ internal class ChatMotion(private val reduced: Boolean) {
         val avatar = at(activityAvatars[c.agent]) ?: return null
         // Before the message is in the list: where its avatar will be, the activity's place (the message comes in
         // there, and the activity moves down), 3dp down its row as a message's avatar sits.
-        val landing = at(landings[c.seq]) ?: at(activityRows[c.agent])?.let { it + Offset(0f, with(density) { 3.dp.toPx() }) } ?: return null
+        // As it comes in, the message is laid out a frame before its avatar says where it is, and the activity has moved
+        // down already: until then, where it was aimed at.
+        val known = at(landings[c.seq])
+        val held = aimed?.takeIf { aimedAt == c.seq && c.pose != Pose.Float }
+        val landing = known ?: held ?: at(activityRows[c.agent])?.let { it + Offset(0f, with(density) { 3.dp.toPx() }) } ?: return null
+        aimed = landing; aimedAt = c.seq
         val t = clock.value
         return when (c.pose) {
             Pose.Float -> {
