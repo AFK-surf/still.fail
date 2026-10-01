@@ -34,6 +34,20 @@ Not for quick commands: run those directly. Not for work that must finish before
 - A job's end is not the people's news unless it matters to them: tell them results, failures they must know about, and
   what happens next.
 
+## Long-running watches
+
+When someone asks you to keep an eye on something for a long while (a CI run, a deploy, a metric, a review queue), start
+it with `job_start` and `watch: true`: a loop that checks and `stillfail-job notify`s on changes. While the watch runs:
+
+- its chat is a watching chat: listed under the chat list's 监控中 filter, never archived for being idle, and asked about
+  before someone archives it by hand;
+- end your turn with `chat_state` waiting (or a final post): you are not asked again when the wait runs out, only when the
+  watch notifies, ends, or someone writes;
+- name the chat for it: give your next `chat_post` a title that says what it watches (e.g. 「监控 · PR #482 的 CI」); a
+  chat with a watch running may be renamed so at once.
+
+Stop the watch (`job_stop`) when it is no longer needed; the chat is then an ordinary one again.
+
 ## Web services: when
 
 Use `job_start` with a `port` when what you made should be looked at or used in a browser, rather than read as text:
