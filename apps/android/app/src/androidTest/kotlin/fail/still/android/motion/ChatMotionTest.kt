@@ -260,11 +260,11 @@ class ChatMotionTest {
         h.launch(listOf(Screen.Home, Screen.NewChat), dark = dark)
         h.type(text)
         h.keyboard()
-        // A quiet patch of the capsule above the field's letters. Its glass must not lose its source
+        // A quiet patch at the capsule's fixed bottom, below the field's letters. Its glass must not lose its source
         // for the frame between the new page leaving and the chat's list being laid out.
         val field = rule.onAllNodes(hasSetTextAction())[0].fetchSemanticsNode().boundsInRoot
         val x = field.center.x.toInt()
-        val y = field.top.toInt() - 4
+        val y = field.bottom.toInt() + 4
         fun ground() = rule.onRoot().captureToImage().toPixelMap()[x, y]
         val before = ground()
         val r = h.record(if (dark) "new-chat-dark" else "new-chat")
