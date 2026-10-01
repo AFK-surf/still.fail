@@ -340,7 +340,7 @@ export interface Session {
 }
 
 /** Where an agent stands. */
-export type Status = "running" | "queued" | "final" | "block" | "failed" | "aborted" | "unexpected" | "idle";
+export type Status = "running" | "queued" | "final" | "block" | "decision" | "failed" | "aborted" | "unexpected" | "idle";
 
 /** How a connect's conversations become sessions. */
 export type ConnectMode = "multi-session" | "single-session";

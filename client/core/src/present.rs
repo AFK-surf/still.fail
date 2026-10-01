@@ -928,6 +928,23 @@ mod tests {
     }
 
     #[test]
+    fn a_decision_agent_passes_the_chat_shape() {
+        let mut s = json!({
+            "key": "ember:c-decision", "runtime": "codex", "process": "warm", "pending": 0,
+            "lastTurn": {"kind": "message", "startedAt": 1, "declared": "block", "ending": "need_decision", "outcome": "completed"}
+        });
+        session(&mut s);
+        let agent = json!({
+            "status": shown_status(&s), "badge": mark_of(&s), "session": s,
+            "profiles": [], "choices": [], "attention": [], "turns": [], "threads": [], "jobs": []
+        });
+        let checked = stillfail_shapes::conform::<stillfail_shapes::ChatAgent>(agent).unwrap();
+        assert_eq!(checked["status"], "decision");
+        assert_eq!(checked["badge"], "block");
+        assert_eq!(checked["session"]["statusText"], "等你决定");
+    }
+
+    #[test]
     fn a_chat_with_nothing_left_is_settled_and_says_where_it_stands() {
         let agent = |turn: Value, process: &str| {
             let mut a = json!({"key": "k", "process": process, "pending": 0, "lastTurn": turn});

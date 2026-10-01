@@ -89,6 +89,7 @@ pub enum Status {
     Queued,
     Final,
     Block,
+    Decision,
     Failed,
     Aborted,
     Unexpected,
