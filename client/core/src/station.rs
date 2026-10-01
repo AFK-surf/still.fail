@@ -1402,6 +1402,7 @@ impl Stations {
                     }
                     let measured = net.measured.as_ref().map(|m| json!({
                         "measuring": m.measuring,
+                        "at": m.at,
                         "relays": m.relays.iter().map(|(relay, ms)| json!({ "relay": relay, "rttMs": ms })).collect::<Vec<_>>(),
                         "moved": m.moved,
                     }));

@@ -496,7 +496,7 @@ pub fn host(h: &mut Value) {
 /// A station's connection as its card shows it (shapes `StationNet`), from what `Topic::Net` read of it; None
 /// while there is none. Only what is off is coloured: a slow round trip, packets lost. A relay is said by the name
 /// still.fail gives it (`relay_name`, by host: 北京中继), or its host.
-pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<Value> {
+pub fn net(raw: &Value, clock: &Clock, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<Value> {
     if !raw.is_object() {
         return None;
     }
@@ -528,6 +528,7 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
         json!({
             "measuring": m.get("measuring").and_then(Value::as_bool).unwrap_or(false),
             "relays": relays,
+            "whenText": m.get("at").and_then(Value::as_f64).map(|at| format!("{}检测", format::relative_time(at, clock.now, clock.offset_min))),
             "moved": m.get("moved").and_then(Value::as_str).map(named),
         })
     });
@@ -659,10 +660,10 @@ mod tests {
     #[test]
     fn a_connection_is_said_in_words_and_only_what_is_off_is_coloured() {
         let unnamed = |_: &str| None;
-        assert_eq!(net(&Value::Null, &unnamed), None);
+        assert_eq!(net(&Value::Null, &Clock { now: 0.0, offset_min: 0 }, &unnamed), None);
         let sample = |rtt: f64, sent: u64, lost: u64| json!({ "at": 0, "rttMs": rtt, "rxBps": 1_468_006, "txBps": 83_968, "sent": sent, "lost": lost });
         let raw = json!({ "path": "direct", "rttMs": 38.4, "rxBytes": 222_298_112u64, "txBytes": 10_066_329u64, "samples": [sample(40.0, 50, 0), sample(38.4, 50, 0)] });
-        let shown = net(&raw, &unnamed).unwrap();
+        let shown = net(&raw, &Clock { now: 0.0, offset_min: 0 }, &unnamed).unwrap();
         assert_eq!(shown["path"], "直连");
         assert_eq!(shown["rtt"], json!({ "text": "38 ms", "level": "ok" }));
         assert_eq!(shown["rttHistory"], json!([40.0, 38.4]));
@@ -674,21 +675,21 @@ mod tests {
         let mut daily = raw.clone();
         daily["todayRxBytes"] = json!(1_073_741_824u64);
         daily["todayTxBytes"] = json!(52_428_800u64);
-        let shown = net(&daily, &unnamed).unwrap();
+        let shown = net(&daily, &Clock { now: 0.0, offset_min: 0 }, &unnamed).unwrap();
         assert_eq!(shown["total"], "今天共 ↓ 1.0 GB · ↑ 50 MB");
         assert_eq!((shown["downTotal"].as_str(), shown["upTotal"].as_str()), (Some("1.0 GB"), Some("50 MB")));
 
         let raw = json!({ "path": "relay", "relay": "relay.still.fail", "rttMs": 286.0, "rxBytes": 0, "txBytes": 0, "samples": [sample(1200.0, 40, 2)] });
-        let shown = net(&raw, &unnamed).unwrap();
+        let shown = net(&raw, &Clock { now: 0.0, offset_min: 0 }, &unnamed).unwrap();
         assert_eq!(shown["path"], "中继 relay.still.fail");
         let named = |host: &str| (host == "relay.still.fail").then(|| "北京".to_string());
-        assert_eq!(net(&raw, &named).unwrap()["path"], "北京中继");
+        assert_eq!(net(&raw, &Clock { now: 0.0, offset_min: 0 }, &named).unwrap()["path"], "北京中继");
         assert_eq!(shown["rtt"]["level"], "ok");
         assert_eq!(shown["loss"], json!({ "text": "丢包 5.0%", "level": "amber" }));
         // Not yet two readings: nothing to say of speed.
         let measured = json!({ "measuring": false, "relays": [{ "relay": "relay.still.fail", "rttMs": 11_000.0 }, { "relay": "hk.test", "rttMs": 82.0 }, { "relay": "cf.test", "rttMs": null }], "moved": "hk.test" });
         let raw = json!({ "path": "relay", "relay": "hk.test", "rttMs": 90.0, "rxBytes": 0, "txBytes": 0, "samples": [], "measured": measured });
-        assert_eq!(net(&raw, &named).unwrap()["measured"], json!({
+        assert_eq!(net(&raw, &Clock { now: 0.0, offset_min: 0 }, &named).unwrap()["measured"], json!({
             "measuring": false,
             "relays": [
                 { "name": "北京", "rtt": { "text": "11.0 s", "level": "red" }, "current": false },
@@ -696,8 +697,13 @@ mod tests {
                 { "name": "cf.test", "rtt": null, "current": false },
             ],
             "moved": "hk.test",
+            "whenText": null,
         }));
-        let shown = net(&json!({ "path": null, "rttMs": 1500.0, "rxBytes": 0, "txBytes": 0, "samples": [] }), &unnamed).unwrap();
+        let mut dated = raw.clone();
+        dated["measured"]["at"] = json!(60_000);
+        dated["measured"]["measuring"] = json!(true);
+        assert_eq!(net(&dated, &Clock { now: 180_000.0, offset_min: 0 }, &named).unwrap()["measured"]["whenText"], "2 分钟前检测");
+        let shown = net(&json!({ "path": null, "rttMs": 1500.0, "rxBytes": 0, "txBytes": 0, "samples": [] }), &Clock { now: 0.0, offset_min: 0 }, &unnamed).unwrap();
         assert_eq!((shown["path"].as_str(), shown["down"].as_str()), (Some("正在选路"), Some("—")));
         assert_eq!(shown["rtt"], json!({ "text": "1.5 s", "level": "red" }));
     }

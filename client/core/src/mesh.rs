@@ -60,6 +60,10 @@ pub const REBIND_MS: u64 = 5_000;
 pub const MEASURE_AFTER_MS: u64 = 3_000;
 /// How often a link through a relay is measured again (`measure`).
 pub const MEASURE_EVERY_MS: u64 = 4 * 60_000;
+/// A complete relay measurement, including connecting and warming up, must finish within this budget.
+const MEASURE_TIMEOUT_MS: u64 = 15_000;
+const MEASURE_WARMUP: usize = 3;
+const MEASURE_SAMPLES: usize = 5;
 /// A link moves to another relay only if the way through it is quicker by both this many milliseconds and this share of
 /// the link's round trip: a few milliseconds either way is no reason to move what is on it.
 /// Where what each station's links carried today is kept (`Mesh::today`).
@@ -160,6 +164,8 @@ struct Day {
 pub struct Measured {
     /// Being measured again now.
     pub measuring: bool,
+    /// When the last completed measurement finished, in epoch milliseconds.
+    pub at: Option<f64>,
     /// Each relay's host and its round trip in milliseconds (None: not reached in time), in still.fail's order.
     pub relays: Vec<(String, Option<f64>)>,
     /// The host of the relay the link moved to, if it did.
@@ -556,25 +562,30 @@ impl Mesh {
         endpoint
     }
 
-    /// The round trip to a station through one relay, in milliseconds, as its handshake on that relay's own endpoint
-    /// measured it: the whole way, device to relay to station and back. None if it was not reached in time.
+    /// A relay-only connection, warmed up before sampling the same QUIC RTT estimate the live link shows.
+    /// Its key is separate from both the live endpoint and other stations' probes, so measuring never displaces them.
     async fn probe(&self, relay: &str, station_id: &str) -> Option<f64> {
-        let endpoint = self.pinned_endpoint(relay).await?;
         let id = PublicKey::from_bytes(&hex::decode(station_id).ok()?.try_into().ok()?).ok()?;
-        let addr = EndpointAddr::new(id).with_relay_url(relay.parse::<RelayUrl>().ok()?);
-        let handshake = async {
+        let url = relay.parse::<RelayUrl>().ok()?;
+        let secret = pinned_key(&pinned_key(&self.secret.get(), relay), station_id);
+        let endpoint = bind_relay(&secret, relay, true).await.ok()?;
+        let exchange = async {
+            let addr = EndpointAddr::new(id).with_relay_url(url.clone());
             let options = ConnectOptions::new().with_additional_alpns(vec![FORMER_ALPN.to_vec()]);
-            endpoint.connect_with_opts(addr, ALPN, options).await.ok()?.await.ok()
+            let conn = endpoint.connect_with_opts(addr, ALPN, options).await.ok()?.await.ok()?;
+            let rtt = sample_relay_rtt(&conn, &url).await;
+            conn.close(0u32.into(), b"measured");
+            rtt
         };
-        let timeout = self.host.sleep(CONNECT_TIMEOUT_MS);
-        pin_mut!(handshake);
-        let conn = match futures::future::select(handshake, timeout).await {
-            Either::Left((conn, _)) => conn?,
-            Either::Right(_) => return None,
+        let rtt = {
+            pin_mut!(exchange);
+            match futures::future::select(exchange, self.host.sleep(MEASURE_TIMEOUT_MS)).await {
+                Either::Left((rtt, _)) => rtt,
+                Either::Right(_) => None,
+            }
         };
-        let rtt = conn.paths().iter().find(|p| p.is_selected()).map(|p| p.rtt().as_secs_f64() * 1000.0);
-        // The station only waited for a credential on it.
-        conn.close(0u32.into(), b"measured");
+        // Also closes a connection whose handshake or samples timed out.
+        endpoint.close().await;
         rtt
     }
 
@@ -582,6 +593,9 @@ impl Mesh {
     /// (`quicker`), opens a link on that relay's own endpoint and puts it in `link`'s place (`switch`: what is on it is
     /// asked again there).
     async fn quickest(&self, station_id: &str, link: &Rc<Link>) {
+        if self.measured(station_id).is_some_and(|m| m.measuring) {
+            return;
+        }
         let mut span = self.tracer.span("mesh.measure", Kind::Internal);
         span.set("stillfail.station", station_id.to_string());
         let (rtt_ms, via) = (link.net().rtt_ms, link.via());
@@ -595,13 +609,14 @@ impl Mesh {
         self.probing.set(self.probing.get() + 1);
         let measured: Vec<(String, Option<f64>)> = join_all(self.relays.iter().map(|relay| async move { (relay.clone(), self.probe(relay, station_id).await) })).await;
         self.probing.set(self.probing.get() - 1);
-        let mut shown = Measured { measuring: false, relays: measured.iter().map(|(relay, ms)| (relay_host(relay), *ms)).collect(), moved: None };
+        let mut shown = Measured { measuring: false, at: Some(self.host.now_ms()), relays: measured.iter().map(|(relay, ms)| (relay_host(relay), *ms)).collect(), moved: None };
         for (relay, ms) in &measured {
             let ms = ms.map(|ms| Value::from(ms.round())).unwrap_or_else(|| "none".into());
             span.set(&format!("stillfail.rtt.{}", relay_host(relay)), ms);
         }
-        if let Some(relay) = quicker(rtt_ms, via.as_ref(), &measured)
+        if link.path() == Some("relay")
             && self.is_current(station_id, link)
+            && let Some(relay) = quicker(link.net().rtt_ms, link.via().as_ref(), &measured)
             && let Some(endpoint) = self.pinned_endpoint(&relay).await
         {
             span.set("stillfail.moved", relay_host(&relay));
@@ -681,7 +696,9 @@ fn quicker(rtt_ms: Option<f64>, via: Option<&RelayUrl>, measured: &[(String, Opt
     if via.is_some() && via == relay.parse::<RelayUrl>().ok().as_ref() {
         return None;
     }
-    let now = rtt_ms?;
+    // Compare fresh measurements from the same round; the live connection may still carry an older estimate.
+    let now = measured.iter().find(|(relay, _)| relay.parse::<RelayUrl>().ok().as_ref() == via)
+        .and_then(|(_, ms)| *ms).or(rtt_ms)?;
     (best + QUICKER_MS <= now && best <= now * (1.0 - QUICKER_SHARE)).then(|| relay.clone())
 }
 
@@ -705,10 +722,41 @@ fn pinned_key(secret: &[u8; 32], relay: &str) -> [u8; 32] {
 /// An endpoint on one relay alone (`Mesh::pinned_endpoint`). Natively it goes direct too, when hole punching finds
 /// the way; it looks nothing up (the main endpoint does that).
 async fn bind_pinned(secret: &[u8; 32], relay: &str) -> Result<Endpoint> {
+    bind_relay(secret, relay, false).await
+}
+
+async fn bind_relay(secret: &[u8; 32], relay: &str, relay_only: bool) -> Result<Endpoint> {
     let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relay_mode(&[relay.to_string()])?).transport_config(transport());
+    // Production probes must not turn a successful LAN/UDP hole punch into a relay's reported RTT.
+    let builder = if relay_only { builder.clear_ip_transports() } else { builder };
     #[cfg(test)]
-    let builder = builder.clear_ip_transports().ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify());
+    let builder = builder.ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify());
     builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
+}
+
+/// Send a byte on a unidirectional stream and wait for its transport ACK, then read QUIC's RTT estimate.
+/// No admin request or new station protocol is needed: even older stations ACK stream data while awaiting a
+/// credential. This is not elapsed application time (which includes delayed ACKs and processing).
+async fn sample_relay_rtt(conn: &iroh::endpoint::Connection, relay: &RelayUrl) -> Option<f64> {
+    let mut samples = Vec::with_capacity(MEASURE_SAMPLES);
+    for i in 0..MEASURE_WARMUP + MEASURE_SAMPLES {
+        let mut send = conn.open_uni().await.ok()?;
+        send.write_all(&[0]).await.ok()?;
+        send.finish().ok()?;
+        if send.stopped().await.ok()?.is_some() {
+            return None;
+        }
+        let paths = conn.paths();
+        let path = paths.iter().find(|p| p.is_selected())?;
+        if path.remote_addr() != &iroh::TransportAddr::Relay(relay.clone()) {
+            return None;
+        }
+        if i >= MEASURE_WARMUP {
+            samples.push(path.rtt().as_secs_f64() * 1000.0);
+        }
+    }
+    samples.sort_by(f64::total_cmp);
+    Some(samples[MEASURE_SAMPLES / 2])
 }
 
 /// What the mesh does as the UI comes back or the network changes (wake.rs; also a person's 重试): iroh is told (on
@@ -1805,9 +1853,36 @@ mod tests {
         assert_eq!(quicker(Some(100.0), Some(&via_a), &measured(None, Some(80.0))), None);
         assert_eq!(quicker(Some(1_000.0), Some(&via_a), &measured(None, Some(850.0))), None);
         assert_eq!(quicker(Some(1_000.0), Some(&via_a), &measured(None, Some(700.0))), Some(b.clone()));
+        // A stale live estimate must not make a barely faster fresh measurement trigger a switch.
+        assert_eq!(quicker(Some(11_000.0), Some(&via_a), &measured(Some(90.0), Some(80.0))), None);
         // Nothing reached, or the link's own round trip not known.
         assert_eq!(quicker(Some(1_000.0), Some(&via_a), &measured(None, None)), None);
         assert_eq!(quicker(None, Some(&via_a), &measured(None, Some(80.0))), None);
+    }
+
+    #[test]
+    fn relay_probes_disable_ip_without_disabling_live_hole_punching() {
+        run(async {
+            let (url, _server) = relay().await;
+            let probe = bind_relay(&[31; 32], url.as_str(), true).await.unwrap();
+            assert!(probe.bound_sockets().is_empty());
+            let live = bind_pinned(&[32; 32], url.as_str()).await.unwrap();
+            assert!(!live.bound_sockets().is_empty());
+            probe.close().await;
+            live.close().await;
+        });
+    }
+
+    #[test]
+    fn a_direct_rtt_is_never_reported_as_a_relay_measurement() {
+        run(async {
+            let station = Station::start().await;
+            let endpoint = Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).bind().await.unwrap();
+            let conn = endpoint.connect(station.addr(), ALPN).await.unwrap();
+            let relay: RelayUrl = "https://relay.test/".parse().unwrap();
+            assert_eq!(sample_relay_rtt(&conn, &relay).await, None);
+            endpoint.close().await;
+        });
     }
 
     /// A relay on localhost.
@@ -1928,6 +2003,7 @@ mod tests {
 
             let shown = mesh.measured(&id).unwrap();
             assert!(!shown.measuring);
+            assert!(shown.at.is_some());
             assert_eq!(shown.moved.as_deref(), b.host_str());
             assert_eq!(shown.relays.len(), 2);
             assert!(shown.relays.iter().all(|(_, ms)| ms.is_some()), "{shown:?}");

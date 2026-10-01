@@ -69,7 +69,7 @@ export function Net({ net, stacked = false }: { net: StationNet; stacked?: boole
           <span>{net.path}</span>
           {net.loss && <Figure f={net.loss} />}
         </span>
-        {net.rtt && <span>延时 <Figure f={net.rtt} /></span>}
+        {net.rtt && <span>当前 <Figure f={net.rtt} /></span>}
       </span>
       <span className={css.netRates}>
         <span>↑</span><b>{net.up}</b><span>{net.upTotal && `共 ${net.upTotal}`}</span>
@@ -88,8 +88,9 @@ export function Ways({ station, measured, stacked = false }: { station: string; 
   return (
     <div className={stacked ? `${css.ways} ${css.waysStacked}` : css.ways}>
       <span className={css.waysList}>
+        {measured && <span>{measured.whenText ?? "上次检测"}</span>}
         {!measured ? <span>各中继还没测过</span> : measured.relays.map((r) => (
-          <span key={r.name} data-current={r.current || undefined}>{r.name} {r.rtt ? <Figure f={r.rtt} /> : <b data-level="red">不通</b>}</span>
+          <span key={r.name} data-current={r.current || undefined}>{r.name} {r.rtt ? <Figure f={r.rtt} /> : <b data-level="red">未测通</b>}</span>
         ))}
         {measured?.moved && <span>已换到{measured.moved}</span>}
       </span>

@@ -2574,6 +2574,8 @@ pub struct StationNet {
 #[serde(rename_all = "camelCase")]
 pub struct NetMeasured {
     pub measuring: bool,
+    /// When these results were measured, in words; absent with an older core.
+    pub when_text: Option<String>,
     pub relays: Vec<NetRelay>,
     /// The relay the connection moved to as they were measured (its name), if it did.
     pub moved: Option<String>,

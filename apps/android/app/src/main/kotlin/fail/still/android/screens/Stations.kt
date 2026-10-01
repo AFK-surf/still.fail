@@ -216,7 +216,7 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
             }
             net.rtt?.let { rtt ->
                 Row {
-                    Text("延时 ", Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1)
+                    Text("当前 ", Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1)
                     Text(rtt.text, Modifier.alignByBaseline(), style = figure, color = tone(rtt), maxLines = 1)
                 }
             }
@@ -245,12 +245,13 @@ internal fun Ways(station: String, measured: NetMeasured?, modifier: Modifier = 
     val tone = { f: NetFigure -> when (f.level) { "red" -> c.red; "amber" -> c.warn; else -> c.ink } }
     val said = buildAnnotatedString {
         if (measured == null) append("各中继还没测过")
+        if (measured != null) append("${measured.whenText ?: "上次检测"}  ")
         measured?.relays?.forEachIndexed { i, r ->
             if (i > 0) append("   ")
             withStyle(SpanStyle(textDecoration = if (r.current) TextDecoration.Underline else null)) { append(r.name) }
             append(" ")
             val rtt = r.rtt
-            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = if (rtt == null) c.red else tone(rtt))) { append(rtt?.text ?: "不通") }
+            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = if (rtt == null) c.red else tone(rtt))) { append(rtt?.text ?: "未测通") }
         }
         measured?.moved?.let { append("   已换到$it") }
     }

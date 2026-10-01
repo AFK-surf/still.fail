@@ -947,7 +947,7 @@ impl Views {
                 "runtimes": runtimes(overview.as_ref()),
                 "models": models(overview.as_ref(), self.host.now_ms()),
                 "overview": shown, "host": host,
-                "net": read(Topic::Net { station: s.address.clone() }).as_ref().and_then(|raw| crate::present::net(raw, &*self.relay_name)),
+                "net": read(Topic::Net { station: s.address.clone() }).as_ref().and_then(|raw| crate::present::net(raw, &self.clock(), &*self.relay_name)),
                 "betaOffered": beta_offered(overview.as_ref(), || (self.beta_of)(scope)),
             })
         });
