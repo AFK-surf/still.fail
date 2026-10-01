@@ -1,5 +1,6 @@
 //! What each workspace has waiting for its person, for where workspaces are switched (`Topic::WorkspaceMarks`): of
-//! the chats they take part in, those that want them (blocked or failed) and those with something unread, from the chat rows the core keeps
+//! the chats they take part in, those that want them (blocked or failed) and those with something unread; of all its
+//! chats, those with a piece of work waiting on them (work.rs); from the chat rows the core keeps
 //! in sync of every workspace anyway (sync.rs); and the chat last open in it, to go back to. Only how many and how
 //! urgent goes past a workspace: nothing of what its chats say.
 
@@ -73,30 +74,40 @@ impl Views {
     pub(super) fn marks(&self, current: Option<&str>) -> Option<Result<Value>> {
         let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
         let mut all = BTreeMap::new();
-        let mut others: (u64, u64) = (0, 0);
+        let mut others = Counts::default();
         for id in workspace_ids(self.ok(Topic::Workspaces)) {
-            let (mut alert, mut unread) = (0u64, 0u64);
+            let mut counts = Counts::default();
+            let me = self.me(&id);
             if let Some(Ok(stations)) = self.stations(&id) {
                 for s in stations {
                     let rows = self.ok(Topic::ChatRows { station: s.address.clone() }).and_then(|r| r.as_array().cloned()).unwrap_or_default();
+                    // Which Slack users are the viewer there, as far as known (its overview, when read).
+                    let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
+                        .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
+                        .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
                     for row in rows.iter().filter(|r| !self.being_archived(&s.address, r)) {
-                        match row_tone(row) {
-                            Some("alert") => alert += 1,
-                            Some(_) => unread += 1,
-                            None => {}
+                        let waits = !crate::work::waiting_on_me(row, &me, &slack_users).is_empty();
+                        match (row_tone(row), waits) {
+                            (Some("alert"), _) => counts.alert += 1,
+                            (_, true) => counts.wait += 1,
+                            (Some(_), false) => counts.unread += 1,
+                            (None, false) => {}
                         }
                     }
                 }
             }
             if current != Some(id.as_str()) {
-                others = (others.0 + alert, others.1 + unread);
+                others = Counts { alert: others.alert + counts.alert, wait: others.wait + counts.wait, unread: others.unread + counts.unread };
             }
             let mut mark = Map::new();
-            mark.insert("alert".into(), json!(alert));
-            mark.insert("unread".into(), json!(unread));
-            if let Some(tone) = tone(alert, unread) {
+            mark.insert("alert".into(), json!(counts.alert));
+            mark.insert("unread".into(), json!(counts.unread));
+            if counts.wait > 0 {
+                mark.insert("wait".into(), json!(counts.wait));
+            }
+            if let Some(tone) = counts.tone() {
                 mark.insert("tone".into(), json!(tone));
-                mark.insert("label".into(), json!(label(alert, unread)));
+                mark.insert("label".into(), json!(counts.label()));
             }
             if let Some(chat) = last_chat(&prefs, &id) {
                 mark.insert("chat".into(), chat);
@@ -104,28 +115,42 @@ impl Views {
             all.insert(id, Value::Object(mark));
         }
         let mut value = json!({ "workspaces": all });
-        if let Some(tone) = tone(others.0, others.1) {
+        if let Some(tone) = others.tone() {
             value["others"] = json!(tone);
-            value["othersLabel"] = json!(format!("其他 workspace：{}", label(others.0, others.1)));
+            value["othersLabel"] = json!(format!("其他 workspace：{}", others.label()));
         }
         Some(Ok(value))
     }
 }
 
-fn tone(alert: u64, unread: u64) -> Option<&'static str> {
-    if alert > 0 { Some("alert") } else if unread > 0 { Some("done") } else { None }
+/// How many chats want their person, each counted once by its most urgent: blocked or failed (`alert`), a piece of
+/// work waiting on them (`wait`), something unread.
+#[derive(Default, Clone, Copy)]
+struct Counts {
+    alert: u64,
+    wait: u64,
+    unread: u64,
 }
 
-/// 2 个需要处理 · 3 个有新消息
-fn label(alert: u64, unread: u64) -> String {
-    let mut parts = Vec::new();
-    if alert > 0 {
-        parts.push(format!("{alert} 个需要处理"));
+impl Counts {
+    fn tone(&self) -> Option<&'static str> {
+        if self.alert > 0 { Some("alert") } else if self.wait > 0 { Some("wait") } else if self.unread > 0 { Some("done") } else { None }
     }
-    if unread > 0 {
-        parts.push(format!("{unread} 个有新消息"));
+
+    /// 2 个需要处理 · 1 个等你决定 · 3 个有新消息
+    fn label(&self) -> String {
+        let mut parts = Vec::new();
+        if self.alert > 0 {
+            parts.push(format!("{} 个需要处理", self.alert));
+        }
+        if self.wait > 0 {
+            parts.push(format!("{} 个等你决定", self.wait));
+        }
+        if self.unread > 0 {
+            parts.push(format!("{} 个有新消息", self.unread));
+        }
+        parts.join(" · ")
     }
-    parts.join(" · ")
 }
 
 #[cfg(test)]
@@ -163,10 +188,13 @@ mod tests {
 
     #[test]
     fn marks_say_how_many_and_how_urgent() {
-        assert_eq!(tone(1, 3), Some("alert"));
-        assert_eq!(tone(0, 3), Some("done"));
-        assert_eq!(tone(0, 0), None);
-        assert_eq!(label(2, 3), "2 个需要处理 · 3 个有新消息");
-        assert_eq!(label(0, 1), "1 个有新消息");
+        let counts = |alert, wait, unread| Counts { alert, wait, unread };
+        assert_eq!(counts(1, 1, 3).tone(), Some("alert"));
+        assert_eq!(counts(0, 1, 3).tone(), Some("wait"));
+        assert_eq!(counts(0, 0, 3).tone(), Some("done"));
+        assert_eq!(counts(0, 0, 0).tone(), None);
+        assert_eq!(counts(2, 0, 3).label(), "2 个需要处理 · 3 个有新消息");
+        assert_eq!(counts(0, 1, 1).label(), "1 个等你决定 · 1 个有新消息");
+        assert_eq!(counts(0, 0, 1).label(), "1 个有新消息");
     }
 }

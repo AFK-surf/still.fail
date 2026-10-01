@@ -9,7 +9,7 @@ import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
-import { ChatMark } from "../ChatMark.tsx";
+import { ChatMark, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
@@ -226,7 +226,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   return (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
-      data-open={app.current === path || undefined}
+      data-settled={item.settled || undefined} data-open={app.current === path || undefined}
       aria-label={item.offline ? `${item.title}（${item.offline}）` : undefined}
       onPointerDown={(e) => {
         longPressed.current = false;
@@ -250,7 +250,10 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
           : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark size={14} /></span></Tip>}</span>}
       </span>
       <span className={css.mChatLine2}>
-        <span className={css.mChatLast}>{item.last && <LastMessage item={item} />}</span>
+        {/* While something in it waits: who it waits on and what, instead (the core's words). */}
+        <span className={css.mChatLast}>{item.waiting
+          ? <span className={css.mLast}><WaitingText waiting={item.waiting} className={css.mLastText} /></span>
+          : item.last && <LastMessage item={item} />}</span>
         <RowAside item={item} lead={lead} size={18} className={css.mRowAside} />
         <span className={css.mChatTime} data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>
       </span>

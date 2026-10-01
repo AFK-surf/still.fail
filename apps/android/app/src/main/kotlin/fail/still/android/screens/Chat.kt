@@ -262,9 +262,39 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     // The messages run under the bar and the composer, which are frosted glass over them.
     val haze = host.haze
     // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
+    // What waits on someone in it, a card at a time over the composer (AskCard.kt); the list keeps clear of it too.
+    var asksHeight by remember { mutableIntStateOf(0) }
+    val asks = remember(station, of) { AskLocal() }
     Box(Modifier.fillMaxSize().background(C.bg)) {
-        Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { host.composerHeight.toDp() }, host)
+        Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { (host.composerHeight + asksHeight).toDp() }, host)
         ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
+        AskCards(
+            if (view.archived == true) emptyList() else view.asks.orEmpty(), asks, haze,
+            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { host.composerHeight.toDp() }).onSizeChanged { asksHeight = it.height },
+            onAnswer = { item, answer ->
+                val session = (of as? ChatOf.Session)?.key ?: item.session
+                val thread = view.thread?.id ?: (of as? ChatOf.Thread)?.id
+                app.scope.launch {
+                    try { app.api(station).answerItem(session, thread, item.key, answer = answer.text!!) }
+                    catch (e: CoreException) { asks.undo(item.key); app.toast = "没能回复「${item.title}」：${e.message}" }
+                }
+            },
+            onDefer = { item ->
+                val session = (of as? ChatOf.Session)?.key ?: item.session
+                app.scope.launch {
+                    try { app.api(station).deferItem(session, item.key) }
+                    catch (e: CoreException) { asks.undo(item.key); app.toast = "没能待定：${e.message}" }
+                }
+            },
+            onReply = { item, words ->
+                val session = (of as? ChatOf.Session)?.key ?: item.session
+                val thread = view.thread?.id ?: (of as? ChatOf.Thread)?.id
+                app.scope.launch {
+                    try { app.api(station).answerItem(session, thread, item.key, reply = words) }
+                    catch (e: CoreException) { asks.undo(item.key, words); app.toast = "没能回复「${item.title}」：${e.message}" }
+                }
+            },
+        )
     }
 }
 

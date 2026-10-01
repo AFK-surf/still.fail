@@ -5,7 +5,8 @@ export const mChat = style({ position: "absolute", inset: "0", background: "var(
 export const mMessages = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", gap: "var(--list-gap)", overflowY: "auto",
   overscrollBehavior: "contain", overflowAnchor: "none",
-  padding: "calc(var(--m-top) + 68px) 14px calc(var(--m-bottom) + 10px)",
+  // Its end clear of the composer, and of what waits to be decided over it (../../Asks.tsx), while there is something.
+  padding: "calc(var(--m-top) + 68px) 14px calc(var(--m-bottom) + var(--asks-height, 0px) + 10px)",
   scrollPaddingTop: "calc(var(--m-top) + 60px)",
   vars: { "--list-gap": "20px" },
 });

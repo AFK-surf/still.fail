@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- chat 里的「事」（chat-items）：agent 用 `chat_post` 的 `items` 声明一个 chat 里的几件事（在做/等人/完成/不要了，等谁，`ask.options`），station 新表 `items`（IF NOT EXISTS，旧库自动建），chat 行带可选的 `items`（答过的带 `answered`）；agent 指令加了两条（session.txt 快照同步）。core 按人算：行的 `waiting`（第二行「奏 · …」）、`tone`（等你蓝空心圈、只等别人灰圈）、`settled`（全结束变淡）、`asks`（卡片顺序），调用 `item.answer`（`answer` 或 `reply`）、`item.defer`（只记本机 prefs）；workspace 计数加 `wait`，通知加「等你决定」。PC/手机 web/安卓：列表第二行和圈、composer 上方一次一张卡片（准/agent 的选项/随便/待定 + 输入框；手机右滑随便、左滑待定）。新字段都可选：新客户端配旧 station 跟以前一样；旧客户端配新 station 看不到事项，agent 照常说话。web 跟部署走，station 要发包，安卓要发一版。上线后验：在测试版 app 的 chat 里让 agent 改点东西并按指令声明事项，列表出现「奏 · …」和蓝圈，chat 里出现卡片；点「准」后另一台设备上卡片也消失；agent 标完成后整行变淡。
 - chat 行上的重连标记（reconnect-mark）：station 在重连时，chat 行上从转圈改成断开图标（同离线），转圈只表示用户点的操作在进行。只改了 web、手机 web、安卓 Home.kt；web 跟部署走，安卓要发一版。上线后验：断网再连时，侧栏 chat 行显示断开图标，悬停是「正在重连…」。
 - 失败原地标出（op-stages）：core 的 `doing` 里失败的调用多留 6 秒（`stage: failed`、`error`），三端原来转圈的地方变成红色「!」带原因（桌面悬停、手机/安卓点一下看）。改了 core、shapes、web、手机 web、安卓；新字段可选，旧 core 没有 stage 时按进行中处理。web 跟部署走，安卓要发一版。上线后验：停掉 station 后在网页上固定一个 chat，约 30 秒后那一行变成红色「!」，悬停显示「连不上这台 station：没有回应」，6 秒后消失。
 - 操作的即时反馈（op-feedback）：core 加 `doing` topic（client/core/src/doing.rs：用户发起的写调用从发出到回答都列在里面），三端按它在对应的行或按钮上转圈、禁止重复点，吞掉的错误都改成提示。改了 core、shapes、web、手机 web、安卓；station 和 cloud 不用动。web 跟部署走，安卓要发一版（安卓的 core 和界面在同一个包里，一起发）。上线后验：网页上右键一个 chat 选「固定」，那一行立刻转圈；把 station 停掉再固定，约 30 秒后提示「没能固定：…」，转圈消失；安卓上长按 chat 选固定，那一行转圈。

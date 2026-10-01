@@ -39,6 +39,8 @@ import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast } from "./toast.tsx";
+import { AskCards } from "./Asks.tsx";
+import * as asksCss from "./Asks.css.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -68,6 +70,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   made?: string;
 }) {
   const station = useStation();
+  const toast = useToast();
   const list = useRef<HTMLDivElement>(null);
   const composerHeight = useComposerHeight();
   const floor = useRef<HTMLDivElement>(null);
@@ -120,6 +123,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
+      {/* What waits to be decided, one at a time, right over the composer (Asks.tsx); not while nothing can be sent. */}
+      {!chat.offline && !chat.archived && <AskCards asks={chat.asks} station={station.address} thread={id} onError={toast} className={asksCss.wideAsks} />}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? "还原对话后才能发送" : "发消息"} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />

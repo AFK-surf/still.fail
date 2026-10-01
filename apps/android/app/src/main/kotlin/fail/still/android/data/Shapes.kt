@@ -803,6 +803,67 @@ data class RowWatch (
 	val ask: String
 )
 
+/// What a piece of work asks: the word for yes (`label`, 准 when absent), and answers to pick from (`options`).
+@Serializable
+data class WorkAsk (
+	val label: String? = null,
+	val options: List<String>? = null
+)
+
+/// An answer a piece of work's card offers: its button's words, what it is (yes | option | drop | delegate | defer |
+/// change), and the message it sends in the chat (`item.answer`), 「设置页间距」准; none for defer (`item.defer`, nothing
+/// is sent) and change (the client puts 「设置页间距」 in the composer to be written on).
+@Serializable
+data class WorkAnswer (
+	val label: String,
+	val kind: String,
+	val text: String? = null
+)
+
+/// A piece of work in a chat (an agent declares them with chat_post): as its station keeps it, with what the core puts
+/// in for the viewer (work.rs): whether it waits on them, its card's lines, and the answers it offers.
+@Serializable
+data class WorkItem (
+	/// Its name in the chat: the same key is the same piece of work.
+	val key: String,
+	/// The agent that declared it last.
+	val session: String,
+	val title: String,
+	/// working | waiting | done | dropped
+	val state: String,
+	/// Whom it waits on while waiting, each as a chat's people are (`shown`: as the core names them).
+	val waitingOn: List<Creator>,
+	/// What is asked of them, in the agent's words; absent for a plain yes.
+	val ask: WorkAsk? = null,
+	/// A line under its title: a branch, a commit, where it went.
+	val detail: String? = null,
+	/// The entry (its number in the chat) that declared it so.
+	val evidence: Long? = null,
+	val createdAt: Long,
+	val updatedAt: Long,
+	/// Its times in words, by field.
+	val time: Map<String, Stamp>? = null,
+	/// It waits on the viewer.
+	val mine: Boolean,
+	/// The viewer set it aside (待定): last of those waiting on them, still waiting. Absent otherwise.
+	val deferred: Boolean? = null,
+	/// Its card's top line while it waits: 奏, 等王磊决定, 等王磊、小李决定. Empty otherwise.
+	val lead: String,
+	/// The line under its title: its detail and when it was last declared so (分支 settings-gap · 3 分钟前).
+	val line: String,
+	/// What its card offers while it waits, in order; none otherwise.
+	val answers: List<WorkAnswer>
+)
+
+/// A row's second line while something in it waits: how many wait on the viewer and how many only on others, and
+/// the line (奏 · 设置页间距 · 另 2 件; 等王磊 · 设置页间距).
+@Serializable
+data class RowWaiting (
+	val mine: UInt,
+	val others: UInt,
+	val text: String
+)
+
 /// An item of the sidebar, as its station puts it together for the viewer, and where it is.
 @Serializable
 data class ChatItem (
@@ -844,7 +905,21 @@ data class ChatItem (
 	/// Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned).
 	val pinned: Boolean? = null,
 	/// A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise.
-	val watch: RowWatch? = null
+	val watch: RowWatch? = null,
+	/// Its pieces of work (core, work.rs), as its station keeps them, oldest first. Absent when it has none (and from a
+	/// station before them).
+	val items: List<WorkItem>? = null,
+	/// Of `items`, those waiting on someone, in the order its page shows them one at a time: those waiting on the
+	/// viewer (set aside last), then those waiting only on others (set aside last). Absent when none waits.
+	val asks: List<WorkItem>? = null,
+	/// Its second line while something in it waits (奏 · 设置页间距 · 另 1 件等王磊). Absent otherwise.
+	val waiting: RowWaiting? = null,
+	/// It has pieces of work and all are done or dropped, with nothing at work or unread in it: drawn faded. Absent
+	/// otherwise.
+	val settled: Boolean? = null,
+	/// Its mark, the most urgent first: alert (blocked or failed), wait (something waits on the viewer), busy (at
+	/// work), done (something unread), other (something waits only on others). Absent for none.
+	val tone: String? = null
 )
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
@@ -1010,7 +1085,10 @@ data class ChatView (
 	/// Why the station could not make it, the last time it was tried.
 	val failed: String? = null,
 	/// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
-	val connection: LinkShown? = null
+	val connection: LinkShown? = null,
+	/// Its pieces of work waiting on someone, in the order its card shows them (as its row's `asks`). Absent when
+	/// none waits.
+	val asks: List<WorkItem>? = null
 )
 
 @Serializable
@@ -1920,14 +1998,17 @@ data class StatusView (
 )
 
 /// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
-/// have something unread; its `tone` (alert | done, as a chat's mark) and in words, none when it is 0 and 0; the chat last
+/// have something unread; of all its chats, how many wait on them (`wait`); its `tone` (alert | wait | done, as a
+/// chat's mark) and in words, none when it is 0 and 0; the chat last
 /// open in it.
 @Serializable
 data class WorkspaceMark (
 	val alert: UInt,
 	val unread: UInt,
+	/// How many have something waiting on them (a piece of work's decision), not counted in `alert`. Absent for 0.
+	val wait: UInt? = null,
 	val tone: String? = null,
-	/// 2 个需要处理 · 3 个有新消息
+	/// 2 个需要处理 · 1 个等你决定 · 3 个有新消息
 	val label: String? = null,
 	val chat: OpenChat? = null
 )
@@ -1937,7 +2018,7 @@ data class WorkspaceMark (
 @Serializable
 data class WorkspaceMarksView (
 	val workspaces: Map<String, WorkspaceMark>,
-	/// alert | done: the others' mark; none when nothing there wants anyone.
+	/// alert | wait | done: the others' mark; none when nothing there wants anyone.
 	val others: String? = null,
 	/// 其他 workspace：1 个需要处理 · 2 个有新消息
 	val othersLabel: String? = null

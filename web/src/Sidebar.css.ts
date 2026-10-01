@@ -119,7 +119,11 @@ export const rowAside = style({
 export const rowSpinner = style({ width: 12, height: 12, borderWidth: 1.5 });
 
 // One column, as wide as the row leaves it: an auto one grows to a long title's whole length, and the row with it.
-export const navSessionText = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, minWidth: 0, flex: 1 });
+export const navSessionText = style({
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, minWidth: 0, flex: 1,
+  // All its pieces of work done or dropped (the core's `settled`): the row stays, faded.
+  selectors: { [`${navSession}[data-settled] &`]: { opacity: 0.45 } },
+});
 export const navSessionHead = style({
   display: "flex", alignItems: "center", gap: 6, minWidth: 0, height: 20, lineHeight: "20px",
   selectors: { [`${navSessionWrap}:hover &`]: { paddingRight: 24 } },
@@ -139,7 +143,11 @@ export const navSessionMeta = style({
   height: 18, lineHeight: "18px",
   selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
-export const navSessionLast = style({ flex: 1, ...ellipsis, fontSize: vars.textXs, color: vars.muted });
+export const navSessionLast = style({
+  flex: 1, ...ellipsis, fontSize: vars.textXs, color: vars.muted,
+  // Its turn (something waits on the viewer, ChatMark.tsx WaitingText): in ink.
+  selectors: { "&[data-turn]": { color: vars.text } },
+});
 /** When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
 export const navTime = style({
   marginLeft: "auto", flex: "none", color: vars.subtle, fontVariantNumeric: "tabular-nums",

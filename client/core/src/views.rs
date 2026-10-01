@@ -624,6 +624,8 @@ impl Views {
                 topics.insert(Topic::ChatRows { station: station.clone() });
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
+                // What the viewer set aside of its pieces of work (work.rs).
+                topics.insert(Topic::Prefs);
                 if let Some((scope, _)) = station.split_once('/') {
                     topics.insert(Topic::Workspace { workspace: scope.to_string() });
                 }
@@ -729,6 +731,9 @@ impl Views {
         let me = self.me(scope);
         // The workspace's people, by email: a row's last speaker is named and pictured as they are here.
         let members: Vec<Value> = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
+        // What the viewer set aside (work.rs), and the clock its lines are said by.
+        let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
+        let clock = self.clock();
         let mut states = Vec::new();
         let mut troubles: Vec<(&str, String)> = Vec::new();
         let mut rows = Vec::new();
@@ -803,6 +808,11 @@ impl Views {
                         let model = row["last"]["by"]["model"].as_str().map(str::to_string);
                         row["last"]["by"]["maker"] = crate::present::maker(model.as_deref());
                     }
+                    // Its pieces of work as the viewer sees them, its second line while one waits, its mark (work.rs).
+                    let session = row.get("session").or_else(|| row.get("id")).and_then(Value::as_str).unwrap_or("").to_string();
+                    let deferred = crate::work::deferred_of(&prefs, &s.address, &session);
+                    let answered = crate::work::answered_of(&prefs, &s.address, &session);
+                    crate::work::present(&mut row, &crate::work::Viewer { me: &me, slack_users: &slack_users, members: &members }, &deferred, &answered, clock);
                     rows.push(row);
                 }
             }
@@ -1149,6 +1159,17 @@ impl Views {
             let sessions: Vec<Value> = view["agents"].as_array().into_iter().flatten().filter_map(|a| a.get("session").cloned()).collect();
             if let Some(watch) = crate::present::row_watch(&sessions) {
                 view["watch"] = watch;
+            }
+            // Its pieces of work waiting on someone, for its card, as its row has them (work.rs).
+            if let Some(mut row) = row.clone() {
+                let session = row.get("session").or_else(|| row.get("id")).and_then(Value::as_str).unwrap_or("").to_string();
+                let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
+                let deferred = crate::work::deferred_of(&prefs, station, &session);
+                let answered = crate::work::answered_of(&prefs, station, &session);
+                crate::work::present(&mut row, &crate::work::Viewer { me: &viewer, slack_users: &slack_users, members: &members }, &deferred, &answered, self.clock());
+                if let Some(asks) = row.get("asks") {
+                    view["asks"] = asks.clone();
+                }
             }
             view
         }))
@@ -2532,8 +2553,8 @@ mod tests {
             t.subscribe(1, chat_topic("ws/a", 7));
             t.read(&mut ui, 1).await;
             // Its thread and its messages are asked for at once.
-            // And its workspace, which says whether the station is online.
-            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
+            // And its workspace, which says whether the station is online; the prefs, what the viewer set aside.
+            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), Topic::Prefs, workspace()]));
             assert!(ui.value.is_none(), "nothing before the thread is read");
 
             let now = t.host.now_ms();

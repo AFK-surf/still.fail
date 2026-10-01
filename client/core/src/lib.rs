@@ -40,6 +40,7 @@ pub mod testing;
 pub mod trace;
 pub mod views;
 pub mod wake;
+pub mod work;
 pub mod workspace;
 
 pub use crate::core::Core;

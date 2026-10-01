@@ -778,6 +778,69 @@ export interface RowWatch {
 	ask: string;
 }
 
+/** What a piece of work asks: the word for yes (`label`, 准 when absent), and answers to pick from (`options`). */
+export interface WorkAsk {
+	label?: string;
+	options?: string[];
+}
+
+/**
+ * An answer a piece of work's card offers: its button's words, what it is (yes | option | drop | delegate | defer |
+ * change), and the message it sends in the chat (`item.answer`), 「设置页间距」准; none for defer (`item.defer`, nothing
+ * is sent) and change (the client puts 「设置页间距」 in the composer to be written on).
+ */
+export interface WorkAnswer {
+	label: string;
+	kind: string;
+	text?: string;
+}
+
+/**
+ * A piece of work in a chat (an agent declares them with chat_post): as its station keeps it, with what the core puts
+ * in for the viewer (work.rs): whether it waits on them, its card's lines, and the answers it offers.
+ */
+export interface WorkItem {
+	/** Its name in the chat: the same key is the same piece of work. */
+	key: string;
+	/** The agent that declared it last. */
+	session: string;
+	title: string;
+	/** working | waiting | done | dropped */
+	state: string;
+	/** Whom it waits on while waiting, each as a chat's people are (`shown`: as the core names them). */
+	waitingOn: Creator[];
+	/** What is asked of them, in the agent's words; absent for a plain yes. */
+	ask?: WorkAsk;
+	/** A line under its title: a branch, a commit, where it went. */
+	detail?: string;
+	/** The entry (its number in the chat) that declared it so. */
+	evidence?: number;
+	createdAt: number;
+	updatedAt: number;
+	/** Its times in words, by field. */
+	time?: Record<string, Stamp>;
+	/** It waits on the viewer. */
+	mine: boolean;
+	/** The viewer set it aside (待定): last of those waiting on them, still waiting. Absent otherwise. */
+	deferred?: boolean;
+	/** Its card's top line while it waits: 奏, 等王磊决定, 等王磊、小李决定. Empty otherwise. */
+	lead: string;
+	/** The line under its title: its detail and when it was last declared so (分支 settings-gap · 3 分钟前). */
+	line: string;
+	/** What its card offers while it waits, in order; none otherwise. */
+	answers: WorkAnswer[];
+}
+
+/**
+ * A row's second line while something in it waits: how many wait on the viewer and how many only on others, and
+ * the line (奏 · 设置页间距 · 另 2 件; 等王磊 · 设置页间距).
+ */
+export interface RowWaiting {
+	mine: number;
+	others: number;
+	text: string;
+}
+
 /** An item of the sidebar, as its station puts it together for the viewer, and where it is. */
 export interface ChatItem {
 	id: string;
@@ -823,6 +886,28 @@ export interface ChatItem {
 	pinned?: boolean;
 	/** A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise. */
 	watch?: RowWatch;
+	/**
+	 * Its pieces of work (core, work.rs), as its station keeps them, oldest first. Absent when it has none (and from a
+	 * station before them).
+	 */
+	items?: WorkItem[];
+	/**
+	 * Of `items`, those waiting on someone, in the order its page shows them one at a time: those waiting on the
+	 * viewer (set aside last), then those waiting only on others (set aside last). Absent when none waits.
+	 */
+	asks?: WorkItem[];
+	/** Its second line while something in it waits (奏 · 设置页间距 · 另 1 件等王磊). Absent otherwise. */
+	waiting?: RowWaiting;
+	/**
+	 * It has pieces of work and all are done or dropped, with nothing at work or unread in it: drawn faded. Absent
+	 * otherwise.
+	 */
+	settled?: boolean;
+	/**
+	 * Its mark, the most urgent first: alert (blocked or failed), wait (something waits on the viewer), busy (at
+	 * work), done (something unread), other (something waits only on others). Absent for none.
+	 */
+	tone?: string;
 }
 
 /**
@@ -1001,6 +1086,11 @@ export interface ChatView {
 	failed?: string;
 	/** Its link while it is down or coming back, in words; absent while it is up (and from a core before it). */
 	connection?: LinkShown;
+	/**
+	 * Its pieces of work waiting on someone, in the order its card shows them (as its row's `asks`). Absent when
+	 * none waits.
+	 */
+	asks?: WorkItem[];
 }
 
 export interface StationState {
@@ -1889,14 +1979,17 @@ export interface StatusView {
 
 /**
  * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
- * have something unread; its `tone` (alert | done, as a chat's mark) and in words, none when it is 0 and 0; the chat last
+ * have something unread; of all its chats, how many wait on them (`wait`); its `tone` (alert | wait | done, as a
+ * chat's mark) and in words, none when it is 0 and 0; the chat last
  * open in it.
  */
 export interface WorkspaceMark {
 	alert: number;
 	unread: number;
+	/** How many have something waiting on them (a piece of work's decision), not counted in `alert`. Absent for 0. */
+	wait?: number;
 	tone?: string;
-	/** 2 个需要处理 · 3 个有新消息 */
+	/** 2 个需要处理 · 1 个等你决定 · 3 个有新消息 */
 	label?: string;
 	chat?: OpenChat;
 }
@@ -1907,7 +2000,7 @@ export interface WorkspaceMark {
  */
 export interface WorkspaceMarksView {
 	workspaces: Record<string, WorkspaceMark>;
-	/** alert | done: the others' mark; none when nothing there wants anyone. */
+	/** alert | wait | done: the others' mark; none when nothing there wants anyone. */
 	others?: string;
 	/** 其他 workspace：1 个需要处理 · 2 个有新消息 */
 	othersLabel?: string;

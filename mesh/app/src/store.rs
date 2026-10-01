@@ -385,6 +385,30 @@ pub struct Post {
     pub at: i64,
 }
 
+/// A piece of work in a chat (the `items` table): what it is, where it stands, and whom it waits on.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemRow {
+    pub key: String,
+    /// The session that declared it last.
+    pub session: String,
+    pub title: String,
+    /// working, waiting, done or dropped.
+    pub state: String,
+    /// Whom it waits on while waiting: creator references (an email, `slack:<connect>:<user>`), as entries' authors.
+    pub waiting_on: Vec<String>,
+    /// What is asked of them: `{label?, options?: [string]}`, the agent's words for the answers; null for a plain yes.
+    pub ask: Option<Value>,
+    /// A line under its title: a branch, a commit, where it went.
+    pub detail: Option<String>,
+    /// The entry (its number in the thread) that shows it: the post that declared it so.
+    pub evidence: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+pub const ITEM_STATES: [&str; 4] = ["working", "waiting", "done", "dropped"];
+
 /// A message being recorded.
 #[derive(Debug, Clone)]
 pub struct NewMessage {
@@ -665,6 +689,21 @@ CREATE TABLE IF NOT EXISTS widget_states (
   updated_at INTEGER NOT NULL,
   told_at INTEGER,
   PRIMARY KEY (session, path)
+);
+-- The pieces of work in a chat, as its agents declare them (chat_post items): each waiting on someone or not.
+CREATE TABLE IF NOT EXISTS items (
+  thread INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  session TEXT NOT NULL,
+  title TEXT NOT NULL,
+  state TEXT NOT NULL,
+  waiting_on TEXT,
+  ask TEXT,
+  detail TEXT,
+  evidence INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (thread, key)
 );
 "#;
 
@@ -1198,6 +1237,7 @@ impl Store {
                 tx.execute("DELETE FROM deliveries WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM entries WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM reads WHERE thread = ?", [thread])?;
+                tx.execute("DELETE FROM items WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM threads WHERE id = ?", [thread])?;
             }
             tx.commit()?;
@@ -1712,6 +1752,59 @@ impl Store {
                 i.db.execute("DELETE FROM pins WHERE viewer = ? AND session = ?", params![viewer, session])?;
             }
             changes.push(StoreChange::Pins(viewer.to_string()));
+            Ok(())
+        })
+    }
+
+    // ── items ─────────────────────────────────────────────────────────────
+
+    /// A thread's pieces of work, in the order they were first declared.
+    pub fn items(&self, thread: i64) -> Result<Vec<ItemRow>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare(
+                "SELECT key, session, title, state, waiting_on, ask, detail, evidence, created_at, updated_at FROM items WHERE thread = ? ORDER BY created_at, rowid",
+            )?;
+            let rows = stmt.query_map([thread], |r| {
+                Ok(ItemRow {
+                    key: r.get(0)?,
+                    session: r.get(1)?,
+                    title: r.get(2)?,
+                    state: r.get(3)?,
+                    waiting_on: from_json_list(r.get(4)?),
+                    ask: r.get::<_, Option<String>>(5)?.and_then(|a| serde_json::from_str(&a).ok()),
+                    detail: r.get(6)?,
+                    evidence: r.get(7)?,
+                    created_at: r.get(8)?,
+                    updated_at: r.get(9)?,
+                })
+            })?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
+    /// Records pieces of work as declared (by key: a known one is updated, keeping when it was first declared), and
+    /// tells the thread's lists.
+    pub fn put_items(&self, thread: i64, items: &[ItemRow]) -> Result<()> {
+        if items.is_empty() {
+            return Ok(());
+        }
+        self.with(|i, changes| {
+            let tx = i.db.transaction()?;
+            for it in items {
+                tx.execute(
+                    "INSERT INTO items (thread, key, session, title, state, waiting_on, ask, detail, evidence, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT (thread, key) DO UPDATE SET session = excluded.session, title = excluded.title, state = excluded.state,
+                       waiting_on = excluded.waiting_on, ask = excluded.ask, detail = excluded.detail,
+                       evidence = COALESCE(excluded.evidence, items.evidence), updated_at = excluded.updated_at",
+                    params![
+                        thread, it.key, it.session, it.title, it.state, json_list(&it.waiting_on),
+                        it.ask.as_ref().map(|a| a.to_string()), it.detail, it.evidence, it.created_at, it.updated_at
+                    ],
+                )?;
+            }
+            tx.commit()?;
+            changes.push(StoreChange::Thread { id: thread, entries: vec![] });
             Ok(())
         })
     }

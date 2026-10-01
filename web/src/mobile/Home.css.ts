@@ -81,6 +81,8 @@ export const mChatRow = style({
 });
 export const mChatText = style({
   display: "flex", flexDirection: "column", justifyContent: "center", flex: "1", minWidth: "0",
+  // All its pieces of work done or dropped (the core's `settled`): the row stays, faded.
+  selectors: { [`${mChatRow}[data-settled] &`]: { opacity: ".45" } },
 });
 /** Who is in a chat, at the second line's end: its time there instead while the row is held. */
 export const mRowAside = style({
@@ -129,6 +131,8 @@ export const mLast = style({
 export const mLastText = style({
   minWidth: "0", fontSize: "14px", lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
+  // Its turn (something waits on the viewer, ../ChatMark.tsx WaitingText): in ink.
+  selectors: { "&[data-turn]": { color: "var(--m-ink)" } },
 });
 globalStyle(`${mHomeWorkspace} svg`, { flex: "none", color: "var(--m-muted)" });
 globalStyle(`${mEmpty} p`, { fontSize: "14px", color: "var(--m-muted)" });

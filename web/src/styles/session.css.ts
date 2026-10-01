@@ -47,7 +47,9 @@ export const chatList = style({
   selectors: {
     // What floats over its foot: its scrollbar (scrollbars.ts) ends a little above the composer, not under it.
     [`${chat}[data-under-composer] &`]: {
-      paddingBottom: "calc(24px + var(--composer-height))", scrollPaddingBottom: "calc(8px + var(--composer-height))",
+      // And of what waits to be decided over it (Asks.tsx: its height and gap, while there is something).
+      paddingBottom: "calc(24px + var(--composer-height) + var(--asks-height, 0px))",
+      scrollPaddingBottom: "calc(8px + var(--composer-height) + var(--asks-height, 0px))",
     },
   },
   // Making way for the small web services in the corner (Previews.tsx, which moves it), with its composer: what it

@@ -416,7 +416,8 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
         // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
         val offline = item.offline
         val dim = if (offline != null) 0.45f else 1f
-        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // All its pieces of work ended, nothing at work or unread: the whole row faded (the core says so).
+        Row(Modifier.fillMaxSize().alpha(if (item.settled == true) 0.45f else 1f).padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChatMark(item, Modifier)
@@ -435,7 +436,10 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
+                                Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) {
+                    val waiting = item.waiting
+                    if (waiting != null) WaitingLine(waiting) else item.last?.let { LastMessage(item) }
+                }
                 if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
                 else RowAside(item, lead, Modifier.alpha(dim))
             }
@@ -444,13 +448,24 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
     }
 }
 
-/** What a chat's row says of it (web/src/ChatMark.tsx): red when it wants someone now, yellow at work, blue ended well and unread. */
-internal enum class RowTone { Busy, Done, Alert }
+/**
+ * What a chat's row says of it (web/src/ChatMark.tsx): red when it wants someone now, yellow at work, blue ended well
+ * and unread; a blue ring when something in it waits on the viewer, a grey one when only on others.
+ */
+internal enum class RowTone { Busy, Done, Alert, Wait, Other }
 
-internal fun rowTone(item: ChatItem): RowTone? = when (item.state) {
-    "block", "failed" -> RowTone.Alert
-    "run" -> RowTone.Busy
-    else -> if (item.unread) RowTone.Done else null
+/** The core's `tone` when it says one (a station with pieces of work); otherwise from the row's state, as before. */
+internal fun rowTone(item: ChatItem): RowTone? = when (item.tone) {
+    "alert" -> RowTone.Alert
+    "busy" -> RowTone.Busy
+    "done" -> RowTone.Done
+    "wait" -> RowTone.Wait
+    "other" -> RowTone.Other
+    else -> when (item.state) {
+        "block", "failed" -> RowTone.Alert
+        "run" -> RowTone.Busy
+        else -> if (item.unread) RowTone.Done else null
+    }
 }
 
 private val MarkBlue = Color(0xFF3B82F6)
@@ -464,12 +479,16 @@ private val MarkYellow = Color(0xFFF2B01E)
 @Composable
 private fun ChatMark(item: ChatItem, modifier: Modifier) {
     val tone = rowTone(item) ?: return
-    val label = when (tone) { RowTone.Busy -> "工作中"; RowTone.Done -> "做完了，有新消息"; RowTone.Alert -> "需要处理" }
+    val label = when (tone) {
+        RowTone.Busy -> "工作中"; RowTone.Done -> "做完了，有新消息"; RowTone.Alert -> "需要处理"
+        RowTone.Wait -> "等你决定"; RowTone.Other -> "等别人决定"
+    }
     // A mark that comes while the chat is in view pops in (web: ChatMark.tsx, 320 ms ease-out, 0 → 1.3 at 60 % → 1);
     // ones there when the list is first drawn do not.
     val still = reducedMotion()
     val pop = remember(tone) { if (!still && MarksSeen.fresh(rowKey(item))) Animatable(0f) else null }
     if (pop != null) LaunchedEffect(pop) { pop.animateTo(1f, tween(320, easing = CssEaseOut)) }
+    val subtle = C.subtle
     val turn = if (tone == RowTone.Busy && !still) rememberInfiniteTransition(label = "mark")
         .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "turn").value else 0f
     Canvas(modifier.size(10.dp).graphicsLayer {
@@ -481,6 +500,8 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
         when (tone) {
             RowTone.Done -> drawCircle(MarkBlue, r - 1.dp.toPx())
             RowTone.Alert -> drawCircle(MarkRed, r - 1.dp.toPx())
+            // A hollow ring, 2dp, 9dp across: blue when it waits on the viewer, grey when only on others.
+            RowTone.Wait, RowTone.Other -> drawCircle(if (tone == RowTone.Wait) MarkBlue else subtle, 4.5.dp.toPx() - ring / 2, style = Stroke(ring))
             RowTone.Busy -> {
                 val inset = ring / 2
                 val box = androidx.compose.ui.geometry.Size(size.width - ring, size.height - ring)
@@ -523,6 +544,29 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
             }
         }
     }
+}
+
+/**
+ * What waits in the chat, in its last message's place (奏 · 设置页间距 · 另 1 件 · 1 件等王磊): in ink with its lead
+ * (what comes before the first " · ") bold when something waits on the viewer, in the secondary colour when only on
+ * others.
+ */
+@Composable
+private fun WaitingLine(waiting: fail.still.android.data.RowWaiting) {
+    val mine = waiting.mine > 0u
+    val text = androidx.compose.ui.text.buildAnnotatedString {
+        val lead = waiting.text.substringBefore(" · ")
+        if (mine) {
+            pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold)); append(lead); pop()
+            append(waiting.text.substring(lead.length))
+        } else append(waiting.text)
+    }
+    Text(
+        text, fontSize = 14.sp, lineHeight = 20.sp, color = if (mine) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+        )),
+    )
 }
 
 /** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */

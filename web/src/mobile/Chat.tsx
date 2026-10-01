@@ -43,6 +43,7 @@ import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 
 import { NAME } from "../channel.ts";
+import { AskCards } from "../Asks.tsx";
 export function ChatScreen() {
   const { chat: address = "" } = useParams();
   // A chat made here keeps the key the core gave it when its address becomes its station's (below).
@@ -94,6 +95,7 @@ function servicePath(station: string, key: string, job: string): string {
 
 function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string; lives: ReturnType<typeof useLives> }) {
   const station = useStation();
+  const app = useApp();
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
@@ -103,6 +105,9 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   return (
     <div className={chatCss.mChat}>
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
+      {/* What waits to be decided, one at a time, over the composer (../Asks.tsx): 你定 and 待定 by swiping it. */}
+      {!view.offline && !view.archived && <AskCards asks={view.asks} station={station.address} thread={view.thread?.id ?? null}
+        swipe onError={app.toast} className={`${css.mAsks} ${rootCss.wide}`} />}
       <ChatBar view={view} here={here} />
     </div>
   );

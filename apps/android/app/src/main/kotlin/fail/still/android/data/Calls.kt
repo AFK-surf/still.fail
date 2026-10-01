@@ -218,6 +218,22 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Clears a session's ended jobs (stopped, failed, ended by itself) off its pages, as the station keeps them. */
     suspend fun clearEndedJobs(session: String) { op("job.clearEnded") { put("session", session) } }
 
+    // ── a chat's pieces of work (client/core/src/work.rs) ──
+
+    /**
+     * Answers a piece of work waiting on the viewer, said in its chat in the viewer's name: `answer`, its answer's
+     * `text`; or `reply`, words written of it (the core says them of it: 「设置页间距」words).
+     */
+    suspend fun answerItem(session: String, thread: Long?, key: String, answer: String? = null, reply: String? = null) {
+        op("item.answer") {
+            put("session", session); if (thread != null) put("thread", thread); put("key", key)
+            if (answer != null) put("answer", answer)
+            if (reply != null) put("reply", reply)
+        }
+    }
+    /** Sets a piece of work aside (待定): last of those waiting on the viewer, still waiting; nothing is said. */
+    suspend fun deferItem(session: String, key: String) { op("item.defer") { put("session", session); put("key", key) } }
+
     // ── the archive (web/src/pages/Archive.tsx) ──
 
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */

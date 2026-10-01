@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "./styles/tokens.css.ts";
 import { busyRing } from "./styles/busyRing.ts";
 import { spinKeyframes } from "./styles/keyframes.css.ts";
 
@@ -21,6 +22,10 @@ export const chatMark = style({
       backgroundImage: "linear-gradient(#e5484d 0 0), linear-gradient(var(--mark-around) 0 0)",
       backgroundClip: "padding-box, border-box",
     },
+    // Something waits on the viewer: a hollow blue ring in the gap's ground (an inset shadow is drawn inside the
+    // padding box, so the gap round it stays whole); waiting only on others, the same ring in grey.
+    '&[data-tone="wait"]': { boxShadow: "inset 0 0 0 2px #3b82f6" },
+    '&[data-tone="other"]': { boxShadow: `inset 0 0 0 2px ${vars.subtle}` },
     // A soft halo, the heaviest of the three: nothing else in the row is this loud.
     '&[data-tone="alert"]::after': {
       content: "\"\"", position: "absolute", inset: -5, borderRadius: "50%", background: "#e5484d", opacity: 0.25,
@@ -40,6 +45,9 @@ export const chatMarkInline = style({
   selectors: {
     '&[data-tone="done"]': { background: "#3b82f6" },
     '&[data-tone="alert"]': { background: "#e5484d" },
+    // Waiting on the viewer: a hollow ring (10px, 2px thick: whole pixels); on others only, the same in grey.
+    '&[data-tone="wait"]': { width: 10, height: 10, border: "2px solid #3b82f6" },
+    '&[data-tone="other"]': { width: 10, height: 10, border: `2px solid ${vars.subtle}` },
     '&[data-tone="alert"]::after': {
       content: "\"\"", position: "absolute", inset: -3, borderRadius: "50%", background: "#e5484d", opacity: 0.25,
     },
@@ -55,3 +63,5 @@ export const chatMarkInline = style({
 export const markCounts = style({ display: "inline-flex", alignItems: "center", gap: 10, flex: "none", fontSize: 12, lineHeight: 1, fontVariantNumeric: "tabular-nums" });
 /** The dot at full colour, its number quiet. */
 export const markCount = style({ display: "inline-flex", alignItems: "center", gap: 5, color: "color-mix(in srgb, currentColor 65%, transparent)" });
+/** A row's waiting line's 等你 (ChatMark.tsx WaitingText). */
+export const waitingLead = style({ fontWeight: 600 });

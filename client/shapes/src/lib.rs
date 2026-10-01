@@ -1486,14 +1486,15 @@ pub struct OpenChat {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceMarksView {
     pub workspaces: HashMap<String, WorkspaceMark>,
-    /// alert | done: the others' mark; none when nothing there wants anyone.
+    /// alert | wait | done: the others' mark; none when nothing there wants anyone.
     pub others: Option<String>,
     /// 其他 workspace：1 个需要处理 · 2 个有新消息
     pub others_label: Option<String>,
 }
 
 /// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
-/// have something unread; its `tone` (alert | done, as a chat's mark) and in words, none when it is 0 and 0; the chat last
+/// have something unread; of all its chats, how many wait on them (`wait`); its `tone` (alert | wait | done, as a
+/// chat's mark) and in words, none when it is 0 and 0; the chat last
 /// open in it.
 #[typeshare]
 #[skip_serializing_none]
@@ -1502,8 +1503,10 @@ pub struct WorkspaceMarksView {
 pub struct WorkspaceMark {
     pub alert: u32,
     pub unread: u32,
+    /// How many have something waiting on them (a piece of work's decision), not counted in `alert`. Absent for 0.
+    pub wait: Option<u32>,
     pub tone: Option<String>,
-    /// 2 个需要处理 · 3 个有新消息
+    /// 2 个需要处理 · 1 个等你决定 · 3 个有新消息
     pub label: Option<String>,
     pub chat: Option<OpenChat>,
 }
@@ -1845,6 +1848,95 @@ pub struct ChatItem {
     pub pinned: Option<bool>,
     /// A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise.
     pub watch: Option<RowWatch>,
+    /// Its pieces of work (core, work.rs), as its station keeps them, oldest first. Absent when it has none (and from a
+    /// station before them).
+    pub items: Option<Vec<WorkItem>>,
+    /// Of `items`, those waiting on someone, in the order its page shows them one at a time: those waiting on the
+    /// viewer (set aside last), then those waiting only on others (set aside last). Absent when none waits.
+    pub asks: Option<Vec<WorkItem>>,
+    /// Its second line while something in it waits (奏 · 设置页间距 · 另 1 件等王磊). Absent otherwise.
+    pub waiting: Option<RowWaiting>,
+    /// It has pieces of work and all are done or dropped, with nothing at work or unread in it: drawn faded. Absent
+    /// otherwise.
+    pub settled: Option<bool>,
+    /// Its mark, the most urgent first: alert (blocked or failed), wait (something waits on the viewer), busy (at
+    /// work), done (something unread), other (something waits only on others). Absent for none.
+    pub tone: Option<String>,
+}
+
+/// A piece of work in a chat (an agent declares them with chat_post): as its station keeps it, with what the core puts
+/// in for the viewer (work.rs): whether it waits on them, its card's lines, and the answers it offers.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkItem {
+    /// Its name in the chat: the same key is the same piece of work.
+    pub key: String,
+    /// The agent that declared it last.
+    pub session: String,
+    pub title: String,
+    /// working | waiting | done | dropped
+    pub state: String,
+    /// Whom it waits on while waiting, each as a chat's people are (`shown`: as the core names them).
+    pub waiting_on: Vec<Creator>,
+    /// What is asked of them, in the agent's words; absent for a plain yes.
+    pub ask: Option<WorkAsk>,
+    /// A line under its title: a branch, a commit, where it went.
+    pub detail: Option<String>,
+    /// The entry (its number in the chat) that declared it so.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub evidence: Option<i64>,
+    #[typeshare(serialized_as = "I54")]
+    pub created_at: i64,
+    #[typeshare(serialized_as = "I54")]
+    pub updated_at: i64,
+    /// Its times in words, by field.
+    pub time: Option<HashMap<String, Stamp>>,
+    /// It waits on the viewer.
+    pub mine: bool,
+    /// The viewer set it aside (待定): last of those waiting on them, still waiting. Absent otherwise.
+    pub deferred: Option<bool>,
+    /// Its card's top line while it waits: 奏, 等王磊决定, 等王磊、小李决定. Empty otherwise.
+    pub lead: String,
+    /// The line under its title: its detail and when it was last declared so (分支 settings-gap · 3 分钟前).
+    pub line: String,
+    /// What its card offers while it waits, in order; none otherwise.
+    pub answers: Vec<WorkAnswer>,
+}
+
+/// What a piece of work asks: the word for yes (`label`, 准 when absent), and answers to pick from (`options`).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkAsk {
+    pub label: Option<String>,
+    pub options: Option<Vec<String>>,
+}
+
+/// An answer a piece of work's card offers: its button's words, what it is (yes | option | drop | delegate | defer |
+/// change), and the message it sends in the chat (`item.answer`), 「设置页间距」准; none for defer (`item.defer`, nothing
+/// is sent) and change (the client puts 「设置页间距」 in the composer to be written on).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkAnswer {
+    pub label: String,
+    pub kind: String,
+    pub text: Option<String>,
+}
+
+/// A row's second line while something in it waits: how many wait on the viewer and how many only on others, and
+/// the line (奏 · 设置页间距 · 另 2 件; 等王磊 · 设置页间距).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RowWaiting {
+    pub mine: u32,
+    pub others: u32,
+    pub text: String,
 }
 
 /// A watching chat (core, present.rs): what it watches in words (监控中：盯 CI), and what archiving it by hand asks
@@ -2249,6 +2341,9 @@ pub struct ChatView {
     pub failed: Option<String>,
     /// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
     pub connection: Option<LinkShown>,
+    /// Its pieces of work waiting on someone, in the order its card shows them (as its row's `asks`). Absent when
+    /// none waits.
+    pub asks: Option<Vec<WorkItem>>,
 }
 
 #[typeshare]

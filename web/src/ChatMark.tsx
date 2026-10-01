@@ -1,19 +1,26 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
-import type { WorkspaceMark } from "./core/shapes.ts";
+import type { RowWaiting, WorkspaceMark } from "./core/shapes.ts";
 import { reducedMotion } from "./motion.ts";
 import * as css from "./ChatMark.css.ts";
 
-export type ChatTone = "busy" | "done" | "alert";
+export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 
-/** What a chat's row says of it: red when it wants someone now (blocked, failed), yellow while at work, blue when it ended well with something unread; nothing otherwise. */
+const TONES: readonly string[] = ["busy", "done", "alert", "wait", "other"];
+
+/**
+ * What a chat's row says of it: the core's mark when it gives one (`tone`, with its pieces of work: a blue ring when
+ * something waits on the viewer, a grey one when only on others). From a core before it: red when it wants someone now
+ * (blocked, failed), yellow while at work, blue when it ended well with something unread; nothing otherwise.
+ */
 export function chatTone(item: ChatItem): ChatTone | undefined {
+  if (item.tone !== undefined) return TONES.includes(item.tone) ? item.tone as ChatTone : undefined;
   if (item.state === "block" || item.state === "failed") return "alert";
   if (item.state === "run") return "busy";
   return item.unread ? "done" : undefined;
 }
 
-const LABEL: Record<ChatTone, string> = { busy: "工作中", done: "做完了，有新消息", alert: "需要处理" };
+const LABEL: Record<ChatTone, string> = { busy: "工作中", done: "做完了，有新消息", alert: "需要处理", wait: "等你决定", other: "等别人决定" };
 
 /**
  * The mark each chat has and since when, to know one that has just come: every list the chat is in pops it (all and
@@ -49,7 +56,22 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
   return (
     <span className={css.markCounts} role="img" aria-label={mark.label ?? ""}>
       {mark.alert > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="alert" />{mark.alert}</span>}
+      {(mark.wait ?? 0) > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="wait" />{mark.wait}</span>}
       {mark.unread > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="done" />{mark.unread}</span>}
+    </span>
+  );
+}
+
+/**
+ * A row's second line while something in it waits (the core's `waiting`): in ink when it is the viewer's turn, its
+ * lead (奏, up to the first ·) bold; 等王磊 … stays quiet, as the last message would be.
+ */
+export function WaitingText({ waiting, className }: { waiting: RowWaiting; className: string }) {
+  const turn = waiting.mine > 0;
+  const lead = turn ? waiting.text.split(" · ")[0]! : "";
+  return (
+    <span className={className} data-turn={turn || undefined}>
+      {lead && <b className={css.waitingLead}>{lead}</b>}{waiting.text.slice(lead.length)}
     </span>
   );
 }

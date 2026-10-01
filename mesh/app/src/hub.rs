@@ -35,7 +35,7 @@ use crate::pool::{PoolSignals, ProfileHealth, pick_profile, serves, usable};
 use crate::runtime::AgentDriver;
 use crate::session::{DeclaredState, HandedSession, SessionActor, SessionDeps};
 use crate::store::{
-    AUTO, Attachment, AuthorKind, STILLFAIL_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
+    AUTO, Attachment, AuthorKind, ITEM_STATES, ItemRow, STILLFAIL_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
     slack_surface, write_compressed,
 };
 use crate::transcript::{TimelineEntry, iso, transcript_path};
@@ -1242,6 +1242,28 @@ impl Hub {
                         "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
                         "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they are uploaded below the text). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                         "title": { "type": "string", "description": "A still.fail chat's name in lists: a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first final post in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
+                        "items": {
+                            "type": "array",
+                            "description": "The pieces of work in this conversation this message says something about, each by a key of yours: new ones are added, known ones updated (only what you give changes). People's lists show what waits on them from these.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "key": { "type": "string", "description": "Yours, stable for the piece of work (e.g. its branch name)." },
+                                    "title": { "type": "string", "description": "What it is, in a few words, in the language people use there. Required the first time." },
+                                    "state": { "type": "string", "enum": ITEM_STATES, "description": "working: you are on it. waiting: done as far as you can go, and a person has to decide (approve, choose, answer). done: finished (merged, answered, delivered). dropped: people said not to." },
+                                    "waitingOn": { "type": "array", "items": { "type": "string" }, "description": "For waiting: who has to decide, as from=\"…\" gives them (the part in parentheses). Default: the person who last wrote in the conversation." },
+                                    "ask": {
+                                        "type": "object",
+                                        "description": "For waiting: the answers people can give with one tap. Their card always has 准 (yes; label: other words for it) and 随便 (you decide), and the composer for anything else. options: the other answers that fit, e.g. 不要了, or the choices when it is a choice.",
+                                        "properties": { "label": { "type": "string" }, "options": { "type": "array", "items": { "type": "string" } } },
+                                        "additionalProperties": false,
+                                    },
+                                    "detail": { "type": "string", "description": "A short line under its title: a branch, a commit, where it went." },
+                                },
+                                "required": ["key"],
+                                "additionalProperties": false,
+                            },
+                        },
                     },
                     "required": ["to"],
                     "additionalProperties": false,
@@ -1399,6 +1421,7 @@ impl Hub {
         }
         let kind = state_arg(args.get("kind"))?;
         let thread = self.target(key, args.get("to"))?;
+        let items = self.items_arg(key, &thread, args.get("items"))?;
         // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
         // them in still.fail instead.
         let slack = thread.thread.surface != STILLFAIL_SURFACE && !paths.is_empty();
@@ -1424,6 +1447,8 @@ impl Hub {
             ..NewMessage::new(thread.thread.id, &ts, AuthorKind::Agent, key, &text)
         })?;
         self.shared(thread.thread.id, n, key, &text)?;
+        let items: Vec<ItemRow> = items.into_iter().map(|it| ItemRow { evidence: Some(n), ..it }).collect();
+        self.store.put_items(thread.thread.id, &items)?;
         if let Some(post) = self.store.posts_by(key)?.pop() {
             self.live.posted(key, post_entries(&[post]));
         }
@@ -1435,10 +1460,96 @@ impl Hub {
             None => String::new(),
         };
         let place = thread_address(&thread.thread.channel, &thread.thread.thread_ts);
+        let recorded = items_said(&items);
         Ok(match kind {
-            Some(kind) => format!("Posted to {place}, and recorded state {}.{titled}", kind.as_str()),
-            None => format!("Posted to {place}.{titled}"),
+            Some(kind) => format!("Posted to {place}, and recorded state {}.{titled}{recorded}", kind.as_str()),
+            None => format!("Posted to {place}.{titled}{recorded}"),
         })
+    }
+
+    /// The pieces of work a post declares (chat_post items), as they will be kept: known ones updated with what is
+    /// given, people to wait on as creator references (the person who last wrote, when none is named).
+    fn items_arg(&self, key: &str, thread: &SessionThread, value: Option<&Value>) -> Result<Vec<ItemRow>> {
+        let list = match value {
+            None | Some(Value::Null) => return Ok(vec![]),
+            Some(Value::Array(list)) => list,
+            Some(_) => bail!("items must be an array of {{key, title, state, …}}"),
+        };
+        let t = &thread.thread;
+        let slack = t.surface != STILLFAIL_SURFACE;
+        let known: HashMap<String, ItemRow> = self.store.items(t.id)?.into_iter().map(|it| (it.key.clone(), it)).collect();
+        let messages = self.store.messages_before(t.id, None, 200)?;
+        let as_ref = |author: &str| if slack { format!("slack:{}:{author}", thread.connect) } else { author.to_string() };
+        let people: Vec<String> = {
+            let mut seen = HashSet::new();
+            messages.iter().filter(|m| m.author_kind == AuthorKind::Person).map(|m| as_ref(&m.author)).filter(|a| seen.insert(a.clone())).collect()
+        };
+        let last_person = messages.iter().rev().find(|m| m.author_kind == AuthorKind::Person).map(|m| as_ref(&m.author));
+        let person = |given: &str| -> Result<String> {
+            let given = given.trim();
+            // As from="name (ref)" gives them, whole or the part in parentheses.
+            let given = match (given.rfind('('), given.ends_with(')')) {
+                (Some(open), true) => &given[open + 1..given.len() - 1],
+                _ => given,
+            };
+            let wanted = if given.starts_with("slack:") || !slack { given.to_string() } else { as_ref(given) };
+            people
+                .iter()
+                .find(|p| p.eq_ignore_ascii_case(&wanted))
+                .cloned()
+                .or_else(|| (!slack && given.contains('@')).then(|| given.to_lowercase()))
+                .ok_or_else(|| anyhow!("waitingOn: {given} has not written in this conversation; name people as from=\"…\" gives them (in parentheses): {}", people.join(", ")))
+        };
+        let now = crate::store::now_ms();
+        let mut out = Vec::new();
+        for (i, it) in list.iter().enumerate() {
+            let Some(it) = it.as_object() else { bail!("items[{i}] must be an object") };
+            let item_key = it.get("key").map(js_string).unwrap_or_default().trim().to_string();
+            if item_key.is_empty() {
+                bail!("items[{i}].key is required");
+            }
+            let before = known.get(&item_key);
+            let text = |name: &str| it.get(name).map(js_string).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+            let title = match (text("title"), before) {
+                (Some(title), _) => title,
+                (None, Some(b)) => b.title.clone(),
+                (None, None) => bail!("items[{i}].title is required for a new piece of work ({item_key})"),
+            };
+            let state = match (text("state"), before) {
+                (Some(state), _) if ITEM_STATES.contains(&state.as_str()) => state,
+                (Some(state), _) => bail!("items[{i}].state must be one of {}, got {state}", ITEM_STATES.join(", ")),
+                (None, Some(b)) => b.state.clone(),
+                (None, None) => "working".to_string(),
+            };
+            let waiting_on = match it.get("waitingOn") {
+                Some(Value::Array(names)) if !names.is_empty() => names.iter().map(|n| person(&js_string(n))).collect::<Result<Vec<_>>>()?,
+                _ if state != "waiting" => vec![],
+                _ => match before.filter(|b| b.state == "waiting" && !b.waiting_on.is_empty()) {
+                    Some(b) => b.waiting_on.clone(),
+                    None => last_person.clone().into_iter().collect(),
+                },
+            };
+            let ask = match it.get("ask") {
+                Some(Value::Object(a)) => Some(Value::Object(a.clone())),
+                Some(Value::Null) => None,
+                Some(_) => bail!("items[{i}].ask must be an object {{label?, options?}}"),
+                None if state == "waiting" => before.and_then(|b| b.ask.clone()),
+                None => None,
+            };
+            out.push(ItemRow {
+                key: item_key,
+                session: key.to_string(),
+                title,
+                state,
+                waiting_on,
+                ask,
+                detail: text("detail").or_else(|| before.and_then(|b| b.detail.clone())),
+                evidence: None,
+                created_at: before.map(|b| b.created_at).unwrap_or(now),
+                updated_at: now,
+            });
+        }
+        Ok(out)
     }
 
     async fn chat_history(&self, key: &str, args: &Map<String, Value>) -> Result<String> {
@@ -1720,6 +1831,21 @@ fn js_number(value: &Value) -> Option<f64> {
 /// How long an agent may say it waits (chat_state "waiting").
 const MIN_WAIT_SECONDS: u64 = 10;
 const MAX_WAIT_SECONDS: u64 = 3600;
+
+/// What chat_post says of the pieces of work it recorded: nothing when it declared none.
+fn items_said(items: &[ItemRow]) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+    let said: Vec<String> = items
+        .iter()
+        .map(|it| match it.state.as_str() {
+            "waiting" => format!("{} (waiting on {})", it.key, it.waiting_on.join(", ")),
+            state => format!("{} ({state})", it.key),
+        })
+        .collect();
+    format!(" Items: {}.", said.join("; "))
+}
 
 fn state_arg(value: Option<&Value>) -> Result<Option<DeclaredState>> {
     match value {

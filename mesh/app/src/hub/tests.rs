@@ -1734,3 +1734,45 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
     settle().await;
     assert_eq!(r.claude.count(), 3);
 }
+
+#[tokio::test]
+async fn chat_post_items_are_kept_by_key_and_wait_on_the_person_who_last_wrote() {
+    let r = setup();
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    r.hub.say(thread.id, "ada@x.com", "fix the spacing", vec![], vec![], None).unwrap();
+    settle().await;
+    let to = format!("EMBER/{}", thread.thread_ts);
+    let said = r
+        .call(&web, "chat_post", json!({ "to": to, "text": "on it", "items": [{ "key": "gap", "title": "设置页间距", "state": "working" }] }))
+        .await
+        .unwrap();
+    assert_eq!(said, format!("Posted to {to}. Items: gap (working)."));
+    let said = r
+        .call(&web, "chat_post", json!({ "to": to, "text": "done, look", "kind": "final", "items": [{ "key": "gap", "state": "waiting", "detail": "settings-gap", "ask": { "label": "可以，合" } }] }))
+        .await
+        .unwrap();
+    assert_eq!(said, format!("Posted to {to}, and recorded state final. Items: gap (waiting on ada@x.com)."));
+    let items = r.store.items(thread.id).unwrap();
+    assert_eq!(items.len(), 1);
+    let it = &items[0];
+    assert_eq!((it.title.as_str(), it.state.as_str(), it.waiting_on.clone(), it.detail.as_deref()), ("设置页间距", "waiting", vec!["ada@x.com".to_string()], Some("settings-gap")));
+    assert_eq!(it.ask, Some(json!({ "label": "可以，合" })));
+    let evidence = r.said(thread.id).last().unwrap().n;
+    assert_eq!(it.evidence, Some(evidence), "the post that declared it so shows it");
+
+    r.call(&web, "chat_post", json!({ "to": to, "text": "merged", "items": [{ "key": "gap", "state": "done" }] })).await.unwrap();
+    let it = &r.store.items(thread.id).unwrap()[0];
+    assert_eq!((it.state.as_str(), it.waiting_on.len(), it.ask.clone(), it.title.as_str()), ("done", 0, None, "设置页间距"));
+
+    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "new" }] })).await.unwrap_err().to_string().contains("title is required"));
+    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "merged" }] })).await.unwrap_err().to_string().contains("state must be one of"));
+    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Bob"] }] })).await.unwrap_err().to_string().contains("ada@x.com"));
+    // Someone who has not written yet, by email: still.fail people are their emails.
+    let bob = r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Bob@x.com"] }] })).await.unwrap();
+    assert!(bob.ends_with("Items: gap (waiting on bob@x.com)."), "{bob}");
+    let named = r
+        .call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Ada (ada@x.com)"] }] }))
+        .await
+        .unwrap();
+    assert!(named.ends_with("Items: gap (waiting on ada@x.com)."), "{named}");
+}

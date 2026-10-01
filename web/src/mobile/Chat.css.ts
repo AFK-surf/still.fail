@@ -26,7 +26,7 @@ globalStyle(`${mMessages} [data-pressed]`, {
   boxShadow: "inset 0 0 0 999px color-mix(in srgb, var(--m-accent) 12%, transparent)",
 });
 export const mJump = style({
-  position: "absolute", right: "18px", bottom: "calc(var(--m-bottom) + 2px)", zIndex: "2", display: "grid",
+  position: "absolute", right: "18px", bottom: "calc(var(--m-bottom) + var(--asks-height, 0px) + 2px)", zIndex: "2", display: "grid",
   placeItems: "center", width: "36px", height: "36px", padding: "0", borderRadius: "50%",
   color: "var(--m-ink) !important", opacity: "0", transform: "translateY(18px) scale(.6)", pointerEvents: "none",
   transition: "opacity 150ms, transform 180ms var(--m-standard)", cursor: "pointer",
@@ -132,3 +132,15 @@ globalStyle(`${mJobNotices} p`, { margin: "0", display: "grid", gridTemplateColu
 globalStyle(`${mJobNotices} time`, { color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });
 // The phone's buttons take the page's font (root.css.ts), stronger than a class alone: the count's size is set as strongly.
 globalStyle(`${mChat} button${mJump}[data-count]`, { fontSize: "14px" });
+
+/**
+ * What waits to be decided (../Asks.tsx), over the composer: its foot 10px over the capsule (8px of the composer's own
+ * padding), as wide as it; in the phone's colours.
+ */
+export const mAsks = style({
+  position: "absolute", left: "10px", right: "10px", bottom: "calc(var(--m-bottom) + 2px)", zIndex: "4",
+  vars: {
+    "--ask-ink": "var(--m-ink)", "--ask-ground": "var(--m-bg)", "--ask-muted": "var(--m-muted)", "--ask-subtle": "var(--m-subtle)",
+    "--ask-chip": "var(--m-chip)", "--ask-solid": "var(--m-surface)",
+  },
+});

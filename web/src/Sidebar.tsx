@@ -12,7 +12,7 @@ import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
-import { ChatMark } from "./ChatMark.tsx";
+import { ChatMark, WaitingText } from "./ChatMark.tsx";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
@@ -156,7 +156,8 @@ function useScrolling() {
 /**
  * A chat in the list: its title (bold while something in it is unread) and
  * where it came from, then the last thing said in it and when; its state as a
- * dot before its title (ChatMark.tsx), who is in it small at the second line's end.
+ * dot before its title (ChatMark.tsx), who is in it small at the second line's end. While a piece of work in it waits,
+ * the second line says on whom and what; with all its work over, the row is faded.
  */
 function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const { connect } = item;
@@ -178,7 +179,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   // A new chat its station has not made yet, or one on a station offline, is neither renamed nor archived.
   const menu = !item.offline && !item.pending;
   const row = (
-    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={(e) => {
+    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} data-settled={item.settled || undefined} onClick={(e) => {
         if (editing) { e.preventDefault(); return; }
         chatClicked();
         move(e, to, "chat");
@@ -207,7 +208,9 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         </span>
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
-          {item.last ? <LastMessage item={item} /> : <span className={nav.navSessionLast} />}
+          {/* While something in it waits: who it waits on and what, instead (the core's words). */}
+          {item.waiting ? <WaitingText waiting={item.waiting} className={nav.navSessionLast} />
+            : item.last ? <LastMessage item={item} /> : <span className={nav.navSessionLast} />}
           <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           <Time className={nav.navTime} stamp={item.time?.lastActiveAt} fixed />
         </span>

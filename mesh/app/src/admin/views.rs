@@ -452,6 +452,11 @@ impl AdminApi {
             if let Some(client) = key.as_str().and_then(|k| self.deps.hub.client_key(k)) {
                 row["clientKey"] = json!(client);
             }
+            // Its pieces of work (chat_post items), with whom each waits on in words; a chat with none says nothing.
+            let items = self.items_view(t.thread.id);
+            if !items.is_empty() {
+                row["items"] = json!(items);
+            }
             if archived {
                 row["archived"] = match t.thread.home.as_ref().and_then(|home| all.get(home)) {
                     Some(home) => archived_of(home),
@@ -503,6 +508,40 @@ impl AdminApi {
             row["pinned"] = json!(row["id"].as_str().and_then(|id| pins.get(id)));
         }
         Ok(rows)
+    }
+
+    /// A chat's pieces of work for its row: each as kept, with `waitingOn` as people (`{id, name, email, via}`), and
+    /// `answered` once someone answered one that waits (a person's message 「<title>」… after the post that asked): it is
+    /// the agent's to take up then, on every device, until it declares it again.
+    fn items_view(&self, thread: i64) -> Vec<Value> {
+        let store = &self.deps.store;
+        let items = store.items(thread).unwrap_or_default();
+        let since = items.iter().filter(|it| it.state == "waiting").filter_map(|it| it.evidence).min();
+        let said: Vec<(i64, String)> = match since {
+            Some(since) => store
+                .messages_before(thread, None, 200)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|m| m.n > since && m.author_kind == AuthorKind::Person)
+                .map(|m| (m.n, m.text))
+                .collect(),
+            None => vec![],
+        };
+        items
+            .into_iter()
+            .map(|it| {
+                let people = self.people(&it.waiting_on);
+                let asked = format!("「{}」", it.title);
+                let answered = it.state == "waiting"
+                    && it.evidence.is_some_and(|e| said.iter().any(|(n, text)| *n > e && text.trim_start().starts_with(&asked)));
+                let mut v = json!(it);
+                v["waitingOn"] = json!(people);
+                if answered {
+                    v["answered"] = json!(true);
+                }
+                v
+            })
+            .collect()
     }
 
     /// Whether a person is the viewer: by id, by email, or as a Slack user the viewer said is them.

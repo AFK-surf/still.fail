@@ -905,6 +905,33 @@ impl Inner {
                     None => Err(CoreError::invalid("没有这个对话")),
                 }
             }
+            Call::ItemAnswer { station, session, thread, key, answer, reply } => {
+                let rows = self.store.value(&Topic::ChatRows { station: station.clone() }).and_then(Result::ok).unwrap_or(Value::Null);
+                let found = crate::work::find(&rows, &session, &key);
+                let thread = thread.or_else(|| found.as_ref().and_then(|(_, thread, _)| *thread)).ok_or_else(|| CoreError::invalid("没有这件事"))?;
+                // Answered: no longer set aside, and the agent's to take up until it declares it again.
+                if let Some((chat, _, item)) = &found {
+                    let at = crate::work::deferral_key(&station, chat, &key);
+                    crate::prefs::undefer(&self.data, &at);
+                    crate::prefs::answered(&self.data, &at, item.get("evidence").and_then(Value::as_i64), self.host.now_ms());
+                }
+                let text = match reply {
+                    Some(reply) => {
+                        let title = found.as_ref().and_then(|(_, _, item)| item.get("title").and_then(Value::as_str)).ok_or_else(|| CoreError::invalid("没有这件事"))?;
+                        format!("「{title}」{reply}")
+                    }
+                    None => answer,
+                };
+                let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes: json!([]), client: None };
+                Box::pin(self.execute(send, progress, at)).await
+            }
+            Call::ItemDefer { station, session, key } => {
+                let rows = self.store.value(&Topic::ChatRows { station: station.clone() }).and_then(Result::ok).unwrap_or(Value::Null);
+                let (chat, _, item) = crate::work::find(&rows, &session, &key).ok_or_else(|| CoreError::invalid("没有这件事"))?;
+                // The prefs changed: the lists and the chat's card are put together again.
+                crate::prefs::defer(&self.data, &crate::work::deferral_key(&station, &chat, &key), item.get("evidence").and_then(Value::as_i64), self.host.now_ms());
+                Ok(Value::Null)
+            }
             Call::ChatRetryIn { station, session, id } => match self.views.pending_thread(&station, &session) {
                 Some(Some(thread)) => Box::pin(self.execute(Call::ChatRetry { station, thread, id }, progress, at)).await,
                 Some(None) => {
@@ -1870,6 +1897,12 @@ pub(crate) enum Call {
     ChatCreate { station: String, ask: Value },
     /// Sending, trying again, dropping in a chat by its key: one asked for here goes to its thread once made.
     ChatSendTo { station: String, session: String, text: String, attachments: Value, quotes: Value, client: Option<String> },
+    /// A piece of work answered (work.rs): `answer`, the message its card's answer sends (「设置页间距」准), sent in its
+    /// chat as `chat.send` sends one. Its chat by `thread`, else as the station's rows have it (by `session` and `key`).
+    ItemAnswer { station: String, session: String, thread: Option<u64>, key: String, answer: String, reply: Option<String> },
+    /// A piece of work set aside by the viewer (待定): last of their cards until asked again. Kept on the device; nothing
+    /// is sent.
+    ItemDefer { station: String, session: String, key: String },
     ChatRetryIn { station: String, session: String, id: String },
     ChatDiscardIn { station: String, session: String, id: String },
     ChatRetry { station: String, thread: u64, id: String },
@@ -1936,6 +1969,7 @@ impl Call {
             },
             Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
+            Call::ItemAnswer { station, .. } | Call::ItemDefer { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatNewer { station, .. } | Call::ChatLatest { station, .. } | Call::ChatPlace { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
@@ -2169,6 +2203,24 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "chat.send" => {
             let p: Send = read(params)?;
             Call::ChatSend { station: p.station, thread: p.thread, text: p.text, attachments: p.attachments, quotes: p.quotes, client: p.client }
+        }
+        "item.answer" => {
+            #[derive(Deserialize)]
+            struct P { station: String, session: String, #[serde(default)] thread: Option<u64>, key: String, #[serde(default)] answer: String, #[serde(default)] reply: String }
+            let p: P = read(params)?;
+            // An answer its card offers (its message as is), or words written on the card (`reply`, said of it).
+            let answer = if p.answer.trim().is_empty() { String::new() } else { p.answer };
+            let reply = Some(p.reply.trim().to_string()).filter(|r| !r.is_empty() && answer.is_empty());
+            if answer.is_empty() && reply.is_none() {
+                return Err(CoreError::invalid("参数不对：answer 和 reply 都是空的"));
+            }
+            Call::ItemAnswer { station: p.station, session: p.session, thread: p.thread, key: p.key, answer, reply }
+        }
+        "item.defer" => {
+            #[derive(Deserialize)]
+            struct P { station: String, session: String, key: String }
+            let p: P = read(params)?;
+            Call::ItemDefer { station: p.station, session: p.session, key: p.key }
         }
         "chat.retry" => {
             let p: Outgoing = read(params)?;
@@ -2449,6 +2501,19 @@ mod tests {
             Call::ChatSendTo { station: "w/s".into(), session: "new:1-1".into(), text: "hi".into(), attachments: json!([]), quotes: json!([]), client: None }
         );
         assert_eq!(parse_call("chat.retry", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatRetryIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
+        // A piece of work answered, by its chat's thread or its session; set aside.
+        assert_eq!(
+            parse_call("item.answer", json!({"station": "w/s", "session": "k", "thread": 7, "key": "gap", "answer": "「设置页间距」准"})).unwrap(),
+            Call::ItemAnswer { station: "w/s".into(), session: "k".into(), thread: Some(7), key: "gap".into(), answer: "「设置页间距」准".into(), reply: None }
+        );
+        assert_eq!(
+            parse_call("item.answer", json!({"station": "w/s", "session": "k", "key": "gap", "answer": "「设置页间距」随便"})).unwrap(),
+            Call::ItemAnswer { station: "w/s".into(), session: "k".into(), thread: None, key: "gap".into(), answer: "「设置页间距」随便".into(), reply: None }
+        );
+        assert_eq!(code(parse_call("item.answer", json!({"station": "w/s", "session": "k", "key": "gap", "answer": " "}))), "invalid_params");
+        assert_eq!(code(parse_call("item.answer", json!({"station": "w/s", "session": "k", "answer": "x"}))), "invalid_params");
+        assert_eq!(parse_call("item.defer", json!({"station": "w/s", "session": "k", "key": "gap"})).unwrap(), Call::ItemDefer { station: "w/s".into(), session: "k".into(), key: "gap".into() });
+        assert_eq!(code(parse_call("item.defer", json!({"station": "w/s", "key": "gap"}))), "invalid_params");
         assert_eq!(parse_call("chat.discard", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatDiscardIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
     }
 
@@ -3231,6 +3296,41 @@ mod tests {
             let tabs = values[&1]["chatTabs"].as_object().unwrap();
             assert_eq!(tabs.len(), 200);
             assert!(tabs.contains_key("ws/st:204") && !tabs.contains_key("ws/st:4") && !tabs.contains_key("ws/st:t"));
+        });
+    }
+
+    #[test]
+    fn a_piece_of_work_is_answered_in_its_chat_and_set_aside_on_the_device() {
+        run(async {
+            let (host, core) = station_core(0.0).await;
+            let ui = core.connect();
+            let item = json!({ "key": "gap", "session": "k1", "title": "设置页间距", "state": "waiting", "waitingOn": [], "ask": null, "detail": null, "evidence": 4, "createdAt": 1, "updatedAt": 1 });
+            core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{ "id": "k1", "session": "k1", "thread": 7, "items": [item] }]));
+            // Set aside: kept on the device, for the request it waits by; nothing is sent.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "item.defer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "gap" }) });
+            host.settle().await;
+            let at = crate::work::deferral_key("ws/st", "k1", "gap");
+            assert_eq!(core.inner.data.get(&Topic::Prefs).unwrap()["deferred"][&at]["evidence"], 4);
+            let posted = |host: &FakeHost| -> Vec<Value> {
+                host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.ends_with("/threads/7/messages"))
+                    .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap()).collect()
+            };
+            assert!(posted(&host).is_empty());
+            // Answered: a message in its chat (found by its session), and no longer set aside.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "item.answer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "gap", "answer": "「设置页间距」准" }) });
+            host.settle().await;
+            assert_eq!(posted(&host)[0]["text"], "「设置页间距」准");
+            assert_eq!(core.inner.data.get(&Topic::Prefs).unwrap()["deferred"], json!({}));
+            // Words written on its card: said of it.
+            core.receive(ui, ClientMessage::Call { id: 6, call: "item.answer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "gap", "reply": " 左边再收 4px " }) });
+            host.settle().await;
+            assert_eq!(posted(&host).last().unwrap()["text"], format!("「{}」左边再收 4px", "设置页间距"));
+            // One the station does not have: refused.
+            core.receive(ui, ClientMessage::Call { id: 4, call: "item.defer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "nope" }) });
+            core.receive(ui, ClientMessage::Call { id: 5, call: "item.answer".into(), params: json!({ "station": "ws/st", "session": "k9", "key": "nope", "answer": "x" }) });
+            host.settle().await;
+            let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 4 | 5, .. })).count();
+            assert_eq!(refused, 2);
         });
     }
 
