@@ -1752,8 +1752,6 @@ export interface NetRelay {
 /** A station's ways through each relay as last measured, and whether they are being measured again. */
 export interface NetMeasured {
 	measuring: boolean;
-	/** When these results were measured, in words; absent with an older core. */
-	whenText?: string;
 	relays: NetRelay[];
 	/** The relay the connection moved to as they were measured (its name), if it did. */
 	moved?: string;

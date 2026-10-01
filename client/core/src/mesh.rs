@@ -164,8 +164,6 @@ struct Day {
 pub struct Measured {
     /// Being measured again now.
     pub measuring: bool,
-    /// When the last completed measurement finished, in epoch milliseconds.
-    pub at: Option<f64>,
     /// Each relay's host and its round trip in milliseconds (None: not reached in time), in still.fail's order.
     pub relays: Vec<(String, Option<f64>)>,
     /// The host of the relay the link moved to, if it did.
@@ -609,7 +607,7 @@ impl Mesh {
         self.probing.set(self.probing.get() + 1);
         let measured: Vec<(String, Option<f64>)> = join_all(self.relays.iter().map(|relay| async move { (relay.clone(), self.probe(relay, station_id).await) })).await;
         self.probing.set(self.probing.get() - 1);
-        let mut shown = Measured { measuring: false, at: Some(self.host.now_ms()), relays: measured.iter().map(|(relay, ms)| (relay_host(relay), *ms)).collect(), moved: None };
+        let mut shown = Measured { measuring: false, relays: measured.iter().map(|(relay, ms)| (relay_host(relay), *ms)).collect(), moved: None };
         for (relay, ms) in &measured {
             let ms = ms.map(|ms| Value::from(ms.round())).unwrap_or_else(|| "none".into());
             span.set(&format!("stillfail.rtt.{}", relay_host(relay)), ms);
@@ -2009,7 +2007,6 @@ mod tests {
 
             let shown = mesh.measured(&id).unwrap();
             assert!(!shown.measuring);
-            assert!(shown.at.is_some());
             assert_eq!(shown.moved.as_deref(), b.host_str());
             assert_eq!(shown.relays.len(), 2);
             assert!(shown.relays.iter().all(|(_, ms)| ms.is_some()), "{shown:?}");

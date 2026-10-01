@@ -20,7 +20,7 @@
 ## 待部署
 
 - Claude 额度报错识别（fix-quota-failover）：更新 station；无需更新客户端。`You've hit your session limit` 等额度提示现在归为 rate_limit，自动账号会话可进入切换并继续链路；固定账号仍遵守原有固定设置。新旧数据和接口不变。上线后核对自然发生的额度失败记录为 rate_limit，且有可用同模型账号时自动继续。
-- 中继检测口径（relay-measure-consistent）：更新 web/wasm、桌面 core 和安卓；station、cloud API 无需更新，仍兼容旧 station。探测只走指定中继，3 次预热后取 5 次 QUIC RTT 估算的中位数；选路优先比较同轮检测，界面区分「当前延时」与检测时间，超时写「未测通」。上线后验：安卓同局域网仍可直连，检测值不被直连冒充；重新测量后显示新时间、慢中继会切到明显更快的中继。
+- 中继检测口径（relay-measure-consistent）：更新 web/wasm、桌面 core 和安卓；station、cloud API 无需更新，仍兼容旧 station。后台探测只走指定中继，3 次预热后取 5 次 QUIC RTT 估算的中位数；选路优先比较同轮检测。三端移除手动检测入口和各中继检测结果，仅保留当前连接网络信息；旧客户端的检测调用仍兼容。上线后验：安卓同局域网仍可直连，检测值不被直连冒充；无需打开 station 页面或点击检测，后台会自动切换到明显更快的中继。
 
 - 事项卡片说清在问什么、等待说清在等什么（ask-question）：station 要求 waiting 的事项带 `ask.question`（没有就报错让 agent 补），`chat_state waiting` 必须带 `for`（turns 表补 `wait_for` 列，旧库自动补，行和会话的 `lastTurn` 带 `waitFor`）；指令同步。core：`WorkItem` 加 `question`、`head`（「奏 · 标题 · 时间」，不再带分支），agent 状态「在等：…」。web 和安卓卡片改成问题做主文字、点空白跳到提问的消息；安卓卡片的滑动改挂在外层（加了 23 个真实触摸的 androidTest：`AskCardSwipeTest`）。新字段可选：旧 station 没有 question 时卡片用标题、没有 waitFor 时显示「等待中」。web 跟部署走，station 要发包，安卓要发一版。上线后验：让 agent 声明一件 waiting 的事，卡片主文字是一句问题；agent 用 waiting 结束时，名字下面显示「在等：…」；安卓上横着拖卡片能滑走。
 - 用量页未知人员解析修复（usage-unknown-person）：core 仍把无法识别人员的历史用量计入总额和「说不清是谁」，但不再把缺少来源字段的占位对象当作 `Creator` 发送，避免安卓整页解析失败。接口字段不变，`person` 本来可空；新旧 station 都兼容。需发布安卓和桌面客户端，web 随部署更新；station 无需更新。上线后用含未知人员历史记录的 workspace 打开用量页，确认 7 天/30 天能显示且未知人员的用量仍计入。

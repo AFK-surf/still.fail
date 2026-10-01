@@ -4,16 +4,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { stamp, type StationView } from "../api.ts";
-import type { Host, Level, NetFigure, NetMeasured, StationNet } from "../core/shapes.ts";
-import { useCall } from "../core/react.ts";
-import { DoingShown, useDoingState } from "../DoingMark.tsx";
+import type { Host, Level, NetFigure, StationNet } from "../core/shapes.ts";
 import { StatusDot, Time } from "../ui.tsx";
 import { ChevronRight } from "../icons.tsx";
 import { Versions } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
-import * as pillCss from "../Connection.css.ts";
 
 import { NAME } from "../channel.ts";
 type Meter = Host["meters"][number];
@@ -79,34 +76,6 @@ export function Net({ net, stacked = false }: { net: StationNet; stacked?: boole
   );
 }
 
-/** The round trip to it through each relay as last measured, the one it goes through now marked, and 重新测量: the
- * core moves the connection to one clearly quicker (`station.measure`). */
-export function Ways({ station, measured, stacked = false }: { station: string; measured?: NetMeasured | undefined; stacked?: boolean }) {
-  const call = useCall();
-  const state = useDoingState("station.measure", { station });
-  const measuring = state.running || (measured?.measuring ?? false);
-  return (
-    <div className={stacked ? `${css.ways} ${css.waysStacked}` : css.ways}>
-      <div className={css.waysHead}>
-        <span>{measured ? measured.whenText ?? "上次检测" : "各中继还没测过"}</span>
-        <button type="button" className={pillCss.connectionRetry} disabled={measuring} aria-busy={measuring || undefined}
-          title={state.error} onClick={() => void call("station.measure", { station }).catch(() => {})}>
-          <DoingShown state={{ running: measuring, error: state.error }} className={pillCss.retrySpinner} size={10} />{measuring ? "正在测量" : "重新测量"}
-        </button>
-      </div>
-      {measured && <div className={css.waysList}>
-        {measured.relays.map((r) => (
-          <div className={css.way} key={r.name}>
-            <span className={css.wayName} data-current={r.current || undefined} title={r.name}>{r.name}</span>
-            {r.rtt ? <Figure f={r.rtt} /> : <b data-level="red">未测通</b>}
-          </div>
-        ))}
-      </div>}
-      {measured?.moved && <span>已换到{measured.moved}</span>}
-    </div>
-  );
-}
-
 /** Whether `waiting` has held for `ms`: a station that says it is online but has not answered for a while. */
 function useLong(waiting: boolean, ms: number): boolean {
   const [long, setLong] = useState(false);
@@ -137,7 +106,6 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
       </div>
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {s.online && s.net && <Net net={s.net} />}
-      {s.online && s.net && <Ways station={s.station} measured={s.net.measured} />}
       <div className={css.cardFoot}>
         {s.online && <span>{machine(s.host) || "正在读取设备信息…"}</span>}
         {/* A station that says its versions says the station's among them; one older, only what the cloud knows. */}

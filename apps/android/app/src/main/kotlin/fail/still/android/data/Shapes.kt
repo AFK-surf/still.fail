@@ -1797,8 +1797,6 @@ data class NetRelay (
 @Serializable
 data class NetMeasured (
 	val measuring: Boolean,
-	/// When these results were measured, in words; absent with an older core.
-	val whenText: String? = null,
 	val relays: List<NetRelay>,
 	/// The relay the connection moved to as they were measured (its name), if it did.
 	val moved: String? = null
