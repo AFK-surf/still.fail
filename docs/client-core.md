@@ -131,7 +131,7 @@ notices are only of the workspace the viewer is in (attend.rs).
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
 | `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.rs): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it |
-| `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.rs): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. The pill over a chat only draws it |
+| `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.rs): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. No page shows it any more (the phones dropped the pill over a chat); kept for apps from before |
 | `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's |
 | `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
 

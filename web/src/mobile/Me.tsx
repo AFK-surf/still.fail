@@ -1,5 +1,5 @@
 // The account on a narrow screen, as the Android app has it (apps/android/…/screens/Me.kt), from the card atop settings
-// (./Settings.tsx): who is signed in, where, and the other accounts on this device.
+// (./Settings.tsx): who is signed in, the accounts on this device, and where it is signed in.
 import { signIn, signOut, useAccounts } from "../cloud/accounts.ts";
 import { useApp } from "./app.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, TopBack } from "./parts.tsx";
@@ -23,8 +23,6 @@ export function MeScreen() {
           <span><b>{me.name || me.email}</b><span className={listsCss.mRowNote}>{me.email} · Google</span></span>
         </span>
       </Card>
-      <SectionHeader title="登录的地方" start={24} />
-      <Devices />
       {/* Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added. */}
       <SectionHeader title="这台设备上的账号" start={24} />
       <ListCard>
@@ -38,6 +36,8 @@ export function MeScreen() {
         ))}
         <ListRow onClick={() => void signIn()}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 登录另一个 Google 账号</span></ListRow>
       </ListCard>
+      <SectionHeader title="登录的地方" start={24} />
+      <Devices />
       <div style={{ height: 30 }} />
     </div>
   );

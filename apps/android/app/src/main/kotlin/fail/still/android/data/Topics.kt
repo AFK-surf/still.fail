@@ -111,8 +111,6 @@ object Topics {
      * workspace's (its stations, its account's socket, the relay), nothing of another; with none, all of it.
      */
     fun status(workspace: String? = null) = buildJsonObject { put("topic", "status"); workspace?.let { put("workspace", it) } }
-    /** What a chat on `station` says of its connection, and when, all decided in the core (pill.rs; Connection.kt). */
-    fun connection(station: String) = buildJsonObject { put("topic", "connection"); put("station", station) }
     /** What wants the viewer in the chats they take part in, the last 20 (docs/notifications.md; Notices.kt). */
     val notices = buildJsonObject { put("topic", "notices") }
     /**

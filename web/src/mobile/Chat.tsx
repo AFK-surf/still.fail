@@ -25,7 +25,6 @@ import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
-import { ConnectionPill } from "../Connection.tsx";
 import type { ChatJobsView, Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
@@ -191,7 +190,6 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
     <OpenFile.Provider value={(session, file) => app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })))}>
       {quoting.pop}
       {askedFile}
-      <ConnectionPill station={here.station} phone />
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>

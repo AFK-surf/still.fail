@@ -1,5 +1,5 @@
 // The account, as the narrow web has it (web/src/mobile/Me.tsx), from the card atop settings (SettingsHome.kt): who is
-// signed in, where, and the other accounts on this device.
+// signed in, the accounts on this device, and where it is signed in.
 package fail.still.android.screens
 
 import androidx.compose.foundation.layout.Column
@@ -61,8 +61,6 @@ fun MeScreen(current: WorkspaceEntry) {
             }
         }
         val list = accounts.value.orEmpty()
-        SectionHeader("登录的地方", start = 24.dp)
-        Devices(current)
         // Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added.
         SectionHeader("这台设备上的账号", start = 24.dp)
         ListCard {
@@ -86,6 +84,8 @@ fun MeScreen(current: WorkspaceEntry) {
                 Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent)
             }
         }
+        SectionHeader("登录的地方", start = 24.dp)
+        Devices(current)
         Spacer(Modifier.height(30.dp))
     }
 }
