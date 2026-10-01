@@ -1,6 +1,6 @@
 //! The admin's console (web/src/admin): still.fail cloud's operator lists (`Topic::Admin`) as its pages show them, so
 //! the page only draws. `adminList`: one list found, filtered and sorted, with how many each filter holds;
-//! `adminItem`: one user's or workspace's page; `adminOverview`: the counts and what wants a look. Times stay in
+//! `adminItem`: one user's, workspace's or bug report's page; `adminOverview`: the counts and what wants a look. Times stay in
 //! seconds, as still.fail cloud gives them: what goes out has them in words beside (present.rs `times`).
 
 use std::cmp::Ordering;
@@ -24,9 +24,11 @@ pub(super) fn sources(view: &Topic) -> Vec<Topic> {
         // A user's page counts their workspaces' people and stations; a workspace's, its people's last visits.
         Topic::AdminItem { account, list, .. } => match list.as_str() {
             "users" => vec![of(account, "users"), of(account, "workspaces"), of(account, "invite-codes")],
+            "feedback" => vec![of(account, "feedback")],
             _ => vec![of(account, "workspaces"), of(account, "users")],
         },
-        Topic::AdminOverview { account } => vec![of(account, "users"), of(account, "workspaces"), of(account, "invite-codes")],
+        // The bug reports only add what wants a look: a cloud from before has none (404), and the rest stands.
+        Topic::AdminOverview { account } => vec![of(account, "users"), of(account, "workspaces"), of(account, "invite-codes"), of(account, "feedback")],
         _ => Vec::new(),
     }
 }
@@ -109,6 +111,47 @@ fn code_state(c: &Value, now: f64) -> (&'static str, &'static str, &'static str)
     }
 }
 
+/// Where a bug report stands: its label and tone.
+fn feedback_status(status: &str) -> (&'static str, &'static str) {
+    match status {
+        "triaged" => ("处理中", "blue"),
+        "fixed" => ("已修好", "green"),
+        "wontfix" => ("不修", "neutral"),
+        _ => ("新反馈", "amber"),
+    }
+}
+
+/// The statuses a bug report can be set to, in order.
+const FEEDBACK_STATUSES: [&str; 4] = ["new", "triaged", "fixed", "wontfix"];
+
+fn channel_label(channel: &str) -> &'static str {
+    if channel == "beta" { "测试版" } else { "正式版" }
+}
+
+fn area_label(area: &str) -> &'static str {
+    match area {
+        "station" => "Station",
+        "web" => "Web",
+        "android" => "Android",
+        "desktop" => "桌面端",
+        "slack" => "Slack",
+        "cloud" => "still.fail cloud",
+        _ => "不确定",
+    }
+}
+
+/// The name of what a report has under `key` (`station`, `workspace`), when it has one.
+fn named<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
+    v.get(key).filter(|x| x.is_object())
+}
+
+fn account_title(a: &Value) -> &str {
+    match str_of(a, "name") {
+        "" => str_of(a, "email"),
+        n => n,
+    }
+}
+
 /// One kind of list: its filters (id, label, whether a row is in it), its sorts, and how a row is found and shown.
 struct Kind {
     filters: Vec<(&'static str, &'static str, Box<dyn Fn(&Value) -> bool>)>,
@@ -157,6 +200,22 @@ fn code_kind(now: f64) -> Kind {
     }
 }
 
+fn feedback_kind() -> Kind {
+    let is = |status: &'static str| -> Box<dyn Fn(&Value) -> bool> { Box::new(move |f| str_of(f, "status") == status || (status == "new" && f.get("status").is_none_or(Value::is_null))) };
+    Kind {
+        filters: vec![
+            ("all", "全部", Box::new(|_| true)),
+            ("new", "新反馈", is("new")),
+            ("triaged", "处理中", is("triaged")),
+            ("fixed", "已修好", is("fixed")),
+            ("wontfix", "不修", is("wontfix")),
+            ("beta", "测试版", Box::new(|f| str_of(f, "channel") == "beta")),
+            ("stable", "正式版", Box::new(|f| str_of(f, "channel") != "beta")),
+        ],
+        sorts: vec![("created", "提交时间")],
+    }
+}
+
 /// What a row is found by, in lower case.
 fn haystack(list: &str, v: &Value) -> String {
     let mut text = match list {
@@ -164,6 +223,12 @@ fn haystack(list: &str, v: &Value) -> String {
         "workspaces" => {
             let creator = v.get("created_by").map(|c| format!("{} {}", str_of(c, "name"), str_of(c, "email"))).unwrap_or_default();
             format!("{} {} {creator}", str_of(v, "name"), str_of(v, "id"))
+        }
+        "feedback" => {
+            let name = |key: &str| named(v, key).map(|x| format!("{} {}", str_of(x, "name"), str_of(x, "id"))).unwrap_or_default();
+            let account = named(v, "account").map(|a| format!("{} {}", str_of(a, "name"), str_of(a, "email"))).unwrap_or_default();
+            let number = v.get("number").and_then(Value::as_u64).map(|n| format!("fb-{n}")).unwrap_or_default();
+            format!("{number} {} {} {} {} {} {account}", str_of(v, "title"), str_of(v, "body"), str_of(v, "reporter"), name("station"), name("workspace"))
         }
         _ => {
             let user = v.get("used_by").map(|c| format!("{} {}", str_of(c, "name"), str_of(c, "email"))).unwrap_or_default();
@@ -253,6 +318,29 @@ fn row(list: &str, v: &Value, now: f64) -> Value {
                 "created_at": v.get("created_at").cloned().unwrap_or(Value::Null),
             })
         }
+        "feedback" => {
+            let (label, tone) = feedback_status(str_of(v, "status"));
+            let mut marks = vec![mark(label, tone)];
+            if str_of(v, "channel") == "beta" {
+                marks.push(mark("测试版", "accent"));
+            }
+            let mut line = vec![area_label(str_of(v, "area")).to_string()];
+            line.extend(named(v, "workspace").map(|w| str_of(w, "name").to_string()).filter(|n| !n.is_empty()));
+            line.extend(named(v, "station").map(|s| str_of(s, "name").to_string()).filter(|n| !n.is_empty()));
+            match str_of(v, "reporter") {
+                "" => line.extend(named(v, "account").map(|a| account_title(a).to_string())),
+                by => line.push(by.to_string()),
+            }
+            json!({
+                "id": str_of(v, "id"),
+                "number": feedback_ref(v),
+                "title": str_of(v, "title"),
+                "line": line.join(" · "),
+                "state": str_of(v, "status"),
+                "marks": marks,
+                "created_at": v.get("created_at").cloned().unwrap_or(Value::Null),
+            })
+        }
         _ => {
             let (state, label, tone) = code_state(v, now);
             let user = v.get("used_by").filter(|u| u.is_object());
@@ -288,6 +376,7 @@ fn rows_of(list: &str, value: &Value) -> Vec<Value> {
     let key = match list {
         "users" => "users",
         "workspaces" => "workspaces",
+        "feedback" => "feedback",
         _ => "codes",
     };
     items(value, key).to_vec()
@@ -301,6 +390,7 @@ pub fn list(list: &str, value: &Value, query: &str, filter: Option<&str>, sort: 
         "users" => user_kind(now),
         "workspaces" => workspace_kind(now, newest_version(&all)),
         "invite-codes" => code_kind(now),
+        "feedback" => feedback_kind(),
         _ => return Err(CoreError::invalid("没有这个列表")),
     };
     let words: Vec<String> = query.to_lowercase().split_whitespace().map(str::to_string).collect();
@@ -424,9 +514,89 @@ pub fn workspace(id: &str, workspaces: &Value, users: Option<&Value>, now: f64) 
     }))
 }
 
+/// How a bug report is named to people: `FB-<number>`.
+fn feedback_ref(v: &Value) -> String {
+    v.get("number").and_then(Value::as_u64).map(|n| format!("FB-{n}")).unwrap_or_default()
+}
+
+/// A value of a report's context as a line: text as it is, the rest as JSON.
+fn context_text(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// A bug report's page: all of it, where it came from, where it stands, and the whole of it as plain text (`text`) to
+/// hand to an agent.
+pub fn feedback(id: &str, value: &Value) -> Result<Value> {
+    let f = rows_of("feedback", value).into_iter().find(|f| str_of(f, "id") == id).ok_or_else(|| CoreError::new("http_404", "没有这个反馈").with_status(404))?;
+    let status = match str_of(&f, "status") {
+        "" => "new",
+        s => s,
+    };
+    let context: Vec<(String, String)> = match f.get("context") {
+        Some(Value::Object(map)) => map.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), context_text(v))).collect(),
+        Some(Value::Null) | None => Vec::new(),
+        Some(other) => vec![("context".into(), context_text(other))],
+    };
+    let logs = f.get("logs").and_then(Value::as_str).filter(|l| !l.trim().is_empty());
+    let station = named(&f, "station");
+    let workspace = named(&f, "workspace");
+    let account = named(&f, "account");
+    let place = |x: Option<&Value>| x.map(|x| match str_of(x, "name") { "" => str_of(x, "id").to_string(), n => format!("{n} ({})", str_of(x, "id")) });
+    let number = feedback_ref(&f);
+    // The whole report, as an agent is to read it.
+    let mut text = format!("{number} {}\n\n", str_of(&f, "title"));
+    let mut fact = |label: &str, value: Option<String>| {
+        if let Some(value) = value.filter(|v| !v.is_empty()) {
+            text.push_str(&format!("{label}: {value}\n"));
+        }
+    };
+    fact("状态", Some(feedback_status(status).0.to_string()));
+    fact("渠道", Some(format!("{} ({})", channel_label(str_of(&f, "channel")), str_of(&f, "channel"))));
+    fact("范围", Some(area_label(str_of(&f, "area")).to_string()));
+    fact("Workspace", place(workspace));
+    fact("Station", place(station));
+    fact("反馈人", Some(str_of(&f, "reporter").to_string()));
+    fact("账号", account.map(|a| match (str_of(a, "name"), str_of(a, "email")) { ("", e) => e.to_string(), (n, e) => format!("{n} <{e}>") }));
+    fact("ID", Some(id.to_string()));
+    text.push_str(&format!("\n## 内容\n\n{}\n", str_of(&f, "body").trim_end()));
+    if !context.is_empty() {
+        text.push_str("\n## 上下文\n\n");
+        for (k, v) in &context {
+            text.push_str(&format!("{k}: {v}\n"));
+        }
+    }
+    if let Some(logs) = logs {
+        text.push_str(&format!("\n## 日志\n\n```\n{}\n```\n", logs.trim_end()));
+    }
+    Ok(json!({
+        "id": id,
+        "number": number,
+        "title": str_of(&f, "title"),
+        "body": str_of(&f, "body"),
+        "status": status,
+        "statuses": FEEDBACK_STATUSES.iter().map(|s| json!({ "id": s, "label": feedback_status(s).0 })).collect::<Vec<_>>(),
+        "marks": [mark(feedback_status(status).0, feedback_status(status).1)],
+        "channel": str_of(&f, "channel"),
+        "channelLabel": channel_label(str_of(&f, "channel")),
+        "area": area_label(str_of(&f, "area")),
+        "reporter": str_of(&f, "reporter"),
+        "station": station.map(|s| json!({ "id": str_of(s, "id"), "name": str_of(s, "name") })),
+        "workspace": workspace.map(|w| json!({ "id": str_of(w, "id"), "title": match str_of(w, "name") { "" => str_of(w, "id"), n => n } })),
+        "account": account.map(|a| json!({ "id": str_of(a, "sub"), "title": account_title(a) })),
+        "context": context.iter().map(|(k, v)| json!({ "key": k, "value": v })).collect::<Vec<_>>(),
+        "logs": logs,
+        "created_at": f.get("created_at").cloned().unwrap_or(Value::Null),
+        "text": text,
+    }))
+}
+
 /// The console's first page: counts, new people by week, and what wants a look, each with the list and filter that
 /// show it.
-pub fn overview(users: &Value, workspaces: &Value, codes: &Value, now: f64, offset_min: i32) -> Value {
+/// `feedback`: the bug reports, when still.fail cloud has them (one from before has none).
+pub fn overview(users: &Value, workspaces: &Value, codes: &Value, feedback: Option<&Value>, now: f64, offset_min: i32) -> Value {
     let users = rows_of("users", users);
     let workspaces = rows_of("workspaces", workspaces);
     let codes = rows_of("invite-codes", codes);
@@ -454,6 +624,9 @@ pub fn overview(users: &Value, workspaces: &Value, codes: &Value, now: f64, offs
             todo.push(json!({ "text": text, "hint": hint, "tone": tone, "list": list, "filter": filter }));
         }
     };
+    let reports = feedback.map(|f| rows_of("feedback", f)).unwrap_or_default();
+    let fresh = count(&reports, &|f| matches!(f.get("status").and_then(Value::as_str), Some("new") | None));
+    want(fresh, format!("{fresh} 个新反馈"), "还没看过的 bug 报告", "amber", "feedback", "new");
     want(stuck, format!("{stuck} 人登录了但还没进来"), "开通资格，或者看看卡在哪", "amber", "users", "stuck");
     want(bare, format!("{bare} 个 workspace 还没有 station"), "建了但没装起来", "amber", "workspaces", "bare");
     want(stale, format!("{stale} 台 station 7 天没连 still.fail cloud"), "可能关机或卸载了", "neutral", "workspaces", "stale");
@@ -488,6 +661,7 @@ impl Views {
                 let codes = read(account, "invite-codes").and_then(Result::ok);
                 Some(users.and_then(|u| workspaces.and_then(|w| user(id, &u, &w, codes.as_ref(), now))))
             }
+            Topic::AdminItem { account, list, id } if list == "feedback" => Some(read(account, "feedback")?.and_then(|f| feedback(id, &f))),
             Topic::AdminItem { account, id, .. } => {
                 let workspaces = read(account, "workspaces")?;
                 let users = read(account, "users").and_then(Result::ok);
@@ -495,7 +669,9 @@ impl Views {
             }
             Topic::AdminOverview { account } => {
                 let (users, workspaces, codes) = (read(account, "users")?, read(account, "workspaces")?, read(account, "invite-codes")?);
-                Some(users.and_then(|u| workspaces.and_then(|w| codes.map(|c| overview(&u, &w, &c, now, clock.offset_min)))))
+                // Not there yet, or a cloud from before (404): the page stands without them.
+                let feedback = read(account, "feedback").and_then(Result::ok);
+                Some(users.and_then(|u| workspaces.and_then(|w| codes.map(|c| overview(&u, &w, &c, feedback.as_ref(), now, clock.offset_min)))))
             }
             _ => None,
         }
@@ -522,6 +698,16 @@ mod tests {
               "members": [{ "sub": "a", "email": "ann@x.io", "name": "Ann", "picture": "", "role": "owner", "added_at": 1, "last_seen": NOW - 3600.0 }, { "sub": "c", "email": "cat@x.io", "name": "Cat", "picture": "", "role": "member", "added_at": 2 }],
               "stations": [{ "id": "s1", "name": "studio", "version": "0.1.1212", "last_seen": NOW - 60.0 }, { "id": "s2", "name": "nas", "version": "0.1.1104", "last_seen": null }], "invitations": [] },
             { "id": "w2", "name": "设计", "created_at": NOW - 5.0 * DAY, "created_by": null, "members": [], "stations": [], "invitations": [{ "id": "i", "role": "member", "email": null, "inviter": "Ann", "expires_at": NOW + DAY }] },
+        ] })
+    }
+
+    fn reports() -> Value {
+        json!({ "feedback": [
+            { "id": "F2", "number": 2, "channel": "beta", "station": { "id": "s1", "name": "studio" }, "workspace": { "id": "w1", "name": "产品" }, "account": null,
+              "title": "发送后消息消失", "body": "## 步骤\n1. 发一条", "area": "web", "reporter": "Ann (Slack)", "context": { "version": "0.1.1212", "session": "ember:c-1", "extra": { "a": 1 } },
+              "logs": "line 1\nline 2", "status": "new", "created_at": NOW - 60.0, "updated_at": NOW - 60.0 },
+            { "id": "F1", "number": 1, "channel": "stable", "station": null, "workspace": null, "account": { "sub": "a", "email": "ann@x.io", "name": "" },
+              "title": "图标糊了", "body": "看着糊", "area": "android", "reporter": "", "context": null, "logs": null, "status": "fixed", "created_at": NOW - DAY, "updated_at": NOW },
         ] })
     }
 
@@ -580,11 +766,49 @@ mod tests {
 
     #[test]
     fn the_overview_points_at_lists() {
-        let v = overview(&users(), &workspaces(), &json!({ "codes": [] }), NOW, 480);
+        let v = overview(&users(), &workspaces(), &json!({ "codes": [] }), None, NOW, 480);
         assert_eq!(v["stats"][0]["value"], 3);
         assert_eq!(v["weeks"].as_array().unwrap().len(), 12);
         assert_eq!(v["weeks"][11]["count"], 1);
         let todo: Vec<(&str, &str)> = v["todo"].as_array().unwrap().iter().map(|t| (t["list"].as_str().unwrap(), t["filter"].as_str().unwrap())).collect();
         assert_eq!(todo, [("users", "stuck"), ("workspaces", "bare"), ("workspaces", "stale"), ("workspaces", "outdated")]);
+        let v = overview(&users(), &workspaces(), &json!({ "codes": [] }), Some(&reports()), NOW, 480);
+        assert_eq!((v["todo"][0]["text"].as_str(), v["todo"][0]["list"].as_str(), v["todo"][0]["filter"].as_str()), (Some("1 个新反馈"), Some("feedback"), Some("new")));
+    }
+
+    #[test]
+    fn bug_reports_are_listed_by_status_and_channel() {
+        let all = list("feedback", &reports(), "", None, None, None, NOW).unwrap();
+        assert_eq!(ids(&all), ["F2", "F1"], "newest first");
+        assert_eq!((count(&all, "new"), count(&all, "fixed"), count(&all, "beta"), count(&all, "stable")), (1, 1, 1, 1));
+        assert_eq!(all["rows"][0]["number"], "FB-2");
+        assert_eq!(all["rows"][0]["line"], "Web · 产品 · studio · Ann (Slack)");
+        assert_eq!(all["rows"][1]["line"], "Android · ann@x.io");
+        let labels: Vec<&str> = all["rows"][0]["marks"].as_array().unwrap().iter().map(|m| m["label"].as_str().unwrap()).collect();
+        assert_eq!(labels, ["新反馈", "测试版"]);
+        // Found by its number, its words, where it came from.
+        assert_eq!(ids(&list("feedback", &reports(), "fb-1", None, None, None, NOW).unwrap()), ["F1"]);
+        assert_eq!(ids(&list("feedback", &reports(), "STUDIO 步骤", None, None, None, NOW).unwrap()), ["F2"]);
+        assert_eq!(ids(&list("feedback", &reports(), "", Some("fixed"), None, None, NOW).unwrap()), ["F1"]);
+    }
+
+    #[test]
+    fn a_bug_reports_page_has_all_of_it_in_text_too() {
+        let page = feedback("F2", &reports()).unwrap();
+        assert_eq!((page["number"].as_str(), page["status"].as_str(), page["channelLabel"].as_str()), (Some("FB-2"), Some("new"), Some("测试版")));
+        assert_eq!(page["statuses"].as_array().unwrap().len(), 4);
+        let context: Vec<(&str, &str)> = page["context"].as_array().unwrap().iter().map(|c| (c["key"].as_str().unwrap(), c["value"].as_str().unwrap())).collect();
+        assert!(context.contains(&("version", "0.1.1212")) && context.contains(&("extra", "{\"a\":1}")), "{context:?}");
+        let text = page["text"].as_str().unwrap();
+        assert!(text.starts_with("FB-2 发送后消息消失\n"), "{text}");
+        for part in ["渠道: 测试版 (beta)", "Station: studio (s1)", "Workspace: 产品 (w1)", "反馈人: Ann (Slack)", "## 步骤", "session: ember:c-1", "```\nline 1\nline 2\n```"] {
+            assert!(text.contains(part), "{part} in {text}");
+        }
+        let page = feedback("F1", &reports()).unwrap();
+        assert_eq!((page["logs"].clone(), page["context"].as_array().unwrap().len(), page["account"]["title"].as_str()), (Value::Null, 0, Some("ann@x.io")));
+        assert!(!page["text"].as_str().unwrap().contains("## 日志"));
+        assert!(feedback("F9", &reports()).is_err());
+        // A cloud from before: no list, so no page and no overview item, and the rest stands.
+        assert!(list("feedback", &json!({}), "", None, None, None, NOW).unwrap()["rows"].as_array().unwrap().is_empty());
     }
 }

@@ -8,6 +8,7 @@ pub mod agent_home;
 pub mod chat;
 pub mod config;
 pub mod connections;
+pub mod feedback;
 pub mod former;
 pub mod handoff;
 pub mod host;

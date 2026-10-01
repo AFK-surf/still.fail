@@ -1437,7 +1437,7 @@ impl Inner {
             // Read as they are now; a write to still.fail cloud (ops.rs) reads them again (refresh_all).
             Topic::LoginSessions { account } => self.cloud.request(account, "GET", "/v1/auth/sessions", None).await.map(|v| v.get("sessions").cloned().unwrap_or(json!([]))),
             Topic::Admin { account, list } => match list.as_str() {
-                "users" | "workspaces" | "invite-codes" => self.cloud.request(account, "GET", &format!("/v1/admin/{list}"), None).await,
+                "users" | "workspaces" | "invite-codes" | "feedback" => self.cloud.request(account, "GET", &format!("/v1/admin/{list}"), None).await,
                 _ => Err(CoreError::invalid("没有这个列表")),
             },
             _ => return,

@@ -23,6 +23,7 @@
 //! A request's `traceparent` header is passed on to the admin API (see telemetry.rs).
 
 mod errors;
+mod feedback;
 mod keep;
 mod local;
 mod notify;
@@ -709,6 +710,8 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     tokio::spawn(keep_relays(endpoint.clone(), station.clone()));
     // What the chats' people hear about, pushed through still.fail cloud.
     tokio::spawn(notify::forward(station.clone(), endpoint.secret_key().clone()));
+    // Bug reports its agents send the still.fail team (stillfail_app::feedback).
+    feedback::register(station.clone(), endpoint.secret_key().clone());
     if traces {
         tokio::spawn(telemetry.export(station.clone(), endpoint.secret_key().clone()));
     }

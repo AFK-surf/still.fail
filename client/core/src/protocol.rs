@@ -68,10 +68,12 @@ pub enum Topic {
     JobLog { station: String, job: String, lines: u64 },
     /// An account's signed-in devices (`/v1/auth/sessions`).
     LoginSessions { account: String },
-    /// still.fail cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
+    /// still.fail cloud's operator lists for an admin account: `users`, `workspaces`, `invite-codes` or `feedback` (bug
+    /// reports; a cloud from before has none: 404) (`/v1/admin/…`).
     Admin { account: String, list: String },
     /// Views of those for the admin's console (views/admin.rs): one list as `query` finds it, in `filter`, by `sort`, its
-    /// first `limit` rows; one user's or workspace's page (`list`: `users` or `workspaces`); the first page's counts.
+    /// first `limit` rows; one user's, workspace's or bug report's page (`list`: `users`, `workspaces` or `feedback`); the
+    /// first page's counts.
     AdminList {
         account: String,
         list: String,

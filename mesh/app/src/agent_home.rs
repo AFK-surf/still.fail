@@ -20,21 +20,34 @@ const BUILTIN_SKILLS: &[(&str, &str)] = &[
     ("stillfail-viz", include_str!("skills/stillfail-viz.md")),
 ];
 
+/// When to offer a bug report to the still.fail team (feedback.rs): only from a station on the stable channel, beside
+/// the `feedback_send` tool; gone from one on the test channel (the team's own).
+const FEEDBACK_SKILL: (&str, &str) = ("stillfail-feedback", include_str!("skills/stillfail-feedback.md"));
+
 /// The station's own skills as they were named before the rename: gone once the new ones are written (they would be
 /// listed twice). A directory with more in it than the SKILL.md the station wrote is left.
 const FORMER_BUILTIN_SKILLS: &[&str] = &["ember-jobs", "ember-show", "ember-viz"];
 
-/// Writes the station's own skills into the shared skills directory.
-pub fn write_builtin_skills(agent_home: &Path) -> Result<()> {
+/// Whether a directory holds nothing but the SKILL.md the station wrote.
+fn only_skill(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| entries.flatten().all(|e| e.file_name() == "SKILL.md")) && std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir())
+}
+
+/// Writes the station's own skills into the shared skills directory; `feedback`: the stillfail-feedback skill too
+/// (else it is taken away, unless someone added to it).
+pub fn write_builtin_skills(agent_home: &Path, feedback: bool) -> Result<()> {
     let (_, skills) = agent_home_paths(agent_home);
     for name in FORMER_BUILTIN_SKILLS {
         let dir = skills.join(name);
-        let only_skill = std::fs::read_dir(&dir).is_ok_and(|entries| entries.flatten().all(|e| e.file_name() == "SKILL.md"));
-        if only_skill && std::fs::symlink_metadata(&dir).is_ok_and(|m| m.is_dir()) {
+        if only_skill(&dir) {
             let _ = std::fs::remove_dir_all(&dir);
         }
     }
-    for (name, text) in BUILTIN_SKILLS {
+    let (feedback_name, _) = FEEDBACK_SKILL;
+    if !feedback && only_skill(&skills.join(feedback_name)) {
+        let _ = std::fs::remove_dir_all(skills.join(feedback_name));
+    }
+    for (name, text) in BUILTIN_SKILLS.iter().chain(feedback.then_some(&FEEDBACK_SKILL)) {
         let dir = skills.join(name);
         std::fs::create_dir_all(&dir)?;
         let path = dir.join("SKILL.md");
@@ -134,7 +147,7 @@ pub fn list_skills(agent_home: &Path) -> Vec<SkillFile> {
             let description = front(&text, "description").unwrap_or_default();
             Some(SkillFile {
                 project: description.starts_with(PROJECT_PREFIX),
-                builtin: BUILTIN_SKILLS.iter().any(|(n, _)| *n == name),
+                builtin: BUILTIN_SKILLS.iter().chain([&FEEDBACK_SKILL]).any(|(n, _)| *n == name),
                 name,
                 description,
                 text,
@@ -194,29 +207,46 @@ mod tests {
         let home = dir.path().join("agent");
         std::fs::create_dir_all(home.join("skills").join("team-skill")).unwrap();
         std::fs::write(home.join("skills").join("team-skill").join("SKILL.md"), "ours").unwrap();
-        write_builtin_skills(&home).unwrap();
+        write_builtin_skills(&home, false).unwrap();
         // The same skills as the station wrote them before the rename: replaced; one someone added to is left.
         for name in ["ember-jobs", "ember-viz"] {
             std::fs::create_dir_all(home.join("skills").join(name)).unwrap();
             std::fs::write(home.join("skills").join(name).join("SKILL.md"), format!("---\nname: {name}\n---\n")).unwrap();
         }
         std::fs::write(home.join("skills").join("ember-viz").join("notes.md"), "mine").unwrap();
-        write_builtin_skills(&home).unwrap();
+        write_builtin_skills(&home, false).unwrap();
         assert!(!home.join("skills").join("ember-jobs").exists());
         assert!(home.join("skills").join("ember-viz").join("notes.md").exists());
         let path = home.join("skills").join("stillfail-jobs").join("SKILL.md");
         assert!(std::fs::read_to_string(&path).unwrap().starts_with("---\nname: stillfail-jobs\n"));
         std::fs::write(&path, "edited by hand").unwrap();
-        write_builtin_skills(&home).unwrap();
+        write_builtin_skills(&home, false).unwrap();
         assert!(std::fs::read_to_string(&path).unwrap().contains("job_start"), "the station's own, as it has it");
         assert_eq!(std::fs::read_to_string(home.join("skills").join("team-skill").join("SKILL.md")).unwrap(), "ours", "the team's stay");
+    }
+
+    #[test]
+    fn the_feedback_skill_is_written_on_the_stable_channel_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("agent");
+        let path = home.join("skills").join("stillfail-feedback").join("SKILL.md");
+        write_builtin_skills(&home, true).unwrap();
+        assert!(std::fs::read_to_string(&path).unwrap().contains("feedback_send"));
+        // On the test channel: taken away.
+        write_builtin_skills(&home, false).unwrap();
+        assert!(!home.join("skills").join("stillfail-feedback").exists());
+        // Unless someone added to it.
+        write_builtin_skills(&home, true).unwrap();
+        std::fs::write(home.join("skills").join("stillfail-feedback").join("notes.md"), "mine").unwrap();
+        write_builtin_skills(&home, false).unwrap();
+        assert!(home.join("skills").join("stillfail-feedback").join("notes.md").exists());
     }
 
     #[test]
     fn skills_are_listed_with_what_they_are_for_and_projects_memories_told_apart() {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().join("agent");
-        write_builtin_skills(&home).unwrap();
+        write_builtin_skills(&home, false).unwrap();
         let write = |name: &str, text: &str| {
             std::fs::create_dir_all(home.join("skills").join(name)).unwrap();
             std::fs::write(home.join("skills").join(name).join("SKILL.md"), text).unwrap();

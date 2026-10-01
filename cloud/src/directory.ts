@@ -18,7 +18,8 @@ import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import { relays } from "./relays";
-import type { AccountEvent, AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { FeedbackInput } from "./feedback";
+import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -41,6 +42,10 @@ export const PING_SEC = 30;
 export const SILENT_MS = 3 * PING_SEC * 1000;
 /** Close codes a station acts on. */
 export const CLOSE = { replaced: 4000, removed: 4004, silent: 4008 } as const;
+
+/** Reports one sender may send in a day, and how many the console lists. */
+const FEEDBACK_PER_DAY = 20;
+const FEEDBACK_LISTED = 500;
 
 const LIST: AccountEvent = { type: "workspaces" };
 type Attachment = { station: string; at: number; dropped?: boolean } | { sub: string };
@@ -84,6 +89,9 @@ export class Directory extends DurableObject<Env> {
       CREATE UNIQUE INDEX IF NOT EXISTS push_by_endpoint ON push (sub, endpoint);
       CREATE UNIQUE INDEX IF NOT EXISTS push_by_token ON push (sub, token);
       CREATE INDEX IF NOT EXISTS push_by_user ON push (sub, sid);
+      CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, number INTEGER NOT NULL UNIQUE, key TEXT NOT NULL, channel TEXT NOT NULL, sender TEXT NOT NULL, station TEXT, workspace TEXT, account TEXT, title TEXT NOT NULL, body TEXT NOT NULL, area TEXT NOT NULL, reporter TEXT NOT NULL DEFAULT '', context TEXT, logs TEXT, status TEXT NOT NULL DEFAULT 'new', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+      CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
+      CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
     // the admin blocked the account; the account's own object is what keeps it out) before the console could block;
@@ -745,6 +753,64 @@ export class Directory extends DurableObject<Env> {
     if (!row) fail(404, "invite_code_invalid");
     if (row!.used_by !== null) fail(409, "invite_code_used");
     this.#run("UPDATE invite_codes SET revoked_at = COALESCE(revoked_at, ?) WHERE code = ?", nowSeconds(), code);
+  }
+
+  // ── bug reports (feedback.ts) ───────────────────────────────────────────
+
+  /** Keeps a report; the same sender's same key again is the one kept. null: the sender sent too many today. */
+  addFeedback(input: FeedbackInput): { id: string; number: number; duplicate: boolean } | null {
+    const kept = this.#one("SELECT id, number FROM feedback WHERE sender = ? AND key = ?", input.sender, input.key);
+    if (kept) return { id: kept.id as string, number: kept.number as number, duplicate: true };
+    const now = nowSeconds();
+    const today = this.#one("SELECT COUNT(*) AS n FROM feedback WHERE sender = ? AND created_at > ?", input.sender, now - 24 * 60 * 60);
+    if ((today?.n as number) >= FEEDBACK_PER_DAY) return null;
+    const workspace = input.station ? ((this.#one("SELECT workspace FROM stations WHERE id = ?", input.station)?.workspace as string | undefined) ?? null) : null;
+    const number = ((this.#one("SELECT MAX(number) AS n FROM feedback")?.n as number | null) ?? 0) + 1;
+    const id = ulid();
+    this.#run(
+      `INSERT INTO feedback (id, number, key, channel, sender, station, workspace, account, title, body, area, reporter, context, logs, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)`,
+      id, number, input.key, input.channel, input.sender, input.station, workspace, input.account, input.title, input.body, input.area, input.reporter, input.context, input.logs, now, now,
+    );
+    return { id, number, duplicate: false };
+  }
+
+  /** The reports, newest first, with the station, workspace and account they came from. */
+  adminFeedback(): AdminFeedback[] {
+    const rows = this.#rows(`SELECT f.*, s.name AS station_name, w.name AS workspace_name, u.email AS account_email, u.name AS account_name
+      FROM feedback f LEFT JOIN stations s ON s.id = f.station LEFT JOIN workspaces w ON w.id = f.workspace LEFT JOIN users u ON u.sub = f.account
+      ORDER BY f.number DESC LIMIT ${FEEDBACK_LISTED}`);
+    return rows.map((r) => {
+      let context: Record<string, unknown> | null = null;
+      try {
+        context = r.context ? (JSON.parse(r.context as string) as Record<string, unknown>) : null;
+      } catch {
+        // Cut at its limit: shown as it came.
+        context = { text: r.context };
+      }
+      return {
+        id: r.id as string,
+        number: r.number as number,
+        channel: r.channel === "beta" ? "beta" : "stable",
+        station: r.station ? { id: r.station as string, name: (r.station_name as string | null) ?? "" } : null,
+        workspace: r.workspace ? { id: r.workspace as string, name: (r.workspace_name as string | null) ?? "" } : null,
+        account: r.account ? { sub: r.account as string, email: (r.account_email as string | null) ?? "", name: (r.account_name as string | null) ?? "" } : null,
+        title: r.title as string,
+        body: r.body as string,
+        area: r.area as AdminFeedback["area"],
+        reporter: r.reporter as string,
+        context,
+        logs: (r.logs as string | null) ?? null,
+        status: r.status as FeedbackStatus,
+        created_at: r.created_at as number,
+        updated_at: r.updated_at as number,
+      };
+    });
+  }
+
+  setFeedbackStatus(id: string, status: FeedbackStatus): void {
+    if (!this.#one("SELECT 1 AS found FROM feedback WHERE id = ?", id)) fail(404, "feedback_not_found");
+    this.#run("UPDATE feedback SET status = ?, updated_at = ? WHERE id = ?", status, nowSeconds(), id);
   }
 
   // ── sockets ─────────────────────────────────────────────────────────────

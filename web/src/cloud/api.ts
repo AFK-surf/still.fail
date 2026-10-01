@@ -6,9 +6,9 @@ import type { ErrorBody } from "../core/client.ts";
 import { core, useTopic, type TopicState } from "../core/react.ts";
 import { prefs, setPrefs } from "../prefs.ts";
 import type { Account } from "./accounts.ts";
-import type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
+import type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
-export type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
+export type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
 
 /** One account's `/v1/me`, as the `workspaces` topic lists it (`error` when that account could not be read). */
 export interface AccountWorkspaces {
@@ -80,6 +80,8 @@ export const admin = {
   /** Blocks the account `user` (signed out everywhere, kept out), or lets it back. */
   block: (sub: string, user: string, on: boolean) => op<{ blocked: boolean }>(sub, "admin.block", { user, on }),
   deleteWorkspace: (sub: string, workspace: string) => op<{ ok: true }>(sub, "admin.deleteWorkspace", { workspace }),
+  /** Where a bug report stands. */
+  feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => op<{ ok: true }>(sub, "admin.feedbackStatus", { id, status }),
 };
 
 // still.fail cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).

@@ -27,9 +27,10 @@ export type Topic =
   // A job's last `lines` lines of output and when it last grew, current as it grows.
   | { topic: "jobLog"; station: string; job: string; lines: number }
   | { topic: "loginSessions"; account: string }
-  | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" }
-  | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes"; query: string; filter?: string; sort?: string; limit?: number }
-  | { topic: "adminItem"; account: string; list: "users" | "workspaces"; id: string }
+  // `feedback`: bug reports about still.fail (a cloud from before has none: an error).
+  | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback" }
+  | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback"; query: string; filter?: string; sort?: string; limit?: number }
+  | { topic: "adminItem"; account: string; list: "users" | "workspaces" | "feedback"; id: string }
   | { topic: "adminOverview"; account: string }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean }

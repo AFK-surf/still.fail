@@ -1,24 +1,26 @@
-// The admin's console, on its own host: every user and workspace in still.fail cloud, and the invite codes that let
-// a new person create a workspace. Only the admin's account reaches it (still.fail cloud answers 404 to everyone
+// The admin's console, on its own host: every user and workspace in still.fail cloud, the invite codes that let
+// a new person create a workspace, and the bug reports people's agents sent about still.fail. Only the admin's account reaches it (still.fail cloud answers 404 to everyone
 // else). The core puts each page together (views/admin.rs: found, filtered, sorted, counted); this draws it. Where
 // the page is (a list's words, filter and sort, the item open) is in its URL, so a link shows the same.
 import { useTopic } from "../core/react.ts";
-import type { Topic } from "../core/client.ts";
-import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Search, Ticket, Users } from "../icons.tsx";
-import { useEffect, useRef, useState } from "react";
+import type { CoreError, Topic } from "../core/client.ts";
+import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Ticket, Users } from "../icons.tsx";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, Time, ICON, type Presence, type Tone } from "../ui.tsx";
 import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
-import { admin, useAction } from "../cloud/api.ts";
+import { admin, useAction, type FeedbackStatus } from "../cloud/api.ts";
+import { Prose } from "../Prose.tsx";
 import { Avatar } from "../cloud/gate.tsx";
 import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./console.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
+import * as conversationCss from "../styles/conversation.css.ts";
 
 // Each account is asked once per page load whether it is the admin.
 const probes = new Map<string, Promise<boolean>>();
@@ -41,7 +43,7 @@ export function useAdminAccount(): Account | null | undefined {
 
 // ── what the core gives (views/admin.rs) ───────────────────────────────
 
-type List = "users" | "workspaces" | "invite-codes";
+type List = "users" | "workspaces" | "invite-codes" | "feedback";
 type Timed = { time?: Record<string, Stamp> };
 type Mark = { label: string; tone: Tone };
 type PersonLike = { name: string; email: string; picture: string };
@@ -49,6 +51,8 @@ type Row = Timed & {
   id: string; title: string; line: string; marks: Mark[]; person?: PersonLike;
   /** A workspace's: how its stations last stood. A code's: open, used, expired, revoked. */
   state?: Presence | string | null; url?: string | null; note?: string;
+  /** A bug report's: FB-<number>. */
+  number?: string;
 };
 type ListView = { total: number; found: number; filter: string; filters: { id: string; label: string; count: number }[]; sort: string; sorts: { id: string; label: string }[]; rows: Row[]; more: boolean };
 type UserPage = Timed & {
@@ -62,6 +66,14 @@ type WorkspacePage = Timed & {
   stations: (Timed & { id: string; name: string; version: string | null; outdated: boolean; state: Presence })[];
   invitations: (Timed & { id: string; email: string; line: string })[];
 };
+type FeedbackPage = Timed & {
+  id: string; number: string; title: string; body: string; status: FeedbackStatus; statuses: { id: FeedbackStatus; label: string }[];
+  marks: Mark[]; channel: string; channelLabel: string; area: string; reporter: string;
+  station: { id: string; name: string } | null; workspace: { id: string; title: string } | null; account: { id: string; title: string } | null;
+  context: { key: string; value: string }[]; logs: string | null;
+  /** All of it as plain text, to hand to an agent. */
+  text: string;
+};
 type Overview = {
   stats: { label: string; value: number; note: string; list: List; filter: string }[];
   weeks: { count: number; label: string }[];
@@ -69,14 +81,14 @@ type Overview = {
 };
 
 /** A topic of the core; while the next one (other words, say) is read, the last one's value stays in view. */
-function useKept<T>(topic: Topic): { value: T | undefined; error: Error | null } {
+function useKept<T>(topic: Topic): { value: T | undefined; error: CoreError | null } {
   const state = useTopic<T>(topic);
   const last = useRef<T | undefined>(undefined);
   if (state.value) last.current = state.value;
-  return { value: state.value ?? (state.error ? undefined : last.current), error: state.error ? new Error(state.error.message) : null };
+  return { value: state.value ?? (state.error ? undefined : last.current), error: state.error };
 }
 
-const PATH: Record<List, string> = { users: "/users", workspaces: "/workspaces", "invite-codes": "/codes" };
+const PATH: Record<List, string> = { users: "/users", workspaces: "/workspaces", "invite-codes": "/codes", feedback: "/feedback" };
 
 // On a phone the sidebar and a page take turns: "/" is the sidebar there, and the overview elsewhere.
 const narrow = () => matchMedia("(max-width: 700px)").matches;
@@ -94,6 +106,7 @@ export function Console({ account }: { account: Account }) {
           <NavLink className={nav.navRow} to="/users"><Users {...ICON} />用户</NavLink>
           <NavLink className={nav.navRow} to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
           <NavLink className={nav.navRow} to="/codes"><Ticket {...ICON} />邀请码</NavLink>
+          <NavLink className={nav.navRow} to="/feedback"><Said {...ICON} />反馈</NavLink>
         </div>
         <div className={`${nav.navFootRow} ${css.adminFoot}`}>
           <span className={css.adminAccount}><Avatar account={account} size={20} /><span className={css.accountEmail}>{account.email}</span></span>
@@ -107,6 +120,7 @@ export function Console({ account }: { account: Account }) {
           <Route path="users/:id?" element={<ListPage account={account} list="users" />} />
           <Route path="workspaces/:id?" element={<ListPage account={account} list="workspaces" />} />
           <Route path="codes" element={<ListPage account={account} list="invite-codes" />} />
+          <Route path="feedback/:id?" element={<ListPage account={account} list="feedback" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -170,8 +184,11 @@ function OverviewPage({ account }: { account: Account }) {
 
 // ── the lists ───────────────────────────────────────────────────────────
 
-const TITLE: Record<List, string> = { users: "用户", workspaces: "Workspace", "invite-codes": "邀请码" };
-const PLACEHOLDER: Record<List, string> = { users: "搜索名字、邮箱、workspace、ID", workspaces: "搜索名字、成员、station、ID", "invite-codes": "搜索邀请码、备注、用的人" };
+const TITLE: Record<List, string> = { users: "用户", workspaces: "Workspace", "invite-codes": "邀请码", feedback: "反馈" };
+const PLACEHOLDER: Record<List, string> = {
+  users: "搜索名字、邮箱、workspace、ID", workspaces: "搜索名字、成员、station、ID", "invite-codes": "搜索邀请码、备注、用的人",
+  feedback: "搜索标题、内容、反馈人、station、workspace、FB 编号",
+};
 const STEP = 50;
 
 function ListPage({ account, list }: { account: Account; list: List }) {
@@ -215,7 +232,8 @@ function ListPage({ account, list }: { account: Account; list: List }) {
             ))}
           </div>
         )}
-        <Failed error={error} />
+        {/* A still.fail cloud from before bug reports has no such list. */}
+        {list === "feedback" && error?.status === 404 ? <p className={css.empty}>这个 still.fail cloud 还不收反馈</p> : <Failed error={error} />}
         {!view ? !error && <Loading label="正在读取…" fill={false} /> : view.rows.length === 0 ? (
           <p className={css.empty}>{query ? "没有找到" : "这里没有"}</p>
         ) : (
@@ -229,7 +247,9 @@ function ListPage({ account, list }: { account: Account; list: List }) {
       </div>
       {detail && (list === "users"
         ? <UserDetail key={id} account={account} id={id} close={`${PATH.users}${search}`} search={search} />
-        : <WorkspaceDetail key={id} account={account} id={id} close={`${PATH.workspaces}${search}`} />)}
+        : list === "feedback"
+          ? <FeedbackDetail key={id} account={account} id={id} close={`${PATH.feedback}${search}`} />
+          : <WorkspaceDetail key={id} account={account} id={id} close={`${PATH.workspaces}${search}`} />)}
       {making && <NewCodeDialog account={account} onClose={() => setMaking(false)} />}
     </div>
   );
@@ -239,18 +259,21 @@ function Marks({ marks }: { marks: Mark[] }) {
   return <>{marks.map((m) => <Pill key={m.label} tone={m.tone}>{m.label}</Pill>)}</>;
 }
 
-/** A user or a workspace: two lines, what is off marked, when it was last seen at the end. */
+/** A user, a workspace or a bug report: two lines, what is off marked, when it was last seen (sent) at the end. */
 function ItemRow({ list, row, open, to }: { list: List; row: Row; open: boolean; to: string }) {
+  const feedback = list === "feedback";
   return (
     <Link className={css.row} to={open ? to.replace(/\/[^/?]+(\?|$)/, "$1") : to} aria-current={open ? "page" : undefined}>
-      {row.person ? <Avatar account={row.person} size={28} /> : <span className={css.wsMark}>{[...row.title][0]}</span>}
+      {feedback ? null : row.person ? <Avatar account={row.person} size={28} /> : <span className={css.wsMark}>{[...row.title][0]}</span>}
       <span className={css.rowText}>
         <span className={css.rowLine1}>
-          <b>{row.title}</b>
+          {feedback && <span className={`${shellCss.mono} ${shellCss.muted} ${css.fbNumber}`}>{row.number}</span>}
+          <b className={feedback ? css.fbTitle : undefined}>{row.title}</b>
           <Marks marks={row.marks} />
           <span className={css.rowTime}>
             {list === "workspaces" && row.state && <StatusDot state={row.state as Presence} />}
-            {stamp(row, "last_seen") ? <Time stamp={stamp(row, "last_seen")} fixed /> : list === "users" ? "没来过" : ""}
+            {feedback ? <Time stamp={stamp(row, "created_at")} fixed />
+              : stamp(row, "last_seen") ? <Time stamp={stamp(row, "last_seen")} fixed /> : list === "users" ? "没来过" : ""}
           </span>
         </span>
         <span className={css.rowLine2}>{row.line}</span>
@@ -406,6 +429,47 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
         title={`删除「${w.title}」？`} action="删除 workspace"
         description="成员都会被移出，它的 station 会断开、需要重新加入别的 workspace。删除后不能恢复。" error={remove.error?.message} />
+    </Detail>
+  );
+}
+
+function FeedbackDetail({ account, id, close }: { account: Account; id: string; close: string }) {
+  const toast = useToast();
+  const { value: f, error } = useKept<FeedbackPage>({ topic: "adminItem", account: account.sub, list: "feedback", id });
+  const status = useAction((to: FeedbackStatus) => admin.feedbackStatus(account.sub, id, to), (_, to) => toast(`已标成${f?.statuses.find((s) => s.id === to)?.label ?? to}`));
+  useEffect(() => { if (status.error) toast(`没能更改：${status.error.message}`); }, [status.error, toast]);
+  const copy = () => void navigator.clipboard.writeText(f?.text ?? "").then(() => toast("已复制，可以贴给 agent"), () => toast("没能复制"));
+  if (!f) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label="正在读取…" fill={false} />}</aside>;
+  return (
+    <Detail close={close} head={
+      <span className={css.detailTitle}><b>{f.title}</b><span className={shellCss.mono}>{f.number}</span></span>
+    }>
+      <div className={css.fbBar}>
+        <Select value={status.busy ? status.arg! : f.status} disabled={status.busy} onChange={(v) => { if (v !== f.status) status.run(v as FeedbackStatus); }} label="状态"
+          options={f.statuses.map((s) => ({ value: s.id, label: s.label }))} />
+        <Button icon={Copy} onClick={copy}>复制给 agent</Button>
+      </div>
+      <dl className={css.kv}>
+        <dt>提交</dt><dd><Time stamp={stamp(f, "created_at")} /></dd>
+        <dt>渠道</dt><dd>{f.channelLabel}</dd>
+        <dt>范围</dt><dd>{f.area}</dd>
+        {f.reporter && <><dt>反馈人</dt><dd>{f.reporter}</dd></>}
+        {f.account && <><dt>账号</dt><dd><Link className={css.link} to={`${PATH.users}/${encodeURIComponent(f.account.id)}`}>{f.account.title}</Link></dd></>}
+        {f.workspace && <><dt>Workspace</dt><dd><Link className={css.link} to={`${PATH.workspaces}/${encodeURIComponent(f.workspace.id)}`}>{f.workspace.title}</Link></dd></>}
+        {f.station && <><dt>Station</dt><dd>{f.station.name || <span className={shellCss.mono}>{f.station.id}</span>}</dd></>}
+      </dl>
+      <div className={css.group}>内容</div>
+      <div className={`${conversationCss.markdown} ${css.fbBody}`}><Prose>{f.body}</Prose></div>
+      {f.context.length > 0 && <>
+        <div className={css.group}>上下文</div>
+        <dl className={`${css.kv} ${css.fbContext}`}>
+          {f.context.map((c) => <Fragment key={c.key}><dt>{c.key}</dt><dd className={shellCss.mono}>{c.value}</dd></Fragment>)}
+        </dl>
+      </>}
+      {f.logs && <>
+        <div className={css.group}>日志</div>
+        <pre className={`${shellCss.mono} ${css.fbLogs}`}>{f.logs}</pre>
+      </>}
     </Detail>
   );
 }

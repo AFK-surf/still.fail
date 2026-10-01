@@ -107,6 +107,17 @@ globalStyle(`${lineAside} [data-off]`, { color: vars.amber });
 export const link = style({ color: vars.text, textDecoration: "underline", textDecorationColor: vars.lineStrong, textUnderlineOffset: "3px" });
 export const actions = style({ display: "flex", gap: "8px", marginTop: "20px" });
 
+// ── a bug report ──
+export const fbNumber = style({ flex: "none", fontSize: vars.textXs });
+export const fbTitle = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const fbBar = style({ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "14px" });
+export const fbBody = style({ padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas, cornerShape: vars.cornerShape });
+export const fbContext = style({ gridTemplateColumns: "minmax(72px, max-content) minmax(0, 1fr)", fontSize: vars.textXs });
+export const fbLogs = style({
+  margin: "0", maxHeight: "360px", overflow: "auto", padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas,
+  cornerShape: vars.cornerShape, fontSize: vars.textXs, lineHeight: "18px", whiteSpace: "pre", tabSize: 4,
+});
+
 // ── the overview ──
 export const stats = style({
   display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "8px", marginBottom: "8px",

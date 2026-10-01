@@ -9,7 +9,9 @@ import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "
 import { header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
+import type { FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature } from "./grants";
+import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays } from "./relays";
 import { receiveTraces } from "./tracing";
@@ -23,7 +25,10 @@ const STATUS: Record<string, number> = {
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400,
+  feedback_not_found: 404,
 };
+
+const FEEDBACK_STATUSES: readonly FeedbackStatus[] = ["new", "triaged", "fixed", "wontfix"];
 
 async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   try {
@@ -110,6 +115,14 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const claims = token ? await account(token, env) : null;
     if (token && !claims) return denied();
     return receiveTraces(request, env, claims?.sub ?? null);
+  }
+
+  // A bug report about still.fail itself, from a station's agent (signed with its key) or a signed-in account (feedback.ts).
+  if (path === "/v1/feedback" && method === "POST") {
+    const token = bearerToken(request);
+    const claims = token ? await account(token, env) : null;
+    if (token && !claims) return denied();
+    return receiveFeedback(request, env, claims?.sub ?? null);
   }
 
   // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
@@ -256,6 +269,13 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
       const made = await dir.createInviteCode(claims.sub, input.note, input.days);
       return { ...made, url: inviteUrl(env, made.code) };
     });
+  }
+  // Bug reports about still.fail (feedback.ts), and marking where each is: { status }.
+  if (path === "/v1/admin/feedback" && method === "GET") return directory(async () => ({ feedback: await dir.adminFeedback() }));
+  const status = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/.exec(path);
+  if (status && method === "POST") {
+    if (!FEEDBACK_STATUSES.includes(input.status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
+    return directory(() => dir.setFeedbackStatus(status[1]!, input.status as FeedbackStatus));
   }
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);
   if (revoke && method === "POST") return directory(() => dir.revokeInviteCode(revoke[1]!));

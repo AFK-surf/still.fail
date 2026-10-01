@@ -121,13 +121,14 @@ fn homes(config: &Config) -> Vec<(String, Vec<RuntimeKind>, PathBuf)> {
     config.profiles.iter().map(|p| (p.id.clone(), p.runtimes.clone(), p.home.clone())).collect()
 }
 
-fn link_homes(config: &Config) {
+/// `feedback`: the station brings the stillfail-feedback skill (feedback.rs; not on the test channel).
+fn link_homes(config: &Config, feedback: bool) {
     let homes = homes(config);
     let refs: Vec<(&str, &[RuntimeKind], &Path)> = homes.iter().map(|(id, rs, home)| (id.as_str(), rs.as_slice(), home.as_path())).collect();
     if let Err(e) = link_agent_home(&config.agent_home, &refs) {
         warn!(error = %e, "agent home not linked");
     }
-    if let Err(e) = crate::agent_home::write_builtin_skills(&config.agent_home) {
+    if let Err(e) = crate::agent_home::write_builtin_skills(&config.agent_home, feedback) {
         warn!(error = %e, "the station's skills not written");
     }
     if let Err(e) = link_transcripts(&config.data_dir, &refs) {
@@ -160,7 +161,10 @@ impl App {
         let settings = Settings::open(&options.config, &options.data)?;
         let config = settings.config();
         let store = Arc::new(Store::open(&options.data.join(DB_FILE).to_string_lossy(), None)?);
-        link_homes(&config);
+        // Bug reports to the still.fail team (feedback.rs): not from the test channel's stations, the team's own. As the
+        // station started: a switch of channel comes with a new release, so a restart.
+        let feedback = crate::updates::channel_of(&settings.raw(), &crate::updates::app_of(&options.ui)) == crate::updates::Channel::Stable;
+        link_homes(&config, feedback);
         let mut handoff = options.handoff;
         let kept = handoff.as_ref().map(|h| h.pgids().into_iter().collect()).unwrap_or_default();
         let reaped = crate::runtime::process::reap_stale_groups(&store, &kept).await?;
@@ -265,6 +269,19 @@ impl App {
         let (tokens, homes_of) = (store.clone(), store.clone());
         let mut tools = hub.tools();
         tools.extend(jobs.tools(Arc::new(move |key| homes_of.get_session(key).ok().flatten().map(|row| PathBuf::from(row.workspace)))));
+        if feedback {
+            let pages = mesh.clone();
+            tools.extend(crate::feedback::tools(
+                store.clone(),
+                Arc::new(move |session: &str| {
+                    let status = pages.status();
+                    match (status.origin, status.station, status.workspace_id) {
+                        (Some(origin), Some(station), Some(workspace)) => Some(format!("{origin}/o/{workspace}/{station}/{}", encode(session))),
+                        _ => None,
+                    }
+                }),
+            ));
+        }
         // A station does no work outside a workspace: never in one, or removed from it.
         let status = mesh.status();
         let bound = Arc::new(AtomicBool::new(status.bound()));
@@ -353,7 +370,7 @@ impl App {
         tokio::spawn(async move {
             while edits.changed().await.is_ok() {
                 let config = edits.borrow_and_update().clone();
-                link_homes(&config);
+                link_homes(&config, feedback);
                 if reconnecting.load(Ordering::SeqCst) {
                     reconnect.reconcile(&config).await;
                 }

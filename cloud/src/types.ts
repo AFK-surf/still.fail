@@ -51,6 +51,35 @@ export interface AdminWorkspace {
   /** How many people it may hold. Missing from a cloud from before. */
   seats?: number;
 }
+/** What a bug report is about (feedback.ts). */
+export type FeedbackArea = "station" | "web" | "android" | "desktop" | "slack" | "cloud" | "unknown";
+export type FeedbackStatus = "new" | "triaged" | "fixed" | "wontfix";
+/** A bug report about still.fail itself, as the console lists it (/v1/admin/feedback). Times in seconds. */
+export interface AdminFeedback {
+  id: string;
+  /** Counts up from 1: what the reporter was told (FB-<number>). */
+  number: number;
+  /** The host it came on: app.still.fail (stable) or the test channel's. */
+  channel: "stable" | "beta";
+  /** The station that sent it (its agent, for the person it works for), with its name and workspace, or null. */
+  station: { id: string; name: string } | null;
+  workspace: { id: string; name: string } | null;
+  /** The signed-in account that sent it, or null. */
+  account: { sub: string; email: string; name: string } | null;
+  title: string;
+  /** What happened, what was expected, how to get there: Markdown, as the agent wrote it and the person agreed to. */
+  body: string;
+  area: FeedbackArea;
+  /** Who it is from, as the agent knew them (a name and where they said it). */
+  reporter: string;
+  /** What the station added: its version, runtime, the session and thread, trace ids. */
+  context: Record<string, unknown> | null;
+  logs: string | null;
+  status: FeedbackStatus;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface InviteCodeView {
   code: string;
   note: string;

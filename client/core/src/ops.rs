@@ -199,6 +199,8 @@ fn cloud_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // Blocks an account (signed out everywhere, kept out) or lets it back: { user, on }.
         "admin.block" => op("POST", p.at("user").map(|u| format!("/v1/admin/users/{u}/block")), Some(json!({ "on": p.bool("on") }))),
         "admin.deleteWorkspace" => op("POST", p.at("workspace").map(|w| format!("/v1/admin/workspaces/{w}/delete")), None),
+        // Where a bug report stands: { id, status } (new, triaged, fixed, wontfix).
+        "admin.feedbackStatus" => op("POST", p.at("id").map(|id| format!("/v1/admin/feedback/{id}/status")), Some(p.pick(&["status"]))),
         _ => return None,
     };
     Some(r)
@@ -227,6 +229,8 @@ mod tests {
         assert_eq!((r.target, r.method, r.path.as_str(), r.body), (Target::Station("w/s".into()), "POST", "/updates/channel", Some(json!({ "channel": "beta" }))));
         let r = req("admin.setBeta", json!({ "account": "a", "user": "sub-1", "on": true }));
         assert_eq!((r.method, r.path.as_str(), r.body), ("POST", "/v1/admin/users/sub-1/beta", Some(json!({ "on": true }))));
+        let r = req("admin.feedbackStatus", json!({ "account": "a", "id": "01J0000000000000000000000A", "status": "fixed" }));
+        assert_eq!((r.target, r.method, r.path.as_str(), r.body), (Target::Cloud("a".into()), "POST", "/v1/admin/feedback/01J0000000000000000000000A/status", Some(json!({ "status": "fixed" }))));
     }
 
     #[test]
