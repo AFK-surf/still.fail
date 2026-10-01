@@ -41,7 +41,7 @@ pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
                             send.finish()?;
                             let bytes=recv.read_to_end(MAX_MESSAGE).await?;
                             let result: Value=serde_json::from_slice(&bytes)?;
-                            if let Some(error)=result["error"].as_str() { bail!("{error}"); }
+                            if let Some(error)=result["error"].as_str() { return Err(stillfail_app::remote::Refused(error.to_string()).into()); }
                             // Keep QUIC alive until the peer's FIN is received (read_to_end above).
                             Ok(result["result"].clone())
                         }).await.map_err(|_| anyhow!("peer request timed out; execution may have happened — query the same task key"))?
@@ -79,4 +79,70 @@ pub async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
     send.finish()?;
     let _=tokio::time::timeout(Duration::from_secs(10),send.stopped()).await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn real_peer_connection_runs_a_task_and_returns_its_artifact() -> Result<()> {
+        let dir=tempfile::tempdir()?;
+        let source=Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).bind().await?;
+        let target=Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).alpns(vec![ALPN.to_vec()]).bind().await?;
+        let source_id=source.id().to_string();
+        let state: CloudState=serde_json::from_value(json!({"origin":"http://localhost","station":target.id().to_string(),"workspace":"test-ws","workspace_name":"Test","name":"target","relay_url":"http://localhost:3340","grant_keys":{},"peers":[{"id":source_id}]}))?;
+        save_state(dir.path(),&state)?;
+        std::fs::write(dir.path().join("config.json"),json!({"http":{"host":"127.0.0.1","port":0},"agentHome":dir.path().join("agent"),"profiles":[],"remoteTasks":{"allow":[source_id]}}).to_string())?;
+        let app=stillfail_app::server::App::start(stillfail_app::server::AppOptions {data:dir.path().into(),config:dir.path().join("config.json"),ui:dir.path().join("app/dist/admin"),handoff:None}).await?;
+        let backend=local::Backend::default();
+        backend.0.set(app.clone()).ok();
+        let station=Arc::new(Station {data:dir.path().into(),state:Mutex::new(state),peers_current:std::sync::atomic::AtomicBool::new(true),backend,ready:watch::channel(true).1,telemetry:Telemetry::new(false)});
+        let accepted=target.clone();
+        let serving=station.clone();
+        let server=tokio::spawn(async move {
+            while let Some(incoming)=accepted.accept().await {
+                let serving=serving.clone();
+                tokio::spawn(async move {if let Ok(conn)=incoming.await {let _=serve(serving,conn).await;}});
+            }
+        });
+        let address=target.addr();
+        async fn rpc(source:&Endpoint,address:&iroh::EndpointAddr,method:&str,extra:Value)->Result<Value> {
+            let conn=source.connect(address.clone(),ALPN).await?;
+            let (mut send,mut recv)=conn.open_bi().await?;
+            let mut request=json!({"method":method,"session":"session","key":"one"});
+            for (k,v) in extra.as_object().unwrap() {request[k]=v.clone();}
+            send.write_all(&serde_json::to_vec(&json!({"workspace":"test-ws","request":request}))?).await?;
+            send.finish()?;
+            let bytes=recv.read_to_end(MAX_MESSAGE).await?;
+            Ok(serde_json::from_slice::<Value>(&bytes)?)
+        }
+        let described=rpc(&source,&address,"describe",json!({})).await?;
+        assert_eq!(described["result"]["tasks"],true);
+        let prepared=rpc(&source,&address,"task.prepare",json!({"spec":{"command":"echo transport-ok > result.txt"}})).await?;
+        assert!(prepared["error"].is_null(),"{prepared}");
+        let started=rpc(&source,&address,"task.start",json!({})).await?;
+        assert!(started["error"].is_null(),"{started}");
+        for _ in 0..200 {
+            let status=rpc(&source,&address,"task.get",json!({})).await?;
+            if status["result"]["job"]["state"]!="running" {assert_eq!(status["result"]["job"]["exitCode"],0);break;}
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        let artifact=rpc(&source,&address,"file.get",json!({"path":"result.txt"})).await?;
+        use base64::Engine;
+        assert_eq!(base64::engine::general_purpose::STANDARD.decode(artifact["result"]["data"].as_str().unwrap())?,b"transport-ok\n");
+        let repeated=rpc(&source,&address,"task.start",json!({})).await?;
+        assert_eq!(repeated["result"]["job"]["id"],started["result"]["job"]["id"]);
+        assert!(member(&station,&source_id,Some("other-ws")).is_err());
+        station.peers_current.store(false,std::sync::atomic::Ordering::SeqCst);
+        assert!(member(&station,&source_id,None).is_err());
+        station.peers_current.store(true,std::sync::atomic::Ordering::SeqCst);
+        station.state.lock().unwrap().peers.clear();
+        assert!(member(&station,&source_id,None).is_err());
+        server.abort();
+        source.close().await;
+        target.close().await;
+        app.shutdown().await;
+        Ok(())
+    }
 }

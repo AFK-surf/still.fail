@@ -252,6 +252,8 @@ impl App {
             store.clone(),
             &options.data,
             Arc::new(move |session: &str, text: String| {
+                // Remote task notices are kept by Jobs and returned to the source station by Remote.
+                if session.starts_with("remote:") { return; }
                 if let Some(hub) = told.upgrade() {
                     if let Err(e) = hub.notify(session, text) {
                         warn!(session, error = %e, "job notice not given");

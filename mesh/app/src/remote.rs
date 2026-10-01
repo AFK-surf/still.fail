@@ -10,6 +10,10 @@ use sha2::{Digest, Sha256};
 use crate::{hub::Hub, jobs::{Jobs, Watch}, mcp::Tool, settings::Settings, store::Store};
 
 pub type Call = Arc<dyn Fn(String, Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct Refused(pub String);
+
 pub const CHUNK: usize = 256 * 1024;
 const MAX_FILE: u64 = 1024 * 1024 * 1024;
 
@@ -84,6 +88,17 @@ impl Remote {
         if !self.allowed(peer) { bail!("remote tasks are not enabled for this source station; a target administrator must add its public key to remoteTasks.allow"); }
         let _guard = self.serial.lock().await;
         let session = text(&request, "session");
+        if method == "task.list" {
+            if session.is_empty() || session.len()>256 {bail!("session is required");}
+            let mut tasks=Vec::new();
+            for entry in std::fs::read_dir(self.root.join("incoming"))?.flatten() {
+                let Ok(meta)=read(&entry.path().join("task.json")) else {continue};
+                if text(&meta,"workspace")!=workspace || text(&meta,"station")!=peer || text(&meta,"session")!=session {continue;}
+                let job=self.store.get_job(&format!("remote_{}",entry.file_name().to_string_lossy()))?;
+                tasks.push(json!({"key":meta["key"],"spec":meta["spec"],"job":job}));
+            }
+            return Ok(json!({"tasks":tasks}));
+        }
         let key = text(&request, "key");
         if session.is_empty() || session.len() > 256 || key.is_empty() || key.len() > 128 { bail!("session and task key are required (at most 256 / 128 bytes)"); }
         let id = hash(&json!([workspace, peer, session, key]));
@@ -142,6 +157,7 @@ impl Remote {
                 Ok(json!({"bytes":bytes.len()}))
             }
             "file.get" => {
+                if job.as_ref().is_some_and(|j| j.state=="running") {bail!("wait for the task to finish before downloading artifacts");}
                 let path = file_path(&work, text(&request,"path"), false)?;
                 let mut options = std::fs::OpenOptions::new();
                 use std::os::unix::fs::OpenOptionsExt;
@@ -183,8 +199,8 @@ impl Remote {
         Ok(ws.to_string())
     }
 
-    fn outgoing(&self, session: &str, station: &str, key: &str) -> PathBuf {
-        self.root.join("outgoing").join(format!("{}.json", hash(&json!([session,station,key]))))
+    fn outgoing(&self, workspace: &str, session: &str, station: &str, key: &str) -> PathBuf {
+        self.root.join("outgoing").join(format!("{}.json", hash(&json!([workspace,session,station,key]))))
     }
 
     fn watch(self: &Arc<Self>, path: PathBuf) {
@@ -223,7 +239,7 @@ impl Remote {
         let mut tools = Vec::new();
         for (name, description, schema) in [
             ("station_list", "List stations in this workspace. With station, ask its OS, architecture and whether it accepts tasks from here. Old stations may not support peer calls.", json!({"type":"object","properties":{"station":{"type":"string"}},"additionalProperties":false})),
-            ("station_task", "Run a shell task on a trusted workspace station, in its own persistent directory. action prepare records command/name with a caller-chosen stable key; upload inputs with station_file; action start executes it once. Reuse the same key after uncertain replies; use a new key for new work. get/log/stop address the same task. Completion and job notices return here, including after reconnect/restart. Commands run as the remote station OS user, not in a sandbox. A lost process is marked failed with unknown exit, never automatically re-executed.", json!({"type":"object","properties":{"station":{"type":"string"},"key":{"type":"string"},"action":{"enum":["prepare","start","get","log","stop"]},"command":{"type":"string"},"name":{"type":"string"},"lines":{"type":"integer"}},"required":["station","key","action"],"additionalProperties":false})),
+            ("station_task", "Run a shell task on a trusted workspace station, in its own persistent directory. action prepare records command/name with a caller-chosen stable key; upload inputs with station_file; action start executes it once. Reuse the same key after uncertain replies; use a new key for new work. get/log/stop address the same task. Completion and job notices return here, including after reconnect/restart. Commands run as the remote station OS user, not in a sandbox. A lost process is marked failed with unknown exit, never automatically re-executed.", json!({"type":"object","properties":{"station":{"type":"string"},"key":{"type":"string"},"action":{"enum":["prepare","start","get","log","stop","list"]},"command":{"type":"string"},"name":{"type":"string"},"lines":{"type":"integer"}},"required":["station","action"],"additionalProperties":false})),
             ("station_file", "Upload an input before starting a remote task, or download a task artifact to this session. path is relative to the task directory; local is a path in this session workspace. Files are transferred in chunks, up to 1 GiB each; repeat upload after a disconnect. direction is upload/download. Downloads never overwrite an existing local file. Post downloaded artifacts using chat_post files.", json!({"type":"object","properties":{"station":{"type":"string"},"key":{"type":"string"},"direction":{"enum":["upload","download"]},"path":{"type":"string"},"local":{"type":"string"}},"required":["station","key","direction","path","local"],"additionalProperties":false})),
         ] {
             let remote = self.clone();
@@ -240,22 +256,27 @@ impl Remote {
         let station = text(&args,"station");
         if tool == "station_list" { return self.call(station, json!({"method":if station.is_empty(){"peers"}else{"describe"}})).await; }
         let key = text(&args,"key");
-        if station.is_empty() || key.is_empty() { bail!("station and key are required"); }
+        if station.is_empty() || (key.is_empty() && !(tool=="station_task" && args["action"]=="list")) { bail!("station and key are required (list needs only station)"); }
         let workspace=self.workspace()?;
         let mut request = json!({"workspace":workspace,"session":session,"key":key});
         if tool == "station_task" {
             let action = text(&args,"action");
-            if !["prepare","start","get","log","stop"].contains(&action) { bail!("unknown task action"); }
+            if !["prepare","start","get","log","stop","list"].contains(&action) { bail!("unknown task action"); }
             request["method"] = json!(format!("task.{action}"));
             request["lines"] = args["lines"].clone();
             request["spec"] = json!({"name":args["name"],"command":args["command"],"requestedBy":row.created_by});
             if action == "start" {
                 // Persist before sending: an uncertain start is still followed after a process restart.
-                let path = self.outgoing(session,station,key);
-                if !path.exists() { write(&path,&json!({"workspace":workspace,"session":session,"station":station,"key":key,"delivered":false}))?; }
+                let path = self.outgoing(&workspace,session,station,key);
+                if !path.exists() || read(&path).is_ok_and(|v|v["refused"]==true) { write(&path,&json!({"workspace":workspace,"session":session,"station":station,"key":key,"delivered":false}))?; }
                 self.watch(path);
             }
-            return self.call(station, request).await;
+            let result=self.call(station, request).await;
+            if action=="start" && result.as_ref().is_err_and(|e|e.downcast_ref::<Refused>().is_some()) {
+                let path=self.outgoing(&workspace,session,station,key);
+                if let Ok(mut entry)=read(&path) {entry["delivered"]=json!(true);entry["refused"]=json!(true);write(&path,&entry)?;}
+            }
+            return result;
         }
         let root = PathBuf::from(row.workspace);
         let local_arg = Path::new(text(&args,"local"));

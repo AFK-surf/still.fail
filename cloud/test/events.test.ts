@@ -123,7 +123,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.equal(first.status, 101);
     await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations });
+    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "studio", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
@@ -226,4 +226,29 @@ test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
   } finally {
     await h.close();
   }
+});
+
+
+test("station rosters stay workspace scoped and update when peers join or leave", async () => {
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    const a = (await (await alice("POST", "/v1/workspaces", { name: "A" })).json()) as any;
+    const b = (await (await alice("POST", "/v1/workspaces", { name: "B" })).json()) as any;
+    const first = await enrollStation(h, alice, a.id, "first");
+    const socket = await connectStation(h, first);
+    await socket.ping!();
+    const roster = () => socket.frames!.filter(f => f.type === "state").at(-1).peers.map((p: any) => p.id).sort();
+    assert.deepEqual(roster(), [first.id]);
+    const second = await enrollStation(h, alice, a.id, "second");
+    await socket.ping!();
+    assert.deepEqual(roster(), [first.id, second.id].sort());
+    await enrollStation(h, alice, b.id, "elsewhere");
+    await socket.ping!();
+    assert.deepEqual(roster(), [first.id, second.id].sort());
+    await alice("DELETE", `/v1/workspaces/${a.id}/stations/${second.id}`);
+    await socket.ping!();
+    assert.deepEqual(roster(), [first.id]);
+    socket.ws!.close(1000);
+  } finally { await h.close(); }
 });
