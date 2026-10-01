@@ -1,45 +1,33 @@
 ---
 name: stillfail-viz
-description: Inline visualizations in still.fail chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in still.fail's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. In Slack threads the file is uploaded into the thread.
+description: Create inline HTML diagrams, charts, comparisons or interactive widgets in still.fail chats. Use when a small visual explains better than prose; Slack receives an attached file.
 ---
 
 # Inline visualizations
 
-In a still.fail chat (EMBER/…) an HTML file you attach and place in your message is drawn there as a page of its own,
-sized to its content, with a link to open the file itself. Nothing else is drawn as a page: an ```html code block
-shows as code, and an HTML file you attach without placing it shows as a file to open.
+In still.fail (EMBER/…), placed HTML attachments render in the message. An HTML code fence is only code;
+an unplaced attachment opens as a file. For a simple flow, sequence, state machine or timeline, use a Mermaid
+code fence instead: it renders in still.fail colours without a file.
 
-For a plain diagram (a flow, a sequence, a state machine, a timeline) a ```mermaid block in the text is enough: it is
-drawn as a chart in still.fail's colours, no file needed. Use a file when you need layout, data or interaction.
+## Post
 
-## Posting one
+Write an HTML fragment in the session workspace, e.g. `session-lifecycle.html`. Attach with
+`chat_post(files=["/abs/path/session-lifecycle.html"])` and put `[Session lifecycle](session-lifecycle.html)` on
+its own line in the text. Explain it around the link: figures are not read aloud and phone apps may show only files.
+In Slack, attach but omit the Markdown link; files upload below the text and also render in still.fail's copy.
+Say what the figure shows for people staying in Slack.
 
-1. Write the fragment to a file in your session workspace, named for what it shows (`session-lifecycle.html`).
-2. Attach it: `chat_post(to=…, text=…, files=["/abs/path/session-lifecycle.html"])`.
-3. Place it: in the text, a line of its own that links to it by its file name: `[Session lifecycle](session-lifecycle.html)`.
-   Put the words that explain it around that line; the figure is not read aloud, and a phone app may show only the file.
+## Write
 
-In a Slack thread, attach the file the same way but do not place it (Slack would show the link as typed): it is
-uploaded into the thread below the text, and still.fail, which keeps it with the message, draws it there. Say in the
-text what the figure shows, for those who stay in Slack.
-
-## Writing one
-
-- Write a fragment, not a document: no `<html>`, `<head>` or `<body>`. `<style>` and `<script>` inside it are fine.
-  Order it style, then markup, then script. Keep it well under 1 MB.
-- still.fail's stylesheet is already loaded (below): use its variables and classes, and add only the layout your figure
-  needs.
-- It runs in a sandbox with no network: no fetch, XHR or WebSocket, and no access to the page, the station or files.
-  Scripts and styles may come from cdnjs.cloudflare.com, esm.sh, cdn.jsdelivr.net and unpkg.com (a charting library,
-  say); images only as data: URIs or drawn (SVG, canvas). Put the data in the fragment itself.
-- Width is the message's: design for about 736 px and keep it working down to 320 px (a phone). No fixed widths or
-  viewport heights; wrap with `.viz-grid` / `.viz-row`, and give wide content `.table-responsive`.
-- Fonts are the system's (`--font-sans`); weights 400 to 600.
-- A whole page (a file with `<!doctype>` or `<html>`: a player, an animation, an app made to fill a window) is not a
-  figure. Placed, it is drawn as written in a 16:9 window of the message's width (about 736×414, as small as 320×180
-  on a phone), not sized to its content, without the stylesheet. Everything in it, its own controls too, must scale
-  with that window (a stage scaled to fit with fixed-pixel controls on top ends up covered by them). Better: attach it
-  without placing it, as a file to open full screen, or serve it (the stillfail-jobs skill).
+- Fragments omit `<html>`, `<head>` and `<body>`; order `<style>`, markup, then `<script>`. Stay well under 1 MB.
+- Use the loaded stylesheet's variables/classes below; add only layout your figure needs.
+- The sandbox has no fetch, XHR, WebSocket or access to the page, station or files. Scripts/styles may load from
+  cdnjs.cloudflare.com, esm.sh, cdn.jsdelivr.net or unpkg.com. Images must be data URIs, SVG or canvas; embed data.
+- Design for 736 px down to 320 px. Avoid fixed widths/viewport heights; wrap with `.viz-grid` / `.viz-row` and
+  `.table-responsive`. Use system `--font-sans`, weights 400–600.
+- A full document (`<!doctype>` or `<html>`) renders as written in a 16:9 window, not content-sized, without the
+  stylesheet: about 736×414 down to 320×180. All content and controls must scale together. Full-screen pages are
+  better attached unplaced or served via stillfail-jobs.
 
 ## Talking back
 

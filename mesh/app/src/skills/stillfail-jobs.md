@@ -1,101 +1,66 @@
 ---
 name: stillfail-jobs
-description: Background jobs and web services on the still.fail station (job_start, job_list, job_log, job_stop, stillfail-job notify). Use when work outlives a turn (long builds, test suites, data jobs, watchers) or when people should see or use something in a browser (a page, prototype, chart, report, dashboard, tool UI) — instead of blocking a turn, pasting walls of output, or describing a UI in words.
+description: Run background jobs, long-running watches, web previews or tasks on another still.fail station. Use for work that outlives a turn or a browser service people need to use.
 ---
 
-# Background jobs and web services
+# Jobs and services
 
-The station runs jobs for you apart from your turns: each in its own process group, its output in a log, kept across your
-turns and across restarts of the station (one that did not survive, say the machine restarted, is started again). You
-hear when one ends, and whatever it says on the way. A job with a
-port is a web service: kept up (started again if it ends) and opened by the workspace's members through its link.
+Jobs run in separate process groups with persistent logs. They survive turns and station restarts; interrupted jobs
+restart. Completion and `stillfail-job notify` messages wake you. A job with a port is a service, kept running and
+available to workspace members through its returned link.
 
-## Background jobs: when
+## Background work
 
-Use `job_start` (no port) for work that takes longer than a turn should, or that you want to keep an eye on:
+- Use `job_start` without a port for long builds, tests, data work or loops. Run quick commands directly; if a result
+  is needed before answering, wait for it in the turn.
+- Supply `command` (run by `sh -c`), a short `name`, and optionally `cwd` (defaults to the session workspace).
+  Keep clones and outputs in that workspace.
+- Tell people what is running, then end `waiting`; use `need_human` instead if you also need their input.
+- Inside long jobs, `stillfail-job notify "<words>"` reports meaningful milestones or trouble, not every line.
+  `ember-job` is an alias. Notices arrive via="ember"; relay only what matters and act on failures.
+- Completion includes the exit code and log tail. `job_log` reads more (up to 1000 lines); `job_list` shows your
+  jobs; `job_stop` stops one. A completed step needs no separate user post unless it is useful news.
 
-- builds, full test suites, benchmarks, migrations, data processing, downloads, anything over a minute or two;
-- watchers and loops (poll something, retry until it works, re-run on change);
-- several independent pieces of work at once.
+## Watches
 
-Not for quick commands: run those directly. Not for work that must finish before you can answer: wait for it in the turn.
+For an explicitly requested ongoing watch (CI, deployment, metrics, review queue), set `watch: true` and loop,
+notifying on changes. The chat appears under 监控中, does not auto-archive, and asks before manual archiving.
+End `waiting`: its timeout will not wake you while the watch runs; a notice, completion or user message will.
+Give the next post a title naming the watch (e.g. 监控 · PR #482 的 CI); watch chats can be renamed immediately.
+Stop the job when no longer needed; the chat then becomes ordinary again.
 
-## Background jobs: how
+## Web services
 
-- `job_start` with `command` (run by `sh -c`), a short `name`, and `cwd` (default: this session's workspace). Keep the
-  workspace as the place for clones and outputs.
-- Tell the people waiting that it runs and what you will tell them, then end the turn (`chat_state` "waiting", or
-  `chat_post` kind "need_human" only if they must act). You do not need to stay in the turn: you are woken when the job ends.
-- For a long job, have it report milestones or trouble with `stillfail-job notify "<words>"` from inside the command (for
-  example `make all && stillfail-job notify "build done, running tests" && make test`; `ember-job` is the same command). Each notice reaches you as a message
-  via="ember"; act on it (relay what matters to people, fix and restart on failure). Do not notify for every line.
-- When it ends you get its exit code and last lines. Read more with `job_log` (`lines` up to 1000). `job_list` shows this
-  session's jobs and their states; `job_stop` ends one.
-- A job's end is not the people's news unless it matters to them: tell them results, failures they must know about, and
-  what happens next.
+Use a port for something people should try in a browser: a UI, prototype, dashboard or tool. A one-off answer,
+static image or internal-only background task does not need a service.
 
-## Long-running watches
+1. Start with `command`, `name`, and `port` (1024–65535). Listen on `$PORT`; 127.0.0.1 is enough, e.g.
+   `python3 -m http.server $PORT`. One service per port.
+2. Verify it answers with `curl -sf http://127.0.0.1:<port>/`; retry briefly or inspect `job_log` on failure.
+3. Post the returned `link` where requested (Slack: `<link|label>`), naming the service and what to try, not its
+   port. It is private to workspace members, not a public URL.
+4. Stop unused services with `job_stop`. To restart, stop then start (or let a dev server reload itself).
+   Repeated crashes cause restarts with increasing delays and notices: inspect logs and fix the cause.
 
-When someone asks you to keep an eye on something for a long while (a CI run, a deploy, a metric, a review queue), start
-it with `job_start` and `watch: true`: a loop that checks and `stillfail-job notify`s on changes. While the watch runs:
+Services open in a frame on their own origin. Use root paths (`/`). Responses are relayed whole: WebSockets,
+SSE and long-poll streams do not pass through. Disable browser hot reload; live data only appears when read.
+Keep the shown version running during review; compare another version via a separate checkout/service.
+The preview supports phone/tablet/desktop sizes, rotation, zoom and screenshot annotations; tell reviewers they
+can mark places and comment. Use stillfail-show for evidence to accompany the link.
 
-- its chat is a watching chat: listed under the chat list's 监控中 filter, never archived for being idle, and asked about
-  before someone archives it by hand;
-- end your turn with `chat_state` waiting (or a post that ends it): you are not asked again when the wait runs out, only when the
-  watch notifies, ends, or someone writes;
-- name the chat for it: give your next `chat_post` a title that says what it watches (e.g. 「监控 · PR #482 的 CI」); a
-  chat with a watch running may be renamed so at once.
+## Another station
 
-Stop the watch (`job_stop`) when it is no longer needed; the chat is then an ordinary one again.
+Use `station_list` to discover workspace stations, then `station_list {station}` for capabilities and task access.
+The target administrator controls permission; never enable `remoteTasks.allow` yourself to bypass it.
 
-## Web services: when
+Prepare `station_task` with a stable `key`, upload inputs with `station_file`, then start the same key. Commands
+run as the target OS user in a task directory, not a sandbox. Pin inputs and versions: for Git, upload a bundle or
+archive and check out the intended revision.
 
-Use `job_start` with a `port` when what you made should be looked at or used in a browser, rather than read as text:
+`station_task` lists, inspects, tails or stops your remote tasks. Completion and notices survive reconnects and
+station restarts; no local polling job is needed. End `waiting`, naming the task. Download artifacts with
+`station_file` and post them to the requesting chat. Downloads create new files, never overwrite; inputs may be
+uploaded again before start.
 
-- a front-end page, prototype or design you built or changed;
-- interactive charts, reports, dashboards or data explorers;
-- a docs site, a storybook, a preview build;
-- a small tool with a UI, or the admin/debug page of a service you are running;
-- something people will open again or keep watching.
-
-Not for a one-off answer (reply with text or a file), a single static image (send the image file), or a service only you
-need to reach (a plain background job is enough).
-
-## Web services: how
-
-- `job_start` with `command`, `name`, `port` (1024–65535). The command must listen on that port; `$PORT` holds it, and
-  127.0.0.1 is enough (for example `python3 -m http.server $PORT`, `npm run dev -- --port $PORT --host 127.0.0.1`).
-- Check it answers before telling anyone: `curl -sf http://127.0.0.1:<port>/` (retry a few seconds while it starts);
-  look at `job_log` if it does not.
-- Give it a name people will recognise (`name`): the pages show services by their names, never their ports. When you
-  speak of it, use that name and the link; the port is the station's business, not theirs.
-- Post the returned `link` where people asked, saying what it is (in Slack: `<link|what it is>`). The link opens the
-  service beside this session in still.fail, for the workspace's members only: it is not a public URL; do not hand it out as
-  one.
-- One service per port. To restart after changes, `job_stop` it and start it again (or use a dev server that reloads by
-  itself). If it keeps crashing, the station restarts it with growing pauses and tells you each time: read `job_log`,
-  fix, restart.
-- Stop services nobody needs any more with `job_stop`.
-- How people see it: in a frame beside the chat, on an origin of its own, with requests relayed through the station
-  (each answer passed on whole). So the service must work at its own root paths (`/`, not under a prefix), and
-  WebSockets (a dev server's live reload) and streamed answers (server-sent events, long polls) do not get through:
-  turn hot reload off, and expect a page that relies on a live stream to show only what it reads.
-
-## Work on another station
-
-When a task needs another machine's tools or resources, use `station_list` to discover stations in this workspace and
-`station_list {station}` to check a target's capabilities and whether it accepts tasks from here. Permission belongs to
-the target administrator; do not enable `remoteTasks.allow` yourself just to get a task through.
-
-Use `station_task` to prepare a named shell task with a stable `key`, upload input files with `station_file`, then start
-it with the same key. Commands run as the target station's OS user in a task directory, not in a sandbox. Include exact
-versions in the inputs and command (for Git, upload a bundle or archive and check out the intended revision).
-
-`station_task` can list, inspect, tail or stop this session's remote tasks. After start, completion and job notices come
-back to this session even across reconnects and station restarts; you do not need a local polling job. While it runs,
-end the turn with `chat_state` waiting, naming the remote task. Download artifacts with `station_file` after it ends,
-and post them in the conversation that asked for the work.
-
-After a timeout, query or retry the **same** key: the command may already have run. A task with a lost process is not
-started again automatically; `failed` with no exit code can mean an uncertain result. Inspect before choosing a new
-key. Uploads can be repeated before starting; downloads create new files and never overwrite existing local files.
+After a timeout, inspect or retry the same key: work may already have run. Lost remote processes are not restarted
+automatically; `failed` without an exit code means the outcome may be uncertain. Inspect before using a new key.
