@@ -348,7 +348,8 @@ const DRAINED_LIMIT: Duration = Duration::from_secs(300);
 /// Says who runs this data directory and what it can do, for `stillfail update` (cloud/src/install.ts): SIGUSR2 hands over
 /// to the binary now at this one's path (handoff), SIGUSR1 holds turns and says when none runs (drain).
 fn write_station_file(run: &Path, started_at: u64) {
-    let text = json!({ "pid": std::process::id(), "startedAt": started_at, "version": version(), "handoff": stillfail_app::handoff::VERSION, "drain": 1 }).to_string();
+    // channel: SIGHUP takes the update channel asked for in run/channel-ask (`stillfail-station channel`).
+    let text = json!({ "pid": std::process::id(), "startedAt": started_at, "version": version(), "handoff": stillfail_app::handoff::VERSION, "drain": 1, "channel": 1 }).to_string();
     if let Err(error) = std::fs::write(run.join("station.json"), format!("{text}\n")) {
         warn!(%error, "station.json not written");
     }
@@ -424,6 +425,8 @@ async fn run(options: Run) -> Result<()> {
     };
     let door = local::serve(listener, data.clone(), ready.clone());
     tokio::spawn(mesh(data.clone(), backend.clone(), ready, telemetry));
+    // Before station.json says SIGHUP is taken: until a handler is set, it would end the process.
+    let mut hup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
     write_station_file(&data.join("run"), now() * 1000 + (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_millis() as u64));
     // SIGTERM (launchd, the desktop app) or ^C: the runtimes end first. So does, with --with-parent, the parent's end
     // (the desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it. Run
@@ -447,6 +450,11 @@ async fn run(options: Run) -> Result<()> {
                     }
                 }
             }
+            // `stillfail update --beta`/`--stable`: the channel asked for, kept by this process (it holds the config).
+            _ = hup.recv() => match backend.0.get().cloned() {
+                Some(app) => answer_channel_ask(&data.join("run"), |channel| app.set_update_channel(channel)),
+                None => warn!("asked for an update channel before the station is up; not now"),
+            },
             _ = usr2.recv() => {
                 let Some(app) = backend.0.get().cloned() else {
                     warn!("asked to hand over before the station is up; not now");
@@ -565,6 +573,86 @@ fn lock(path: &Path) -> Result<std::fs::File> {
         return Err(Held(path.parent().and_then(Path::parent).unwrap_or(path).to_path_buf()).into());
     }
     Ok(file)
+}
+
+/// Where `stillfail-station channel` asks the running station for an update channel, and where it answers.
+const CHANNEL_ASK: &str = "channel-ask";
+const CHANNEL_ANSWER: &str = "channel-answer";
+
+/// Writes `text` to `path` whole (a reader never sees half of it).
+fn write_whole(path: &Path, text: &str) -> Result<()> {
+    let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// The running station's side: takes the channel asked for in <run>/channel-ask (if any), sets it, and answers in
+/// <run>/channel-answer (`ok <channel>`, or `error <why>`).
+fn answer_channel_ask(run: &Path, set: impl FnOnce(stillfail_app::updates::Channel) -> Result<()>) {
+    let ask = run.join(CHANNEL_ASK);
+    let Ok(asked) = std::fs::read_to_string(&ask) else { return };
+    let _ = std::fs::remove_file(&ask);
+    let answer = match stillfail_app::updates::Channel::of(&asked) {
+        Some(channel) => match set(channel) {
+            Ok(()) => format!("ok {}", channel.id()),
+            Err(error) => format!("error {error:#}"),
+        },
+        None => format!("error 不认识的渠道 {}", asked.trim()),
+    };
+    if let Err(error) = write_whole(&run.join(CHANNEL_ANSWER), &format!("{answer}\n")) {
+        warn!(%error, "the update channel's answer not written");
+    }
+}
+
+/// Whether `pid` is a station (its command says so), as the installer checks it: a pid left in station.json may be
+/// another process's by now.
+fn is_station(pid: i32) -> bool {
+    std::process::Command::new("ps").args(["-p", &pid.to_string(), "-o", "command="]).output()
+        .is_ok_and(|o| { let c = String::from_utf8_lossy(&o.stdout); c.contains("stillfail-station") || c.contains("ember-station") })
+}
+
+/// Puts the station of `data` on `channel` (`stillfail update --beta`/`--stable`). A station running there holds the
+/// config (an edit of its own would write over one made beside it): it is asked to (SIGHUP, the channel in
+/// run/channel-ask) and its answer waited for, up to `wait`. With none running, the config is written here, the
+/// station's lock held meanwhile; so it is too beside a running station from before it took the ask (station.json
+/// says `channel`), which the update that follows replaces at once.
+fn set_channel(data: &Path, config: &Path, channel: stillfail_app::updates::Channel, wait: Duration, is_station: impl Fn(i32) -> bool) -> Result<()> {
+    use stillfail_app::updates::set_channel_in;
+    let run = data.join("run");
+    std::fs::create_dir_all(&run)?;
+    match lock(&run.join("station.lock")) {
+        Ok(_held) => return set_channel_in(config, data, channel),
+        Err(error) if error.downcast_ref::<Held>().is_none() => return Err(error),
+        Err(_) => {}
+    }
+    let said: Value = std::fs::read(run.join("station.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+    let pid = said["pid"].as_i64().and_then(|p| i32::try_from(p).ok()).filter(|p| *p > 0);
+    let Some(pid) = pid.filter(|p| said["channel"] == 1 && is_station(*p)) else {
+        return set_channel_in(config, data, channel);
+    };
+    let answer = run.join(CHANNEL_ANSWER);
+    let _ = std::fs::remove_file(&answer);
+    write_whole(&run.join(CHANNEL_ASK), channel.id())?;
+    // SAFETY: a signal to the process the station's own file names, checked to be a station.
+    if unsafe { libc::kill(pid, libc::SIGHUP) } != 0 {
+        let _ = std::fs::remove_file(run.join(CHANNEL_ASK));
+        bail!("没能通知运行中的 station（pid {pid}）：{}", std::io::Error::last_os_error());
+    }
+    let until = Instant::now() + wait;
+    while Instant::now() < until {
+        if let Ok(text) = std::fs::read_to_string(&answer) {
+            let _ = std::fs::remove_file(&answer);
+            let text = text.trim();
+            return match text.strip_prefix("ok") {
+                Some(_) => Ok(()),
+                None => Err(anyhow!("{}", text.strip_prefix("error ").unwrap_or(text))),
+            };
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let _ = std::fs::remove_file(run.join(CHANNEL_ASK));
+    bail!("运行中的 station 没有回应（它可能还在启动），过一会儿再试")
 }
 
 /// Whether the station's config turns traces on (telemetry.traces in <data>/config.json).
@@ -1202,7 +1290,7 @@ async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut Send
 }
 
 fn usage() -> ! {
-    eprintln!("usage:\n  stillfail-station run --app DIR [--port N] [--data DIR] [--with-parent]\n  stillfail-station enroll <cloud-origin> <token> [--data DIR]\n  stillfail-station status [--data DIR]\n  stillfail-station id [--data DIR]\n\n--data: default ~/.stillfail ($STILLFAIL_DATA, else $EMBER_DATA); ~/.ember is moved there on the first start.\nrun: --app is the release (bin/, dist/admin/); --port the loopback port's, which sends old page links to still.fail cloud (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
+    eprintln!("usage:\n  stillfail-station run --app DIR [--port N] [--data DIR] [--with-parent]\n  stillfail-station enroll <cloud-origin> <token> [--data DIR]\n  stillfail-station status [--data DIR]\n  stillfail-station id [--data DIR]\n  stillfail-station channel [stable|beta] [--app DIR] [--data DIR]\n\n--data: default ~/.stillfail ($STILLFAIL_DATA, else $EMBER_DATA); ~/.ember is moved there on the first start.\nrun: --app is the release (bin/, dist/admin/); --port the loopback port's, which sends old page links to still.fail cloud (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
     std::process::exit(2);
 }
 
@@ -1306,6 +1394,19 @@ async fn main() -> Result<()> {
         }
         Some("id") => {
             println!("{}", hex::encode(load_key(&data)?.public().as_bytes()));
+            Ok(())
+        }
+        // The channel the station is updated on (`stillfail update`): set when one is named (kept in its config, read
+        // as the station starts), then said; `--app`: the release, which says the channel it came from.
+        Some("channel") if args.len() <= 2 => {
+            use stillfail_app::updates::{Channel, channel_of};
+            let config = stillfail_app::former::var("CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
+            if let Some(named) = args.get(1) {
+                let channel = Channel::of(named).ok_or_else(|| anyhow!("channel 必须是 stable 或 beta，不是 {named}"))?;
+                set_channel(&data, &config, channel, Duration::from_secs(10), is_station)?;
+            }
+            let raw = stillfail_app::config::read_raw(&config)?;
+            println!("{}", channel_of(&raw, &app.map(PathBuf::from).unwrap_or_default()).id());
             Ok(())
         }
         _ => usage(),
@@ -1440,6 +1541,52 @@ mod tests {
         enrolled(&dir.0);
         let said = status(&dir.0);
         assert!(said.contains("workspace：Dev（w）") && said.contains("cloud：https://app.still.fail") && said.contains("工作：正常") && said.contains("在线：否"), "{said}");
+    }
+
+    #[test]
+    fn with_no_station_running_the_channel_is_written_in_the_config() {
+        use stillfail_app::updates::Channel;
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config.json");
+        set_channel(dir.path(), &config, Channel::Beta, Duration::from_secs(1), |_| panic!("no station to ask")).unwrap();
+        assert_eq!(stillfail_app::config::read_raw(&config).unwrap().update_channel.as_deref(), Some("beta"));
+        // Beside a station from before it took the ask: written too (the update that follows restarts it).
+        let _held = lock(&dir.path().join("run").join("station.lock")).unwrap();
+        std::fs::write(dir.path().join("run").join("station.json"), json!({ "pid": std::process::id(), "drain": 1 }).to_string()).unwrap();
+        set_channel(dir.path(), &config, Channel::Stable, Duration::from_secs(1), |_| true).unwrap();
+        assert_eq!(stillfail_app::config::read_raw(&config).unwrap().update_channel.as_deref(), Some("stable"));
+    }
+
+    #[tokio::test]
+    async fn a_running_station_is_asked_for_the_channel_and_keeps_it_itself() {
+        use stillfail_app::updates::Channel;
+        let dir = tempfile::tempdir().unwrap();
+        let (data, run) = (dir.path().to_path_buf(), dir.path().join("run"));
+        std::fs::create_dir_all(&run).unwrap();
+        // This process plays the station: its lock held, its file saying it takes the ask, SIGHUP taken.
+        let _held = lock(&run.join("station.lock")).unwrap();
+        std::fs::write(run.join("station.json"), json!({ "pid": std::process::id(), "drain": 1, "channel": 1 }).to_string()).unwrap();
+        let mut hup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()).unwrap();
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let (station_run, kept) = (run.clone(), asked.clone());
+        tokio::spawn(async move {
+            while hup.recv().await.is_some() {
+                answer_channel_ask(&station_run, |channel| {
+                    kept.lock().unwrap().push(channel);
+                    if channel == Channel::Stable { anyhow::bail!("不行") } else { Ok(()) }
+                });
+            }
+        });
+        let config = data.join("config.json");
+        let (d, c) = (data.clone(), config.clone());
+        tokio::task::spawn_blocking(move || set_channel(&d, &c, Channel::Beta, Duration::from_secs(5), |_| true)).await.unwrap().unwrap();
+        assert_eq!(*asked.lock().unwrap(), [Channel::Beta]);
+        assert!(!config.exists(), "the running station keeps it, not this");
+        assert!(!run.join(CHANNEL_ASK).exists() && !run.join(CHANNEL_ANSWER).exists());
+        // What the station says when it cannot.
+        let (d, c) = (data.clone(), config.clone());
+        let refused = tokio::task::spawn_blocking(move || set_channel(&d, &c, Channel::Stable, Duration::from_secs(5), |_| true)).await.unwrap();
+        assert_eq!(refused.unwrap_err().to_string(), "不行");
     }
 
     #[test]

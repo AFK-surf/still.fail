@@ -149,7 +149,7 @@ export function StationScreen() {
                 <GoRow title="Profile" value={`${s.overview.profiles.length} 个`} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
                 <GoRow title="记忆" onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
               </ListCard>
-              {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} />}
+              {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
             </>
           )}
           <div style={{ height: 30 }} />

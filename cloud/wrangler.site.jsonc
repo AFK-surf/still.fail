@@ -1,8 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   // The official site, still.fail: static files only (`pnpm run build:site` → dist/site, the page built to HTML with
-  // the demo's opening frame in it), no code. youdid.wtf goes here too once its zone is on Cloudflare: the page lights
-  // the domain it was opened on (web/src/site/Site.tsx).
+  // the demo's opening frame in it), no code. youdid.wtf, the test channel's, is a build of its own (wrangler.site-beta.jsonc).
   "name": "still-fail-site",
   "compatibility_date": "2026-09-08",
   "workers_dev": false,

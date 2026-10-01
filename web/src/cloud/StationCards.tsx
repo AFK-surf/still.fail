@@ -108,7 +108,7 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
         {/* A station that says its versions says the station's among them; one older, only what the cloud knows. */}
         <span className={css.ident}>{s.version && !s.overview?.updates?.length ? `stillfail-station ${s.version} · ` : ""}<span className={css.mono}>{s.id.slice(0, 12)}</span></span>
       </div>
-      {s.online && <div className={css.cardVersions}><Versions station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
+      {s.online && <div className={css.cardVersions}><Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} /></div>}
     </div>
   );
 }

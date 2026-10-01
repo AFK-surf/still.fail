@@ -575,6 +575,15 @@ impl AdminApi {
                 updates.check().await;
                 return ok(serde_json::to_value(updates.get())?);
             }
+            // The station's update channel (stable or beta), set as someone asked: its versions as they are after it.
+            ("POST", "/updates/channel") => {
+                let updates = self.updates_for(viewer)?;
+                let input = read_json(body).await?;
+                let channel = crate::updates::Channel::of(input.get("channel").and_then(Value::as_str).unwrap_or_default())
+                    .ok_or_else(|| http_error(400, "channel 必须是 stable 或 beta"))?;
+                updates.set_channel(channel).await.map_err(|e| http_error(400, e.to_string()))?;
+                return ok(serde_json::to_value(updates.get())?);
+            }
             ("POST", "/updates") => {
                 let updates = self.updates_for(viewer)?;
                 let input = read_json(body).await?;

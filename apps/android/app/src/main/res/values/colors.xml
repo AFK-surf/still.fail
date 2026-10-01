@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The launcher's own background is launcher_bg (app/build.gradle.kts): this orange, or the beta app's teal. -->
     <color name="launcher_face_bg">#E5704A</color>
 </resources>

@@ -17,6 +17,10 @@ import kotlinx.serialization.json.JsonElement
     val invitations: List<PendingInvitation> = emptyList(),
     /** The account's `/v1/me` has answered; until then (or after a failure) an empty list says nothing. */
     val loaded: Boolean = false,
+    /** still.fail cloud lets this account use the beta apps (its `/v1/me` says `user.beta`). */
+    val beta: Boolean = false,
+    /** In the beta app, an account still.fail cloud has not let into the beta: what to say (the core's), with a way out. */
+    val blocked: String? = null,
     /** Set when this account could not be read. */
     val error: JsonElement? = null,
 )

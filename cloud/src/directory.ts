@@ -18,7 +18,7 @@ import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import { relays } from "./relays";
-import type { AccountEvent, AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -69,7 +69,7 @@ export class Directory extends DurableObject<Env> {
     super(ctx, env);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     ctx.storage.sql.exec(`
-      CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, last_seen INTEGER, admitted TEXT);
+      CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, last_seen INTEGER, admitted TEXT, beta INTEGER);
       CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS members (workspace TEXT NOT NULL, sub TEXT NOT NULL, role TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, sub));
       CREATE INDEX IF NOT EXISTS members_by_user ON members (sub);
@@ -85,9 +85,10 @@ export class Directory extends DurableObject<Env> {
       CREATE UNIQUE INDEX IF NOT EXISTS push_by_token ON push (sub, token);
       CREATE INDEX IF NOT EXISTS push_by_user ON push (sub, sid);
     `);
-    // users had neither column before invite codes; the table in production gains them here.
+    // users had neither column before invite codes, nor beta (1: let into the test channel) before it; the table in
+    // production gains them here.
     const columns = new Set(this.#rows("PRAGMA table_info(users)").map((r) => r.name as string));
-    for (const column of ["last_seen INTEGER", "admitted TEXT"]) {
+    for (const column of ["last_seen INTEGER", "admitted TEXT", "beta INTEGER"]) {
       if (!columns.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE users ADD COLUMN ${column}`);
     }
   }
@@ -234,8 +235,10 @@ export class Directory extends DurableObject<Env> {
     return this.workspace(sub, workspace);
   }
 
-  me(sub: string): { user: UserView | null; workspaces: WorkspaceSummary[] } {
-    const user = this.#one("SELECT sub, email, name, picture FROM users WHERE sub = ?", sub) as unknown as UserView | undefined;
+  me(sub: string): { user: MeView | null; workspaces: WorkspaceSummary[] } {
+    const row = this.#one("SELECT sub, email, name, picture, beta FROM users WHERE sub = ?", sub);
+    // beta only when set: clients from before it know no such field, and an account without it says nothing.
+    const user = row ? { sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string, ...(row.beta ? { beta: true as const } : {}) } : undefined;
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
         (SELECT COUNT(*) FROM stations s WHERE s.workspace = w.id) AS stations,
@@ -623,14 +626,26 @@ export class Directory extends DurableObject<Env> {
       list.push({ id: row.id as string, name: row.name as string, role: row.role as Role });
       memberships.set(row.sub as string, list);
     }
-    return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted FROM users ORDER BY created_at DESC").map((row) => {
+    return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted, beta FROM users ORDER BY created_at DESC").map((row) => {
       const workspaces = memberships.get(row.sub as string) ?? [];
       const admission: Admission | null = isAdmin(this.env, row.email as string) ? "admin" : (row.admitted as Admission | null) ?? (workspaces.length ? "early" : null);
       return {
         sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string,
-        created_at: row.created_at as number, last_seen: row.last_seen as number | null, admission, workspaces,
+        created_at: row.created_at as number, last_seen: row.last_seen as number | null, admission, workspaces, beta: Boolean(row.beta),
       };
     });
+  }
+
+  /** Lets an account into the test channel (BETA_ORIGIN), or out of it. */
+  setBeta(sub: string, on: boolean): { sub: string; beta: boolean } {
+    if (!this.#one("SELECT 1 AS x FROM users WHERE sub = ?", sub)) fail(404, "user_not_found");
+    this.#run("UPDATE users SET beta = ? WHERE sub = ?", on ? 1 : null, sub);
+    return { sub, beta: on };
+  }
+
+  /** Whether the account may use the test channel. */
+  isBeta(sub: string): boolean {
+    return Boolean(this.#one("SELECT beta FROM users WHERE sub = ?", sub)?.beta);
   }
 
   /** The operator removes a workspace as its owner would (the admin token's route). */

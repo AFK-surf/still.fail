@@ -819,6 +819,13 @@ pub struct SoftwareVersion {
     pub latest: Option<String>,
     /// The latest is newer than what runs.
     pub newer: bool,
+    /// The station's, switched back from the test channel: the latest is the stable release, older than the beta that
+    /// runs, and going back to it is offered (回到正式版). False from a station older than channels.
+    #[serde(default)]
+    pub downgrade: bool,
+    /// The station's: which releases it is updated to, `stable` or `beta`; none where it cannot be updated from here,
+    /// and from a station older than channels.
+    pub channel: Option<String>,
     /// The pages can update it (or install it, when it is not installed).
     pub updatable: bool,
     /// Why it cannot be updated from here (the desktop app's station, a runtime installed another way…).
@@ -2117,6 +2124,10 @@ pub struct StationView {
     pub runtimes: Vec<RuntimeModels>,
     pub models: Vec<ModelOption>,
     pub overview: Option<Overview>,
+    /// Its versions offer the 测试版 switch: it can be put on a channel (its station's version says one), and the
+    /// account that reaches it is in the beta or it is on the test channel already (to be switched back).
+    #[serde(default)]
+    pub beta_offered: bool,
     pub host: Option<Host>,
     /// How this device's connection to it runs; none for a station reached without one of its own (the page's own)
     /// or before one is open.

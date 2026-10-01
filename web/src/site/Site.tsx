@@ -6,10 +6,17 @@ import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
 import { heroMotion } from "./motion.ts";
 
-const APP = "https://app.still.fail";
-/** The apps' latest builds (cloud's /releases/latest/<app> goes to the one released last). */
-const MAC = `${APP}/releases/latest/mac`;
-const ANDROID = `${APP}/releases/latest/android`;
+declare const __SITE_BETA__: boolean;
+/**
+ * Built as the test channel's site (youdid.wtf, `pnpm build:site-beta`): named youdid.wtf, opening the test channel's
+ * web app, its downloads the beta apps (named youdid.wtf, beside the released ones). The rest is the same page.
+ */
+const BETA = typeof __SITE_BETA__ !== "undefined" && __SITE_BETA__;
+const APP = BETA ? "https://app.youdid.wtf" : "https://app.still.fail";
+const NAME = BETA ? { head: "youdid", tail: ".wtf" } : { head: "still", tail: ".fail" };
+/** The apps' latest builds (cloud's /releases/latest/<app> goes to the one released last; -beta: the beta apps'). */
+const MAC = `https://app.still.fail/releases/latest/${BETA ? "mac-beta" : "mac"}`;
+const ANDROID = `https://app.still.fail/releases/latest/${BETA ? "android-beta" : "android"}`;
 const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
 
 /** A picture of web/public and its -dark twin: the one for the page's theme shows (site.css.ts), with no script. */
@@ -74,7 +81,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
     <div className={css.page}>
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
-          <a href="/" className={css.brand} aria-label="still.fail"><Themed name="mark" className={css.logo} /><span>still<span className={css.brandTail}>.fail</span></span></a>
+          <a href="/" className={css.brand} aria-label={NAME.head + NAME.tail}><Themed name="mark" className={css.logo} /><span>{NAME.head}<span className={css.brandTail}>{NAME.tail}</span></span></a>
           {/* The apps, for the device the page is on (data-platform, set before the first paint by site/index.html): on
               Android the app itself; on a computer a card under the word, with the Mac's and a code to scan for Android. */}
           <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>下载</a>
@@ -85,13 +92,13 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
                 <b>Mac</b><span>Apple 芯片</span><span className={css.menuGo}>下载 →</span>
               </a>
               <span className={css.menuItem}>
-                <img className={css.scanCode} src="/android-qr.svg" alt="下载 Android 版的二维码" width={33} height={33} />
+                <img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt="下载 Android 版的二维码" width={33} height={33} />
                 <span>Android 扫码下载</span>
               </span>
             </span>
           </span>
           <ThemeSwitch />
-          <Button href={APP} kind="primary" className={css.navButton}>打开 still.fail</Button>
+          <Button href={APP} kind="primary" className={css.navButton}>打开 {NAME.head + NAME.tail}</Button>
         </div>
       </nav>
 
@@ -141,7 +148,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
 
       <footer className={css.footer}>
         <div className={`${css.wrap} ${css.footerRow}`}>
-          <span className={css.footerFirst}>© 2026 still.fail</span>
+          <span className={css.footerFirst}>© 2026 {NAME.head + NAME.tail}</span>
           <a className={css.navLink} href={APP}>网页版</a>
           <a className={css.navLink} href={MAC}>Mac</a>
           <a className={css.navLink} href={ANDROID}>Android</a>

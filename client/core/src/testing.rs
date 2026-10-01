@@ -31,6 +31,8 @@ type StreamResponder = Box<dyn Fn(&HttpRequest) -> Result<StreamResponse, HostEr
 
 pub struct FakeHost {
     pub origin: String,
+    /// A beta app's host (`Host::beta`).
+    pub beta: Cell<bool>,
     storage: RefCell<HashMap<String, Vec<u8>>>,
     /// The core's database: (table, key) → bytes.
     pub db: RefCell<std::collections::BTreeMap<(String, String), Vec<u8>>>,
@@ -58,6 +60,7 @@ impl FakeHost {
     pub fn new() -> Rc<FakeHost> {
         Rc::new(FakeHost {
             origin: "https://stillfail.test".into(),
+            beta: Cell::new(false),
             storage: RefCell::default(),
             db: RefCell::default(),
             responder: RefCell::default(),
@@ -160,6 +163,10 @@ pub fn run<F: std::future::Future<Output = ()>>(body: F) {
 impl Host for FakeHost {
     fn cloud_origin(&self) -> String {
         self.origin.clone()
+    }
+
+    fn beta(&self) -> bool {
+        self.beta.get()
     }
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>> {

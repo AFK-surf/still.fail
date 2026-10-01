@@ -6,6 +6,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/inter";
 import { CloudApp } from "./cloud/CloudApp.tsx";
+import { markBetaTitle } from "./cloud/beta.tsx";
 import { startTelemetry } from "./telemetry.ts";
 
 followAppearance();
@@ -14,4 +15,5 @@ startScrollbars();
 // ember cloud's web app (sign-in, workspaces; stations over iroh). The data comes from the client core (core/); a
 // station serves no page of its own.
 startTelemetry("cloud");
+markBetaTitle();
 createRoot(document.getElementById("app")!).render(<StrictMode><CloudApp /></StrictMode>);

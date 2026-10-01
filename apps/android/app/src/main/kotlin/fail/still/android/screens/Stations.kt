@@ -176,7 +176,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles(address)) }
                     GoRow("记忆") { app.push(Screen.Memory(address)) }
                 }
-                if (s.online) Versions(address, overview.updates, manager)
+                if (s.online) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             }
             Spacer(Modifier.height(30.dp))
         }

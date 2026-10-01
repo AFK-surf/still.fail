@@ -67,6 +67,9 @@ pub struct RawConfig {
     pub auto_archive_days: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub telemetry: Option<RawTelemetry>,
+    /// Which releases the station is updated to (updates.rs): `stable` or `beta`; none: as its release was installed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_channel: Option<String>,
     #[serde(flatten)]
     pub rest: Map<String, Value>,
 }

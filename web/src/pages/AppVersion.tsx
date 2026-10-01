@@ -14,7 +14,7 @@ export function AppVersionPage({ back }: { back: string }) {
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label="设置" />
       <header className={pagesCss.pageHead}><div><h1>版本</h1></div></header>
-      <Section title="still.fail 桌面版" description="启动时和每 4 小时自动检查一次，有新版本时侧栏顶上会出现「更新」">
+      <Section title={window.stillfailDesktop?.beta ? "youdid.wtf" : "still.fail 桌面版"} description="启动时和每 4 小时自动检查一次，有新版本时侧栏顶上会出现「更新」">
         <AppVersion />
       </Section>
     </div>

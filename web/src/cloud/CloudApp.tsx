@@ -10,8 +10,9 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, usePa
 import { ToastProvider } from "../toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
-import { signIn, useAccounts } from "./accounts.ts";
+import { signIn, signOut, useAccounts } from "./accounts.ts";
 import { Callback, SignInPage } from "./gate.tsx";
+import { BetaGate, BetaMark } from "./beta.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
@@ -41,6 +42,7 @@ export function CloudApp() {
             <Route path="*" element={<Home />} />
           </Routes>
         </BrowserRouter>
+        <BetaMark />
       </Tooltip.Provider>
     </ToastProvider>
   );
@@ -94,13 +96,16 @@ function Home() {
 function SignedIn() {
   useNotices();
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/o/:ws/:station/:session" element={<OpenItem />} />
-      <Route path="/w/:ws/s/:station/services/:service" element={<CloudServicePage />} />
-      <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <BetaGate />
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/o/:ws/:station/:session" element={<OpenItem />} />
+        <Route path="/w/:ws/s/:station/services/:service" element={<CloudServicePage />} />
+        <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 
@@ -130,7 +135,20 @@ function Landing() {
   // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
   const ready = workspaces !== undefined && workspaces.every((a) => a.loaded);
   const failed = workspaces?.find((a) => a.error)?.error;
+  // The beta app, and an account not let into the beta (the core says so): said, with a way out.
+  const blocked = workspaces?.find((a) => a.blocked);
   if (first) return <Navigate to={`/w/${first.id}`} replace />;
+  if (blocked) {
+    return (
+      <div className={`${shellCss.gate} ${css.invitePage}`}>
+        <Illustration name="sign-in" />
+        <h1>{blocked.blocked}</h1>
+        <p>{blocked.account.email}</p>
+        <Button variant="primary" onClick={() => void signOut(blocked.account.sub)}>退出这个账号</Button>
+        <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+      </div>
+    );
+  }
   if (ready && pending.length > 0) {
     return (
       <div className={`${shellCss.gate} ${css.invitePage}`}>

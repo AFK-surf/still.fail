@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
-"""Deploys still.fail cloud, five Workers (wrangler.jsonc says what each is; they keep their names from before the
+"""Deploys still.fail cloud, six Workers (wrangler.jsonc says what each is; they keep their names from before the
 rename to still.fail, as do their Durable Objects, bucket and secrets: renaming would make new, empty ones):
-  api      ember-cloud    the API (wrangler.jsonc)
-  relay    ember-relay    the relay and its container (wrangler.relay.jsonc)
-  web      ember-web      the web app, static (wrangler.web.jsonc)
-  admin    ember-admin    the admin's console, static (wrangler.admin.jsonc)
-  preview  ember-preview  the preview host, static (wrangler.preview.jsonc)
+  api       ember-cloud     the API (wrangler.jsonc)
+  relay     ember-relay     the relay and its container (wrangler.relay.jsonc)
+  web       ember-web       the web app, static (wrangler.web.jsonc): app.still.fail, the stable one
+  web-beta  ember-web-beta  the same build on app.youdid.wtf, the test channel (wrangler.web-beta.jsonc)
+  admin     ember-admin     the admin's console, static (wrangler.admin.jsonc)
+  preview   ember-preview   the preview host, static (wrangler.preview.jsonc)
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
-site, `site`, still-fail-site: only when asked for by name or with all of them.)
+site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
+The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
+web-beta and site-beta are skipped, the API is deployed without the app.youdid.wtf routes and BETA_ORIGIN, and a deploy
+without parts deploys web instead of web-beta. STILLFAIL_BETA=on skips the check.
 
-    python3 deploy.py                 # all of them, in this order: relay, api, web, admin, preview
-    python3 deploy.py api web         # only these (the static ones are built first)
-    python3 deploy.py --check         # only report what is missing
+The web app goes to the test channel first: a deploy without parts deploys web-beta, not web, and keeps the build it
+deployed in <deploy>/builds/<commit>/cloud-web (the newest ten). Once tried there, that very build (not a new one) goes
+to app.still.fail with promote-web. `web` named deploys a new build to app.still.fail straight away.
+
+    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, site
+    python3 deploy.py api web-beta      # only these (the static ones are built first)
+    python3 deploy.py web               # a new build to app.still.fail, without the test channel
+    python3 deploy.py promote-web <dir> # a build already made (a directory, or a commit kept in <deploy>/builds) to app.still.fail
+    python3 deploy.py --check           # only report what is missing
 
 Inputs (none of them in the repository), in the deploy directory: $STILLFAIL_DEPLOY_DIR (or $EMBER_DEPLOY_DIR),
 else ~/stillfail-deploy, else ~/ember-deploy while only that one exists (from before the rename; move it when you
@@ -33,9 +43,11 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -76,7 +88,14 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "site": "wrangler.site.jsonc"}
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
+# What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's site.
+DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta")]
+# The test channel's parts, on its own domain (youdid.wtf): deployed only once that zone is on Cloudflare (beta_zone()).
+BETA_PARTS = ("web-beta", "site-beta")
+# The web app's builds deployed to the test channel, by commit, for promote-web.
+BUILDS = DEPLOY / "builds"
+KEEP_BUILDS = 10
 
 
 def read_template(name: str = "wrangler.jsonc") -> dict:
@@ -162,9 +181,98 @@ def docker_env():
         yield env
 
 
+def beta_zone() -> str:
+    """The test channel's zone: the registrable domain of BETA_ORIGIN (youdid.wtf)."""
+    host = urllib.parse.urlparse(read_template()["vars"].get("BETA_ORIGIN", "")).hostname or ""
+    return ".".join(host.split(".")[-2:])
+
+
+def beta_ready(account: str) -> bool:
+    """Whether the test channel's zone is an active zone of the account. STILLFAIL_BETA=on|off says so instead."""
+    said = (env_var("BETA") or "").lower()
+    if said in ("on", "off"):
+        return said == "on"
+    zone = beta_zone()
+    if not zone:
+        return False
+    try:
+        auth = json.loads(wrangler("auth", "token", "--json", capture=True))
+        headers = {"user-agent": "stillfail-deploy"}
+        if auth.get("type") == "api_key":
+            headers |= {"x-auth-key": auth["key"], "x-auth-email": auth["email"]}
+        else:
+            headers["authorization"] = f"Bearer {auth['token']}"
+        url = f"https://api.cloudflare.com/client/v4/zones?name={zone}&account.id={account}"
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
+            zones = json.loads(response.read()).get("result") or []
+        return any(z.get("status") == "active" for z in zones)
+    except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+        print(f"note: could not ask Cloudflare about the zone {zone} ({error}); taking it for missing")
+        return False
+
+
+def without_beta(config: dict) -> dict:
+    """The API's config without the test channel's host: its routes (their zone is not there yet) and BETA_ORIGIN."""
+    zone = beta_zone()
+    routes = [r for r in config.get("routes", []) if not (zone and isinstance(r, dict) and r.get("zone_name") == zone)]
+    return {**config, "routes": routes, "vars": {k: v for k, v in config["vars"].items() if k != "BETA_ORIGIN"}}
+
+
+def commit() -> str:
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
+    dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=REPO, text=True).strip()
+    return f"{sha}-dirty" if dirty else sha
+
+
+def keep_build() -> Path:
+    """dist/cloud-web, as just deployed to the test channel, under <deploy>/builds/<commit>/cloud-web; the newest ten stay."""
+    target = BUILDS / commit() / "cloud-web"
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(REPO / "dist" / "cloud-web", target)
+    for old in sorted((d for d in BUILDS.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)[KEEP_BUILDS:]:
+        shutil.rmtree(old)
+    return target
+
+
+def promoted_build(name: str) -> Path:
+    """The build promote-web was given: a directory of the web app's files, or a commit (or its start) kept in BUILDS."""
+    given = Path(name).expanduser()
+    if given.is_dir():
+        return (given / "cloud-web" if (given / "cloud-web" / "index.html").exists() else given).resolve()
+    kept = [d for d in BUILDS.iterdir() if d.name.startswith(name)] if BUILDS.exists() and name else []
+    if len(kept) != 1:
+        sys.exit(f"no build {name}: give the directory of a build of the web app, or one commit of {BUILDS} ({len(kept)} match)")
+    return kept[0] / "cloud-web"
+
+
+def promote_web(name: str) -> None:
+    """A build already deployed to the test channel to app.still.fail (ember-web), byte for byte: nothing is built."""
+    build = promoted_build(name)
+    if not (build / "index.html").exists():
+        sys.exit(f"{build} has no index.html: not a build of the web app")
+    config = {**read_template(PARTS["web"]), "account_id": account_id()}
+    config["assets"] = {**config["assets"], "directory": str(build)}
+    local = ROOT / "wrangler.web.local.json"
+    local.write_text(json.dumps(config, indent=2) + "\n")
+    print(f"promoting {build} to web ({config['name']})", flush=True)
+    wrangler("deploy", "--config", str(local), capture=True)
+    origin = read_template()["vars"]["PUBLIC_ORIGIN"]
+    request = urllib.request.Request(f"{origin}/", headers={"user-agent": "stillfail-deploy"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            print("check web", origin, response.status)
+    except OSError as error:
+        print("check web", origin, "failed:", error)
+
+
 def main() -> None:
+    if sys.argv[1:2] == ["promote-web"]:
+        if len(sys.argv) != 3:
+            sys.exit("usage: deploy.py promote-web <directory of a build, or a commit kept in <deploy>/builds>")
+        return promote_web(sys.argv[2])
     parser = argparse.ArgumentParser()
-    parser.add_argument("parts", nargs="*", help=f"what to deploy, of {', '.join(PARTS)} (default: all)")
+    parser.add_argument("parts", nargs="*", help=f"what to deploy, of {', '.join(PARTS)} (default: all but web)")
     parser.add_argument("--google", type=Path, default=DEPLOY / "google-oauth.json")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--skip-build", action="store_true", help="deploy the static sites already in dist/")
@@ -172,7 +280,7 @@ def main() -> None:
     unknown = set(args.parts) - set(PARTS)
     if unknown:
         sys.exit(f"no such part: {', '.join(sorted(unknown))}")
-    parts = [p for p in PARTS if p in args.parts] or list(PARTS)
+    parts = [p for p in PARTS if p in args.parts] or list(DEFAULT_PARTS)
 
     template = read_template()
     origin = template["vars"]["PUBLIC_ORIGIN"]
@@ -189,10 +297,22 @@ def main() -> None:
         print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
         print("vapid", "present" if VAPID.exists() else f"missing: no Web Push without {VAPID}")
         print("fcm", "present" if FCM.exists() else f"missing: no pushes to Android without {FCM}")
+        print("beta zone", beta_zone(), "active" if beta_ready(account_id()) else "not active: web-beta and site-beta will be skipped")
         return
 
     account = account_id()
-    if not args.skip_build and {"web", "admin", "preview"} & set(parts):
+    beta = beta_ready(account)
+    if not beta:
+        skipped = [p for p in parts if p in BETA_PARTS]
+        print(f"note: the test channel's zone ({beta_zone() or 'BETA_ORIGIN unset'}) is not an active zone on Cloudflare yet: "
+              f"skipping {', '.join(skipped) or 'nothing'}, and the API goes without its routes and BETA_ORIGIN "
+              "(STILLFAIL_BETA=on to deploy them anyway)", flush=True)
+        parts = [p for p in parts if p not in BETA_PARTS]
+        # Without the test channel, the web app a deploy without parts would have sent there goes to app.still.fail.
+        if not args.parts and "web-beta" in skipped:
+            parts.insert(parts.index("admin"), "web")
+            print("note: deploying web (app.still.fail) instead of web-beta", flush=True)
+    if not args.skip_build and {"web", "web-beta", "admin", "preview"} & set(parts):
         # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG (EMBER_POSTHOG before the rename) names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
@@ -200,6 +320,8 @@ def main() -> None:
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
     if not args.skip_build and "site" in parts:
         subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)
+    if not args.skip_build and "site-beta" in parts:
+        subprocess.run(["pnpm", "run", "build:site-beta"], cwd=REPO, check=True)
     secrets_of = {
         "api": {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push()},
         "relay": {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
@@ -208,11 +330,15 @@ def main() -> None:
         config = {**read_template(PARTS[part]), "account_id": account}
         if part == "api":
             config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}
+            if not beta:
+                config = without_beta(config)
         local = ROOT / PARTS[part].replace(".jsonc", ".local.json")
         local.write_text(json.dumps(config, indent=2) + "\n")
         print(f"deploying {part} ({config['name']})", flush=True)
         extra = ["--containers-rollout", "immediate"] if part == "relay" else []
         wrangler("deploy", "--config", str(local), *extra, env=env, capture=True)
+        if part == "web-beta":
+            print(f"kept the build for promote-web in {keep_build()}", flush=True)
         if part in secrets_of:
             with tempfile.TemporaryDirectory(prefix="stillfail-secrets-") as directory:
                 path = Path(directory) / "secrets.json"
@@ -238,9 +364,11 @@ def main() -> None:
         "api": [f"{origin}/healthz", f"{old}/healthz"],
         "relay": [f"{origin}/ping", f"{old}/ping"],
         "web": [f"{origin}/", f"{old}/"],
+        "web-beta": [f"{template['vars'].get('BETA_ORIGIN', 'https://app.youdid.wtf')}/"],
         "admin": [f"{admin}/", f"{old_admin}/"],
         "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
         "site": ["https://still.fail/"],
+        "site-beta": [f"https://{beta_zone()}/"],
     }
     for part in parts:
         for url in dict.fromkeys(checks[part]):

@@ -8,9 +8,9 @@ import { installScript, releaseType } from "./install.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
-import { adminOrigins, publicOrigins } from "./compat";
+import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api } from "./api";
+import { adminApi, api, socketToken } from "./api";
 import { parseTraceparent, recordCall } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
@@ -24,6 +24,23 @@ export { LoginAttempt, LoginLimiter } from "./login";
 const CONSOLE_CALLS = new Set(["/v1/auth/token", "/v1/auth/refresh", "/v1/auth/logout", "/v1/me"]);
 
 const notFound = () => new Response("Not found", { status: 404 });
+
+// The test channel is for the accounts the admin let in (Directory `beta`): the web app on BETA_ORIGIN
+// (app.youdid.wtf), with the API on its paths as on PUBLIC_ORIGIN, and the beta apps (fail.still.android.beta,
+// fail.still.desktop.beta), whose core says `x-stillfail-channel: beta` on every call. Signing in works for anyone
+// (on the test channel's host it starts on PUBLIC_ORIGIN, as from the console, and comes back to its /auth/callback);
+// any other call carrying an account's token answers 403 not_beta for an account not let in, which the page takes for
+// "go to the stable one" and an app for "this account cannot use the test build".
+const notBetaReply = (env: Env) => reply({ error: "not_beta", message: "这个账号还没有开通测试版", stable: env.PUBLIC_ORIGIN }, 403);
+
+/** Whether a call of the test channel comes from an account not let in: one with a valid token, not beta. */
+async function notBeta(request: Request, env: Env): Promise<boolean> {
+  const token = bearerToken(request) ?? socketToken(request)?.token ?? null;
+  const claims = token ? await verifyToken(env, token, "access") : null;
+  // No token, or not a valid one: the call answers as it would anywhere (401 for an account's call).
+  if (!claims) return false;
+  return !(await env.DIRECTORY.getByName("primary").isBeta(claims.sub));
+}
 
 /** The same request on PUBLIC_ORIGIN: where a browser's sign-in goes, so its cookie is on the host Google calls back. */
 const toPublic = (env: Env, url: URL) => new Response(null, { status: 302, headers: { location: `${env.PUBLIC_ORIGIN}${url.pathname}${url.search}`, "cache-control": "no-store" } });
@@ -48,16 +65,20 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return Response.json({ service: "ember-cloud", google_login: authConfigured(env) });
   }
   const onPublic = publicOrigins(env).includes(url.origin);
-  // Installing a station: the installer, and the releases it gets; the apps' builds, for their updaters.
-  if (onPublic && request.method === "GET") {
-    if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
+  const onBeta = url.origin === betaOrigin(env);
+  // Installing a station: the installer, and the releases it gets; the apps' builds, for their updaters. The installer
+  // gets the test channel's release with ?channel=beta (or STILLFAIL_CHANNEL=beta where it runs), and by default when
+  // fetched from the test channel's host; either way the station joins PUBLIC_ORIGIN.
+  if ((onPublic || onBeta) && request.method === "GET") {
+    const channel = url.searchParams.get("channel") === "beta" || (onBeta && url.searchParams.get("channel") !== "stable") ? "beta" : "stable";
+    if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN, channel), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
     const release = /^\/releases\/(.+)$/.exec(path)?.[1];
     const type = release ? releaseType(release) : null;
     if (release && type) {
       return serveRelease(request, env.RELEASES, release, type);
     }
     // The apps' latest builds at links that stay (the site's download buttons; under /releases/, which cloud's routes send here).
-    const app = /^\/releases\/latest\/(mac|android)$/.exec(path)?.[1];
+    const app = /^\/releases\/latest\/(mac|android|mac-beta|android-beta)$/.exec(path)?.[1];
     if (app) {
       const file = await latestDownload(env.RELEASES, app);
       if (!file || !releaseType(file)) return notFound();
@@ -66,15 +87,18 @@ async function handle(request: Request, env: Env): Promise<Response> {
   }
   const onConsole = adminOrigins(env).includes(url.origin);
   if (path.startsWith("/v1/")) {
-    if (!onPublic && !onConsole) return reply({ error: "invalid_origin" }, 421);
+    if (!onPublic && !onConsole && !onBeta) return reply({ error: "invalid_origin" }, 421);
     if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
+    // Signing in, refreshing and signing out stay open to it, so a login completes and the page or app can be told.
+    const ofBeta = onBeta || header(request, "channel") === "beta";
+    if (ofBeta && !path.startsWith("/v1/auth/") && (await notBeta(request, env))) return notBetaReply(env);
   }
   if (onConsole) {
     if (path === "/v1/auth/google/start" && request.method === "GET") return toPublic(env, url);
     if (path.startsWith("/v1/admin/")) return adminApi(request, env, path);
     if (!CONSOLE_CALLS.has(path)) return notFound();
   }
-  // A browser signing in on an old host goes on to the new one, which Google calls back.
+  // A browser signing in on an old host, or on the test channel's, goes on to the new one, which Google calls back.
   if (url.origin !== env.PUBLIC_ORIGIN && request.method === "GET" && (path === "/v1/auth/google/start" || /^\/v1\/auth\/device\/[A-Za-z0-9_-]{43}$/.test(path))) return toPublic(env, url);
   if (path === "/v1/auth/google/start" && request.method === "GET") {
     return googleStart(env, request);

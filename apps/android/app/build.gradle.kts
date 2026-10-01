@@ -20,12 +20,18 @@ val stillfailBuild = providers.gradleProperty("stillfailBuild")
 val firebase = Properties().apply { rootProject.file("firebase.properties").takeIf { it.exists() }?.reader()?.use { load(it) } }
 fun fcm(key: String): String = providers.gradleProperty(key).orNull ?: firebase.getProperty(key) ?: ""
 
+// The beta app (-PstillfailBeta; apps/android/build.py --beta): an app of its own beside the released one
+// (fail.still.android.beta, 「youdid.wtf」, a teal icon), signing in through stillfail-beta:// and taking its newer
+// builds from the beta feed (/releases/android/beta/latest.json: its core says it is a beta app, client/core
+// Host::beta). Its pushes need a Firebase app of its own (fcmBetaAppId); without one it has none.
+val beta = providers.gradleProperty("stillfailBeta").isPresent
+
 android {
     namespace = "fail.still.android"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "fail.still.android"
+        applicationId = if (beta) "fail.still.android.beta" else "fail.still.android"
         minSdk = 29
         targetSdk = 36
         versionCode = stillfailBuild
@@ -36,9 +42,15 @@ android {
         val cloud = providers.gradleProperty("stillfailCloud").orElse(providers.gradleProperty("emberCloud")).getOrElse("https://app.still.fail")
         buildConfigField("String", "CLOUD_ORIGIN", "\"$cloud\"")
         buildConfigField("String", "FCM_PROJECT_ID", "\"${fcm("fcmProjectId")}\"")
-        buildConfigField("String", "FCM_APP_ID", "\"${fcm("fcmAppId")}\"")
+        buildConfigField("String", "FCM_APP_ID", "\"${fcm(if (beta) "fcmBetaAppId" else "fcmAppId")}\"")
         buildConfigField("String", "FCM_API_KEY", "\"${fcm("fcmApiKey")}\"")
         buildConfigField("String", "FCM_SENDER_ID", "\"${fcm("fcmSenderId")}\"")
+        buildConfigField("boolean", "BETA", "$beta")
+        resValue("string", "app_name", if (beta) "youdid.wtf" else "still.fail")
+        resValue("color", "launcher_bg", if (beta) "#4A9D8F" else "#E5704A")
+        // The sign-in's way back (data/Calls.kt Auth): the beta app's own, so the two apps never both take it.
+        manifestPlaceholders["authScheme"] = if (beta) "stillfail-beta" else "stillfail"
+        manifestPlaceholders["formerAuthScheme"] = if (beta) "stillfail-beta" else "ember"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     // The motion tests (src/androidTest, run by src/androidTest/motion.sh): -PmotionTest builds the app as an app of its
@@ -52,7 +64,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-    buildFeatures { compose = true; buildConfig = true }
+    buildFeatures { compose = true; buildConfig = true; resValues = true }
     // An inline visualization's page is the web's: its stylesheet and bridge, from web/src/viz (ui/Viz.kt).
     sourceSets["main"].assets.srcDir(rootProject.file("../../web/src/viz"))
     compileOptions {

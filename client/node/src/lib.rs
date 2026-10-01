@@ -34,16 +34,17 @@ pub struct StillFailCore {
 }
 
 /// Starts a core (client/ffi's `start`): `data_dir` holds accounts and the device key;
-/// `cloud_origin` is still.fail cloud; `listener(client, json)` gets what the core says to each client.
+/// `cloud_origin` is still.fail cloud; `listener(client, json)` gets what the core says to each client; `channel`
+/// `"beta"` for a beta app's core (client/ffi's `start_as`), none for the released app's.
 /// With `STILLFAIL_LOG` (or `EMBER_LOG`) set (a tracing filter, e.g. `iroh=debug`), what the core and iroh log goes to stderr.
 #[napi]
-pub fn start(data_dir: String, cloud_origin: String, listener: Function<Message, ()>) -> napi::Result<StillFailCore> {
+pub fn start(data_dir: String, cloud_origin: String, listener: Function<Message, ()>, channel: Option<String>) -> napi::Result<StillFailCore> {
     if let Ok(filter) = std::env::var("STILLFAIL_LOG").or_else(|_| std::env::var("EMBER_LOG")) {
         // Once per process: a second core (after a panic) keeps the first one's.
         let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::new(filter)).with_writer(std::io::stderr).try_init();
     }
     let listener = listener.build_threadsafe_function().callee_handled::<false>().build()?;
-    let inner = stillfail_core_ffi::start(data_dir, cloud_origin, Box::new(Listener(listener)))
+    let inner = stillfail_core_ffi::start_as(data_dir, cloud_origin, channel.as_deref() == Some("beta"), Box::new(Listener(listener)))
         .map_err(|error| napi::Error::from_reason(error.to_string()))?;
     Ok(StillFailCore { inner })
 }

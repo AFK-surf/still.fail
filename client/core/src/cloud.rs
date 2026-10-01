@@ -23,6 +23,10 @@ pub struct Credential {
     pub relay_url: String,
 }
 
+/// still.fail cloud's answer to a beta app (`x-stillfail-channel: beta`) used by an account not let into the beta.
+pub const NOT_BETA: &str = "not_beta";
+pub const NOT_BETA_TEXT: &str = "这个账号还没开通测试版";
+
 pub struct Cloud {
     host: Rc<dyn Host>,
     accounts: Rc<Accounts>,
@@ -40,6 +44,7 @@ impl Cloud {
     pub async fn request(&self, sub: &str, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
         let token = self.accounts.access_token(sub).await?;
         let mut headers = vec![("authorization".to_string(), format!("Bearer {token}"))];
+        headers.extend(channel_header(&*self.host));
         if body.is_some() {
             headers.push(("content-type".into(), "application/json".into()));
         }
@@ -90,7 +95,7 @@ impl Cloud {
         let request = HttpRequest {
             method: "POST".into(),
             url: format!("{}/v1/telemetry/traces", self.host.cloud_origin()),
-            headers: vec![("authorization".into(), format!("Bearer {token}")), ("content-type".into(), "application/json".into())],
+            headers: [("authorization".into(), format!("Bearer {token}")), ("content-type".into(), "application/json".into())].into_iter().chain(channel_header(&*self.host)).collect(),
             body: Some(body),
         };
         let response = self.host.fetch(request).await?;
@@ -110,6 +115,12 @@ impl Cloud {
         let answer = self.request(sub, "POST", &path, Some(json!({ "device": device }))).await?;
         serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", format!("still.fail cloud 的回复无法解析：{e}")))
     }
+}
+
+/// A beta app says so on its calls (`x-stillfail-channel: beta`): still.fail cloud lets only the accounts let into
+/// the beta use it (`not_beta` otherwise). The released apps send nothing.
+pub fn channel_header(host: &dyn Host) -> Option<(String, String)> {
+    host.beta().then(|| ("x-stillfail-channel".to_string(), "beta".to_string()))
 }
 
 /// The error for a cloud error code, with its Chinese message when there is one.
@@ -134,6 +145,7 @@ fn message(code: &str) -> Option<&'static str> {
         "too_many_members" => "成员数量到上限了",
         "too_many_stations" => "station 数量到上限了",
         "invalid_session" => "登录已失效，请重新登录",
+        NOT_BETA => NOT_BETA_TEXT,
         _ => return None,
     })
 }

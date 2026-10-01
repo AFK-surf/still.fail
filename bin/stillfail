@@ -7,7 +7,10 @@
 #                                                       once had on to still.fail cloud
 #   stillfail status                                    where the station is: its workspace and cloud, whether it is
 #                                                       online, and why it does no work when it does none
-#   stillfail update                                    updates this station to its cloud's latest release
+#   stillfail update [--beta|--stable]                  updates this station to its cloud's latest release, on its
+#                                                       channel (stable, or the test channel's); --beta/--stable puts
+#                                                       it on that channel first (back to the stable release even when
+#                                                       that is older than the beta it runs)
 #   stillfail station enroll <cloud-origin> <token>     joins a workspace in still.fail cloud
 #   stillfail station id
 # The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
@@ -28,9 +31,22 @@ case "${1:-} ${2:-}" in
     [ -f "$cloud" ] || cloud="$HOME/.ember/mesh/cloud.json"
     origin=$(sed -n 's/.*"origin": *"\([^"]*\)".*/\1/p' "$cloud" 2>/dev/null | head -1)
     [ -n "$origin" ] || { echo "这台 station 还没有加入 workspace，无从更新" >&2; exit 1; }
-    curl -fsSL "$origin/install.sh" | sh ;;
+    # Its channel, set first when named (the station's last line says it); a station that cannot say (a clone not
+    # built) takes the stable one.
+    case "${2:-}" in
+      --beta) set -- beta ;;
+      --stable) set -- stable ;;
+      "") set -- ;;
+      *) echo "usage: stillfail update [--beta|--stable]" >&2; exit 2 ;;
+    esac
+    channel=$("$station" channel "$@" --app "$here" --data "$data" 2>/dev/null | tail -n 1) || true
+    case "$channel" in
+      stable|beta) ;;
+      *) [ $# -eq 0 ] || { echo "没能把 station 设成 $1 渠道" >&2; exit 1; }; channel=stable ;;
+    esac
+    curl -fsSL "$origin/install.sh" | STILLFAIL_CHANNEL="$channel" sh ;;
   "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
   "status "*|"station status") exec "$station" status --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
-  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update | stillfail station enroll <cloud-origin> <token> | stillfail station id" >&2; exit 2 ;;
+  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> | stillfail station id" >&2; exit 2 ;;
 esac

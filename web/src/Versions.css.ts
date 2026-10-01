@@ -17,3 +17,10 @@ export const action = style({
   selectors: { "&:disabled": { cursor: "default", opacity: "0.6" } },
 });
 export const check = style([action, { color: vars.muted, fontWeight: "400" }]);
+/** The station on the test channel: a small tag beside its version. */
+export const betaTag = style({
+  alignSelf: "center", padding: "0 5px", borderRadius: "999px", background: vars.accentBg, color: vars.accentText,
+  fontSize: "10px", fontWeight: "500", lineHeight: "16px",
+});
+/** The 测试版 switch, with its name before it. */
+export const channel = style({ display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "center", cursor: "pointer", whiteSpace: "nowrap" });

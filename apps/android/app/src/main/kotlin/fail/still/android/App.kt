@@ -412,7 +412,10 @@ fun StillFailApp(app: AppState) {
                 LaunchedEffect(current?.workspace?.id) { current?.let { if (it.workspace.id != app.workspace) app.pickWorkspace(it.workspace.id) } }
                 // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
                 val all = workspaces.value
-                if (current == null) {
+                // The beta app, and an account not let into the beta (the core says so): said, with a way out.
+                val blocked = all?.firstOrNull { it.blocked != null }
+                if (current == null && blocked != null) fail.still.android.screens.Blocked(blocked)
+                else if (current == null) {
                     if (entries == null || all == null || !all.all { it.loaded }) {
                         val failed = workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { "没能读取你的 workspace" }
                         // What the core has been waiting on for a while, under it (the core's `status`), as the web's splash says.

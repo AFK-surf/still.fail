@@ -10,9 +10,10 @@ interface NodeCore {
   receive(client: number, json: string): void;
   disconnect(client: number): void;
 }
-type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, json: string) => void) => NodeCore;
+/** `channel`: "beta" for the beta app's core (main.ts BETA). */
+type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, json: string) => void, channel?: string) => NodeCore;
 
-const [dataDir, cloudOrigin, addon] = process.argv.slice(2) as [string, string, string];
+const [dataDir, cloudOrigin, addon, channel] = process.argv.slice(2) as [string, string, string, string | undefined];
 const { start } = require(addon) as { start: Start };
 
 /** One core and its clients. A panic ends a core; the pages then open new ports, which go to the next one. */
@@ -31,7 +32,7 @@ function begin(): Generation {
       current = begin();
     }
     generation.clients.get(client)?.postMessage(json);
-  });
+  }, channel || undefined);
   return generation;
 }
 

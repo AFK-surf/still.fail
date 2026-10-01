@@ -18,6 +18,10 @@ const desktop = {
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
   /** This build's version (0.1.<commits>). */
   version: ipcRenderer.sendSync("app:version") as string,
+  /** The beta app (「youdid.wtf」, beside the released one: main.ts BETA). */
+  beta: ipcRenderer.sendSync("app:beta") as boolean,
+  /** The scheme a sign-in comes back to the app on (stillfail, or the beta app's stillfail-beta). */
+  scheme: ipcRenderer.sendSync("app:scheme") as string,
   /** A newer build of the app: what there is of it now, each change after, and downloading and installing it (main.ts). */
   appUpdate: {
     state: (): Promise<unknown> => ipcRenderer.invoke("update:state"),

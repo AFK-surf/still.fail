@@ -53,6 +53,7 @@ import fail.still.android.LocalApp
 import fail.still.android.R
 import fail.still.android.data.Account
 import fail.still.android.data.AccountWorkspaces
+import fail.still.android.data.Auth
 import fail.still.android.data.Cloud
 import fail.still.android.data.PendingInvitation
 import fail.still.android.data.ROLE_LABEL
@@ -151,6 +152,26 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
             }
         }
+    }
+}
+
+/** An account the beta app cannot be used with (the core's `blocked`): it signs out, or another signs in. */
+@Composable
+fun Blocked(entry: AccountWorkspaces) {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val out = remember { Write() }
+    Column(
+        Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Illustration(R.drawable.illus_sign_in, R.drawable.illus_sign_in_dark, 260.dp)
+        Title(entry.blocked ?: "")
+        Lead(entry.account.email)
+        Button("退出这个账号", primary = true, busy = out.busy) { app.run(out, entry.account.sub) { Auth.signOut(app.core, entry.account.sub) } }
+        out.error?.let { Error(it.message) }
+        Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
     }
 }
 

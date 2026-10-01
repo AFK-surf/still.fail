@@ -33,12 +33,15 @@ const DAY_MS: f64 = 86_400_000.0;
 pub type EmailOf = Rc<dyn Fn(&str) -> Option<String>>;
 /// What still.fail calls a relay, by its host, as `/v1/me` said (`relay_names`).
 pub type RelayName = Rc<dyn Fn(&str) -> Option<String>>;
+/// Whether the signed-in account that reaches a workspace is in the beta (its `/v1/me` says `user.beta`).
+pub type BetaOf = Rc<dyn Fn(&str) -> bool>;
 
 pub struct Views {
     host: Rc<dyn Host>,
     store: Rc<Store>,
     email_of: EmailOf,
     relay_name: RelayName,
+    beta_of: BetaOf,
     /// Per live view, the topics it watches.
     views: RefCell<HashMap<Topic, HashMap<Topic, Watch>>>,
     /// Messages sent from here that the chat does not show yet, per (station, thread), oldest first.
@@ -83,6 +86,17 @@ fn down(link: &Value) -> bool {
     }
 }
 
+/// Whether a station's versions offer the 测试版 switch: it can be put on a channel (its station's version says the one
+/// it is on), and it is on the beta already (to be switched back) or the account that reaches it is in the beta.
+fn beta_offered(overview: Option<&Value>, account_in_beta: impl FnOnce() -> bool) -> bool {
+    let station = overview.and_then(|o| o.get("updates")).and_then(Value::as_array).into_iter().flatten().find(|v| v.get("id").and_then(Value::as_str) == Some("station"));
+    match station.and_then(|v| v.get("channel")).and_then(Value::as_str) {
+        Some("beta") => true,
+        Some(_) => account_in_beta(),
+        None => false,
+    }
+}
+
 struct StationInfo {
     address: String,
     id: String,
@@ -93,12 +107,13 @@ struct StationInfo {
 }
 
 impl Views {
-    pub fn new(host: Rc<dyn Host>, store: Rc<Store>, email_of: EmailOf, relay_name: RelayName) -> Rc<Views> {
+    pub fn new(host: Rc<dyn Host>, store: Rc<Store>, email_of: EmailOf, relay_name: RelayName, beta_of: BetaOf) -> Rc<Views> {
         Rc::new(Views {
             host,
             store,
             email_of,
             relay_name,
+            beta_of,
             views: RefCell::default(),
             outbox: RefCell::default(),
             sent: Cell::new(0),
@@ -614,6 +629,10 @@ impl Views {
             topics.insert(Topic::Prefs);
         }
         topics.insert(Topic::Workspace { workspace: scope.to_string() });
+        // Whether the account is in the beta (`betaOffered`): its `/v1/me`, which the accounts' list follows.
+        if let Topic::Stations { .. } = view {
+            topics.insert(Topic::Workspaces);
+        }
         if let Some(Ok(stations)) = self.stations(scope) {
             for s in stations {
                 // Whether it is up is watched for every one (a station found down comes back); what else it has, for
@@ -902,6 +921,7 @@ impl Views {
                 "models": models(overview.as_ref(), self.host.now_ms()),
                 "overview": shown, "host": host,
                 "net": read(Topic::Net { station: s.address.clone() }).as_ref().and_then(|raw| crate::present::net(raw, &*self.relay_name)),
+                "betaOffered": beta_offered(overview.as_ref(), || (self.beta_of)(scope)),
             })
         });
         Some(Ok(Value::Array(items.collect())))
@@ -1630,6 +1650,8 @@ mod tests {
     }
 
     struct Setup {
+        /// Whether the account that reaches "ws" is in the beta.
+        beta: Rc<Cell<bool>>,
         host: Rc<FakeHost>,
         store: Rc<Store>,
         router: Rc<Router>,
@@ -1641,10 +1663,14 @@ mod tests {
         let store = Store::new(host.clone());
         store.set_shaped();
         let router = Rc::new(Router::default());
+        let beta = Rc::new(Cell::new(false));
         let email_of: EmailOf = Rc::new(|ws: &str| (ws == "ws").then(|| "Me@x.com".to_string()));
-        *router.views.borrow_mut() = Some(Views::new(host.clone(), store.clone(), email_of, Rc::new(|_: &str| None)));
+        *router.views.borrow_mut() = Some(Views::new(host.clone(), store.clone(), email_of, Rc::new(|_: &str| None), {
+            let beta = beta.clone();
+            Rc::new(move |ws: &str| ws == "ws" && beta.get())
+        }));
         store.set_source(router.clone());
-        Setup { host, store, router }
+        Setup { beta, host, store, router }
     }
 
     /// What one UI subscription has seen: values and deltas applied, as the web client does.
@@ -2197,7 +2223,7 @@ mod tests {
             t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
             let each = |st: &str| vec![link(st), overview(st), host_of(st), Topic::Net { station: st.into() }];
-            let watched = sorted([vec![workspace()], each("ws/a"), each("ws/b"), each("ws/c")].concat());
+            let watched = sorted([vec![workspace(), Topic::Workspaces], each("ws/a"), each("ws/b"), each("ws/c")].concat());
             assert_eq!(sorted(t.started()), watched);
             t.store.unsubscribe(1, 1);
             // The view itself goes after the grace, then what it watched after another.
@@ -2264,10 +2290,45 @@ mod tests {
             assert_eq!(
                 plain(&v[1]),
                 json!({"station": "ws/b", "id": "b", "name": "beta", "online": false, "lastSeen": v[1]["lastSeen"],
-                    "link": {"state": "offline"}, "runtimes": [], "models": []})
+                    "link": {"state": "offline"}, "runtimes": [], "models": [], "betaOffered": false})
             );
             assert!(v[1]["summary"].as_str().unwrap().starts_with("离线 · "));
             assert!(v[2].get("lastSeen").is_none());
+        });
+    }
+
+    #[test]
+    fn the_beta_switch_is_offered_to_an_account_in_the_beta_or_a_station_on_it() {
+        let with = |channel: Option<&str>| json!({ "updates": [{ "id": "claude" }, { "id": "station", "channel": channel }] });
+        // A station older than channels, or one that cannot be updated from here: never.
+        assert!(!beta_offered(None, || true));
+        assert!(!beta_offered(Some(&json!({})), || true));
+        assert!(!beta_offered(Some(&with(None)), || true));
+        // On the stable channel: only to an account in the beta.
+        assert!(!beta_offered(Some(&with(Some("stable"))), || false));
+        assert!(beta_offered(Some(&with(Some("stable"))), || true));
+        // On the beta: to anyone, to be switched back.
+        assert!(beta_offered(Some(&with(Some("beta"))), || false));
+    }
+
+    #[test]
+    fn the_beta_switch_follows_the_accounts_beta_at_once() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Stations { scope: "ws".into() });
+            t.set(workspace(), stations(t.now_s()));
+            t.read(&mut ui, 1).await;
+            let mut o = overview_of(vec![], vec![]);
+            o["updates"] = json!([{ "id": "station", "name": "still.fail station", "installed": true, "version": "0.1.1", "newer": false, "updatable": true, "state": "idle", "channel": "stable" }]);
+            t.set(overview("ws/a"), o);
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.as_ref().unwrap()[0]["betaOffered"], false);
+            // Let into the beta: the accounts' list read again, and the switch is offered.
+            t.beta.set(true);
+            t.set(Topic::Workspaces, json!([]));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.as_ref().unwrap()[0]["betaOffered"], true);
         });
     }
 

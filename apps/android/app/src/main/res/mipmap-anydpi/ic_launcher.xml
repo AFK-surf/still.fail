@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The station buddy's face, filling the icon (design/app-icon/face.svg). -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/launcher_face_bg" />
+    <background android:drawable="@color/launcher_bg" />
     <foreground android:drawable="@drawable/launcher_face" />
     <monochrome android:drawable="@drawable/launcher_face_mono" />
 </adaptive-icon>

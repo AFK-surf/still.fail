@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, EncryptJWT, jwtDecrypt, jwtVerify, SignJWT } from "jose";
-import { adminOrigins, publicOrigins } from "./compat";
+import { adminOrigins, betaOrigin, publicOrigins } from "./compat";
 import type { Env } from "./env";
 
 export const ACCESS_TTL_SEC = 5 * 60;
@@ -41,15 +41,17 @@ export const validSecret = (value: unknown): value is string => typeof value ===
 export const validId = (value: unknown): value is string => typeof value === "string" && /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(value);
 
 /** The Android app's callbacks: the app registers this scheme and host for the Custom Tab to return to (apps from before the rename, ember://). */
-export const APP_REDIRECTS = ["stillfail://auth/callback", "ember://auth/callback"];
+// The beta apps (fail.still.android.beta, fail.still.desktop.beta: 「youdid.wtf」) come back on a scheme of their own.
+export const APP_REDIRECTS = ["stillfail://auth/callback", "ember://auth/callback", "stillfail-beta://auth/callback"];
 
 /**
- * Where a login may return: the web app's own callback on one of its origins,
- * the admin console's on one of its, the native app's callback, or a loopback
- * listener of a command-line client.
+ * Where a login may return: the web app's own callback on one of its origins
+ * (the test channel's included), the admin console's on one of its, the native
+ * app's callback, or a loopback listener of a command-line client.
  */
 export function validRedirect(env: Env, value: string): boolean {
-  if ([...publicOrigins(env), ...adminOrigins(env)].some((origin) => value === `${origin}/auth/callback`) || APP_REDIRECTS.includes(value)) return true;
+  const beta = betaOrigin(env);
+  if ([...publicOrigins(env), ...adminOrigins(env), ...(beta ? [beta] : [])].some((origin) => value === `${origin}/auth/callback`) || APP_REDIRECTS.includes(value)) return true;
   try {
     const url = new URL(value);
     return url.protocol === "http:" && url.hostname === "127.0.0.1" && Number(url.port) > 0 && url.pathname === "/oauth/callback" && !url.username && !url.password && !url.search && !url.hash;

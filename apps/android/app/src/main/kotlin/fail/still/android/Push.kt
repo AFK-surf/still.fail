@@ -87,7 +87,7 @@ class PushService : FirebaseMessagingService() {
         runBlocking {
             withTimeoutOrNull(30_000) {
                 try {
-                    Push.register(StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN), token)
+                    Push.register(StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA), token)
                 } catch (_: CoreException) {
                     // Registered again on the app's next start (Push.sync).
                 }
@@ -110,7 +110,7 @@ class PushService : FirebaseMessagingService() {
     private fun shown(workspace: String?): Boolean = runBlocking {
         withTimeoutOrNull(5_000) {
             try {
-                val answer = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN).call("notice.pushed", buildJsonObject { workspace?.let { put("workspace", it) } })
+                val answer = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA).call("notice.pushed", buildJsonObject { workspace?.let { put("workspace", it) } })
                 (answer as? JsonObject)?.get("show")?.jsonPrimitive?.booleanOrNull
             } catch (_: CoreException) {
                 null

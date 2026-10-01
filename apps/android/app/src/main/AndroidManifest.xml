@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="still.fail"
+        android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.StillFail"
@@ -37,13 +37,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <!-- still.fail cloud's sign-in returns here (auth.begin's redirect_uri): stillfail://, and ember:// from before
-                 the rename (still accepted). -->
+                 the rename (still accepted); the beta app's, stillfail-beta:// (app/build.gradle.kts). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="stillfail" android:host="auth" android:path="/callback" />
-                <data android:scheme="ember" android:host="auth" android:path="/callback" />
+                <data android:scheme="${authScheme}" android:host="auth" android:path="/callback" />
+                <data android:scheme="${formerAuthScheme}" android:host="auth" android:path="/callback" />
             </intent-filter>
             <!-- An item's link (a session's link in Slack): the app opens it, verified by still.fail cloud's assetlinks.json
                  (served on both hosts: app.still.fail, and ember.3720.org from before the rename). -->

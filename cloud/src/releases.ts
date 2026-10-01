@@ -144,16 +144,24 @@ export function groupReads(ranges: Range[]): { start: number; end: number; last:
   }
 }
 
+/** Each app's feed: the released builds', and the beta apps' (fail.still.*.beta, for testers: /releases/latest/<app>-beta). */
+const FEEDS: Record<string, string> = {
+  mac: "desktop/stillfail-mac.yml",
+  android: "android/latest.json",
+  "mac-beta": "desktop/stillfail-beta-mac.yml",
+  "android-beta": "android/beta/latest.json",
+};
+
 /**
  * The latest build of an app, for a link that does not change (the site's downloads, /releases/latest/<app>): where its
  * updater's feed says it is, as a path under /releases/; null while there is none.
  */
 export async function latestDownload(bucket: ReleaseBucket | undefined, app: string): Promise<string | null> {
-  const feed = app === "mac" ? "desktop/stillfail-mac.yml" : app === "android" ? "android/latest.json" : null;
+  const feed = FEEDS[app];
   const object = feed ? await bucket?.get(feed) : null;
   if (!object) return null;
   const text = await new Response(object.body).text();
-  if (app === "mac") {
+  if (app.startsWith("mac")) {
     const file = /^path:\s*(\S+)\s*$/m.exec(text)?.[1];
     return file ? `desktop/${file}` : null;
   }

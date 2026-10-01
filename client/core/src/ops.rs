@@ -153,6 +153,9 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         "memory.get" => op("GET", Ok("/memory".into()), None),
         "software.update" => op("POST", Ok("/updates".into()), Some(p.pick(&["id"]))),
         "software.check" => op("POST", Ok("/updates/check".into()), None),
+        // The station's update channel: { channel: "stable" | "beta" }. Back to stable from a beta, the stable release
+        // is then offered to go back to (`downgrade`), older or not.
+        "software.channel" => op("POST", Ok("/updates/channel".into()), Some(p.pick(&["channel"]))),
         _ => return None,
     };
     Some(r)
@@ -189,6 +192,8 @@ fn cloud_op(name: &str, params: &Value) -> Option<Result<Request>> {
         "admin.me" => op("GET", Ok("/v1/admin/me".into()), None),
         "admin.createCode" => op("POST", Ok("/v1/admin/invite-codes".into()), Some(p.pick(&["note", "days"]))),
         "admin.revokeCode" => op("POST", p.at("code").map(|c| format!("/v1/admin/invite-codes/{c}/revoke")), None),
+        // An account into the test channel (app.youdid.wtf) or out of it: { user, on }.
+        "admin.setBeta" => op("POST", p.at("user").map(|u| format!("/v1/admin/users/{u}/beta")), Some(json!({ "on": p.bool("on") }))),
         _ => return None,
     };
     Some(r)
@@ -213,6 +218,10 @@ mod tests {
         let r = req("workspace.setRole", json!({ "account": "a", "workspace": "w1", "member": "x@y.z", "role": "admin" }));
         assert_eq!((r.target, r.method, r.path.as_str()), (Target::Cloud("a".into()), "PATCH", "/v1/workspaces/w1/members/x%40y.z"));
         assert_eq!(req("invitation.accept", json!({ "account": "a", "token": "t" })).path, "/v1/invitations/accept");
+        let r = req("software.channel", json!({ "station": "w/s", "channel": "beta" }));
+        assert_eq!((r.target, r.method, r.path.as_str(), r.body), (Target::Station("w/s".into()), "POST", "/updates/channel", Some(json!({ "channel": "beta" }))));
+        let r = req("admin.setBeta", json!({ "account": "a", "user": "sub-1", "on": true }));
+        assert_eq!((r.method, r.path.as_str(), r.body), ("POST", "/v1/admin/users/sub-1/beta", Some(json!({ "on": true }))));
     }
 
     #[test]

@@ -29,8 +29,17 @@ const APP_ORIGIN = DEV_URL ? new URL(DEV_URL).origin : "app://ember";
 // The dev server is plain http on the LAN: taken as secure, as app://ember is, so the page has what a secure page has
 // (the clipboard among it) and behaves as the packed one does.
 if (DEV_URL) app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", APP_ORIGIN);
-/** The app's link schemes: stillfail://, and ember:// as before the rename (links made then, pages that still make them). */
-const SCHEMES = ["stillfail", "ember"];
+/**
+ * The beta app (apps/desktop/build.sh --beta, which fixes this at build time; or the variable, run from the source): an
+ * app of its own beside the released one, 「youdid.wtf」 (fail.still.desktop.beta, its own userData), its core
+ * saying so to still.fail cloud (client/core Host::beta), its updates on the beta channel, its own link scheme.
+ */
+const BETA = process.env.STILLFAIL_CHANNEL === "beta";
+/**
+ * The app's link schemes: stillfail://, and ember:// as before the rename (links made then, pages that still make them);
+ * the beta app's only stillfail-beta://, so a sign-in or a link comes back to the app that asked for it.
+ */
+const SCHEMES = BETA ? ["stillfail-beta"] : ["stillfail", "ember"];
 /** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, stillfail_core.node and station/. */
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, "..");
 const web = join(resources, "web");
@@ -51,7 +60,8 @@ function carryOverUserData(): void {
   if (dir !== app.getPath("userData")) app.setPath("userData", dir);
 }
 
-carryOverUserData();
+// The beta app never had a name before: what the released app left there is the released app's.
+if (!BETA) carryOverUserData();
 
 // A standard, secure origin: the page's absolute paths, storage and clipboard work as on https://.
 protocol.registerSchemesAsPrivileged([
@@ -72,7 +82,7 @@ let core: UtilityProcess | null = null;
 /** The core's process, started when a page first asks for it and again after it exited. */
 function coreProcess(): UtilityProcess {
   if (core) return core;
-  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "stillfail_core.node")], { serviceName: "still.fail core" });
+  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "stillfail_core.node"), BETA ? "beta" : ""], { serviceName: "still.fail core" });
   child.on("exit", (code) => {
     if (core === child) core = null;
     dropOwnLink("核心进程退出了");
@@ -96,6 +106,9 @@ ipcMain.on("core:open", (event, id: unknown) => {
 // The cloud's origin, for the page to know its links (web/src/core/client.ts, StillFailDesktop.cloudOrigin).
 ipcMain.on("app:cloud-origin", (event) => { event.returnValue = CLOUD_ORIGIN; });
 ipcMain.on("app:version", (event) => { event.returnValue = app.getVersion(); });
+// The beta app or not, and the scheme its sign-in comes back on (web/src/cloud/accounts.ts).
+ipcMain.on("app:beta", (event) => { event.returnValue = BETA; });
+ipcMain.on("app:scheme", (event) => { event.returnValue = SCHEMES[0]; });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
 interface OwnLink {
@@ -447,7 +460,7 @@ function machineName(): string {
 }
 
 // Keeping the app current: the cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/,
-// stillfail-mac.yml), looked for at start and every few hours. A newer one is said to the pages, which show 更新
+// stillfail-mac.yml; the beta app's, stillfail-beta-mac.yml beside it), looked for at start and every few hours. A newer one is said to the pages, which show 更新
 // beside the buddy (web/src/brand.tsx); clicked, it is downloaded, and once it is the app quits (the station stopped
 // first) and opens as the new one.
 const UPDATE_EVERY = 4 * 60 * 60 * 1000;
@@ -540,7 +553,7 @@ function setMenu(): void {
 function keepUpdated(): void {
   if (!app.isPackaged) return;
   download = () => void autoUpdater.downloadUpdate().catch(() => {});
-  autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop`, channel: "stillfail" });
+  autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop`, channel: BETA ? "stillfail-beta" : "stillfail" });
   autoUpdater.logger = null;
   autoUpdater.autoDownload = false;
   autoUpdater.on("update-available", ({ version }) => {
@@ -675,8 +688,11 @@ ipcMain.handle("notify:set", (event, on: unknown) => {
  * place.
  */
 function arrived(url: string): void {
-  const item = /^(?:stillfail|ember):\/\/o\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/.exec(url);
-  if (!/^(?:stillfail|ember):\/\/auth\/callback(?:[?#]|$)/.test(url) && !item) return;
+  const scheme = SCHEMES.find((s) => url.startsWith(`${s}://`));
+  if (!scheme) return;
+  const rest = url.slice(scheme.length + 3);
+  const item = /^o\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/.exec(rest);
+  if (!/^auth\/callback(?:[?#]|$)/.test(rest) && !item) return;
   // An item's link may name a web service to open with it (?service=<job>).
   const path = item ? `/o/${item[1]}/${item[2]}/${item[3]}${new URL(url).search}` : `/auth/callback${new URL(url).search}`;
   if (item) {

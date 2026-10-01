@@ -10,6 +10,7 @@ CARGO_TARGET_DIR is honoured; the Android build goes under it like any other.
   apps/android/build.py                   # :app:assembleDebug
   apps/android/build.py --tasks :core:testDebugUnitTest
   apps/android/build.py --release         # an optimized core
+  apps/android/build.py --release --beta  # the beta app (fail.still.android.beta, 「youdid.wtf」; app/build.gradle.kts)
 """
 import argparse
 import os
@@ -37,6 +38,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--release", action="store_true", help="build the core with the release profile")
     parser.add_argument("--tasks", nargs="*", default=[":app:assembleDebug"], help="Gradle tasks (none: only the native part)")
+    parser.add_argument("--beta", action="store_true", help="build the beta app beside the released one (-PstillfailBeta)")
     args = parser.parse_args()
 
     env = dict(os.environ)
@@ -87,7 +89,7 @@ def main():
          "generate", "--library", str(built), "--language", "kotlin", "--no-format", "--out-dir", str(bindings)], env, cwd=CLIENT)
 
     if args.tasks:
-        run([str(APP / "gradlew"), "-p", str(APP), *args.tasks], env)
+        run([str(APP / "gradlew"), "-p", str(APP), *(["-PstillfailBeta"] if args.beta else []), *args.tasks], env)
         if ":app:assembleDebug" in args.tasks:
             print(APP / "app/build/outputs/apk/debug/app-debug.apk")
 

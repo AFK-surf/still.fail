@@ -236,6 +236,10 @@ impl Host for WakingHost {
         self.inner.cloud_origin()
     }
 
+    fn beta(&self) -> bool {
+        self.inner.beta()
+    }
+
     fn fetch(&self, mut request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>> {
         if hedgeable(&request) {
             request.headers.retain(|(k, _)| !k.eq_ignore_ascii_case(HEDGE));

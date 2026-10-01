@@ -3,9 +3,14 @@
 // (Slack's, invitations, bookmarks) open the app where it now lives. Only the pages: the API's and the relay's paths
 // on the old host are routes of their own (wrangler.jsonc), which stations and apps from before the rename keep
 // calling, and never reach this Worker. 302, not 301, which browsers would remember for good.
-import { publicOrigins } from "./compat.ts";
+// The same code and the same files are the test channel's Worker too (ember-web-beta, wrangler.web-beta.jsonc, on
+// BETA_ORIGIN): a build tried there is promoted to ember-web byte for byte (deploy.py promote-web). On that host every
+// answer says not to index it, /robots.txt disallows everything, and each page gets
+// <meta name="stillfail-beta" content="<PUBLIC_ORIGIN>">, by which the page knows it is the test channel and where the
+// stable one is (web/src/cloud/beta.tsx).
+import { betaOrigin, publicOrigins } from "./compat.ts";
 
-export type WebEnv = { ASSETS: Fetcher; PUBLIC_ORIGIN: string; PUBLIC_ORIGIN_ALIASES?: string };
+export type WebEnv = { ASSETS: Fetcher; PUBLIC_ORIGIN: string; PUBLIC_ORIGIN_ALIASES?: string; BETA_ORIGIN?: string };
 
 /** Where a page asked for on an old host has moved to, or null when it is served here. */
 export function moved(request: Request, env: Omit<WebEnv, "ASSETS">): Response | null {
@@ -17,8 +22,26 @@ export function moved(request: Request, env: Omit<WebEnv, "ASSETS">): Response |
   return Response.redirect(`${env.PUBLIC_ORIGIN}${url.pathname}${url.search}`, 302);
 }
 
+const NOINDEX = "noindex, nofollow";
+
+/** The web app's answer to `request`, its files got by `files`: as above, on the test channel's host or the others. */
+export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, files: (request: Request) => Promise<Response> | Response): Promise<Response> {
+  const redirect = moved(request, env);
+  if (redirect) return redirect;
+  if (new URL(request.url).origin !== betaOrigin(env)) return files(request);
+  if (new URL(request.url).pathname === "/robots.txt") {
+    return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": NOINDEX } });
+  }
+  const file = await files(request);
+  const answer = new Response(file.body, file);
+  answer.headers.set("x-robots-tag", NOINDEX);
+  if (!(answer.headers.get("content-type") ?? "").startsWith("text/html")) return answer;
+  const meta = `<meta name="stillfail-beta" content="${env.PUBLIC_ORIGIN.replace(/[&"<>]/g, "")}">`;
+  return new HTMLRewriter().on("head", { element: (head) => void head.prepend(meta, { html: true }) }).transform(answer);
+}
+
 export default {
   fetch(request: Request, env: WebEnv): Response | Promise<Response> {
-    return moved(request, env) ?? env.ASSETS.fetch(request);
+    return serveWeb(request, env, (r) => env.ASSETS.fetch(r));
   },
 };

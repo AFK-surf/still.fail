@@ -1,7 +1,10 @@
 //! Which versions this station and the machine's runtimes (Claude Code, Codex) are, whether newer ones are out, and
 //! updating them from the pages.
 //! - The station: its release says its version in BUILD (scripts/station-bundle.sh: `0.1.<commits>`, as the apps are
-//!   numbered); the latest is what still.fail cloud serves as releases/station.json (scripts/release.sh). It is updated as
+//!   numbered); the latest is what still.fail cloud serves as releases/station.json (scripts/release.sh), or on the test
+//!   channel (`updateChannel: "beta"` in config.json; a station installed from the beta and not told otherwise is on it)
+//!   releases/station-beta.json (release.sh --beta). Switched back from the beta, the stable release may be older than
+//!   the beta that runs: then going back to it is offered (`downgrade`), only then, never as a newer version. It is updated as
 //!   `stillfail update` does, by the cloud's installer (cloud/src/install.ts), run apart from the station (its own
 //!   process group, not waited for): the installer hands the running station over to the new release, or drains and
 //!   restarts it, so this process is gone (or another binary) by the time it ends. Only a release installed by that
@@ -23,7 +26,9 @@ use tokio::process::Command;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
+use crate::config::RawConfig;
 use crate::machine_logins::Env;
+use crate::settings::Settings;
 use crate::store::now_ms;
 
 /// How often what is out is read again (and the pages' "check" reads it at once).
@@ -43,6 +48,69 @@ pub fn station_version(app: &Path) -> Option<String> {
 /// The release directory a station's page (dist/admin) is in.
 pub fn app_of(ui: &Path) -> PathBuf {
     ui.parent().and_then(Path::parent).map(Path::to_path_buf).unwrap_or_else(|| ui.to_path_buf())
+}
+
+/// Which releases a station is updated to: the stable ones, or the test channel's.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Channel {
+    Stable,
+    Beta,
+}
+
+impl Channel {
+    pub fn id(self) -> &'static str {
+        match self {
+            Channel::Stable => "stable",
+            Channel::Beta => "beta",
+        }
+    }
+
+    pub fn of(id: &str) -> Option<Channel> {
+        match id.trim() {
+            "stable" => Some(Channel::Stable),
+            "beta" => Some(Channel::Beta),
+            _ => None,
+        }
+    }
+
+    /// Where still.fail cloud says its latest (scripts/release.sh, cloud/src/install.ts).
+    pub fn feed(self, origin: &str) -> String {
+        match self {
+            Channel::Stable => format!("{origin}/releases/station.json"),
+            Channel::Beta => format!("{origin}/releases/station-beta.json"),
+        }
+    }
+}
+
+/// The channel the release in `app` came from, as its installer wrote it (CHANNEL); None from an installer before that.
+pub fn release_channel(app: &Path) -> Option<Channel> {
+    Channel::of(&std::fs::read_to_string(app.join("CHANNEL")).ok()?)
+}
+
+/// The channel a station is updated on: as its config says, else as its release came (an install from before there
+/// were channels: stable).
+pub fn channel_of(raw: &RawConfig, app: &Path) -> Channel {
+    raw.update_channel.as_deref().and_then(Channel::of).or_else(|| release_channel(app)).unwrap_or(Channel::Stable)
+}
+
+/// Sets the channel in the config at `config` (`stillfail update --beta`/`--stable`, run apart from the station).
+pub fn set_channel_in(config: &Path, data: &Path, channel: Channel) -> Result<()> {
+    Settings::open(config, data)?.update(|raw| {
+        raw.update_channel = Some(channel.id().to_string());
+        Ok(())
+    })?;
+    Ok(())
+}
+
+/// What is offered for the station going from `version` to `latest` (as `channel`'s feed says it), its release having
+/// come from `installed`: (newer, downgrade). Back to the stable release from a beta is offered even when it is older,
+/// but only so: a stable station is never offered an older version.
+fn offer(version: Option<&str>, latest: Option<&str>, channel: Channel, installed: Channel) -> (bool, bool) {
+    match (version, latest) {
+        (Some(v), Some(l)) if newer(v, l) => (true, false),
+        (Some(v), Some(l)) => (false, channel == Channel::Stable && installed == Channel::Beta && newer(l, v)),
+        _ => (false, false),
+    }
 }
 
 /// Whether `latest` is a newer version than `current`, number by number ("2.1.10" is newer than "2.1.9").
@@ -131,6 +199,8 @@ struct Item {
     /// When an update started, while it runs.
     updating: Option<i64>,
     failed: Option<String>,
+    /// The station's: the channel whose latest `latest` is.
+    channel: Option<Channel>,
 }
 
 /// The versions, read now and then; `changes` moves when they differ from the last reading.
@@ -138,7 +208,13 @@ pub struct Updates {
     app: PathBuf,
     data: PathBuf,
     env: Env,
+    /// The config, where the channel is kept.
+    settings: Arc<Settings>,
+    /// The channel the running release came from: as it says (CHANNEL), else the channel it started on.
+    installed: Channel,
     origin: Box<dyn Fn() -> Option<String> + Send + Sync>,
+    /// Where the runtimes' latest versions are read (npm's registry; tests give one that answers nothing).
+    registry: String,
     items: Mutex<[Item; 3]>,
     checked: Mutex<(Option<i64>, bool)>,
     changes: watch::Sender<u64>,
@@ -146,9 +222,44 @@ pub struct Updates {
 
 impl Updates {
     /// `app`: the release this station runs from; `origin`: the still.fail cloud it is in, when it is.
-    pub fn new(app: PathBuf, data: PathBuf, env: Env, origin: Box<dyn Fn() -> Option<String> + Send + Sync>) -> Arc<Updates> {
+    pub fn new(app: PathBuf, data: PathBuf, env: Env, settings: Arc<Settings>, origin: Box<dyn Fn() -> Option<String> + Send + Sync>) -> Arc<Updates> {
+        Updates::with_registry(app, data, env, settings, origin, "https://registry.npmjs.org".into())
+    }
+
+    pub(crate) fn with_registry(app: PathBuf, data: PathBuf, env: Env, settings: Arc<Settings>, origin: Box<dyn Fn() -> Option<String> + Send + Sync>, registry: String) -> Arc<Updates> {
         let items = Default::default();
-        Arc::new(Updates { app, data, env, origin, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0 })
+        // Read before an update can replace the release.
+        let installed = release_channel(&app).unwrap_or_else(|| channel_of(&settings.raw(), &app));
+        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0 })
+    }
+
+    /// The channel the station is updated on now.
+    pub fn channel(&self) -> Channel {
+        channel_of(&self.settings.raw(), &self.app)
+    }
+
+    /// Puts the station on `channel` (as someone asked, from a page): kept in its config, and what is out read again
+    /// from that channel. Going back to the stable channel from a beta offers the stable release, older or not.
+    pub async fn set_channel(&self, channel: Channel) -> Result<()> {
+        if let Some(note) = &self.items.lock().unwrap()[Kind::Station as usize].note {
+            bail!("{}：{note}", Kind::Station.name());
+        }
+        self.keep_channel(channel)?;
+        self.check().await;
+        Ok(())
+    }
+
+    /// Keeps `channel` in the config, when it is another one than now.
+    pub fn keep_channel(&self, channel: Channel) -> Result<()> {
+        if self.channel() != channel {
+            self.settings.update(|raw| {
+                raw.update_channel = Some(channel.id().to_string());
+                Ok(())
+            })?;
+            info!(channel = channel.id(), "the station's update channel set");
+            self.changed();
+        }
+        Ok(())
     }
 
     /// Reads them at once and every few hours after.
@@ -181,21 +292,37 @@ impl Updates {
     pub fn get(&self) -> Vec<SoftwareVersion> {
         let checked = self.checked.lock().unwrap().0;
         let items = self.items.lock().unwrap().clone();
+        let channel = self.channel();
         Kind::ALL
             .into_iter()
             .zip(items)
-            .map(|(kind, item)| SoftwareVersion {
-                id: kind.id().into(),
-                name: kind.name().into(),
-                installed: item.installed,
-                newer: matches!((&item.version, &item.latest), (Some(v), Some(l)) if newer(v, l)),
-                updatable: item.how.is_some() || (kind == Kind::Station && item.note.is_none() && item.version.is_some()),
-                version: item.version,
-                latest: item.latest,
-                note: item.note,
-                state: if item.updating.is_some() { "updating" } else if item.failed.is_some() { "failed" } else { "idle" }.into(),
-                message: item.failed,
-                checked_at: checked,
+            .map(|(kind, mut item)| {
+                let station = kind == Kind::Station;
+                // Read from another channel than the one it is on now: not yet known.
+                if station && item.channel != Some(channel) {
+                    item.latest = None;
+                }
+                let (newer, downgrade) = if station {
+                    offer(item.version.as_deref(), item.latest.as_deref(), channel, self.installed)
+                } else {
+                    (matches!((&item.version, &item.latest), (Some(v), Some(l)) if newer(v, l)), false)
+                };
+                SoftwareVersion {
+                    id: kind.id().into(),
+                    name: kind.name().into(),
+                    installed: item.installed,
+                    newer,
+                    downgrade,
+                    // Only where it can be updated from here.
+                    channel: (station && item.note.is_none() && item.version.is_some()).then(|| channel.id().to_string()),
+                    updatable: item.how.is_some() || (kind == Kind::Station && item.note.is_none() && item.version.is_some()),
+                    version: item.version,
+                    latest: item.latest,
+                    note: item.note,
+                    state: if item.updating.is_some() { "updating" } else if item.failed.is_some() { "failed" } else { "idle" }.into(),
+                    message: item.failed,
+                    checked_at: checked,
+                }
             })
             .collect()
     }
@@ -209,7 +336,11 @@ impl Updates {
             }
             checked.1 = true;
         }
-        let (station, claude, codex) = tokio::join!(self.read_station(), self.read_runtime(Kind::Claude), self.read_runtime(Kind::Codex));
+        let (mut station, claude, codex) = tokio::join!(self.read_station(self.channel()), self.read_runtime(Kind::Claude), self.read_runtime(Kind::Codex));
+        // Put on another channel while it was read: read from that one.
+        while station.channel != Some(self.channel()) {
+            station = self.read_station(self.channel()).await;
+        }
         {
             let mut items = self.items.lock().unwrap();
             for (kind, read) in [(Kind::Station, station), (Kind::Claude, claude), (Kind::Codex, codex)] {
@@ -224,7 +355,7 @@ impl Updates {
         self.changed();
     }
 
-    async fn read_station(&self) -> Item {
+    async fn read_station(&self, channel: Channel) -> Item {
         let version = station_version(&self.app);
         let installed = |p: &Path| std::fs::canonicalize(p).ok();
         let note = if installed(&self.app).is_some_and(|a| Some(a) == installed(&self.data.join("app"))) {
@@ -237,7 +368,7 @@ impl Updates {
         let origin = (self.origin)();
         let note = note.or_else(|| origin.is_none().then(|| "还没加入 workspace，无从更新".to_string()));
         let latest = match &origin {
-            Some(origin) => match fetch_json(&format!("{origin}/releases/station.json")).await {
+            Some(origin) => match fetch_json(&channel.feed(origin)).await {
                 Ok(said) => said.get("version").and_then(Value::as_str).map(String::from),
                 Err(e) => {
                     warn!(error = %e, "the station's latest release not read");
@@ -246,7 +377,7 @@ impl Updates {
             },
             None => None,
         };
-        Item { installed: true, version, latest, note, ..Default::default() }
+        Item { installed: true, version, latest, note, channel: Some(channel), ..Default::default() }
     }
 
     async fn read_runtime(&self, kind: Kind) -> Item {
@@ -258,7 +389,7 @@ impl Updates {
             },
             None => None,
         };
-        let latest = match fetch_json(&format!("https://registry.npmjs.org/{}/latest", kind.package())).await {
+        let latest = match fetch_json(&format!("{}/{}/latest", self.registry, kind.package())).await {
             Ok(said) => said.get("version").and_then(Value::as_str).map(String::from),
             Err(e) => {
                 warn!(runtime = kind.id(), error = %e, "the runtime's latest version not read");
@@ -331,12 +462,15 @@ impl Updates {
         // In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a
         // handover (this process becomes another binary) and a restart (the service's processes are stopped).
         let script = r#"( curl -fsSL "$1/install.sh" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &"#;
+        let channel = self.channel();
         let status = std::process::Command::new("/bin/sh")
             .args(["-c", script, "sh", &origin, &run_dir.to_string_lossy()])
             .env_clear()
             .envs(&self.env)
             // Under both names: the cloud's installer from before the rename reads the old one.
             .envs(crate::former::both("DATA").map(|name| (name, self.data.clone())))
+            // The release of its channel (the installer from before channels takes the stable one).
+            .env("STILLFAIL_CHANNEL", channel.id())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -345,7 +479,7 @@ impl Updates {
         if !status.success() {
             bail!("没能开始更新");
         }
-        info!(origin, "updating the station");
+        info!(origin, channel = channel.id(), "updating the station");
         let started = now_ms();
         self.set(Kind::Station, |i| {
             i.updating = Some(started);
@@ -467,7 +601,7 @@ async fn run(program: impl AsRef<Path>, args: &[&str], env: &Env, timeout: Durat
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -492,6 +626,95 @@ mod tests {
         std::fs::write(dir.path().join("BUILD"), "1234\n").unwrap();
         assert_eq!(station_version(dir.path()).as_deref(), Some("0.1.1234"));
         assert_eq!(app_of(&dir.path().join("dist").join("admin")), dir.path());
+    }
+
+    #[test]
+    fn the_latest_comes_from_the_channels_feed_and_a_station_is_on_the_channel_it_was_installed_from() {
+        assert_eq!(Channel::Stable.feed("https://app.still.fail"), "https://app.still.fail/releases/station.json");
+        assert_eq!(Channel::Beta.feed("https://app.still.fail"), "https://app.still.fail/releases/station-beta.json");
+        let dir = tempfile::tempdir().unwrap();
+        let raw = |channel: Option<&str>| RawConfig { update_channel: channel.map(String::from), ..Default::default() };
+        // An install from before channels, and a config that says none: stable.
+        assert_eq!(release_channel(dir.path()), None);
+        assert_eq!(channel_of(&raw(None), dir.path()), Channel::Stable);
+        assert_eq!(channel_of(&raw(Some("nonsense")), dir.path()), Channel::Stable);
+        // Installed from the beta: on it, until the config says otherwise.
+        std::fs::write(dir.path().join("CHANNEL"), "beta\n").unwrap();
+        assert_eq!(channel_of(&raw(None), dir.path()), Channel::Beta);
+        assert_eq!(channel_of(&raw(Some("stable")), dir.path()), Channel::Stable);
+        assert_eq!(channel_of(&raw(Some("beta")), dir.path()), Channel::Beta);
+    }
+
+    #[test]
+    fn an_older_version_is_offered_only_back_from_the_beta() {
+        use Channel::*;
+        // Newer is newer on either channel.
+        assert_eq!(offer(Some("0.1.10"), Some("0.1.12"), Stable, Stable), (true, false));
+        assert_eq!(offer(Some("0.1.10"), Some("0.1.12"), Beta, Stable), (true, false));
+        // A stable station never goes back by itself, nor a beta one to an older beta.
+        assert_eq!(offer(Some("0.1.12"), Some("0.1.10"), Stable, Stable), (false, false));
+        assert_eq!(offer(Some("0.1.12"), Some("0.1.10"), Beta, Beta), (false, false));
+        // Switched back from the beta: the older stable release is offered, as going back.
+        assert_eq!(offer(Some("0.1.12"), Some("0.1.10"), Stable, Beta), (false, true));
+        // The same build (a beta promoted): nothing.
+        assert_eq!(offer(Some("0.1.12"), Some("0.1.12"), Stable, Beta), (false, false));
+        assert_eq!(offer(None, Some("0.1.10"), Stable, Beta), (false, false));
+        assert_eq!(offer(Some("0.1.12"), None, Stable, Beta), (false, false));
+    }
+
+    /// A station installed by the installer (<data>/app, BUILD `build`, from `channel`), in a cloud that answers nothing;
+    /// its config `settings`, else <data>/config.json.
+    pub(crate) fn installed(data: &Path, build: &str, channel: Option<&str>, settings: Option<Arc<Settings>>) -> Arc<Updates> {
+        let app = data.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::write(app.join("BUILD"), build).unwrap();
+        if let Some(channel) = channel {
+            std::fs::write(app.join("CHANNEL"), channel).unwrap();
+        }
+        let settings = settings.unwrap_or_else(|| Settings::open(&data.join("config.json"), data).unwrap());
+        let nowhere = "http://127.0.0.1:1".to_string();
+        let env: Env = [("PATH".to_string(), "/nowhere".to_string())].into();
+        Updates::with_registry(app, data.to_path_buf(), env, settings, Box::new(move || Some("http://127.0.0.1:1".into())), nowhere)
+    }
+
+    /// What the station's line says, its latest read as `latest` (as if from the channel it is on).
+    fn station_with(updates: &Updates, latest: &str) -> SoftwareVersion {
+        {
+            let mut items = updates.items.lock().unwrap();
+            let item = &mut items[Kind::Station as usize];
+            item.version = station_version(&updates.app);
+            item.latest = Some(latest.into());
+            item.channel = Some(updates.channel());
+        }
+        updates.get().remove(0)
+    }
+
+    #[tokio::test]
+    async fn switched_back_from_the_beta_the_stable_release_is_offered_and_kept_in_the_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let updates = installed(dir.path(), "1300", Some("beta"), None);
+        assert_eq!(updates.channel(), Channel::Beta);
+        let line = station_with(&updates, "0.1.1310");
+        assert_eq!((line.channel.as_deref(), line.newer, line.downgrade), (Some("beta"), true, false));
+
+        updates.set_channel(Channel::Stable).await.unwrap();
+        assert_eq!(updates.channel(), Channel::Stable);
+        let config: Value = serde_json::from_str(&std::fs::read_to_string(dir.path().join("config.json")).unwrap()).unwrap();
+        assert_eq!(config["updateChannel"], "stable");
+        // What was read from the beta's feed is not the stable one's.
+        let line = updates.get().remove(0);
+        assert_eq!((line.latest, line.newer, line.downgrade), (None, false, false));
+        let line = station_with(&updates, "0.1.1200");
+        assert_eq!((line.channel.as_deref(), line.newer, line.downgrade), (Some("stable"), false, true));
+
+        // A station that never was on the beta is not offered an older one.
+        let other = tempfile::tempdir().unwrap();
+        let stable = installed(other.path(), "1300", None, None);
+        let line = station_with(&stable, "0.1.1200");
+        assert_eq!((line.channel.as_deref(), line.newer, line.downgrade), (Some("stable"), false, false));
+        // Read again in a new process from a config that says beta: the feed it reads is the beta's.
+        set_channel_in(&other.path().join("config.json"), other.path(), Channel::Beta).unwrap();
+        assert_eq!(installed(other.path(), "1300", None, None).channel(), Channel::Beta);
     }
 
     fn found(real: &str) -> Found {

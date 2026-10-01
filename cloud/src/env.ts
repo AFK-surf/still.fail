@@ -19,6 +19,11 @@ export interface Env {
   ADMIN_ORIGIN: string;
   /** Older origins of the console (comma-separated), answered like ADMIN_ORIGIN. */
   ADMIN_ORIGIN_ALIASES?: string;
+  /**
+   * The web app's test channel (https://app.youdid.wtf): the same API on another host, for the accounts the admin lets
+   * in (`beta` in the console); unset, there is none (index.ts).
+   */
+  BETA_ORIGIN?: string;
   /** Where stations and clients find the relay; defaults to PUBLIC_ORIGIN (whose /relay is the relay: relay-worker.ts). */
   RELAY_URL?: string;
   /** More relays beside it (comma-separated), for where it is slow or out of reach (relays.ts). */

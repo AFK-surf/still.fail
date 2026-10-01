@@ -114,6 +114,12 @@ export const switchThumb = style({
     "&[data-state=\"checked\"]": { transform: "translateX(16px)" },
   },
 });
+/** A switch in a line of small text (Versions.tsx): the same, smaller. */
+export const switchSmall = style({ width: "26px", height: "16px", alignSelf: "center" });
+export const switchThumbSmall = style({
+  width: "12px", height: "12px",
+  selectors: { "&[data-state=\"checked\"]": { transform: "translateX(12px)" } },
+});
 export const switchRow = style({ display: "flex", alignItems: "center", gap: "16px" });
 export const switchRowText = style({ flex: "1", display: "grid", gap: "2px", fontSize: vars.textSm, cursor: "pointer" });
 export const choices = style({ display: "grid", gap: "8px" });

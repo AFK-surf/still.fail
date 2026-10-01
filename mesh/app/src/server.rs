@@ -141,6 +141,7 @@ pub struct App {
     owed: AtomicBool,
     /// The agents' MCP endpoint.
     mcp: Arc<Door>,
+    updates: Arc<crate::updates::Updates>,
 }
 
 impl App {
@@ -270,6 +271,7 @@ impl App {
             crate::updates::app_of(&options.ui),
             options.data.clone(),
             process_env(),
+            settings.clone(),
             Box::new(move || origin_of.status().origin),
         );
         updates.start();
@@ -306,7 +308,7 @@ impl App {
             slack_apps: None,
             check_on_start: true,
             machine_logins: Some(machine_logins),
-            updates: Some(updates),
+            updates: Some(updates.clone()),
             dev: crate::former::var("DEV").as_deref() == Some("1"),
             jobs: Some(jobs.clone()),
         });
@@ -328,6 +330,7 @@ impl App {
             bound: bound.clone(),
             owed: AtomicBool::new(false),
             mcp: mcp_door,
+            updates,
         });
 
         // Edits apply as they are saved: homes linked, connects (re)connected while in a workspace.
@@ -436,6 +439,15 @@ impl App {
     }
 
     /// Holds turns: none starts, messages stay pending (Hub::hold). For a restart: once none runs, nothing is cut off.
+    /// Puts the station on an update channel as this machine asked (`stillfail update --beta`/`--stable`, through
+    /// stillfail-station): kept in its config by this process, which holds it, and what is out read again.
+    pub fn set_update_channel(&self, channel: crate::updates::Channel) -> Result<()> {
+        self.updates.keep_channel(channel)?;
+        let updates = self.updates.clone();
+        tokio::spawn(async move { updates.check().await });
+        Ok(())
+    }
+
     pub fn hold(&self) {
         self.hub.hold(Hold::Drain);
     }

@@ -438,6 +438,10 @@ export interface StillFailDesktop {
   cloudOrigin?: string;
   /** The app's version (0.1.<commits>); an app from before it has none. */
   version?: string;
+  /** The beta app (「youdid.wtf」, beside the released one); an app from before it has none (released). */
+  beta?: boolean;
+  /** The scheme a sign-in comes back to the app on (stillfail://, the beta app's stillfail-beta://); an app from before it has none (stillfail). */
+  scheme?: string;
   /** A newer build of the app (apps/desktop/src/main.ts, keepUpdated); an app from before updates has none. */
   appUpdate?: {
     state(): Promise<AppUpdate | null>;

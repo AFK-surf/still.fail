@@ -19,6 +19,9 @@ export const publicOrigins = (env: { PUBLIC_ORIGIN: string; PUBLIC_ORIGIN_ALIASE
 /** The admin console's origins: ADMIN_ORIGIN and its old ones. */
 export const adminOrigins = (env: { ADMIN_ORIGIN: string; ADMIN_ORIGIN_ALIASES?: string }) => originList(env.ADMIN_ORIGIN, env.ADMIN_ORIGIN_ALIASES);
 
+/** The test channel's origin (BETA_ORIGIN), or null when there is none. Not an alias: what it serves is gated (index.ts). */
+export const betaOrigin = (env: { BETA_ORIGIN?: string }): string | null => env.BETA_ORIGIN?.trim() || null;
+
 /** A still.fail request header by its name after the prefix (`station` for x-stillfail-station), or its x-ember- one. */
 export function header(from: Request | Headers, name: string): string | null {
   const headers = from instanceof Headers ? from : from.headers;

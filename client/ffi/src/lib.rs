@@ -59,6 +59,13 @@ pub struct StillFailCoreFfi {
 /// (created if missing); `cloud_origin` is still.fail cloud, e.g. https://app.still.fail.
 #[uniffi::export]
 pub fn start(data_dir: String, cloud_origin: String, listener: Box<dyn CoreListener>) -> Result<Arc<StillFailCoreFfi>, StartError> {
+    start_as(data_dir, cloud_origin, false, listener)
+}
+
+/// Starts a core as `start` does, of a beta app when `beta` (a build of its own beside the released one): its calls
+/// to still.fail cloud say so, and its newer builds come from the beta feed.
+#[uniffi::export]
+pub fn start_as(data_dir: String, cloud_origin: String, beta: bool, listener: Box<dyn CoreListener>) -> Result<Arc<StillFailCoreFfi>, StartError> {
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir).map_err(|e| StartError::Io(format!("无法创建数据目录 {}：{e}", data_dir.display())))?;
     let (commands, queue) = mpsc::unbounded_channel();
@@ -66,7 +73,7 @@ pub fn start(data_dir: String, cloud_origin: String, listener: Box<dyn CoreListe
     let host_commands = commands.clone();
     std::thread::Builder::new()
         .name("stillfail-core".into())
-        .spawn(move || run(data_dir, cloud_origin.trim_end_matches('/').to_string(), listener, host_commands, queue))
+        .spawn(move || run(data_dir, cloud_origin.trim_end_matches('/').to_string(), beta, listener, host_commands, queue))
         .map_err(|e| StartError::Io(format!("无法启动核心线程：{e}")))?;
     Ok(Arc::new(StillFailCoreFfi { commands, next_client: Mutex::new(1) }))
 }
@@ -100,10 +107,10 @@ pub fn utc_offset_min(at_ms: f64) -> i32 {
 }
 
 /// The core thread: builds the core, then serves commands until the app lets go of it or the core panics.
-fn run(data_dir: PathBuf, cloud_origin: String, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>, queue: UnboundedReceiver<Command>) {
+fn run(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>, queue: UnboundedReceiver<Command>) {
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("tokio runtime");
     let local = tokio::task::LocalSet::new();
-    let host = Rc::new(NativeHost::new(data_dir, cloud_origin, listener.clone(), commands));
+    let host = Rc::new(NativeHost::new(data_dir, cloud_origin, beta, listener.clone(), commands));
     let mut clients = BTreeSet::new();
     let served = std::panic::catch_unwind(AssertUnwindSafe(|| local.block_on(&runtime, serve(host, queue, &mut clients))));
     let reason = match served {

@@ -2,6 +2,8 @@
 export type Role = "owner" | "admin" | "member";
 
 export interface UserView { sub: string; email: string; name: string; picture: string }
+/** The signed-in account, as `/v1/me` has it: `beta` only when the admin let it into the test channel. */
+export interface MeView extends UserView { beta?: true }
 export interface WorkspaceSummary { id: string; name: string; role: Role; created_at: number; stations: number; members: number }
 /** last_seen: when it last connected to still.fail cloud or left it (whether it is up, each device finds out over the mesh). */
 export interface StationView { id: string; name: string; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null }
@@ -29,6 +31,8 @@ export interface AdminUser extends UserView {
   /** null: signed in but not let in yet (no workspace, no code, no invitation). */
   admission: Admission | null;
   workspaces: { id: string; name: string; role: Role }[];
+  /** Let into the test channel (app.youdid.wtf). Missing from a cloud from before it. */
+  beta?: boolean;
 }
 export interface AdminWorkspace {
   id: string;

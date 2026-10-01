@@ -3,11 +3,13 @@
 // workspace's owner or admin). Grey but for what wants doing: a newer version out, an update going on, one that failed.
 package fail.still.android.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,10 +37,11 @@ import java.util.Date
 
 /**
  * The station's versions as a section of its page: one to a row, then the check (with when it last looked). `updates`:
- * its overview's (none from a station older than them: nothing shows); `manager`: may update.
+ * its overview's (none from a station older than them: nothing shows); `manager`: may update; `beta`: the 测试版 switch
+ * is offered (the core's `betaOffered`).
  */
 @Composable
-fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean) {
+fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean, beta: Boolean = false) {
     if (updates.isNullOrEmpty()) return
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
@@ -45,13 +49,30 @@ fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean)
     var updating by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf<String?>(null) }
+    // The channel asked for, while it is being set: the switch shows it at once.
+    var switching by remember { mutableStateOf<String?>(null) }
     val checked = updates.first().checkedAt
+    val channel = updates.firstOrNull { it.id == "station" }?.channel
     SectionHeader("版本", checked?.let { "上次检查 ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))}" }, start = 24.dp)
     ListCard {
         updates.forEach { v ->
             VersionRow(v, manager, busy = updating == v.id) {
                 updating = v.id; failed = null
                 scope.launch { try { api.updateSoftware(v.id) } catch (e: CoreException) { failed = e.message } finally { updating = null } }
+            }
+        }
+        if (beta && manager && channel != null) {
+            val on = (switching ?: channel) == "beta"
+            ListRow(onClick = if (switching != null) null else ({
+                val to = if (on) "stable" else "beta"
+                switching = to; failed = null
+                scope.launch { try { api.setSoftwareChannel(to) } catch (e: CoreException) { failed = e.message } finally { switching = null } }
+            })) {
+                Column(Modifier.weight(1f)) {
+                    Text("测试版", fontSize = 15.sp, color = C.ink)
+                    Text("新版本先到这里，可能不稳定", fontSize = 13.sp, color = C.muted)
+                }
+                Switch(on)
             }
         }
         ListRow(onClick = if (checked == null || checking) null else ({
@@ -73,7 +94,7 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
     // What the web says on hover, said under the name.
     val note = listOfNotNull(
         v.note,
-        if (v.installed && !v.newer && v.latest != null) "已是最新" else null,
+        if (v.installed && !v.newer && v.downgrade != true && v.latest != null) "已是最新" else null,
         if (v.installed && v.latest == null && v.checkedAt != null) "查不到最新版本" else null,
         if (v.state == "failed") v.message else null,
     ).filter { it.isNotBlank() }.joinToString("；")
@@ -88,6 +109,10 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(v.name, fontSize = 15.sp, color = C.ink, maxLines = 1)
                 Text(shown, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (v.channel == "beta") {
+                    Text("测试版", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = C.accentInk, maxLines = 1,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(C.accentBg).padding(horizontal = 6.dp, vertical = 1.dp))
+                }
             }
             if (note.isNotEmpty()) Text(note, fontSize = 13.sp, color = if (v.state == "failed") C.red else C.muted)
         }
@@ -104,6 +129,10 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
             v.newer && v.latest != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("→ ${v.latest}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
                 action("更新")
+            }
+            v.downgrade == true && v.latest != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("→ ${v.latest}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                action("回到正式版")
             }
         }
     }

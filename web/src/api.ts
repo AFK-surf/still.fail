@@ -339,6 +339,8 @@ export function stationApi(t: StationCall) {
     /** Brings a piece of the station's software up to date, or checks what is new. */
     updateSoftware: <T,>(id: string) => op<T>("software.update", { id }),
     checkSoftware: <T,>() => op<T>("software.check"),
+    /** Puts the station on the stable channel or the test channel's; the core reads its versions again. */
+    setSoftwareChannel: <T,>(channel: "stable" | "beta") => op<T>("software.channel", { channel }),
   };
 }
 

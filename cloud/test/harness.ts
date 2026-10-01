@@ -26,6 +26,8 @@ export async function harness(
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
+    /** The test channel's host (BETA_ORIGIN): the web app and the API, for accounts let in. */
+    betaOrigin?: string;
     /** The hosts' old names (before the rename to still.fail), bound to the same Workers: PUBLIC_ORIGIN_ALIASES and so on. */
     oldOrigin?: string;
     oldAdminOrigin?: string;
@@ -44,6 +46,7 @@ export async function harness(
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
+  const betaOrigin = options.betaOrigin ?? "https://app.beta-domain.example";
   const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
   const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
   const oldPreviewOrigin = options.oldPreviewOrigin ?? "https://preview.old.relay.example";
@@ -75,7 +78,7 @@ export async function harness(
   // still.fail cloud's Workers as Cloudflare runs them: the static sites on their hosts, and routes (which take
   // precedence) sending the API's and the relay's paths to theirs (cloud/wrangler*.jsonc); on each host's new name
   // and its old one.
-  const hosts = [origin, oldOrigin].map((o) => new URL(o).host), adminHosts = [adminOrigin, oldAdminOrigin].map((o) => new URL(o).host);
+  const hosts = [origin, oldOrigin].map((o) => new URL(o).host), adminHosts = [adminOrigin, oldAdminOrigin].map((o) => new URL(o).host), betaHost = new URL(betaOrigin).host;
   const common = { modules: true, compatibilityDate: "2026-09-08", compatibilityFlags: ["nodejs_compat"] };
   const mf = new Miniflare(
     convertV4MiniflareOptions({
@@ -87,7 +90,7 @@ export async function harness(
         ...common,
         name: "static",
         script: await bundle("test/static-worker.ts"),
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin },
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin },
         serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
       }, {
         ...common,
@@ -101,12 +104,13 @@ export async function harness(
         ...common,
         name: "api",
         script: await bundle("test/worker.ts"),
-        routes: [...hosts.flatMap((host) => [`${host}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`]), ...adminHosts.map((host) => `${host}/v1/*`)],
+        routes: [...[...hosts, betaHost].flatMap((host) => [`${host}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`]), ...adminHosts.map((host) => `${host}/v1/*`)],
         bindings: {
         PUBLIC_ORIGIN: origin,
         PUBLIC_ORIGIN_ALIASES: oldOrigin,
         ADMIN_ORIGIN: adminOrigin,
         ADMIN_ORIGIN_ALIASES: oldAdminOrigin,
+        BETA_ORIGIN: betaOrigin,
         GOOGLE_CLIENT_ID: options.noGoogle ? "" : "test-google-client",
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
@@ -175,6 +179,8 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
+  /** A request to the test channel's host. */
+  const fetchBeta = (path: string, init?: RequestInit) => mf.dispatchFetch(betaOrigin + path, init as any);
   /** A request to a host's old name (before the rename): "main", "admin" or "preview". */
   const fetchOld = (on: "main" | "admin" | "preview", path: string, init?: RequestInit) => mf.dispatchFetch({ main: oldOrigin, admin: oldAdminOrigin, preview: oldPreviewOrigin }[on] + path, init as any);
   /** A request straight to one of the Workers ("api", "relay", "static"), whatever the routes say. */
@@ -234,9 +240,9 @@ export async function harness(
     if (response.status !== 200) throw new Error("exchange: " + response.status);
     return (await response.json()) as Tokens;
   }
-  /** Calls the API as a logged-in account (on the console's host with `on: "admin"`). */
-  const as = (tokens: Tokens, on: "main" | "admin" = "main") => (method: string, path: string, value?: unknown) =>
-    (on === "admin" ? fetchAdmin : fetch)(path, {
+  /** Calls the API as a logged-in account (on the console's host with `on: "admin"`, the test channel's with "beta"). */
+  const as = (tokens: Tokens, on: "main" | "admin" | "beta" = "main") => (method: string, path: string, value?: unknown) =>
+    ({ main: fetch, admin: fetchAdmin, beta: fetchBeta })[on](path, {
       method,
       headers: { authorization: `Bearer ${tokens.access_token}`, ...(value === undefined ? {} : { "content-type": "application/json" }) },
       ...(value === undefined ? {} : { body: JSON.stringify(value) }),
@@ -245,6 +251,7 @@ export async function harness(
     mf,
     origin,
     adminOrigin,
+    betaOrigin,
     oldOrigin,
     oldAdminOrigin,
     as,
@@ -255,6 +262,7 @@ export async function harness(
     fetch,
     fetchAdmin,
     fetchPreview,
+    fetchBeta,
     fetchOld,
     fetchWorker,
     begin,
@@ -280,6 +288,8 @@ export const STAND_IN_FILES: Record<string, string> = {
 };
 
 function standInAssets(request: Request): Response {
-  const body = STAND_IN_FILES[new URL(request.url).pathname];
-  return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body) as unknown as Response;
+  const path = new URL(request.url).pathname;
+  const body = STAND_IN_FILES[path];
+  const headers = path.endsWith(".html") ? { "content-type": "text/html; charset=utf-8" } : {};
+  return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body, { headers }) as unknown as Response;
 }

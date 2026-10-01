@@ -6,9 +6,9 @@ import type { ErrorBody } from "../core/client.ts";
 import { core, useTopic, type TopicState } from "../core/react.ts";
 import { prefs, setPrefs } from "../prefs.ts";
 import type { Account } from "./accounts.ts";
-import type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
+import type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
-export type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
+export type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
 
 /** One account's `/v1/me`, as the `workspaces` topic lists it (`error` when that account could not be read). */
 export interface AccountWorkspaces {
@@ -18,6 +18,10 @@ export interface AccountWorkspaces {
   relay_url: string | null;
   /** The account's `/v1/me` has answered; until then (or after a failure) an empty list says nothing. */
   loaded: boolean;
+  /** still.fail cloud lets this account use the beta apps (its `/v1/me` says `user.beta`). */
+  beta?: boolean;
+  /** In the beta app, an account still.fail cloud has not let into the beta: what to say (the core's), with a way out. */
+  blocked?: string;
   error?: ErrorBody;
 }
 
@@ -69,6 +73,8 @@ export const admin = {
   /** Each with its sign-up link on the web app. */
   createCode: (sub: string, note: string, days: number) => op<InviteCodeView & { url: string }>(sub, "admin.createCode", { note, days }),
   revokeCode: (sub: string, code: string) => op<{ ok: true }>(sub, "admin.revokeCode", { code }),
+  /** Lets the account `user` into the test channel (app.youdid.wtf), or out of it. */
+  setBeta: (sub: string, user: string, on: boolean) => op<{ sub: string; beta: boolean }>(sub, "admin.setBeta", { user, on }),
 };
 
 // still.fail cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).

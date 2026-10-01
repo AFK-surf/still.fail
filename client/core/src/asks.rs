@@ -21,7 +21,7 @@ pub enum Ask {
     /// What a link opens in the app (a `LinkTarget`), or null: the system opens it.
     LinkParse { url: String },
     /// The newest build of the app for `platform` (android) when newer than `version`, else null; still.fail cloud is
-    /// asked at most once an hour unless `now`.
+    /// asked at most once an hour unless `now`. A beta app's are the beta builds' (`Host::beta`).
     AppUpdate { platform: String, version: i64, now: bool },
     /// A picture by its URL (a Google account's), `{type, bytes}`, fetched once each for the core's life.
     Picture { url: String },
@@ -58,7 +58,7 @@ type Picture = Shared<LocalBoxFuture<'static, std::result::Result<(String, Vec<u
 
 pub struct Asks {
     host: Rc<dyn Host>,
-    /// By platform: when still.fail cloud was last asked, and the newest build it named.
+    /// By feed (`android`, `android/beta`): when still.fail cloud was last asked, and the newest build it named.
     releases: RefCell<HashMap<String, (f64, Option<Value>)>>,
     pictures: RefCell<HashMap<String, Picture>>,
 }
@@ -71,7 +71,7 @@ impl Asks {
     pub async fn run(&self, ask: Ask, accounts: &Accounts) -> Result<Value> {
         match ask {
             Ask::LinkParse { url } => Ok(link_target(&url, &self.host.cloud_origin())),
-            Ask::AppUpdate { platform, version, now } => self.update(&platform, version, now).await,
+            Ask::AppUpdate { platform, version, now } => self.update(&platform, version, now, self.host.beta()).await,
             Ask::Picture { url } => {
                 let (kind, bytes) = self.picture(&url).await?;
                 Ok(json!({ "type": kind, "bytes": BASE64.encode(bytes) }))
@@ -93,25 +93,29 @@ impl Asks {
         }
     }
 
-    async fn update(&self, platform: &str, version: i64, now: bool) -> Result<Value> {
+    /// The newest build of `platform`'s feed when newer than `version`: the released app's
+    /// (`/releases/<platform>/latest.json`), or with `beta` the beta app's (`/releases/<platform>/beta/latest.json`;
+    /// their files are where the released ones' are).
+    async fn update(&self, platform: &str, version: i64, now: bool, beta: bool) -> Result<Value> {
+        let feed = if beta { format!("{platform}/beta") } else { platform.to_string() };
         let newer = |release: &Option<Value>| release.clone().filter(|r| r.get("versionCode").and_then(Value::as_i64).is_some_and(|v| v > version)).unwrap_or(Value::Null);
         let time = self.host.now_ms();
-        if let Some((at, release)) = self.releases.borrow().get(platform) {
+        if let Some((at, release)) = self.releases.borrow().get(&feed) {
             if !now && time - at < UPDATE_EVERY_MS {
                 return Ok(newer(release));
             }
         }
-        self.releases.borrow_mut().entry(platform.to_string()).or_insert((time, None)).0 = time;
-        let url = format!("{}/releases/{platform}/latest.json", self.host.cloud_origin());
+        self.releases.borrow_mut().entry(feed.clone()).or_insert((time, None)).0 = time;
+        let url = format!("{}/releases/{feed}/latest.json", self.host.cloud_origin());
         let request = HttpRequest { method: "GET".into(), url, headers: vec![("cache-control".into(), "no-cache".into())], body: None };
         // Not reached, or nothing there: none newer, as far as is known (what was found before stays).
-        let Ok(response) = self.host.fetch(request).await else { return Ok(newer(&self.releases.borrow()[platform].1)) };
+        let Ok(response) = self.host.fetch(request).await else { return Ok(newer(&self.releases.borrow()[&feed].1)) };
         let release = serde_json::from_slice::<Value>(&response.body).ok().filter(|_| response.status == 200)
             .and_then(|r| stillfail_shapes::conform::<stillfail_shapes::AppRelease>(r).ok());
         if release.is_some() {
-            self.releases.borrow_mut().insert(platform.to_string(), (time, release.clone()));
+            self.releases.borrow_mut().insert(feed.clone(), (time, release.clone()));
         }
-        Ok(newer(&self.releases.borrow()[platform].1))
+        Ok(newer(&self.releases.borrow()[&feed].1))
     }
 
     async fn picture(&self, url: &str) -> Result<(String, Vec<u8>)> {
@@ -274,13 +278,13 @@ mod tests {
             });
             let asks = Asks::new(host.clone());
             let asked = || host.requests.borrow().iter().filter(|r| r.url.ends_with("latest.json")).count();
-            let newer = asks.update("android", 1100, false).await.unwrap();
+            let newer = asks.update("android", 1100, false, false).await.unwrap();
             assert_eq!((newer["versionCode"].as_i64(), newer["file"].as_str(), newer.get("extra")), (Some(1200), Some("android/stillfail-1200.apk"), None));
             // Within the hour: what was found, not asked again; this build as new or newer, nothing.
-            assert_eq!(asks.update("android", 1100, false).await.unwrap()["versionCode"], 1200);
-            assert_eq!(asks.update("android", 1200, false).await.unwrap(), Value::Null);
+            assert_eq!(asks.update("android", 1100, false, false).await.unwrap()["versionCode"], 1200);
+            assert_eq!(asks.update("android", 1200, false, false).await.unwrap(), Value::Null);
             assert_eq!(asked(), 1);
-            asks.update("android", 1100, true).await.unwrap();
+            asks.update("android", 1100, true, false).await.unwrap();
             assert_eq!(asked(), 2);
             // A picture is fetched once; together or after, the same bytes.
             let (a, b) = futures::join!(asks.picture("https://p.test/a.png"), asks.picture("https://p.test/a.png"));
@@ -293,6 +297,36 @@ mod tests {
             assert!(asks.picture("https://p.test/gone.png").await.is_err());
             assert_eq!(host.requests.borrow().iter().filter(|r| r.url.ends_with("gone.png")).count(), 2);
             assert!(asks.picture("file:///etc/passwd").await.is_err());
+        });
+    }
+
+    #[test]
+    fn a_beta_app_takes_its_builds_from_the_beta_feed() {
+        use crate::testing::{FakeHost, json_response, run};
+        run(async {
+            let release = |code: i64| json!({ "versionCode": code, "versionName": format!("0.1.{code}"), "file": format!("android/stillfail-{code}.apk"), "sha256": "ab", "size": 9 });
+            let feeds = move |req: &HttpRequest| match req.url.as_str() {
+                "https://stillfail.test/releases/android/latest.json" => json_response(200, release(1200)),
+                "https://stillfail.test/releases/android/beta/latest.json" => json_response(200, release(1250)),
+                _ => json_response(404, json!({})),
+            };
+            // The released app: the released feed only.
+            let host = FakeHost::new();
+            host.on_fetch(feeds);
+            let asks = Asks::new(host.clone());
+            assert_eq!(asks.run(Ask::AppUpdate { platform: "android".into(), version: 1100, now: false }, &*Accounts::load(host.clone()).await).await.unwrap()["versionCode"], 1200);
+            assert!(host.requests.borrow().iter().all(|r| !r.url.contains("/beta/")));
+            // The beta app: the beta feed only, its build kept apart from the released one's.
+            let host = FakeHost::new();
+            host.beta.set(true);
+            host.on_fetch(feeds);
+            let asks = Asks::new(host.clone());
+            let accounts = Accounts::load(host.clone()).await;
+            let newer = asks.run(Ask::AppUpdate { platform: "android".into(), version: 1100, now: false }, &accounts).await.unwrap();
+            assert_eq!((newer["versionCode"].as_i64(), newer["file"].as_str()), (Some(1250), Some("android/stillfail-1250.apk")));
+            assert_eq!(asks.run(Ask::AppUpdate { platform: "android".into(), version: 1250, now: true }, &accounts).await.unwrap(), Value::Null);
+            assert!(host.requests.borrow().iter().all(|r| r.url.ends_with("/android/beta/latest.json")));
+            assert_eq!(host.requests.borrow().len(), 2);
         });
     }
 

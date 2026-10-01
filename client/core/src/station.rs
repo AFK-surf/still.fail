@@ -961,6 +961,8 @@ impl Stations {
                 }
             }
             Some("profiles") => touched.push(Topic::Overview { station: name.clone() }),
+            // The station's software: updated, checked, or put on another channel (its versions are the overview's).
+            Some("updates") => touched.push(Topic::Overview { station: name.clone() }),
             // The workspace's Slack settings (its app configuration token): every connect's app reads through them.
             Some("slack") => {
                 touched.push(Topic::Overview { station: name.clone() });
@@ -2656,6 +2658,10 @@ mod tests {
             assert_eq!(wire.count("GET", "/admin/api/overview"), o);
             stations.request(&remote(), "POST", "/profiles/p/check", None).await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
+            // Put on another update channel: its versions (the overview's) read again.
+            wire.answer("POST /admin/api/updates/channel", 200, json!([]));
+            stations.request(&remote(), "POST", "/updates/channel", Some(json!({"channel": "beta"}))).await.unwrap();
+            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 2);
             // Another chat on a session answers its thread, which goes into the lists without a request.
             let reads = wire.calls.borrow().len();
             wire.answer("POST /admin/api/threads", 200, thread_view(9, &["k 1"], 0, 0, 0));
@@ -2665,7 +2671,7 @@ mod tests {
             assert_eq!(wire.calls.borrow().len(), reads + 1);
             // A read changes nothing.
             stations.request(&remote(), "GET", "/slack/config-token", None).await.unwrap();
-            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
+            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 2);
             // The workspace's app configuration token: every connect's app shown is read again, as it now reads.
             let app = Topic::SlackApp { station: ST.into(), connect: "ds".into() };
             wire.answer("GET /admin/api/connects/ds/slack-app", 200, json!({"state": "no_config_token"}));

@@ -24,7 +24,7 @@ export function useAccounts(): Account[] | undefined {
  */
 export async function signIn(returnTo = location.pathname + location.search + location.hash): Promise<void> {
   const { url } = await core().call("auth.begin", {
-    redirect_uri: window.stillfailDesktop ? "stillfail://auth/callback" : `${location.origin}/auth/callback`, return_to: returnTo,
+    redirect_uri: window.stillfailDesktop ? `${window.stillfailDesktop.scheme ?? "stillfail"}://auth/callback` : `${location.origin}/auth/callback`, return_to: returnTo,
   }) as { url: string };
   location.assign(url);
 }

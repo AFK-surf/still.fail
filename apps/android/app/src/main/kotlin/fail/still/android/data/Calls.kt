@@ -4,6 +4,7 @@
 package fail.still.android.data
 
 import android.util.Base64
+import fail.still.android.BuildConfig
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.serialization.builtins.ListSerializer
@@ -254,6 +255,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun updateSoftware(id: String) { op("software.update") { put("id", id) } }
     /** Reads again what versions are out. */
     suspend fun checkSoftware() { op("software.check") }
+    /** Puts the station on a channel (`stable` | `beta`); its versions are read again. */
+    suspend fun setSoftwareChannel(channel: String) { op("software.channel") { put("channel", channel) } }
     /** The agents' memory on the station: the global one and the skills (projects' memories among them), as they are. */
     suspend fun memory(): JsonElement = op("memory.get")
     /**
@@ -313,7 +316,8 @@ data class MachineSaid(val person: Boolean, val text: String, val at: Long? = nu
 
 object Auth {
     // stillfail:// since the rename; the app still accepts ember:// coming back (MainActivity), and the cloud both.
-    const val REDIRECT = "stillfail://auth/callback"
+    // The beta app's own scheme (app/build.gradle.kts), so the released app never takes its sign-in, nor it theirs.
+    val REDIRECT = if (BuildConfig.BETA) "stillfail-beta://auth/callback" else "stillfail://auth/callback"
 
     /** The URL to open in a Custom Tab; still.fail cloud comes back to REDIRECT. The device signs in by the name the core gives it. */
     suspend fun begin(core: StillFailCore): String =

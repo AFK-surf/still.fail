@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
-            val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN)
+            val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
             val shared = getSharedPreferences("stillfail", Context.MODE_PRIVATE)
             // The prefs are the core's (data/Prefs.kt): what the app kept before goes in once, and the first frame is
             // drawn with them (the theme among them), not with defaults first.
@@ -185,8 +185,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** The sign-in callback's schemes: stillfail:// is what the app asks for; ember:// (the name before) is still accepted. */
-private val AUTH_SCHEMES = setOf("stillfail", "ember")
+/**
+ * The sign-in callback's schemes: stillfail:// is what the app asks for; ember:// (the name before) is still accepted;
+ * the beta app's is stillfail-beta:// (its manifest takes only that one).
+ */
+private val AUTH_SCHEMES = setOf("stillfail", "ember", "stillfail-beta")
 
 /**
  * Since when the app has been off screen (elapsedRealtime: it counts deep sleep too); null while on it. The process's,

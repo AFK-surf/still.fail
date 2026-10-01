@@ -160,3 +160,21 @@ test("with both places there the new one is used and the old one left; a fresh m
     fresh.done();
   }
 });
+
+test("the release says which channel it came from, for the station to go back from the beta", () => {
+  const m = machine();
+  try {
+    const beta = m.run(["tok"], { STILLFAIL_CHANNEL: "beta" });
+    assert.equal(beta.status, 0, beta.out);
+    assert.match(beta.said, /curl .*\/releases\/beta\/stillfail-station-darwin-arm64\.tar\.gz/);
+    assert.equal(readFileSync(join(m.home, ".stillfail", "app", "CHANNEL"), "utf8"), "beta\n");
+    // In a workspace now: updated without a token, on a channel it does not know (the stable one).
+    mkdirSync(join(m.home, ".stillfail", "mesh"), { recursive: true });
+    writeFileSync(join(m.home, ".stillfail", "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    const stable = m.run([], { STILLFAIL_CHANNEL: "anything" });
+    assert.equal(stable.status, 0, stable.out);
+    assert.equal(readFileSync(join(m.home, ".stillfail", "app", "CHANNEL"), "utf8"), "stable\n");
+  } finally {
+    m.done();
+  }
+});

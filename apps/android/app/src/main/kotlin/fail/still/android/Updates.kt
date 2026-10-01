@@ -1,5 +1,6 @@
 // The app keeps itself current: the core asks still.fail cloud which build is the latest (`app.update`, at most hourly;
-// /releases/android/latest.json, put there by scripts/release.sh), and a newer one is downloaded, checked against its
+// /releases/android/latest.json, put there by scripts/release.sh; the beta app's core asks
+// /releases/android/beta/latest.json), and a newer one is downloaded, checked against its
 // sha256 and handed to the system's installer, which installs it over this one (the same package and signing key) once
 // the person agrees.
 package fail.still.android

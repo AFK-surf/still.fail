@@ -56,8 +56,11 @@ class StillFailCore internal constructor(
         private val started = Mutex()
         private var instance: StillFailCore? = null
 
-        /** One per process. `cloudOrigin` e.g. "https://app.still.fail" (the emulator reaches a dev cloud at http://10.0.2.2:8787). */
-        suspend fun start(context: Context, cloudOrigin: String): StillFailCore = started.withLock {
+        /**
+         * One per process. `cloudOrigin` e.g. "https://app.still.fail" (the emulator reaches a dev cloud at
+         * http://10.0.2.2:8787); `beta`: the beta app's core (client/core Host::beta).
+         */
+        suspend fun start(context: Context, cloudOrigin: String, beta: Boolean = false): StillFailCore = started.withLock {
             instance?.let { core ->
                 require(core.cloudOrigin == cloudOrigin) { "the core already runs against ${core.cloudOrigin}" }
                 return core
@@ -65,7 +68,7 @@ class StillFailCore internal constructor(
             val dataDir = File(context.applicationContext.filesDir, "stillfail-core").path
             // Loads the library off the caller's thread; it is the slow part of starting.
             withContext(Dispatchers.IO) { fail.still.core.ffi.utcOffsetMin(0.0) }
-            val core = StillFailCore(ffiEngines(dataDir, cloudOrigin))
+            val core = StillFailCore(ffiEngines(dataDir, cloudOrigin, beta))
             core.cloudOrigin = cloudOrigin
             withContext(core.confined) { core.open() }
             instance = core

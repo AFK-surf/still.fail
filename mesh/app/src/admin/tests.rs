@@ -303,6 +303,8 @@ struct Setup {
     quota: Option<Arc<AtomicUsize>>,
     cloud: Option<&'static str>,
     machine: Option<Arc<MachineLogins>>,
+    /// The station's updates, as a release installed from `channel` (BUILD 1300) in a cloud that answers nothing.
+    updates: Option<Option<&'static str>>,
 }
 
 struct Rig {
@@ -445,7 +447,7 @@ async fn setup_with(o: Setup) -> Rig {
         slack_apps: Some(slack.clone()),
         check_on_start: false,
         machine_logins: o.machine,
-        updates: None,
+        updates: o.updates.map(|channel| crate::updates::tests::installed(&data, "1300", channel, Some(settings.clone()))),
         dev: false,
         jobs: None,
     });
@@ -1723,4 +1725,37 @@ async fn a_jobs_log_asked_for_on_the_events_stream_comes_at_once_and_again_as_it
     // Nothing new: nothing sent.
     tokio::time::sleep(Duration::from_millis(1500)).await;
     assert_eq!(events.all().iter().filter(|(e, _)| e == "job-log").count(), 2);
+}
+
+fn member(role: &str) -> Viewer {
+    Viewer::Mesh { sub: "s".into(), email: "m@x.com".into(), name: "M".into(), role: role.into(), workspace: "ws".into(), device: "d".into() }
+}
+
+#[tokio::test]
+async fn the_update_channel_is_said_with_the_versions_and_set_by_an_admin() {
+    let s = setup_with(Setup { updates: Some(Some("beta")), ..Default::default() }).await;
+    s.call("POST", "/updates/check", None).await;
+    let station = |updates: &Value| updates.as_array().unwrap().iter().find(|v| v["id"] == "station").cloned().unwrap();
+    let overview = s.get("/overview").await;
+    assert_eq!(station(&overview["updates"])["channel"], "beta", "installed from the beta, on it");
+
+    // A member may not; nor a channel that is not one.
+    let (status, _) = s.call_as("POST", "/updates/channel", Some(json!({ "channel": "stable" })), member("member")).await;
+    assert_eq!(status, 403);
+    let (status, _) = s.call_as("POST", "/updates/channel", Some(json!({ "channel": "nightly" })), member("admin")).await;
+    assert_eq!(status, 400);
+
+    let (status, updates) = s.call_as("POST", "/updates/channel", Some(json!({ "channel": "stable" })), member("admin")).await;
+    assert_eq!(status, 200, "{updates}");
+    assert_eq!(station(&updates)["channel"], "stable");
+    assert_eq!(s.settings.raw().update_channel.as_deref(), Some("stable"));
+    let overview = s.get("/overview").await;
+    assert_eq!(station(&overview["updates"])["channel"], "stable");
+}
+
+#[tokio::test]
+async fn a_station_with_nothing_to_update_has_no_channel_to_set() {
+    let s = setup().await;
+    let (status, _) = s.call("POST", "/updates/channel", Some(json!({ "channel": "beta" }))).await;
+    assert_eq!(status, 404);
 }

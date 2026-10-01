@@ -16,7 +16,7 @@ import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
 const STATUS: Record<string, number> = {
-  workspace_not_found: 404, member_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
+  workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
   already_member: 409, invalid_name: 400, invalid_role: 400, invalid_email: 400,
   last_owner: 409,
@@ -52,7 +52,7 @@ const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerC
  * `ember-events`. A header, unlike a query string, stays out of URLs and so
  * out of request logs.
  */
-function socketToken(request: Request): { token: string; protocol: string } | null {
+export function socketToken(request: Request): { token: string; protocol: string } | null {
   const offered = (request.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim());
   const protocol = EVENTS_PROTOCOLS.find((p) => offered.includes(p));
   if (!protocol) return null;
@@ -219,6 +219,12 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   const dir = env.DIRECTORY.getByName("primary");
   if (path === "/v1/admin/me" && method === "GET") return reply({ email: claims.email });
   if (path === "/v1/admin/users" && method === "GET") return directory(async () => ({ users: await dir.adminUsers() }));
+  // Lets an account into the test channel (BETA_ORIGIN) or out of it: { on: boolean }.
+  const beta = /^\/v1\/admin\/users\/([A-Za-z0-9_-]{1,128})\/beta$/.exec(path);
+  if (beta && method === "POST") {
+    if (typeof input.on !== "boolean") return reply({ error: "invalid_request" }, 400);
+    return directory(() => dir.setBeta(beta[1]!, input.on as boolean));
+  }
   if (path === "/v1/admin/workspaces" && method === "GET") return directory(async () => ({ workspaces: await dir.adminWorkspaces() }));
   // Each with its sign-up link: that is the web app's, on the other origin.
   if (path === "/v1/admin/invite-codes" && method === "GET") return directory(async () => ({ codes: (await dir.inviteCodes()).map((c) => ({ ...c, url: inviteUrl(env, c.code) })) }));

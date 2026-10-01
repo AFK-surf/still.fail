@@ -7,6 +7,11 @@ export const mVersionShown = style({
   fontSize: "13px", color: "var(--m-muted)", fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
+/** The station on the test channel: a small tag beside its version. */
+export const mVersionBeta = style({
+  alignSelf: "center", flex: "none", padding: "0 6px", borderRadius: "999px", background: "var(--m-accent-bg)",
+  color: "var(--m-accent-ink)", fontSize: "11px", fontWeight: "500", lineHeight: "18px",
+});
 export const mVersionNote = style({
   fontSize: "13px", color: "var(--m-muted)",
   selectors: { "&[data-failed]": { color: "var(--m-red)" } },

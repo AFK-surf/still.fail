@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // The test channel's official site, youdid.wtf (the dual of still.fail): the same page (`pnpm run build:site-beta` →
+  // dist/site-beta), named youdid.wtf, its downloads the beta apps' (web/src/site/Site.tsx). Static files only, like
+  // still-fail-site (wrangler.site.jsonc).
+  "name": "youdid-wtf-site",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "youdid.wtf", "custom_domain": true }],
+  "assets": { "directory": "../dist/site-beta", "not_found_handling": "single-page-application" },
+}

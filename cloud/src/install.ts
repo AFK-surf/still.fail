@@ -20,9 +20,12 @@
 // (its definition differs, so it is never handed over), ~/.ember moved to ~/.stillfail with a link left at the old
 // place, the old service's definition removed and the new one started; `ember` is linked to the new command.
 
-/** The installer for a still.fail cloud at `origin`. */
-export function installScript(origin: string): string {
-  return SCRIPT.replaceAll("__ORIGIN__", origin);
+/**
+ * The installer for a still.fail cloud at `origin`, getting the release of `channel` by default: the stable one, or the
+ * test channel's (beta/, scripts/release.sh --beta). STILLFAIL_CHANNEL where it runs says otherwise.
+ */
+export function installScript(origin: string, channel: "stable" | "beta" = "stable"): string {
+  return SCRIPT.replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel);
 }
 
 /**
@@ -31,6 +34,9 @@ export function installScript(origin: string): string {
  */
 export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
 
+/** The test channel's release (scripts/release.sh --beta), until promoted to the stable name. */
+export const BETA_RELEASE_FILE = /^beta\/stillfail-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
  * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
@@ -38,18 +44,24 @@ export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|
 const APP_FILES: [RegExp, string][] = [
   // The station's latest release, for stations to say a newer one is out (mesh/app/src/updates.rs).
   [/^station\.json$/, "application/json"],
+  // The test channel's (scripts/release.sh --beta): the station's latest, and the beta apps' (fail.still.desktop.beta,
+  // fail.still.android.beta, apps of their own beside the released ones): the desktop one's feed (electron-updater's
+  // channel stillfail-beta) and the Android one's, with the builds they name (stillfail-beta-…).
+  [/^station-beta\.json$/, "application/json"],
+  [/^desktop\/stillfail-beta-mac\.yml$/, "text/yaml; charset=utf-8"],
+  [/^android\/beta\/latest\.json$/, "application/json"],
   [/^desktop\/stillfail-mac\.yml$/, "text/yaml; charset=utf-8"],
-  [/^desktop\/stillfail-[0-9.]+-arm64-mac\.zip$/, "application/zip"],
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip$/, "application/zip"],
   // Its blockmap, for the updater to download only what changed since the zip it has (releases.ts).
-  [/^desktop\/stillfail-[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
-  [/^android\/(stillfail|ember)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
 ];
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
-  if (RELEASE_FILE.test(file)) return "application/gzip";
+  if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return "application/gzip";
   return APP_FILES.find(([name]) => name.test(file))?.[1] ?? null;
 }
 
@@ -58,6 +70,7 @@ export function releaseType(file: string): string | null {
 const SCRIPT = `#!/bin/sh
 # Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
 #   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token>
+# STILLFAIL_CHANNEL=beta gets the test channel's release (stable: the usual one); this copy defaults to __CHANNEL__.
 # The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail;
 # a station from before the rename has it in ~/.ember, which is moved there).
 set -eu
@@ -105,9 +118,15 @@ user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-e
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-echo "下载 still.fail station…"
-curl -fL --progress-bar "$origin/releases/stillfail-station-$platform.tar.gz" -o "$tmp/stillfail.tar.gz"
+channel="\${STILLFAIL_CHANNEL:-__CHANNEL__}"
+case "$channel" in
+  beta) release="beta/stillfail-station-$platform.tar.gz"; echo "下载 still.fail station（测试版）…" ;;
+  *) channel=stable; release="stillfail-station-$platform.tar.gz"; echo "下载 still.fail station…" ;;
+esac
+curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz"
 tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
+# Which channel the release came from, for the station (mesh/app/src/updates.rs: where it goes back from the beta).
+printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run). Each directory once: run from
 # the station (whose PATH is this), it would otherwise grow with every update.
@@ -182,6 +201,7 @@ inside_station() {
 
 # Already on this release, and running as its service would: nothing to do.
 if [ -n "$pid" ] && [ -z "$migrate" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/stillfail/VERSION" "$app/VERSION" && same_service; then
+  cp "$tmp/stillfail/CHANNEL" "$app/CHANNEL" 2>/dev/null || true
   echo "still.fail station 已经是最新版（$(cut -c1-7 "$app/VERSION")），不用更新。"
   exit 0
 fi

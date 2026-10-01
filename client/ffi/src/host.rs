@@ -23,6 +23,8 @@ use crate::{Command, CoreListener};
 
 pub struct NativeHost {
     cloud_origin: String,
+    /// A beta app's core (`Host::beta`).
+    beta: bool,
     tls: Arc<rustls::ClientConfig>,
     /// Its pool of connections; replaced when they are taken for gone (`reset_connections`).
     http: RefCell<reqwest::Client>,
@@ -35,10 +37,10 @@ pub struct NativeHost {
 }
 
 impl NativeHost {
-    pub fn new(data_dir: PathBuf, cloud_origin: String, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>) -> NativeHost {
+    pub fn new(data_dir: PathBuf, cloud_origin: String, beta: bool, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>) -> NativeHost {
         let tls = Arc::new(tls_config());
         let http = RefCell::new(http_client(&tls));
-        NativeHost { cloud_origin, tls, http, storage: Storage::new(data_dir), listener, commands, started: std::time::Instant::now() }
+        NativeHost { cloud_origin, beta, tls, http, storage: Storage::new(data_dir), listener, commands, started: std::time::Instant::now() }
     }
 }
 
@@ -168,6 +170,10 @@ fn headers(response: &reqwest::Response) -> Vec<(String, String)> {
 impl Host for NativeHost {
     fn cloud_origin(&self) -> String {
         self.cloud_origin.clone()
+    }
+
+    fn beta(&self) -> bool {
+        self.beta
     }
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>> {
@@ -468,7 +474,7 @@ mod tests {
         impl CoreListener for Quiet {
             fn on_message(&self, _: u64, _: String) {}
         }
-        let host = NativeHost::new(PathBuf::from("/data"), String::new(), Arc::new(Quiet), commands);
+        let host = NativeHost::new(PathBuf::from("/data"), String::new(), false, Arc::new(Quiet), commands);
         assert_eq!(host.storage.path("device"), PathBuf::from("/data/device"));
         assert_eq!(host.storage.path("../x.y"), PathBuf::from("/data/%2E%2E%2Fx%2Ey"));
     }

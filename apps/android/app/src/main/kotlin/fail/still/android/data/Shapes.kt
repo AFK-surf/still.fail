@@ -1518,6 +1518,12 @@ data class SoftwareVersion (
 	val latest: String? = null,
 	/// The latest is newer than what runs.
 	val newer: Boolean,
+	/// The station's, switched back from the test channel: the latest is the stable release, older than the beta that
+	/// runs, and going back to it is offered (回到正式版). False from a station older than channels.
+	val downgrade: Boolean? = null,
+	/// The station's: which releases it is updated to, `stable` or `beta`; none where it cannot be updated from here,
+	/// and from a station older than channels.
+	val channel: String? = null,
 	/// The pages can update it (or install it, when it is not installed).
 	val updatable: Boolean,
 	/// Why it cannot be updated from here (the desktop app's station, a runtime installed another way…).
@@ -1591,6 +1597,9 @@ data class StationView (
 	val runtimes: List<RuntimeModels>,
 	val models: List<ModelOption>,
 	val overview: Overview? = null,
+	/// Its versions offer the 测试版 switch: it can be put on a channel (its station's version says one), and the
+	/// account that reaches it is in the beta or it is on the test channel already (to be switched back).
+	val betaOffered: Boolean? = null,
 	val host: Host? = null,
 	/// How this device's connection to it runs; none for a station reached without one of its own (the page's own)
 	/// or before one is open.

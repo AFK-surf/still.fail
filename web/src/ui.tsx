@@ -149,10 +149,11 @@ export function Choices<T extends string>({ options, value, onChange, label }:
   );
 }
 
-export function Switch({ checked, onChange, label, disabled, id }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean | undefined; id?: string }) {
+/** `small`: one to sit in a line of small text. */
+export function Switch({ checked, onChange, label, disabled, id, small = false }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean | undefined; id?: string; small?: boolean }) {
   return (
-    <RSwitch.Root id={id} className={css.switch_} checked={checked} onCheckedChange={onChange} disabled={disabled ?? false} aria-label={label}>
-      <RSwitch.Thumb className={css.switchThumb} />
+    <RSwitch.Root id={id} className={small ? `${css.switch_} ${css.switchSmall}` : css.switch_} checked={checked} onCheckedChange={onChange} disabled={disabled ?? false} aria-label={label}>
+      <RSwitch.Thumb className={small ? `${css.switchThumb} ${css.switchThumbSmall}` : css.switchThumb} />
     </RSwitch.Root>
   );
 }

@@ -10,7 +10,7 @@ import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { About, Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Time, ICON, type Tone } from "../ui.tsx";
+import { About, Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Switch, Time, ICON, type Tone } from "../ui.tsx";
 import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "../cloud/api.ts";
 import { Avatar } from "../cloud/gate.tsx";
@@ -112,13 +112,13 @@ function UsersPage({ account }: { account: Account }) {
     <Page title="用户" lead={list && `${list.length} 人登录过 still.fail。「还没进来」的人登录了，但没有 workspace，也没有用过邀请码或接受过邀请。`}>
       <Failed error={users.error} />
       {!list ? !users.error && <Loading label="正在读取…" fill={false} /> : (
-        <ul className={css.adminList}>{list.map((u) => <UserItem key={u.sub} user={u} />)}</ul>
+        <ul className={css.adminList}>{list.map((u) => <UserItem key={u.sub} account={account} user={u} />)}</ul>
       )}
     </Page>
   );
 }
 
-function UserItem({ user }: { user: AdminUser }) {
+function UserItem({ account, user }: { account: Account; user: AdminUser }) {
   const admission = ADMISSION[user.admission ?? "none"];
   return (
     <li className={css.adminItem}>
@@ -129,6 +129,7 @@ function UserItem({ user }: { user: AdminUser }) {
           <span className={shellCss.muted}>{user.email}</span>
         </span>
         <Pill tone={admission.tone}>{admission.label}</Pill>
+        {user.beta !== undefined && <BetaSwitch account={account} user={user} />}
       </div>
       <p className={`${css.adminMeta} ${shellCss.muted}`}>
         <Time stamp={stamp(user, "created_at")} />首次登录 · {user.last_seen ? <><Time stamp={stamp(user, "last_seen")} />来过</> : "还没有来访记录"}
@@ -137,6 +138,20 @@ function UserItem({ user }: { user: AdminUser }) {
         <div className={css.chips}>{user.workspaces.map((w) => <span key={w.id} className={css.chip}>{w.name} · {ROLE_LABEL[w.role]}</span>)}</div>
       )}
     </li>
+  );
+}
+
+/** Whether the account may use the test channel (app.youdid.wtf); the list is read again once it is set. */
+function BetaSwitch({ account, user }: { account: Account; user: AdminUser }) {
+  const toast = useToast();
+  const set = useAction((on: boolean) => admin.setBeta(account.sub, user.sub, on), (_, on) => toast(on ? "已开通测试版" : "已关闭测试版"));
+  useEffect(() => { if (set.error) toast(`没能更改：${set.error.message}`); }, [set.error, toast]);
+  const id = `beta-${user.sub}`;
+  return (
+    <span className={css.betaSwitch}>
+      <label htmlFor={id} className={shellCss.muted}>测试版</label>
+      <Switch id={id} checked={set.busy ? Boolean(set.arg) : Boolean(user.beta)} disabled={set.busy} onChange={(on) => set.run(on)} />
+    </span>
   );
 }
 

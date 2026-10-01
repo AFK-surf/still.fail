@@ -24,11 +24,12 @@ Object.assign(globalThis, {
 
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));
 const { render } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);
-const page = dist("site/index.html");
+// STILLFAIL_SITE=beta: the test channel's site, youdid.wtf (web/vite.demo.config.ts).
+const page = dist(process.env.STILLFAIL_SITE === "beta" ? "site-beta/index.html" : "site/index.html");
 const html = readFileSync(page, "utf8");
-if (!html.includes("<!--site-->")) throw new Error("dist/site/index.html has no <!--site--> to fill");
+if (!html.includes("<!--site-->")) throw new Error(`${page} has no <!--site--> to fill`);
 writeFileSync(page, html.replace("<!--site-->", render()));
 rmSync(dist("site-ssr"), { recursive: true, force: true });
-console.log("prerendered dist/site/index.html");
+console.log(`prerendered ${page}`);
 // What the app started (timers, the demo's lingering topics) has nothing more to do.
 process.exit(0);

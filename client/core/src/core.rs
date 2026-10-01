@@ -212,7 +212,7 @@ impl Core {
             );
             let kept = Kept::new(host.clone());
             let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone(), workspaces.clone());
-            let views = Views::new(host.clone(), store.clone(), email_of(me.clone()), relay_name(me.clone()));
+            let views = Views::new(host.clone(), store.clone(), email_of(me.clone()), relay_name(me.clone()), beta_of(me.clone()));
             let choose = Choose::new(host.clone(), store.clone(), data.clone(), views.clone(), check_profile(me.clone()));
             let sync = Sync::new(store.clone(), host.clone(), workspaces.clone());
             let notices = Notices::new(store.clone(), host.clone(), workspaces.clone(), email_of(me.clone()));
@@ -601,6 +601,15 @@ fn email_of(core: Weak<Inner>) -> EmailOf {
         let core = core.upgrade()?;
         let sub = core.workspaces.owner(workspace)?;
         core.accounts.list().into_iter().find(|a| a.sub == sub).map(|a| a.email)
+    })
+}
+
+/// Whether the account that reaches a workspace is in the beta, as its `/v1/me` said (`user.beta`).
+fn beta_of(core: Weak<Inner>) -> crate::views::BetaOf {
+    Rc::new(move |workspace: &str| {
+        let Some(core) = core.upgrade() else { return false };
+        let Some(sub) = core.workspaces.owner(workspace) else { return false };
+        core.data.record("me", &sub).and_then(|me| me.pointer("/user/beta").and_then(Value::as_bool)) == Some(true)
     })
 }
 
@@ -1247,6 +1256,12 @@ impl Inner {
                     }
                 }
                 self.data.put("me", &account.sub, me.clone());
+            } else if let Err(error) = &me
+                && error.code == crate::cloud::NOT_BETA
+            {
+                // A beta app the account may not use: what it reached is not reached through this app (kept from
+                // before, it would show its workspaces as if they could be opened).
+                self.data.forget_record("me", &account.sub);
             }
             self.mes.borrow_mut().insert(account.sub.clone(), me.map(|_| ()));
         }
@@ -1331,9 +1346,18 @@ impl Inner {
                 "relay_url": me.get("relay_url").cloned().unwrap_or(Value::Null),
                 "loaded": matches!(mes.get(&account.sub), Some(Ok(()))),
             });
+            // still.fail cloud lets this account use the beta apps (`user.beta`); absent otherwise.
+            if me.pointer("/user/beta").and_then(Value::as_bool) == Some(true) {
+                entry["beta"] = json!(true);
+            }
             // One account failing (offline, signed out elsewhere) still shows the others.
             if let Some(Err(error)) = mes.get(&account.sub) {
                 entry["error"] = json!(error);
+                // A beta app, and an account still.fail cloud has not let into the beta: said as such, for the UI to
+                // show with a way to sign the account out (it reaches nothing here).
+                if error.code == crate::cloud::NOT_BETA {
+                    entry["blocked"] = json!(crate::cloud::NOT_BETA_TEXT);
+                }
             }
             entry
         });
@@ -2716,6 +2740,67 @@ mod tests {
             pass(SOCKET_IDLE_MS).await;
             assert_eq!(host.sockets.borrow().len(), opened + 1, "silent past its pings: opened again");
             assert_eq!(host.open_sockets("/v1/events"), 1);
+        });
+    }
+
+    #[test]
+    fn a_beta_app_says_so_and_an_account_not_let_in_is_blocked() {
+        run(async {
+            let host = FakeHost::new();
+            host.speed_up(SPEEDUP);
+            host.beta.set(true);
+            let account = StoredAccount { sub: "s1".into(), email: "a@x.com".into(), name: "阿一".into(), picture: String::new(), access: "a".into(), refresh: "r".into(), access_expires: now_s() + 3600.0 };
+            host.store(STORAGE_KEY, serde_json::to_vec(&vec![account]).unwrap());
+            let beta = Rc::new(Cell::new(false));
+            let let_in = beta.clone();
+            host.on_fetch(move |req| {
+                let release = |code: i64| json!({ "versionCode": code, "versionName": format!("0.1.{code}"), "file": format!("android/stillfail-{code}.apk"), "sha256": "ab", "size": 9 });
+                let says_beta = req.headers.iter().any(|(k, v)| k == "x-stillfail-channel" && v == "beta");
+                match req.url.trim_start_matches("https://stillfail.test") {
+                    // As still.fail cloud gates a beta app's calls.
+                    "/v1/me" if says_beta && !let_in.get() => json_response(403, json!({ "error": "not_beta" })),
+                    "/v1/me" => json_response(200, json!({ "user": { "sub": "s1", "beta": let_in.get() }, "workspaces": [{ "id": "ws", "name": "W" }], "invitations": [], "relay_url": "https://relay.test" })),
+                    "/releases/android/latest.json" => json_response(200, release(1200)),
+                    "/releases/android/beta/latest.json" => json_response(200, release(1250)),
+                    _ => json_response(404, json!({ "error": "not_found" })),
+                }
+            });
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            let mut values: HashMap<RequestId, Value> = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            host.settle().await;
+            apply(&host, &mut values);
+            let entry = &values[&1][0];
+            assert_eq!((entry["blocked"].as_str(), entry["error"]["code"].as_str(), entry["workspaces"].as_array().map(Vec::len)), (Some("这个账号还没开通测试版"), Some("not_beta"), Some(0)));
+            assert!(host.requests.borrow().iter().filter(|r| r.url.contains("/v1/")).all(|r| r.headers.iter().any(|(k, _)| k == "x-stillfail-channel")));
+            // Let in: its workspaces, marked as let in, nothing blocked.
+            beta.set(true);
+            host.socket_send("/v1/events", r#"{"type":"workspaces"}"#);
+            host.settle().await;
+            apply(&host, &mut values);
+            let entry = &values[&1][0];
+            assert_eq!((entry["beta"].as_bool(), entry.get("blocked"), entry["workspaces"][0]["id"].as_str()), (Some(true), None, Some("ws")));
+            // Its newer builds are the beta feed's.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "app.update".into(), params: json!({ "platform": "android", "versionCode": 1100 }) });
+            host.settle().await;
+            let answer = host.take_emitted().into_iter().find_map(|(_, m)| match m { CoreMessage::Ok { id: 2, ok } => Some(ok), _ => None }).expect("answered");
+            assert_eq!(answer["versionCode"], 1250);
+        });
+    }
+
+    #[test]
+    fn a_released_app_says_nothing_of_a_channel() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            host.settle().await;
+            assert!(count(&host, "/v1/me") > 0);
+            assert!(host.requests.borrow().iter().all(|r| r.headers.iter().all(|(k, _)| k != "x-stillfail-channel")));
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!((values[&1][0].get("beta"), values[&1][0].get("blocked")), (None, None));
         });
     }
 

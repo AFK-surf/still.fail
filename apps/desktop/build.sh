@@ -10,7 +10,13 @@
 # Packed, the app is also zipped (stillfail-<version>-arm64-mac.zip) with stillfail-mac.yml beside it in out/: what
 # scripts/release.sh desktop publishes for the apps' updater (main.ts, keepUpdated). Its version is 0.1.<the commits
 # in the history>, each release's higher than the one before it.
+# --beta (or BETA=1) builds the beta app instead: 「youdid.wtf」 (fail.still.desktop.beta), beside the released one, with
+# its own userData and link scheme (stillfail-beta://), its core saying it is a beta app and its updates on the
+# stillfail-beta channel (main.ts BETA): out/mac-arm64/youdid.wtf.app, zipped as stillfail-beta-<version>-arm64-mac.zip
+# with stillfail-beta-mac.yml beside it.
 set -eu
+[ "${1:-}" = "--beta" ] && BETA=1
+beta=${BETA:-}
 # A non-login shell (ssh studio …) has none of these on its PATH.
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
@@ -33,10 +39,32 @@ rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
 [ -d node_modules/electron/dist ] || node node_modules/electron/install.js
-pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning
+pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning \
+  ${beta:+--define:process.env.STILLFAIL_CHANNEL='"beta"'}
 # The page marking in a preview's frame (web/src/annotate/frame.ts), which main.ts serves as its /_ember/annotate.js.
 pnpm exec esbuild "$root/web/src/annotate/frame.ts" --bundle --format=iife --minify --outfile=build/app/annotate.js --log-level=warning
 [ -z "${DEV:-}" ] || { echo "$here/build"; exit 0; }
 version="0.1.$(git -C "$root" rev-list --count HEAD)"
-pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version"
-ls -d "$here/out/mac-arm64/still.fail.app"
+if [ -z "$beta" ]; then
+  pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version"
+  ls -d "$here/out/mac-arm64/still.fail.app"
+else
+  # package.json's build, made the beta app's (the name the app and its userData go by is its productName).
+  node -e '
+    const [version, out] = process.argv.slice(1);
+    const pkg = JSON.parse(require("fs").readFileSync("package.json", "utf8"));
+    const name = "youdid.wtf";
+    const b = pkg.build;
+    b.appId = "fail.still.desktop.beta";
+    b.productName = name;
+    b.extraMetadata = { ...b.extraMetadata, version, productName: name };
+    b.protocols = [{ name, schemes: ["stillfail-beta"] }];
+    b.mac = { ...b.mac, extendInfo: { ...b.mac.extendInfo, CFBundleName: name, CFBundleDisplayName: name }, artifactName: "stillfail-beta-${version}-${arch}-mac.${ext}" };
+    b.publish = { ...b.publish, channel: "stillfail-beta" };
+    // UNSIGNED=1: only to see it packs (ssh studio has no keychain for codesign).
+    if (process.env.UNSIGNED) b.mac.identity = null;
+    require("fs").writeFileSync(out, JSON.stringify(b, null, 2));
+  ' "$version" build/builder-beta.json
+  pnpm exec electron-builder --mac --arm64 --publish never --config build/builder-beta.json
+  ls -d "$here/out/mac-arm64/youdid.wtf.app"
+fi

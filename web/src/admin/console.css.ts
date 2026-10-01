@@ -19,6 +19,8 @@ export const adminItem = style({
   fontSize: vars.textSm, cornerShape: vars.cornerShape,
 });
 export const adminHead = style({ display: "flex", alignItems: "center", gap: "12px", minWidth: "0" });
+/** The test channel's switch, at the end of a user's head row. */
+export const betaSwitch = style({ flex: "none", display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textXs });
 export const adminMeta = style({ margin: "0", fontSize: vars.textXs });
 export const adminGroup = style({ display: "grid", gap: "2px" });
 export const adminGroupLabel = style({ marginBottom: "2px", fontSize: vars.textXs, color: vars.muted });

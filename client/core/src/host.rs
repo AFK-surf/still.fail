@@ -73,6 +73,11 @@ pub enum DbOp {
 pub trait Host {
     /// Where still.fail cloud is: the page's origin on the web, https://app.still.fail natively.
     fn cloud_origin(&self) -> String;
+    /// A beta app (a build of its own, installed beside the released one): its calls to still.fail cloud say so, and
+    /// it takes its newer builds from the beta feed (`app.update`). The web is never one.
+    fn beta(&self) -> bool {
+        false
+    }
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>>;
     fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>>;
