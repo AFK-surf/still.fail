@@ -237,26 +237,27 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
  * The round trip to a station through each relay as last measured, the one it goes through now underlined, and
  * 重新测量: the core moves the connection to one clearly quicker (`station.measure`; web/src/cloud/StationCards.tsx Ways).
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun Ways(station: String, measured: NetMeasured?, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val c = C
     val measuring = app.isDoing("station.measure", "station" to station) || measured?.measuring == true
     val tone = { f: NetFigure -> when (f.level) { "red" -> c.red; "amber" -> c.warn; else -> c.ink } }
-    val said = buildAnnotatedString {
-        if (measured == null) append("各中继还没测过")
-        if (measured != null) append("${measured.whenText ?: "上次检测"}  ")
-        measured?.relays?.forEachIndexed { i, r ->
-            if (i > 0) append("   ")
-            withStyle(SpanStyle(textDecoration = if (r.current) TextDecoration.Underline else null)) { append(r.name) }
-            append(" ")
-            val rtt = r.rtt
-            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = if (rtt == null) c.red else tone(rtt))) { append(rtt?.text ?: "未测通") }
-        }
-        measured?.moved?.let { append("   已换到$it") }
-    }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(said, Modifier.weight(1f), fontSize = 12.sp, color = C.muted, style = TextStyle(fontFeatureSettings = "tnum"))
+        androidx.compose.foundation.layout.FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(if (measured == null) "各中继还没测过" else measured.whenText ?: "上次检测", fontSize = 12.sp, color = c.muted)
+            measured?.relays?.forEach { r ->
+                val said = buildAnnotatedString {
+                    withStyle(SpanStyle(textDecoration = if (r.current) TextDecoration.Underline else null)) { append(r.name) }
+                    append(" ")
+                    val rtt = r.rtt
+                    withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = if (rtt == null) c.red else tone(rtt))) { append(rtt?.text ?: "未测通") }
+                }
+                Text(said, fontSize = 12.sp, color = c.muted, style = TextStyle(fontFeatureSettings = "tnum"), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            measured?.moved?.let { Text("已换到$it", fontSize = 12.sp, color = c.muted) }
+        }
         Row(
             Modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !measuring) {
                 app.act("重新测量") { app.core.call("station.measure", buildJsonObject { put("station", station) }) }

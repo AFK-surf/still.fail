@@ -622,10 +622,12 @@ impl Mesh {
             span.set("stillfail.moved", relay_host(&relay));
             let opened = self.tracer.instrument(Some(span.context()), open(self.host.clone(), endpoint, vec![relay.clone()], station_id.to_string(), link.credentials.clone(), false, Some(relay)));
             match opened.await {
-                Ok(new) => {
+                Ok(new) if self.is_current(station_id, link) && link.path() == Some("relay") => {
                     shown.moved = new.via().and_then(|url| url.host_str().map(str::to_string));
                     self.switch(station_id, link, new);
                 }
+                // The live link may have gone direct (or been replaced) while this candidate was opening.
+                Ok(new) => new.close(),
                 Err(error) => {
                     span.fail();
                     span.set("error.type", error.code);
