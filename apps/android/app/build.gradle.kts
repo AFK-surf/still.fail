@@ -21,7 +21,7 @@ val firebase = Properties().apply { rootProject.file("firebase.properties").take
 fun fcm(key: String): String = providers.gradleProperty(key).orNull ?: firebase.getProperty(key) ?: ""
 
 // The beta app (-PstillfailBeta; apps/android/build.py --beta): an app of its own beside the released one
-// (fail.still.android.beta, 「youdid.wtf」, a teal icon), signing in through stillfail-beta:// and taking its newer
+// (fail.still.android.beta, 「youdid.wtf」, the face dark with white eyes), signing in through stillfail-beta:// and taking its newer
 // builds from the beta feed (/releases/android/beta/latest.json: its core says it is a beta app, client/core
 // Host::beta). Its pushes need a Firebase app of its own (fcmBetaAppId); without one it has none.
 val beta = providers.gradleProperty("stillfailBeta").isPresent
@@ -47,7 +47,9 @@ android {
         buildConfigField("String", "FCM_SENDER_ID", "\"${fcm("fcmSenderId")}\"")
         buildConfigField("boolean", "BETA", "$beta")
         resValue("string", "app_name", if (beta) "youdid.wtf" else "still.fail")
-        resValue("color", "launcher_bg", if (beta) "#4A9D8F" else "#E5704A")
+        // The face: orange with dark eyes; the beta app's dark with white eyes (design/app-icon/face-beta.svg).
+        resValue("color", "launcher_bg", if (beta) "#1C1D20" else "#E5704A")
+        resValue("color", "launcher_eyes", if (beta) "#FFFFFF" else "#24272B")
         // The sign-in's way back (data/Calls.kt Auth): the beta app's own, so the two apps never both take it.
         manifestPlaceholders["authScheme"] = if (beta) "stillfail-beta" else "stillfail"
         manifestPlaceholders["formerAuthScheme"] = if (beta) "stillfail-beta" else "ember"
