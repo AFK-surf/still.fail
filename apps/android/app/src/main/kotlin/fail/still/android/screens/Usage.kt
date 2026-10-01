@@ -250,7 +250,7 @@ fun UsagePricesScreen(current: WorkspaceEntry, days: Int) {
                         val header = listOf("模型") + table.rows.first().rates.map { it.label }
                         val markdown = (listOf(line(header), line(header.map { "---" })) +
                             table.rows.map { row -> line(listOf(row.model) + row.rates.map { it.value }) }).joinToString("\n")
-                        Markdown(markdown, fillTables = true)
+                        Markdown(markdown, modifier = Modifier.padding(top = 8.dp), fillTables = true)
                     }
                 }
             }
