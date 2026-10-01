@@ -1,5 +1,6 @@
 // Who is in a chat, as its row in the chat list shows it (the sidebar's Sidebar.tsx, the phone's mobile/Home.tsx): its
-// agents' marks and its people's faces, small at the second line's end, in the order `lead` says (rowLead.ts).
+// agents' marks and its people's faces, small at the second line's end, in the order `lead` says (the chats view's
+// `leading`).
 import type { ChatItem, Person, RowAgent } from "./api.ts";
 import { Avatar, ModelLogo, Tip } from "./ui.tsx";
 import * as css from "./RowPicture.css.ts";

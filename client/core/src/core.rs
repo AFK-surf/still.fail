@@ -3149,14 +3149,6 @@ mod tests {
     }
 
     #[test]
-    fn the_rows_are_led_by_the_setting_or_by_how_many_people_there_are() {
-        assert_eq!(crate::prefs::leading(None, None), "agents");
-        assert_eq!(crate::prefs::leading(Some(&json!({})), Some(3)), "people");
-        assert_eq!(crate::prefs::leading(Some(&json!({ "rowPicture": "agents" })), Some(3)), "agents");
-        assert_eq!(crate::prefs::leading(Some(&json!({ "rowPicture": "people" })), Some(1)), "people");
-    }
-
-    #[test]
     fn a_draft_is_kept_on_the_device_until_emptied() {
         run(async {
             let (host, core) = station_core(0.0).await;

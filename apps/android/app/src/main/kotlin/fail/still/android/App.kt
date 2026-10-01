@@ -196,10 +196,6 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     val theme: String get() = kept.appearance ?: "system"
     fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
 
-    /** 列表头像: whose pictures lead a chat's row, "auto" (the default), "agents" or "people"; the chats view says which leads. */
-    val rowPicture: String get() = kept.rowPicture ?: "auto"
-    fun useRowPicture(value: String) = setPrefs(kept.copy(rowPicture = value), buildJsonObject { put("rowPicture", value) })
-
     val onlyMine: Boolean get() = kept.onlyMine ?: false
     fun showOnlyMine(on: Boolean) = setPrefs(kept.copy(onlyMine = on), buildJsonObject { put("onlyMine", on) })
 

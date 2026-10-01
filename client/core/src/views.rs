@@ -842,8 +842,9 @@ impl Views {
         let note = crate::looks::list_note(&states, &days, loading);
         // How many people the scope has: its members, once known.
         let members = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).map(Vec::len));
-        // Whose pictures lead, by the device's setting (prefs.rs).
-        let leading = crate::prefs::leading(self.ok(Topic::Prefs).as_ref(), members);
+        // Whose pictures lead: always the agents, the people after them (the 侧栏头像 setting is gone; clients from before
+        // it read this).
+        let leading = "agents";
         Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble, "members": members, "leading": leading, "glyph": glyph, "note": note })))
     }
 
@@ -2110,7 +2111,7 @@ mod tests {
     }
 
     #[test]
-    fn the_rows_are_led_as_the_device_says_else_by_how_many_people_the_scope_has() {
+    fn the_rows_are_led_by_the_agents_whatever_was_set() {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
@@ -2119,12 +2120,9 @@ mod tests {
             t.host.settle().await;
             t.set(rows("ws/st"), json!([]));
             t.read(&mut ui, 1).await;
-            // How many people the workspace has not known yet: as if alone, its agents lead.
             assert_eq!(ui.value.as_ref().unwrap()["leading"], "agents");
+            // What a device set before the setting went changes nothing.
             t.set(Topic::Prefs, json!({ "rowPicture": "people" }));
-            t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.as_ref().unwrap()["leading"], "people");
-            t.set(Topic::Prefs, json!({}));
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.as_ref().unwrap()["leading"], "agents");
         });

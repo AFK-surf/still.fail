@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -51,15 +52,10 @@ import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.Seg
 import kotlinx.coroutines.launch
 
 private val THEMES = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
-/** Whose pictures lead a chat's row (RowPicture.kt). */
-private val PICTURES = listOf(
-    Triple("auto", "自动", "有人参与时显示人，否则显示 agent"),
-    Triple("agents", "Agent 为主", "总是显示回话的 agent"),
-    Triple("people", "人为主", "总是显示发起的人"),
-)
 
 /** A row that opens a page: its name, how things stand (`bad` in red; `dot`, a red dot before it), a chevron. */
 @Composable
@@ -165,7 +161,7 @@ private fun Version() {
     }
 }
 
-/** How this device shows still.fail: its theme, and whose pictures lead a chat's row. */
+/** How this device shows still.fail: its theme. */
 @Composable
 fun AppearanceScreen() {
     val app = LocalApp.current
@@ -173,20 +169,8 @@ fun AppearanceScreen() {
         TopBack("设置", app::pop)
         LargeTitle("", "外观")
         SectionHeader("主题", start = 24.dp)
-        ListCard { THEMES.forEach { (v, label) -> CheckRow(label, null, app.theme == v) { app.useTheme(v) } } }
-        SectionHeader("会话列表的头像", start = 24.dp)
-        ListCard { PICTURES.forEach { (v, label, note) -> CheckRow(label, note, app.rowPicture == v) { app.useRowPicture(v) } } }
+        Seg(THEMES.map { it.second }, THEMES.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(THEMES[it].first) },
+            Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
         Spacer(Modifier.height(30.dp))
-    }
-}
-
-@Composable
-private fun CheckRow(title: String, note: String?, on: Boolean, onClick: () -> Unit) {
-    ListRow(onClick = onClick) {
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, color = C.ink)
-            if (note != null) Text(note, fontSize = 13.sp, color = C.muted)
-        }
-        if (on) IconIn(Icons.Check, 18.dp, C.accent)
     }
 }

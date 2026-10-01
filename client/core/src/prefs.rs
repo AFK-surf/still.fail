@@ -1,8 +1,8 @@
 //! What this device keeps of how its person likes it (the `prefs` topic): the lists' 只看我的, the appearance, whose
-//! pictures lead a row, times as dates, keys changed, the workspace and the chat last open, each chat's history tabs,
-//! a new connect to go on with, the invite code carried through signing in. One record in the data center (data.rs,
-//! table `prefs`), written by `prefs.set`. With it, what the device is (`client.device`: its host says so once at
-//! start) and what follows from that: phone or computer, the name it signs in as, the app a message is sent from.
+//! pictures led a row (no longer read; clients from before still set it), times as dates, keys changed, the workspace
+//! and the chat last open, each chat's history tabs, a new connect to go on with, the invite code carried through
+//! signing in. One record in the data center (data.rs, table `prefs`), written by `prefs.set`. With it, what the device
+//! is (`client.device`: its host says so once at start) and what follows from that: phone or computer, the name it signs in as, the app a message is sent from.
 
 use serde_json::{Map, Value, json};
 
@@ -129,12 +129,3 @@ pub fn device_name(data: &Data) -> Option<String> {
     device_said(data, "name")
 }
 
-/// Whose pictures lead a list's rows: the setting, or 自动 by how many people the scope has (unknown: as if alone).
-pub fn leading(prefs: Option<&Value>, members: Option<usize>) -> &'static str {
-    match prefs.and_then(|p| p.get("rowPicture")).and_then(Value::as_str) {
-        Some("agents") => "agents",
-        Some("people") => "people",
-        _ if members.unwrap_or(1) > 1 => "people",
-        _ => "agents",
-    }
-}

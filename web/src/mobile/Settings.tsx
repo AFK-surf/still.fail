@@ -6,14 +6,13 @@ import type { ReactNode } from "react";
 import { useStations, useConnects } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
-import { Check, ChevronRight } from "../icons.tsx";
-import { useRowPicture, type RowPicture } from "../rowLead.ts";
+import { ChevronRight } from "../icons.tsx";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
 import { quotaTrouble } from "./Profiles.tsx";
-import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -21,12 +20,6 @@ import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Settings.css.ts";
 
 export const THEMES: [Appearance, string][] = [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]];
-/** Whose pictures lead a chat's row (../rowLead.ts). */
-export const PICTURES: [RowPicture, string, string][] = [
-  ["auto", "自动", "有人参与时显示人，否则显示 agent"],
-  ["agents", "Agent 为主", "总是显示回话的 agent"],
-  ["people", "人为主", "总是显示发起的人"],
-];
 
 /** A row that opens a page: its name, how things stand (`bad` in red), a chevron. */
 export function GoRow({ title, value, bad = false, lead, onClick }: { title: string; value?: ReactNode; bad?: boolean; lead?: ReactNode; onClick: () => void }) {
@@ -104,36 +97,20 @@ function Notify() {
   );
 }
 
-/** How this device shows still.fail: its theme, and whose pictures lead a chat's row. */
+/** How this device shows still.fail: its theme. */
 export function AppearanceScreen() {
   const app = useApp();
   const [appearance, setAppearance] = useAppearance();
-  const [picture, setPicture] = useRowPicture();
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label="设置" onBack={app.pop} />
       <LargeTitle small="" big="外观" />
       <SectionHeader title="主题" start={24} />
-      <ListCard>
-        {THEMES.map(([v, label]) => <CheckRow key={v} title={label} on={appearance === v} onClick={() => setAppearance(v)} />)}
-      </ListCard>
-      <SectionHeader title="会话列表的头像" start={24} />
-      <ListCard>
-        {PICTURES.map(([v, label, note]) => <CheckRow key={v} title={label} note={note} on={picture === v} onClick={() => setPicture(v)} />)}
-      </ListCard>
+      <div style={{ padding: "0 12px" }}>
+        <Seg options={THEMES.map(([, label]) => label)} selected={Math.max(0, THEMES.findIndex(([v]) => v === appearance))}
+          onSelect={(i) => setAppearance(THEMES[i]![0])} height={34} fill />
+      </div>
       <div style={{ height: 30 }} />
     </div>
-  );
-}
-
-function CheckRow({ title, note, on, onClick }: { title: string; note?: string; on: boolean; onClick: () => void }) {
-  return (
-    <ListRow onClick={onClick}>
-      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-        <span className={listsCss.mRowTitle}>{title}</span>
-        {note && <span className={listsCss.mRowNote}>{note}</span>}
-      </span>
-      {on && <Check size={18} className={css.mCheck} />}
-    </ListRow>
   );
 }
