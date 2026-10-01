@@ -176,10 +176,12 @@ export function PriceTables({ view }: { view: UsageView }) {
     {tables.map((table, i) => <section className={css.card} key={i}>
       <h2 className={css.priceStation}>{table.station}</h2>
       <p className={css.priceNote}>{table.note}</p>
-      <div className={css.priceGrid}>{table.rows.map((row) => <div className={css.priceModel} key={row.model}>
-        <h3 className={css.priceName}>{row.model}</h3>
-        <dl className={css.priceRates}>{row.rates.map((rate) => <div className={css.priceRate} key={rate.label}><dt>{rate.label}</dt><dd>{rate.value}</dd></div>)}</dl>
-      </div>)}</div>
+      {table.rows.length === 0 ? <p className={css.priceNote}>这段时间没有模型用量</p> : <div className={css.priceScroll}>
+        <table className={css.priceTable}>
+          <thead><tr><th scope="col">模型</th>{table.rows[0]?.rates.map((r) => <th scope="col" key={r.label}>{r.label}</th>)}</tr></thead>
+          <tbody>{table.rows.map((row) => <tr key={row.model}><th scope="row">{row.model}</th>{row.rates.map((rate) => <td key={rate.label}>{rate.value}</td>)}</tr>)}</tbody>
+        </table>
+      </div>}
     </section>)}
   </div>;
 }

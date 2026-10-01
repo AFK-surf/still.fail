@@ -1,6 +1,7 @@
 // What the agents spent, on a narrow screen (../Usage.tsx has the view and the wide screen's page): from settings
 // (./Settings.tsx), the same totals, chart and lists, on the phone's cards.
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { DAYS, DaysChart, Notes, PriceTables, Ranking, Tiles, usageCss as css, useUsage, type UsageDays } from "../Usage.tsx";
 import { useApp } from "./app.tsx";
 import { LargeTitle, Loading, Seg, TopBack } from "./parts.tsx";
@@ -21,7 +22,7 @@ export function UsageScreen() {
       <p className={settingsCss.mPageNote}>agent 调用模型用了多少 token，按 API 价折算成钱</p>
       {!view ? <Loading text={usage.error ? `读不到用量：${usage.error.message}` : "正在读取…"} /> : (
         <div className={`${css.usage} ${css.mobile}`}>
-          <Tiles view={view} pricesPath={`/w/${app.entry.id}/settings/usage/prices`} />
+          <Tiles view={view} pricesPath={`/w/${app.entry.id}/settings/usage/prices?days=${days}`} />
           {view.empty ? <p className={css.empty}>{view.loading ? "正在读取…" : "这段时间没有用量"}</p> : (
             <>
               <div className={css.card}><DaysChart view={view} /></div>
@@ -45,7 +46,8 @@ export function UsageScreen() {
 
 export function UsagePricesScreen() {
   const app = useApp();
-  const usage = useUsage(app.entry.id, "7");
+  const [params] = useSearchParams();
+  const usage = useUsage(app.entry.id, params.get("days") === "30" ? "30" : "7");
   return <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
     <TopBack label="用量" onBack={app.pop} />
     <LargeTitle small="" big="价目表" />

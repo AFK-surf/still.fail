@@ -139,7 +139,7 @@ sealed interface Screen {
     data object Memories : Screen { override val id = "memories" }
     /** What the agents spent (screens/Usage.kt). */
     data object Usage : Screen { override val id = "usage" }
-    data object UsagePrices : Screen { override val id = "usage-prices" }
+    data class UsagePrices(val days: Int) : Screen { override val id = "usage-prices-$days" }
     /** A web service an agent started, full screen: by its job (people know it by its name, never its port). */
     data class Preview(val station: String, val job: String) : Screen { override val id = "preview/$station/$job" }
     /** A visualization an agent posted, as a page of its own in the preview (web mobile's 在侧边打开 on a phone). */
@@ -642,7 +642,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)
                     Screen.Memories -> fail.still.android.screens.MemoriesScreen(current)
                     Screen.Usage -> fail.still.android.screens.UsageScreen(current)
-                    Screen.UsagePrices -> fail.still.android.screens.UsagePricesScreen(current)
+                    is Screen.UsagePrices -> fail.still.android.screens.UsagePricesScreen(current, screen.days)
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)

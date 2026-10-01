@@ -196,16 +196,30 @@ fn items_shown(mut items: Vec<Item>, total: &Sum) -> Vec<Value> {
 }
 
 /// Keep stations separate: versions can have different tables, and an older station cannot tell us its rates.
-fn price_tables(sources: &[Source]) -> Vec<Value> {
+fn price_tables(sources: &[Source], first: &str, last: &str) -> Vec<Value> {
     sources.iter().map(|s| {
         let table = s.value.as_ref().and_then(|v| v.as_ref().ok()).and_then(|v| v.get("prices"));
         let note = if !s.online { "station 离线，无法读取价目" } else if table.is_none() {
             "station 尚未提供价目表，请更新 station 后查看"
         } else { table.and_then(|t| t.get("note")).and_then(Value::as_str).unwrap_or("美元 / 100 万 token") };
-        let rows: Vec<Value> = if s.online { table.and_then(|t| t.get("rows")).and_then(Value::as_array).into_iter().flatten().map(|r| {
-            let rates: Vec<Value> = [("input", "输入"), ("cacheRead", "缓存读取"), ("cacheWrite", "缓存写入 / 5 分钟"), ("cacheWriteLong", "缓存写入 / 1 小时"), ("output", "输出")]
-                .into_iter().filter_map(|(key, label)| r.get(key).and_then(Value::as_f64).map(|n| json!({"label": label, "value": format!("${n}")}))).collect();
-            json!({"model": r.get("model").and_then(Value::as_str).unwrap_or("未知模型"), "rates": rates})
+        let used: std::collections::BTreeSet<String> = s.value.as_ref().and_then(|v| v.as_ref().ok())
+            .and_then(|v| v.get("rows")).and_then(Value::as_array).into_iter().flatten()
+            .filter(|r| r.get("day").and_then(Value::as_str).is_some_and(|d| d >= first && d <= last)
+                && r.get("calls").and_then(Value::as_f64).unwrap_or(0.0) > 0.0)
+            .map(|r| r.get("model").and_then(Value::as_str).map(stillfail_shapes::model::key).unwrap_or_else(|| "未知模型".into())).collect();
+        let prices = table.and_then(|t| t.get("rows")).and_then(Value::as_array);
+        let matched: Vec<_> = used.iter().map(|model| {
+            let rate = prices.into_iter().flatten().find(|p| p.get("model").and_then(Value::as_str).is_some_and(|key|
+                model == key || model.strip_prefix(key).is_some_and(|suffix| suffix.starts_with('['))));
+            (model, rate)
+        }).collect();
+        // Every row has the same columns; cache-write columns appear only when a counted model uses them.
+        let columns: Vec<_> = [("input", "输入"), ("cacheRead", "缓存读取"), ("cacheWrite", "缓存写入 / 5 分钟"), ("cacheWriteLong", "缓存写入 / 1 小时"), ("output", "输出")]
+            .into_iter().filter(|(key, _)| !key.starts_with("cacheWrite") || matched.iter().any(|(_, p)| p.and_then(|p| p.get(*key)).and_then(Value::as_f64).is_some())).collect();
+        let rows: Vec<Value> = if s.online { matched.iter().map(|(model, r)| {
+            let rates: Vec<Value> = columns.iter().map(|(key, label)| json!({"label": label,
+                "value": r.and_then(|r| r.get(*key)).and_then(Value::as_f64).map(|n| format!("${n}")).unwrap_or_else(|| "—".into())})).collect();
+            json!({"model": if r.is_some() { (*model).clone() } else { format!("{model}（未计价）") }, "rates": rates})
         }).collect() } else { vec![] };
         json!({"station": s.name, "note": note, "rows": rows})
     }).collect()
@@ -367,7 +381,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
     }
     json!({
         "days": days,
-        "prices": price_tables(sources),
+        "prices": price_tables(sources, &first, &today),
         "loading": loading,
         "empty": total.calls == 0.0,
         "tiles": tiles,
@@ -437,13 +451,39 @@ mod tests {
     #[test]
     fn price_tables_keep_station_rates_separate_and_handle_older_stations() {
         let source = |name: &str, rate: f64| Source { address: name.into(), name: name.into(), online: true,
-            value: Some(Ok(json!({"prices": {"note": "standard", "rows": [{"model": "gpt-6-astra", "input": rate, "cacheRead": 0.01, "output": 50.0}]}}))) };
-        let tables = price_tables(&[source("alpha", 10.0), source("beta", 12.0), Source { address: "old".into(), name: "old".into(), online: true, value: Some(Ok(json!({}))) }]);
+            value: Some(Ok(json!({"rows": [{"day": "2026-10-02", "model": "gpt-6-astra", "calls": 1}], "prices": {"note": "standard", "rows": [{"model": "gpt-6-astra", "input": rate, "cacheRead": 0.01, "output": 50.0}]}}))) };
+        let tables = price_tables(&[source("alpha", 10.0), source("beta", 12.0), Source { address: "old".into(), name: "old".into(), online: true, value: Some(Ok(json!({}))) }], "2026-09-26", "2026-10-02");
         assert_eq!(tables[0]["rows"][0]["rates"][0]["value"], "$10");
         assert_eq!(tables[1]["rows"][0]["rates"][0]["value"], "$12");
         assert_eq!(tables[0]["rows"][0]["rates"][1]["value"], "$0.01");
         assert_eq!(tables[2]["rows"], json!([]));
         assert!(tables[2]["note"].as_str().unwrap().contains("更新 station"));
+    }
+
+    #[test]
+    fn price_table_only_lists_counted_models_in_the_selected_period() {
+        let sources = [Source { address: "st".into(), name: "st".into(), online: true, value: Some(Ok(json!({
+            "rows": [
+                {"day": "2026-10-02", "model": "openai/gpt-6-astra", "calls": 2},
+                {"day": "2026-10-01", "model": "gpt-6-astra", "calls": 3},
+                {"day": "2026-09-10", "model": "claude-opus-5-5", "calls": 1},
+                {"day": "2026-10-02", "model": "gpt-6-sol", "calls": 0},
+                {"day": "2026-10-02", "model": "new-model", "calls": 1}
+            ],
+            "prices": {"rows": [
+                {"model": "gpt-6-astra", "input": 10.0, "cacheRead": 1.0, "output": 50.0},
+                {"model": "claude-opus-5-5", "input": 4.0, "cacheWrite": 5.0},
+                {"model": "gpt-6-sol", "input": 2.0}
+            ]}
+        }))) }];
+        let short = price_tables(&sources, "2026-09-26", "2026-10-02");
+        assert_eq!(short[0]["rows"].as_array().unwrap().len(), 2);
+        assert_eq!(short[0]["rows"][0]["model"], "gpt-6-astra");
+        assert_eq!(short[0]["rows"][0]["rates"].as_array().unwrap().len(), 3);
+        assert_eq!(short[0]["rows"][1]["model"], "new-model（未计价）");
+        let long = price_tables(&sources, "2026-09-03", "2026-10-02");
+        assert_eq!(long[0]["rows"].as_array().unwrap().len(), 3);
+        assert_eq!(long[0]["rows"][0]["rates"].as_array().unwrap().len(), 4);
     }
 
     #[test]

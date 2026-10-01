@@ -6,6 +6,7 @@ package fail.still.android.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,7 +85,7 @@ fun UsageScreen(current: WorkspaceEntry) {
         if (view == null) {
             Text(topic.error?.let { "读不到用量：${it.message}" } ?: "正在读取…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
         } else {
-            Tiles(view) { app.push(Screen.UsagePrices) }
+            Tiles(view) { app.push(Screen.UsagePrices(days)) }
             if (view.empty) {
                 Text(if (view.loading) "正在读取…" else "这段时间没有用量", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
             } else {
@@ -220,9 +221,9 @@ private fun ItemRow(item: UsageItem, rank: Int, kind: String, open: (UsageItem) 
 }
 
 @Composable
-fun UsagePricesScreen(current: WorkspaceEntry) {
+fun UsagePricesScreen(current: WorkspaceEntry, days: Int) {
     val app = LocalApp.current
-    val topic by rememberTopic<UsageView>(app.core, Topics.usage(current.workspace.id, 7))
+    val topic by rememberTopic<UsageView>(app.core, Topics.usage(current.workspace.id, days))
     val view = topic.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack("用量", app::pop)
@@ -236,13 +237,19 @@ fun UsagePricesScreen(current: WorkspaceEntry) {
                 Card {
                     Text(table.station, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                     Text(table.note, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
-                    table.rows.forEach { row ->
-                        Text(row.model, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                        Column(Modifier.padding(top = 10.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.rates.forEach { rate ->
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(rate.label, fontSize = 12.sp, color = C.muted)
-                                    Text(rate.value, fontSize = 12.sp, color = C.ink)
+                    if (table.rows.isEmpty()) Text("这段时间没有模型用量", fontSize = 12.sp, color = C.muted)
+                    else Column(Modifier.horizontalScroll(rememberScrollState())) {
+                        Row {
+                            Text("模型", fontSize = 12.sp, color = C.muted, modifier = Modifier.width(140.dp).padding(vertical = 12.dp))
+                            table.rows.first().rates.forEach { rate ->
+                                Text(rate.label, fontSize = 12.sp, color = C.muted, textAlign = TextAlign.End, modifier = Modifier.width(70.dp).padding(10.dp))
+                            }
+                        }
+                        table.rows.forEachIndexed { index, row ->
+                            Row(Modifier.background(if (index % 2 == 0) C.chip else Color.Transparent)) {
+                                Text(row.model, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.ink, modifier = Modifier.width(140.dp).padding(vertical = 12.dp))
+                                row.rates.forEach { rate ->
+                                    Text(rate.value, fontSize = 12.sp, color = C.ink, textAlign = TextAlign.End, modifier = Modifier.width(70.dp).padding(10.dp))
                                 }
                             }
                         }

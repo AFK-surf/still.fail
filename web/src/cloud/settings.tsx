@@ -8,7 +8,7 @@ import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, Navigate, NavLink, useNavigate } from "react-router";
+import { Link, Navigate, NavLink, useNavigate, useSearchParams } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
@@ -235,14 +235,15 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
   return (
     <Page title="用量" lead="各台 station 上的 agent 调用模型用了多少 token，按 API 价折算成钱；按人、对话、账号和模型分开看。workspace 里的人都能看。" back={`/w/${entry.id}/settings`}
       actions={<Segmented<UsageDays> className={usageCss.pick} label="多少天" value={days} onChange={setDays} options={DAYS} />}>
-      {usage.value ? <UsageBody view={usage.value} pricesPath={`/w/${entry.id}/settings/usage/prices`} />
+      {usage.value ? <UsageBody view={usage.value} pricesPath={`/w/${entry.id}/settings/usage/prices?days=${days}`} />
         : usage.error ? <p className={controlsCss.fieldError}>读不到用量：{usage.error.message}</p> : <Loading label="正在读取…" fill={false} />}
     </Page>
   );
 }
 
 export function UsagePricesSettings({ entry }: { entry: WorkspaceEntry }) {
-  const usage = useUsage(entry.id, "7");
+  const [params] = useSearchParams();
+  const usage = useUsage(entry.id, params.get("days") === "30" ? "30" : "7");
   return <Page title="价目表" lead="当前各台 station 用于折算费用的单价" back={`/w/${entry.id}/settings/usage`}>
     {usage.value ? <PriceTables view={usage.value} /> : <Loading label={usage.error ? `读不到价目：${usage.error.message}` : "正在读取…"} fill={false} />}
   </Page>;
