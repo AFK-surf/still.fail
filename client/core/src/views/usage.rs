@@ -233,13 +233,16 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
 
             // Who it was for: one person however they wrote (Slack or the page), by their email.
             let reference = text("person");
-            let mut person = reference.as_ref().and_then(|r| station_people.get(r)).cloned().unwrap_or_else(|| json!({ "id": reference.clone().unwrap_or_default(), "name": "说不清是谁", "email": null }));
+            let known_person = reference.as_ref().and_then(|r| station_people.get(r)).filter(|p| p.is_object());
+            let mut person = known_person.cloned().unwrap_or_else(|| json!({ "id": reference.clone().unwrap_or_default(), "name": "说不清是谁", "email": null }));
             crate::present::person(&mut person, me, members);
             let person_key = person.get("email").and_then(Value::as_str).or_else(|| person.get("id").and_then(Value::as_str)).unwrap_or("").to_ascii_lowercase();
             let name = person["shown"]["display"].as_str().unwrap_or("").to_string();
             let cost = row.get("cost").and_then(Value::as_f64).unwrap_or(0.0);
             *day_people.entry(person_key.clone()).or_default() += cost;
-            people.entry(person_key.clone()).or_insert_with(|| Item { key: person_key.clone(), title: name, sub: None, extra: json!({ "person": person }), sum: Sum::default() }).sum.add(row);
+            // An unknown person still has a total and label, but no Creator: the display fallback above is not
+            // a complete identity (in particular it has no `via`), and Android decodes the whole view strictly.
+            people.entry(person_key.clone()).or_insert_with(|| Item { key: person_key.clone(), title: name, sub: None, extra: json!({ "person": known_person.map(|_| person) }), sum: Sum::default() }).sum.add(row);
 
             // Where: its chat (a Slack thread too), named as the station names it.
             let session = text("session").unwrap_or_default();
@@ -402,6 +405,28 @@ mod tests {
         let models = list(3);
         assert_eq!((models[0]["title"].as_str(), models[1]["sub"].as_str()), (Some("Opus 5.5"), Some("没有价目，不计费用")));
         assert_eq!(v["notes"], json!(["4 次调用的模型没有价目，没算进费用"]));
+    }
+
+    #[test]
+    fn unknown_people_keep_their_usage_and_the_view_decodes() {
+        for reference in [Value::Null, json!("missing@x")] {
+            let mut unknown = row("2026-10-02", "", 7, "cc", "gpt-6", 2, Some(3.0));
+            unknown["person"] = reference;
+            let sources = [Source {
+                address: "ws/st".into(), name: "studio".into(), online: true,
+                value: Some(Ok(station(vec![unknown, row("2026-10-02", "a@x", 7, "cc", "gpt-6", 1, Some(1.0))]))),
+            }];
+            let v = usage_view(&sources, 7, NOW, 480, &json!({}), &[]);
+            // Decode the actual output with the same contract that generates Android's UsageView/Creator.
+            let decoded: stillfail_shapes::UsageView = serde_json::from_value(v).expect("usage view must match the clients' shapes");
+            let people = &decoded.lists[0].items;
+            assert_eq!(decoded.tiles[0].value, "$4.00");
+            assert_eq!(decoded.tiles[1].value, "3 次");
+            assert_eq!(people[0].title, "说不清是谁");
+            assert!(people[0].person.is_none());
+            assert_eq!(people[0].cost, 3.0);
+            assert_eq!(people[1].person.as_ref().unwrap().via, "cloud");
+        }
     }
 
     #[test]
