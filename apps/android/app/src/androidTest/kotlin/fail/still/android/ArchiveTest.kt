@@ -244,6 +244,20 @@ class ArchiveTest {
         assertTrue(buttons[0].boundsInRoot.top > bounds("这件做完了").top)
         tap(buttons[0].boundsInRoot.center)
         assertArchived(h, done.session)
+        assertEquals("back to the chat list", listOf<Screen>(Screen.Home), h.app.stack)
+    }
+
+    @Test fun failedChatArchiveStaysInChat() {
+        val h = chat()
+        h.fake.answer = { name, _ ->
+            if (name == "chat.archive") throw fail.still.core.CoreException("failed", "归档失败", null)
+            JsonNull
+        }
+        val before = h.app.stack
+        tap(bounds("归档这个 chat").center)
+        h.settle()
+        assertEquals("failed archive keeps the chat open", before, h.app.stack)
+        assertTrue("failure is visible", h.app.toast?.contains("归档失败") == true)
     }
 
     // ── pictures ──

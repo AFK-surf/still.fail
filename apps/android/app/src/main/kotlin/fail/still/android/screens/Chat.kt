@@ -1041,8 +1041,14 @@ private fun archiveSession(of: ChatOf, view: ChatView, agents: List<AgentHere>):
     (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
 
 /** Archives the chat (its bar's 归档, and the one under its last 做完了). */
-private fun archiveChat(app: fail.still.android.AppState, station: String, view: ChatView, session: String) =
-    app.act("归档") { app.api(station).setArchived(view.thread?.id, session, true); app.toast = "已归档" }
+private fun archiveChat(app: fail.still.android.AppState, station: String, view: ChatView, session: String) {
+    val page = app.stack.last()
+    app.act("归档") {
+        app.api(station).setArchived(view.thread?.id, session, true)
+        if (app.stack.last() == page) app.home()
+        app.toast = "已归档"
+    }
+}
 
 /**
  * 归档这个 chat, full width under the agent's latest post that ended its turn all done, while nothing is left in the
