@@ -236,9 +236,9 @@ impl Inner {
                 Box::pin(self.execute(send, progress, at)).await
             }
             Call::DecisionReply { station, thread, seq, text } => {
-                // As its chat's row has it: still pending, and a text card.
+                // As its chat's row has it: still pending, and a supported card.
                 let card = self.pending_card(&station, thread, seq)?;
-                let (text, quotes) = crate::decisions::reply(&card, &text).ok_or_else(|| CoreError::invalid("这张卡片不用填写，请选一个选项"))?;
+                let (text, quotes) = crate::decisions::reply(&card, &text).ok_or_else(|| CoreError::invalid("请在 chat 里回复这张卡片"))?;
                 crate::prefs::undefer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq));
                 let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await

@@ -32,8 +32,8 @@ pub(crate) enum Call {
     /// An options card answered with one of its options (decisions.rs): the viewer's message in its chat, the option's
     /// label quoting the post that asked, sent as `chat.send` sends one. Only while its chat's row says it is pending.
     DecisionAnswer { station: String, thread: u64, seq: u64, option: String },
-    /// A text card answered (decisions.rs): what the viewer wrote, quoting the post that asked, sent as `chat.send`
-    /// sends one. Only while its chat's row says it is pending, and only a text card.
+    /// A card answered in writing (decisions.rs): what the viewer wrote, quoting the post that asked, sent as `chat.send`
+    /// sends one. Only while its chat's row says it is pending; options and text cards accept it.
     DecisionReply { station: String, thread: u64, seq: u64, text: String },
     /// A decision set aside by the viewer (待定): last on the decisions page, still pending. Kept on the device; nothing
     /// is sent.

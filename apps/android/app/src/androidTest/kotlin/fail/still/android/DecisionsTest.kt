@@ -42,6 +42,7 @@ import fail.still.android.data.StationState
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceMark
 import fail.still.android.data.WorkspaceMarksView
+import fail.still.android.screens.Drafts
 import fail.still.android.motion.Fixtures
 import fail.still.android.motion.Harness
 import fail.still.android.motion.MotionRule
@@ -89,8 +90,19 @@ class DecisionsTest {
 
     // ── driving ──
 
+    private fun freshDrafts(h: Harness) {
+        rule.runOnUiThread {
+            listOf(first, second, keyItem).forEach { item ->
+                Drafts.of(rule.activity, h.fake.core, "decision:${item.station}:${item.thread}:${item.seq}").apply {
+                    text = ""; starting = false; save()
+                }
+            }
+        }
+    }
+
     private fun page(dark: Boolean = false): Harness {
         val h = Harness(rule)
+        freshDrafts(h)
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(listOf(first, second), 2u, loading = false))
         h.launch(listOf(Screen.Home, Screen.Decisions), dark)
         return h
@@ -259,6 +271,7 @@ class DecisionsTest {
     private fun textPage(dark: Boolean = false, card: MessageCard = keyPost.card!!): Harness {
         // As the app's activity (MainActivity, the manifest): edge to edge, resized for the keyboard, not panned.
         val h = Harness(rule)
+        freshDrafts(h)
         val it = keyItem.copy(card = card, message = keyPost.copy(card = card))
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(listOf(it, first), 2u, loading = false))
         h.launch(listOf(Screen.Home, Screen.Decisions), dark)

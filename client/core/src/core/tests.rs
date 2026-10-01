@@ -964,9 +964,18 @@ fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_t
         assert_eq!(refused, 2);
         assert_eq!(posted(&host).len(), 1);
         // Both options and text cards accept free-form replies; text cards have no choices.
+        station_answers(&host, |req| {
+            if req.method == "POST" && req.url.ends_with("/threads/7/messages") {
+                json_response(200, json!({ "n": 7 }))
+            } else {
+                json_response(404, json!({}))
+            }
+        });
+        core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{ "id": "k1", "session": "k1", "thread": 7, "decision": decision }]));
         core.receive(ui, ClientMessage::Call { id: 8, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4, "text": "随便" }) });
         host.settle().await;
-        assert!(!host.take_emitted().into_iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 8, .. })));
+        let replies = host.take_emitted();
+        assert!(!replies.iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 8, .. })), "{replies:?}");
         assert_eq!(posted(&host)[1]["text"], "随便");
         assert_eq!(posted(&host)[1]["quotes"][0]["ts"], "9.000004");
         let card = json!({ "seq": 6, "card": { "type": "text", "placeholder": "sk_" }, "message": { "seq": 6, "ts": "9.000006", "text": "key？", "authorName": "Claude" }, "before": [] });
