@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- station 自更新下载进度（station-update-progress）：发 station 包；从现有安装脚本的 curl 进度输出上报已有 `percent` 字段，Android/web 无需更新，旧 cloud 安装脚本也兼容。本次从旧 station 升级仍只有阶段文字，运行新 station 后的下一次更新才会显示下载百分比；上线后验下载期间百分比递增，交接/重启后清除进度条。
+
 - 安卓正文视频附件点按（fix-android-video）：仅安卓 UI 改动，需要发布安卓包；兼容现有 core/station，无部署顺序要求。上线后验：同段两个 `![](视频.mp4)` 和 Markdown 表格中的视频卡片均可点开播放。Studio 独立模拟器已复现修复前失败、修复后通过，完整 Android 检查通过。
 
 - 剩余客户端精简（complete-client-simplification）：core 接管完整 Slack 接入向导（草稿、步骤、配置 token、建 app、校验、绑定和提交），三端只保留视图与本地输入回显；表单按 client/form 隔离，关闭后丢弃迟到结果。普通 HTTP 操作参数从 ops.rs 生成 TS/Kotlin 包装，保留缺省与显式 null 的区别；操作反馈统一观察 doing，系统权限、图片导出和动效仍在端上。core/station 按执行、账号、路由、传输、事件、线程拆文件，无数据迁移、无新增 station/cloud 接口。需要发 web、桌面 core、Android；web 遇到旧桌面 core 的 unknown_call 时保留旧向导，新客户端配旧 station 仍用原接口。上线后验：三端分别走配置 token/OAuth 和手填 token 路径；切换模型、返回上一步、校验失败、关闭后重开；连续点创建只出现一个连接；两个窗口的草稿互不串。

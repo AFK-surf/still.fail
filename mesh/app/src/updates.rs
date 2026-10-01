@@ -216,7 +216,7 @@ struct Item {
     updating: Option<i64>,
     /// The station's, while it updates: where it is, as the pages say it.
     progress: Option<String>,
-    /// A runtime's, while what it downloads comes in: how much of it is (0–100).
+    /// While what it downloads comes in: how much of it is (0–100).
     percent: Option<u64>,
     /// The station's, a while after an update ended well: how it went.
     done: Option<String>,
@@ -775,6 +775,7 @@ impl Updates {
         self.set(Kind::Station, |i| {
             i.updating = Some(started.at);
             i.progress = None;
+            i.percent = None;
             i.failed = None;
             i.done = None;
         });
@@ -791,8 +792,17 @@ impl Updates {
                     Err(_) if now_ms() - started.at > STATION_LIMIT_MS => (Some("安装脚本 20 分钟没有结束，看 ~/.stillfail/run/update.log".to_string()), None),
                     Err(_) => {
                         let progress = me.progress(&step);
-                        if me.items.lock().unwrap()[Kind::Station as usize].progress != progress {
-                            me.set(Kind::Station, |i| i.progress = progress);
+                        let percent = if step == "download" { station_download_percent(&log) } else { None };
+                        let changed = {
+                            let items = me.items.lock().unwrap();
+                            let item = &items[Kind::Station as usize];
+                            item.progress != progress || item.percent != percent
+                        };
+                        if changed {
+                            me.set(Kind::Station, |i| {
+                                i.progress = progress;
+                                i.percent = percent;
+                            });
                         }
                         drop(me);
                         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -806,6 +816,7 @@ impl Updates {
                 me.set(Kind::Station, |i| {
                     i.updating = None;
                     i.progress = None;
+                    i.percent = None;
                     i.failed = failed;
                     i.done = done.clone();
                 });
@@ -851,6 +862,30 @@ impl Updates {
             _ => format!("已更新{to}"),
         }
     }
+}
+
+/// The installer already records curl's progress bar in update.log, including with older clouds. Read only its
+/// tail (a slow download's log can be large), and only complete percentage readings: curl may be mid-write.
+fn station_download_percent(log: &Path) -> Option<u64> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(log).ok()?;
+    let len = file.metadata().ok()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(4096))).ok()?;
+    let mut bytes = Vec::new();
+    file.take(4096).read_to_end(&mut bytes).ok()?;
+    curl_percent(&String::from_utf8_lossy(&bytes))
+}
+
+fn curl_percent(log: &str) -> Option<u64> {
+    log.split(['\r', '\n']).rev().find_map(|line| {
+        let line = line.trim_end();
+        let (bar, value) = line.rsplit_once(char::is_whitespace)?;
+        if bar.is_empty() || !bar.chars().all(|c| c == '#' || c.is_ascii_whitespace()) {
+            return None;
+        }
+        let value = value.strip_suffix('%')?.parse::<f64>().ok()?;
+        (value.is_finite() && (0.0..=100.0).contains(&value)).then_some(value as u64)
+    })
 }
 
 /// The last lines of what a command said, for the pages.
@@ -1175,6 +1210,46 @@ pub(crate) mod tests {
         // Read again (the next check), it still says so.
         updates.check().await;
         assert_eq!(station().done.as_deref(), Some("已更新到 0.1.1300，agent 没有中断"));
+    }
+
+    #[test]
+    fn installer_download_percent_reads_complete_curl_bars() {
+        assert_eq!(curl_percent("下载 still.fail station…\n\r                 0.0%"), Some(0));
+        assert_eq!(curl_percent("\r###   12.4%\r########   44.9%\r#########  45."), Some(44));
+        assert_eq!(curl_percent("\r######## 100.0%\n"), Some(100));
+        for log in ["", "\r#=#=#", "error 44.0%", "### NaN%", "### 101.0%", "### -1.0%"] {
+            assert_eq!(curl_percent(log), None, "{log}");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("update.log");
+        assert_eq!(station_download_percent(&log), None);
+        std::fs::write(&log, format!("{}\r### 37.2%", "old output\n".repeat(1000))).unwrap();
+        assert_eq!(station_download_percent(&log), Some(37));
+    }
+
+    #[tokio::test]
+    async fn station_download_percent_changes_are_published_and_cleared() {
+        let dir = tempfile::tempdir().unwrap();
+        let run = dir.path().join("run");
+        std::fs::create_dir_all(&run).unwrap();
+        let updates = installed(dir.path(), "1300", None, None);
+        let station = || updates.get().remove(0);
+        std::fs::write(run.join("update.step"), "download\n").unwrap();
+        std::fs::write(run.join("update.log"), "\r### 12.4%").unwrap();
+        updates.follow(Started { at: now_ms(), from: Some("0.1.1300".into()) });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(station().percent, Some(12));
+        std::fs::write(run.join("update.log"), "\r### 12.4%\r######## 44.9%").unwrap();
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert_eq!(station().percent, Some(44));
+        std::fs::write(run.join("update.step"), "handoff\n").unwrap();
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert_eq!(station().percent, None);
+        assert_eq!(station().progress.as_deref(), Some("正在交接给新版本（agent 不中断）…"));
+        std::fs::write(run.join("update.exit"), "0\n").unwrap();
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        assert_eq!(station().state, "idle");
+        assert_eq!(station().percent, None);
     }
 
     /// What the station's line says, its latest read as `latest` (as if from the channel it is on).
