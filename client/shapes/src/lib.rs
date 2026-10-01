@@ -2550,6 +2550,34 @@ pub struct StationNet {
     pub up_total: Option<String>,
     /// Packets lost over the last minute, when some were.
     pub loss: Option<NetFigure>,
+    /// The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
+    /// a core from before.
+    pub measured: Option<NetMeasured>,
+}
+
+/// A station's ways through each relay as last measured, and whether they are being measured again.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NetMeasured {
+    pub measuring: bool,
+    pub relays: Vec<NetRelay>,
+    /// The relay the connection moved to as they were measured (its name), if it did.
+    pub moved: Option<String>,
+}
+
+/// The way through one relay: its round trip, or none if it was not reached in time.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NetRelay {
+    /// What still.fail calls it (北京), or its host.
+    pub name: String,
+    pub rtt: Option<NetFigure>,
+    /// The connection goes through it now.
+    pub current: bool,
 }
 
 /// A figure in words, and how bad it is.

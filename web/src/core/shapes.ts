@@ -1732,6 +1732,23 @@ export interface NetFigure {
 	level: Level;
 }
 
+/** The way through one relay: its round trip, or none if it was not reached in time. */
+export interface NetRelay {
+	/** What still.fail calls it (北京), or its host. */
+	name: string;
+	rtt?: NetFigure;
+	/** The connection goes through it now. */
+	current: boolean;
+}
+
+/** A station's ways through each relay as last measured, and whether they are being measured again. */
+export interface NetMeasured {
+	measuring: boolean;
+	relays: NetRelay[];
+	/** The relay the connection moved to as they were measured (its name), if it did. */
+	moved?: string;
+}
+
 export interface RuntimeModels {
 	runtime: RuntimeKind;
 	models: string[];
@@ -1856,6 +1873,11 @@ export interface StationNet {
 	upTotal?: string;
 	/** Packets lost over the last minute, when some were. */
 	loss?: NetFigure;
+	/**
+	 * The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
+	 * a core from before.
+	 */
+	measured?: NetMeasured;
 }
 
 export interface StationView {

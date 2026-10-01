@@ -54,6 +54,13 @@ import fail.still.android.Screen
 import fail.still.android.data.StationView
 import fail.still.android.data.StationNet
 import fail.still.android.data.NetFigure
+import fail.still.android.data.NetMeasured
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
@@ -157,6 +164,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     MeterChips(host.meters, Modifier.padding(vertical = 4.dp))
                     Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
                     s.net?.let { NetLine(it, Modifier.padding(top = 6.dp)) }
+                    s.net?.let { Ways(address, it.measured, Modifier.padding(top = 6.dp)) }
                     s.overview?.processesText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp)) }
                 }
             } else if (!s.online) {
@@ -221,6 +229,41 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
                     total?.let { Text("共 $it", Modifier.width(60.dp), style = figure.copy(fontWeight = FontWeight.Normal), color = C.muted, maxLines = 1) }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The round trip to a station through each relay as last measured, the one it goes through now underlined, and
+ * 重新测量: the core moves the connection to one clearly quicker (`station.measure`; web/src/cloud/StationCards.tsx Ways).
+ */
+@Composable
+internal fun Ways(station: String, measured: NetMeasured?, modifier: Modifier = Modifier) {
+    val app = LocalApp.current
+    val c = C
+    val measuring = app.isDoing("station.measure", "station" to station) || measured?.measuring == true
+    val tone = { f: NetFigure -> when (f.level) { "red" -> c.red; "amber" -> c.warn; else -> c.ink } }
+    val said = buildAnnotatedString {
+        if (measured == null) append("各中继还没测过")
+        measured?.relays?.forEachIndexed { i, r ->
+            if (i > 0) append("   ")
+            withStyle(SpanStyle(textDecoration = if (r.current) TextDecoration.Underline else null)) { append(r.name) }
+            append(" ")
+            val rtt = r.rtt
+            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = if (rtt == null) c.red else tone(rtt))) { append(rtt?.text ?: "不通") }
+        }
+        measured?.moved?.let { append("   已换到$it") }
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(said, Modifier.weight(1f), fontSize = 12.sp, color = C.muted, style = TextStyle(fontFeatureSettings = "tnum"))
+        Row(
+            Modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !measuring) {
+                app.act("重新测量") { app.core.call("station.measure", buildJsonObject { put("station", station) }) }
+            }.padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            if (measuring) Spinner(10.dp)
+            Text(if (measuring) "正在测量" else "重新测量", color = if (measuring) C.muted else C.ink, fontSize = 12.sp)
         }
     }
 }

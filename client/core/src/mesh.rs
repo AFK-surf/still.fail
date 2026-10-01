@@ -15,18 +15,19 @@
 //! `mesh` for everything on the way (unreachable, stream broken).
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use futures::channel::oneshot;
-use futures::future::{Either, LocalBoxFuture, Shared};
+use futures::future::{Either, LocalBoxFuture, Shared, join_all};
 use futures::lock::Mutex;
 use futures::{FutureExt, pin_mut};
 
 use iroh::endpoint::{ConnectOptions, ConnectionError, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint, EndpointAddr, PublicKey, RelayMode, RelayUrl, SecretKey};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 use crate::cloud::Credential;
 use crate::error::{CoreError, Result};
@@ -34,7 +35,7 @@ use crate::host::Host;
 use crate::trace::{Kind, Tracer};
 
 /// The mDNS service stations announce themselves under (mesh/station's `MDNS_SERVICE`).
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(test)))]
 const MDNS_SERVICE: &str = "ember";
 
 pub const DEVICE_KEY: &str = "device";
@@ -54,6 +55,15 @@ pub const RETIRE_MS: u64 = 10_000;
 /// The endpoint is bound anew (`Mesh::rebind`) at most this often.
 pub const REBIND_MS: u64 = 5_000;
 /// What a link not opened in [`CONNECT_TIMEOUT_MS`] fails with.
+/// How long after a station's link opens the way to it through each relay is first measured (`measure`): hole punching
+/// has gone direct by then if it will.
+pub const MEASURE_AFTER_MS: u64 = 3_000;
+/// How often a link through a relay is measured again (`measure`).
+pub const MEASURE_EVERY_MS: u64 = 4 * 60_000;
+/// A link moves to another relay only if the way through it is quicker by both this many milliseconds and this share of
+/// the link's round trip: a few milliseconds either way is no reason to move what is on it.
+const QUICKER_MS: f64 = 30.0;
+const QUICKER_SHARE: f64 = 0.2;
 const NO_ANSWER: &str = "连不上这台 station：没有回应";
 
 /// A reply head is a line of JSON; anything longer is not a station talking.
@@ -114,6 +124,29 @@ pub struct Mesh {
     /// The openings under way, by station: a link tried beside each as the UI asks (`hedge`).
     hedges: Rc<RefCell<HashMap<String, Hedge>>>,
     serials: Cell<u64>,
+    /// Itself, for what it starts from `&self` (`measure`).
+    me: Weak<Mesh>,
+    /// An endpoint on each of still.fail's relays alone, by relay, each under a key of its own (`pinned_key`): what the
+    /// way to a station through that relay is measured on, and a link moved to that relay goes on (`quickest`). The
+    /// main endpoint cannot do either: iroh sends everything for one station on the one way it chose for it.
+    pinned: RefCell<HashMap<String, Shared<LocalBoxFuture<'static, Option<Endpoint>>>>>,
+    /// Stations whose ways are being measured (`measure`).
+    measuring: RefCell<HashSet<String>>,
+    /// Measurements under way: pinned endpoints are not let go meanwhile (`let_go`).
+    probing: Cell<usize>,
+    /// Each station's last measurement of the ways there (`quickest`), for its card.
+    measured: RefCell<HashMap<String, Measured>>,
+}
+
+/// The ways to a station as last measured (`Mesh::quickest`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Measured {
+    /// Being measured again now.
+    pub measuring: bool,
+    /// Each relay's host and its round trip in milliseconds (None: not reached in time), in still.fail's order.
+    pub relays: Vec<(String, Option<f64>)>,
+    /// The host of the relay the link moved to, if it did.
+    pub moved: Option<String>,
 }
 
 impl Mesh {
@@ -132,7 +165,7 @@ impl Mesh {
             }
         };
         let endpoint = bind(&secret, relays).await?;
-        let mesh = Rc::new(Mesh {
+        let mesh = Rc::new_cyclic(|me| Mesh {
             host: host.clone(),
             tracer,
             relays: relays.to_vec(),
@@ -146,6 +179,11 @@ impl Mesh {
             known: RefCell::default(),
             hedges: Rc::default(),
             serials: Cell::new(0),
+            me: me.clone(),
+            pinned: RefCell::default(),
+            measuring: RefCell::default(),
+            probing: Cell::new(0),
+            measured: RefCell::default(),
         });
         host.spawn(watch(host.clone(), Rc::downgrade(&mesh)).boxed_local());
         Ok(mesh)
@@ -314,7 +352,7 @@ impl Mesh {
         self.serials.set(serial);
         let (tx, hedged) = oneshot::channel();
         self.hedges.borrow_mut().insert(station_id.to_string(), Hedge { serial, credentials: credentials.clone(), tx: Some(tx) });
-        let first = self.tracer.instrument(Some(span.context()), open(self.host.clone(), endpoint.clone(), self.relays.clone(), station_id.to_string(), credentials, fresh));
+        let first = self.tracer.instrument(Some(span.context()), open(self.host.clone(), endpoint.clone(), self.relays.clone(), station_id.to_string(), credentials, fresh, None));
         let (hedges, stuck, id) = (self.hedges.clone(), self.stuck.clone(), station_id.to_string());
         let opening = async move {
             // The first link that opens, of this one and one tried beside it (`hedge`); failing, the other's result.
@@ -356,7 +394,11 @@ impl Mesh {
         .shared();
         self.links.borrow_mut().insert(station_id.to_string(), opening.clone());
         self.notify();
-        opening.await
+        let link = opening.await;
+        if link.is_ok() {
+            self.measure_soon(station_id);
+        }
+        link
     }
 
     /// Closes the link to a station, if one is open or opening: taken for gone (wake.rs), so the next request opens
@@ -384,6 +426,13 @@ impl Mesh {
         self.host.storage_set(DEVICE_KEY, secret.to_vec()).await?;
         self.secret.set(secret);
         let old = self.endpoint.replace(endpoint);
+        // Their keys came from the old one.
+        let pinned: Vec<_> = self.pinned.borrow_mut().drain().map(|(_, endpoint)| endpoint).collect();
+        for endpoint in pinned {
+            if let Some(Some(endpoint)) = endpoint.peek().cloned() {
+                self.host.spawn(async move { endpoint.close().await }.boxed_local());
+            }
+        }
         let links: Vec<Opening> = self.links.borrow_mut().drain().map(|(_, opening)| opening).collect();
         self.notify();
         for opening in links {
@@ -394,6 +443,200 @@ impl Mesh {
         self.host.spawn(async move { old.close().await }.boxed_local());
         Ok(())
     }
+
+    /// Starts measuring the ways to a station (`measure`), unless that is under way or there is no other relay to go by.
+    fn measure_soon(&self, station_id: &str) {
+        if self.relays.len() < 2 || !self.measuring.borrow_mut().insert(station_id.to_string()) {
+            return;
+        }
+        self.host.spawn(measure(self.host.clone(), self.me.clone(), station_id.to_string()).boxed_local());
+    }
+
+    /// The ways to a station as last measured, if they were.
+    pub fn measured(&self, station_id: &str) -> Option<Measured> {
+        self.measured.borrow().get(station_id).cloned()
+    }
+
+    /// Measures the ways to a station now, as a person asks (its card's 重新测量), and moves its link to a quicker
+    /// one as `measure` would; at once if it is being measured already.
+    pub async fn remeasure(&self, station_id: &str) -> Result<()> {
+        if self.measured(station_id).is_some_and(|m| m.measuring) {
+            return Ok(());
+        }
+        let link = self.current(station_id).filter(|link| link.usable()).ok_or_else(|| mesh_error("还没连上这台 station".into()))?;
+        self.quickest(station_id, &link).await;
+        Ok(())
+    }
+
+    /// The endpoint on `relay` alone, bound the first time it is asked for (or after it was let go); None if it cannot be.
+    async fn pinned_endpoint(&self, relay: &str) -> Option<Endpoint> {
+        let existing = self.pinned.borrow().get(relay).cloned();
+        if let Some(endpoint) = existing {
+            return endpoint.await;
+        }
+        let (secret, url) = (pinned_key(&self.secret.get(), relay), relay.to_string());
+        let binding = async move { bind_pinned(&secret, &url).await.ok() }.boxed_local().shared();
+        self.pinned.borrow_mut().insert(relay.to_string(), binding.clone());
+        let endpoint = binding.await;
+        if endpoint.is_none() {
+            self.pinned.borrow_mut().remove(relay);
+        }
+        endpoint
+    }
+
+    /// The round trip to a station through one relay, in milliseconds, as its handshake on that relay's own endpoint
+    /// measured it: the whole way, device to relay to station and back. None if it was not reached in time.
+    async fn probe(&self, relay: &str, station_id: &str) -> Option<f64> {
+        let endpoint = self.pinned_endpoint(relay).await?;
+        let id = PublicKey::from_bytes(&hex::decode(station_id).ok()?.try_into().ok()?).ok()?;
+        let addr = EndpointAddr::new(id).with_relay_url(relay.parse::<RelayUrl>().ok()?);
+        let handshake = async {
+            let options = ConnectOptions::new().with_additional_alpns(vec![FORMER_ALPN.to_vec()]);
+            endpoint.connect_with_opts(addr, ALPN, options).await.ok()?.await.ok()
+        };
+        let timeout = self.host.sleep(CONNECT_TIMEOUT_MS);
+        pin_mut!(handshake);
+        let conn = match futures::future::select(handshake, timeout).await {
+            Either::Left((conn, _)) => conn?,
+            Either::Right(_) => return None,
+        };
+        let rtt = conn.paths().iter().find(|p| p.is_selected()).map(|p| p.rtt().as_secs_f64() * 1000.0);
+        // The station only waited for a credential on it.
+        conn.close(0u32.into(), b"measured");
+        rtt
+    }
+
+    /// Measures the way to the station through each relay and, if one is clearly quicker than the way `link` goes
+    /// (`quicker`), opens a link on that relay's own endpoint and puts it in `link`'s place (`switch`: what is on it is
+    /// asked again there).
+    async fn quickest(&self, station_id: &str, link: &Rc<Link>) {
+        let mut span = self.tracer.span("mesh.measure", Kind::Internal);
+        span.set("stillfail.station", station_id.to_string());
+        let (rtt_ms, via) = (link.net().rtt_ms, link.via());
+        if let Some(ms) = rtt_ms {
+            span.set("stillfail.rtt", ms.round());
+        }
+        if let Some(via) = &via {
+            span.set("stillfail.via", via.host_str().unwrap_or_default().to_string());
+        }
+        self.measured.borrow_mut().entry(station_id.to_string()).or_default().measuring = true;
+        self.probing.set(self.probing.get() + 1);
+        let measured: Vec<(String, Option<f64>)> = join_all(self.relays.iter().map(|relay| async move { (relay.clone(), self.probe(relay, station_id).await) })).await;
+        self.probing.set(self.probing.get() - 1);
+        let mut shown = Measured { measuring: false, relays: measured.iter().map(|(relay, ms)| (relay_host(relay), *ms)).collect(), moved: None };
+        for (relay, ms) in &measured {
+            let ms = ms.map(|ms| Value::from(ms.round())).unwrap_or_else(|| "none".into());
+            span.set(&format!("stillfail.rtt.{}", relay_host(relay)), ms);
+        }
+        if let Some(relay) = quicker(rtt_ms, via.as_ref(), &measured)
+            && self.is_current(station_id, link)
+            && let Some(endpoint) = self.pinned_endpoint(&relay).await
+        {
+            span.set("stillfail.moved", relay_host(&relay));
+            let opened = self.tracer.instrument(Some(span.context()), open(self.host.clone(), endpoint, vec![relay.clone()], station_id.to_string(), link.credentials.clone(), false, Some(relay)));
+            match opened.await {
+                Ok(new) => {
+                    shown.moved = new.via().and_then(|url| url.host_str().map(str::to_string));
+                    self.switch(station_id, link, new);
+                }
+                Err(error) => {
+                    span.fail();
+                    span.set("error.type", error.code);
+                }
+            }
+        }
+        span.end();
+        self.measured.borrow_mut().insert(station_id.to_string(), shown);
+        // Those no link went on, once a link moved off one has closed (`RETIRE_MS`).
+        let (host, me) = (self.host.clone(), self.me.clone());
+        self.host.spawn(
+            async move {
+                host.sleep(RETIRE_MS).await;
+                if let Some(mesh) = me.upgrade() {
+                    mesh.let_go();
+                }
+            }
+            .boxed_local(),
+        );
+    }
+
+    /// Closes the pinned endpoints no open link is on, unless something is being measured on them.
+    fn let_go(&self) {
+        if self.probing.get() > 0 {
+            return;
+        }
+        let used: HashSet<String> = self.open_links().into_iter().filter_map(|(_, link)| link.pinned.clone()).collect();
+        let unused: Vec<_> = {
+            let mut pinned = self.pinned.borrow_mut();
+            let gone: Vec<String> = pinned.keys().filter(|relay| !used.contains(*relay)).cloned().collect();
+            gone.iter().filter_map(|relay| pinned.remove(relay)).collect()
+        };
+        for endpoint in unused {
+            if let Some(Some(endpoint)) = endpoint.peek().cloned() {
+                self.host.spawn(async move { endpoint.close().await }.boxed_local());
+            }
+        }
+    }
+}
+
+/// Keeps a station's link on the quickest way there, for as long as it has one: [`MEASURE_AFTER_MS`] after it opened,
+/// then every [`MEASURE_EVERY_MS`], the way through each relay is measured if the link goes through a relay
+/// (`Mesh::quickest`). Which relay the link first went through is only which answered the first packets first, the one
+/// the device was already on winning; how long the way goes on to take is not looked at again. A station abroad
+/// reached through the relay nearest a phone in mainland China was seen at 11 s a round trip, the one in Hong Kong
+/// unused (2026-10-01, bft).
+async fn measure(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String) {
+    host.sleep(MEASURE_AFTER_MS).await;
+    loop {
+        let Some(this) = mesh.upgrade() else { return };
+        let Some(link) = this.current(&id).filter(|link| link.usable()) else {
+            this.measuring.borrow_mut().remove(&id);
+            return;
+        };
+        if link.path() == Some("relay") {
+            this.quickest(&id, &link).await;
+        }
+        drop(this);
+        host.sleep(MEASURE_EVERY_MS).await;
+    }
+}
+
+/// The relay to move a link to, of those measured (each relay's round trip in milliseconds, None not reached): the
+/// quickest, if the link is not already through it and it is quicker than the link's round trip by both [`QUICKER_MS`]
+/// and [`QUICKER_SHARE`].
+fn quicker(rtt_ms: Option<f64>, via: Option<&RelayUrl>, measured: &[(String, Option<f64>)]) -> Option<String> {
+    let (relay, best) = measured.iter().filter_map(|(relay, ms)| ms.map(|ms| (relay, ms))).min_by(|a, b| a.1.total_cmp(&b.1))?;
+    if via.is_some() && via == relay.parse::<RelayUrl>().ok().as_ref() {
+        return None;
+    }
+    let now = rtt_ms?;
+    (best + QUICKER_MS <= now && best <= now * (1.0 - QUICKER_SHARE)).then(|| relay.clone())
+}
+
+/// A relay's host, for a span.
+fn relay_host(relay: &str) -> String {
+    relay.parse::<RelayUrl>().ok().and_then(|url| url.host_str().map(str::to_string)).unwrap_or_else(|| relay.to_string())
+}
+
+/// The key of the endpoint on one relay alone: the device key's, made over for that relay. Each relay's endpoint has a
+/// key of its own, so that the station keeps a way for each apart (iroh keeps one per key), and two endpoints are never
+/// on one relay under one key, which would push each other off it. Its credentials are asked for under it like the
+/// device key's.
+fn pinned_key(secret: &[u8; 32], relay: &str) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"stillfail/relay-endpoint/1\0");
+    hash.update(secret);
+    hash.update(relay.as_bytes());
+    hash.finalize().into()
+}
+
+/// An endpoint on one relay alone (`Mesh::pinned_endpoint`). Natively it goes direct too, when hole punching finds
+/// the way; it looks nothing up (the main endpoint does that).
+async fn bind_pinned(secret: &[u8; 32], relay: &str) -> Result<Endpoint> {
+    let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relay_mode(&[relay.to_string()])?).transport_config(transport());
+    #[cfg(test)]
+    let builder = builder.clear_ip_transports().ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify());
+    builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
 }
 
 /// What the mesh does as the UI comes back or the network changes (wake.rs; also a person's 重试): iroh is told (on
@@ -434,7 +677,7 @@ async fn hedge(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, credentials: Cr
     let mut span = tracer.span("mesh.hedge", Kind::Internal);
     span.set("stillfail.station", id.clone());
     span.set("stillfail.relay", relay_status(&endpoint));
-    let opened = tracer.instrument(Some(span.context()), open(host, endpoint, relays, id, credentials, false)).await;
+    let opened = tracer.instrument(Some(span.context()), open(host, endpoint, relays, id, credentials, false, None)).await;
     if opened.is_err() {
         span.fail();
     }
@@ -470,7 +713,7 @@ async fn race(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, old: Rc<Link>) {
     drop(this);
     let mut span = tracer.span("mesh.race", Kind::Internal);
     span.set("stillfail.station", id.clone());
-    let fresh = tracer.instrument(Some(span.context()), open(host.clone(), endpoint, relays, id.clone(), old.credentials.clone(), false));
+    let fresh = tracer.instrument(Some(span.context()), open(host.clone(), endpoint, relays, id.clone(), old.credentials.clone(), false, None));
     let probe = old.answers(host.as_ref());
     pin_mut!(fresh, probe);
     let won = match futures::future::select(probe, fresh).await {
@@ -512,7 +755,7 @@ async fn race(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, old: Rc<Link>) {
 async fn bind(secret: &[u8; 32], relays: &[String]) -> Result<Endpoint> {
     let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relay_mode(relays)?).transport_config(transport());
     // No relay (tests on localhost): nothing to look up either.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), not(test)))]
     let builder = if relays.is_empty() {
         builder
     } else {
@@ -523,6 +766,9 @@ async fn bind(secret: &[u8; 32], relays: &[String]) -> Result<Endpoint> {
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
             .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish())
     };
+    // The tests' relays (`tests::relays`) have certificates of their own, and the tests go through them alone.
+    #[cfg(test)]
+    let builder = if relays.is_empty() { builder } else { builder.clear_ip_transports().ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify()) };
     builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
 }
 
@@ -562,7 +808,10 @@ pub fn transport() -> QuicTransportConfig {
 /// station reads a connection's first stream (the credential) before any request
 /// stream, so requests can follow at once. If it refuses, it closes the
 /// connection, the requests on it fail, and the next `Mesh::link` starts over.
-async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, station_id: String, credentials: CredentialSource, fresh: bool) -> Result<Rc<Link>> {
+///
+/// `pinned` names the relay when `endpoint` is the one on it alone (`Mesh::pinned_endpoint`).
+#[allow(clippy::too_many_arguments)]
+async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, station_id: String, credentials: CredentialSource, fresh: bool, pinned: Option<String>) -> Result<Rc<Link>> {
     let id: [u8; 32] = hex::decode(&station_id).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let id = PublicKey::from_bytes(&id).map_err(|_| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let device = hex::encode(endpoint.id().as_bytes());
@@ -611,6 +860,7 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, stati
         refused: RefCell::new(None),
         credential: RefCell::new(credential.credential.clone()),
         credentials: credentials.clone(),
+        pinned,
     });
     // The station's answer to the first credential, while requests already go: a refusal closes the link.
     let answered = link.clone();
@@ -717,6 +967,8 @@ pub struct Link {
     credential: RefCell<String>,
     /// Where its credentials come from: a link opened beside it (`race`) takes the same.
     credentials: CredentialSource,
+    /// The relay whose own endpoint it is on (`Mesh::pinned_endpoint`); None on the main one.
+    pinned: Option<String>,
 }
 
 impl Link {
@@ -786,6 +1038,14 @@ impl Link {
         self.conn.paths().iter().find(|p| p.is_selected()).map(|p| if p.is_relay() { "relay" } else { "direct" })
     }
 
+    /// The relay the connection goes through now, if it goes through one.
+    fn via(&self) -> Option<RelayUrl> {
+        self.conn.paths().iter().find(|p| p.is_selected()).and_then(|p| match p.remote_addr() {
+            iroh::TransportAddr::Relay(url) => Some(url.clone()),
+            _ => None,
+        })
+    }
+
     /// How the connection runs, as QUIC measures it: the path it takes now, its round trip, and what went over it
     /// (every datagram, both ways, since it opened), for the station's card (station.rs `Topic::Net`).
     pub fn net(&self) -> LinkNet {
@@ -800,6 +1060,7 @@ impl Link {
             path: selected.as_ref().map(|p| if p.is_relay() { "relay" } else { "direct" }),
             relay,
             rtt_ms: selected.as_ref().map(|p| p.rtt().as_secs_f64() * 1000.0),
+            measured: None,
             rx_bytes: stats.udp_rx.bytes,
             tx_bytes: stats.udp_tx.bytes,
             tx_packets: stats.udp_tx.datagrams,
@@ -833,6 +1094,8 @@ pub struct LinkNet {
     /// The relay's host, on a relay path.
     pub relay: Option<String>,
     pub rtt_ms: Option<f64>,
+    /// The ways to the station as last measured (`Mesh::measured`), where the mesh says.
+    pub measured: Option<Measured>,
     pub rx_bytes: u64,
     pub tx_bytes: u64,
     pub tx_packets: u64,
@@ -1095,7 +1358,10 @@ mod tests {
                 // Then a stream that trickles, like /events.
                 for part in ["|one", "|two", "|three"] {
                     tokio::time::sleep(Duration::from_millis(100)).await;
-                    send.write_all(part.as_bytes()).await.unwrap();
+                    // Not read on by a request that only wanted the status.
+                    if send.write_all(part.as_bytes()).await.is_err() {
+                        return;
+                    }
                 }
                 send.finish().unwrap();
             });
@@ -1423,6 +1689,157 @@ mod tests {
             link.close();
             mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
             assert_eq!(mesh.endpoint().bound_sockets(), now);
+        });
+    }
+
+    #[test]
+    fn moves_only_to_a_clearly_quicker_relay() {
+        let (a, b) = ("https://a.test/".to_string(), "https://b.test/".to_string());
+        let via_a: RelayUrl = a.parse().unwrap();
+        let measured = |ma: Option<f64>, mb: Option<f64>| vec![(a.clone(), ma), (b.clone(), mb)];
+        // 11 s through a, 80 ms through b: to b.
+        assert_eq!(quicker(Some(11_000.0), Some(&via_a), &measured(Some(9_000.0), Some(80.0))), Some(b.clone()));
+        // Already through the quickest.
+        assert_eq!(quicker(Some(300.0), Some(&via_a), &measured(Some(40.0), Some(80.0))), None);
+        // Quicker by less than QUICKER_MS, or by less than QUICKER_SHARE.
+        assert_eq!(quicker(Some(100.0), Some(&via_a), &measured(None, Some(80.0))), None);
+        assert_eq!(quicker(Some(1_000.0), Some(&via_a), &measured(None, Some(850.0))), None);
+        assert_eq!(quicker(Some(1_000.0), Some(&via_a), &measured(None, Some(700.0))), Some(b.clone()));
+        // Nothing reached, or the link's own round trip not known.
+        assert_eq!(quicker(Some(1_000.0), Some(&via_a), &measured(None, None)), None);
+        assert_eq!(quicker(None, Some(&via_a), &measured(None, Some(80.0))), None);
+    }
+
+    /// A relay on localhost.
+    async fn relay() -> (RelayUrl, iroh_relay::server::Server) {
+        let (_, url, server) = iroh::test_utils::run_relay_server_with(false).await.unwrap();
+        (url, server)
+    }
+
+    /// The relay at `url` reached through a proxy that holds what goes through it, either way, `delay` a piece: its
+    /// url for those who should find it slow.
+    async fn slowed(url: &RelayUrl, delay: Duration) -> RelayUrl {
+        async fn pump(mut from: impl tokio::io::AsyncRead + Unpin, mut to: impl tokio::io::AsyncWrite + Unpin, delay: Duration) {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let mut buf = vec![0u8; 64 * 1024];
+            while let Ok(n) = from.read(&mut buf).await {
+                tokio::time::sleep(delay).await;
+                if n == 0 || to.write_all(&buf[..n]).await.is_err() {
+                    break;
+                }
+            }
+        }
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let upstream = (url.host_str().unwrap().to_string(), url.port().unwrap());
+        tokio::task::spawn_local(async move {
+            while let Ok((down, _)) = listener.accept().await {
+                let Ok(up) = tokio::net::TcpStream::connect((upstream.0.as_str(), upstream.1)).await else { continue };
+                let ((down_r, down_w), (up_r, up_w)) = (down.into_split(), up.into_split());
+                tokio::task::spawn_local(pump(down_r, up_w, delay));
+                tokio::task::spawn_local(pump(up_r, down_w, delay));
+            }
+        });
+        format!("https://{}:{port}/", url.host_str().unwrap()).parse().unwrap()
+    }
+
+    /// A station on `home` that is on `other` too, through a keeper there (mesh/station keep.rs).
+    async fn station_on(home: &RelayUrl, other: &RelayUrl) -> Station {
+        let endpoint = Endpoint::builder(Minimal)
+            .clear_ip_transports()
+            .relay_mode(RelayMode::Custom(iroh::RelayMap::from_iter([home.clone()])))
+            .ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify())
+            .alpns(vec![ALPN.to_vec(), FORMER_ALPN.to_vec()])
+            .bind()
+            .await
+            .unwrap();
+        endpoint.online().await;
+        let keeper = Endpoint::builder(Minimal)
+            .clear_ip_transports()
+            .relay_mode(RelayMode::Custom(iroh::RelayMap::from_iter([other.clone()])))
+            .ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify())
+            .alpns(vec![b"keep".to_vec()])
+            .bind()
+            .await
+            .unwrap();
+        keeper.online().await;
+        let accepted = {
+            let keeper = keeper.clone();
+            tokio::task::spawn_local(async move { keeper.accept().await.unwrap().await.unwrap() })
+        };
+        let held = endpoint.connect(EndpointAddr::new(keeper.id()).with_relay_url(other.clone()), b"keep").await.unwrap();
+        let kept = accepted.await.unwrap();
+        tokio::task::spawn_local(async move {
+            let _keep = (keeper, kept);
+            held.closed().await;
+        });
+        let station = Station { endpoint: endpoint.clone(), grants: Rc::default(), conns: Rc::default(), dead_below: Rc::default(), unanswered: Rc::default(), idempotent: Rc::default() };
+        let (grants, conns, idempotent) = (station.grants.clone(), station.conns.clone(), station.idempotent.clone());
+        tokio::task::spawn_local(async move {
+            while let Some(incoming) = endpoint.accept().await {
+                let Ok(conn) = incoming.await else { continue };
+                conns.borrow_mut().push(conn.clone());
+                tokio::task::spawn_local(serve(conn, grants.clone(), Rc::new(|| false), idempotent.clone()));
+            }
+        });
+        station
+    }
+
+    /// A phone's link to a station abroad went through the relay nearest the phone, the station's way there slow
+    /// (2026-10-01, bft: 11 s a round trip); measured, it moves to the relay that is quicker the whole way.
+    #[test]
+    fn a_link_through_a_slow_relay_moves_to_the_quicker_one() {
+        run(async {
+            let ((a, _a), (b, _b)) = (relay().await, relay().await);
+            // The station reaches a slowly, b at once; the device reaches both at once.
+            let station = station_on(&b, &slowed(&a, Duration::from_millis(150)).await).await;
+            let id = station.id();
+            let host: Rc<dyn Host> = FakeHost::new();
+            let mesh = Mesh::new(host.clone(), Tracer::new(host.clone(), 1.0), &[a.to_string(), b.to_string()]).await.unwrap();
+            mesh.endpoint().online().await;
+            // As it went: through a, the first relay the device was on.
+            let link = open(host.clone(), mesh.endpoint(), vec![a.to_string()], id.clone(), grants("ok", Rc::default()), false, None).await.unwrap();
+            let ready: Opening = futures::future::ready(Ok(link.clone())).boxed_local().shared();
+            let _ = ready.clone().now_or_never();
+            mesh.links.borrow_mut().insert(id.clone(), ready);
+            for _ in 0..3 {
+                assert_eq!(link.request(head("/admin/api/overview"), Vec::new()).await.unwrap().status, 200);
+            }
+            let slow = link.net().rtt_ms.unwrap();
+            assert_eq!(link.via(), Some(a.clone()));
+            assert!(slow > 250.0, "{slow}");
+
+            mesh.quickest(&id, &link).await;
+            let moved = mesh.current(&id).unwrap();
+            assert!(!Rc::ptr_eq(&moved, &link));
+            assert_eq!(moved.via(), Some(b.clone()));
+            assert_eq!(moved.pinned.as_deref(), Some(b.as_str()));
+            // Its round trip as QUIC smooths it, once a few have gone by.
+            for _ in 0..5 {
+                assert_eq!(moved.request(head("/admin/api/overview"), Vec::new()).await.unwrap().status, 200);
+            }
+            let quick = moved.net().rtt_ms.unwrap();
+            assert!(quick < slow / 2.0, "{quick} vs {slow}");
+            // On b's own endpoint, under a key of its own (`pinned_key`): the station sees another device.
+            let device = station.conns.borrow().iter().rev().find(|c| c.close_reason().is_none()).map(|c| c.remote_id()).unwrap();
+            assert_ne!(device, mesh.endpoint().id());
+            assert_eq!(device.as_bytes(), SecretKey::from_bytes(&pinned_key(&mesh.secret.get(), b.as_str())).public().as_bytes());
+            assert_eq!(*station.grants.borrow(), vec!["ok-1".to_string(), "ok-2".to_string()]);
+
+            let shown = mesh.measured(&id).unwrap();
+            assert!(!shown.measuring);
+            assert_eq!(shown.moved.as_deref(), b.host_str());
+            assert_eq!(shown.relays.len(), 2);
+            assert!(shown.relays.iter().all(|(_, ms)| ms.is_some()), "{shown:?}");
+
+            // Measured again, as a person asks: it stays, nothing is quicker than where it is.
+            mesh.remeasure(&id).await.unwrap();
+            assert_eq!(mesh.measured(&id).unwrap().moved, None);
+            assert!(Rc::ptr_eq(&moved, &mesh.current(&id).unwrap()));
+            // The endpoint on a, only measured on, is let go (`let_go`, RETIRE_MS after measuring); b's, with the link on it, stays.
+            mesh.let_go();
+            assert_eq!(mesh.pinned.borrow().keys().cloned().collect::<Vec<_>>(), vec![b.to_string()]);
+            assert_eq!(moved.request(head("/admin/api/overview"), Vec::new()).await.unwrap().status, 200);
         });
     }
 

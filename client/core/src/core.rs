@@ -713,6 +713,10 @@ fn credentials(core: Weak<Inner>) -> StationCredentials {
 /// one serves before a new one is asked for.
 const CREDENTIAL_KEY: &str = "credential";
 const CREDENTIAL_FOR_S: f64 = 24.0 * 60.0 * 60.0;
+/// Beside each, under `<key>/<account>/<workspace>/others`, those of the mesh's other keys (mesh.rs `pinned_key`), the
+/// latest first: one per relay, a few more after the device key changed.
+const CREDENTIAL_OTHERS: &str = "others";
+const CREDENTIAL_OTHERS_KEPT: usize = 8;
 
 /// Where this device's push registration is kept (docs/notifications.md), and the accounts that have it.
 const PUSH_KEY: &str = "push";
@@ -980,6 +984,10 @@ impl Inner {
                 Ok(Value::Null)
             }
             Call::HistoryOlder { station, key } => Ok(json!({ "more": self.stations.history_older(&StationAddr::parse(&station)?, &key).await? })),
+            Call::StationMeasure { station } => {
+                self.stations.measure(&StationAddr::parse(&station)?).await?;
+                Ok(Value::Null)
+            }
             Call::ChatRead { station, thread, seq } => {
                 self.stations.read(&StationAddr::parse(&station)?, thread, seq).await?;
                 Ok(Value::Null)
@@ -1243,16 +1251,33 @@ impl Inner {
     async fn credential(&self, workspace: &str, device: &str, fresh: bool) -> Result<Credential> {
         let sub = self.owner(workspace).await?;
         let key = format!("{CREDENTIAL_KEY}/{sub}/{workspace}");
+        // The mesh's endpoints on one relay alone have keys of their own (mesh.rs `pinned_key`): theirs are kept apart,
+        // and the device key's where it always was.
+        let others_key = format!("{key}/{CREDENTIAL_OTHERS}");
+        let main = self.mesh.borrow().as_ref().and_then(|m| m.peek().cloned()).and_then(|m| m.ok()).map(|m| m.device_id());
+        let other = main.is_some_and(|main| main != device);
         let now = self.host.now_ms() / 1000.0;
-        let kept = self.host.storage_get(&key).await.ok().flatten().and_then(|bytes| serde_json::from_slice::<KeptCredential>(&bytes).ok());
-        let kept = kept.filter(|k| k.device == device).map(|k| k.credential).filter(|c| c.expires_at > now + 60.0 && !fresh);
+        let mut others: Vec<KeptCredential> = if other { self.host.storage_get(&others_key).await.ok().flatten().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default() } else { Vec::new() };
+        let kept = if other {
+            others.iter().find(|k| k.device == device).cloned()
+        } else {
+            self.host.storage_get(&key).await.ok().flatten().and_then(|bytes| serde_json::from_slice::<KeptCredential>(&bytes).ok()).filter(|k| k.device == device)
+        };
+        let kept = kept.map(|k| k.credential).filter(|c| c.expires_at > now + 60.0 && !fresh);
         if let Some(c) = kept.as_ref().filter(|c| now - c.issued_at < CREDENTIAL_FOR_S) {
             return Ok(c.clone());
         }
         match self.cloud.credential(&sub, workspace, device).await {
             Ok(credential) => {
                 let kept = KeptCredential { device: device.to_string(), credential: credential.clone() };
-                let _ = self.host.storage_set(&key, serde_json::to_vec(&kept).unwrap_or_default()).await;
+                if other {
+                    others.retain(|k| k.device != device);
+                    others.insert(0, kept);
+                    others.truncate(CREDENTIAL_OTHERS_KEPT);
+                    let _ = self.host.storage_set(&others_key, serde_json::to_vec(&others).unwrap_or_default()).await;
+                } else {
+                    let _ = self.host.storage_set(&key, serde_json::to_vec(&kept).unwrap_or_default()).await;
+                }
                 Ok(credential)
             }
             Err(error) => kept.ok_or(error),
@@ -1386,7 +1411,10 @@ impl Inner {
                 for workspace in me.get("workspaces").and_then(Value::as_array).into_iter().flatten() {
                     if let Some(id) = workspace.get("id").and_then(Value::as_str) {
                         let (host, key) = (self.host.clone(), format!("{CREDENTIAL_KEY}/{sub}/{id}"));
-                        self.host.spawn(async move { let _ = host.storage_delete(&key).await; }.boxed_local());
+                        self.host.spawn(async move {
+                            let _ = host.storage_delete(&format!("{key}/{CREDENTIAL_OTHERS}")).await;
+                            let _ = host.storage_delete(&key).await;
+                        }.boxed_local());
                     }
                 }
                 self.data.forget_record("me", &sub);
@@ -1925,6 +1953,8 @@ pub(crate) enum Call {
     /// (`offset`, the client's measure; optional), or none at its end (it opens there next).
     ChatPlace { station: String, thread: u64, seq: Option<u64>, offset: Option<f64> },
     HistoryOlder { station: String, key: String },
+    /// The ways to a station measured now (its card's 重新测量: mesh.rs `Mesh::remeasure`).
+    StationMeasure { station: String },
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String, thumb: bool, progress: bool },
@@ -1981,7 +2011,7 @@ impl Call {
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
             Call::ItemAnswer { station, .. } | Call::ItemDefer { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatNewer { station, .. } | Call::ChatLatest { station, .. } | Call::ChatPlace { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
-            Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } => Some(station),
+            Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } | Call::StationMeasure { station } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
             Call::DraftPut { station, .. } | Call::DraftGet { station, .. } | Call::ChatRef { station, .. } => Some(station),
@@ -2262,6 +2292,11 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             let p: Session = read(params)?;
             Call::HistoryOlder { station: p.station, key: p.key }
         }
+        "station.measure" => {
+            #[derive(Deserialize)]
+            struct P { station: String }
+            Call::StationMeasure { station: read::<P>(params)?.station }
+        }
         "chat.read" => {
             let p: Read = read(params)?;
             Call::ChatRead { station: p.station, thread: p.thread, seq: p.seq }
@@ -2499,6 +2534,7 @@ mod tests {
         );
         assert_eq!(parse_call("chat.older", json!({"station": "w/s", "thread": 7})).unwrap(), Call::ChatOlder { station: "w/s".into(), thread: 7 });
         assert_eq!(parse_call("history.older", json!({"station": "w/s", "key": "ember:c-1"})).unwrap(), Call::HistoryOlder { station: "w/s".into(), key: "ember:c-1".into() });
+        assert_eq!(parse_call("station.measure", json!({"station": "w/s"})).unwrap(), Call::StationMeasure { station: "w/s".into() });
         assert_eq!(parse_call("chat.read", json!({"station": "w/s", "thread": 7, "seq": 12})).unwrap(), Call::ChatRead { station: "w/s".into(), thread: 7, seq: 12 });
         // A chat is a thread: a session key does not name one.
         assert_eq!(code(parse_call("chat.send", json!({"station": "w/s", "key": "k", "text": "hi"}))), "invalid_params");

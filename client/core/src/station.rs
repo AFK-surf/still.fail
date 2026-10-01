@@ -186,6 +186,10 @@ pub trait StationWire {
     fn net(&self, _station: &StationAddr) -> Option<LinkNet> {
         None
     }
+    /// Measures the ways to the station now (mesh.rs `Mesh::remeasure`). Only the mesh has more than one.
+    fn measure(&self, _station: &StationAddr) -> LocalBoxFuture<'static, Result<()>> {
+        async { Err(CoreError::new("unsupported", "这里只有一条路，不用测")) }.boxed_local()
+    }
     /// A preview page's WebSocket (`head.path` a preview's): the station's reply, then its frames both ways
     /// ([`SocketFrame`]). Only the mesh carries one.
     fn socket(&self, _station: &StationAddr, _head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
@@ -395,7 +399,12 @@ impl StationWire for MeshWire {
 
     fn net(&self, station: &StationAddr) -> Option<LinkNet> {
         let Some(Ok(mesh)) = (self.mesh)().now_or_never() else { return None };
-        mesh.current(&station.station).map(|link| link.net())
+        mesh.current(&station.station).map(|link| LinkNet { measured: mesh.measured(&station.station), ..link.net() })
+    }
+
+    fn measure(&self, station: &StationAddr) -> LocalBoxFuture<'static, Result<()>> {
+        let (mesh, id) = ((self.mesh)(), station.station.clone());
+        async move { mesh.await?.remeasure(&id).await }.boxed_local()
     }
 
     fn socket(&self, station: &StationAddr, head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
@@ -1384,9 +1393,14 @@ impl Stations {
                     while samples.len() > NET_KEPT {
                         samples.pop_front();
                     }
+                    let measured = net.measured.as_ref().map(|m| json!({
+                        "measuring": m.measuring,
+                        "relays": m.relays.iter().map(|(relay, ms)| json!({ "relay": relay, "rttMs": ms })).collect::<Vec<_>>(),
+                        "moved": m.moved,
+                    }));
                     let value = json!({
                         "path": net.path, "relay": net.relay, "rttMs": net.rtt_ms,
-                        "rxBytes": net.rx_bytes, "txBytes": net.tx_bytes, "samples": samples,
+                        "rxBytes": net.rx_bytes, "txBytes": net.tx_bytes, "samples": samples, "measured": measured,
                     });
                     last = Some((now, net));
                     value
@@ -2454,6 +2468,11 @@ impl Stations {
         });
         // Told meanwhile: that is newer.
         *self.places.borrow_mut().entry(key).or_insert(kept)
+    }
+
+    /// Measures the ways to the station now (its card's 重新测量); its `net` topic shows what was found.
+    pub async fn measure(&self, station: &StationAddr) -> Result<()> {
+        self.wire.measure(station).await
     }
 
     /// The page of a session's transcript before what its `live` topic has, into it: from what is kept, else from the

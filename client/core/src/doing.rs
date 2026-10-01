@@ -87,7 +87,7 @@ pub(crate) fn counts(call: &Call, name: &str) -> bool {
     match call {
         Call::Op(op) => op.method != "GET" && !matches!(name, "session.warm" | "widget.setState" | "login.drop"),
         Call::ChatArchive { .. } | Call::ChatRetry { .. } | Call::ChatRetryIn { .. } | Call::ChatDiscard { .. } | Call::ChatDiscardIn { .. } => true,
-        Call::ChatLatest { .. } | Call::SignOut { .. } | Call::AuthBegin { .. } => true,
+        Call::ChatLatest { .. } | Call::SignOut { .. } | Call::AuthBegin { .. } | Call::StationMeasure { .. } => true,
         Call::Wake { retry, .. } => *retry,
         Call::Choose { name, .. } => name == "pick.save",
         Call::Attend(_) => name == "notify.set",

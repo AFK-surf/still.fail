@@ -1775,6 +1775,25 @@ data class NetFigure (
 	val level: Level
 )
 
+/// The way through one relay: its round trip, or none if it was not reached in time.
+@Serializable
+data class NetRelay (
+	/// What still.fail calls it (北京), or its host.
+	val name: String,
+	val rtt: NetFigure? = null,
+	/// The connection goes through it now.
+	val current: Boolean
+)
+
+/// A station's ways through each relay as last measured, and whether they are being measured again.
+@Serializable
+data class NetMeasured (
+	val measuring: Boolean,
+	val relays: List<NetRelay>,
+	/// The relay the connection moved to as they were measured (its name), if it did.
+	val moved: String? = null
+)
+
 @Serializable
 data class RuntimeModels (
 	val runtime: RuntimeKind,
@@ -1893,7 +1912,10 @@ data class StationNet (
 	val downTotal: String? = null,
 	val upTotal: String? = null,
 	/// Packets lost over the last minute, when some were.
-	val loss: NetFigure? = null
+	val loss: NetFigure? = null,
+	/// The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
+	/// a core from before.
+	val measured: NetMeasured? = null
 )
 
 @Serializable

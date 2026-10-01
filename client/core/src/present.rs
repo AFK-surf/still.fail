@@ -505,9 +505,24 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
         _ => "正在选路".to_string(),
     };
     let samples: Vec<&Value> = raw.get("samples").and_then(Value::as_array).map(|a| a.iter().collect()).unwrap_or_default();
-    let rtt = raw.get("rttMs").and_then(Value::as_f64).map(|ms| {
+    let figure = |ms: f64| {
         let text = if ms >= 1000.0 { format!("{:.1} s", ms / 1000.0) } else { format!("{} ms", ms.round().max(1.0) as i64) };
         json!({ "text": text, "level": if ms >= 1000.0 { "red" } else if ms >= 300.0 { "amber" } else { "ok" } })
+    };
+    let rtt = raw.get("rttMs").and_then(Value::as_f64).map(figure);
+    let named = |host: &str| relay_name(host).unwrap_or_else(|| host.to_string());
+    // The way through each relay as last measured (mesh.rs `Mesh::quickest`): the one the link goes through marked.
+    let via = (raw.get("path").and_then(Value::as_str) == Some("relay")).then(|| raw.get("relay").and_then(Value::as_str)).flatten();
+    let measured = raw.get("measured").filter(|m| m.is_object()).map(|m| {
+        let relays: Vec<Value> = m.get("relays").and_then(Value::as_array).into_iter().flatten().filter_map(|r| {
+            let host = r.get("relay").and_then(Value::as_str)?;
+            Some(json!({ "name": named(host), "rtt": r.get("rttMs").and_then(Value::as_f64).map(figure), "current": via == Some(host) }))
+        }).collect();
+        json!({
+            "measuring": m.get("measuring").and_then(Value::as_bool).unwrap_or(false),
+            "relays": relays,
+            "moved": m.get("moved").and_then(Value::as_str).map(named),
+        })
     });
     let history: Vec<f64> = samples.iter().filter_map(|s| s.get("rttMs").and_then(Value::as_f64)).map(|ms| (ms * 10.0).round() / 10.0).collect();
     let rate = |key: &str| samples.last().and_then(|s| s.get(key)).and_then(Value::as_f64).map(|b| format!("{}/s", format::bytes(b))).unwrap_or_else(|| "—".into());
@@ -527,6 +542,7 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
         "downTotal": format::bytes(n("rxBytes")),
         "upTotal": format::bytes(n("txBytes")),
         "loss": loss,
+        "measured": measured,
     }))
 }
 
@@ -653,6 +669,17 @@ mod tests {
         assert_eq!(shown["rtt"]["level"], "ok");
         assert_eq!(shown["loss"], json!({ "text": "丢包 5.0%", "level": "amber" }));
         // Not yet two readings: nothing to say of speed.
+        let measured = json!({ "measuring": false, "relays": [{ "relay": "relay.still.fail", "rttMs": 11_000.0 }, { "relay": "hk.test", "rttMs": 82.0 }, { "relay": "cf.test", "rttMs": null }], "moved": "hk.test" });
+        let raw = json!({ "path": "relay", "relay": "hk.test", "rttMs": 90.0, "rxBytes": 0, "txBytes": 0, "samples": [], "measured": measured });
+        assert_eq!(net(&raw, &named).unwrap()["measured"], json!({
+            "measuring": false,
+            "relays": [
+                { "name": "北京", "rtt": { "text": "11.0 s", "level": "red" }, "current": false },
+                { "name": "hk.test", "rtt": { "text": "82 ms", "level": "ok" }, "current": true },
+                { "name": "cf.test", "rtt": null, "current": false },
+            ],
+            "moved": "hk.test",
+        }));
         let shown = net(&json!({ "path": null, "rttMs": 1500.0, "rxBytes": 0, "txBytes": 0, "samples": [] }), &unnamed).unwrap();
         assert_eq!((shown["path"].as_str(), shown["down"].as_str()), (Some("正在选路"), Some("—")));
         assert_eq!(shown["rtt"], json!({ "text": "1.5 s", "level": "red" }));

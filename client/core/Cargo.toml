@@ -34,3 +34,9 @@ testing = ["dep:tokio"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# Relays on localhost (mesh.rs tests), one reached through a proxy that slows it.
+iroh = { version = "=1.0.3", features = ["test-utils"] }
+iroh-relay = { version = "1", features = ["test-utils"] }
+tokio = { version = "1", features = ["rt", "macros", "time", "net", "io-util"] }

@@ -13,7 +13,7 @@ import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
-import { Net } from "../cloud/StationCards.tsx";
+import { Net, Ways } from "../cloud/StationCards.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Spinner, TopBack } from "./parts.tsx";
@@ -136,6 +136,7 @@ export function StationScreen() {
               <span className={css.mStationRings}><MeterChips meters={s.host.meters} /></span>
               <span className={css.mStationLine}>{s.host.line}</span>
               {s.net && <Net net={s.net} stacked />}
+              {s.net && <Ways station={s.station} measured={s.net.measured} stacked />}
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (
