@@ -20,6 +20,7 @@
 ## 待部署
 
 - 本机文件链接（fix/local-file-links）：只需更新 station，无客户端或数据库迁移。still.fail 聊天的 chat_post 自动将 Markdown 绝对路径链接/图片复制成现有附件，并将目标改成编码后的文件名；新 station 配旧客户端可用，旧 station 保持原行为。旧消息不回填。上线后在测试会话发一个仅含本机文件链接、不带 files 的消息，确认能打开附件；文件不存在时应在发出前报错。老 agent 会收到迁移说明。
+- 本机订阅去重（hide-duplicate-local-account）：需更新 station（overview 提供订阅实际邮箱）和 web/桌面/Android 的共享 core。可任意顺序更新；新客户端连旧 station 缺邮箱时保留原显示，旧客户端忽略新增字段。无数据迁移。上线后检查同服务同邮箱本机项消失，不同账号仍显示；删除绑定订阅后本机项恢复。
 
 - Claude 额度续期（claude-quota-refresh）：需发 station 包，无客户端/API/数据迁移依赖。额度读取和机器账号启动直接走 OAuth 续期，不再发 Haiku 对话；沿用文件/钥匙串原位置与 Claude Code 2.1.286 的新旧刷新锁。升级后在机器登录和独立登录两类账号上，token 到期后只打开账号额度页，确认恢复显示且不出现模型调用；模拟接口已覆盖到期、提前 401、并发、失败重试、钥匙串及遗留锁恢复。未来 Claude Code 调整锁或凭据格式时需同步核对。
 
