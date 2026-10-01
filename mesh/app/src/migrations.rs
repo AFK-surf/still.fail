@@ -7,6 +7,7 @@
 /// The notes, oldest first, each with its number (counting up from 1, never reused).
 pub const NOTES: &[(i64, &str)] = &[
     (1, "How a turn ends: all_done now needs done (the evidence nothing is left), a turn waiting on a person is need_human (with need), and waiting is only for your own work that brings you back (with for). A message can carry a card (options, or a field to type in)."),
+    (2, "In still.fail chats, chat_post automatically attaches local files named by inline Markdown links or images. Invalid local paths and conflicting attachment names are rejected before posting; correct them or write paths as code when they are only examples."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

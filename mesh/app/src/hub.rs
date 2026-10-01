@@ -1554,7 +1554,7 @@ impl Hub {
 
     async fn chat_post(&self, key: &str, args: &Map<String, Value>) -> Result<String> {
         let text = args.get("text").map(js_string).unwrap_or_default().trim().to_string();
-        let paths: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().map(js_string).collect()).unwrap_or_default();
+        let mut paths: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().map(js_string).collect()).unwrap_or_default();
         let given = state_arg(args.get("kind"))?;
         let card = card_arg(args.get("card"), args.get("options"))?;
         // need_decision, as said before cards: a post with a card that ends the turn need_help.
@@ -1592,6 +1592,10 @@ impl Hub {
         };
         // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
         // them in still.fail instead.
+        let text = if thread.thread.surface == STILLFAIL_SURFACE {
+            let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session"))?;
+            crate::local_links::prepare(&text, &mut paths, Path::new(&row.workspace))?
+        } else { text };
         let slack = thread.thread.surface != STILLFAIL_SURFACE && !paths.is_empty();
         let link = || (self.link)(key).ok_or_else(|| anyhow!("files cannot be shown from Slack until this station is in a still.fail workspace; mention their paths in the text instead"));
         let files = if paths.is_empty() { vec![] } else { self.attach(key, &paths)? };

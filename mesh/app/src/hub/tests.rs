@@ -2214,3 +2214,25 @@ async fn a_session_from_before_a_change_is_told_it_once_and_a_new_one_never() {
     settle().await;
     assert!(!r.claude.last().prompts().last().unwrap().contains("still.fail changed how you work"));
 }
+
+#[tokio::test]
+async fn web_posts_deliver_local_file_links_and_reject_missing_files_before_posting() {
+    let r = setup();
+    let (key, thread) = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
+    let workspace = PathBuf::from(r.session(&key).workspace);
+    let source = workspace.join("report.txt");
+    std::fs::write(&source, "original report").unwrap();
+    let to = format!("EMBER/{}", thread.thread_ts);
+    r.call(&key, "chat_post", json!({ "to": to, "text": format!("Read [report]({})", source.display()) })).await.unwrap();
+    let messages = r.said(thread.id);
+    let posted = messages.last().unwrap();
+    assert_eq!(posted.text, "Read [report](report%2Etxt)");
+    assert_eq!(posted.attachments.len(), 1);
+    assert_eq!(posted.attachments[0].name, "report.txt");
+    std::fs::write(&source, "changed report").unwrap();
+    assert_eq!(std::fs::read_to_string(&posted.attachments[0].path).unwrap(), "original report");
+    let count = messages.len();
+    let error = r.call(&key, "chat_post", json!({ "to": to, "text": "[report](/tmp/stillfail-missing-file.txt)" })).await.unwrap_err().to_string();
+    assert!(error.contains("correct the path"), "{error}");
+    assert_eq!(r.said(thread.id).len(), count);
+}
