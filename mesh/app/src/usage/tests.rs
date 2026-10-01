@@ -81,6 +81,31 @@ fn prices_are_found_however_a_profile_spells_the_model_and_cost_counts_each_kind
     assert_eq!(cost(&UsageGroup { model: Some("gpt-6".into()), ..g }), None);
 }
 
+#[test]
+fn gpt_usage_has_a_price_and_unknown_variants_do_not_borrow_one() {
+    for (model, input, cached, output) in [
+        ("gpt-6-astra", 10.0, 1.0, 50.0),
+        ("gpt-6.1-sol", 2.0, 0.1, 10.0),
+        ("gpt-6-sol", 2.0, 0.2, 10.0),
+        ("gpt-6-luna", 0.1, 0.01, 0.5),
+        ("gpt-5.6-sol", 4.0, 0.4, 20.0),
+    ] {
+        let g = UsageGroup { model: Some(model.into()), input: 1_000_000, cache_read: 1_000_000, output: 1_000_000, ..Default::default() };
+        assert!((cost(&g).unwrap() - (input + cached + output)).abs() < 1e-9, "{model}");
+    }
+    assert_eq!(price("openai/gpt-6-astra-2026-08-21"), price("gpt-6-astra"));
+    assert_eq!(price("gpt-6-astra-unknown"), None);
+    assert_eq!(price("gpt-6-astra:free"), None);
+    let table = price_table();
+    let astra = table["rows"].as_array().unwrap().iter().find(|r| r["model"] == "gpt-6-astra").unwrap();
+    assert_eq!(astra["input"], 10.0);
+    assert_eq!(astra["cacheRead"], 1.0);
+    assert_eq!(astra["output"], 50.0);
+    // Actual recorded GPT token totals: cached input is already separate from uncached input.
+    let g = UsageGroup { model: Some("gpt-6-astra".into()), input: 1_916_566, cache_read: 71_041_792, output: 245_251, ..Default::default() };
+    assert!((cost(&g).unwrap() - 102.469002).abs() < 1e-9);
+}
+
 struct Rig {
     _dir: tempfile::TempDir,
     data: PathBuf,

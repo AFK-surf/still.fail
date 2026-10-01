@@ -14,7 +14,7 @@ import { RunSettingsScreen } from "./History.tsx";
 import { Home, Recent } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
 import { MemoriesScreen, MemoryScreen } from "./Memory.tsx";
-import { UsageScreen } from "./Usage.tsx";
+import { UsageScreen, UsagePricesScreen } from "./Usage.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
@@ -45,6 +45,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/connects" element={<ConnectsScreen />} />
       <Route path="settings/profiles" element={<ProfilesScreen />} />
       <Route path="settings/memory" element={<MemoriesScreen />} />
+      <Route path="settings/usage/prices" element={<UsagePricesScreen />} />
       <Route path="settings/usage" element={<UsageScreen />} />
       {/* The workspace's page at the addresses it had before (links sent keep working). */}
       <Route path="settings/general" element={<WorkspaceScreen />} />

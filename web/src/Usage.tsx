@@ -30,16 +30,14 @@ export function chatPath(item: UsageItem): string | null {
   return id ? `${stationBase(chat.station)}/chats/${encodeURIComponent(id)}` : null;
 }
 
-export function Tiles({ view }: { view: UsageView }) {
+export function Tiles({ view, pricesPath }: { view: UsageView; pricesPath?: string | undefined }) {
   return (
     <div className={css.tiles}>
-      {view.tiles.map((t) => (
-        <div key={t.label} className={css.tile}>
-          <span className={css.tileLabel}>{t.label}</span>
-          <span className={css.tileValue}>{t.value}</span>
-          <span className={css.tileSub}>{t.sub}</span>
-        </div>
-      ))}
+      {view.tiles.map((t, i) => {
+        const content = <><span className={css.tileLabel}>{t.label}</span><span className={css.tileValue}>{t.value}</span><span className={css.tileSub}>{i === 0 && pricesPath ? "查看价目表 →" : t.sub}</span></>;
+        return i === 0 && pricesPath ? <Link key={t.label} className={`${css.tile} ${css.tileLink}`} to={pricesPath} aria-label="折合费用，查看价目表">{content}</Link>
+          : <div key={t.label} className={css.tile}>{content}</div>;
+      })}
     </div>
   );
 }
@@ -155,10 +153,10 @@ export function Notes({ view }: { view: UsageView }) {
 }
 
 /** The whole page's body, below its title: the totals, the days, the lists, what is missing. */
-export function UsageBody({ view }: { view: UsageView }) {
+export function UsageBody({ view, pricesPath }: { view: UsageView; pricesPath?: string | undefined }) {
   return (
     <div className={css.usage}>
-      <Tiles view={view} />
+      <Tiles view={view} pricesPath={pricesPath} />
       {view.empty ? <p className={css.empty}>{view.loading ? "正在读取…" : "这段时间没有用量"}</p> : (
         <>
           <DaysChart view={view} />
@@ -168,6 +166,22 @@ export function UsageBody({ view }: { view: UsageView }) {
       <Notes view={view} />
     </div>
   );
+}
+
+/** Prices come from each station, through the core; no independent table in a UI. */
+export function PriceTables({ view }: { view: UsageView }) {
+  const tables = view.prices ?? [];
+  return <div className={css.usage}>
+    {tables.length === 0 && <p className={css.empty}>暂时没有价目表</p>}
+    {tables.map((table, i) => <section className={css.card} key={i}>
+      <h2 className={css.priceStation}>{table.station}</h2>
+      <p className={css.priceNote}>{table.note}</p>
+      <div className={css.priceGrid}>{table.rows.map((row) => <div className={css.priceModel} key={row.model}>
+        <h3 className={css.priceName}>{row.model}</h3>
+        <dl className={css.priceRates}>{row.rates.map((rate) => <div className={css.priceRate} key={rate.label}><dt>{rate.label}</dt><dd>{rate.value}</dd></div>)}</dl>
+      </div>)}</div>
+    </section>)}
+  </div>;
 }
 
 export { css as usageCss };

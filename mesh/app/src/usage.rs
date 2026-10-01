@@ -38,8 +38,15 @@ pub struct Price {
     pub cache_read: f64,
 }
 
-/// Anthropic's list prices (2026-09). Longer names first: a name is matched by its start.
+/// Standard short-context API list prices (2026-10-02). Longer names first.
+/// OpenAI: https://developers.openai.com/api/docs/pricing
+/// These are token-cost estimates, not invoices (no long-context or service-tier surcharges).
 const PRICES: &[(&str, Price)] = &[
+    ("gpt-6-astra", Price { input: 10.0, output: 50.0, cache_read: 1.0 }),
+    ("gpt-6.1-sol", Price { input: 2.0, output: 10.0, cache_read: 0.1 }),
+    ("gpt-6-sol", Price { input: 2.0, output: 10.0, cache_read: 0.2 }),
+    ("gpt-6-luna", Price { input: 0.1, output: 0.5, cache_read: 0.01 }),
+    ("gpt-5.6-sol", Price { input: 4.0, output: 20.0, cache_read: 0.4 }),
     ("claude-fable-5-1", Price { input: 10.0, output: 50.0, cache_read: 0.25 }),
     ("claude-mythos-5-1", Price { input: 10.0, output: 50.0, cache_read: 0.25 }),
     ("claude-fable-5", Price { input: 10.0, output: 50.0, cache_read: 1.0 }),
@@ -57,11 +64,22 @@ const PRICES: &[(&str, Price)] = &[
     ("claude-haiku-4-5", Price { input: 1.0, output: 5.0, cache_read: 0.1 }),
 ];
 
+/// The very same table used by `cost`, for inspecting a station's calculation from the usage page.
+pub fn price_table() -> Value {
+    serde_json::json!({
+        "note": "美元 / 100 万 token · 标准短上下文单价；费用 = 各类 token × 对应单价 ÷ 100 万；记录为 fast 的调用乘 2。未计长上下文和其他服务等级加价。价目核对于 2026-10-02",
+        "rows": PRICES.iter().map(|(model, p)| serde_json::json!({
+            "model": model, "input": p.input, "cacheRead": p.cache_read,
+            "cacheWrite": p.input * 1.25, "cacheWriteLong": p.input * 2.0, "output": p.output,
+        })).collect::<Vec<_>>()
+    })
+}
+
 /// A model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m]); None for a model
 /// without a list price here.
 pub fn price(model: &str) -> Option<Price> {
     let name = stillfail_shapes::model::key(model);
-    PRICES.iter().find(|(prefix, _)| name.starts_with(prefix)).map(|(_, p)| *p)
+    PRICES.iter().find(|(prefix, _)| name == *prefix || name.strip_prefix(prefix).is_some_and(|suffix| suffix.starts_with('['))).map(|(_, p)| *p)
 }
 
 /// What a day's calls of one model would cost at its API prices, in dollars.

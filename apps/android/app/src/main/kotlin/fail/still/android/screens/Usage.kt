@@ -84,7 +84,7 @@ fun UsageScreen(current: WorkspaceEntry) {
         if (view == null) {
             Text(topic.error?.let { "读不到用量：${it.message}" } ?: "正在读取…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
         } else {
-            Tiles(view)
+            Tiles(view) { app.push(Screen.UsagePrices) }
             if (view.empty) {
                 Text(if (view.loading) "正在读取…" else "这段时间没有用量", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
             } else {
@@ -105,15 +105,15 @@ fun UsageScreen(current: WorkspaceEntry) {
 
 /** The totals, two to a row. */
 @Composable
-private fun Tiles(view: UsageView) {
+private fun Tiles(view: UsageView, openPrices: () -> Unit) {
     Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         view.tiles.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { t ->
-                    Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(C.surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(C.surface).then(if (t == view.tiles.firstOrNull()) Modifier.clickable(onClick = openPrices) else Modifier).padding(horizontal = 16.dp, vertical = 14.dp)) {
                         Text(t.label, fontSize = 12.sp, color = C.muted)
                         Text(t.value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1)
-                        Text(t.sub, fontSize = 12.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (t == view.tiles.firstOrNull()) "查看价目表 →" else t.sub, fontSize = 12.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -216,5 +216,40 @@ private fun ItemRow(item: UsageItem, rank: Int, kind: String, open: (UsageItem) 
         Box(Modifier.padding(start = 34.dp, top = 6.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.chip)) {
             Box(Modifier.fillMaxWidth(item.share.toFloat().coerceIn(if (item.share > 0) .01f else 0f, 1f)).fillMaxHeight().background(C.subtle.copy(alpha = .5f)))
         }
+    }
+}
+
+@Composable
+fun UsagePricesScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val topic by rememberTopic<UsageView>(app.core, Topics.usage(current.workspace.id, 7))
+    val view = topic.value
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack("用量", app::pop)
+        LargeTitle("", "价目表")
+        PageNote("当前各台 station 用于折算费用的单价")
+        if (view == null) PageNote(topic.error?.let { "读不到价目：${it.message}" } ?: "正在读取…")
+        else {
+            val tables = view.prices.orEmpty()
+            if (tables.isEmpty()) PageNote("暂时没有价目表")
+            tables.forEach { table ->
+                Card {
+                    Text(table.station, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                    Text(table.note, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
+                    table.rows.forEach { row ->
+                        Text(row.model, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                        Column(Modifier.padding(top = 10.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.rates.forEach { rate ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(rate.label, fontSize = 12.sp, color = C.muted)
+                                    Text(rate.value, fontSize = 12.sp, color = C.ink)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(30.dp))
     }
 }

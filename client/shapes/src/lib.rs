@@ -2325,6 +2325,31 @@ pub struct UsageView {
     pub lists: Vec<UsageList>,
     pub notes: Vec<String>,
     pub basis: String,
+    /// Each station's own calculation table; absent with older cores.
+    pub prices: Option<Vec<UsagePriceTable>>,
+}
+
+/// A station's own price table; its note explains missing data on older/offline stations.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UsagePriceTable {
+    pub station: String,
+    pub note: String,
+    pub rows: Vec<UsagePriceRow>,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UsagePriceRow {
+    pub model: String,
+    pub rates: Vec<UsageRate>,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UsageRate {
+    pub label: String,
+    pub value: String,
 }
 
 /// 折合费用 $1,911 (按 API 价算).

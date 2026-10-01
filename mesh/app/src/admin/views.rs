@@ -368,6 +368,7 @@ impl AdminApi {
             "to": to,
             "since": self.deps.store.usage_since()?,
             "reading": usage.reading_all(),
+            "prices": crate::usage::price_table(),
             "rows": rows,
             "threads": threads,
             "people": people,

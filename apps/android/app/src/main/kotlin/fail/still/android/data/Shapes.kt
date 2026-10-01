@@ -2303,6 +2303,26 @@ data class UsageList (
 	val items: List<UsageItem>
 )
 
+@Serializable
+data class UsageRate (
+	val label: String,
+	val value: String
+)
+
+@Serializable
+data class UsagePriceRow (
+	val model: String,
+	val rates: List<UsageRate>
+)
+
+/// A station's own price table; its note explains missing data on older/offline stations.
+@Serializable
+data class UsagePriceTable (
+	val station: String,
+	val note: String,
+	val rows: List<UsagePriceRow>
+)
+
 /// A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty).
 @Serializable
 data class UsageSeries (
@@ -2334,7 +2354,9 @@ data class UsageView (
 	val max: Double,
 	val lists: List<UsageList>,
 	val notes: List<String>,
-	val basis: String
+	val basis: String,
+	/// Each station's own calculation table; absent with older cores.
+	val prices: List<UsagePriceTable>? = null
 )
 
 /// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many

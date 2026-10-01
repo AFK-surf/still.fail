@@ -2286,6 +2286,23 @@ export interface UsageList {
 	items: UsageItem[];
 }
 
+export interface UsageRate {
+	label: string;
+	value: string;
+}
+
+export interface UsagePriceRow {
+	model: string;
+	rates: UsageRate[];
+}
+
+/** A station's own price table; its note explains missing data on older/offline stations. */
+export interface UsagePriceTable {
+	station: string;
+	note: string;
+	rows: UsagePriceRow[];
+}
+
 /** A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty). */
 export interface UsageSeries {
 	key: string;
@@ -2317,6 +2334,8 @@ export interface UsageView {
 	lists: UsageList[];
 	notes: string[];
 	basis: string;
+	/** Each station's own calculation table; absent with older cores. */
+	prices?: UsagePriceTable[];
 }
 
 /**

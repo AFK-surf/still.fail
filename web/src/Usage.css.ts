@@ -129,3 +129,14 @@ export const cardHead = style({ display: "flex", alignItems: "center", justifyCo
 export const pick = style({ minWidth: "140px" });
 export const pickLists = style({ minWidth: "300px" });
 globalStyle(`${pick} > button, ${pickLists} > button`, { whiteSpace: "nowrap", padding: "0 10px" });
+
+// Inspect the rates behind the total, with the same cards on wide and narrow screens.
+export const tileLink = style({ color: "inherit", textDecoration: "none", selectors: { "&:hover": { background: u.hover } } });
+export const priceStation = style({ fontSize: "16px", margin: "0 0 8px", fontWeight: 600 });
+export const priceNote = style({ fontSize: "12px", color: u.muted, margin: "0 0 20px", lineHeight: 1.6 });
+export const priceGrid = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "24px 32px" });
+export const priceModel = style({ minWidth: 0 });
+export const priceName = style({ fontSize: "14px", margin: "0 0 10px", fontWeight: 600, overflowWrap: "anywhere" });
+export const priceRates = style({ display: "grid", gap: "6px", margin: 0, fontSize: "12px" });
+export const priceRate = style({ display: "flex", justifyContent: "space-between", gap: "12px", color: u.muted, fontVariantNumeric: "tabular-nums" });
+globalStyle(`${priceRate} dd`, { margin: 0, color: u.text });

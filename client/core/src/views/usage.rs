@@ -144,6 +144,16 @@ impl Sum {
         self.output += n("output");
     }
 
+    fn cost_text(&self) -> String {
+        if self.unpriced > 0.0 && self.unpriced >= self.calls {
+            "未计价".into()
+        } else if self.unpriced > 0.0 {
+            format!("≥{}", money(self.cost))
+        } else {
+            money(self.cost)
+        }
+    }
+
     fn tokens(&self) -> f64 {
         self.input + self.cache_read + self.cache_write + self.output
     }
@@ -171,7 +181,7 @@ fn items_shown(mut items: Vec<Item>, total: &Sum) -> Vec<Value> {
                 "title": i.title,
                 "sub": i.sub,
                 "cost": i.sum.cost,
-                "costText": money(i.sum.cost),
+                "costText": i.sum.cost_text(),
                 "share": share,
                 "shareText": percent(share, 1.0),
                 "calls": i.sum.calls,
@@ -183,6 +193,22 @@ fn items_shown(mut items: Vec<Item>, total: &Sum) -> Vec<Value> {
             v
         })
         .collect()
+}
+
+/// Keep stations separate: versions can have different tables, and an older station cannot tell us its rates.
+fn price_tables(sources: &[Source]) -> Vec<Value> {
+    sources.iter().map(|s| {
+        let table = s.value.as_ref().and_then(|v| v.as_ref().ok()).and_then(|v| v.get("prices"));
+        let note = if !s.online { "station 离线，无法读取价目" } else if table.is_none() {
+            "station 尚未提供价目表，请更新 station 后查看"
+        } else { table.and_then(|t| t.get("note")).and_then(Value::as_str).unwrap_or("美元 / 100 万 token") };
+        let rows: Vec<Value> = if s.online { table.and_then(|t| t.get("rows")).and_then(Value::as_array).into_iter().flatten().map(|r| {
+            let rates: Vec<Value> = [("input", "输入"), ("cacheRead", "缓存读取"), ("cacheWrite", "缓存写入 / 5 分钟"), ("cacheWriteLong", "缓存写入 / 1 小时"), ("output", "输出")]
+                .into_iter().map(|(key, label)| json!({"label": label, "value": r.get(key).and_then(Value::as_f64).map(|n| format!("${n}")).unwrap_or_else(|| "—".into())})).collect();
+            json!({"model": r.get("model").and_then(Value::as_str).unwrap_or("未知模型"), "rates": rates})
+        }).collect() } else { vec![] };
+        json!({"station": s.name, "note": note, "rows": rows})
+    }).collect()
 }
 
 /// The view (see the module): `days` local days to `now`, the viewer `me` among the workspace's `members`.
@@ -311,14 +337,14 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
             if rest {
                 parts.push(split.iter().filter(|(k, _)| !top.iter().any(|(t, _)| t == *k)).map(|(_, v)| v).sum());
             }
-            json!({ "day": day, "label": day_label(day), "today": *day == today, "cost": sum.cost, "costText": money(sum.cost), "calls": sum.calls, "callsText": format!("{} 次调用", count(sum.calls)), "partsText": parts.iter().map(|p| money(*p)).collect::<Vec<_>>(), "parts": parts })
+            json!({ "day": day, "label": day_label(day), "today": *day == today, "cost": sum.cost, "costText": sum.cost_text(), "calls": sum.calls, "callsText": format!("{} 次调用", count(sum.calls)), "partsText": parts.iter().map(|p| money(*p)).collect::<Vec<_>>(), "parts": parts })
         })
         .collect();
     let max = by_day.values().map(|(s, _)| s.cost).fold(0.0, f64::max);
 
     let input = total.input + total.cache_read + total.cache_write;
     let tiles = json!([
-        { "label": "折合费用", "value": money(total.cost), "sub": "按 API 价算" },
+        { "label": "折合费用", "value": total.cost_text(), "sub": "按 API 标准单价估算" },
         { "label": "模型调用", "value": format!("{} 次", count(total.calls)), "sub": format!("日均 {} 次", count(total.calls / days as f64)) },
         { "label": "输入 token", "value": count(input), "sub": format!("缓存命中 {}", percent(total.cache_read, input)) },
         { "label": "输出 token", "value": count(total.output), "sub": format!("平均每次 {}", count(if total.calls > 0.0 { total.output / total.calls } else { 0.0 })) },
@@ -341,6 +367,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
     }
     json!({
         "days": days,
+        "prices": price_tables(sources),
         "loading": loading,
         "empty": total.calls == 0.0,
         "tiles": tiles,
@@ -349,7 +376,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
         "max": max,
         "lists": lists,
         "notes": notes,
-        "basis": "订阅账号不按 token 收费；费用是同样的用量按 API 价要花的钱",
+        "basis": "订阅账号不按 token 收费；费用按 API 标准单价估算，不含长上下文和服务等级等加价",
     })
 }
 
@@ -388,7 +415,7 @@ mod tests {
         let sources = [Source { address: "ws/st".into(), name: "studio".into(), online: true, value: Some(Ok(station(rows))) }];
         let members = [json!({ "email": "a@x", "name": "阿一", "picture": "https://p/a" })];
         let v = usage_view(&sources, 7, NOW, 480, &json!({ "id": "b@x", "email": "b@x" }), &members);
-        assert_eq!(v["tiles"][0]["value"], "$4.00");
+        assert_eq!(v["tiles"][0]["value"], "≥$4.00");
         assert_eq!(v["tiles"][1]["value"], "19 次");
         let daily = v["daily"].as_array().unwrap();
         assert_eq!((daily.len(), daily[6]["label"].as_str(), daily[6]["today"].as_bool()), (7, Some("10/2"), Some(true)));
@@ -405,6 +432,34 @@ mod tests {
         let models = list(3);
         assert_eq!((models[0]["title"].as_str(), models[1]["sub"].as_str()), (Some("Opus 5.5"), Some("没有价目，不计费用")));
         assert_eq!(v["notes"], json!(["4 次调用的模型没有价目，没算进费用"]));
+    }
+
+    #[test]
+    fn price_tables_keep_station_rates_separate_and_handle_older_stations() {
+        let source = |name: &str, rate: f64| Source { address: name.into(), name: name.into(), online: true,
+            value: Some(Ok(json!({"prices": {"note": "standard", "rows": [{"model": "gpt-6-astra", "input": rate, "cacheRead": 0.01, "output": 50.0}]}}))) };
+        let tables = price_tables(&[source("alpha", 10.0), source("beta", 12.0), Source { address: "old".into(), name: "old".into(), online: true, value: Some(Ok(json!({}))) }]);
+        assert_eq!(tables[0]["rows"][0]["rates"][0]["value"], "$10");
+        assert_eq!(tables[1]["rows"][0]["rates"][0]["value"], "$12");
+        assert_eq!(tables[0]["rows"][0]["rates"][1]["value"], "$0.01");
+        assert_eq!(tables[2]["rows"], json!([]));
+        assert!(tables[2]["note"].as_str().unwrap().contains("更新 station"));
+    }
+
+    #[test]
+    fn unknown_prices_are_not_shown_as_zero_and_tokens_stay_counted() {
+        let sources = [Source { address: "ws/st".into(), name: "studio".into(), online: true,
+            value: Some(Ok(station(vec![row("2026-10-02", "a@x", 7, "cc", "unknown-model", 2, None)]))) }];
+        let v = usage_view(&sources, 7, NOW, 480, &json!({}), &[]);
+        assert_eq!(v["tiles"][0]["value"], "未计价");
+        assert_eq!(v["tiles"][1]["value"], "2 次");
+        assert_eq!(v["daily"][6]["costText"], "未计价");
+        assert_eq!(v["daily"][0]["costText"], "$0");
+        for list in v["lists"].as_array().unwrap() {
+            assert_eq!(list["items"][0]["costText"], "未计价");
+            assert_eq!(list["items"][0]["detail"], "2 次调用 · 202 token");
+        }
+        serde_json::from_value::<stillfail_shapes::UsageView>(v).unwrap();
     }
 
     #[test]

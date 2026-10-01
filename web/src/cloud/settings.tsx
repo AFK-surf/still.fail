@@ -18,7 +18,7 @@ import { StationContext, stationBase, type Station } from "../station.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
 import { MemoryView } from "../Memory.tsx";
-import { DAYS, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
+import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
@@ -235,10 +235,17 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
   return (
     <Page title="用量" lead="各台 station 上的 agent 调用模型用了多少 token，按 API 价折算成钱；按人、对话、账号和模型分开看。workspace 里的人都能看。" back={`/w/${entry.id}/settings`}
       actions={<Segmented<UsageDays> className={usageCss.pick} label="多少天" value={days} onChange={setDays} options={DAYS} />}>
-      {usage.value ? <UsageBody view={usage.value} />
+      {usage.value ? <UsageBody view={usage.value} pricesPath={`/w/${entry.id}/settings/usage/prices`} />
         : usage.error ? <p className={controlsCss.fieldError}>读不到用量：{usage.error.message}</p> : <Loading label="正在读取…" fill={false} />}
     </Page>
   );
+}
+
+export function UsagePricesSettings({ entry }: { entry: WorkspaceEntry }) {
+  const usage = useUsage(entry.id, "7");
+  return <Page title="价目表" lead="当前各台 station 用于折算费用的单价" back={`/w/${entry.id}/settings/usage`}>
+    {usage.value ? <PriceTables view={usage.value} /> : <Loading label={usage.error ? `读不到价目：${usage.error.message}` : "正在读取…"} fill={false} />}
+  </Page>;
 }
 
 export function ConnectsSettings({ entry }: { entry: WorkspaceEntry }) {
