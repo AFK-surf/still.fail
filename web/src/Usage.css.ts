@@ -134,3 +134,6 @@ globalStyle(`${pick} > button, ${pickLists} > button`, { whiteSpace: "nowrap", p
 export const tileLink = style({ color: "inherit", textDecoration: "none", selectors: { "&:hover": { background: u.hover } } });
 export const priceStation = style({ fontSize: "16px", margin: "0 0 8px", fontWeight: 600 });
 export const priceNote = style({ fontSize: "12px", color: u.muted, margin: "0 0 20px", lineHeight: 1.6 });
+
+export const priceFullWidth = style({ width: "100%" });
+globalStyle(`${priceFullWidth} > table`, { width: "100%" });

@@ -207,12 +207,12 @@ private val codeInline @Composable get() = if (C.dark) Color(0xFFC9A2E6) else Co
 /** A block with the margins the web gives it, above and below. */
 private class Piece(val top: Float, val bottom: Float, val draw: @Composable () -> Unit)
 
-private class Ctx(val size: Int, val placing: Placing?)
+private class Ctx(val size: Int, val placing: Placing?, val fillTables: Boolean)
 
 @Composable
-fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null) {
+fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null, fillTables: Boolean = false) {
     val doc = remember(text) { parser.parse(text) }
-    val ctx = Ctx(size, placing)
+    val ctx = Ctx(size, placing, fillTables)
     Box(modifier) { Stack(pieces(doc.children(), ctx, tight = false)) }
 }
 
@@ -484,6 +484,10 @@ private fun Table(table: TableBlock, ctx: Ctx) {
                 }
                 val sumMin = mins.sum(); val sumMax = maxs.sum()
                 val widths = when {
+                    sumMax <= avail && ctx.fillTables -> {
+                        val extra = avail - sumMax
+                        IntArray(columns) { c -> maxs[c] + extra / columns + if (c < extra % columns) 1 else 0 }
+                    }
                     sumMax <= avail -> maxs
                     sumMin >= avail -> mins
                     else -> IntArray(columns) { c -> mins[c] + ((maxs[c] - mins[c]).toFloat() * (avail - sumMin) / (sumMax - sumMin)).roundToInt() }

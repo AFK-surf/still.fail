@@ -178,7 +178,7 @@ export function PriceTables({ view }: { view: UsageView }) {
     {tables.map((table, i) => <section className={css.card} key={i}>
       <h2 className={css.priceStation}>{table.station}</h2>
       <p className={css.priceNote}>{table.note}</p>
-      {table.rows.length === 0 ? <p className={css.priceNote}>这段时间没有模型用量</p> : <div className={conversationCss.markdown}><div className={proseCss.tableScroll}>
+      {table.rows.length === 0 ? <p className={css.priceNote}>这段时间没有模型用量</p> : <div className={conversationCss.markdown}><div className={`${proseCss.tableScroll} ${css.priceFullWidth}`}>
         <table>
           <thead><tr><th scope="col">模型</th>{table.rows[0]?.rates.map((r) => <th scope="col" key={r.label}>{r.label}</th>)}</tr></thead>
           <tbody>{table.rows.map((row) => <tr key={row.model}><td>{row.model}</td>{row.rates.map((rate) => <td key={rate.label}>{rate.value}</td>)}</tr>)}</tbody>
