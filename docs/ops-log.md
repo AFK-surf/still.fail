@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 移动端执行历史全屏页（mobile-history-page）：手机 web 和安卓从半屏抽屉改为独立页面，顶部返回、系统返回及聊天链接回到聊天；沿用页面栈保存位置。只改视图，不改 core/station 接口，可与旧 station 混用。web 随部署更新，安卓需要发新版。上线后验：点击 agent 打开全屏历史，步骤/详情可切换，返回后聊天位置不变。
+
 - station 自更新下载进度（station-update-progress）：发 station 包；从现有安装脚本的 curl 进度输出上报已有 `percent` 字段，Android/web 无需更新，旧 cloud 安装脚本也兼容。本次从旧 station 升级仍只有阶段文字，运行新 station 后的下一次更新才会显示下载百分比；上线后验下载期间百分比递增，交接/重启后清除进度条。
 
 - 安卓正文视频附件点按（fix-android-video）：仅安卓 UI 改动，需要发布安卓包；兼容现有 core/station，无部署顺序要求。上线后验：同段两个 `![](视频.mp4)` 和 Markdown 表格中的视频卡片均可点开播放。Studio 独立模拟器已复现修复前失败、修复后通过，完整 Android 检查通过。
