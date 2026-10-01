@@ -44,6 +44,10 @@
 
 ## 2026-10-01
 
+### 11:45 发安卓 0.1.1256
+
+- 从 main 371e6a4 打包（`~/ember-wt/rel-android` 新 worktree，`~/bin/ember-gui rel-1256` 跑 `release.sh android`）。带上了 1212 之后所有安卓的改动：「待部署」里写着「安卓要发一版」的那些，现在安卓这边都已经发出去了。两个域名上的 `android/latest.json` 都是 1256，apk 用 Range GET 返回 206，整包 sha256 和 latest.json 一致；`/releases/latest/android` 302 到 stillfail-1256.apk。
+
 ### 11:13 部署 1bf61c4（香港 relay、官网下载、建 workspace 资格按账号）
 
 - 部署：76afc23 → 1bf61c4，共 40 个提交。完整检查 9 项通过，部署了 api、web 和 admin，另外单独发了官网（`python3 deploy.py site`）。station 发布包传完后，studio 的 station 原地交接到了 0.1.1249。
