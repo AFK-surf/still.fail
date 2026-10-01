@@ -25,7 +25,7 @@ Not for quick commands: run those directly. Not for work that must finish before
 - `job_start` with `command` (run by `sh -c`), a short `name`, and `cwd` (default: this session's workspace). Keep the
   workspace as the place for clones and outputs.
 - Tell the people waiting that it runs and what you will tell them, then end the turn (`chat_state` "waiting", or
-  `chat_post` kind "need_help" only if they must act). You do not need to stay in the turn: you are woken when the job ends.
+  `chat_post` kind "need_human" only if they must act). You do not need to stay in the turn: you are woken when the job ends.
 - For a long job, have it report milestones or trouble with `stillfail-job notify "<words>"` from inside the command (for
   example `make all && stillfail-job notify "build done, running tests" && make test`; `ember-job` is the same command). Each notice reaches you as a message
   via="ember"; act on it (relay what matters to people, fix and restart on failure). Do not notify for every line.

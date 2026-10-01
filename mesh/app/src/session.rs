@@ -54,7 +54,7 @@ impl DeclaredState {
     pub fn parse(kind: &str, wait: u64) -> Option<DeclaredState> {
         match kind {
             "all_done" | "final" => Some(DeclaredState::AllDone),
-            "need_help" | "block" | "need_decision" => Some(DeclaredState::NeedHelp),
+            "need_human" | "need_help" | "block" | "need_decision" => Some(DeclaredState::NeedHelp),
             "waiting" => Some(DeclaredState::Waiting(wait)),
             _ => None,
         }
