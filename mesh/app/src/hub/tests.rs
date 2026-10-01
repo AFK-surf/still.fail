@@ -2205,7 +2205,7 @@ async fn a_session_from_before_a_change_is_told_it_once_and_a_new_one_never() {
     let workspace = r.store.get_session(&key).unwrap().unwrap().workspace;
     let full = std::path::Path::new(&workspace).join(".stillfail-instructions.md");
     assert!(prompts.last().unwrap().contains(&full.to_string_lossy().into_owned()), "it says where today's instructions are");
-    assert!(std::fs::read_to_string(&full).unwrap().contains("Messages reach you"), "and they are there");
+    assert_eq!(std::fs::read_to_string(&full).unwrap(), r.claude.last().options.instructions, "the file contains the full current instructions");
     assert_eq!(r.store.told_notes(&key).unwrap(), crate::migrations::latest());
     r.call(&key, "chat_state", json!({ "kind": "all_done", "done": "答完了它问的事" })).await.unwrap();
     r.claude.last().complete();
