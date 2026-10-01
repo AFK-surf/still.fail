@@ -3,6 +3,11 @@
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.graphics.toPixelMap
+import org.junit.Assert.assertTrue
+import kotlin.math.abs
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.text.TextLayoutResult
@@ -231,7 +236,12 @@ class ChatMotionTest {
 
     /** A new chat's first message: the scene leaves, the words go up into the chat it made, the composer stays. */
     @Test
-    fun newChatBecomesItsChat() {
+    fun newChatBecomesItsChat() = newChatBecomesItsChat(false)
+
+    @Test
+    fun newChatBecomesItsChatDark() = newChatBecomesItsChat(true)
+
+    private fun newChatBecomesItsChat(dark: Boolean) {
         val h = Harness(rule)
         val text = "帮我看看登录页为什么在 Safari 上点了没反应"
         val made = Topics.chat(Fixtures.STATION, ChatOf.Session("new:1"))
@@ -247,12 +257,25 @@ class ChatMotionTest {
             model = Fixtures.station.models.first(), runtime = "claude", efforts = listOf("high"),
             accounts = emptyList(), pickAccount = false, waiting = false,
         ))
-        h.launch(listOf(Screen.Home, Screen.NewChat))
+        h.launch(listOf(Screen.Home, Screen.NewChat), dark = dark)
         h.type(text)
         h.keyboard()
-        val r = h.record("new-chat")
+        // A quiet patch of the capsule above the field's letters. Its glass must not lose its source
+        // for the frame between the new page leaving and the chat's list being laid out.
+        val field = rule.onAllNodes(hasSetTextAction())[0].fetchSemanticsNode().boundsInRoot
+        val x = field.center.x.toInt()
+        val y = field.top.toInt() - 4
+        fun ground() = rule.onRoot().captureToImage().toPixelMap()[x, y]
+        val before = ground()
+        val r = h.record(if (dark) "new-chat-dark" else "new-chat")
         r.frame { h.send() }
-        r.frames(16)
+        repeat(8) {
+            r.frame()
+            val now = ground()
+            assertTrue("composer glass flashed at frame ${it + 2}: $before → $now",
+                abs(before.red - now.red) < 0.035f && abs(before.green - now.green) < 0.035f && abs(before.blue - now.blue) < 0.035f)
+        }
+        r.frames(8)
         // Its station makes it and takes the message, which becomes the chat's first.
         h.fake.put(made, Fixtures.chat(emptyList(), listOf(Fixtures.outgoing("out-1", text, seq = 1)), title = text))
         r.frames(2)

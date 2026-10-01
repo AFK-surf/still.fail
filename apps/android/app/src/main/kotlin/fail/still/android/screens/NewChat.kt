@@ -106,7 +106,9 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
     val choice = chat.value
     val onStation = { id: String -> app.pickNew(scope) { put("station", id) } }
     // What the composer frosts, under it: this page (its own paper) until it leaves.
-    Column(if (leaving) Modifier.fillMaxSize() else Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg)) {
+    // Keep the source attached through the hand-off: the chat's source is only ready after layout.
+    // Removing it here leaves the composer's glass without a recorded source for one frame.
+    Column(Modifier.fillMaxSize().hazeSource(host.haze).then(if (leaving) Modifier else Modifier.background(C.bg))) {
         // Gone at once as it leaves (the chat has its own bar), its room kept so the scene leaves from where it was.
         Box(Modifier.alpha(if (leaving) 0f else 1f)) { NavBar("取消", app::pop, "新对话") }
         val view = choice?.station
