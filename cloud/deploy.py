@@ -276,6 +276,8 @@ def main() -> None:
     parser.add_argument("--google", type=Path, default=DEPLOY / "google-oauth.json")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--skip-build", action="store_true", help="deploy the static sites already in dist/")
+    parser.add_argument("--dry-run", action="store_true", help="build and bundle each part (wrangler deploy --dry-run), "
+                        "deploy nothing: CI on a branch, without Cloudflare's login or the deploy directory's secrets")
     args = parser.parse_args()
     unknown = set(args.parts) - set(PARTS)
     if unknown:
@@ -286,7 +288,7 @@ def main() -> None:
     origin = template["vars"]["PUBLIC_ORIGIN"]
     aliases = [o.strip() for o in template["vars"].get("PUBLIC_ORIGIN_ALIASES", "").split(",") if o.strip()]
     # Only the API needs the Google client: a deploy of the static sites (CI's web-beta) goes without it.
-    web = json.loads(args.google.read_text())["web"] if args.check or "api" in parts else {}
+    web = json.loads(args.google.read_text())["web"] if (args.check or "api" in parts) and not args.dry_run else {}
     # Google calls back the new origin; a login started on an old one before a deploy, the old one.
     for callback in [f"{o}/v1/auth/google/callback" for o in [origin, *aliases]] if web else []:
         if callback not in web.get("redirect_uris", []):
@@ -301,8 +303,9 @@ def main() -> None:
         print("beta zone", beta_zone(), "active" if beta_ready(account_id()) else "not active: web-beta and site-beta will be skipped")
         return
 
-    account = account_id()
-    beta = beta_ready(account)
+    # A dry run asks Cloudflare nothing: any account, and the test channel taken as there (STILLFAIL_BETA=off says not).
+    account = "0" * 32 if args.dry_run else account_id()
+    beta = (env_var("BETA") or "").lower() != "off" if args.dry_run else beta_ready(account)
     if not beta:
         skipped = [p for p in parts if p in BETA_PARTS]
         print(f"note: the test channel's zone ({beta_zone() or 'BETA_ORIGIN unset'}) is not an active zone on Cloudflare yet: "
@@ -332,12 +335,17 @@ def main() -> None:
     def deploy(part: str, env) -> None:
         config = {**read_template(PARTS[part]), "account_id": account}
         if part == "api":
-            config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}
+            config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web.get("client_id", "dry-run")}
             if not beta:
                 config = without_beta(config)
         local = ROOT / PARTS[part].replace(".jsonc", ".local.json")
         local.write_text(json.dumps(config, indent=2) + "\n")
-        print(f"deploying {part} ({config['name']})", flush=True)
+        print(f"{'bundling' if args.dry_run else 'deploying'} {part} ({config['name']})", flush=True)
+        if args.dry_run:
+            with tempfile.TemporaryDirectory(prefix="stillfail-dry-run-") as out:
+                wrangler("deploy", "--config", str(local), "--dry-run", "--outdir", out, env=env, capture=True)
+            print(f"bundled {part}", flush=True)
+            return
         extra = ["--containers-rollout", "immediate"] if part == "relay" else []
         wrangler("deploy", "--config", str(local), *extra, env=env, capture=True)
         if part == "web-beta":
@@ -374,7 +382,7 @@ def main() -> None:
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],
     }
-    for part in parts:
+    for part in [] if args.dry_run else parts:
         for url in dict.fromkeys(checks[part]):
             request = urllib.request.Request(url, headers={"user-agent": "stillfail-deploy"})
             try:

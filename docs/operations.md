@@ -111,8 +111,12 @@ still.fail 会校验每个经过 tunnel 的请求所带的 Access JWT（签名�
 
 ## CI
 
-- 测试版 web（app.youdid.wtf）自动部署：`.github/workflows/web-beta.yml`，main 上改到 `web/`、`client/`（以及依赖、`cloud/deploy.py`、这个 workflow）的 push 触发。跑 wasm 核心构建、web 和脚本的 typecheck、`pnpm test`，过了就 `python3 cloud/deploy.py web-beta`；新的 push 会取消还在跑的那次。冷编约 2.5 分钟，有缓存时几十秒。
-- 跑在 mini1 的自托管 runner 上（名字和 label 都是 `mini1`，`~/actions-runner-ember`，LaunchAgent `actions.runner.zzj3720-ember.mini1`，用户 zuozijian），不花 GitHub 分钟数。Cloudflare 用的是 mini1 自己的 `wrangler login`；部署目录 `~/stillfail-deploy` 只有 `posthog.json`、`builds/`（promote-web 用的构建）和 `beta-web-commit`（最近一次上 beta 的提交）。cargo 的 target 放在 `~/stillfail-ci/target`，跨次保留。工具链：rustup 1.95（`~/.cargo/bin`，带 wasm32 和 wasm-bindgen-cli 0.2.129，Cargo.lock 里 wasm-bindgen 升级时要跟着 `cargo install wasm-bindgen-cli --version <新版> --locked`）、Homebrew 的 llvm@22、`~/.local/bin` 的 node 24 和 pnpm。
-- 其余部分（api、relay、admin、preview、官网、station 发布包）仍由 studio 的 `~/bin/ember-deploy` 部署，它不再部署 web-beta。转正 `~/bin/ember-promote web` 从 mini1 取 `beta-web-commit` 和那份构建，原样部署到 app.still.fail。
-- 一个提交同时改了 api 时，CI 只发 web：新页面会先配旧 api，直到在 studio 部署。新字段本来就要求可选，一般不坏；要紧的改动合进去后尽快跑一次 `ember-deploy`。
-- runner 重新注册：在 mini1 上 `cd ~/actions-runner-ember && ./config.sh remove`，再用 `gh api -X POST repos/zzj3720/ember/actions/runners/registration-token --jq .token` 拿 token，`./config.sh --unattended --url https://github.com/zzj3720/ember --token <token> --name mini1 --labels mini1`，`./svc.sh install && ./svc.sh start`。
+`.github/workflows/pipeline.yml`，跑在 mini1 的自托管 runner 上（`mini1`、`mini1-2`、`mini1-3`，label 都是 `mini1`），不花 GitHub 分钟数。
+
+- **分支**：每次 push 跑完整检查（`scripts/check.sh full <merge-base>..HEAD`），并把改到的部分构建、打包一遍（`deploy.py --dry-run`，不部署、不读密钥）。结果当合并的证据，不卡合并。
+- **main**：检查上次部署（tag `deployed/beta`）以来改到的部分，过了就按顺序部署改到的：先 api（ember-cloud，正式环境，只有一份），再 web-beta（app.youdid.wtf）、admin、preview、site-beta（youdid.wtf）。哪一步不过，后面的都不发；全部发完才把 `deployed/beta` 挪到这个提交，所以被取消或失败的那次，改动会算进下一次。relay 改了只在 Actions 里给个警告，不自动部署（会断所有连接）。
+- **不在 CI 里的**：relay、station 发布包（`release.sh --beta`）和 studio 的 station 更新，仍由 studio 的 `~/bin/ember-deploy` 做；转正 `~/bin/ember-promote`（web 从 mini1 的 `~/stillfail-deploy/builds` 取 CI 部署的那份构建，Actions 里也有 `cloud-web-<sha>` artifact）；正式官网 `deploy.py site`；安卓/桌面发版。
+- **密钥**：GitHub 的 Environment `production`（只有 main 能用），secret 是部署目录各文件的内容：`DEPLOY_KEYS_JSON`（keys.json）、`GOOGLE_OAUTH_JSON`、`AXIOM_JSON`、`FCM_SERVICE_ACCOUNT_JSON`、`POSTHOG_JSON`、`VAPID_JSON`（还没有）、`CLOUDFLARE_API_TOKEN`（没设时用 mini1 自己的 `wrangler login`）。`.github/deploy.sh` 每次把它们写进临时部署目录，用完就删。换密钥：改 studio `~/ember-deploy` 里的文件，再 `gh secret set <名字> --env production < 文件`。
+- **mini1**：runner 在 `~/actions-runner-ember`、`~/actions-runner-ember-2`、`-3`（LaunchAgent `actions.runner.zzj3720-ember.<名字>`，用户 zuozijian）。工具链：rustup 1.95（`~/.cargo/bin`，带 wasm32、aarch64-linux-android 和 wasm-bindgen-cli 0.2.129；Cargo.lock 里 wasm-bindgen 升级时要跟着 `cargo install wasm-bindgen-cli --version <新版> --locked`）、Homebrew 的 llvm@22 和 openjdk@17、`~/Library/Android/sdk`（NDK 28.2.13676358）、`~/.local/bin` 的 node 24 和 pnpm。每个 runner 有自己的 cargo target（`~/stillfail-ci/target-<runner>`），跨次保留。
+- **加 runner / 重新注册**：在 mini1 上 `gh api -X POST repos/zzj3720/ember/actions/runners/registration-token --jq .token` 拿 token，在新目录里解开 actions-runner-osx-arm64，`./config.sh --unattended --url https://github.com/zzj3720/ember --token <token> --name mini1-<n> --labels mini1`，`./svc.sh install && ./svc.sh start`。
+- 看结果：`gh run list -R zzj3720/ember -w pipeline`（mini1 上有 gh 登录）。

@@ -1,0 +1,136 @@
+# still.fail's pipeline (docs/operations.md, "CI"), on mini1's self-hosted runners (label mini1):
+#   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
+#             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
+#   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
+#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf.
+#             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
+# Not here: the relay (deploying it drops every connection), the station's release, the stable channel and the apps:
+# ~/bin/ember-deploy and ~/bin/ember-promote on studio.
+name: pipeline
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+# Only the newest commit of a branch matters: a push stops the run before it (main's tag keeps what that one missed).
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: write # the tag deployed/beta
+jobs:
+  plan:
+    runs-on: [self-hosted, mini1]
+    outputs:
+      range: ${{ steps.plan.outputs.range }}
+      parts: ${{ steps.plan.outputs.parts }}
+      api: ${{ steps.plan.outputs.api }}
+      static: ${{ steps.plan.outputs.static }}
+      relay: ${{ steps.plan.outputs.relay }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, fetch-tags: true }
+      - id: plan
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ]; then base=$(git rev-parse -q --verify "refs/tags/deployed/beta^{commit}" || true)
+          else base=$(git merge-base origin/main HEAD); fi
+          if [ -n "$base" ]; then range="$base..$GITHUB_SHA"; changed=$(git diff --name-only "$base" "$GITHUB_SHA"); else range=all; changed=$(git ls-files); fi
+          has() { printf '%s\n' "$changed" | grep -qE "$1"; }
+          # Part by part, as ~/bin/ember-deploy decided them.
+          static=()
+          if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc)$)'; then static+=(web-beta); fi
+          if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
+          if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
+          if has '^(web/src/site/|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
+          api=false
+          if printf '%s\n' "$changed" | grep -E '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' | grep -qvE '^cloud/src/(relay|relay-worker|limits|preview)\.ts$'; then api=true; fi
+          relay=false
+          if has '^cloud/(src/(relay|relay-worker|limits|auth)\.ts|Dockerfile|relay-entrypoint\.sh|wrangler\.relay\.jsonc)$'; then relay=true; fi
+          {
+            echo "range=$range"
+            echo "parts=${static[*]}"
+            echo "static=$([ ${#static[@]} -gt 0 ] && echo true || echo false)"
+            echo "api=$api"
+            echo "relay=$relay"
+          } >> "$GITHUB_OUTPUT"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} relay=$relay"
+
+  check:
+    needs: plan
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - name: Full check
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+
+  # A branch: what main would deploy, built and bundled; nothing sent, no secrets.
+  bundle:
+    needs: [plan, check]
+    if: github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true')
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: deploy.py --dry-run
+        run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
+
+  api:
+    needs: [plan, check]
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true'
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Deploy api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOY_KEYS_JSON: ${{ secrets.DEPLOY_KEYS_JSON }}
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          VAPID_JSON: ${{ secrets.VAPID_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: sh .github/deploy.sh api
+
+  static:
+    needs: [plan, check, api]
+    # After the API (a page may need what it adds), or without it when it did not change.
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Deploy ${{ needs.plan.outputs.parts }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: sh .github/deploy.sh ${{ needs.plan.outputs.parts }}
+      - name: Keep the test channel's build
+        if: contains(needs.plan.outputs.parts, 'web-beta')
+        # What ~/bin/ember-promote web takes to app.still.fail: the very files deployed to app.youdid.wtf.
+        run: echo "$GITHUB_SHA" > "$HOME/stillfail-deploy/beta-web-commit"
+      - if: contains(needs.plan.outputs.parts, 'web-beta')
+        uses: actions/upload-artifact@v4
+        with: { name: "cloud-web-${{ github.sha }}", path: dist/cloud-web, retention-days: 90 }
+
+  # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
+  done:
+    needs: [plan, check, api, static]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
+    runs-on: [self-hosted, mini1]
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          git tag -f deployed/beta "$GITHUB_SHA"
+          git push -f origin refs/tags/deployed/beta
+      - if: needs.plan.outputs.relay == 'true'
+        run: echo "::warning::the relay changed and is not deployed here, as that drops every connection. Run ~/bin/ember-deploy on studio."

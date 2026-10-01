@@ -1,0 +1,3 @@
+# actionlint: the labels of mini1's self-hosted runners (docs/operations.md, "CI").
+self-hosted-runner:
+  labels: [mini1]
