@@ -20,7 +20,7 @@ use tracing::{error, info, warn};
 use crate::chat::status::tool_status;
 use crate::chat::{ChatSurface, ThreadRef};
 use crate::config::Profile;
-use crate::instructions::{GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
+use crate::instructions::{GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
 use crate::live::LiveHub;
 use crate::runtime::{AgentDriver, AgentSession, FailureReason, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
 use crate::store::{AuthorKind, STILLFAIL_SURFACE, NewMessage, PendingMessage, Store, TurnFor, now_ms};
@@ -105,6 +105,8 @@ pub trait SessionDeps: Send + Sync {
 struct Turn {
     id: String,
     declared: Option<DeclaredState>,
+    auth_retried: bool,
+    by: TurnFor,
 }
 
 /// A chat thread the running turn works for, with the message that brought it in: it is told what the turn does.
@@ -141,6 +143,10 @@ pub struct HandedSession {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HandedTurn {
     pub id: String,
+    #[serde(default)]
+    pub auth_retried: bool,
+    #[serde(default)]
+    pub by: TurnFor,
     /// all_done, need_decision, need_help or waiting (final or block from a binary before them).
     pub declared: Option<String>,
     pub wait: Option<u64>,
@@ -462,6 +468,8 @@ impl SessionActor {
             agent,
             turn: st.turn.as_ref().map(|t| HandedTurn {
                 id: t.id.clone(),
+                auth_retried: t.auth_retried,
+                by: t.by.clone(),
                 declared: t.declared.map(|d| d.as_str().to_string()),
                 wait: match t.declared {
                     Some(DeclaredState::Waiting(seconds)) => Some(seconds),
@@ -490,6 +498,8 @@ impl SessionActor {
             st.agent = agent.map(|agent| (st.generation, agent));
             st.turn = handed.turn.map(|t| Turn {
                 id: t.id,
+                auth_retried: t.auth_retried,
+                by: t.by,
                 declared: t.declared.as_deref().and_then(|d| DeclaredState::parse(d, t.wait.unwrap_or(0))),
             });
             st.working_for = handed.working_for.into_iter().map(|w| Working { connect: w.connect, thread: ThreadRef::new(&w.channel, &w.thread_ts), ts: w.ts }).collect();
@@ -852,7 +862,7 @@ impl SessionActor {
         let id = uuid();
         let profile = {
             let mut st = self.st();
-            st.turn = Some(Turn { id: id.clone(), declared: None });
+            st.turn = Some(Turn { id: id.clone(), declared: None, auth_retried: kind == "auth_retry", by: by.clone() });
             st.waiting = None;
             st.profile.clone()
         };
@@ -988,6 +998,22 @@ impl SessionActor {
                 _ => None,
             };
             store.end_turn(&turn.id, outcome.kind(), detail.as_deref(), turn.declared.map(DeclaredState::as_str), wait)?;
+        }
+        // Reopen Claude once so it reads the current credentials (and refreshes an expiring machine token).
+        // Resume its transcript with a continuation, never replay the original request: it may already have run tools.
+        if self.runtime == RuntimeKind::Claude
+            && matches!(&outcome, TurnOutcome::Failed { reason: FailureReason::Auth, .. })
+            && !stop_requested
+            && !deps.held()
+            && turn.as_ref().is_some_and(|t| !t.auth_retried && t.declared.is_none())
+        {
+            self.st().nudges = 0;
+            let agent = self.st().agent.take();
+            if let Some((_, agent)) = agent {
+                agent.dispose().await;
+            }
+            info!(session = self.key, "Claude authentication failed; reopening and continuing once");
+            return self.start_turn_for(&deps, "auth_retry", GO_ON_AFTER_AUTH, turn.as_ref().unwrap().by.clone()).await;
         }
         match &outcome {
             TurnOutcome::Failed { reason: FailureReason::RateLimit, .. } => {

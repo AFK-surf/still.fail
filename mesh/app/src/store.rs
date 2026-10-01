@@ -564,7 +564,7 @@ fn job_row(r: &rusqlite::Row) -> rusqlite::Result<JobRow> {
 }
 
 /// Whom a turn works for (Store::start_turn_for).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TurnFor {
     pub profile: Option<String>,
     /// A creator reference: an email, or "slack:<connect>:<user>".

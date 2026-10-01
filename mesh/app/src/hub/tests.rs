@@ -726,13 +726,23 @@ async fn stop_while_waiting_ends_the_jobs_that_would_bring_it_back_but_not_its_s
 }
 
 #[tokio::test]
-async fn a_failed_turn_is_reported_to_the_thread_and_not_nudged() {
+async fn claude_auth_retries_once_then_reports_the_profile_and_does_not_loop() {
     let r = setup();
     let m = message();
     r.accept(&m).await;
     settle().await;
-    r.claude.last().end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401 Missing API key".into() });
+    let first = r.claude.last();
+    first.end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401 Missing API key".into() });
     settle().await;
+    let retry = r.claude.last();
+    assert!(first.disposed());
+    assert_eq!(r.claude.count(), 2);
+    assert_eq!(retry.options.resume.as_deref(), Some(first.id.as_str()));
+    assert_eq!(retry.prompts(), vec![crate::instructions::GO_ON_AFTER_AUTH.to_string()]);
+    assert!(!r.chat.texts().iter().any(|t| t.contains("认证失败")));
+    retry.end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401 Missing API key".into() });
+    settle().await;
+    assert_eq!(r.claude.count(), 2, "a persistent auth failure must stop, not loop");
     assert!(matches(&r.chat.last_text(), &["认证失败", "401 Missing API key"]));
     assert_eq!(r.claude.last().prompts().len(), 1);
     // The notice says whose sign-in failed, for the clients to link that profile's page; another failure is no profile's.
@@ -745,6 +755,67 @@ async fn a_failed_turn_is_reported_to_the_thread_and_not_nudged() {
     settle().await;
     assert!(matches(&r.chat.last_text(), &["意外退出"]));
     assert_eq!(last(&r).profile, None);
+}
+
+#[tokio::test]
+async fn claude_auth_recovers_without_replaying_input_and_a_later_turn_can_recover_again() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = r.claude.last().options.route.clone();
+    for expected in [2, 3] {
+        r.claude.last().end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401 expired token".into() });
+        settle().await;
+        assert_eq!(r.claude.count(), expected);
+        assert_eq!(r.claude.last().prompts(), vec![crate::instructions::GO_ON_AFTER_AUTH.to_string()]);
+        r.call(&key, "chat_state", json!({ "kind": "all_done" })).await.unwrap();
+        r.claude.last().complete();
+        settle().await;
+        assert!(!r.chat.texts().iter().any(|t| t.contains("认证失败")));
+        if expected == 2 {
+            r.accept(&InboundMessage { addressed: true, ..reply(&m, "9999.2", "<@UBOT> next task") }).await;
+            settle().await;
+        }
+    }
+}
+
+#[tokio::test]
+async fn claude_auth_does_not_restart_stopped_held_or_declared_work() {
+    for mode in ["stop", "hold", "declared"] {
+        let r = setup();
+        let m = message();
+        r.accept(&m).await;
+        settle().await;
+        match mode {
+            "stop" => r.accept(&InboundMessage { addressed: true, ..reply(&m, "9999.2", "<@UBOT> -stop") }).await,
+            "hold" => r.hub.hold(Hold::Drain),
+            _ => { r.call(&r.claude.last().options.route, "chat_state", json!({ "kind": "all_done" })).await.unwrap(); }
+        }
+        settle().await;
+        r.claude.last().end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401".into() });
+        settle().await;
+        assert_eq!(r.claude.count(), 1, "{mode}");
+    }
+}
+
+#[tokio::test]
+async fn claude_auth_retry_budget_and_attribution_survive_handoff() {
+    let r = setup();
+    r.accept(&message()).await;
+    settle().await;
+    r.claude.last().end(TurnOutcome::Failed { reason: FailureReason::Auth, message: "401".into() });
+    settle().await;
+    let handed = r.hub.hand_off().await.unwrap();
+    let saved = serde_json::to_value(&handed.sessions[0].turn).unwrap();
+    let turn: crate::session::HandedTurn = serde_json::from_value(saved).unwrap();
+    assert!(turn.auth_retried);
+    assert!(turn.by.person.is_some());
+    assert!(turn.by.thread.is_some());
+    // An older station never wrote these fields.
+    let old: crate::session::HandedTurn = serde_json::from_value(json!({ "id": "old", "declared": null, "wait": null })).unwrap();
+    assert!(!old.auth_retried);
+    assert_eq!(old.by, crate::store::TurnFor::default());
 }
 
 #[tokio::test]

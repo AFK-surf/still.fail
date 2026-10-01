@@ -222,6 +222,9 @@ pub fn wait_over(seconds: u64) -> String {
 
 pub const RESUME_AFTER_RESTART: &str = r#"The station restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know."#;
 
+/// Continue the transcript after reloading credentials, without replaying completed work.
+pub const GO_ON_AFTER_AUTH: &str = r#"Your last turn stopped on an authentication error. The station reopened Claude to reload its credentials. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know."#;
+
 /// A turn stopped at its account's allowance, and the session now runs on another account (or model).
 pub const GO_ON_AFTER_SPENT: &str = r#"Your last turn was cut off: the account it ran on hit its usage limit. You now run on another account (or model). Check where you were, then continue the work. Post only if people need to know."#;
 
