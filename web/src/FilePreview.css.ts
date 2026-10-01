@@ -95,7 +95,7 @@ export const fpToolText = style({
 });
 export const fpPercent = style({ minWidth: "52px" });
 export const fpBody = style({
-  minWidth: "0", minHeight: "0", display: "grid", gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)",
+  minWidth: "0", minHeight: "0", overflow: "hidden", display: "grid", gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)",
   placeItems: "center",
   selectors: {
 
@@ -103,6 +103,13 @@ export const fpBody = style({
   },
 });
 globalStyle(`${fpBody} > *`, { gridArea: "1 / 1" });
+/** What is shown, in the body's place: moved sideways as one stepping through images slides it. */
+export const fpSlide = style({
+  position: "relative", minWidth: "0", minHeight: "0", width: "100%", height: "100%", display: "grid", gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)",
+  placeItems: "center",
+});
+/** An image beside the one shown, a window's width (and a gap) to its side. */
+export const fpPeek = style({ position: "absolute", inset: "0", pointerEvents: "none" });
 /** Over the image's sides, in the middle: to the one before and after. */
 export const fpStep = style({
   gridArea: "1 / 1", alignSelf: "center", zIndex: "1", display: "grid", placeItems: "center", width: "40px", height: "40px",

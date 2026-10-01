@@ -1,6 +1,6 @@
 // Zooming and panning a picture in a stage (an image, a video's frames), as web/src/FilePreview.tsx useZoom: fitted
 // to the stage with a margin, pinched around the fingers, panned when larger than the stage, a double tap zooms in
-// (or back to fitted). Fitted, a sideways swipe steps to the picture before or after.
+// (or back to fitted). Fitted, one finger moving sideways is a `Swipe`'s: to the picture before or after.
 package fail.still.android.ui
 
 import androidx.compose.animation.core.CubicBezierEasing
@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.abs
@@ -168,16 +169,23 @@ interface Strokes {
     fun cancel()
 }
 
+/** One finger moving a fitted picture sideways: where it has got to (px from where it went down), then where and how fast (px/s) it was let go. */
+interface Swipe {
+    fun drag(dx: Float)
+    fun end(dx: Float, vx: Float)
+}
+
 /**
- * The stage's gestures: pinch and pan; a tap (`onTap`) and a double tap; a sideways swipe when fitted (`onSwipe`: -1
- * to the one before, 1 after). With `strokes`, one finger is theirs and double taps are not heard.
+ * The stage's gestures: pinch and pan; a tap (`onTap`) and a double tap; one finger sideways when fitted (`swipe`).
+ * With `strokes`, one finger is theirs and double taps are not heard. `swipe` and `strokes` are its keys: they are to
+ * stay the same objects while a gesture may be going on (a new one starts the handling over, losing the gesture).
  */
-fun Modifier.zoomable(state: ZoomState, scope: CoroutineScope, onTap: () -> Unit, onSwipe: ((Int) -> Unit)? = null, strokes: Strokes? = null): Modifier =
+fun Modifier.zoomable(state: ZoomState, scope: CoroutineScope, onTap: () -> Unit, swipe: Swipe? = null, strokes: Strokes? = null): Modifier =
     onSizeChanged { state.fitBox(it) }
         .pointerInput(state, strokes == null) {
             if (strokes == null) detectTapGestures(onDoubleTap = { state.doubleTap(it, scope) }, onTap = { onTap() })
         }
-        .pointerInput(state, strokes, onSwipe) {
+        .pointerInput(state, strokes, swipe) {
             val slop = viewConfiguration.touchSlop
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -188,6 +196,9 @@ fun Modifier.zoomable(state: ZoomState, scope: CoroutineScope, onTap: () -> Unit
                 var pan = Offset.Zero
                 var zoom = 1f
                 var last: PointerInputChange = down
+                var swiped = false
+                val tracker = VelocityTracker()
+                tracker.addPosition(down.uptimeMillis, down.position)
                 if (strokes != null) { strokes.down(start); drawing = true; down.consume() }
                 while (true) {
                     val event = awaitPointerEvent()
@@ -196,6 +207,8 @@ fun Modifier.zoomable(state: ZoomState, scope: CoroutineScope, onTap: () -> Unit
                     if (pressed.size > 1 && !multi) {
                         multi = true
                         if (drawing) { strokes?.cancel(); drawing = false }
+                        // A second finger pinches: the swipe goes back.
+                        if (swiped) { swipe?.end(0f, 0f); swiped = false }
                     }
                     if (drawing) {
                         pressed.firstOrNull { it.id == down.id }?.let { strokes?.move(it.position); it.consume() }
@@ -209,16 +222,19 @@ fun Modifier.zoomable(state: ZoomState, scope: CoroutineScope, onTap: () -> Unit
                     }
                     if (past) {
                         // Fitted and one finger: a swipe, not a pan.
-                        val swiping = !multi && onSwipe != null && !state.zoomed && !state.larger
-                        if (!swiping) state.transform(event.calculateCentroid(useCurrent = true), z, p)
+                        val finger = pressed.firstOrNull { it.id == down.id }
+                        if (!multi && swipe != null && finger != null && (swiped || !state.zoomed && !state.larger)) {
+                            swiped = true
+                            tracker.addPosition(finger.uptimeMillis, finger.position)
+                            swipe.drag(finger.position.x - start.x)
+                        } else state.transform(event.calculateCentroid(useCurrent = true), z, p)
                         event.changes.forEach { if (it.positionChanged()) it.consume() }
                     }
                 }
                 if (drawing) strokes?.up()
-                else if (!multi && onSwipe != null && !state.zoomed) {
-                    val dx = last.position.x - start.x
-                    val dy = last.position.y - start.y
-                    if (abs(dx) > 60 * density && abs(dx) > 2 * abs(dy)) onSwipe(if (dx > 0) -1 else 1)
+                else if (swiped) {
+                    tracker.addPosition(last.uptimeMillis, last.position)
+                    swipe?.end(last.position.x - start.x, tracker.calculateVelocity().x)
                 }
             }
         }

@@ -91,6 +91,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.rememberUpdatedState
+import fail.still.android.ui.Swipe
+import kotlinx.coroutines.CoroutineStart
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -129,9 +133,11 @@ import fail.still.android.ui.highlight
 import fail.still.android.ui.zoomable
 import fail.still.core.CoreException
 import java.io.File
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sign
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
@@ -371,11 +377,15 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
     val before = if (at > 0) images[at - 1] else null
     val after = if (at >= 0) images.getOrNull(at + 1) else null
     val fullId = FileData.id(station, key, file, thumb = false)
-    val loaded by produceState<FileLoad>(FileData.kept(fullId)?.let { FileLoad.Ready(it) } ?: FileLoad.Loading(null), fullId) {
-        if (value is FileLoad.Ready) return@produceState
-        value = FileLoad.Loading(null)
-        value = try { FileLoad.Ready(FileData.fetch(app, station, key, file, thumb = false).await()) } catch (e: CoreException) { FileLoad.Failed(e.message) }
+    fun keptLoad() = FileData.kept(fullId)?.let { FileLoad.Ready(it) } ?: FileLoad.Loading(null)
+    // By the file it is of: stepped to another, what came of the one before is not taken for it (not even for a frame).
+    val got by produceState<Pair<String, FileLoad>>(fullId to keptLoad(), fullId) {
+        if (value.first == fullId && value.second is FileLoad.Ready) return@produceState
+        value = fullId to keptLoad()
+        if (value.second is FileLoad.Ready) return@produceState
+        value = fullId to try { FileLoad.Ready(FileData.fetch(app, station, key, file, thumb = false).await()) } catch (e: CoreException) { FileLoad.Failed(e.message) }
     }
+    val loaded = got.second.takeIf { got.first == fullId } ?: keptLoad()
     val progress = FileData.progress[fullId]
     val shownLoaded = (loaded as? FileLoad.Loading)?.let { FileLoad.Loading(progress) } ?: loaded
     // The neighbours are fetched ahead, so a step shows the next one at once.
@@ -400,6 +410,47 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
 
     val zoom = remember(file.path) { ZoomState(density) }
     val marks = remember(file.path) { ImageMarks(zoom, density) }
+
+    // The one shown and those beside it move as one strip, GAP apart (web: FilePreview.tsx go): a step slides it out to
+    // one side and the next in from the other, a swipe carries it under the finger first. The one going is drawn from
+    // its picture where it was.
+    val strip = remember { Animatable(0f) }
+    var leaving by remember { mutableStateOf<Leaving?>(null) }
+    var width by remember { mutableIntStateOf(0) }
+    val near by rememberUpdatedState(before to after)
+    val gap = with(LocalDensity.current) { SLIDE_GAP.toPx() }
+    val chatLongest = with(LocalDensity.current) { 360.dp.roundToPx() }
+    fun back(v: Float = 0f) { scope.launch { strip.animateTo(0f, SLIDE, v) } }
+    fun go(dir: Int, v: Float = 0f) {
+        val to = (if (dir < 0) near.first else near.second) ?: return back(v)
+        val w = width + gap
+        val from = strip.value
+        val was = shown
+        leaving = zoom.rect()?.let { r -> leavingPicture(station, was, chatLongest)?.let { Leaving(it, r, dir, w) } }
+        shown = to
+        // Set before the next frame draws the new one: it comes in from the side, not first in place.
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            strip.snapTo(from + dir * w)
+            strip.animateTo(0f, SLIDE, v)
+            leaving = null
+        }
+    }
+    val swipe = remember {
+        object : Swipe {
+            override fun drag(dx: Float) {
+                // A swipe while one slides: it takes the strip as it is.
+                leaving = null
+                // Past the first or the last, it gives only a little.
+                val none = if (dx > 0) near.first == null else near.second == null
+                scope.launch(start = CoroutineStart.UNDISPATCHED) { strip.snapTo(if (none) dx / 3 else dx) }
+            }
+            override fun end(dx: Float, vx: Float) {
+                val far = abs(dx) > min(80 * density, width / 5f)
+                val flung = abs(vx) > 300 * density && sign(vx) == sign(dx) && abs(dx) > 10 * density
+                if (dx != 0f && (far || flung)) go(if (dx > 0) -1 else 1, vx) else back(vx)
+            }
+        }
+    }
     var source by remember(file.path) { mutableStateOf(false) }
     BackHandler(enabled = marks.on) { marks.back() }
     val coming = (kind == PreviewKind.Image || kind == PreviewKind.Video && FileData.keptPicture("$fullId#still", 0) != null) && shownLoaded is FileLoad.Loading
@@ -429,11 +480,21 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
         else -> ({ null })
     }
     val ground = when { dark -> Color.Black; kind == PreviewKind.Pdf -> lerp(C.bg, C.ink, 0.05f); else -> chatInk().canvas }
-    Box(Modifier.fillMaxSize().onSizeChanged { videoZoom.fitBox(it) }.drawBehind { drawRect(ground, alpha = flight.chrome) }) {
+    Box(Modifier.fillMaxSize().onSizeChanged { videoZoom.fitBox(it); width = it.width }.drawBehind { drawRect(ground, alpha = flight.chrome) }) {
         Box(Modifier.fillMaxSize().hazeSource(haze)) {
+            leaving?.let { l -> Canvas(Modifier.fillMaxSize()) { l.draw(this, strip.value) } }
+            // The ones beside it, out of sight until a swipe brings them in (while one goes, it is drawn in their place).
+            if (known.kind == PreviewKind.Image && !marks.on && leaving == null) {
+                val w = width + gap
+                before?.let { key(it.file.path) { Beside(station, it, chatLongest) { strip.value - w } } }
+                after?.let { key(it.file.path) { Beside(station, it, chatLongest) { strip.value + w } } }
+            }
             when {
-                known.kind == PreviewKind.Image -> ImageStage(station, key, file, bytes, zoom, marks, Modifier.viewerFlying(flight), onTap = ::toggle,
-                    onSwipe = if (marks.on) null else { d -> (if (d < 0) before else after)?.let { shown = it } })
+                // One of its own for each image: what it remembers of one (its picture) is not the next one's.
+                known.kind == PreviewKind.Image -> key(file.path) {
+                    ImageStage(station, key, file, bytes, zoom, marks, Modifier.viewerFlying(flight), onTap = ::toggle,
+                        swipe = if (marks.on) null else swipe, slide = { strip.value })
+                }
                 known.kind == PreviewKind.Video && still != null && (bytes == null || shownLoaded !is FileLoad.Ready) -> Poster(still, videoZoom, Modifier.viewerFlying(flight))
                 shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
                 shownLoaded is FileLoad.Failed -> Note { Text("载入失败：${shownLoaded.message}", fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
@@ -462,7 +523,7 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
             listOf(before to Alignment.CenterStart, after to Alignment.CenterEnd).forEachIndexed { i, (to, side) ->
                 if (to != null) Box(
                     Modifier.align(side).padding(horizontal = 8.dp).graphicsLayer { alpha = flight.chrome }.alpha(if (show) 1f else 0f).size(36.dp).shadow(1.dp, CircleShape)
-                        .clip(CircleShape).background(DarkCanvas.copy(alpha = 0.8f)).clickable(enabled = show) { shown = to },
+                        .clip(CircleShape).background(DarkCanvas.copy(alpha = 0.8f)).clickable(enabled = show) { go(if (i == 0) -1 else 1) },
                     contentAlignment = Alignment.Center,
                 ) { IconIn(if (i == 0) Icons.ChevronLeft else Icons.ChevronRight, 22.dp, DarkText) }
             }
@@ -641,13 +702,53 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFitted(p: Imag
 
 // ── images ─────────────────────────────────────────────────────────────
 
+/** Images stepped through slide this far apart, on this spring (web: FilePreview.tsx GAP, SLIDE). */
+private val SLIDE_GAP = 24.dp
+private val SLIDE = spring<Float>(dampingRatio = 1f, stiffness = 400f)
+
+/** The image going as the next comes: its `picture` where it was (`at`), moving out to the side away from `dir`. */
+private class Leaving(val picture: ImageBitmap, val at: Rect, val dir: Int, val width: Float) {
+    fun draw(scope: androidx.compose.ui.graphics.drawscope.DrawScope, x: Float) = with(scope) {
+        withTransform({ translate(at.left + x - dir * width, at.top); scale(at.width / picture.width, at.height / picture.height, Offset.Zero) }) {
+            drawImage(picture, filterQuality = FilterQuality.Medium)
+        }
+    }
+}
+
+/** An image beside the one shown, fitted as the stage will fit it, drawn `x()` px aside. */
+@Composable
+private fun Beside(station: String, s: Shown, thumbLongest: Int, x: () -> Float) {
+    val app = LocalApp.current
+    val density = LocalDensity.current.density
+    val id = FileData.id(station, s.key, s.file, thumb = false)
+    val picture by produceState(leavingPicture(station, s, thumbLongest), id) {
+        FileData.keptPicture(id, 4096)?.let { value = it; return@produceState }
+        val bytes = try { FileData.fetch(app, station, s.key, s.file, thumb = false).await() } catch (e: CoreException) { return@produceState }
+        FileData.picture(id, bytes, 4096)?.let { value = it }
+    }
+    val p = picture ?: return
+    val zoom = remember { ZoomState(density) }
+    val sent = s.file.width?.takeIf { it > 0 }?.let { w -> s.file.height?.takeIf { it > 0 }?.let { h -> IntSize(w.toInt(), h.toInt()) } }
+    zoom.fitNatural(sent ?: IntSize(p.width, p.height))
+    Canvas(Modifier.fillMaxSize().onSizeChanged { zoom.fitBox(it) }.graphicsLayer { translationX = x() }) {
+        val r = zoom.rect() ?: return@Canvas
+        withTransform({ translate(r.left, r.top); scale(r.width / p.width, r.height / p.height, Offset.Zero) }) {
+            drawImage(p, filterQuality = FilterQuality.Medium)
+        }
+    }
+}
+
+/** What the stage drew of `s`: the whole of it if it came, else the chat's thumbnail. */
+private fun leavingPicture(station: String, s: Shown, thumbLongest: Int): ImageBitmap? =
+    FileData.keptPicture(FileData.id(station, s.key, s.file, thumb = false), 4096) ?: FileData.keptPicture(FileData.id(station, s.key, s.file, thumb = true), thumbLongest)
+
 /**
- * An image fitted to the screen, to pinch, pan and double-tap; fitted, a sideways swipe steps (`onSwipe`). Until the
+ * An image fitted to the screen, to pinch, pan and double-tap; fitted, one finger sideways is `swipe`'s (drawn `slide` px aside). Until the
  * whole of it comes (`bytes`), its thumbnail (as the chat showed it) stands in its place. Marked, the marks are drawn
  * over it, moved and zoomed with it.
  */
 @Composable
-private fun ImageStage(station: String, key: String, file: Attachment, bytes: ByteArray?, zoom: ZoomState, marks: ImageMarks, stage: Modifier, onTap: () -> Unit, onSwipe: ((Int) -> Unit)?) {
+private fun ImageStage(station: String, key: String, file: Attachment, bytes: ByteArray?, zoom: ZoomState, marks: ImageMarks, stage: Modifier, onTap: () -> Unit, swipe: Swipe?, slide: () -> Float) {
     val scope = rememberCoroutineScope()
     val thumbId = FileData.id(station, key, file, thumb = true)
     val chatLongest = with(LocalDensity.current) { 360.dp.roundToPx() }
@@ -682,8 +783,9 @@ private fun ImageStage(station: String, key: String, file: Attachment, bytes: By
     val gap = with(LocalDensity.current) { 24.dp.toPx() }
     val below = marks.writingBottom()?.let { it + gap - (zoom.box.height - ime) } ?: 0f
     val lift by animateFloatAsState(if (ime > 0 && below > 0) below else 0f, label = "lift")
-    Box(Modifier.fillMaxSize().then(stage).graphicsLayer { translationY = -lift }.zoomable(zoom, scope, onTap, onSwipe, strokes = if (marks.on) marks else null)) {
-        Canvas(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().then(stage).graphicsLayer { translationY = -lift }.zoomable(zoom, scope, onTap, swipe, strokes = if (marks.on) marks else null)) {
+        // Moved by the strip in drawing only: the gestures measure the finger on the stage, which stays put.
+        Canvas(Modifier.fillMaxSize().graphicsLayer { translationX = slide() }) {
             val r = zoom.rect() ?: return@Canvas
             val p = picture ?: return@Canvas
             withTransform({ translate(r.left, r.top); scale(r.width / p.width, r.height / p.height, Offset.Zero) }) {

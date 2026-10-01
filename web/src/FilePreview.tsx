@@ -3,7 +3,7 @@
 // highlighted, Markdown rendered, CSV as a table, HTML in a sandbox. Anything
 // else says it cannot be shown and offers the download.
 import { Dialog as RDialog } from "radix-ui";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { ChevronLeft, ChevronRight, Close, Download, Minus, Plus } from "./icons.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
@@ -15,6 +15,7 @@ import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "./backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
+import { animate, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -249,7 +250,88 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
   const after = at >= 0 ? images[at + 1] : undefined;
   const api = useApi();
   const station = useStation();
-  const step = useCallback((to: Shown | undefined) => { if (to) setShown(to); }, []);
+  // The one shown and those beside it move as one strip (GAP apart): a step slides it out to one side and the next in
+  // from the other, a swipe carries it under the finger first. The one going is a copy: the real one is the next already.
+  const slide = useRef<HTMLDivElement>(null);
+  const sliding = useRef<{ runs: AnimationPlaybackControls[]; copy: HTMLElement | null }>({ runs: [], copy: null });
+  const arriving = useRef<{ dir: -1 | 1; from: number; v: number } | null>(null);
+  const near = useRef({ before, after });
+  near.current = { before, after };
+  const settle = useCallback(() => {
+    const el = slide.current;
+    // Where it is now, as the motion left it.
+    const t = el ? getComputedStyle(el).transform : "none";
+    const x = t === "none" ? 0 : new DOMMatrixReadOnly(t).m41;
+    for (const r of sliding.current.runs) r.stop();
+    sliding.current.copy?.remove();
+    sliding.current = { runs: [], copy: null };
+    if (el) el.style.transform = x ? `translateX(${x}px)` : "";
+    return x;
+  }, []);
+  const run = useCallback((from: number, to: number, v: number, draw: (x: number) => void) => {
+    draw(from);
+    const r = animate(from, to, { ...SLIDE, velocity: v * 1000, onUpdate: draw });
+    sliding.current.runs.push(r);
+    void r.finished.then(() => {
+      if (!sliding.current.runs.includes(r)) return;
+      settle();
+      if (slide.current) slide.current.style.transform = "";
+    }, () => {});
+  }, [settle]);
+  /** Back to its place, from where a swipe left it (at `v` px/ms). */
+  const back = useCallback((v = 0) => {
+    const from = settle();
+    const el = slide.current;
+    if (el && from && !reducedMotion()) run(from, 0, v, (x) => { el.style.transform = `translateX(${x}px)`; });
+    else if (el) el.style.transform = "";
+  }, [settle, run]);
+  /** To the one before (-1) or after (1), going on from where a swipe left it (at `v` px/ms). */
+  const go = useCallback((dir: -1 | 1, v = 0) => {
+    const to = dir < 0 ? near.current.before : near.current.after;
+    if (!to) return back(v);
+    const from = settle();
+    const el = slide.current;
+    if (el && !reducedMotion()) {
+      const copy = el.cloneNode(true) as HTMLElement;
+      // Only drawn: what finds the picture and the bars finds the real ones.
+      for (const n of copy.querySelectorAll("[data-peek]")) n.remove();
+      for (const n of copy.querySelectorAll("[data-viewer-picture], [data-floats]")) { n.removeAttribute("data-viewer-picture"); n.removeAttribute("data-floats"); }
+      copy.inert = true;
+      copy.setAttribute("aria-hidden", "true");
+      el.after(copy);
+      sliding.current.copy = copy;
+      arriving.current = { dir, from, v };
+    }
+    setShown(to);
+  }, [settle, back]);
+  useLayoutEffect(() => {
+    const a = arriving.current, el = slide.current, copy = sliding.current.copy;
+    arriving.current = null;
+    if (!a || !el) return;
+    const width = el.clientWidth + GAP;
+    run(a.from, -a.dir * width, a.v, (x) => {
+      if (copy) copy.style.transform = `translateX(${x}px)`;
+      el.style.transform = `translateX(${x + a.dir * width}px)`;
+    });
+  }, [file.path, run]);
+  useEffect(() => () => { settle(); }, [settle]);
+  const swipe = useMemo<Swipe>(() => ({
+    drag(dx) {
+      const el = slide.current;
+      if (!el) return;
+      if (sliding.current.runs.length) settle();
+      // Past the first or the last, it gives only a little.
+      const none = dx > 0 ? !near.current.before : !near.current.after;
+      el.style.transform = `translateX(${none ? dx / 3 : dx}px)`;
+    },
+    end(dx, vx) {
+      const dir = dx > 0 ? -1 : 1;
+      const far = Math.abs(dx) > Math.min(80, (slide.current?.clientWidth ?? 0) / 5);
+      const flung = Math.abs(vx) > 0.3 && Math.sign(vx) === Math.sign(dx) && Math.abs(dx) > 10;
+      if (dx && (far || flung)) go(dir, vx);
+      else back(vx);
+    },
+  }), [settle, go, back]);
   // An image being marked: its bar stays, and it stays the one shown.
   const [marking, setMarking] = useState(false);
   // The neighbours are fetched ahead, so a step shows the next one at once.
@@ -259,14 +341,14 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || marking) return;
-      if (e.key === "ArrowLeft" && before) step(before);
-      else if (e.key === "ArrowRight" && after) step(after);
+      if (e.key === "ArrowLeft" && before) go(-1);
+      else if (e.key === "ArrowRight" && after) go(1);
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [before, after, step, marking]);
+  }, [before, after, go, marking]);
   // Opened out of the chat's thumbnail of it, closed back into the thumbnail of the one it shows then.
   const content = useRef<HTMLDivElement>(null);
   const [flight] = useState(() => viewerFlight(() => content.current, { stage: css2.fpStage, steps: css2.fpStep }));
@@ -315,7 +397,7 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
   useEffect(() => { wake(); return () => clearTimeout(resting.current); }, [wake, file.path]);
   let body: ReactNode;
   if (known.kind === "image" && (loaded.state === "ready" || (loaded.state === "loading" && thumb))) {
-    body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)}
+    body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} swipe={swipe}
       waiting={loaded.state === "loading"} onMarking={setMarking} onClose={onClose} />;
   } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) {
     body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</>}</div>;
@@ -324,7 +406,7 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
   else {
     const { url, blob } = loaded;
     switch (kind) {
-      case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)} onMarking={setMarking} onClose={onClose} />; break;
+      case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} swipe={swipe} onMarking={setMarking} onClose={onClose} />; break;
       case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} />; break;
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
@@ -362,10 +444,15 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
         <Tip label="关闭（Esc）"><RDialog.Close className={pagesCss.iconBtn} aria-label="关闭"><Close size={18} /></RDialog.Close></Tip>
       </header>
       <div className={css2.fpBody}>
-        {body}
+        <div ref={slide} className={css2.fpSlide}>
+          {body}
+          {/* The ones beside it, out of sight until a swipe brings them in. */}
+          {known.kind === "image" && !marking && before && <Peek key={before.file.path} shown={before} side={-1} />}
+          {known.kind === "image" && !marking && after && <Peek key={after.file.path} shown={after} side={1} />}
+        </div>
         {images.length > 1 && at >= 0 && !marking && <>
-          <Tip label="上一张（←）"><button type="button" className={css2.fpStep} data-side="before" aria-label="上一张" disabled={!before} onClick={() => step(before)}><ChevronLeft size={22} /></button></Tip>
-          <Tip label="下一张（→）"><button type="button" className={css2.fpStep} data-side="after" aria-label="下一张" disabled={!after} onClick={() => step(after)}><ChevronRight size={22} /></button></Tip>
+          <Tip label="上一张（←）"><button type="button" className={css2.fpStep} data-side="before" aria-label="上一张" disabled={!before} onClick={() => go(-1)}><ChevronLeft size={22} /></button></Tip>
+          <Tip label="下一张（→）"><button type="button" className={css2.fpStep} data-side="after" aria-label="下一张" disabled={!after} onClick={() => go(1)}><ChevronRight size={22} /></button></Tip>
         </>}
       </div>
     </RDialog.Content>
@@ -389,6 +476,12 @@ const KIND_LABEL: Partial<Record<PreviewKind, string>> = { image: "图片", vide
 
 // ── images: zoom and pan ───────────────────────────────────────────────
 
+/** A sideways drag of a fitted image: where it has got to (px from where it started), then where and how fast (px/ms) it was let go. */
+export interface Swipe { drag(dx: number): void; end(dx: number, vx: number): void }
+/** Images stepped through slide this far apart, on this spring. */
+const GAP = 24;
+const SLIDE = { type: "spring", visualDuration: 0.32, bounce: 0 } as const;
+
 interface View { scale: number; x: number; y: number }
 const MAX_SCALE = 16;
 
@@ -402,12 +495,12 @@ const MAX_SCALE = 16;
  * can be marked (annotate/ImageMarks.tsx): `onMarking` says when, `onClose` closes the preview once its marked image
  * is in the chat's draft.
  */
-function ImageViewer({ url, file, setControls, onSwipe, waiting = false, onMarking, onClose }:
-  { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void; waiting?: boolean; onMarking(on: boolean): void; onClose(): void }) {
+function ImageViewer({ url, file, setControls, swipe, waiting = false, onMarking, onClose }:
+  { url: string; file: Attachment; setControls(c: ReactNode): void; swipe: Swipe; waiting?: boolean; onMarking(on: boolean): void; onClose(): void }) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
   const [zoomControls, setZoomControls] = useState<ReactNode>(null);
   const [marksOn, setMarksOn] = useState(false);
-  const zoom = useZoom(natural, setZoomControls, marksOn ? undefined : onSwipe);
+  const zoom = useZoom(natural, setZoomControls, marksOn ? undefined : swipe);
   const marks = useImageMarks({ url: waiting ? null : url, name: file.name, natural, scale: zoom.scale, pass: zoom.stageProps, onDone: onClose });
   useEffect(() => { setMarksOn(marks.on); onMarking(marks.on); }, [marks.on, onMarking]);
   useEffect(() => () => onMarking(false), [onMarking]);
@@ -425,6 +518,23 @@ function ImageViewer({ url, file, setControls, onSwipe, waiting = false, onMarki
   );
 }
 
+/** An image beside the one shown, fitted as it will be once it is (the strip carries it in with a swipe). */
+function Peek({ shown: { sessionKey, file }, side }: { shown: Shown; side: -1 | 1 }) {
+  const url = useFileUrl(sessionKey, file, true, false);
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
+  const zoom = useZoom(natural, noControls, undefined, false);
+  return (
+    <div className={css2.fpPeek} data-peek="" aria-hidden="true" style={{ transform: `translateX(calc(${side} * (100% + ${GAP}px)))` }}>
+      <div ref={zoom.stage} className={css2.fpStage}>
+        {url && <img className={css2.fpImage} src={url} alt="" draggable={false}
+          onLoad={(e) => { const img = e.currentTarget; if (!natural && img.naturalWidth && img.naturalHeight) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
+          style={zoom.place ?? { visibility: "hidden" }} />}
+      </div>
+    </div>
+  );
+}
+const noControls = () => {};
+
 /** How much of a file has come, out of its size (the station's, else the one sent with it); a bar that sweeps when neither is known. */
 function Progress({ got, size, inBar = false }: { got: FileProgress | null | undefined; size: number; inBar?: boolean }) {
   const total = got?.total ?? (size > 0 ? size : null);
@@ -440,9 +550,9 @@ function Progress({ got, size, inBar = false }: { got: FileProgress | null | und
 /**
  * Zooming and panning a picture of `natural` size in a stage (an image, a video's frames): fitted to the window, to
  * zoom (pinch, ctrl/⌘ + wheel, double-click, the bar's buttons, + − 0 1) around the pointer and pan (drag, wheel) when
- * larger than the window. Fitted, a sideways swipe calls `onSwipe`. `place` positions the picture (absolutely, in the stage's centre).
+ * larger than the window. Fitted, one pointer dragging sideways is a `swipe`'s. `place` positions the picture (absolutely, in the stage's centre).
  */
-export function useZoom(natural: { w: number; h: number } | null, setControls: (c: ReactNode) => void, onSwipe?: (direction: -1 | 1) => void) {
+export function useZoom(natural: { w: number; h: number } | null, setControls: (c: ReactNode) => void, swipe?: Swipe, keys = true) {
   const stage = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ w: number; h: number; top: number; bottom: number } | null>(null);
   const [view, setView] = useState<View | null>(null);
@@ -457,10 +567,16 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     const root = el.closest(`.${css2.fp}`) ?? el;
     const measure = () => {
       const r = el.getBoundingClientRect();
+      // Where it is in place: stepping through images moves it sideways (the strip; the one beside, a peek's place).
+      let slid = 0;
+      for (let n = el.parentElement; n && n !== root; n = n.parentElement) {
+        const t = getComputedStyle(n).transform;
+        if (t !== "none") slid += new DOMMatrixReadOnly(t).m41;
+      }
       let top = 0, bottom = 0;
       for (const bar of root.querySelectorAll("[data-floats]")) {
         const b = bar.getBoundingClientRect();
-        if (!b.height || b.right <= r.left || b.left >= r.right) continue;
+        if (!b.height || b.right <= r.left - slid || b.left >= r.right - slid) continue;
         if (b.top + b.bottom < r.top + r.bottom) top = Math.max(top, b.bottom - r.top);
         else bottom = Math.max(bottom, r.bottom - b.top);
       }
@@ -552,6 +668,9 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   // Drag to pan; two fingers pinch.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ view: View; x: number; y: number; distance: number } | null>(null);
+  // A swipe going on: how far it has gone and how fast (px/ms, of its last moves); let go when a second finger comes.
+  const swiping = useRef<{ dx: number; at: number; vx: number } | null>(null);
+  const letGo = (dx: number, vx: number) => { if (swiping.current) { swiping.current = null; swipe?.end(dx, vx); } };
   const start = () => {
     const points = [...pointers.current.values()];
     const v = viewRef.current;
@@ -564,6 +683,7 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    letGo(0, 0);
     start();
   };
   const onPointerMove = (e: React.PointerEvent) => {
@@ -577,19 +697,24 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     // The point under the gesture's start stays under its centre now.
     const [sx, sy] = fromCentre(g.x, g.y);
     const k = scale / g.view.scale;
+    // Fitted, one pointer moves the image sideways to the one before or after it.
+    if (swipe && points.length === 1 && g.distance === 0 && g.view.scale <= fit * 1.01) {
+      const dx = x - g.x, s = swiping.current;
+      if (!s && Math.abs(dx) < 4) return;
+      const at = e.timeStamp;
+      swiping.current = { dx, at, vx: s && at > s.at ? 0.6 * ((dx - s.dx) / (at - s.at)) + 0.4 * s.vx : 0 };
+      swipe.drag(dx);
+      return;
+    }
     fitted.current = false;
     setView(clamp({ scale, x: sx - (sx - g.view.x) * k + (x - g.x), y: sy - (sy - g.view.y) * k + (y - g.y) }));
   };
   const onPointerUp = (e: React.PointerEvent) => {
-    const g = gesture.current;
-    const single = pointers.current.size === 1 && g && g.distance === 0;
+    const g = gesture.current, s = swiping.current;
     pointers.current.delete(e.pointerId);
     start();
-    // A swipe: one finger, mostly sideways, on an image not zoomed in (zoomed in, a drag pans).
-    if (single && onSwipe && e.type === "pointerup" && g.view.scale <= fit * 1.01) {
-      const dx = e.clientX - g.x, dy = e.clientY - g.y;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) onSwipe(dx > 0 ? -1 : 1);
-    }
+    // A move that stopped a while ago is no flick.
+    if (s && g) letGo(e.type === "pointerup" ? e.clientX - g.x : 0, e.timeStamp - s.at < 80 ? s.vx : 0);
   };
   const onDoubleClick = (e: React.MouseEvent) => {
     const v = viewRef.current;
@@ -599,6 +724,7 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   };
 
   useEffect(() => {
+    if (!keys) return;
     const onKey = (e: KeyboardEvent) => {
       const v = viewRef.current;
       if (!v || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -611,7 +737,7 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [zoomTo, reset]);
+  }, [zoomTo, reset, keys]);
 
   const scale = view?.scale ?? fit;
   useEffect(() => {

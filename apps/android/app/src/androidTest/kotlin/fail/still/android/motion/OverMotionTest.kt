@@ -197,6 +197,84 @@ class OverMotionTest {
         assertTrue("status bar icons dark again over the light page", bars())
     }
 
+    /** A picture of its own colours, `label` on it. */
+    private fun slidePicture(label: String, from: Int, to: Int): ByteArray {
+        val b = Bitmap.createBitmap(800, 600, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        c.drawPaint(Paint().apply { shader = LinearGradient(0f, 0f, 800f, 600f, from, to, Shader.TileMode.CLAMP) })
+        c.drawText(label, 300f, 360f, Paint().apply { color = 0xFFFFFFFF.toInt(); textSize = 180f; isAntiAlias = true })
+        return ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+    }
+
+    /**
+     * A chat's three images, the first opened: a finger moving sideways carries it, and let go it slides out as the
+     * next slides in; a short drag let go goes back; past the last it gives only a little.
+     */
+    @Test
+    fun viewerSwipes() {
+        val h = Harness(rule)
+        val pictures = mapOf(
+            "a.png" to slidePicture("1", 0xFFE8704A.toInt(), 0xFF3A6FD8.toInt()),
+            "b.png" to slidePicture("2", 0xFF2E9E6B.toInt(), 0xFFE0C341.toInt()),
+            "c.png" to slidePicture("3", 0xFF8A4FD8.toInt(), 0xFFD84F8A.toInt()),
+        )
+        h.fake.answer = { name, args ->
+            val path = args.toString()
+            val bytes = pictures.entries.firstOrNull { path.contains(it.key) }?.value
+            if (name == "station.file" && bytes != null) buildJsonObject { put("type", "image/png"); put("bytes", Base64.encodeToString(bytes, Base64.NO_WRAP)) } else JsonNull
+        }
+        val context = rule.activity
+        val prefs = context.getSharedPreferences("motion-test", Context.MODE_PRIVATE)
+        prefs.edit().clear().putString("theme", "light").commit()
+        rule.runOnUiThread { context.enableEdgeToEdge() }
+        val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", h.fake.core))
+        val files = pictures.map { (name, bytes) -> Attachment(name = name, path = "ws/c-1/$name", size = bytes.size.toLong(), width = 800, height = 600) }
+        val gallery = files.map { fail.still.android.screens.Shown("ember:c-1", it) }
+        rule.setContent {
+            StillFailTheme(false) {
+                CompositionLocalProvider(LocalApp provides app) {
+                    Box(Modifier.fillMaxSize().background(C.bg)) {
+                        Column(Modifier.padding(start = 16.dp, top = 360.dp).width(260.dp)) {
+                            StationImage(Fixtures.STATION, "ember:c-1", files[0], gallery = { gallery })
+                        }
+                        ViewerHost()
+                    }
+                }
+            }
+        }
+        h.settle()
+        rule.onRoot().performTouchInput { click(Offset(16f * 2.625f + 300f, 360f * 2.625f + 200f)) }
+        h.settle(3000)
+        val w = rule.onRoot().fetchSemanticsNode().size.width.toFloat()
+        val y = rule.onRoot().fetchSemanticsNode().size.height / 2f
+        // To the next: dragged a third of the way, let go while moving.
+        val next = h.record("viewer-swipe-next")
+        next.frame { rule.onRoot().performTouchInput { down(Offset(w * 0.8f, y)) } }
+        repeat(12) { next.frame { rule.onRoot().performTouchInput { moveBy(Offset(-w / 36f, 0f)) } } }
+        next.frame { rule.onRoot().performTouchInput { up() } }
+        next.frames(36)
+        next.end()
+        h.settle(1500)
+        // A short slow drag let go: back in place.
+        val back = h.record("viewer-swipe-back")
+        back.frame { rule.onRoot().performTouchInput { down(Offset(w * 0.5f, y)) } }
+        repeat(10) { back.frame { rule.onRoot().performTouchInput { moveBy(Offset(w / 100f, 0f), delayMillis = 60) } } }
+        back.frames(3)
+        back.frame { rule.onRoot().performTouchInput { up() } }
+        back.frames(30)
+        back.end()
+        h.settle(1500)
+        // Back to the first by a fling, then past it: it gives a little and comes back.
+        rule.onRoot().performTouchInput { swipe(Offset(w * 0.2f, y), Offset(w * 0.8f, y), 200) }
+        h.settle(1500)
+        val edge = h.record("viewer-swipe-edge")
+        edge.frame { rule.onRoot().performTouchInput { down(Offset(w * 0.2f, y)) } }
+        repeat(12) { edge.frame { rule.onRoot().performTouchInput { moveBy(Offset(w / 30f, 0f)) } } }
+        edge.frame { rule.onRoot().performTouchInput { up() } }
+        edge.frames(30)
+        edge.end()
+    }
+
     /** A short clip (red to blue, a frame's number on each), encoded here: 30 frames at about 30 fps. */
     private fun clip(file: java.io.File) {
         val w = 320; val hgt = 240
