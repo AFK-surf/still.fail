@@ -665,7 +665,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 // Where its foot will be: above the composer's own room (and what else the list keeps clear of).
                 val foot = list.layoutInfo.viewportEndOffset - (room - host.listRoom + host.naturalRoom())
                 val cut = flying.reserve().roundToInt()
-                val at = if (flying.settle() > 0f) foot - (full - cut) else (top + (foot - (full - flying.hidden().roundToInt()) - top) * flying.up()).roundToInt()
+                val at = (top + (foot - (full - cut) - top) * flying.up()).roundToInt()
                 list.requestScrollToItem(index, -at)
                 // Resolve the destination in the overlay, not as a delta from the requested scroll offset.
                 // That offset has not been laid out yet; mixing it with current coordinates makes the words recoil.

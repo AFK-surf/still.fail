@@ -134,13 +134,13 @@ class Flight internal constructor(
     fun across(): Float = if (carried) e() else Ease.Flight.transform((fly() / 0.88f).coerceAtMost(1f))
     fun up(): Float = if (carried) e() else Ease.Flight.transform(((fly() - 0.12f) / 0.88f).coerceAtLeast(0f))
     /**
-     * In an open chat the words first fly as they were typed (`fly`), all but there; then they settle into their bubble
-     * (laid out and sized as in it), its ground and time coming in around them.
+     * In an open chat the words start as typed, then unfold into their bubble during the flight.
+     * Its ground and time come in with the unfolding, without a pause at the destination.
      */
     private fun fly(): Float = (progress.value / FLY).coerceAtMost(1f)
     fun settle(): Float = if (carried) e() else Ease.Arrive.transform(((progress.value - SETTLE) / (1f - SETTLE)).coerceIn(0f, 1f))
     /** How much of the bubble's ground shows (around the words, drawn by the host in an open chat): coming in from half way, all there as they come. */
-    fun ground(): Float = if (carried) e() else ((fly() - 0.5f) / 0.5f).coerceIn(0f, 1f)
+    fun ground(): Float = if (carried) e() else ((progress.value - SETTLE) / (FLY - SETTLE)).coerceIn(0f, 1f)
     /** The bubble's ground, as its row draws it. */
     internal var groundColor = androidx.compose.ui.graphics.Color.Unspecified
     private var aim: Offset? = null
@@ -556,7 +556,7 @@ private fun FlightLayer(host: Host) {
         snapshotFlow { f.placed }.first { it }
         // A new chat's: once its choices have faded (web: 90 ms after what leaves has begun to).
         // The composer comes down once they are half way.
-        if (!f.carried) launch { snapshotFlow { f.progress.value }.first { it >= FLY / 2 }; if (host.flight === f) host.hold = null }
+        if (!f.carried) launch { snapshotFlow { f.progress.value }.first { it >= SETTLE }; if (host.flight === f) host.hold = null }
         f.progress.animateTo(1f, tween(if (f.carried) ARRIVE_MS else FLIGHT_MS, delayMillis = if (f.carried) 90 else 0, easing = LinearEasing))
         host.landed(f)
     }
@@ -565,9 +565,9 @@ private fun FlightLayer(host: Host) {
 /** How long a new chat's first words take to their place (web madeChat.ts: 480 ms, Ease.Arrive). */
 internal const val ARRIVE_MS = 480
 /**
- * How long words sent in an open chat take to their row: flying as typed for the first FLY of it (460 ms), there a
- * moment as they are (100 ms: seen to have come), then settling in their bubble from SETTLE on (240 ms).
+ * One continuous motion: start unfolding 144 ms into the 480 ms flight, then finish opening by 600 ms.
+ * There is no pause at the destination; the composer starts closing as the bubble opens.
  */
-internal const val FLIGHT_MS = 800
-internal const val FLY = 0.575f
-internal const val SETTLE = 0.7f
+internal const val FLIGHT_MS = 600
+internal const val FLY = 0.8f
+internal const val SETTLE = 0.24f
