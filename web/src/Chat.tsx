@@ -1337,8 +1337,8 @@ const FOLD_MS = 170;
 const SPIT_MS = 380;
 /** The hop: how long, how high above the higher of its two ends it goes, and the share of it spent going up. */
 const HOP_MS = 440;
-const HOP_PX = 26;
-const RISE = 0.4;
+const HOP_PX = 34;
+const RISE = 0.42;
 const FLY = { type: "spring", visualDuration: 0.26, bounce: 0 } as const;
 
 export function useEmissions(list: RefObject<HTMLDivElement | null>) {
@@ -1346,7 +1346,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const done = useRef(new Set<number>());
   const queue = useRef<{ seq: number; agent: string }[]>([]);
   const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose } | null>(null);
-  const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number> } | null>(null);
+  const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number>; sx: MotionValue<number>; sy: MotionValue<number> } | null>(null);
   const [, rerender] = useState(0);
   const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
@@ -1361,12 +1361,20 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     el.classList.add(css.avatarFlying);
     Object.assign(el.style, { left: "0", top: "0", width: `${avatar.offsetWidth}px`, height: `${avatar.offsetHeight}px` });
     pane.append(el);
-    const at = { ...home(avatar), s: 1 };
-    const draw = () => { el.style.transform = `translate(${at.x}px, ${at.y}px) scale(${at.s})`; };
+    // Squashed and stretched (sx, sy) from its foot; swelling (s) from its middle.
+    const at = { ...home(avatar), s: 1, sx: 1, sy: 1 };
+    const h = avatar.offsetHeight;
+    const draw = () => {
+      el.style.transform = `translate(${at.x}px, ${at.y + (h * (1 - at.sy)) / 2}px) scale(${at.s * at.sx}, ${at.s * at.sy})`;
+    };
     const s = motionValue(1);
+    const sx = motionValue(1);
+    const sy = motionValue(1);
     s.on("change", (v) => { at.s = v; draw(); });
+    sx.on("change", (v) => { at.sx = v; draw(); });
+    sy.on("change", (v) => { at.sy = v; draw(); });
     draw();
-    return { el, s, x: follower(at.x, (v) => { at.x = v; draw(); }), y: follower(at.y, (v) => { at.y = v; draw(); }) };
+    return { el, s, sx, sy, x: follower(at.x, (v) => { at.x = v; draw(); }), y: follower(at.y, (v) => { at.y = v; draw(); }) };
   };
   const land = () => {
     const f = flight.current;
@@ -1374,6 +1382,8 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     f.x.stop();
     f.y.stop();
     f.s.destroy();
+    f.sx.destroy();
+    f.sy.destroy();
     f.el.remove();
     flight.current = null;
   };
@@ -1459,15 +1469,22 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     if (pose === "float") {
       const f = (flight.current ??= launch(pane, avatar));
       const from = { x: f.x.value, y: f.y.value };
-      // Thrown up: it slows to the top, then falls ever faster (as under gravity) onto where it goes.
+      // Thrown up: it shoots off and slows to the top, hangs there a moment, then drops ever faster (stretching as it
+      // goes) onto where it goes. Across, it eases out and in.
       hop = animate(0, 1, {
         duration: HOP_MS / 1000, ease: "linear",
         onUpdate: (t) => {
           const to = landed();
           const top = Math.min(from.y, to.y) - HOP_PX;
-          const y = t < RISE ? from.y + (top - from.y) * (1 - (1 - t / RISE) ** 2) : top + (to.y - top) * ((t - RISE) / (1 - RISE)) ** 2;
-          f.x.jump(from.x + (to.x - from.x) * t);
+          const up = t / RISE;
+          const down = (t - RISE) / (1 - RISE);
+          const y = t < RISE ? from.y + (top - from.y) * (1 - (1 - up) ** 2.5) : top + (to.y - top) * down ** 2.5;
+          const across = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+          f.x.jump(from.x + (to.x - from.x) * across);
           f.y.jump(y);
+          const stretch = t < RISE ? 0.07 * Math.sin(Math.PI * up) : 0.14 * down ** 2;
+          f.sx.jump(1 - stretch * 0.6);
+          f.sy.jump(1 + stretch);
         },
         onComplete: () => go("spit"),
       });
@@ -1475,7 +1492,14 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     // A small swell as it lets the message out, staying on the message's avatar as the message grows.
     if (pose === "spit") {
       const f = flight.current;
-      if (f) animate(f.s, [1, 1.16, 1], { duration: SPIT_MS / 1000, times: [0, 0.35, 0.7], ease: "easeInOut" });
+      if (f) {
+        // Landing: flattened by the fall, it springs back up as the message comes out.
+        f.sx.jump(1.16);
+        f.sy.jump(0.8);
+        animate(f.sx, 1, { type: "spring", stiffness: 520, damping: 14 });
+        animate(f.sy, 1, { type: "spring", stiffness: 520, damping: 14 });
+        animate(f.s, [1, 1.12, 1], { duration: SPIT_MS / 1000, times: [0, 0.4, 0.75], ease: "easeInOut" });
+      }
       follow(landed);
       timer = setTimeout(() => go("return"), SPIT_MS);
     }
