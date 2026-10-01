@@ -18,6 +18,7 @@ import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
 import { AppearanceScreen, SettingsScreen } from "./Settings.tsx";
+import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
 
 export function MobileWorkspace({ entry }: { entry: Entry }) {
@@ -35,6 +36,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings" element={<SettingsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
       <Route path="settings/appearance" element={<AppearanceScreen />} />
+      <Route path="settings/changelog" element={<ChangelogScreen />} />
       <Route path="settings/workspace" element={<WorkspaceScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/connects" element={<ConnectsScreen />} />

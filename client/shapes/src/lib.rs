@@ -1322,6 +1322,63 @@ pub struct DeviceView {
     pub handoff: bool,
 }
 
+/// What changed in still.fail, as this app shows it (the `changelog` topic; client/core/src/changelog.rs): `app`
+/// (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes by day, newest
+/// first; what this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while
+/// first read, `error` when it could not be and none was kept.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangelogView {
+    #[serde(default)]
+    pub app: String,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub build: Option<i64>,
+    pub days: Vec<ChangelogDay>,
+    pub news: Option<ChangelogNews>,
+    #[serde(default)]
+    pub loading: bool,
+    pub error: Option<String>,
+}
+
+/// A day's changes, under its heading (今天, 昨天, 9月20日).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangelogDay {
+    pub label: String,
+    pub entries: Vec<ChangelogItem>,
+}
+
+/// One change: its lines for people, the version it came in, where it is (`place`: the parts and version, empty when
+/// it needed no release), whether this app has it (`has`: absent when it is not this app's), and what that means
+/// (`note`: 你的版本已包含, 更新到 0.1.n 后就有, 还没发布, 已发布, 已上线); `mine`: it is this app's.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangelogItem {
+    #[typeshare(serialized_as = "I54")]
+    pub version: i64,
+    pub version_name: String,
+    pub text: Vec<String>,
+    pub place: String,
+    pub has: Option<bool>,
+    pub note: String,
+    pub mine: bool,
+}
+
+/// What this app got since the changelog was last shown here: its `build` (0.1.n) and those changes.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangelogNews {
+    pub build: Option<String>,
+    pub entries: Vec<ChangelogItem>,
+}
+
 /// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.
 #[typeshare]
 #[skip_serializing_none]

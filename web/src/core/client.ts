@@ -71,6 +71,9 @@ export type Topic =
   | { topic: "job"; station: string; id: string }
   // How its person likes it on this device, and what the device is (prefs.ts).
   | { topic: "prefs" }
+  // What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen`
+  // (client/core/src/changelog.rs).
+  | { topic: "changelog" }
   // What each workspace has waiting (how many chats want their person, how many are unread) and the chat last open in
   // it; of those other than `workspace` (the one in view), the most urgent (client/core/src/views/marks.rs).
   | { topic: "workspaceMarks"; workspace?: string };

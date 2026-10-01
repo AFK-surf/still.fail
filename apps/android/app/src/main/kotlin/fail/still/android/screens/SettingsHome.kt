@@ -117,6 +117,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
             GoRow("外观", THEMES.firstOrNull { it.first == app.theme }?.second) { app.push(Screen.Appearance) }
             Notify()
             Version()
+            GoRow("更新日志") { app.push(Screen.Changelog) }
         }
         Spacer(Modifier.height(30.dp))
     }

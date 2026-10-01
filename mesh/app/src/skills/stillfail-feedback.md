@@ -52,6 +52,8 @@ them when you show the report.
 
 Show them the report as it will be sent (title, body, logs if any) and ask them to confirm. Send only once they agree;
 if they want changes, change it and show it again. Then call feedback_send with the thread you are in as `to`, and
-tell them the number it got (FB-…), which they can give the team.
+tell them the number it got (FB-…), which they can give the team, and that they will be told here once a fix for it
+is out. When it is, the station tells you (a message from the station naming the FB number): pass it on to them in
+that thread, briefly.
 
 If feedback_send fails, tell them it could not be sent and give them the report to pass on themselves.

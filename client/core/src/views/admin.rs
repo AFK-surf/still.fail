@@ -553,7 +553,14 @@ pub fn feedback(id: &str, value: &Value) -> Result<Value> {
             text.push_str(&format!("{label}: {value}\n"));
         }
     };
-    fact("状态", Some(feedback_status(status).0.to_string()));
+    // Fixed by a commit's `Fixes: FB-<n>` (docs/changelog.md): in which version, and whether its reporter was told.
+    let fixed_in = f.get("fixed_in").and_then(Value::as_i64);
+    let told = f.get("told_at").is_some_and(|t| !t.is_null());
+    let state = match fixed_in {
+        Some(n) if status == "fixed" => format!("{} · 0.1.{n}{}", feedback_status(status).0, if told { " · 已告诉反馈人" } else { "" }),
+        _ => feedback_status(status).0.to_string(),
+    };
+    fact("状态", Some(state.clone()));
     fact("渠道", Some(format!("{} ({})", channel_label(str_of(&f, "channel")), str_of(&f, "channel"))));
     fact("范围", Some(area_label(str_of(&f, "area")).to_string()));
     fact("Workspace", place(workspace));
@@ -578,7 +585,7 @@ pub fn feedback(id: &str, value: &Value) -> Result<Value> {
         "body": str_of(&f, "body"),
         "status": status,
         "statuses": FEEDBACK_STATUSES.iter().map(|s| json!({ "id": s, "label": feedback_status(s).0 })).collect::<Vec<_>>(),
-        "marks": [mark(feedback_status(status).0, feedback_status(status).1)],
+        "marks": [mark(&state, feedback_status(status).1)],
         "channel": str_of(&f, "channel"),
         "channelLabel": channel_label(str_of(&f, "channel")),
         "area": area_label(str_of(&f, "area")),

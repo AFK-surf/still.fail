@@ -156,6 +156,48 @@ data class Buddy (
 	val bg: String
 )
 
+/// One change: its lines for people, the version it came in, where it is (`place`: the parts and version, empty when
+/// it needed no release), whether this app has it (`has`: absent when it is not this app's), and what that means
+/// (`note`: 你的版本已包含, 更新到 0.1.n 后就有, 还没发布, 已发布, 已上线); `mine`: it is this app's.
+@Serializable
+data class ChangelogItem (
+	val version: Long,
+	val versionName: String,
+	val text: List<String>,
+	val place: String,
+	val has: Boolean? = null,
+	val note: String,
+	val mine: Boolean
+)
+
+/// A day's changes, under its heading (今天, 昨天, 9月20日).
+@Serializable
+data class ChangelogDay (
+	val label: String,
+	val entries: List<ChangelogItem>
+)
+
+/// What this app got since the changelog was last shown here: its `build` (0.1.n) and those changes.
+@Serializable
+data class ChangelogNews (
+	val build: String? = null,
+	val entries: List<ChangelogItem>
+)
+
+/// What changed in still.fail, as this app shows it (the `changelog` topic; client/core/src/changelog.rs): `app`
+/// (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes by day, newest
+/// first; what this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while
+/// first read, `error` when it could not be and none was kept.
+@Serializable
+data class ChangelogView (
+	val app: String? = null,
+	val build: Long? = null,
+	val days: List<ChangelogDay>,
+	val news: ChangelogNews? = null,
+	val loading: Boolean? = null,
+	val error: String? = null
+)
+
 /// A person as the core names them: `display` is 你 for the viewer.
 @Serializable
 data class PersonShown (

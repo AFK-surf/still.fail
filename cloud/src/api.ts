@@ -11,6 +11,7 @@ import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import type { FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature } from "./grants";
+import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays } from "./relays";
@@ -124,6 +125,10 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (token && !claims) return denied();
     return receiveFeedback(request, env, claims?.sub ?? null);
   }
+
+  // Which of its reports are fixed and out, for a station to tell who reported them; what changed, for anyone (changelog.ts).
+  if (path === "/v1/feedback/fixed" && method === "POST") return serveFixed(request, env);
+  if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
 
   // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
   if (path === "/v1/stations/notify" && method === "POST") return stationNotify(request, env);
@@ -271,7 +276,14 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
     });
   }
   // Bug reports about still.fail (feedback.ts), and marking where each is: { status }.
-  if (path === "/v1/admin/feedback" && method === "GET") return directory(async () => ({ feedback: await dir.adminFeedback() }));
+  // Those the changelog fixes marked first (changelog.ts).
+  if (path === "/v1/admin/feedback" && method === "GET") {
+    return directory(async () => {
+      const entries = await changelog(env.RELEASES);
+      await dir.markFixed(entries.flatMap((e) => e.fixes.map((number) => ({ number, version: e.version, parts: e.parts }))));
+      return { feedback: await dir.adminFeedback() };
+    });
+  }
   const status = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/.exec(path);
   if (status && method === "POST") {
     if (!FEEDBACK_STATUSES.includes(input.status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);

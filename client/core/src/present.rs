@@ -532,6 +532,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Job { .. } => s::conform::<s::Job>(value),
         Topic::JobLog { .. } => s::conform::<s::JobLogView>(value),
         Topic::Prefs => s::conform::<s::PrefsView>(value),
+        Topic::Changelog => s::conform::<s::ChangelogView>(value),
         Topic::WorkspaceMarks { .. } => s::conform::<s::WorkspaceMarksView>(value),
         _ => Ok(value),
     }

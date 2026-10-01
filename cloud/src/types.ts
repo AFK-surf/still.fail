@@ -76,6 +76,9 @@ export interface AdminFeedback {
   context: Record<string, unknown> | null;
   logs: string | null;
   status: FeedbackStatus;
+  /** The version its fix came in (the changelog's `Fixes: FB-<n>`), and when its station told the reporter; null before. Missing from a cloud from before. */
+  fixed_in?: number | null;
+  told_at?: number | null;
   created_at: number;
   updated_at: number;
 }

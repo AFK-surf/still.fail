@@ -120,6 +120,8 @@ object Topics {
     fun notify(workspace: String? = null) = buildJsonObject { put("topic", "notify"); workspace?.let { put("workspace", it) } }
     /** How its person likes it on this device, and what the device is (Prefs.kt). */
     val prefs = buildJsonObject { put("topic", "prefs") }
+    /** What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen` (Changelog.kt). */
+    val changelog = buildJsonObject { put("topic", "changelog") }
     /**
      * What each workspace has waiting (how many chats want their person, how many are unread) and the chat last open in
      * it; of those other than `workspace` (the one in view), the most urgent (client/core/src/views/marks.rs).

@@ -18,6 +18,7 @@ import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import { relays } from "./relays";
+import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
 import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
@@ -99,6 +100,12 @@ export class Directory extends DurableObject<Env> {
     const columns = new Set(this.#rows("PRAGMA table_info(users)").map((r) => r.name as string));
     for (const column of ["last_seen INTEGER", "admitted TEXT", "beta INTEGER", "blocked INTEGER"]) {
       if (!columns.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE users ADD COLUMN ${column}`);
+    }
+    // Nor had feedback where it was fixed (the changelog's version and parts, changelog.ts) and when its station was
+    // told, before the changelog.
+    const reported = new Set(this.#rows("PRAGMA table_info(feedback)").map((r) => r.name as string));
+    for (const column of ["fixed_in INTEGER", "fixed_parts TEXT", "told_at INTEGER"]) {
+      if (!reported.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE feedback ADD COLUMN ${column}`);
     }
   }
 
@@ -802,6 +809,8 @@ export class Directory extends DurableObject<Env> {
         context,
         logs: (r.logs as string | null) ?? null,
         status: r.status as FeedbackStatus,
+        fixed_in: (r.fixed_in as number | null) ?? null,
+        told_at: (r.told_at as number | null) ?? null,
         created_at: r.created_at as number,
         updated_at: r.updated_at as number,
       };
@@ -811,6 +820,47 @@ export class Directory extends DurableObject<Env> {
   setFeedbackStatus(id: string, status: FeedbackStatus): void {
     if (!this.#one("SELECT 1 AS found FROM feedback WHERE id = ?", id)) fail(404, "feedback_not_found");
     this.#run("UPDATE feedback SET status = ?, updated_at = ? WHERE id = ?", status, nowSeconds(), id);
+  }
+
+  /**
+   * Marks the reports the changelog says are fixed (newest entry first): the version and parts of the latest fix of
+   * each, until its station is told; one the team marked won't fix stays so.
+   */
+  markFixed(fixes: { number: number; version: number; parts: string[] }[]): void {
+    const now = nowSeconds();
+    for (const { number, version, parts } of fixes) {
+      this.#run(
+        `UPDATE feedback SET fixed_in = ?, fixed_parts = ?, status = CASE WHEN status = 'wontfix' THEN status ELSE 'fixed' END, updated_at = ?
+         WHERE number = ? AND told_at IS NULL AND (fixed_in IS NULL OR fixed_in < ?)`,
+        version, JSON.stringify(parts), now, number, version,
+      );
+    }
+  }
+
+  /** A station's reports that are fixed and it has not told of yet, with where it reported each. */
+  fixedUntold(station: string): { id: string; number: number; title: string; channel: "stable" | "beta"; version: number; parts: Part[]; session: string | null; thread: string | null }[] {
+    return this.#rows("SELECT id, number, title, channel, fixed_in, fixed_parts, context FROM feedback WHERE station = ? AND fixed_in IS NOT NULL AND told_at IS NULL AND status = 'fixed' ORDER BY number", station).map((r) => {
+      let context: Record<string, unknown> = {};
+      let parts: Part[] = [];
+      try {
+        context = JSON.parse((r.context as string | null) ?? "{}") as Record<string, unknown>;
+      } catch {
+        // Cut at its limit: no session to tell.
+      }
+      try {
+        parts = JSON.parse((r.fixed_parts as string | null) ?? "[]") as Part[];
+      } catch {
+        parts = [];
+      }
+      const said = (v: unknown) => (typeof v === "string" && v ? v : null);
+      return { id: r.id as string, number: r.number as number, title: r.title as string, channel: r.channel === "beta" ? "beta" : "stable", version: r.fixed_in as number, parts, session: said(context.session), thread: said(context.thread) };
+    });
+  }
+
+  /** The station has told these of its reports' fixes. */
+  toldFixed(station: string, ids: string[]): void {
+    const now = nowSeconds();
+    for (const id of ids) this.#run("UPDATE feedback SET told_at = ? WHERE id = ? AND station = ? AND fixed_in IS NOT NULL AND told_at IS NULL", now, id, station);
   }
 
   // ── sockets ─────────────────────────────────────────────────────────────

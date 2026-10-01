@@ -15,6 +15,7 @@ import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
+import { ChangelogNews } from "./Changelog.tsx";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
@@ -144,6 +145,8 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
   const lead = view?.leading ?? "agents";
   return (
     <div className={css.mHomePane}>
+      {/* What the last update brought (./Changelog.tsx), until it is seen: even while the list is being read. */}
+      <ChangelogNews />
       {!view ? <Note text={chats.error?.message ?? reading(status)} error={!!chats.error} /> : (
         <>
           {/* A station's link coming back is said on its rows; only with no rows to show does the list say it. */}

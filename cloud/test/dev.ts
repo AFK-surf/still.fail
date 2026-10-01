@@ -14,7 +14,7 @@
 // With PUSH_LOG=<file>, pushes work with a VAPID key made at start, and what the cloud pushes (to browsers, to FCM)
 // is written there, a JSON line each (its body base64), instead of reaching a push service.
 import { appendFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
 import { extname, join, normalize } from "node:path";
@@ -74,6 +74,17 @@ const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" }))
 if (Number(process.env.SEED) > 0) {
   const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
   await directories.get(directories.idFromName("primary")).seedPeople(Number(process.env.SEED));
+}
+// What dist/releases holds goes into the Worker's bucket too, for what the API reads of it: the changelog
+// (changelog.json, `node scripts/changelog.ts`) and what each part has out (station.json, android/latest.json, web.json…).
+try {
+  const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: Uint8Array): Promise<unknown> };
+  for (const file of await readdir(join(dist, "releases"), { recursive: true })) {
+    const body = await readFile(join(dist, "releases", file)).catch(() => null);
+    if (body) await bucket.put(file, body);
+  }
+} catch {
+  // No dist/releases: nothing to put.
 }
 for (const name of ["studio", "mac-mini"]) {
   const enrollment = await (await alice("POST", `/v1/workspaces/${workspace.id}/enrollments`, { name })).json() as { command: string };

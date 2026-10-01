@@ -117,6 +117,8 @@ struct Inner {
     preview_sockets: Rc<RefCell<HashMap<(ClientId, String), SocketInbox>>>,
     /// What UIs ask that is no station's or account's call (asks.rs).
     asks: crate::asks::Asks,
+    /// What changed in still.fail, for this app (changelog.rs).
+    changelog: Rc<crate::changelog::Changelog>,
 }
 
 struct Socket {
@@ -219,7 +221,8 @@ impl Core {
             let notices = Notices::new(store.clone(), host.clone(), workspaces.clone(), email_of(me.clone()));
             let pills = crate::pill::Pills::new(host.clone(), store.clone(), views.clone());
             let jobs = crate::jobs::Polls::new(host.clone(), Rc::downgrade(&store), Rc::downgrade(&stations));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), workspaces: workspaces.clone(), notices: notices.clone(), attend: attend.clone(), pills, jobs, tracer: tracer.clone(), opening: RefCell::default() }));
+            let changelog = crate::changelog::Changelog::new(host.clone(), Rc::downgrade(&store), data.clone());
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), choose: choose.clone(), status: status.clone(), workspaces: workspaces.clone(), notices: notices.clone(), attend: attend.clone(), pills, jobs, changelog: changelog.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             sync.on_look({
                 let notices = Rc::downgrade(&notices);
                 let (attend, store) = (Rc::downgrade(&attend), Rc::downgrade(&store));
@@ -262,6 +265,7 @@ impl Core {
                 calls: RefCell::default(),
                 preview_sockets: Rc::default(),
                 asks: crate::asks::Asks::new(host.clone()),
+                changelog,
             }
         });
         // Whom each account reaches, as the data center has it from the last run: views put together before the
@@ -382,6 +386,7 @@ struct Router {
     pills: Rc<crate::pill::Pills>,
     /// A job and its output, read again while shown (jobs.rs).
     jobs: Rc<crate::jobs::Polls>,
+    changelog: Rc<crate::changelog::Changelog>,
     tracer: Rc<Tracer>,
     /// Views opening: each is a trace (`chat.open`, …) until its first value goes out.
     opening: RefCell<HashMap<Topic, Span>>,
@@ -420,6 +425,9 @@ impl Source for Router {
         if crate::jobs::Polls::owns(topic) {
             self.jobs.start(topic);
             return;
+        }
+        if crate::changelog::Changelog::owns(topic) {
+            return self.changelog.start();
         }
         // Followed by its station (station.rs, below); what it says in words goes out fresh as it changes (jobs.rs).
         if let Topic::JobLog { .. } = topic {
@@ -466,6 +474,9 @@ impl Source for Router {
         if crate::jobs::Polls::owns(topic) {
             return self.jobs.stop(topic);
         }
+        if crate::changelog::Changelog::owns(topic) {
+            return;
+        }
         // Followed by its station (station.rs); what it says in words goes out fresh as it changes (jobs.rs).
         if let Topic::JobLog { .. } = topic {
             self.jobs.stop(topic);
@@ -506,6 +517,9 @@ impl Source for Router {
         // Nothing chosen on this device yet: the defaults (the shape fills them in).
         if *topic == Topic::Prefs {
             return Some(Ok(json!({})));
+        }
+        if crate::changelog::Changelog::owns(topic) {
+            return Some(Ok(self.changelog.value()));
         }
         let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic).map(|v| self.attended(topic, v)) };
         // Still opening: what it starts now (a chat's agents) is part of it too.
@@ -977,6 +991,11 @@ impl Inner {
             }
             Call::ClientDevice { facts } => {
                 crate::prefs::device(&self.data, &facts)?;
+                self.changelog.device(&facts);
+                Ok(Value::Null)
+            }
+            Call::ChangelogSeen => {
+                self.changelog.seen();
                 Ok(Value::Null)
             }
             Call::StationUpload { station, name, bytes } => {
@@ -1861,6 +1880,8 @@ enum Call {
     PrefsSet { patch: Value, fill: bool },
     /// What the device is, as its host says once at start (prefs.rs).
     ClientDevice { facts: Value },
+    /// The changelog shown, up to this build (changelog.rs).
+    ChangelogSeen,
     /// A link's target, a newer app, a picture, the buddies, a dev sign-in (asks.rs).
     Ask(crate::asks::Ask),
 }
@@ -1887,7 +1908,7 @@ impl Call {
             Call::DraftPut { station, .. } | Call::DraftGet { station, .. } | Call::ChatRef { station, .. } => Some(station),
             Call::Attend(_) | Call::ChatRefsKeep { .. } => None,
             Call::Choose { params, .. } => params.get("station").and_then(Value::as_str),
-            Call::PrefsSet { .. } | Call::ClientDevice { .. } => None,
+            Call::PrefsSet { .. } | Call::ClientDevice { .. } | Call::ChangelogSeen => None,
             Call::Ask(_) => None,
         }
     }
@@ -2203,6 +2224,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             Call::PrefsSet { patch: p, fill }
         }
         "client.device" => Call::ClientDevice { facts: params_or_empty(params) },
+        "changelog.seen" => Call::ChangelogSeen,
         "station.upload" => {
             let p: Upload = read(params)?;
             Call::StationUpload { bytes: base64(&p.bytes, "文件内容")?, station: p.station, name: p.name }
@@ -3847,5 +3869,60 @@ mod tests {
         assert_eq!(encode("ws_01-a.b~"), "ws_01-a.b~");
         assert_eq!(encode("a/b c?"), "a%2Fb%20c%3F");
         assert_eq!(encode("工"), "%E5%B7%A5");
+    }
+
+    #[test]
+    fn the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen() {
+        run(async {
+            let host = FakeHost::new();
+            let now = (host.now_ms() / 1000.0).round();
+            host.on_fetch(move |req| {
+                if !req.url.ends_with("/v1/changelog") {
+                    return json_response(404, json!({}));
+                }
+                let entry = |version: i64, parts: Value, text: &str| json!({ "version": version, "commit": "c", "at": now, "text": [text], "fixes": [], "parts": parts });
+                json_response(200, json!({
+                    "entries": [
+                        entry(1340, json!(["android"]), "修复：还没发布的"),
+                        entry(1330, json!(["android", "web"]), "修复：列表跳动"),
+                        entry(1325, json!(["station"]), "修复：station 的"),
+                        entry(1310, json!(["android"]), "新功能：更早的"),
+                    ],
+                    "released": { "android": 1335, "web": 1335, "station": 1320, "desktop": null },
+                }))
+            });
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            call(&host, &core, ui, 1, "client.device", json!({ "app": "android", "build": "0.1.1320" })).await.unwrap();
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Changelog });
+            host.settle().await;
+            let mut values = HashMap::new();
+            answers(&host, &mut values);
+            let v = &values[&2];
+            assert_eq!((v["app"].clone(), v["build"].clone(), v["loading"].clone()), (json!("android"), json!(1320), json!(false)));
+            let entries = v["days"][0]["entries"].as_array().unwrap();
+            assert_eq!(v["days"][0]["label"], "今天");
+            let notes: Vec<&str> = entries.iter().map(|e| e["note"].as_str().unwrap()).collect();
+            assert_eq!(notes, ["还没发布", "更新到 0.1.1330 后就有", "还没发布", "你的版本已包含"]);
+            // The first build seen here: nothing is news.
+            assert!(v.get("news").is_none(), "{v}");
+
+            // Updated, the app started again: what it brought, until seen.
+            drop(core);
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            call(&host, &core, ui, 3, "client.device", json!({ "app": "android", "build": "0.1.1335" })).await.unwrap();
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Changelog });
+            host.settle().await;
+            answers(&host, &mut values);
+            let news = &values[&2]["news"];
+            assert_eq!(news["build"], "0.1.1335");
+            assert_eq!(news["entries"].as_array().unwrap().iter().map(|e| e["text"][0].clone()).collect::<Vec<_>>(), [json!("修复：列表跳动")]);
+            call(&host, &core, ui, 4, "changelog.seen", json!({})).await.unwrap();
+            answers(&host, &mut values);
+            assert!(values[&2].get("news").is_none());
+            // Read when shown, once in the hour for each start.
+            assert_eq!(host.requests.borrow().iter().filter(|r| r.url.ends_with("/v1/changelog")).count(), 2);
+        });
     }
 }

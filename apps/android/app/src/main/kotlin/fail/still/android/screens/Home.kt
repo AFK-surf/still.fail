@@ -245,6 +245,8 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine:
         // Rows gone, each drawn where it was as it goes, under the rows closing over it.
         if (view != null) for (g in motion.ghosts) key(g.key, g.at) { Leaving(g, view, motion) }
     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = padding) {
+        // What the last update brought (Changelog.kt), until it is seen: even while the list is being read.
+        item(key = "changelog-news") { ChangelogNews() }
         if (view == null) {
             item(key = "wait") { Note(chats.error?.message ?: reading, error = chats.error != null) }
         } else {

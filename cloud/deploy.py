@@ -257,6 +257,7 @@ def promote_web(name: str) -> None:
     local.write_text(json.dumps(config, indent=2) + "\n")
     print(f"promoting {build} to web ({config['name']})", flush=True)
     wrangler("deploy", "--config", str(local), capture=True)
+    say_web_build(build, beta=False)
     origin = read_template()["vars"]["PUBLIC_ORIGIN"]
     request = urllib.request.Request(f"{origin}/", headers={"user-agent": "stillfail-deploy"})
     try:
@@ -264,6 +265,18 @@ def promote_web(name: str) -> None:
             print("check web", origin, response.status)
     except OSError as error:
         print("check web", origin, "failed:", error)
+
+
+def say_web_build(build: Path, beta: bool) -> None:
+    """What the web app has out on a channel, from its build.json, in the releases bucket's web.json (web-beta.json) for
+    the changelog to say which fixes it carries (src/changelog.ts). A build from before build.json says nothing."""
+    said = build / "build.json"
+    if not said.exists():
+        print(f"note: {said} is missing: web{'-beta' if beta else ''}.json not written", flush=True)
+        return
+    name = "web-beta.json" if beta else "web.json"
+    wrangler("r2", "object", "put", f"ember-releases/{name}", "--file", str(said), "--content-type", "application/json", "--remote", capture=True)
+    print(f"put {name} ({json.loads(said.read_text()).get('version')})", flush=True)
 
 
 def main() -> None:
@@ -350,6 +363,8 @@ def main() -> None:
         wrangler("deploy", "--config", str(local), *extra, env=env, capture=True)
         if part == "web-beta":
             print(f"kept the build for promote-web in {keep_build()}", flush=True)
+        if part in ("web", "web-beta"):
+            say_web_build(REPO / "dist" / "cloud-web", beta=part == "web-beta")
         if part in secrets_of:
             with tempfile.TemporaryDirectory(prefix="stillfail-secrets-") as directory:
                 path = Path(directory) / "secrets.json"

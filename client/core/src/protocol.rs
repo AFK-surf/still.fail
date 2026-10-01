@@ -158,6 +158,9 @@ pub enum Topic {
     Job { station: String, id: String },
     /// What this device keeps of how its person likes it, and what it is (prefs.rs; `prefs.set`, `client.device`).
     Prefs,
+    /// What changed in still.fail, as this app shows it (changelog.rs): by day, each change saying where it is and
+    /// whether this app has it, and what this app got since it was last shown (`changelog.seen`).
+    Changelog,
     /// What each workspace has waiting for its person (how many chats want them, how many have something unread) and
     /// the chat last open in it (views/marks.rs); of those other than `workspace` (the one in view), the most urgent.
     WorkspaceMarks {
@@ -174,7 +177,8 @@ impl Topic {
             Topic::ArchivedRows { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
-            // The core's own (pill.rs).
+            // The core's own (pill.rs, changelog.rs).
+            Topic::Changelog => None,
             Topic::Connection { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } => None,
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => None,

@@ -24,6 +24,7 @@ import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
+import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
@@ -98,6 +99,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
             {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
+            <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
             {/* Pages the workspace page took in: links to them still land there. */}
@@ -193,6 +195,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
       <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
       <div className={nav.navFoot}>
+        <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
         <WorkspaceOpenJobs scope={entry.id} />
         <div className={nav.navFootRow}>

@@ -6,7 +6,7 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Command, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
@@ -61,6 +61,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       {CAN_NOTIFY && <NavLink className={nav.navRow} to={`${base}/notifications`}><Bell {...ICON} />通知</NavLink>}
       {CHANGEABLE && <NavLink className={nav.navRow} to={`${base}/shortcuts`}><Command {...ICON} />快捷键</NavLink>}
       {HAS_VERSION && <NavLink className={nav.navRow} to={`${base}/version`}><Info {...ICON} />版本</NavLink>}
+      <NavLink className={nav.navRow} to={`${base}/changelog`}><Sparks {...ICON} />更新日志</NavLink>
       <div className={nav.navHeading}>Station</div>
       <NavLink className={nav.navRow} to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}

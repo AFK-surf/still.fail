@@ -10,6 +10,7 @@ import { ChevronRight } from "../icons.tsx";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { useApp } from "./app.tsx";
+import { useChangelog } from "../changelog.ts";
 import { Presence } from "./Connects.tsx";
 import { quotaTrouble } from "./Profiles.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
@@ -40,6 +41,7 @@ export function SettingsScreen() {
   const stations = useStations(app.entry.id).value;
   const connects = useConnects(app.entry.id).value;
   const [appearance] = useAppearance();
+  const build = useChangelog().value?.build;
   const manager = view?.role === "owner" || view?.role === "admin";
   const waiting = view ? view.added.length + view.invitations.length : 0;
   const online = stations?.filter((s) => s.online).length ?? 0;
@@ -71,6 +73,7 @@ export function SettingsScreen() {
       <ListCard>
         <GoRow title="外观" value={THEMES.find(([v]) => v === appearance)?.[1]} onClick={at("/settings/appearance")} />
         <Notify />
+        <GoRow title="更新日志" value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/changelog")} />
       </ListCard>
       <div style={{ height: 30 }} />
     </div>

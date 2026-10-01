@@ -40,17 +40,30 @@ export default defineConfig(({ mode }) => {
   const consoleBuild = mode === "cloud-admin";
   // The admin's console reports nothing.
   const posthog = consoleBuild ? null : posthogKey();
+  const build = buildNumber();
   return {
     root: here(consoleBuild ? "admin" : "."),
     publicDir: here("public"),
     base: "/",
-    plugins: [react(), vanillaExtractPlugin()],
+    plugins: [
+      react(),
+      vanillaExtractPlugin(),
+      // The web app's build.json: which build it is, for deploy.py to say what app.still.fail (or the test channel's)
+      // has out (the releases bucket's web.json, cloud/src/changelog.ts).
+      {
+        name: "stillfail-build",
+        apply: "build",
+        generateBundle() {
+          if (!consoleBuild && build) this.emitFile({ type: "asset", fileName: "build.json", source: `${JSON.stringify({ version: build, build: Number(build.split(".")[2]) })}\n` });
+        },
+      },
+    ],
     define: {
       __POSTHOG__: JSON.stringify(posthog),
       // When this build was made: the core's worker of a newer build takes over from an older one (src/core/worker.ts).
       __BUILT_AT__: JSON.stringify(Date.now()),
       // Which build it is, as the app a message was sent from (src/api.ts).
-      __BUILD__: JSON.stringify(buildNumber()),
+      __BUILD__: JSON.stringify(build),
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
       __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
     },

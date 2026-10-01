@@ -7,6 +7,7 @@ pub mod accounts;
 pub mod activity;
 pub mod asks;
 pub mod attend;
+pub mod changelog;
 pub mod brand;
 pub mod choose;
 pub mod cloud;

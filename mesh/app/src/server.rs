@@ -403,6 +403,22 @@ impl App {
                 }
             }
         });
+        // The bug reports its agents sent that are fixed and out (feedback.rs): each session told, a few minutes after the
+        // start and every hour.
+        if feedback {
+            let told = Arc::downgrade(&hub);
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+                let mut hourly = tokio::time::interval(crate::feedback::FIXED_EVERY);
+                loop {
+                    hourly.tick().await;
+                    let Some(hub) = told.upgrade() else { return };
+                    if let Err(error) = crate::feedback::tell_fixed(&move |session: &str, text: String| hub.notify(session, text)).await {
+                        warn!(error = %error, "fixed bug reports not read");
+                    }
+                }
+            });
+        }
         if status.bound() {
             jobs.relaunch();
         }

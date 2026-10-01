@@ -25,3 +25,7 @@ team, shows them the report, and sends it once they agree. The reports wait in t
   `{ status: new | triaged | fixed | wontfix }`.
 - **Old and new together**: an old station has no tool and no skill. A new station on an old cloud gets 404 and the
   agent hands the person the report to pass on. An old console never asks for the list.
+- **Told when fixed** (docs/changelog.md): a commit's `Fixes: FB-<n>` trailer marks the report fixed (its version and
+  parts) once CI's changelog is in the releases bucket; when the fix is out on the report's channel, its station
+  (asking `POST /v1/feedback/fixed` hourly) tells the session it came from, for the agent to tell the person who
+  reported it in the thread they did.

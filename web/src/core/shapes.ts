@@ -146,6 +146,48 @@ export interface Buddy {
 	bg: string;
 }
 
+/**
+ * One change: its lines for people, the version it came in, where it is (`place`: the parts and version, empty when
+ * it needed no release), whether this app has it (`has`: absent when it is not this app's), and what that means
+ * (`note`: 你的版本已包含, 更新到 0.1.n 后就有, 还没发布, 已发布, 已上线); `mine`: it is this app's.
+ */
+export interface ChangelogItem {
+	version: number;
+	versionName: string;
+	text: string[];
+	place: string;
+	has?: boolean;
+	note: string;
+	mine: boolean;
+}
+
+/** A day's changes, under its heading (今天, 昨天, 9月20日). */
+export interface ChangelogDay {
+	label: string;
+	entries: ChangelogItem[];
+}
+
+/** What this app got since the changelog was last shown here: its `build` (0.1.n) and those changes. */
+export interface ChangelogNews {
+	build?: string;
+	entries: ChangelogItem[];
+}
+
+/**
+ * What changed in still.fail, as this app shows it (the `changelog` topic; client/core/src/changelog.rs): `app`
+ * (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes by day, newest
+ * first; what this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while
+ * first read, `error` when it could not be and none was kept.
+ */
+export interface ChangelogView {
+	app?: string;
+	build?: number;
+	days: ChangelogDay[];
+	news?: ChangelogNews;
+	loading?: boolean;
+	error?: string;
+}
+
 /** A person as the core names them: `display` is 你 for the viewer. */
 export interface PersonShown {
 	name: string;
