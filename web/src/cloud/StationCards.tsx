@@ -87,17 +87,22 @@ export function Ways({ station, measured, stacked = false }: { station: string; 
   const measuring = state.running || (measured?.measuring ?? false);
   return (
     <div className={stacked ? `${css.ways} ${css.waysStacked}` : css.ways}>
-      <span className={css.waysList}>
-        {measured && <span>{measured.whenText ?? "上次检测"}</span>}
-        {!measured ? <span>各中继还没测过</span> : measured.relays.map((r) => (
-          <span key={r.name} data-current={r.current || undefined}>{r.name} {r.rtt ? <Figure f={r.rtt} /> : <b data-level="red">未测通</b>}</span>
+      <div className={css.waysHead}>
+        <span>{measured ? measured.whenText ?? "上次检测" : "各中继还没测过"}</span>
+        <button type="button" className={pillCss.connectionRetry} disabled={measuring} aria-busy={measuring || undefined}
+          title={state.error} onClick={() => void call("station.measure", { station }).catch(() => {})}>
+          <DoingShown state={{ running: measuring, error: state.error }} className={pillCss.retrySpinner} size={10} />{measuring ? "正在测量" : "重新测量"}
+        </button>
+      </div>
+      {measured && <div className={css.waysList}>
+        {measured.relays.map((r) => (
+          <div className={css.way} key={r.name}>
+            <span className={css.wayName} data-current={r.current || undefined} title={r.name}>{r.name}</span>
+            {r.rtt ? <Figure f={r.rtt} /> : <b data-level="red">未测通</b>}
+          </div>
         ))}
-        {measured?.moved && <span>已换到{measured.moved}</span>}
-      </span>
-      <button type="button" className={pillCss.connectionRetry} disabled={measuring} aria-busy={measuring || undefined}
-        title={state.error} onClick={() => void call("station.measure", { station }).catch(() => {})}>
-        <DoingShown state={{ running: measuring, error: state.error }} className={pillCss.retrySpinner} size={10} />{measuring ? "正在测量" : "重新测量"}
-      </button>
+      </div>}
+      {measured?.moved && <span>已换到{measured.moved}</span>}
     </div>
   );
 }

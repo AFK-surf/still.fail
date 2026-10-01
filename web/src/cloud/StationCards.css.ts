@@ -56,11 +56,14 @@ globalStyle(`${netLine} > *:last-child`, { minWidth: "0", overflow: "hidden", te
 export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5ch 7.5ch", columnGap: "5px", rowGap: "2px", alignItems: "baseline", flex: "none" });
 /** Under it, the way through each relay as last measured, the one it goes through now underlined, and 重新测量. */
 export const ways = style({
-  display: "flex", alignItems: "center", gap: "10px", marginLeft: "17px", marginTop: "-2px",
+  display: "flex", flexDirection: "column", gap: "8px", marginLeft: "17px", marginTop: "4px",
   fontSize: vars.textXs, color: vars.muted, fontVariantNumeric: "tabular-nums",
 });
-export const waysStacked = style({ marginLeft: "0", paddingTop: "6px" });
-export const waysList = style({ display: "flex", flexWrap: "wrap", gap: "2px 10px", minWidth: "0", flex: "1 1 auto" });
+export const waysStacked = style({ marginLeft: "0", paddingTop: "8px" });
+export const waysHead = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" });
+export const waysList = style({ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px 12px", minWidth: "0" });
+export const way = style({ display: "flex", flexDirection: "column", gap: "3px", minWidth: "0" });
+export const wayName = style({ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${waysList} b`, { fontWeight: "500", color: vars.text });
 globalStyle(`${waysList} b[data-level="amber"]`, { color: vars.amber });
 globalStyle(`${waysList} b[data-level="red"]`, { color: vars.red });
