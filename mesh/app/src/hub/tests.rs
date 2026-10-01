@@ -1265,7 +1265,14 @@ async fn archiving_a_session_cleans_what_can_be_made_again_from_its_directory() 
     std::fs::write(workspace.join("app/node_modules/x/index.js"), vec![1u8; 50_000]).unwrap();
     std::fs::write(workspace.join("notes.md"), b"kept").unwrap();
     assert_eq!(r.hub.clean_rebuildable(&key), 0, "not while in the lists");
+    r.hub.archive(&key, true).unwrap();
+    settle().await;
+    assert_eq!(r.hub.clean_rebuildable(&key), 0, "not while at work");
     assert!(workspace.join("app/node_modules").exists());
+    r.call(&key, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    r.hub.archive(&key, false).unwrap();
     r.hub.archive(&key, true).unwrap();
     for _ in 0..200 {
         if !workspace.join("app/node_modules").exists() {
