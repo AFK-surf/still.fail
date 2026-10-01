@@ -23,7 +23,7 @@ use crate::config::Profile;
 use crate::instructions::{GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
 use crate::live::LiveHub;
 use crate::runtime::{AgentDriver, AgentSession, FailureReason, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
-use crate::store::{AuthorKind, STILLFAIL_SURFACE, NewMessage, PendingMessage, Store, now_ms};
+use crate::store::{AuthorKind, STILLFAIL_SURFACE, NewMessage, PendingMessage, Store, TurnFor, now_ms};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeclaredState {
@@ -574,7 +574,13 @@ impl SessionActor {
         }
         self.st().nudges = 0;
         self.work_for(&deps, &pending);
-        self.start_turn(&deps, "input", &text).await?;
+        // The turn is for the first person whose message it takes.
+        let by = pending
+            .iter()
+            .find(|m| m.message.author_kind == AuthorKind::Person)
+            .map(|m| TurnFor { person: Some(person_ref(m)), thread: Some(m.message.thread), profile: None })
+            .unwrap_or_default();
+        self.start_turn_for(&deps, "input", &text, by).await?;
         self.delivered(&store, &pending, &widgets)
     }
 
@@ -706,6 +712,11 @@ impl SessionActor {
     /// Starts a turn with `text`. On failure the thread is told and the error returned, so callers leave their messages
     /// pending for the next attempt.
     async fn start_turn(self: &Arc<Self>, deps: &Arc<dyn SessionDeps>, kind: &str, text: &str) -> Result<()> {
+        self.start_turn_for(deps, kind, text, TurnFor::default()).await
+    }
+
+    /// Starts a turn with `text` for someone: the person whose message it answers, and where (usage counts it theirs).
+    async fn start_turn_for(self: &Arc<Self>, deps: &Arc<dyn SessionDeps>, kind: &str, text: &str, by: TurnFor) -> Result<()> {
         let started = async {
             // Until the runtime says it has sent its request, the turn is starting (a warm process can still take a while
             // to take input).
@@ -735,7 +746,7 @@ impl SessionActor {
                 return Ok(());
             }
             self.st().steered.clear();
-            self.begin_turn(deps, kind)?;
+            self.begin_turn(deps, kind, by)?;
             if let Err(e) = agent.prompt(&prompt).await {
                 // The runtime is unusable (died between turns, or refused): replace it once.
                 warn!(session = self.key, error = %e, "prompt failed, reopening the runtime");
@@ -759,15 +770,16 @@ impl SessionActor {
         Err(e)
     }
 
-    fn begin_turn(&self, deps: &Arc<dyn SessionDeps>, kind: &str) -> Result<()> {
+    fn begin_turn(&self, deps: &Arc<dyn SessionDeps>, kind: &str, by: TurnFor) -> Result<()> {
         let id = uuid();
-        {
+        let profile = {
             let mut st = self.st();
             st.turn = Some(Turn { id: id.clone(), declared: None });
             st.waiting = None;
-        }
+            st.profile.clone()
+        };
         let store = deps.store();
-        store.start_turn(&id, &self.key, kind)?;
+        store.start_turn_for(&id, &self.key, kind, &TurnFor { profile, ..by })?;
         store.set_running(&self.key, true)
     }
 
@@ -841,7 +853,7 @@ impl SessionActor {
                     RuntimeEvent::TurnStarted => {
                         let _ = actor.enqueue(move |a| async move {
                             if a.is_current(generation) && a.st().turn.is_none() {
-                                a.begin_turn(&a.deps()?, "input")?;
+                                a.begin_turn(&a.deps()?, "input", TurnFor::default())?;
                             }
                             Ok(())
                         });
@@ -1053,4 +1065,10 @@ fn failure_notice(outcome: &TurnOutcome) -> String {
         "exited" => format!("⚠️ agent 进程意外退出，回复可恢复：{message}"),
         _ => format!("⚠️ 这一轮出错：{message}"),
     }
+}
+
+/// Who wrote a message, as a creator reference: their email on the page, their Slack user through the connect it came
+/// by (store.rs thread_people).
+fn person_ref(m: &PendingMessage) -> String {
+    if m.surface == STILLFAIL_SURFACE { m.message.author.clone() } else { format!("slack:{}:{}", m.connect, m.message.author) }
 }

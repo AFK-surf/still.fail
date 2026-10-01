@@ -6,7 +6,7 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
@@ -18,10 +18,11 @@ import { StationContext, stationBase, type Station } from "../station.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
 import { MemoryView } from "../Memory.tsx";
+import { DAYS, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
-import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
+import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
 import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
@@ -68,6 +69,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/memory`}><Brain {...ICON} />记忆</NavLink>}
+      {some && <NavLink className={nav.navRow} to={`${base}/usage`}><Chart {...ICON} />用量</NavLink>}
       <div className={nav.navHeading}>Cloud</div>
       <NavLink className={nav.navRow} to={`${base}/workspace`}><Users {...ICON} /><span className={nav.navText}>Workspace · {entry.name}</span></NavLink>
       <NavLink className={nav.navRow} to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className={nav.navText}>{entry.account.email}</span></NavLink>
@@ -220,6 +222,21 @@ export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
           {s.online ? <MemoryView station={s.station} /> : <p className={shellCss.muted}>离线，等它上线再看。</p>}
         </div>
       ))}
+    </Page>
+  );
+}
+
+/** What the agents of the workspace's stations spent (../Usage.tsx). */
+export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
+  const listed = useStations(entry.id).value;
+  const [days, setDays] = useState<UsageDays>("7");
+  const usage = useUsage(entry.id, days);
+  if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
+  return (
+    <Page title="用量" lead="各台 station 上的 agent 调用模型用了多少 token，按 API 价折算成钱；按人、对话、账号和模型分开看。workspace 里的人都能看。" back={`/w/${entry.id}/settings`}
+      actions={<Segmented<UsageDays> className={usageCss.pick} label="多少天" value={days} onChange={setDays} options={DAYS} />}>
+      {usage.value ? <UsageBody view={usage.value} />
+        : usage.error ? <p className={controlsCss.fieldError}>读不到用量：{usage.error.message}</p> : <Loading label="正在读取…" fill={false} />}
     </Page>
   );
 }

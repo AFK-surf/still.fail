@@ -563,6 +563,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Pick { .. } => s::conform::<s::PickView>(value),
         Topic::ChatJobs { .. } => s::conform::<s::ChatJobsView>(value),
         Topic::LongJobs { .. } => s::conform::<s::LongJobsView>(value),
+        Topic::Usage { .. } => s::conform::<s::UsageView>(value),
         Topic::Job { .. } => s::conform::<s::Job>(value),
         Topic::JobLog { .. } => s::conform::<s::JobLogView>(value),
         Topic::Prefs => s::conform::<s::PrefsView>(value),

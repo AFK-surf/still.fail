@@ -25,6 +25,7 @@ use crate::store::{Store, Watch};
 
 mod admin;
 mod archive;
+mod usage;
 pub mod marks;
 
 /// The runtimes a chat can run on, in the order they are offered.
@@ -485,6 +486,7 @@ impl Views {
             Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
             Topic::History { station, key } => self.history(station, key),
             Topic::Archive { scope } => self.archive(scope),
+            Topic::Usage { scope, days } => self.usage(scope, days.unwrap_or(7)),
             Topic::WorkspaceMarks { workspace } => self.marks(workspace.as_deref()),
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => self.admin(view),
             Topic::ChatJobs { station, thread, session } => {
@@ -564,6 +566,7 @@ impl Views {
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station: station.clone() }, Topic::Net { station }]),
             Topic::Archive { scope } => (scope.as_str(), |station| vec![Topic::ArchivedRows { station }]),
             Topic::LongJobs { scope } => (scope.as_str(), |station| vec![Topic::Jobs { station }]),
+            Topic::Usage { scope, .. } => (scope.as_str(), |station| vec![Topic::StationUsage { station }]),
             // A chat's jobs are its agents', as its view has them.
             Topic::ChatJobs { station, thread, session } => {
                 topics.insert(Topic::Chat { station: station.clone(), thread: *thread, session: session.clone() });

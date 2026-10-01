@@ -168,6 +168,8 @@ pub struct AdminDeps {
     pub dev: bool,
     /// Background jobs, for the pages to stop one; None where there are none (tests).
     pub jobs: Option<Arc<crate::jobs::Jobs>>,
+    /// What the agents spent, read from their transcripts; None where it is not counted (tests).
+    pub usage: Option<Arc<crate::usage::Usage>>,
 }
 
 /// An error that is the asker's: its status and what to tell them.
@@ -550,6 +552,14 @@ impl AdminApi {
             ("GET", "/threads") => return ok(Value::Array(self.threads(viewer, asked.param("session"))?)),
             // The services and jobs still up on this station, across its chats (the sidebar keeps those left open a long while in view).
             ("GET", "/jobs") => return ok(Value::Array(self.open_jobs(viewer)?)),
+            // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east
+            // of UTC), with whom, where and on what (views.rs usage).
+            ("GET", "/usage") => {
+                let number = |k: &str| asked.param(k).and_then(|v| v.parse::<f64>().ok()).map(|v| v as i64);
+                let to = number("to").unwrap_or(i64::MAX);
+                let from = number("from").unwrap_or(0);
+                return ok(self.usage(from, to, number("tz").unwrap_or(0).clamp(-24 * 60, 24 * 60))?);
+            }
             ("POST", "/threads") => {
                 // Another chat on the pages with a session in it.
                 let input = read_json(body).await?;

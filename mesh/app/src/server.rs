@@ -311,6 +311,9 @@ impl App {
         let counted = Arc::downgrade(&hub);
         updates.count_running(move || counted.upgrade().map_or(0, |hub| hub.running()));
         updates.start();
+        // What the agents spent, read from their transcripts as they grow.
+        let usage = crate::usage::Usage::new(store.clone(), settings.clone());
+        usage.start();
         let (quota_codex, models_codex) = (codex.clone(), codex.clone());
         let admin = AdminApi::new(AdminDeps {
             settings: settings.clone(),
@@ -347,6 +350,7 @@ impl App {
             updates: Some(updates.clone()),
             dev: crate::former::var("DEV").as_deref() == Some("1"),
             jobs: Some(jobs.clone()),
+            usage: Some(usage),
         });
         // What the chats' people hear about while no client of theirs runs (the station process posts it on).
         crate::admin::notify::Notifier::start(&admin);

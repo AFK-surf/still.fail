@@ -1979,6 +1979,88 @@ export interface StatusView {
 	items: StatusItem[];
 }
 
+/** Where a chat in the usage lists opens: its station, and its thread, or its agent's session. */
+export interface UsageChat {
+	station: string;
+	thread?: number;
+	session?: string;
+}
+
+/**
+ * A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its
+ * calls.
+ */
+export interface UsageDay {
+	day: string;
+	label: string;
+	today: boolean;
+	cost: number;
+	costText: string;
+	calls: number;
+	callsText: string;
+	parts: number[];
+	partsText: string[];
+}
+
+/**
+ * A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was
+ * priced), `detail` its calls and tokens in a line. A person's `person` (with `shown`); a chat's page (`chat`), when
+ * it is still there.
+ */
+export interface UsageItem {
+	key: string;
+	title: string;
+	sub?: string;
+	cost: number;
+	costText: string;
+	share: number;
+	shareText: string;
+	calls: number;
+	detail: string;
+	person?: Creator;
+	chat?: UsageChat;
+}
+
+/** 按人 / 按对话 / 按账号 / 按模型 (`key` people, chats, profiles, models), the most spent first. */
+export interface UsageList {
+	key: string;
+	title: string;
+	items: UsageItem[];
+}
+
+/** A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty). */
+export interface UsageSeries {
+	key: string;
+	name: string;
+}
+
+/** 折合费用 $1,911 (按 API 价算). */
+export interface UsageTile {
+	label: string;
+	value: string;
+	sub: string;
+}
+
+/**
+ * What the agents of a workspace spent over its last `days` (the `usage` view, client/core/src/views/usage.rs): a few
+ * totals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,
+ * which chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that
+ * means). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.
+ */
+export interface UsageView {
+	days: number;
+	loading: boolean;
+	empty: boolean;
+	tiles: UsageTile[];
+	series: UsageSeries[];
+	daily: UsageDay[];
+	/** The most a day cost (what the bars are drawn against). */
+	max: number;
+	lists: UsageList[];
+	notes: string[];
+	basis: string;
+}
+
 /**
  * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
  * have something unread; of all its chats, how many wait on them (`wait`); its `tone` (alert | wait | done, as a

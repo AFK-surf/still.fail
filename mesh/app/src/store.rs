@@ -506,6 +506,15 @@ fn job_row(r: &rusqlite::Row) -> rusqlite::Result<JobRow> {
     })
 }
 
+/// Whom a turn works for (Store::start_turn_for).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TurnFor {
+    pub profile: Option<String>,
+    /// A creator reference: an email, or "slack:<connect>:<user>".
+    pub person: Option<String>,
+    pub thread: Option<i64>,
+}
+
 /// What the store says changed, for whoever follows it (the admin API's /events, the hub).
 #[derive(Debug, Clone, PartialEq)]
 pub enum StoreChange {
@@ -529,6 +538,8 @@ pub enum StoreChange {
     Job(String),
     /// A job that was over was taken off its session's record (cleared from the pages).
     JobRemoved { id: String, session: String },
+    /// Model calls were recorded (store/usage.rs).
+    Usage,
 }
 
 // ── schema ─────────────────────────────────────────────────────────────────
@@ -705,6 +716,34 @@ CREATE TABLE IF NOT EXISTS items (
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (thread, key)
 );
+-- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
+-- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same.
+CREATE TABLE IF NOT EXISTS usage (
+  id TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  turn TEXT,
+  thread INTEGER,
+  person TEXT,
+  profile TEXT,
+  runtime TEXT NOT NULL,
+  model TEXT,
+  subagent INTEGER NOT NULL DEFAULT 0,
+  fast INTEGER NOT NULL DEFAULT 0,
+  input INTEGER NOT NULL,
+  cache_read INTEGER NOT NULL,
+  cache_write INTEGER NOT NULL,
+  cache_write_long INTEGER NOT NULL,
+  output INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
+-- How far each transcript has been read for it.
+CREATE TABLE IF NOT EXISTS usage_files (
+  path TEXT PRIMARY KEY,
+  session TEXT,
+  offset INTEGER NOT NULL,
+  model TEXT
+);
 "#;
 
 fn json_list<T: Serialize>(value: &[T]) -> Option<String> {
@@ -773,6 +812,12 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
     // Came with waiting's limit, after the turns table.
     if !has("turns", "wait_seconds")? {
         db.execute_batch("ALTER TABLE turns ADD COLUMN wait_seconds INTEGER")?;
+    }
+    // Came with usage (store/usage.rs): whom a turn worked for, where, and on which profile.
+    for (column, kind) in [("profile", "TEXT"), ("person", "TEXT"), ("thread", "INTEGER")] {
+        if !has("turns", column)? {
+            db.execute_batch(&format!("ALTER TABLE turns ADD COLUMN {column} {kind}"))?;
+        }
     }
     if has("threads", "home")? {
         return Ok(());
@@ -1837,8 +1882,23 @@ impl Store {
     }
 
     pub fn start_turn(&self, id: &str, session: &str, kind: &str) -> Result<()> {
+        self.start_turn_for(id, session, kind, &TurnFor::default())
+    }
+
+    /// Starts a turn for someone: the person whose message it answers, in that thread, on that profile. A turn nobody's
+    /// message started (a job's notice, a nudge, going on after an account ran out) goes on with the work of the one
+    /// before it, so it is theirs.
+    pub fn start_turn_for(&self, id: &str, session: &str, kind: &str, by: &TurnFor) -> Result<()> {
         self.with(|i, changes| {
-            i.db.execute("INSERT INTO turns (id, session_key, kind, started_at) VALUES (?, ?, ?, ?)", params![id, session, kind, now_ms()])?;
+            let before = |column: &str| format!("(SELECT {column} FROM turns WHERE session_key = ?2 AND {column} IS NOT NULL ORDER BY started_at DESC LIMIT 1)");
+            i.db.execute(
+                &format!(
+                    "INSERT INTO turns (id, session_key, kind, started_at, profile, person, thread) VALUES (?1, ?2, ?3, ?4, ?5, COALESCE(?6, {}), COALESCE(?7, {}))",
+                    before("person"),
+                    before("thread")
+                ),
+                params![id, session, kind, now_ms(), by.profile, by.person, by.thread],
+            )?;
             changes.push(StoreChange::Session(session.to_string()));
             Ok(())
         })
@@ -2497,6 +2557,9 @@ fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
     )?;
     Ok(())
 }
+
+mod usage;
+pub use usage::{UsageCall, UsageFile, UsageFor, UsageGroup, UsageTurn};
 
 #[cfg(test)]
 mod tests;

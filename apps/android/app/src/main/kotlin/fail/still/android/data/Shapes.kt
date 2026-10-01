@@ -1999,6 +1999,89 @@ data class StatusView (
 	val items: List<StatusItem>
 )
 
+/// Where a chat in the usage lists opens: its station, and its thread, or its agent's session.
+@Serializable
+data class UsageChat (
+	val station: String,
+	val thread: Long? = null,
+	val session: String? = null
+)
+
+/// A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its
+/// calls.
+@Serializable
+data class UsageDay (
+	val day: String,
+	val label: String,
+	val today: Boolean,
+	val cost: Double,
+	val costText: String,
+	val calls: Double,
+	val callsText: String,
+	val parts: List<Double>,
+	val partsText: List<String>
+)
+
+/// A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was
+/// priced), `detail` its calls and tokens in a line. A person's `person` (with `shown`); a chat's page (`chat`), when
+/// it is still there.
+@Serializable
+data class UsageItem (
+	val key: String,
+	val title: String,
+	val sub: String? = null,
+	val cost: Double,
+	val costText: String,
+	val share: Double,
+	val shareText: String,
+	val calls: Double,
+	val detail: String,
+	val person: Creator? = null,
+	val chat: UsageChat? = null
+)
+
+/// 按人 / 按对话 / 按账号 / 按模型 (`key` people, chats, profiles, models), the most spent first.
+@Serializable
+data class UsageList (
+	val key: String,
+	val title: String,
+	val items: List<UsageItem>
+)
+
+/// A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty).
+@Serializable
+data class UsageSeries (
+	val key: String,
+	val name: String
+)
+
+/// 折合费用 $1,911 (按 API 价算).
+@Serializable
+data class UsageTile (
+	val label: String,
+	val value: String,
+	val sub: String
+)
+
+/// What the agents of a workspace spent over its last `days` (the `usage` view, client/core/src/views/usage.rs): a few
+/// totals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,
+/// which chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that
+/// means). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.
+@Serializable
+data class UsageView (
+	val days: UInt,
+	val loading: Boolean,
+	val empty: Boolean,
+	val tiles: List<UsageTile>,
+	val series: List<UsageSeries>,
+	val daily: List<UsageDay>,
+	/// The most a day cost (what the bars are drawn against).
+	val max: Double,
+	val lists: List<UsageList>,
+	val notes: List<String>,
+	val basis: String
+)
+
 /// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
 /// have something unread; of all its chats, how many wait on them (`wait`); its `tone` (alert | wait | done, as a
 /// chat's mark) and in words, none when it is 0 and 0; the chat last

@@ -1122,6 +1122,14 @@ impl Stations {
             Topic::ArchivedRows { .. } => "/chats?archived=1".to_string(),
             Topic::SlackApp { connect, .. } => format!("/connects/{}/slack-app", encode(connect)),
             Topic::Jobs { .. } => "/jobs".to_string(),
+            // From this device's midnight 29 days ago, days as its clock has them.
+            Topic::StationUsage { .. } => {
+                let now = self.host.now_ms();
+                let offset = self.host.utc_offset_min(now) as i64;
+                let (day, local) = (86_400_000_i64, now as i64 + offset * 60_000);
+                let from = local - local.rem_euclid(day) - 29 * day - offset * 60_000;
+                format!("/usage?from={from}&tz={offset}")
+            }
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
             Topic::JobLog { job, lines, .. } => format!("/jobs/{}/log?lines={lines}", encode(job)),
             // A thread shown at its end only asks for what came after it; one short of its end has nothing to catch up
@@ -1711,6 +1719,8 @@ impl Stations {
             }
             "overview" => self.set_live(Topic::Overview { station: station.into() }, data),
             "host" => self.set_live(Topic::Host { station: station.into() }, data),
+            // It recorded more of what its agents spent (about once a minute while they work).
+            "usage" => self.refetch(&Topic::StationUsage { station: station.into() }),
             _ => {}
         }
     }
@@ -2678,7 +2688,7 @@ impl Source for Stations {
                     this.set_link(&station, link);
                 });
             }
-            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::ArchivedRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Jobs { .. } => {
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::ArchivedRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Jobs { .. } | Topic::StationUsage { .. } => {
                 self.refetch(topic)
             }
             Topic::Thread { thread, .. } => {

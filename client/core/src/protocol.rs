@@ -161,6 +161,16 @@ pub enum Topic {
     ChatJobs { station: String, #[serde(default)] thread: Option<u64>, #[serde(default)] session: Option<String> },
     /// The services and jobs left up a long while on the scope's stations that are up (jobs.rs).
     LongJobs { scope: String },
+    /// What a station's agents spent over the last 30 days, by day as this device's clock has them (`/usage`), read
+    /// again as it records more (its `usage` event).
+    StationUsage { station: String },
+    /// A view: what the agents of a scope's stations spent over its last `days` (7 or 30), added up by day, person,
+    /// chat, profile and model (views/usage.rs).
+    Usage {
+        scope: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        days: Option<u32>,
+    },
     /// A background job as it is now (`/jobs/:id`, then its events).
     Job { station: String, id: String },
     /// What this device keeps of how its person likes it, and what it is (prefs.rs; `prefs.set`, `client.device`).
@@ -184,13 +194,13 @@ impl Topic {
     pub fn station(&self) -> Option<&str> {
         match self {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Net { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
-            Topic::ArchivedRows { station } => Some(station),
+            Topic::ArchivedRows { station } | Topic::StationUsage { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
             // The core's own (pill.rs, changelog.rs).
             Topic::Changelog | Topic::Doing => None,
             Topic::Connection { .. } => None,
-            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } => None,
+            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } | Topic::Usage { .. } => None,
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
             // The core's own (jobs.rs), not the station module's.
@@ -199,6 +209,6 @@ impl Topic {
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::WorkspaceMarks { .. } | Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::WorkspaceMarks { .. } | Topic::Usage { .. } | Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. })
     }
 }

@@ -2239,6 +2239,102 @@ pub struct LongJobsGroup {
     pub jobs: Vec<Job>,
 }
 
+/// What the agents of a workspace spent over its last `days` (the `usage` view, client/core/src/views/usage.rs): a few
+/// totals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,
+/// which chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that
+/// means). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageView {
+    pub days: u32,
+    pub loading: bool,
+    pub empty: bool,
+    pub tiles: Vec<UsageTile>,
+    pub series: Vec<UsageSeries>,
+    pub daily: Vec<UsageDay>,
+    /// The most a day cost (what the bars are drawn against).
+    pub max: f64,
+    pub lists: Vec<UsageList>,
+    pub notes: Vec<String>,
+    pub basis: String,
+}
+
+/// 折合费用 $1,911 (按 API 价算).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UsageTile {
+    pub label: String,
+    pub value: String,
+    pub sub: String,
+}
+
+/// A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UsageSeries {
+    pub key: String,
+    pub name: String,
+}
+
+/// A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its
+/// calls.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageDay {
+    pub day: String,
+    pub label: String,
+    pub today: bool,
+    pub cost: f64,
+    pub cost_text: String,
+    pub calls: f64,
+    pub calls_text: String,
+    pub parts: Vec<f64>,
+    pub parts_text: Vec<String>,
+}
+
+/// 按人 / 按对话 / 按账号 / 按模型 (`key` people, chats, profiles, models), the most spent first.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UsageList {
+    pub key: String,
+    pub title: String,
+    pub items: Vec<UsageItem>,
+}
+
+/// A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was
+/// priced), `detail` its calls and tokens in a line. A person's `person` (with `shown`); a chat's page (`chat`), when
+/// it is still there.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageItem {
+    pub key: String,
+    pub title: String,
+    pub sub: Option<String>,
+    pub cost: f64,
+    pub cost_text: String,
+    pub share: f64,
+    pub share_text: String,
+    pub calls: f64,
+    pub detail: String,
+    pub person: Option<Creator>,
+    pub chat: Option<UsageChat>,
+}
+
+/// Where a chat in the usage lists opens: its station, and its thread, or its agent's session.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct UsageChat {
+    pub station: String,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub thread: Option<i64>,
+    pub session: Option<String>,
+}
+
 /// A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
 /// station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
 #[typeshare]

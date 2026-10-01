@@ -409,6 +409,8 @@ impl Events {
                 }
             }
             StoreChange::JobRemoved { id, session } => self.emit("job-removed", &json!({ "id": id, "session": session }), |_| true),
+            // Model calls were recorded: a page showing usage reads it again (it is too big to send to everyone).
+            StoreChange::Usage => self.emit("usage", &json!({}), |_| true),
         }
     }
 

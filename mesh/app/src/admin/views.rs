@@ -1,6 +1,6 @@
 //! What the pages read: the overview, sessions, threads, the sidebar and thread entries.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use anyhow::Result;
 use serde_json::{Value, json};
@@ -10,7 +10,7 @@ use crate::access::Viewer;
 use crate::chat::internal::INTERNAL_CONNECT;
 use crate::config::runtime_name;
 use crate::pool::serves;
-use crate::store::{AuthorKind, STILLFAIL_SURFACE, EntryRow, MessageRow, SessionStats, ThreadSummary};
+use crate::store::{AuthorKind, STILLFAIL_SURFACE, EntryRow, MessageRow, SessionStats, ThreadRow, ThreadSummary};
 
 /// How much of a chat's last message the sidebar gets.
 const LAST_CHARS: usize = 200;
@@ -61,7 +61,11 @@ pub fn slack_connect_of(t: &ThreadSummary) -> Option<String> {
 
 /// The name a chat has been given: by people, else by its agent (ThreadRow::auto_title).
 fn given_title(t: &ThreadSummary) -> Option<&str> {
-    [t.thread.title.as_deref(), t.thread.auto_title.as_deref()].into_iter().flatten().map(str::trim).find(|s| !s.is_empty())
+    given(&t.thread)
+}
+
+fn given(thread: &ThreadRow) -> Option<&str> {
+    [thread.title.as_deref(), thread.auto_title.as_deref()].into_iter().flatten().map(str::trim).find(|s| !s.is_empty())
 }
 
 /// Whether a chat has a title of its own, or something a person said in it to take one from.
@@ -72,17 +76,22 @@ fn has_words(t: &ThreadSummary) -> bool {
 /// What a thread is called: the name people gave it, else the one its agent gave it, else the first line a person
 /// wrote in it (Slack mentions left out, spaces collapsed), else its Slack channel (`#name`, 私信 for a direct message).
 pub fn chat_title(t: &ThreadSummary, channel_name: Option<&str>) -> String {
-    if let Some(title) = given_title(t) {
+    title_of(&t.thread, t.first_text.as_deref(), channel_name)
+}
+
+/// What a thread is called (chat_title), from its row and the first thing a person said in it.
+pub fn title_of(thread: &ThreadRow, first_text: Option<&str>, channel_name: Option<&str>) -> String {
+    if let Some(title) = given(thread) {
         return title.to_string();
     }
-    let text = without_mentions(t.first_text.as_deref().unwrap_or(""));
+    let text = without_mentions(first_text.unwrap_or(""));
     if let Some(first) = text.split('\n').map(|line| line.split_whitespace().collect::<Vec<_>>().join(" ")).find(|l| !l.is_empty()) {
         return first;
     }
     if let Some(name) = channel_name.map(str::trim).filter(|s| !s.is_empty()) {
         return format!("#{name}");
     }
-    if t.thread.surface != STILLFAIL_SURFACE && t.thread.channel.starts_with('D') {
+    if thread.surface != STILLFAIL_SURFACE && thread.channel.starts_with('D') {
         return "私信".into();
     }
     NO_WORDS.into()
@@ -330,6 +339,39 @@ impl AdminApi {
 
     pub(super) fn threads(&self, viewer: &Viewer, session: Option<&str>) -> Result<Vec<Value>> {
         Ok(self.deps.store.list_threads(&viewer.id(), session, None)?.iter().map(|t| self.thread_view(t)).collect())
+    }
+
+    /// What the agents spent (crate::usage): its rows, and the threads, people and profiles they name, as the pages show
+    /// them. `reading`: the transcripts are still being read for the first time, so the rows are short of it.
+    pub(super) fn usage(&self, from: i64, to: i64, utc_offset_min: i64) -> Result<Value> {
+        let Some(usage) = &self.deps.usage else { return Err(http_error(404, "这台 station 不记用量")) };
+        let rows = usage.summary(from, to, utc_offset_min)?;
+        let wanted: HashSet<i64> = rows.iter().filter_map(|r| r.thread).collect();
+        let threads: serde_json::Map<String, Value> = self
+            .deps
+            .store
+            .usage_threads(&wanted.into_iter().collect::<Vec<_>>())?
+            .iter()
+            .map(|(t, first)| {
+                let channel_name = if t.surface == STILLFAIL_SURFACE { None } else { self.thread_chat(t.id).and_then(|c| c.known_channel(&t.channel)) };
+                let title = title_of(t, first.as_deref(), channel_name.as_deref());
+                (t.id.to_string(), json!({ "title": title, "surface": t.surface, "home": t.home, "archived": t.hidden_at.is_some() }))
+            })
+            .collect();
+        let refs: Vec<String> = rows.iter().filter_map(|r| r.person.clone()).collect::<BTreeSet<_>>().into_iter().collect();
+        let people: serde_json::Map<String, Value> = refs.iter().filter_map(|r| Some((r.clone(), self.creator(Some(r))?))).collect();
+        let config = self.config();
+        let profiles: serde_json::Map<String, Value> = config.profiles.iter().map(|p| (p.id.clone(), json!({ "name": p.name, "runtime": runtime_name(p.runtime) }))).collect();
+        Ok(json!({
+            "from": from,
+            "to": to,
+            "since": self.deps.store.usage_since()?,
+            "reading": usage.reading_all(),
+            "rows": rows,
+            "threads": threads,
+            "people": people,
+            "profiles": profiles,
+        }))
     }
 
     pub(super) fn thread(&self, id: i64, viewer: &Viewer) -> Result<Value> {

@@ -67,6 +67,9 @@ export type Topic =
   | { topic: "chatJobs"; station: string; session: string }
   // The services and jobs left up a long while on the scope's stations that are up.
   | { topic: "longJobs"; scope: string }
+  // What the agents of a scope's stations spent over its last `days` (7 or 30), by day, person, chat, profile and model
+  // (client/core/src/views/usage.rs). A core from before it answers an error.
+  | { topic: "usage"; scope: string; days?: number }
   // A job as it is now (kept current by its events).
   | { topic: "job"; station: string; id: string }
   // How its person likes it on this device, and what the device is (prefs.ts).

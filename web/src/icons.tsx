@@ -61,6 +61,10 @@ export function Camera(props: IconProps) {
   return <Svg {...props}><path d="M8 6.5L9 3.5H15L16 6.5H17Q20.5 6.5 20.5 10V16.5Q20.5 20 17 20H7Q3.5 20 3.5 16.5V10Q3.5 6.5 7 6.5Z" /><circle cx="12" cy="13" r="3.5" /></Svg>;
 }
 
+export function Chart(props: IconProps) {
+  return <Svg {...props}><path d="M3.5 20.5H20.5 M6.5 16.5V12 M12 16.5V5 M17.5 16.5V9" /></Svg>;
+}
+
 export function Chat(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5C17.5 3.5 20.5 6 20.5 11C20.5 16 17 18 12 18H10L5 20.5L5.5 16C4 14.5 3.5 13 3.5 11C3.5 6 6.5 3.5 12 3.5Z" /></Svg>;
 }
@@ -351,6 +355,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "boxes": Boxes,
   "brain": Brain,
   "camera": Camera,
+  "chart": Chart,
   "chat": Chat,
   "chats": Chats,
   "check-circle": CheckCircle,

@@ -450,6 +450,7 @@ async fn setup_with(o: Setup) -> Rig {
         updates: o.updates.map(|channel| crate::updates::tests::installed(&data, "1300", channel, Some(settings.clone()))),
         dev: false,
         jobs: None,
+        usage: None,
     });
     Rig { _dir: dir, data, path, settings, store, hub, conns, connections, claude, slack, api, logins }
 }

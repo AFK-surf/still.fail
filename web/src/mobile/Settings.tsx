@@ -69,6 +69,7 @@ export function SettingsScreen() {
         <GoRow title="连接" bad={failing > 0} value={connects ? (failing ? `${failing} 个出错` : `${connects.items.length} 个`) : undefined} onClick={at("/settings/connects")} />
         <GoRow title="Profile" bad={short > 0} value={stations ? (short ? `${short} 个要处理` : `${profiles.length} 个`) : undefined} onClick={at("/settings/profiles")} />
         <GoRow title="记忆" onClick={at("/settings/memory")} />
+        <GoRow title="用量" onClick={at("/settings/usage")} />
       </ListCard>
       <SectionHeader title="这台设备" start={24} />
       <ListCard>
