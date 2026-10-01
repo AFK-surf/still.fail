@@ -209,17 +209,19 @@ export function ListRow({ onClick, children }: { onClick?: (() => void) | undefi
 }
 
 /** A row of a picking sheet: what, a line under it, two short notes at its end (each by one of those lines), and a check on the chosen one. */
-export function PickRow({ label, sub, aside, checked = false, enabled = true, accent = false, leading, onClick }: {
-  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; accent?: boolean; leading?: ReactNode; onClick: () => void;
+/** `mark`: a small mark after the label (what a workspace has waiting). */
+export function PickRow({ label, sub, aside, checked = false, enabled = true, accent = false, leading, mark, onClick }: {
+  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
 }) {
+  const title = mark ? <span className={css.mPickLabel}><span className={css.mPickLabelText}>{label}</span>{mark}</span> : <span>{label}</span>;
   return (
     <button type="button" className={css.mPickRow} disabled={!enabled} data-accent={accent || undefined} onClick={onClick}>
       {leading}
       {aside === undefined
-        ? <span className={css.mPickText}><span>{label}</span>{sub !== undefined && <small>{sub}</small>}</span>
+        ? <span className={css.mPickText}>{title}{sub !== undefined && <small>{sub}</small>}</span>
         : (
           <span className={`${css.mPickText} ${css.mPickGrid}`}>
-            <span>{label}</span><small className={css.mPickAside}>{aside[0]}</small>
+            {title}<small className={css.mPickAside}>{aside[0]}</small>
             {sub !== undefined ? <small>{sub}</small> : <span />}<small className={css.mPickAside}>{aside[1]}</small>
           </span>
         )}

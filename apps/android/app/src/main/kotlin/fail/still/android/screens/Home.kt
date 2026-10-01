@@ -112,6 +112,7 @@ import fail.still.android.data.ChatsView
 import fail.still.android.data.StatusView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
+import fail.still.android.data.WorkspaceMarksView
 import fail.still.android.data.page
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.state
@@ -160,7 +161,11 @@ fun HomeScreen(current: WorkspaceEntry) {
             Box(Modifier.semantics { contentDescription = "设置" }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
+                // The other workspaces have something waiting: its dot by the name, before an invitation's.
+                val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
+                val others = marks.value?.others
+                if (others != null) WorkspaceMark(others, marks.value?.othersLabel.orEmpty())
+                else if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
             // A newer build of the app: tapped, it is downloaded and handed to the installer (Updates.kt).
@@ -459,6 +464,36 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
                 // Round ends (web: styles/busyRing.ts), the arc shortened by the half stroke they add so the gap stays a quarter.
                 val cap = Math.toDegrees((ring / box.width).toDouble()).toFloat()
                 drawArc(MarkYellow, turn + 45f + cap, 270f - 2 * cap, false, at, box, style = Stroke(ring, cap = StrokeCap.Round))
+            }
+        }
+    }
+}
+
+/**
+ * What a workspace has waiting, as the core says (views/marks.rs): `alert` a red dot with a soft halo, `done` a blue
+ * one; as a chat's mark (ChatMark), still. `label` says it in words.
+ */
+@Composable
+internal fun WorkspaceMark(tone: String, label: String) {
+    Canvas(Modifier.size(10.dp).semantics { contentDescription = label }) {
+        val r = size.minDimension / 2 - 1.dp.toPx()
+        if (tone == "alert") drawCircle(MarkRed.copy(alpha = 0.25f), r + 3.dp.toPx())
+        drawCircle(if (tone == "alert") MarkRed else MarkBlue, r)
+    }
+}
+
+/**
+ * What a workspace has waiting, after its name in the switcher (web: ChatMark.tsx MarkCounts): a red dot and how many
+ * of the chats its person takes part in want them, a blue one and how many are unread; nothing for none.
+ */
+@Composable
+internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
+    if (mark.tone == null) return
+    Row(Modifier.semantics(mergeDescendants = true) { contentDescription = mark.label.orEmpty() }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("alert" to mark.alert, "done" to mark.unread).filter { it.second > 0u }.forEach { (tone, n) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                WorkspaceMark(tone, "")
+                Text("$n", fontSize = 12.sp, color = C.muted)
             }
         }
     }

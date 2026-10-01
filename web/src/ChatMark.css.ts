@@ -50,3 +50,8 @@ export const chatMarkInline = style({
   },
   "@media": { "(prefers-reduced-motion: reduce)": { selectors: { '&[data-tone="busy"]': { animation: "none" } } } },
 });
+
+/** A workspace's counts (ChatMark.tsx MarkCounts): each dot with its number, small and quiet beside its name. */
+export const markCounts = style({ display: "inline-flex", alignItems: "center", gap: 10, flex: "none", fontSize: 12, lineHeight: 1, fontVariantNumeric: "tabular-nums" });
+/** The dot at full colour, its number quiet. */
+export const markCount = style({ display: "inline-flex", alignItems: "center", gap: 5, color: "color-mix(in srgb, currentColor 65%, transparent)" });

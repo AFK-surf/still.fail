@@ -119,6 +119,9 @@ export const mPickText = style({ flex: "1", minWidth: "0", display: "flex", flex
 /** A row with notes at its end: its lines and the notes in two columns, each note on the baseline of its line. */
 export const mPickGrid = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: "12px", alignItems: "baseline" });
 export const mPickAside = style({ textAlign: "right" });
+/** A label with a mark after it (PickRow `mark`). */
+export const mPickLabel = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
+export const mPickLabelText = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const mInfoList = style({
   borderRadius: "14px", background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", overflow: "hidden",
   // Two lists one after the other, with no group label between them, are still two cards.

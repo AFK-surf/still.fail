@@ -1,0 +1,172 @@
+//! What each workspace has waiting for its person, for where workspaces are switched (`Topic::WorkspaceMarks`): of
+//! the chats they take part in, those that want them (blocked or failed) and those with something unread, from the chat rows the core keeps
+//! in sync of every workspace anyway (sync.rs); and the chat last open in it, to go back to. Only how many and how
+//! urgent goes past a workspace: nothing of what its chats say.
+
+use std::collections::BTreeMap;
+
+use serde_json::{Map, Value, json};
+
+use super::Views;
+use crate::error::Result;
+use crate::protocol::Topic;
+
+/// The workspaces' ids, as the accounts' `/v1/me` list them.
+pub(super) fn workspace_ids(workspaces: Option<Value>) -> Vec<String> {
+    let entries = workspaces.as_ref().and_then(Value::as_array).cloned().unwrap_or_default();
+    entries.iter()
+        .flat_map(|a| a.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default())
+        .filter_map(|w| w.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect()
+}
+
+/// What a chat's row asks of its person: `alert` (its agent blocked on them or failed), `done` (something in it
+/// unread), or nothing; as its mark in the list says (web ChatMark.tsx). Only a chat they take part in (`mine`) asks
+/// anything: the others are theirs who are in them.
+pub fn row_tone(row: &Value) -> Option<&'static str> {
+    if row.get("mine").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+    let state = crate::present::row_state(&agents);
+    if matches!(state, Some("block" | "failed")) {
+        return Some("alert");
+    }
+    (row.get("unread").and_then(Value::as_bool) == Some(true) && state != Some("run")).then_some("done")
+}
+
+/// The chat last open in a workspace, from the prefs: as the core keeps it (`openChat`), else as a page from before
+/// kept its path (`lastChat`: `/w/<workspace>/s/<station>/chats/<key>`).
+pub fn last_chat(prefs: &Value, workspace: &str) -> Option<Value> {
+    if let Some(chat) = prefs.get("openChat").and_then(|m| m.get(workspace)).filter(|c| c.is_object()) {
+        return Some(chat.clone());
+    }
+    let path = prefs.get("lastChat")?.get(workspace)?.as_str()?;
+    let rest = path.strip_prefix(&format!("/w/{workspace}/s/"))?;
+    let (station, key) = rest.split_once("/chats/")?;
+    let key = crate::accounts::decode_component(key.split(['?', '#', '/']).next()?);
+    (!station.is_empty() && !key.is_empty() && !key.starts_with(super::PENDING_PREFIX))
+        .then(|| json!({ "station": format!("{workspace}/{station}"), "key": key }))
+}
+
+impl Views {
+    /// The topics the marks are put together from: the workspaces, the prefs (the chat last open), and of each
+    /// workspace its stations' rows.
+    pub(super) fn marks_sources(&self) -> Vec<Topic> {
+        let mut topics = vec![Topic::Workspaces, Topic::Prefs];
+        for id in workspace_ids(self.ok(Topic::Workspaces)) {
+            topics.push(Topic::Workspace { workspace: id.clone() });
+            if let Some(Ok(stations)) = self.stations(&id) {
+                for s in stations {
+                    topics.push(Topic::Link { station: s.address.clone() });
+                    if s.online {
+                        topics.push(Topic::ChatRows { station: s.address });
+                    }
+                }
+            }
+        }
+        topics
+    }
+
+    /// Each workspace's marks, and of those other than `current` (the one in view) the most urgent, for where the
+    /// others are reached from.
+    pub(super) fn marks(&self, current: Option<&str>) -> Option<Result<Value>> {
+        let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
+        let mut all = BTreeMap::new();
+        let mut others: (u64, u64) = (0, 0);
+        for id in workspace_ids(self.ok(Topic::Workspaces)) {
+            let (mut alert, mut unread) = (0u64, 0u64);
+            if let Some(Ok(stations)) = self.stations(&id) {
+                for s in stations {
+                    let rows = self.ok(Topic::ChatRows { station: s.address.clone() }).and_then(|r| r.as_array().cloned()).unwrap_or_default();
+                    for row in rows.iter().filter(|r| !self.being_archived(&s.address, r)) {
+                        match row_tone(row) {
+                            Some("alert") => alert += 1,
+                            Some(_) => unread += 1,
+                            None => {}
+                        }
+                    }
+                }
+            }
+            if current != Some(id.as_str()) {
+                others = (others.0 + alert, others.1 + unread);
+            }
+            let mut mark = Map::new();
+            mark.insert("alert".into(), json!(alert));
+            mark.insert("unread".into(), json!(unread));
+            if let Some(tone) = tone(alert, unread) {
+                mark.insert("tone".into(), json!(tone));
+                mark.insert("label".into(), json!(label(alert, unread)));
+            }
+            if let Some(chat) = last_chat(&prefs, &id) {
+                mark.insert("chat".into(), chat);
+            }
+            all.insert(id, Value::Object(mark));
+        }
+        let mut value = json!({ "workspaces": all });
+        if let Some(tone) = tone(others.0, others.1) {
+            value["others"] = json!(tone);
+            value["othersLabel"] = json!(format!("其他 workspace：{}", label(others.0, others.1)));
+        }
+        Some(Ok(value))
+    }
+}
+
+fn tone(alert: u64, unread: u64) -> Option<&'static str> {
+    if alert > 0 { Some("alert") } else if unread > 0 { Some("done") } else { None }
+}
+
+/// 2 个需要处理 · 3 个有新消息
+fn label(alert: u64, unread: u64) -> String {
+    let mut parts = Vec::new();
+    if alert > 0 {
+        parts.push(format!("{alert} 个需要处理"));
+    }
+    if unread > 0 {
+        parts.push(format!("{unread} 个有新消息"));
+    }
+    parts.join(" · ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn agent(status: &str) -> Value {
+        match status {
+            "running" => json!({ "key": "k", "process": "running" }),
+            "blocked" => json!({ "key": "k", "lastTurn": { "declared": "block" } }),
+            _ => json!({ "key": "k" }),
+        }
+    }
+
+    #[test]
+    fn only_a_row_its_person_takes_part_in_wants_them() {
+        assert_eq!(row_tone(&json!({ "mine": true, "agents": [agent("blocked")] })), Some("alert"));
+        assert_eq!(row_tone(&json!({ "mine": false, "agents": [agent("blocked")] })), None);
+        assert_eq!(row_tone(&json!({ "mine": true, "unread": true, "agents": [] })), Some("done"));
+        assert_eq!(row_tone(&json!({ "mine": false, "unread": true, "agents": [] })), None);
+        assert_eq!(row_tone(&json!({ "mine": true, "unread": true, "agents": [agent("running")] })), None);
+        assert_eq!(row_tone(&json!({ "mine": true, "agents": [] })), None);
+    }
+
+    #[test]
+    fn the_chat_last_open_is_the_cores_else_the_path_a_page_kept() {
+        let kept = json!({ "openChat": { "ws": { "station": "ws/a", "key": "k1" } }, "lastChat": { "ws": "/w/ws/s/b/chats/k2" } });
+        assert_eq!(last_chat(&kept, "ws"), Some(json!({ "station": "ws/a", "key": "k1" })));
+        let old = json!({ "lastChat": { "ws": "/w/ws/s/b/chats/thread%3A7", "x": "/w/x/new", "y": "/w/y/s/c/chats/new%3A1" } });
+        assert_eq!(last_chat(&old, "ws"), Some(json!({ "station": "ws/b", "key": "thread:7" })));
+        assert_eq!(last_chat(&old, "x"), None);
+        assert_eq!(last_chat(&old, "y"), None);
+        assert_eq!(last_chat(&old, "z"), None);
+    }
+
+    #[test]
+    fn marks_say_how_many_and_how_urgent() {
+        assert_eq!(tone(1, 3), Some("alert"));
+        assert_eq!(tone(0, 3), Some("done"));
+        assert_eq!(tone(0, 0), None);
+        assert_eq!(label(2, 3), "2 个需要处理 · 3 个有新消息");
+        assert_eq!(label(0, 1), "1 个有新消息");
+    }
+}

@@ -4,7 +4,7 @@
 // station the item belongs to (StationContext).
 import { ChevronRight, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
-import { lastChat, useRememberChat } from "../lastChat.ts";
+import { useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
@@ -15,6 +15,7 @@ import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble } from "../Sidebar.tsx";
+import { MarkCounts } from "../ChatMark.tsx";
 import { OpenJobs } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
 import { ShortcutsPage } from "../Shortcuts.tsx";
@@ -41,6 +42,7 @@ import * as css from "./workspace.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
+import * as chatMarkCss from "../ChatMark.css.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
@@ -168,9 +170,10 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
 
 /** `stations` is undefined until the core has listed them. */
 function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
+  const last = useLastChat(id, `/w/${id}/new`);
   if (!stations) return <Loading label="正在读取 workspace…" />;
-  // With stations there is always a chat in view: the one last open, or a new one.
-  if (stations.length) return <Navigate to={lastChat(id, `/w/${id}/new`)} replace />;
+  // With stations there is always a chat in view: the one last open (the core keeps it), or a new one.
+  if (stations.length) return last ? <Navigate to={last} replace /> : <Loading label="正在读取 workspace…" />;
   return (
     <Empty>
       <Illustration name="no-station" />
@@ -223,6 +226,9 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   const isCurrent = (sub: string, id: string) => id === current.id && sub === current.account.sub;
   const shown = byAccount.find((a) => a.account.sub === current.account.sub)?.workspaces.find((w) => w.id === current.id);
   const others = byAccount.flatMap(({ account, workspaces: items }) => items.filter((w) => !isCurrent(account.sub, w.id)).map((w) => ({ account, w })));
+  // What the others have waiting, as the core counts it: one dot on the trigger, one by each in the menu.
+  const marks = useWorkspaceMarks(current.id);
+  const othersTone = marks?.others;
   return (
     <>
       <DropdownMenu.Root modal={false}>
@@ -231,7 +237,9 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             <span className={css.accountText}>
               <span className={css.accountName}>{current.name}</span>
             </span>
-            {pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={`${pending.length} 个邀请`} />}
+            {othersTone
+              ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} title={marks?.othersLabel ?? undefined} />
+              : pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={`${pending.length} 个邀请`} />}
             <ChevronsUpDown {...ICON} size={14} />
           </button>
         </DropdownMenu.Trigger>
@@ -268,14 +276,22 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             )}
             {others.length > 0 && <DropdownMenu.Label className={controlsCss.menuLabel}>切换到</DropdownMenu.Label>}
             {/* Each workspace says whose it is under its name (a heading per account read as something to pick), what it holds at its end. */}
-            {others.map(({ account, w }) => (
+            {/* Its page goes back to the chat last open there (WorkspaceHome). */}
+            {others.map(({ account, w }) => {
+              const mark = marks?.workspaces[w.id];
+              return (
               <DropdownMenu.Item key={w.id} className={controlsCss.menuItem} onSelect={() => navigate(`/w/${w.id}`)}>
                 <span className={css.menuWorkspace}>
-                  <span>{w.name}</span><span className={css.menuStat}>{w.stations} 台 station</span>
+                  <span className={css.menuWorkspaceName}>
+                    <span className={css.menuWorkspaceText}>{w.name}</span>
+                    <MarkCounts mark={mark} />
+                  </span>
+                  <span className={css.menuStat}>{w.stations} 台 station</span>
                   {byAccount.length > 1 ? <span className={shellCss.muted}>{account.email}</span> : <span />}<span className={css.menuStat}>{w.members} 人</span>
                 </span>
               </DropdownMenu.Item>
-            ))}
+              );
+            })}
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
             <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>

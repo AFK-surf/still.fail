@@ -1743,6 +1743,13 @@ data class NotifyView (
 	val show: List<Notice>
 )
 
+/// A chat to go back to: its station's address and the key its page goes by.
+@Serializable
+data class OpenChat (
+	val station: String,
+	val key: String
+)
+
 /// How the pages look: as the system does (the default), or always light, or always dark.
 typealias Appearance = String
 
@@ -1765,6 +1772,9 @@ data class PrefsView (
 	val workspace: String? = null,
 	/// The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went).
 	val lastChat: Map<String, String>? = null,
+	/// The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it
+	/// was): what the workspace's page goes back to.
+	val openChat: Map<String, OpenChat>? = null,
 	/// Each chat's history tabs, by `<station>:<chat>` (the latest 200).
 	val chatTabs: Map<String, KeptTabs>? = null,
 	/// A Slack app made for a new connect, to go on with, by station (the Android app's).
@@ -1809,5 +1819,29 @@ data class StatusView (
 	val state: String? = null,
 	val text: String? = null,
 	val items: List<StatusItem>
+)
+
+/// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
+/// have something unread; its `tone` (alert | done, as a chat's mark) and in words, none when it is 0 and 0; the chat last
+/// open in it.
+@Serializable
+data class WorkspaceMark (
+	val alert: UInt,
+	val unread: UInt,
+	val tone: String? = null,
+	/// 2 个需要处理 · 3 个有新消息
+	val label: String? = null,
+	val chat: OpenChat? = null
+)
+
+/// What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):
+/// by workspace id; and of those other than the one in view, the most urgent.
+@Serializable
+data class WorkspaceMarksView (
+	val workspaces: Map<String, WorkspaceMark>,
+	/// alert | done: the others' mark; none when nothing there wants anyone.
+	val others: String? = null,
+	/// 其他 workspace：1 个需要处理 · 2 个有新消息
+	val othersLabel: String? = null
 )
 

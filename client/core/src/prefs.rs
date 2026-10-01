@@ -1,6 +1,6 @@
 //! What this device keeps of how its person likes it (the `prefs` topic): the lists' 只看我的, the appearance, whose
 //! pictures led a row (no longer read; clients from before still set it), times as dates, keys changed, the workspace
-//! and the chat last open, each chat's history tabs, a new connect to go on with, the invite code carried through
+//! and the chat last open (each workspace's, as `client.focus` says: `openChat`), each chat's history tabs, a new connect to go on with, the invite code carried through
 //! signing in. One record in the data center (data.rs, table `prefs`), written by `prefs.set`. With it, what the device
 //! is (`client.device`: its host says so once at start) and what follows from that: phone or computer, the name it signs in as, the app a message is sent from.
 
@@ -76,6 +76,22 @@ pub fn set(data: &Data, patch: Value, fill: bool, now: f64) -> Result<()> {
     stillfail_shapes::conform::<stillfail_shapes::PrefsView>(prefs.clone()).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
     data.set(&Topic::Prefs, prefs);
     Ok(())
+}
+
+/// A chat opened (`client.focus`): kept as the one last open in its workspace (`openChat`), to go back to.
+pub fn chat_opened(data: &Data, station: &str, key: &str) {
+    let workspace = crate::workspace::of_address(station);
+    let chat = json!({ "station": station, "key": key });
+    let mut prefs = kept(data);
+    if prefs.get("openChat").and_then(|m| m.get(workspace)) == Some(&chat) {
+        return;
+    }
+    let map = prefs.entry("openChat").or_insert_with(|| json!({}));
+    if !map.is_object() {
+        *map = json!({});
+    }
+    map[workspace] = chat;
+    data.set(&Topic::Prefs, Value::Object(prefs));
 }
 
 /// A workspace made: the invite code kept is done with (it was for that, or another was used).

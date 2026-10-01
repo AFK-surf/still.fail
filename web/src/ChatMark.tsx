@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
+import type { WorkspaceMark } from "./core/shapes.ts";
 import { reducedMotion } from "./motion.ts";
 import * as css from "./ChatMark.css.ts";
 
@@ -37,4 +38,18 @@ export function ChatMark({ item, inline }: { item: ChatItem; inline?: boolean })
     mark.current.animate([{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
   }, [key, tone]);
   return tone ? <span ref={mark} className={inline ? css.chatMarkInline : css.chatMark} data-tone={tone} role="img" aria-label={LABEL[tone]} /> : null;
+}
+
+/**
+ * What a workspace has waiting, after its name where workspaces are switched (the core's `workspaceMarks`): a red dot
+ * and how many of the chats its person takes part in want them, a blue one and how many are unread; nothing for none.
+ */
+export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
+  if (!mark?.tone) return null;
+  return (
+    <span className={css.markCounts} role="img" aria-label={mark.label ?? ""}>
+      {mark.alert > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="alert" />{mark.alert}</span>}
+      {mark.unread > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="done" />{mark.unread}</span>}
+    </span>
+  );
 }

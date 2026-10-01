@@ -1347,6 +1347,10 @@ pub struct PrefsView {
     /// The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went).
     #[serde(default)]
     pub last_chat: HashMap<String, String>,
+    /// The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it
+    /// was): what the workspace's page goes back to.
+    #[serde(default)]
+    pub open_chat: HashMap<String, OpenChat>,
     /// Each chat's history tabs, by `<station>:<chat>` (the latest 200).
     #[serde(default)]
     pub chat_tabs: HashMap<String, KeptTabs>,
@@ -1358,6 +1362,44 @@ pub struct PrefsView {
     pub invite: Option<String>,
     #[serde(default)]
     pub device: DeviceView,
+}
+
+/// A chat to go back to: its station's address and the key its page goes by.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct OpenChat {
+    pub station: String,
+    pub key: String,
+}
+
+/// What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):
+/// by workspace id; and of those other than the one in view, the most urgent.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceMarksView {
+    pub workspaces: HashMap<String, WorkspaceMark>,
+    /// alert | done: the others' mark; none when nothing there wants anyone.
+    pub others: Option<String>,
+    /// 其他 workspace：1 个需要处理 · 2 个有新消息
+    pub others_label: Option<String>,
+}
+
+/// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
+/// have something unread; its `tone` (alert | done, as a chat's mark) and in words, none when it is 0 and 0; the chat last
+/// open in it.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceMark {
+    pub alert: u32,
+    pub unread: u32,
+    pub tone: Option<String>,
+    /// 2 个需要处理 · 3 个有新消息
+    pub label: Option<String>,
+    pub chat: Option<OpenChat>,
 }
 
 /// A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs

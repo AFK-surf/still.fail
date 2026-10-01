@@ -1701,6 +1701,12 @@ export interface NotifyView {
 	show: Notice[];
 }
 
+/** A chat to go back to: its station's address and the key its page goes by. */
+export interface OpenChat {
+	station: string;
+	key: string;
+}
+
 /** How the pages look: as the system does (the default), or always light, or always dark. */
 export type Appearance = "system" | "light" | "dark";
 
@@ -1724,6 +1730,11 @@ export interface PrefsView {
 	workspace?: string;
 	/** The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went). */
 	lastChat?: Record<string, string>;
+	/**
+	 * The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it
+	 * was): what the workspace's page goes back to.
+	 */
+	openChat?: Record<string, OpenChat>;
 	/** Each chat's history tabs, by `<station>:<chat>` (the latest 200). */
 	chatTabs?: Record<string, KeptTabs>;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
@@ -1768,5 +1779,31 @@ export interface StatusView {
 	state?: string;
 	text?: string;
 	items: StatusItem[];
+}
+
+/**
+ * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
+ * have something unread; its `tone` (alert | done, as a chat's mark) and in words, none when it is 0 and 0; the chat last
+ * open in it.
+ */
+export interface WorkspaceMark {
+	alert: number;
+	unread: number;
+	tone?: string;
+	/** 2 个需要处理 · 3 个有新消息 */
+	label?: string;
+	chat?: OpenChat;
+}
+
+/**
+ * What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):
+ * by workspace id; and of those other than the one in view, the most urgent.
+ */
+export interface WorkspaceMarksView {
+	workspaces: Record<string, WorkspaceMark>;
+	/** alert | done: the others' mark; none when nothing there wants anyone. */
+	others?: string;
+	/** 其他 workspace：1 个需要处理 · 2 个有新消息 */
+	othersLabel?: string;
 }
 

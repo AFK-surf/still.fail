@@ -24,6 +24,7 @@ use crate::protocol::Topic;
 use crate::store::{Store, Watch};
 
 mod archive;
+pub mod marks;
 
 /// The runtimes a chat can run on, in the order they are offered.
 const RUNTIMES: [&str; 2] = ["claude", "codex"];
@@ -483,6 +484,7 @@ impl Views {
             Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
             Topic::History { station, key } => self.history(station, key),
             Topic::Archive { scope } => self.archive(scope),
+            Topic::WorkspaceMarks { workspace } => self.marks(workspace.as_deref()),
             Topic::ChatJobs { station, thread, session } => {
                 let chat = Topic::Chat { station: station.clone(), thread: *thread, session: session.clone() };
                 Some(self.store.value(&chat)?.map(|chat| {
@@ -597,6 +599,7 @@ impl Views {
                 }
                 return topics;
             }
+            Topic::WorkspaceMarks { .. } => return self.marks_sources().into_iter().collect(),
             Topic::History { station, key } => {
                 topics.insert(Topic::Live { station: station.clone(), key: key.clone() });
                 topics.insert(Topic::Session { station: station.clone(), key: key.clone() });

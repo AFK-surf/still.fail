@@ -433,6 +433,7 @@ impl Source for Router {
                 Topic::ChatSearch { .. } => ("chats.search", None),
                 Topic::Stations { .. } => ("stations.open", None),
                 Topic::Archive { .. } => ("archive.open", None),
+                Topic::WorkspaceMarks { .. } => ("workspaces.marks", None),
                 _ => ("connects.open", None),
             };
             let mut span = self.tracer.root(name, Kind::Internal);
@@ -897,6 +898,10 @@ impl Inner {
             }
             Call::Attend(call) => match call {
                 crate::attend::Call::Focus(focus) => {
+                    // Kept as the chat to come back to in its workspace (views/marks.rs).
+                    if let Some((station, key)) = focus.opened() {
+                        crate::prefs::chat_opened(&self.data, station, key);
+                    }
                     self.attend.focus(at.0, focus);
                     self.attended();
                     // Another workspace now: what a page is to show is the new one's.

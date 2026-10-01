@@ -10,6 +10,8 @@ import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ChatMark } from "../ChatMark.tsx";
+import * as chatMarkCss from "../ChatMark.css.ts";
+import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
@@ -29,6 +31,8 @@ export function Home() {
   const mine = useChats(scope, true);
   const [onlyMine, setOnlyMine] = useOnlyMine();
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
+  // The other workspaces have something waiting: its dot by the name, before an invitation's.
+  const marks = useWorkspaceMarks(scope);
   // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
   const none = useStations(scope).value?.length === 0;
   return (
@@ -48,7 +52,9 @@ export function Home() {
         </button>
         <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
           <b>{app.entry.name}</b>
-          {invited && <span className={css.mDot} aria-label="有邀请" />}
+          {marks?.others
+            ? <span className={chatMarkCss.chatMarkInline} data-tone={marks.others} role="img" aria-label={marks.othersLabel ?? ""} />
+            : invited && <span className={css.mDot} aria-label="有邀请" />}
           <ChevronDown size={16} />
         </button>
         {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}

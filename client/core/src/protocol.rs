@@ -140,6 +140,12 @@ pub enum Topic {
     Job { station: String, id: String },
     /// What this device keeps of how its person likes it, and what it is (prefs.rs; `prefs.set`, `client.device`).
     Prefs,
+    /// What each workspace has waiting for its person (how many chats want them, how many have something unread) and
+    /// the chat last open in it (views/marks.rs); of those other than `workspace` (the one in view), the most urgent.
+    WorkspaceMarks {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace: Option<String>,
+    },
 }
 
 impl Topic {
@@ -152,7 +158,7 @@ impl Topic {
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
             // The core's own (pill.rs).
             Topic::Connection { .. } => None,
-            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } => None,
+            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
             // The core's own (jobs.rs), not the station module's.
             Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::Job { .. } => None,
@@ -160,6 +166,6 @@ impl Topic {
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::WorkspaceMarks { .. })
     }
 }

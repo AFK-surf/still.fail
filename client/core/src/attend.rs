@@ -112,6 +112,16 @@ pub struct FocusCall {
     workspace: Option<String>,
 }
 
+impl FocusCall {
+    /// The chat it now shows, by station and the key its page goes by, when that is one to come back to: not one the
+    /// core is still making (`new:`), nor none (a settings page shows no chat, and leaves the last one as it was).
+    pub fn opened(&self) -> Option<(&str, &str)> {
+        let chat = self.chat.as_ref()?.as_ref()?;
+        let key = chat.session.as_deref().filter(|k| !k.is_empty() && !k.starts_with(crate::views::PENDING_PREFIX))?;
+        Some((chat.station.as_str(), key))
+    }
+}
+
 fn some<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<Option<ChatOf>>, D::Error> {
     Option::<ChatOf>::deserialize(d).map(Some)
 }

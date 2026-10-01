@@ -122,6 +122,11 @@ object Topics {
     fun notify(workspace: String? = null) = buildJsonObject { put("topic", "notify"); workspace?.let { put("workspace", it) } }
     /** How its person likes it on this device, and what the device is (Prefs.kt). */
     val prefs = buildJsonObject { put("topic", "prefs") }
+    /**
+     * What each workspace has waiting (how many chats want their person, how many are unread) and the chat last open in
+     * it; of those other than `workspace` (the one in view), the most urgent (client/core/src/views/marks.rs).
+     */
+    fun workspaceMarks(workspace: String) = buildJsonObject { put("topic", "workspaceMarks"); put("workspace", workspace) }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
     /** The chats of a scope a few words find, titles first: only `station`'s, not `exclude` (a chat's id or agent), `limit` at most (ChatRefMenu). */

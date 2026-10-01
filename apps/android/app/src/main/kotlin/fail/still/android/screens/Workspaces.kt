@@ -58,6 +58,8 @@ import fail.still.android.data.Cloud
 import fail.still.android.data.PendingInvitation
 import fail.still.android.data.ROLE_LABEL
 import fail.still.android.data.Topics
+import fail.still.android.data.WorkspaceMark
+import fail.still.android.data.WorkspaceMarksView
 import fail.still.android.data.errorText
 import fail.still.android.data.needsInviteCode
 import fail.still.android.data.rememberTopic
@@ -247,6 +249,8 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     val currentOf = byAccount.firstOrNull { a -> a.workspaces.any { it.id == app.workspace } }
     val current = currentOf?.workspaces?.firstOrNull { it.id == app.workspace }
     val others = byAccount.flatMap { a -> a.workspaces.filter { it.id != app.workspace }.map { a.account to it } }
+    // What each of the others has waiting, as the core counts it.
+    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(app.workspace.orEmpty()))
     SheetGrab()
     SheetHead("Workspace")
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
@@ -271,8 +275,9 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
         Label("切换到")
         // The one in use first, checked; its settings are in 设置 (the gear on Home), not here.
         if (current != null) AsideRow(current.name, if (byAccount.size > 1) currentOf.account.email else null, "${current.stations} 台 station", "${current.members} 人", checked = true) { app.sheet = null }
+        // One with something waiting says so after its name: a dot and a count for each kind.
         others.forEach { (account, w) ->
-            AsideRow(w.name, if (byAccount.size > 1) account.email else null, "${w.stations} 台 station", "${w.members} 人") { app.pickWorkspace(w.id); app.home() }
+            AsideRow(w.name, if (byAccount.size > 1) account.email else null, "${w.stations} 台 station", "${w.members} 人", mark = marks.value?.workspaces?.get(w.id)) { app.pickWorkspace(w.id); app.home() }
         }
         PickRow("＋ 新建 workspace", color = C.accent) { openNewWorkspace(app) }
         PickRow("＋ 用邀请链接加入", color = C.accent) { openInviteLink(app) }
@@ -281,12 +286,15 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
 
 /** A row of the sheet with two short notes at its end, each by one of its lines (the name, and whose it is); a check on the one in use. */
 @Composable
-private fun AsideRow(label: String, sub: String?, first: String, second: String, checked: Boolean = false, onClick: () -> Unit) {
+private fun AsideRow(label: String, sub: String?, first: String, second: String, checked: Boolean = false, mark: WorkspaceMark? = null, onClick: () -> Unit) {
     Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alignByBaseline())
+                Row(Modifier.weight(1f).alignByBaseline(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (mark != null) MarkCounts(mark)
+                }
                 Text(first, fontSize = 12.sp, color = C.muted, maxLines = 1, modifier = Modifier.alignByBaseline())
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

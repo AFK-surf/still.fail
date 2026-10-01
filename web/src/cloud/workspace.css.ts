@@ -28,6 +28,10 @@ export const menuWorkspace = style({
   alignItems: "baseline",
 });
 export const menuStat = style({ textAlign: "right", fontSize: vars.textXs, color: vars.muted });
+/** A workspace's name in the menu, and the dot of what it has waiting after it. */
+export const menuWorkspaceName = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
+export const menuWorkspaceText = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+
 /** The workspace in use, a soft card atop the menu: its name and what it holds, and the way into its settings. */
 export const menuCurrent = style({
   marginBottom: "4px", padding: "10px 10px 10px 12px", background: `color-mix(in srgb, ${vars.text} 5%, transparent)`,

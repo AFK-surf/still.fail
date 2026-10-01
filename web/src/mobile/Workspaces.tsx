@@ -5,6 +5,8 @@ import { signIn, useAccounts } from "../cloud/accounts.ts";
 import { cloud, errorText, needsInviteCode, useAction, useWorkspaces, type AccountWorkspaces, type PendingInvitation } from "../cloud/api.ts";
 import type { Account } from "../cloud/accounts.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
+import { useWorkspaceMarks } from "../lastChat.ts";
+import { MarkCounts } from "../ChatMark.tsx";
 import { Button, Field, PickRow } from "./parts.tsx";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Workspaces.css.ts";
@@ -23,6 +25,8 @@ function WorkspacesSheet() {
   const others = byAccount
     .map((a) => ({ account: a.account, workspaces: a.workspaces.filter((w) => w.id !== app.entry.id) }))
     .filter((a) => a.workspaces.length > 0);
+  // What each of the others has waiting, as the core counts it.
+  const marks = useWorkspaceMarks(app.entry.id);
   const respond = useAction(async ({ account, invite, join }: { account: Account; invite: PendingInvitation; join: boolean }) => {
     if (join) {
       const w = await cloud.acceptInvitationById(account.sub, invite.id);
@@ -56,8 +60,10 @@ function WorkspacesSheet() {
         {current && <PickRow label={current.name} sub={byAccount.length > 1 ? currentOf!.account.email : undefined} checked
           aside={[`${current.stations} 台 station`, `${current.members} 人`]} onClick={() => app.sheet(null)} />}
         {/* With more than one account signed in, each workspace says whose it is under its name (a heading per account read as something to tap); what it holds goes at the row's end. */}
+        {/* One with something waiting says so after its name: a dot and a count for each kind. */}
         {others.flatMap(({ account, workspaces }) => workspaces.map((w) => (
           <PickRow key={w.id} label={w.name} sub={byAccount.length > 1 ? account.email : undefined}
+            mark={marks?.workspaces[w.id]?.tone && <MarkCounts mark={marks.workspaces[w.id]} />}
             aside={[`${w.stations} 台 station`, `${w.members} 人`]}
             onClick={() => { app.sheet(null); app.replace(`/w/${w.id}`); }} />
         )))}

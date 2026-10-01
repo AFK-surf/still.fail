@@ -27,7 +27,7 @@ impl Views {
                 list.remove(i);
             }
         }
-        let views: Vec<Topic> = self.views.borrow().keys().filter(|v| matches!(v, Topic::Chats { .. })).cloned().collect();
+        let views: Vec<Topic> = self.views.borrow().keys().filter(|v| matches!(v, Topic::Chats { .. } | Topic::WorkspaceMarks { .. })).cloned().collect();
         for view in views {
             self.store.invalidate(&view);
         }

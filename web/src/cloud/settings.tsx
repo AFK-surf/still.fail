@@ -23,7 +23,7 @@ import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
 import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { signOut, type Account } from "./accounts.ts";
-import { lastChat } from "../lastChat.ts";
+import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
 import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
@@ -51,9 +51,10 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   const base = `/w/${entry.id}/settings`;
   // Connects and profiles are a station's: none to show before there is one.
   const some = (useStations(entry.id).value?.length ?? 0) > 0;
+  const back = useLastChat(entry.id, `/w/${entry.id}`) ?? `/w/${entry.id}`;
   return (
     <div className={nav.navScroll}>
-      <NavLink className={nav.navRow} to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
+      <NavLink className={nav.navRow} to={back} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
       <div className={nav.navHeading}>客户端</div>
       <NavLink className={nav.navRow} to={`${base}/appearance`}><Sliders {...ICON} />外观</NavLink>
       {CAN_NOTIFY && <NavLink className={nav.navRow} to={`${base}/notifications`}><Bell {...ICON} />通知</NavLink>}
