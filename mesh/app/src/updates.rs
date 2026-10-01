@@ -677,7 +677,8 @@ impl Updates {
             let base = "https://downloads.claude.ai/claude-code-releases";
             let Ok(version) = fetch_text(&format!("{base}/latest")).await else { return };
             let version = version.trim().to_string();
-            let (plain, zst) = tokio::join!(fetch_json(&format!("{base}/{version}/manifest.json")), fetch_json(&format!("{base}/{version}/manifest.zst.json")));
+            let (plain, zst) = (format!("{base}/{version}/manifest.json"), format!("{base}/{version}/manifest.zst.json"));
+            let (plain, zst) = tokio::join!(fetch_json(&plain), fetch_json(&zst));
             let size = |manifest: Result<Value>| manifest.ok().and_then(|m| m.pointer(&format!("/platforms/{platform}/size")).and_then(Value::as_u64));
             let (plain, zst) = (size(plain), size(zst));
             let file = home.join(".claude/downloads").join(format!("claude-{version}-{platform}"));
