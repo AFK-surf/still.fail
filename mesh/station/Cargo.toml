@@ -34,4 +34,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [dev-dependencies]
 # Relay servers of their own for the tests (keep.rs).
 iroh = { version = "=1.0.3", features = ["test-utils"] }
-iroh-relay = { version = "=1.0.3", features = ["test-utils"] }
+iroh-relay = { version = "1", features = ["test-utils"] }
