@@ -28,12 +28,12 @@ pub(crate) enum Call {
     ChatCreate { station: String, ask: Value },
     /// Sending, trying again, dropping in a chat by its key: one asked for here goes to its thread once made.
     ChatSendTo { station: String, session: String, text: String, attachments: Value, quotes: Value, client: Option<String> },
-    /// A piece of work answered (work.rs): `answer`, the message its card's answer sends (「设置页间距」准), sent in its
-    /// chat as `chat.send` sends one. Its chat by `thread`, else as the station's rows have it (by `session` and `key`).
-    ItemAnswer { station: String, session: String, thread: Option<u64>, key: String, answer: String, reply: Option<String> },
-    /// A piece of work set aside by the viewer (待定): last of their cards until asked again. Kept on the device; nothing
+    /// A decision answered with one of its options (decisions.rs): the viewer's message in its chat, the option's label
+    /// quoting the post that asked, sent as `chat.send` sends one. Only while its chat's row says it is pending.
+    DecisionAnswer { station: String, thread: u64, seq: u64, option: String },
+    /// A decision set aside by the viewer (待定): last on the decisions page, still pending. Kept on the device; nothing
     /// is sent.
-    ItemDefer { station: String, session: String, key: String },
+    DecisionDefer { station: String, thread: u64, seq: u64 },
     ChatRetryIn { station: String, session: String, id: String },
     ChatDiscardIn { station: String, session: String, id: String },
     ChatRetry { station: String, thread: u64, id: String },
@@ -102,7 +102,7 @@ impl Call {
             },
             Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
-            Call::ItemAnswer { station, .. } | Call::ItemDefer { station, .. } => Some(station),
+            Call::DecisionAnswer { station, .. } | Call::DecisionDefer { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatNewer { station, .. } | Call::ChatLatest { station, .. } | Call::ChatPlace { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } | Call::StationMeasure { station } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
@@ -345,23 +345,20 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             let p: Send = read(params)?;
             Call::ChatSend { station: p.station, thread: p.thread, text: p.text, attachments: p.attachments, quotes: p.quotes, client: p.client }
         }
-        "item.answer" => {
+        "decision.answer" => {
             #[derive(Deserialize)]
-            struct P { station: String, session: String, #[serde(default)] thread: Option<u64>, key: String, #[serde(default)] answer: String, #[serde(default)] reply: String }
+            struct P { station: String, thread: u64, seq: u64, option: String }
             let p: P = read(params)?;
-            // An answer its card offers (its message as is), or words written on the card (`reply`, said of it).
-            let answer = if p.answer.trim().is_empty() { String::new() } else { p.answer };
-            let reply = Some(p.reply.trim().to_string()).filter(|r| !r.is_empty() && answer.is_empty());
-            if answer.is_empty() && reply.is_none() {
-                return Err(CoreError::invalid("参数不对：answer 和 reply 都是空的"));
+            if p.option.trim().is_empty() {
+                return Err(CoreError::invalid("参数不对：option 是空的"));
             }
-            Call::ItemAnswer { station: p.station, session: p.session, thread: p.thread, key: p.key, answer, reply }
+            Call::DecisionAnswer { station: p.station, thread: p.thread, seq: p.seq, option: p.option.trim().to_string() }
         }
-        "item.defer" => {
+        "decision.defer" => {
             #[derive(Deserialize)]
-            struct P { station: String, session: String, key: String }
+            struct P { station: String, thread: u64, seq: u64 }
             let p: P = read(params)?;
-            Call::ItemDefer { station: p.station, session: p.session, key: p.key }
+            Call::DecisionDefer { station: p.station, thread: p.thread, seq: p.seq }
         }
         "chat.retry" => {
             let p: Outgoing = read(params)?;

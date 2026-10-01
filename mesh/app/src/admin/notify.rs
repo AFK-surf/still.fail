@@ -161,7 +161,7 @@ mod tests {
     use super::*;
 
     fn turn(declared: Option<&str>, outcome: &str) -> TurnSummary {
-        TurnSummary { kind: "message".into(), outcome: Some(outcome.into()), declared: declared.map(str::to_string), wait_seconds: None, wait_for: None, detail: Some("rate_limit: 用完了".into()), started_at: 100, ended_at: Some(200) }
+        TurnSummary { kind: "message".into(), outcome: Some(outcome.into()), declared: declared.map(str::to_string), ending: None, need: None, wait_seconds: None, wait_for: None, detail: Some("rate_limit: 用完了".into()), started_at: 100, ended_at: Some(200) }
     }
 
     fn said(kind: AuthorKind, author: &str, at: i64) -> MessageRow {

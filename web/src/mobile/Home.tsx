@@ -9,7 +9,7 @@ import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
-import { ChatMark, WaitingText } from "../ChatMark.tsx";
+import { ChatMark, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
@@ -36,6 +36,7 @@ export function Home() {
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
   // The other workspaces have something waiting: its dot by the name, before an invitation's.
   const marks = useWorkspaceMarks(scope);
+  const decisions = marks?.workspaces[scope]?.decisions ?? 0;
   // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
   const none = useStations(scope).value?.length === 0;
   return (
@@ -68,6 +69,12 @@ export function Home() {
       </header>
       {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent in a glass ring. */}
       {!none && <div className={css.mHomeToolbar}>
+        {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, only while there are some. */}
+        {decisions > 0 && (
+          <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={`奏：${decisions} 件等你决定`}>
+            <b>奏</b><span>{decisions}</span>
+          </button>
+        )}
         <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
           <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
         </div>
@@ -224,9 +231,11 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     menu(new DOMRect(x - 90, r.top, 0, r.height), () => { holding.current = false; setHeld(false); });
   };
   const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
-  return (
+  // Nothing left in it (the core's `archivable`): archived with one tap, at the row's end.
+  const archivable = !!item.archivable && !item.offline && !item.pending;
+  const row = (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
-      data-settled={item.settled || undefined} data-open={app.current === path || undefined}
+      data-settled={item.settled || undefined} data-open={app.current === path || undefined} data-archivable={archivable || undefined}
       aria-label={item.offline ? `${item.title}（${item.offline}）` : undefined}
       onPointerDown={(e) => {
         longPressed.current = false;
@@ -250,14 +259,33 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
           : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark size={14} /></span></Tip>}</span>}
       </span>
       <span className={css.mChatLine2}>
-        {/* While something in it waits: who it waits on and what, instead (the core's words). */}
-        <span className={css.mChatLast}>{item.waiting
-          ? <span className={css.mLast}><WaitingText waiting={item.waiting} className={css.mLastText} /></span>
+        {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
+        <span className={css.mChatLast}>{stateLine(item)
+          ? <span className={css.mLast}><WaitingText text={stateLine(item)!} className={css.mLastText} /></span>
           : item.last && <LastMessage item={item} />}</span>
         <RowAside item={item} lead={lead} size={18} className={css.mRowAside} />
         <span className={css.mChatTime} data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>
       </span>
       </span>
+    </button>
+  );
+  if (!archivable) return row;
+  return <div className={css.mChatRowWrap}>{row}<RowArchive item={item} busy={busy} /></div>;
+}
+
+/** A row's 归档, at its end while nothing is left in its chat; the row says it is under way, the toast how it ended. */
+function RowArchive({ item, busy }: { item: ChatItem; busy: boolean }) {
+  const app = useApp();
+  const api = stationApi(useStationCall(item.station));
+  const archive = () => {
+    const go = () => api.archive(item, true).then(() => app.toast("已归档"));
+    // A chat keeping watch is archived only once asked (the core's words).
+    if (item.watch) confirm(app, { title: `归档「${item.title}」？`, text: item.watch.ask, action: "归档", run: go });
+    else go().catch((error: unknown) => app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`));
+  };
+  return (
+    <button type="button" className={css.mRowArchive} aria-label={`归档「${item.title}」`} disabled={busy} onClick={archive}>
+      <Archive size={18} />
     </button>
   );
 }

@@ -80,7 +80,16 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
     val app = LocalApp.current
     val foot = Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
     when (top) {
-        Screen.Home -> Box(Modifier.align(Alignment.BottomEnd).then(foot).padding(end = 10.dp, bottom = 10.dp)) { NewChatDisc() }
+        Screen.Home -> {
+            val decisions = decisionsWaiting(current)
+            androidx.compose.foundation.layout.Row(
+                Modifier.align(Alignment.BottomEnd).then(foot).padding(end = 10.dp, bottom = 10.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (decisions > 0) DecisionsCapsule(decisions, Modifier.floatingStill(CircleShape))
+                NewChatDisc()
+            }
+        }
         // A message's page is the chat's own, over it (Annotate.kt).
         is Screen.Annotate -> {}
         else -> Recent(current, top, foot)

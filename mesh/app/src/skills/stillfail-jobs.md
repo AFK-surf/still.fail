@@ -24,8 +24,8 @@ Not for quick commands: run those directly. Not for work that must finish before
 
 - `job_start` with `command` (run by `sh -c`), a short `name`, and `cwd` (default: this session's workspace). Keep the
   workspace as the place for clones and outputs.
-- Tell the people waiting that it runs and what you will tell them, then end the turn (`chat_post` kind "final", or
-  "block" only if they must act). You do not need to stay in the turn: you are woken when the job ends.
+- Tell the people waiting that it runs and what you will tell them, then end the turn (`chat_state` "waiting", or
+  `chat_post` kind "need_help" only if they must act). You do not need to stay in the turn: you are woken when the job ends.
 - For a long job, have it report milestones or trouble with `stillfail-job notify "<words>"` from inside the command (for
   example `make all && stillfail-job notify "build done, running tests" && make test`; `ember-job` is the same command). Each notice reaches you as a message
   via="ember"; act on it (relay what matters to people, fix and restart on failure). Do not notify for every line.
@@ -41,7 +41,7 @@ it with `job_start` and `watch: true`: a loop that checks and `stillfail-job not
 
 - its chat is a watching chat: listed under the chat list's 监控中 filter, never archived for being idle, and asked about
   before someone archives it by hand;
-- end your turn with `chat_state` waiting (or a final post): you are not asked again when the wait runs out, only when the
+- end your turn with `chat_state` waiting (or a post that ends it): you are not asked again when the wait runs out, only when the
   watch notifies, ends, or someone writes;
 - name the chat for it: give your next `chat_post` a title that says what it watches (e.g. 「监控 · PR #482 的 CI」); a
   chat with a watch running may be renamed so at once.

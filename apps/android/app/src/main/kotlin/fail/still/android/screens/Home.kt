@@ -217,7 +217,7 @@ fun HomeScreen(current: WorkspaceEntry) {
             }
         }
         // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
-        if (!LocalWide.current) Toolbar(app, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
+        if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
     }
 }
 
@@ -358,7 +358,9 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
-    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
+    // Nothing left in it: archived with one tap at its end (as its menu's 归档).
+    val onArchive = if (live && item.archivable == true && item.offline == null && item.pending != true) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
+    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
         detectTapGestures(
             onPress = { tryAwaitRelease(); held = false },
             onLongPress = { at ->
@@ -389,13 +391,16 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
         // A station from before pins says nothing of them: its chats are not pinned from here.
         item.pinned?.let { pinned -> MenuItem(if (pinned) "取消固定" else "固定", Icons.Pin) { run(if (pinned) "取消固定" else "固定") { api.setPinned(item.session, !pinned) } } },
         MenuItem("重命名", Icons.Edit) { askTitle(app, item.station, item.thread, item.session, item.title) },
-        MenuItem("归档", Icons.Archive) {
-            // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
-            val watch = item.watch
-            if (watch != null) confirm(app, "归档「${item.title}」？", watch.ask, "归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
-            else run("归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
-        },
+        MenuItem("归档", Icons.Archive) { archiveRow(app, item) },
     )
+}
+
+/** Archives a row's chat; one keeping watch only once asked: its watch runs on in the archive (the core's words). */
+private fun archiveRow(app: AppState, item: ChatItem) {
+    val api = app.api(item.station)
+    val watch = item.watch
+    if (watch != null) confirm(app, "归档「${item.title}」？", watch.ask, "归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
+    else app.act("归档") { api.setArchived(item.thread, item.session, true); app.toast = "已归档" }
 }
 
 /** Whether the row's menu set its chat's pin or archive going, not answered yet. */
@@ -408,7 +413,7 @@ private fun rowFailed(app: AppState, item: ChatItem): String? =
 
 /** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
-internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, modifier: Modifier = Modifier) {
+internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     Box(
         Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
             .then(modifier),
@@ -416,9 +421,10 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
         // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
         val offline = item.offline
         val dim = if (offline != null) 0.45f else 1f
-        // All its pieces of work ended, nothing at work or unread: the whole row faded (the core says so).
-        Row(Modifier.fillMaxSize().alpha(if (item.settled == true) 0.45f else 1f).padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+        // Nothing left in it (its agents all done, nothing at work, waiting or unread): the row faded (the core says so),
+        // its archive button at its end not.
+        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = if (onArchive != null) 6.dp else 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).alpha(if (item.settled == true) 0.45f else 1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChatMark(item, Modifier)
                 Text(
@@ -437,13 +443,18 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) {
-                    val waiting = item.waiting
-                    if (waiting != null) WaitingLine(waiting) else item.last?.let { LastMessage(item) }
+                    // Where it stands (奏 · …, 在等：…, 做完了), from a station that says; else what was said last.
+                    val state = item.stateText ?: item.decision?.text
+                    if (state != null) StateLine(state) else item.last?.let { LastMessage(item) }
                 }
                 if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
                 else RowAside(item, lead, Modifier.alpha(dim))
             }
         }
+        if (onArchive != null) Box(
+            Modifier.size(34.dp).clip(CircleShape).clickable(enabled = !busy, onClick = onArchive).semantics { contentDescription = "归档「${item.title}」" },
+            contentAlignment = Alignment.Center,
+        ) { IconIn(Icons.Archive, 17.dp, C.muted) }
         }
     }
 }
@@ -547,22 +558,18 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
 }
 
 /**
- * What waits in the chat, in its last message's place (奏 · 设置页间距 · 另 1 件 · 1 件等王磊): in ink with its lead
- * (what comes before the first " · ") bold when something waits on the viewer, in the secondary colour when only on
- * others.
+ * Where the chat stands, in its last message's place (the core's `stateText`): a decision waiting for the viewer
+ * (奏 · …) in ink with its 奏 bold; anything else (在等：…, 做完了) in the secondary colour.
  */
 @Composable
-private fun WaitingLine(waiting: fail.still.android.data.RowWaiting) {
-    val mine = waiting.mine > 0u
+private fun StateLine(state: String) {
+    val decide = state.startsWith("奏")
     val text = androidx.compose.ui.text.buildAnnotatedString {
-        val lead = waiting.text.substringBefore(" · ")
-        if (mine) {
-            pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold)); append(lead); pop()
-            append(waiting.text.substring(lead.length))
-        } else append(waiting.text)
+        if (decide) { pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append("奏"); pop(); append(state.substring(1)) }
+        else append(state)
     }
     Text(
-        text, fontSize = 14.sp, lineHeight = 20.sp, color = if (mine) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        text, fontSize = 14.sp, lineHeight = 20.sp, color = if (decide) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),
@@ -580,14 +587,38 @@ private fun LastMessage(item: ChatItem) {
     )
 }
 
+/** How many decisions wait for the viewer in the workspace (the core's marks: the home page's 奏 N); 0 from a core before them. */
 @Composable
-private fun Toolbar(app: AppState, haze: HazeState, modifier: Modifier) {
-    // The new-chat button alone, floating over the list at the bottom right: a disc in the accent in a glass ring.
-    Box(
+internal fun decisionsWaiting(current: WorkspaceEntry): Int {
+    val app = LocalApp.current
+    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
+    return marks.value?.workspaces?.get(current.workspace.id)?.decisions?.toInt() ?: 0
+}
+
+/** 奏 N: the decisions page's way in, a capsule of the new-chat button's glass (`ground`) beside it, as tall. */
+@Composable
+internal fun DecisionsCapsule(n: Int, ground: Modifier) {
+    val app = LocalApp.current
+    Row(
+        ground.height(56.dp).clickable { app.push(Screen.Decisions) }.padding(horizontal = 20.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "$n 件等你决定" },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("奏", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
+        Text("$n", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = C.ink)
+    }
+}
+
+@Composable
+private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Modifier) {
+    // Floating over the list at the bottom right: 奏 N while decisions wait, and the new-chat button, a disc in the
+    // accent in a glass ring.
+    Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
-        contentAlignment = Alignment.CenterEnd,
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (decisions > 0) DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
         Box(
             Modifier.floating(haze, CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
                 .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = "新建对话" },

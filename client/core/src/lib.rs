@@ -12,6 +12,7 @@ pub mod brand;
 pub mod choose;
 pub mod cloud;
 pub mod data;
+pub mod decisions;
 pub mod core;
 pub mod delta;
 pub mod doing;
@@ -42,7 +43,6 @@ pub mod trace;
 pub mod footprint;
 pub mod views;
 pub mod wake;
-pub mod work;
 pub mod workspace;
 
 pub use crate::core::Core;

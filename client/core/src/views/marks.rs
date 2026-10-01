@@ -23,14 +23,15 @@ pub(super) fn workspace_ids(workspaces: Option<Value>) -> Vec<String> {
 
 /// What a chat's row asks of its person: `alert` (its agent blocked on them or failed), `done` (something in it
 /// unread), or nothing; as its mark in the list says (web ChatMark.tsx). Only a chat they take part in (`mine`) asks
-/// anything: the others are theirs who are in them.
+/// anything: the others are theirs who are in them. Blocked on a decision is no alert: the decision counts (`wait`),
+/// for everyone who has not dismissed it.
 pub fn row_tone(row: &Value) -> Option<&'static str> {
     if row.get("mine").and_then(Value::as_bool) != Some(true) {
         return None;
     }
     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
     let state = crate::present::row_state(&agents);
-    if matches!(state, Some("block" | "failed")) {
+    if state == Some("failed") || (state == Some("block") && crate::decisions::of_row(row).is_none()) {
         return Some("alert");
     }
     (row.get("unread").and_then(Value::as_bool) == Some(true) && state != Some("run")).then_some("done")
@@ -77,16 +78,13 @@ impl Views {
         let mut others = Counts::default();
         for id in workspace_ids(self.ok(Topic::Workspaces)) {
             let mut counts = Counts::default();
-            let me = self.me(&id);
+            let mut decisions = 0u64;
             if let Some(Ok(stations)) = self.stations(&id) {
                 for s in stations {
                     let rows = self.ok(Topic::ChatRows { station: s.address.clone() }).and_then(|r| r.as_array().cloned()).unwrap_or_default();
-                    // Which Slack users are the viewer there, as far as known (its overview, when read).
-                    let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
-                        .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
-                        .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
                     for row in rows.iter().filter(|r| !self.being_archived(&s.address, r)) {
-                        let waits = !crate::work::waiting_on_me(row, &me, &slack_users).is_empty();
+                        let waits = crate::decisions::waits(row);
+                        decisions += u64::from(waits);
                         match (row_tone(row), waits) {
                             (Some("alert"), _) => counts.alert += 1,
                             (_, true) => counts.wait += 1,
@@ -104,6 +102,9 @@ impl Views {
             mark.insert("unread".into(), json!(counts.unread));
             if counts.wait > 0 {
                 mark.insert("wait".into(), json!(counts.wait));
+            }
+            if decisions > 0 {
+                mark.insert("decisions".into(), json!(decisions));
             }
             if let Some(tone) = counts.tone() {
                 mark.insert("tone".into(), json!(tone));
@@ -123,8 +124,8 @@ impl Views {
     }
 }
 
-/// How many chats want their person, each counted once by its most urgent: blocked or failed (`alert`), a piece of
-/// work waiting on them (`wait`), something unread.
+/// How many chats want their person, each counted once by its most urgent: blocked or failed (`alert`), a decision
+/// waiting for them (`wait`), something unread.
 #[derive(Default, Clone, Copy)]
 struct Counts {
     alert: u64,
@@ -173,6 +174,8 @@ mod tests {
         assert_eq!(row_tone(&json!({ "mine": false, "unread": true, "agents": [] })), None);
         assert_eq!(row_tone(&json!({ "mine": true, "unread": true, "agents": [agent("running")] })), None);
         assert_eq!(row_tone(&json!({ "mine": true, "agents": [] })), None);
+        // Blocked on a decision: the decision counts, not an alert.
+        assert_eq!(row_tone(&json!({ "mine": true, "agents": [agent("blocked")], "decision": { "seq": 4 } })), None);
     }
 
     #[test]

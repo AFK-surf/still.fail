@@ -481,7 +481,7 @@ async fn the_same_message_delivered_twice_is_handled_once() {
 }
 
 #[tokio::test]
-async fn a_turn_ending_without_final_or_block_is_nudged_then_reported_after_max_nudges() {
+async fn a_turn_ending_without_a_state_is_nudged_then_reported_after_max_nudges() {
     let r = setup_with(Setup { max_nudges: Some(1), ..Setup::default() });
     r.accept(&message()).await;
     settle().await;
@@ -489,7 +489,7 @@ async fn a_turn_ending_without_final_or_block_is_nudged_then_reported_after_max_
     settle().await;
     let prompts = r.claude.last().prompts();
     assert_eq!(prompts.len(), 2);
-    assert!(prompts[1].contains("without a final or block state"));
+    assert!(prompts[1].contains("ended without a state"));
     r.claude.last().complete();
     settle().await;
     assert_eq!(r.claude.last().prompts().len(), 2);
@@ -577,7 +577,8 @@ async fn chat_post_with_kind_final_posts_and_settles_the_turn_without_a_nudge() 
     settle().await;
     let key = session_key("cl", "C1", &m.thread_ts);
     let to = format!("C1/{}", m.thread_ts);
-    assert_eq!(r.call(&key, "chat_post", json!({ "to": to, "text": "**done**", "kind": "final" })).await.unwrap(), format!("Posted to {to}, and recorded state final."));
+    // "final", from a session whose instructions are from before all_done, is all_done.
+    assert_eq!(r.call(&key, "chat_post", json!({ "to": to, "text": "**done**", "kind": "final" })).await.unwrap(), format!("Posted to {to}, and recorded state all_done."));
     r.claude.last().complete();
     settle().await;
     assert_eq!(r.claude.last().prompts().len(), 1);
@@ -597,7 +598,7 @@ async fn the_agents_posts_are_recorded_in_the_thread_and_chat_history_shows_them
     let said = r.said(thread.id);
     assert_eq!(
         (said[0].author_kind, said[1].author_kind, said[1].author.as_str(), said[1].declared.as_deref()),
-        (AuthorKind::Person, AuthorKind::Agent, key.as_str(), Some("block"))
+        (AuthorKind::Person, AuthorKind::Agent, key.as_str(), Some("need_help"))
     );
     assert_eq!(r.store.pending_messages(&key).unwrap().len(), 0, "an agent's own post is not delivered back to it");
     let history = r.call(&key, "chat_history", json!({ "to": to })).await.unwrap();
@@ -649,12 +650,12 @@ async fn slack_edits_are_appended_to_the_thread_as_entries_of_their_own() {
 }
 
 #[tokio::test]
-async fn chat_state_rejects_kinds_other_than_final_and_block() {
+async fn chat_state_rejects_kinds_it_does_not_know() {
     let r = setup();
     let m = message();
     r.accept(&m).await;
     let refused = r.call(&session_key("cl", "C1", &m.thread_ts), "chat_state", json!({ "kind": "wait" })).await.unwrap_err();
-    assert!(refused.to_string().contains("final\" or \"block"), "{refused}");
+    assert!(refused.to_string().contains("\"all_done\", \"need_decision\" or \"need_help\" (or \"waiting\""), "{refused}");
 }
 
 #[tokio::test]
@@ -1158,7 +1159,7 @@ async fn a_chat_opened_on_the_admin_page_reaches_the_session_like_slack_and_the_
     assert!(prompt.contains(&format!("<message via=\"web\" connect=\"ember\" thread=\"EMBER/{}\" from=\"管理员 (local)\"", thread.thread_ts)), "{prompt}");
     assert!(prompt.contains("现在进展如何"));
     let to = format!("EMBER/{}", thread.thread_ts);
-    assert_eq!(r.call(&key, "chat_post", json!({ "to": to, "text": "快好了", "kind": "final" })).await.unwrap(), format!("Posted to {to}, and recorded state final."));
+    assert_eq!(r.call(&key, "chat_post", json!({ "to": to, "text": "快好了", "kind": "all_done" })).await.unwrap(), format!("Posted to {to}, and recorded state all_done."));
     let said: Vec<(AuthorKind, String)> = r.said(thread.id).into_iter().map(|x| (x.author_kind, x.text)).collect();
     assert_eq!(said, [(AuthorKind::Person, "现在进展如何？".to_string()), (AuthorKind::Agent, "快好了".into())]);
     assert_eq!(r.chat.texts().len(), 1, "only the Slack thread's own answer went to Slack");
@@ -1846,60 +1847,136 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
 }
 
 #[tokio::test]
-async fn chat_post_items_are_kept_by_key_and_wait_on_the_person_who_last_wrote() {
+async fn a_block_post_offers_options_kept_with_it_and_checked() {
     let r = setup();
     let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "ada@x.com", "fix the spacing", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
-    let said = r
-        .call(&web, "chat_post", json!({ "to": to, "text": "on it", "items": [{ "key": "gap", "title": "设置页间距", "state": "working" }] }))
-        .await
-        .unwrap();
-    assert_eq!(said, format!("Posted to {to}. Items: gap (working)."));
-    let said = r
-        .call(&web, "chat_post", json!({ "to": to, "text": "done, look", "kind": "final", "items": [{ "key": "gap", "state": "waiting", "detail": "settings-gap", "ask": { "question": "间距改成 16px，合吗？", "label": "可以，合" } }] }))
-        .await
-        .unwrap();
-    assert_eq!(
-        said,
-        format!("Posted to {to}, and recorded state final. Items: gap (waiting on ada@x.com).\nStill open: {to}: gap 「设置页间距」 waiting on ada@x.com. Check each against where things stand now; if one has changed (done, dropped, now waiting on someone, answered), update it with chat_post items (text may be left out to update without posting).")
-    );
-    // At a turn's end without a post, the same reminder.
-    let state = r.call(&web, "chat_state", json!({ "kind": "final" })).await.unwrap();
-    assert!(state.starts_with("Recorded state final.\nStill open: ") && state.contains("gap 「设置页间距」 waiting on ada@x.com"), "{state}");
-    let items = r.store.items(thread.id).unwrap();
-    assert_eq!(items.len(), 1);
-    let it = &items[0];
-    assert_eq!((it.title.as_str(), it.state.as_str(), it.waiting_on.clone(), it.detail.as_deref()), ("设置页间距", "waiting", vec!["ada@x.com".to_string()], Some("settings-gap")));
-    assert_eq!(it.ask, Some(json!({ "question": "间距改成 16px，合吗？", "label": "可以，合" })));
-    let evidence = r.said(thread.id).last().unwrap().n;
-    assert_eq!(it.evidence, Some(evidence), "the post that declared it so shows it");
+    let options = json!([
+        { "label": " 按今天累计 ", "detail": "重连不清零，零点归零", "recommended": true },
+        { "label": "先不改", "detail": "", "recommended": false },
+    ]);
+    let said = r.call(&web, "chat_post", json!({ "to": to, "text": "「共」改成按今天累计吗？", "kind": "need_decision", "options": options })).await.unwrap();
+    assert!(said.starts_with(&format!("Posted to {to}, and recorded state need_decision. People can pick: 按今天累计 (recommended); 先不改;")), "{said}");
+    let n = r.said(thread.id).last().unwrap().n;
+    let kept = r.store.entries_between(thread.id, n, n).unwrap().remove(0);
+    assert_eq!(kept.options, Some(json!([{ "label": "按今天累计", "detail": "重连不清零，零点归零", "recommended": true }, { "label": "先不改" }])));
+    assert_eq!(kept.declared.as_deref(), Some("need_decision"));
+    // As JSON text, from a runtime whose tool list is from before options, asking with block; a bare phrase is a label.
+    let said = r.call(&web, "chat_post", json!({ "to": to, "text": "选哪个？", "kind": "block", "options": "[\"A\", {\"label\": \"B\"}]" })).await.unwrap();
+    assert!(said.contains("recorded state need_decision."), "{said}");
+    let n = r.said(thread.id).last().unwrap().n;
+    assert_eq!(r.store.entries_between(thread.id, n, n).unwrap()[0].options, Some(json!([{ "label": "A" }, { "label": "B" }])));
+    // A post without options keeps none.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "进度" })).await.unwrap();
+    let n = r.said(thread.id).last().unwrap().n;
+    assert_eq!(r.store.entries_between(thread.id, n, n).unwrap()[0].options, None);
+    let refused = |args: Value| {
+        let r = &r;
+        let web = web.clone();
+        async move { r.call(&web, "chat_post", args).await.unwrap_err().to_string() }
+    };
+    let one = json!([{ "label": "A" }]);
+    assert!(refused(json!({ "to": to, "text": "x", "options": one })).await.contains("only with kind \"need_decision\""));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "all_done", "options": one })).await.contains("only with kind \"need_decision\""));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_help", "need": "y", "options": one })).await.contains("only with kind \"need_decision\""));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision" })).await.contains("carries options"));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [] })).await.contains("1 to 6"));
+    let seven: Vec<Value> = (0..7).map(|i| json!({ "label": format!("选项{i}") })).collect();
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": seven })).await.contains("1 to 6"));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [{ "label": " " }] })).await.contains("label is empty"));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [{ "label": "A" }, { "label": "A" }] })).await.contains("repeats"));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [{ "label": "A", "recommended": true }, { "label": "B", "recommended": true }] })).await.contains("only one"));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": { "label": "A" } })).await.contains("must be an array"));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": "not json" })).await.contains("must be an array"));
+    assert!(refused(json!({ "to": to, "files": [], "kind": "need_decision", "options": one })).await.contains("text is empty"));
+}
 
-    // As JSON text, from a runtime that does not know the parameter's type.
-    let text = r.call(&web, "chat_post", json!({ "to": to, "items": "[{\"key\": \"gap\", \"detail\": \"settings-gap\"}]" })).await.unwrap();
-    assert!(text.ends_with("Items: gap (waiting on ada@x.com)."), "{text}");
-    let posts = r.said(thread.id).len();
-    // Only the items, nothing said: the post that asked stays its evidence; nothing open, no reminder.
-    let quiet = r.call(&web, "chat_post", json!({ "to": to, "items": [{ "key": "gap", "state": "done" }], "kind": "final" })).await.unwrap();
-    assert_eq!(quiet, format!("Updated in {to}, nothing posted. Items: gap (done)."));
-    assert_eq!(r.said(thread.id).len(), posts);
-    assert_eq!(r.store.items(thread.id).unwrap()[0].evidence, Some(evidence));
-    assert_eq!(r.call(&web, "chat_state", json!({ "kind": "final" })).await.unwrap(), "Recorded state final.");
-    let it = &r.store.items(thread.id).unwrap()[0];
-    assert_eq!((it.state.as_str(), it.waiting_on.len(), it.ask.clone(), it.title.as_str()), ("done", 0, None, "设置页间距"));
+#[tokio::test]
+async fn options_are_refused_in_a_slack_thread() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let refused = r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "选哪个？", "kind": "need_decision", "options": [{ "label": "A" }] })).await.unwrap_err();
+    assert!(refused.to_string().contains("only in still.fail chats"), "{refused}");
+}
 
-    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "new" }] })).await.unwrap_err().to_string().contains("title is required"));
-    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "merged" }] })).await.unwrap_err().to_string().contains("state must be one of"));
-    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Bob"] }] })).await.unwrap_err().to_string().contains("ada@x.com"));
-    // Waiting says what is to be decided.
-    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting" }] })).await.unwrap_err().to_string().contains("ask.question is required"));
-    // Someone who has not written yet, by email: still.fail people are their emails.
-    let bob = r.call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Bob@x.com"], "ask": { "question": "这样行吗？" } }] })).await.unwrap();
-    assert!(bob.ends_with("Items: gap (waiting on bob@x.com)."), "{bob}");
-    let named = r
-        .call(&web, "chat_post", json!({ "to": to, "text": "x", "items": [{ "key": "gap", "state": "waiting", "waitingOn": ["Ada (ada@x.com)"], "ask": { "question": "这样行吗？" } }] }))
-        .await
-        .unwrap();
-    assert!(named.ends_with("Items: gap (waiting on ada@x.com)."), "{named}");
+#[tokio::test]
+async fn a_decision_is_pending_until_a_person_writes_and_a_newer_one_replaces_it() {
+    let r = setup();
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    r.hub.say(thread.id, "ada@x.com", "fix the spacing", vec![], vec![], None).unwrap();
+    settle().await;
+    let to = format!("EMBER/{}", thread.thread_ts);
+    let pending = || r.store.pending_decision(thread.id).unwrap().map(|(m, options)| (m.n, options));
+    assert_eq!(pending(), None);
+    // Help asked for asks nothing to pick.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "要 key", "kind": "need_help", "need": "要 Stripe 的测试 key" })).await.unwrap();
+    assert_eq!(pending(), None);
+    r.call(&web, "chat_post", json!({ "to": to, "text": "合吗？", "kind": "need_decision", "options": [{ "label": "合" }] })).await.unwrap();
+    let first = r.said(thread.id).last().unwrap().n;
+    assert_eq!(pending(), Some((first, json!([{ "label": "合" }]))));
+    // The agent saying more without options leaves it pending; only people answer it.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "顺便说一下进度" })).await.unwrap();
+    assert_eq!(pending().map(|p| p.0), Some(first));
+    // A newer one replaces it.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "还是先问这个：留哪个？", "kind": "need_decision", "options": [{ "label": "留旧的" }, { "label": "留新的" }] })).await.unwrap();
+    let second = r.said(thread.id).last().unwrap().n;
+    assert_eq!(pending().map(|p| p.0), Some(second));
+    // Any person's message after it answers it, quoting it or not.
+    r.hub.say(thread.id, "bob@x.com", "都不要，换个思路", vec![], vec![], None).unwrap();
+    assert_eq!(pending(), None);
+    r.call(&web, "chat_post", json!({ "to": to, "text": "那这样？", "kind": "need_decision", "options": [{ "label": "好" }] })).await.unwrap();
+    assert!(pending().is_some());
+}
+
+#[tokio::test]
+async fn a_turn_ends_all_done_needing_a_decision_or_help_or_waiting_and_the_words_from_before_still_count() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let to = format!("C1/{}", m.thread_ts);
+    let last = || r.store.last_turn(&key).unwrap().unwrap();
+    // need_help says what is needed: kept with the turn; refused without it.
+    let refused = r.call(&key, "chat_post", json!({ "to": to, "text": "卡住了", "kind": "need_help" })).await.unwrap_err();
+    assert!(refused.to_string().contains("need is required"), "{refused}");
+    let said = r.call(&key, "chat_post", json!({ "to": to, "text": "卡住了", "kind": "need_help", "need": " 要 Stripe 的测试 key " })).await.unwrap();
+    assert_eq!(said, format!("Posted to {to}, and recorded state need_help."));
+    r.claude.last().complete();
+    settle().await;
+    let turn = last();
+    assert_eq!((turn.declared.as_deref(), turn.ending.as_deref(), turn.need.as_deref()), (Some("block"), Some("need_help"), Some("要 Stripe 的测试 key")), "clients from before read block");
+    assert_eq!(r.claude.last().prompts().len(), 1, "a state: not nudged");
+    // need goes only with need_help; need_decision only posted, with options.
+    r.accept(&reply(&m, "9999.1", "给你 key")).await;
+    settle().await;
+    assert!(r.call(&key, "chat_state", json!({ "kind": "all_done", "need": "x" })).await.unwrap_err().to_string().contains("only with kind \"need_help\""));
+    assert!(r.call(&key, "chat_state", json!({ "kind": "need_decision" })).await.unwrap_err().to_string().contains("posted with chat_post"));
+    assert!(r.call(&key, "chat_state", json!({ "kind": "need_help" })).await.unwrap_err().to_string().contains("need is required"));
+    assert!(r.call(&key, "chat_state", json!({ "kind": "done" })).await.unwrap_err().to_string().contains("all_done"));
+    assert_eq!(r.call(&key, "chat_state", json!({ "kind": "need_help", "need": "确认一下要不要上线" })).await.unwrap(), "Recorded state need_help.");
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!((last().ending.as_deref(), last().need.as_deref()), (Some("need_help"), Some("确认一下要不要上线")));
+    // The words from before: block needs no need; final is all_done.
+    r.accept(&reply(&m, "9999.2", "上吧")).await;
+    settle().await;
+    assert_eq!(r.call(&key, "chat_state", json!({ "kind": "block" })).await.unwrap(), "Recorded state need_help.");
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!((last().declared.as_deref(), last().ending.as_deref(), last().need.as_deref()), (Some("block"), Some("need_help"), None));
+    r.accept(&reply(&m, "9999.3", "好了吗"))
+        .await;
+    settle().await;
+    assert_eq!(r.call(&key, "chat_state", json!({ "kind": "final" })).await.unwrap(), "Recorded state all_done.");
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!((last().declared.as_deref(), last().ending.as_deref()), (Some("final"), Some("all_done")));
+    let thread = r.thread("C1", &m.thread_ts);
+    assert_eq!(r.said(thread.id).iter().filter_map(|m| m.declared.clone()).collect::<Vec<_>>(), ["need_help"], "posts keep today's words");
 }

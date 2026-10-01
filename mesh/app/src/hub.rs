@@ -35,7 +35,7 @@ use crate::pool::{PoolSignals, ProfileHealth, pick_profile, serves, usable};
 use crate::runtime::AgentDriver;
 use crate::session::{DeclaredState, HandedSession, SessionActor, SessionDeps};
 use crate::store::{
-    AUTO, Attachment, AuthorKind, ITEM_STATES, ItemRow, STILLFAIL_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
+    AUTO, Attachment, AuthorKind, STILLFAIL_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
     slack_surface, write_compressed,
 };
 use crate::transcript::{TimelineEntry, iso, transcript_path};
@@ -1278,34 +1278,27 @@ impl Hub {
         vec![
             Tool {
                 name: "chat_post".into(),
-                description: "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for a still.fail chat. Set kind to \"final\" when this message completes the work, or \"block\" when it asks a person for something you need.".into(),
+                description: "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for a still.fail chat. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished), need_decision (a person picks one of your options) or need_help (a person has to give or do something: need says what).".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "to": to.clone(),
-                        "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written). May be left out when only items change: nothing is posted then." },
-                        "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
+                        "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written). With options: the question and the facts it turns on, so it can be decided on from this message alone." },
+                        "kind": { "type": "string", "enum": ["all_done", "need_decision", "need_help"], "description": "Omit for a progress update. all_done: the chat has nothing unfinished at all (no branch left unmerged, no open question, nothing waiting for a yes). need_decision: a person has to choose; give options. need_help: a person has to give or do something, or answer an open question; give need." },
+                        "need": { "type": "string", "description": "For need_help (required): what the person has to give or do, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key)." },
                         "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they are uploaded below the text). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
-                        "title": { "type": "string", "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first final post in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
-                        "items": {
+                        "title": { "type": "string", "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first post that ends a turn in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
+                        "options": {
                             "type": "array",
-                            "description": "The pieces of work in this conversation this message says something about, each by a key of yours: new ones are added, known ones updated (only what you give changes). People's lists show what waits on them from these.",
+                            "description": "For need_decision (required), in a still.fail chat: the answers people can pick with one tap (1 to 6), shown under this message. A pick reaches you as their message quoting this one and saying the option's label; they may also just write something else.",
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "key": { "type": "string", "description": "Yours, stable for the piece of work (e.g. its branch name)." },
-                                    "title": { "type": "string", "description": "What it is, in a few words, in the language people use there. Required the first time." },
-                                    "state": { "type": "string", "enum": ITEM_STATES, "description": "working: you are on it. waiting: done as far as you can go, and a person has to decide (approve, choose, answer). done: finished (merged, answered, delivered). dropped: people said not to." },
-                                    "waitingOn": { "type": "array", "items": { "type": "string" }, "description": "For waiting: who has to decide, as from=\"…\" gives them (the part in parentheses). Default: the person who last wrote in the conversation." },
-                                    "ask": {
-                                        "type": "object",
-                                        "description": "For waiting (required): what people decide, on their card. question: one sentence they can answer without reading anything else, the facts it turns on in it (\"「共 …」改成按今天累计（重连、换中继不清零，零点归零），这样合吗？\"). The card always has 准 (yes; label: other words for it) and 随便 (you decide), and a field for anything else. options: the other answers that fit, each a short phrase that reads on its own (\"界面上标明「今天」\", \"不要了\"), or the choices when it is a choice.",
-                                        "properties": { "question": { "type": "string" }, "label": { "type": "string" }, "options": { "type": "array", "items": { "type": "string" } } },
-                                        "additionalProperties": false,
-                                    },
-                                    "detail": { "type": "string", "description": "A short line under its title: a branch, a commit, where it went." },
+                                    "label": { "type": "string", "description": "A short phrase that reads on its own, in the language people use there (e.g. 按今天累计, 先不改)." },
+                                    "detail": { "type": "string", "description": "One line on what choosing it leads to." },
+                                    "recommended": { "type": "boolean", "description": "The one you recommend (at most one)." },
                                 },
-                                "required": ["key"],
+                                "required": ["label"],
                                 "additionalProperties": false,
                             },
                         },
@@ -1342,11 +1335,12 @@ impl Hub {
             },
             Tool {
                 name: "chat_state".into(),
-                description: "Record that this turn ends as final (work done), block (waiting on a person) or waiting (work you started runs on and will bring you back) without posting another message.".into(),
+                description: "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished), need_help (a person has to give or do something: need says what) or waiting (work you started runs on and will bring you back). A decision (need_decision) is posted with chat_post and its options.".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
-                        "kind": { "type": "string", "enum": ["final", "block", "waiting"] },
+                        "kind": { "type": "string", "enum": ["all_done", "need_help", "waiting"] },
+                        "need": { "type": "string", "description": "For need_help (required): what the person has to give or do, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key)." },
                         "seconds": { "type": "integer", "minimum": MIN_WAIT_SECONDS, "maximum": MAX_WAIT_SECONDS, "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch)." },
                         "for": { "type": "string", "description": "For waiting (required): what you wait for, in a few words people read under your name, in the language they use there (e.g. 安卓滑动测试在模拟器上跑完)." },
                     },
@@ -1363,13 +1357,21 @@ impl Hub {
                                 hub.wait_for(&key, &what);
                                 DeclaredState::Waiting((seconds.max(0.0) as u64).clamp(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
                             }
-                            kind => state_arg(kind)?.ok_or_else(|| anyhow!("kind is required"))?,
+                            kind => match state_arg(kind)? {
+                                Some((DeclaredState::NeedDecision, _)) => bail!("need_decision is posted with chat_post, with its options and the question in the text"),
+                                Some((kind, legacy)) => {
+                                    if let Some(need) = need_arg(&args, kind, legacy)? {
+                                        hub.need(&key, &need);
+                                    }
+                                    kind
+                                }
+                                None => bail!("kind is required"),
+                            },
                         };
                         hub.declare(&key, kind);
-                        let open = hub.open_items_said(&key);
                         Ok(match kind {
-                            DeclaredState::Waiting(seconds) => format!("Recorded state waiting: you are asked again in {seconds} seconds unless something brings you back first.{open}"),
-                            _ => format!("Recorded state {}.{open}", kind.as_str()),
+                            DeclaredState::Waiting(seconds) => format!("Recorded state waiting: you are asked again in {seconds} seconds unless something brings you back first."),
+                            _ => format!("Recorded state {}.", kind.as_str()),
                         })
                     })
                 }),
@@ -1443,6 +1445,13 @@ impl Hub {
         }
     }
 
+    fn need(&self, key: &str, what: &str) {
+        let actor = self.actors.lock().unwrap().get(key).cloned();
+        if let Some(actor) = actor {
+            actor.need(what);
+        }
+    }
+
     fn declare(&self, key: &str, kind: DeclaredState) {
         let actor = self.actors.lock().unwrap().get(key).cloned();
         if let Some(actor) = actor {
@@ -1473,30 +1482,30 @@ impl Hub {
     async fn chat_post(&self, key: &str, args: &Map<String, Value>) -> Result<String> {
         let text = args.get("text").map(js_string).unwrap_or_default().trim().to_string();
         let paths: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().map(js_string).collect()).unwrap_or_default();
-        let kind = state_arg(args.get("kind"))?;
+        let given = state_arg(args.get("kind"))?;
+        let options = options_arg(args.get("options"))?;
+        let kind = match (given, &options) {
+            (Some((DeclaredState::NeedDecision, _)), None) => bail!("need_decision carries options: the answers people can pick"),
+            // A session from before need_decision asks with block and options.
+            (Some((DeclaredState::NeedHelp, true)), Some(_)) => Some(DeclaredState::NeedDecision),
+            (Some((DeclaredState::NeedDecision, _)), Some(_)) => Some(DeclaredState::NeedDecision),
+            (_, Some(_)) => bail!("options go only with kind \"need_decision\": a post that needs a person's decision"),
+            (given, None) => given.map(|(kind, _)| kind),
+        };
+        let need = match given {
+            Some((kind, legacy)) => need_arg(args, kind, legacy)?,
+            None => need_arg(args, DeclaredState::AllDone, true)?,
+        };
         if text.is_empty() && paths.is_empty() {
-            // Only where its pieces of work stand: nothing is said in the conversation.
-            let thread = match args.get("items") {
-                Some(v) if !v.is_null() => Some(self.target(key, args.get("to"))?),
-                _ => None,
-            };
-            let items = match &thread {
-                Some(thread) => self.items_arg(key, thread, args.get("items"))?,
-                None => vec![],
-            };
-            if let (Some(thread), false) = (thread, items.is_empty()) {
-                self.store.put_items(thread.thread.id, &items)?;
-                if let Some(kind) = kind {
-                    self.declare(key, kind);
-                }
-                let place = thread_address(&thread.thread.channel, &thread.thread.thread_ts);
-                let open = if kind.is_some() { self.open_items_said(key) } else { String::new() };
-                return Ok(format!("Updated in {place}, nothing posted.{}{open}", items_said(&items)));
-            }
             bail!("text is empty");
         }
         let thread = self.target(key, args.get("to"))?;
-        let items = self.items_arg(key, &thread, args.get("items"))?;
+        if options.is_some() && thread.thread.surface != STILLFAIL_SURFACE {
+            bail!("options are shown only in still.fail chats (EMBER/…); in a Slack thread, write the choices in the text and end with kind \"need_help\"");
+        }
+        if options.is_some() && text.is_empty() {
+            bail!("text is required with options: the question and the facts it turns on");
+        }
         // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
         // them in still.fail instead.
         let slack = thread.thread.surface != STILLFAIL_SURFACE && !paths.is_empty();
@@ -1516,16 +1525,19 @@ impl Hub {
         } else {
             (chat.post(&here, &text, &files).await?, text)
         };
+        let offered = options.as_ref().map(options_said).unwrap_or_default();
         let (n, _) = self.store.insert_message(NewMessage {
             attachments: files,
             declared: kind.map(|k| k.as_str().to_string()),
+            options,
             ..NewMessage::new(thread.thread.id, &ts, AuthorKind::Agent, key, &text)
         })?;
         self.shared(thread.thread.id, n, key, &text)?;
-        let items: Vec<ItemRow> = items.into_iter().map(|it| ItemRow { evidence: Some(n), ..it }).collect();
-        self.store.put_items(thread.thread.id, &items)?;
         if let Some(post) = self.store.posts_by(key)?.pop() {
             self.live.posted(key, post_entries(&[post]));
+        }
+        if let Some(need) = &need {
+            self.need(key, need);
         }
         if let Some(kind) = kind {
             self.declare(key, kind);
@@ -1535,136 +1547,10 @@ impl Hub {
             None => String::new(),
         };
         let place = thread_address(&thread.thread.channel, &thread.thread.thread_ts);
-        let recorded = items_said(&items);
         Ok(match kind {
-            Some(kind) => format!("Posted to {place}, and recorded state {}.{titled}{recorded}{}", kind.as_str(), self.open_items_said(key)),
-            None => format!("Posted to {place}.{titled}{recorded}"),
+            Some(kind) => format!("Posted to {place}, and recorded state {}.{titled}{offered}", kind.as_str()),
+            None => format!("Posted to {place}.{titled}{offered}"),
         })
-    }
-
-    /// At a turn's end: the pieces of work still open in the session's still.fail chats (working, or waiting and not
-    /// yet answered), for the agent to check against where things stand; nothing when there are none.
-    fn open_items_said(&self, key: &str) -> String {
-        let threads = self.store.session_threads(key).unwrap_or_default();
-        let mut lines = Vec::new();
-        for t in threads.iter().filter(|t| t.thread.surface == STILLFAIL_SURFACE) {
-            let open: Vec<String> = self
-                .store
-                .items(t.thread.id)
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|it| it.state == "working" || it.state == "waiting")
-                .map(|it| match it.state.as_str() {
-                    "waiting" => format!("{} 「{}」 waiting on {}", it.key, it.title, it.waiting_on.join(", ")),
-                    _ => format!("{} 「{}」 working", it.key, it.title),
-                })
-                .collect();
-            if !open.is_empty() {
-                lines.push(format!("{}: {}", thread_address(&t.thread.channel, &t.thread.thread_ts), open.join("; ")));
-            }
-        }
-        if lines.is_empty() {
-            return String::new();
-        }
-        format!(
-            "\nStill open: {}. Check each against where things stand now; if one has changed (done, dropped, now waiting on someone, answered), update it with chat_post items (text may be left out to update without posting).",
-            lines.join(" | ")
-        )
-    }
-
-    /// The pieces of work a post declares (chat_post items), as they will be kept: known ones updated with what is
-    /// given, people to wait on as creator references (the person who last wrote, when none is named).
-    fn items_arg(&self, key: &str, thread: &SessionThread, value: Option<&Value>) -> Result<Vec<ItemRow>> {
-        // A runtime that does not know the parameter's type (its tool list from before it was added) sends it as JSON text.
-        let parsed = match value {
-            Some(Value::String(text)) => serde_json::from_str::<Value>(text).ok(),
-            _ => None,
-        };
-        let list = match parsed.as_ref().or(value) {
-            None | Some(Value::Null) => return Ok(vec![]),
-            Some(Value::Array(list)) => list,
-            Some(_) => bail!("items must be an array of {{key, title, state, …}}"),
-        };
-        let t = &thread.thread;
-        let slack = t.surface != STILLFAIL_SURFACE;
-        let known: HashMap<String, ItemRow> = self.store.items(t.id)?.into_iter().map(|it| (it.key.clone(), it)).collect();
-        let messages = self.store.messages_before(t.id, None, 200)?;
-        let as_ref = |author: &str| if slack { format!("slack:{}:{author}", thread.connect) } else { author.to_string() };
-        let people: Vec<String> = {
-            let mut seen = HashSet::new();
-            messages.iter().filter(|m| m.author_kind == AuthorKind::Person).map(|m| as_ref(&m.author)).filter(|a| seen.insert(a.clone())).collect()
-        };
-        let last_person = messages.iter().rev().find(|m| m.author_kind == AuthorKind::Person).map(|m| as_ref(&m.author));
-        let person = |given: &str| -> Result<String> {
-            let given = given.trim();
-            // As from="name (ref)" gives them, whole or the part in parentheses.
-            let given = match (given.rfind('('), given.ends_with(')')) {
-                (Some(open), true) => &given[open + 1..given.len() - 1],
-                _ => given,
-            };
-            let wanted = if given.starts_with("slack:") || !slack { given.to_string() } else { as_ref(given) };
-            people
-                .iter()
-                .find(|p| p.eq_ignore_ascii_case(&wanted))
-                .cloned()
-                .or_else(|| (!slack && given.contains('@')).then(|| given.to_lowercase()))
-                .ok_or_else(|| anyhow!("waitingOn: {given} has not written in this conversation; name people as from=\"…\" gives them (in parentheses): {}", people.join(", ")))
-        };
-        let now = crate::store::now_ms();
-        let mut out = Vec::new();
-        for (i, it) in list.iter().enumerate() {
-            let Some(it) = it.as_object() else { bail!("items[{i}] must be an object") };
-            let item_key = it.get("key").map(js_string).unwrap_or_default().trim().to_string();
-            if item_key.is_empty() {
-                bail!("items[{i}].key is required");
-            }
-            let before = known.get(&item_key);
-            let text = |name: &str| it.get(name).map(js_string).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-            let title = match (text("title"), before) {
-                (Some(title), _) => title,
-                (None, Some(b)) => b.title.clone(),
-                (None, None) => bail!("items[{i}].title is required for a new piece of work ({item_key})"),
-            };
-            let state = match (text("state"), before) {
-                (Some(state), _) if ITEM_STATES.contains(&state.as_str()) => state,
-                (Some(state), _) => bail!("items[{i}].state must be one of {}, got {state}", ITEM_STATES.join(", ")),
-                (None, Some(b)) => b.state.clone(),
-                (None, None) => "working".to_string(),
-            };
-            let waiting_on = match it.get("waitingOn") {
-                Some(Value::Array(names)) if !names.is_empty() => names.iter().map(|n| person(&js_string(n))).collect::<Result<Vec<_>>>()?,
-                _ if state != "waiting" => vec![],
-                _ => match before.filter(|b| b.state == "waiting" && !b.waiting_on.is_empty()) {
-                    Some(b) => b.waiting_on.clone(),
-                    None => last_person.clone().into_iter().collect(),
-                },
-            };
-            let ask = match it.get("ask") {
-                Some(Value::Object(a)) => Some(Value::Object(a.clone())),
-                Some(Value::Null) => None,
-                Some(_) => bail!("items[{i}].ask must be an object {{question, label?, options?}}"),
-                None if state == "waiting" => before.and_then(|b| b.ask.clone()),
-                None => None,
-            };
-            // A card that waits says what is to be decided: its title alone does not.
-            let asked = ask.as_ref().and_then(|a| a.get("question")).and_then(Value::as_str).is_some_and(|q| !q.trim().is_empty());
-            if state == "waiting" && !asked {
-                bail!("items[{i}].ask.question is required while it waits ({item_key}): one sentence people can decide on from their card alone, with the facts it turns on");
-            }
-            out.push(ItemRow {
-                key: item_key,
-                session: key.to_string(),
-                title,
-                state,
-                waiting_on,
-                ask,
-                detail: text("detail").or_else(|| before.and_then(|b| b.detail.clone())),
-                evidence: None,
-                created_at: before.map(|b| b.created_at).unwrap_or(now),
-                updated_at: now,
-            });
-        }
-        Ok(out)
     }
 
     async fn chat_history(&self, key: &str, args: &Map<String, Value>) -> Result<String> {
@@ -1964,28 +1850,97 @@ fn js_number(value: &Value) -> Option<f64> {
 const MIN_WAIT_SECONDS: u64 = 10;
 const MAX_WAIT_SECONDS: u64 = 3600;
 
-/// What chat_post says of the pieces of work it recorded: nothing when it declared none.
-fn items_said(items: &[ItemRow]) -> String {
-    if items.is_empty() {
-        return String::new();
+/// How many answers a decision may offer.
+const MAX_OPTIONS: usize = 6;
+
+/// The answers a decision offers (chat_post `options`), as kept with its post: `[{label, detail?, recommended?}]`,
+/// each label trimmed. 1 to 6, labels not empty and not repeated, at most one recommended (only with need_decision:
+/// chat_post checks). A runtime whose tool list is from before the parameter sends it as JSON text: read too.
+fn options_arg(value: Option<&Value>) -> Result<Option<Value>> {
+    let parsed = match value {
+        Some(Value::String(text)) if !text.trim().is_empty() => {
+            Some(serde_json::from_str::<Value>(text).map_err(|_| anyhow!("options must be an array of {{label, detail?, recommended?}}"))?)
+        }
+        _ => None,
+    };
+    let list = match parsed.as_ref().or(value) {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::String(_)) => return Ok(None),
+        Some(Value::Array(list)) => list,
+        Some(_) => bail!("options must be an array of {{label, detail?, recommended?}}"),
+    };
+    if list.is_empty() || list.len() > MAX_OPTIONS {
+        bail!("options must have 1 to {MAX_OPTIONS} answers, got {}", list.len());
     }
-    let said: Vec<String> = items
-        .iter()
-        .map(|it| match it.state.as_str() {
-            "waiting" => format!("{} (waiting on {})", it.key, it.waiting_on.join(", ")),
-            state => format!("{} ({state})", it.key),
-        })
-        .collect();
-    format!(" Items: {}.", said.join("; "))
+    let mut out = Vec::new();
+    let mut labels: Vec<String> = Vec::new();
+    for (i, o) in list.iter().enumerate() {
+        let o = match o {
+            // A bare phrase is its label.
+            Value::String(label) => json!({ "label": label }),
+            Value::Object(_) => o.clone(),
+            _ => bail!("options[{i}] must be an object {{label, detail?, recommended?}}"),
+        };
+        let label = o.get("label").map(js_string).unwrap_or_default().trim().to_string();
+        if label.is_empty() {
+            bail!("options[{i}].label is empty: a short phrase that reads on its own");
+        }
+        if labels.contains(&label) {
+            bail!("options[{i}].label repeats {label:?}: each answer says something else");
+        }
+        labels.push(label.clone());
+        let mut kept = json!({ "label": label });
+        if let Some(detail) = o.get("detail").map(js_string).map(|d| d.trim().to_string()).filter(|d| !d.is_empty()) {
+            kept["detail"] = json!(detail);
+        }
+        if o.get("recommended").is_some_and(|r| r.as_bool() == Some(true) || r.as_str() == Some("true")) {
+            kept["recommended"] = json!(true);
+        }
+        out.push(kept);
+    }
+    if out.iter().filter(|o| o.get("recommended").is_some()).count() > 1 {
+        bail!("only one option may be recommended");
+    }
+    Ok(Some(Value::Array(out)))
 }
 
-fn state_arg(value: Option<&Value>) -> Result<Option<DeclaredState>> {
+/// What chat_post says of the answers it offered.
+fn options_said(options: &Value) -> String {
+    let labels: Vec<String> = options
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|o| {
+            let label = o.get("label").and_then(Value::as_str).unwrap_or("");
+            if o.get("recommended").is_some() { format!("{label} (recommended)") } else { label.to_string() }
+        })
+        .collect();
+    format!(" People can pick: {}; a pick reaches you as their message quoting this one with the option's label, and anything they write instead is their answer too.", labels.join("; "))
+}
+
+/// How a post or chat_state ends the turn (`kind`), and whether in the words from before (final, block: a session
+/// whose instructions are from before all_done, need_decision and need_help). Waiting is chat_state's own.
+fn state_arg(value: Option<&Value>) -> Result<Option<(DeclaredState, bool)>> {
     match value {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(s)) if s.is_empty() => Ok(None),
-        Some(Value::String(s)) if s == "final" => Ok(Some(DeclaredState::Final)),
-        Some(Value::String(s)) if s == "block" => Ok(Some(DeclaredState::Block)),
-        Some(other) => bail!("kind must be \"final\" or \"block\", got {other}"),
+        Some(Value::String(s)) if s != "waiting" && DeclaredState::parse(s, 0).is_some() => {
+            Ok(DeclaredState::parse(s, 0).map(|kind| (kind, s == "final" || s == "block")))
+        }
+        Some(other) => bail!("kind must be \"all_done\", \"need_decision\" or \"need_help\" (or \"waiting\", with chat_state), got {other}"),
+    }
+}
+
+/// What a need_help turn needs of a person (`need`): required with need_help, unless asked with block (a session from
+/// before it); refused with any other kind.
+fn need_arg(args: &Map<String, Value>, kind: DeclaredState, legacy: bool) -> Result<Option<String>> {
+    let need = args.get("need").map(js_string).map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+    match (kind, need) {
+        (DeclaredState::NeedHelp, Some(need)) => Ok(Some(need)),
+        (DeclaredState::NeedHelp, None) if legacy => Ok(None),
+        (DeclaredState::NeedHelp, None) => bail!("need is required for need_help: what the person has to give or do, in one sentence"),
+        (_, Some(_)) => bail!("need goes only with kind \"need_help\""),
+        (_, None) => Ok(None),
     }
 }
 

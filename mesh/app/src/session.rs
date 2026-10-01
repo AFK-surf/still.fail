@@ -25,22 +25,46 @@ use crate::live::LiveHub;
 use crate::runtime::{AgentDriver, AgentSession, FailureReason, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
 use crate::store::{AuthorKind, STILLFAIL_SURFACE, NewMessage, PendingMessage, Store, TurnFor, now_ms};
 
+/// How an agent ended its turn (chat_post / chat_state `kind`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeclaredState {
-    Final,
-    Block,
+    /// The chat has nothing unfinished at all: no branch left to merge, no open question, nothing awaiting a yes.
+    AllDone,
+    /// A person has to pick: the post carries the answers (chat_post `options`).
+    NeedDecision,
+    /// A person has to give or do something (the turn's `need` says what), or answer an open question.
+    NeedHelp,
     /// The work goes on after the turn (a background agent or command of the runtime's) and will bring the agent back
     /// on its own; if nothing has by then, the agent is asked again after this many seconds.
     Waiting(u64),
 }
 
 impl DeclaredState {
+    /// As kept (turns.declared, entries.declared).
     pub fn as_str(self) -> &'static str {
         match self {
-            DeclaredState::Final => "final",
-            DeclaredState::Block => "block",
+            DeclaredState::AllDone => "all_done",
+            DeclaredState::NeedDecision => "need_decision",
+            DeclaredState::NeedHelp => "need_help",
             DeclaredState::Waiting(_) => "waiting",
         }
+    }
+
+    /// A kind as kept or given, the words from before these included: final is all_done, block need_help. `wait`: a
+    /// wait's seconds.
+    pub fn parse(kind: &str, wait: u64) -> Option<DeclaredState> {
+        match kind {
+            "all_done" | "final" => Some(DeclaredState::AllDone),
+            "need_decision" => Some(DeclaredState::NeedDecision),
+            "need_help" | "block" => Some(DeclaredState::NeedHelp),
+            "waiting" => Some(DeclaredState::Waiting(wait)),
+            _ => None,
+        }
+    }
+
+    /// The turn ended as the agent's to take up again only when a person (or nothing) brings it back: not waiting.
+    pub fn settled(self) -> bool {
+        !matches!(self, DeclaredState::Waiting(_))
     }
 }
 
@@ -119,7 +143,7 @@ pub struct HandedSession {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HandedTurn {
     pub id: String,
-    /// final, block or waiting.
+    /// all_done, need_decision, need_help or waiting (final or block from a binary before them).
     pub declared: Option<String>,
     pub wait: Option<u64>,
 }
@@ -290,6 +314,14 @@ impl SessionActor {
         }
     }
 
+    /// What the turn running now needs of a person, once it ends as need_help (`need`).
+    pub fn need(&self, what: &str) {
+        let id = self.st().turn.as_ref().map(|t| t.id.clone());
+        if let (Some(id), Some(deps)) = (id, self.deps.upgrade()) {
+            let _ = deps.store().set_need(&id, what);
+        }
+    }
+
     /// Called by the MCP tools while a turn runs.
     pub fn declare(&self, state: DeclaredState) {
         if let Some(turn) = self.st().turn.as_mut() {
@@ -452,12 +484,7 @@ impl SessionActor {
             st.agent = agent.map(|agent| (st.generation, agent));
             st.turn = handed.turn.map(|t| Turn {
                 id: t.id,
-                declared: match t.declared.as_deref() {
-                    Some("final") => Some(DeclaredState::Final),
-                    Some("block") => Some(DeclaredState::Block),
-                    Some("waiting") => Some(DeclaredState::Waiting(t.wait.unwrap_or(0))),
-                    _ => None,
-                },
+                declared: t.declared.as_deref().and_then(|d| DeclaredState::parse(d, t.wait.unwrap_or(0))),
             });
             st.working_for = handed.working_for.into_iter().map(|w| Working { connect: w.connect, thread: ThreadRef::new(&w.channel, &w.thread_ts), ts: w.ts }).collect();
             st.notices = handed.notices;
@@ -534,7 +561,7 @@ impl SessionActor {
             }
             let deps = a.deps()?;
             let store = deps.store();
-            let settled = turn.as_ref().is_some_and(|t| matches!(t.declared, Some(DeclaredState::Final | DeclaredState::Block)));
+            let settled = turn.as_ref().is_some_and(|t| t.declared.is_some_and(DeclaredState::settled));
             let resume = (turn.is_some() || busy) && !settled;
             info!(session = a.key, resume, "ending the runtime process: the station is in no workspace");
             if let Some(agent) = agent {

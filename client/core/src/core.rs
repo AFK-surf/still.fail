@@ -485,6 +485,7 @@ impl Source for Router {
                 Topic::Archive { .. } => ("archive.open", None),
                 Topic::Usage { .. } => ("usage.open", None),
                 Topic::WorkspaceMarks { .. } => ("workspaces.marks", None),
+                Topic::Decisions { .. } => ("decisions.open", None),
                 Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => ("admin.open", None),
                 _ => ("connects.open", None),
             };
@@ -947,31 +948,20 @@ impl Inner {
                     None => Err(CoreError::invalid("没有这个对话")),
                 }
             }
-            Call::ItemAnswer { station, session, thread, key, answer, reply } => {
+            Call::DecisionAnswer { station, thread, seq, option } => {
+                // As its chat's row has it: still pending, and the option one it offers.
                 let rows = self.store.value(&Topic::ChatRows { station: station.clone() }).and_then(Result::ok).unwrap_or(Value::Null);
-                let found = crate::work::find(&rows, &session, &key);
-                let thread = thread.or_else(|| found.as_ref().and_then(|(_, thread, _)| *thread)).ok_or_else(|| CoreError::invalid("没有这件事"))?;
-                // Answered: no longer set aside, and the agent's to take up until it declares it again.
-                if let Some((chat, _, item)) = &found {
-                    let at = crate::work::deferral_key(&station, chat, &key);
-                    crate::prefs::undefer(&self.data, &at);
-                    crate::prefs::answered(&self.data, &at, item.get("evidence").and_then(Value::as_i64), self.host.now_ms());
-                }
-                let text = match reply {
-                    Some(reply) => {
-                        let title = found.as_ref().and_then(|(_, _, item)| item.get("title").and_then(Value::as_str)).ok_or_else(|| CoreError::invalid("没有这件事"))?;
-                        format!("「{title}」{reply}")
-                    }
-                    None => answer,
-                };
-                let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes: json!([]), client: None };
+                let row = rows.as_array().into_iter().flatten().find(|r| r.get("thread").and_then(Value::as_u64) == Some(thread));
+                let decision = row.and_then(crate::decisions::of_row).filter(|d| d.get("seq").and_then(Value::as_u64) == Some(seq))
+                    .ok_or_else(|| CoreError::invalid("这个决定已经有人回复了"))?;
+                let (text, quotes) = crate::decisions::answer(decision, &option).ok_or_else(|| CoreError::invalid("没有这个选项"))?;
+                crate::prefs::undefer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq));
+                let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await
             }
-            Call::ItemDefer { station, session, key } => {
-                let rows = self.store.value(&Topic::ChatRows { station: station.clone() }).and_then(Result::ok).unwrap_or(Value::Null);
-                let (chat, _, item) = crate::work::find(&rows, &session, &key).ok_or_else(|| CoreError::invalid("没有这件事"))?;
-                // The prefs changed: the lists and the chat's card are put together again.
-                crate::prefs::defer(&self.data, &crate::work::deferral_key(&station, &chat, &key), item.get("evidence").and_then(Value::as_i64), self.host.now_ms());
+            Call::DecisionDefer { station, thread, seq } => {
+                // The prefs changed: the decisions page is put together again. Nothing is sent.
+                crate::prefs::defer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq), self.host.now_ms());
                 Ok(Value::Null)
             }
             Call::ChatRetryIn { station, session, id } => match self.views.pending_thread(&station, &session) {
@@ -2059,19 +2049,15 @@ mod tests {
             Call::ChatSendTo { station: "w/s".into(), session: "new:1-1".into(), text: "hi".into(), attachments: json!([]), quotes: json!([]), client: None }
         );
         assert_eq!(parse_call("chat.retry", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatRetryIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
-        // A piece of work answered, by its chat's thread or its session; set aside.
+        // A decision answered with an option, set aside; dismissed is the station's (ops.rs).
         assert_eq!(
-            parse_call("item.answer", json!({"station": "w/s", "session": "k", "thread": 7, "key": "gap", "answer": "「设置页间距」准"})).unwrap(),
-            Call::ItemAnswer { station: "w/s".into(), session: "k".into(), thread: Some(7), key: "gap".into(), answer: "「设置页间距」准".into(), reply: None }
+            parse_call("decision.answer", json!({"station": "w/s", "thread": 7, "seq": 4, "option": " 先不改 "})).unwrap(),
+            Call::DecisionAnswer { station: "w/s".into(), thread: 7, seq: 4, option: "先不改".into() }
         );
-        assert_eq!(
-            parse_call("item.answer", json!({"station": "w/s", "session": "k", "key": "gap", "answer": "「设置页间距」随便"})).unwrap(),
-            Call::ItemAnswer { station: "w/s".into(), session: "k".into(), thread: None, key: "gap".into(), answer: "「设置页间距」随便".into(), reply: None }
-        );
-        assert_eq!(code(parse_call("item.answer", json!({"station": "w/s", "session": "k", "key": "gap", "answer": " "}))), "invalid_params");
-        assert_eq!(code(parse_call("item.answer", json!({"station": "w/s", "session": "k", "answer": "x"}))), "invalid_params");
-        assert_eq!(parse_call("item.defer", json!({"station": "w/s", "session": "k", "key": "gap"})).unwrap(), Call::ItemDefer { station: "w/s".into(), session: "k".into(), key: "gap".into() });
-        assert_eq!(code(parse_call("item.defer", json!({"station": "w/s", "key": "gap"}))), "invalid_params");
+        assert_eq!(code(parse_call("decision.answer", json!({"station": "w/s", "thread": 7, "seq": 4, "option": " "}))), "invalid_params");
+        assert_eq!(code(parse_call("decision.answer", json!({"station": "w/s", "thread": 7, "option": "x"}))), "invalid_params");
+        assert_eq!(parse_call("decision.defer", json!({"station": "w/s", "thread": 7, "seq": 4})).unwrap(), Call::DecisionDefer { station: "w/s".into(), thread: 7, seq: 4 });
+        assert_eq!(code(parse_call("decision.defer", json!({"station": "w/s", "thread": 7}))), "invalid_params");
         assert_eq!(parse_call("chat.discard", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatDiscardIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
     }
 
@@ -2858,37 +2844,43 @@ mod tests {
     }
 
     #[test]
-    fn a_piece_of_work_is_answered_in_its_chat_and_set_aside_on_the_device() {
+    fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_the_station() {
         run(async {
             let (host, core) = station_core(0.0).await;
             let ui = core.connect();
-            let item = json!({ "key": "gap", "session": "k1", "title": "设置页间距", "state": "waiting", "waitingOn": [], "ask": null, "detail": null, "evidence": 4, "createdAt": 1, "updatedAt": 1 });
-            core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{ "id": "k1", "session": "k1", "thread": 7, "items": [item] }]));
-            // Set aside: kept on the device, for the request it waits by; nothing is sent.
-            core.receive(ui, ClientMessage::Call { id: 2, call: "item.defer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "gap" }) });
+            let decision = json!({ "seq": 4, "options": [{ "label": "合", "recommended": true }, { "label": "先不改" }],
+                "message": { "seq": 4, "ts": "9.000004", "text": "合吗？", "authorName": "Claude" }, "before": [] });
+            core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{ "id": "k1", "session": "k1", "thread": 7, "decision": decision }]));
+            // Set aside: kept on the device; nothing is sent.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "decision.defer".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4 }) });
             host.settle().await;
-            let at = crate::work::deferral_key("ws/st", "k1", "gap");
-            assert_eq!(core.inner.data.get(&Topic::Prefs).unwrap()["deferred"][&at]["evidence"], 4);
+            let at = crate::decisions::deferral_key("ws/st", 7, 4);
+            assert!(core.inner.data.get(&Topic::Prefs).unwrap()["decisionsDeferred"][&at].is_number());
             let posted = |host: &FakeHost| -> Vec<Value> {
                 host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.ends_with("/threads/7/messages"))
                     .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap()).collect()
             };
             assert!(posted(&host).is_empty());
-            // Answered: a message in its chat (found by its session), and no longer set aside.
-            core.receive(ui, ClientMessage::Call { id: 3, call: "item.answer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "gap", "answer": "「设置页间距」准" }) });
+            // Answered: the option's label, quoting the post that asked; no longer set aside.
+            core.receive(ui, ClientMessage::Call { id: 3, call: "decision.answer".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4, "option": "先不改" }) });
             host.settle().await;
-            assert_eq!(posted(&host)[0]["text"], "「设置页间距」准");
-            assert_eq!(core.inner.data.get(&Topic::Prefs).unwrap()["deferred"], json!({}));
-            // Words written on its card: said of it.
-            core.receive(ui, ClientMessage::Call { id: 6, call: "item.answer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "gap", "reply": " 左边再收 4px " }) });
+            let sent = posted(&host);
+            assert_eq!(sent[0]["text"], "先不改");
+            assert_eq!(sent[0]["quotes"], json!([{ "author": "Claude", "text": "合吗？", "comment": "", "role": "agent", "ts": "9.000004" }]));
+            assert_eq!(core.inner.data.get(&Topic::Prefs).unwrap()["decisionsDeferred"], json!({}));
+            // Dismissed: the station keeps it for the viewer.
+            core.receive(ui, ClientMessage::Call { id: 7, call: "decision.dismiss".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4 }) });
             host.settle().await;
-            assert_eq!(posted(&host).last().unwrap()["text"], format!("「{}」左边再收 4px", "设置页间距"));
-            // One the station does not have: refused.
-            core.receive(ui, ClientMessage::Call { id: 4, call: "item.defer".into(), params: json!({ "station": "ws/st", "session": "k1", "key": "nope" }) });
-            core.receive(ui, ClientMessage::Call { id: 5, call: "item.answer".into(), params: json!({ "station": "ws/st", "session": "k9", "key": "nope", "answer": "x" }) });
+            let dismissed: Vec<Value> = host.requests.borrow().iter().filter(|r| r.method == "PUT" && r.url.ends_with("/threads/7/dismissed"))
+                .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap()).collect();
+            assert_eq!(dismissed, vec![json!({ "n": 4 })]);
+            // An option it does not offer, or a decision no longer pending: refused.
+            core.receive(ui, ClientMessage::Call { id: 4, call: "decision.answer".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4, "option": "别的" }) });
+            core.receive(ui, ClientMessage::Call { id: 5, call: "decision.answer".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 3, "option": "合" }) });
             host.settle().await;
             let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 4 | 5, .. })).count();
             assert_eq!(refused, 2);
+            assert_eq!(posted(&host).len(), 1);
         });
     }
 

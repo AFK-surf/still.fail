@@ -218,6 +218,13 @@ export interface TurnSummary {
 	waitSeconds?: number;
 	/** For waiting: what it waits for, in the agent's words (a station yet to update says nothing). */
 	waitFor?: string;
+	/**
+	 * How the agent ended it in today's words: all_done, need_decision, need_help or waiting (`declared` keeps the
+	 * words from before: final, block). A station yet to update says nothing.
+	 */
+	ending?: string;
+	/** For need_help: what a person has to give or do, in the agent's words. */
+	need?: string;
 	detail?: string;
 	startedAt: number;
 	endedAt?: number;
@@ -536,6 +543,8 @@ export interface TurnRecord {
 	kind: string;
 	outcome?: string;
 	declared?: string;
+	/** In today's words (TurnSummary::ending). */
+	ending?: string;
 	/** For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none). */
 	waitSeconds?: number;
 	detail?: string;
@@ -573,7 +582,10 @@ export interface Message {
 	text: string;
 	attachments: Attachment[];
 	quotes: Quote[];
+	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */
 	declared?: string;
+	/** all_done, need_decision, need_help: how the post ended its agent's turn. A station yet to update says nothing. */
+	ending?: string;
 	createdAt: number;
 	editedAt?: number;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
@@ -780,73 +792,26 @@ export interface RowWatch {
 	ask: string;
 }
 
-/** What a piece of work asks: the word for yes (`label`, 准 when absent), and answers to pick from (`options`). */
-export interface WorkAsk {
-	/** What is to be decided, in a sentence: its card's main line (the title there when absent: an older station). */
-	question?: string;
-	label?: string;
-	options?: string[];
-}
-
 /**
- * An answer a piece of work's card offers: its button's words, what it is (yes | option | drop | delegate | defer |
- * change), and the message it sends in the chat (`item.answer`), 「设置页间距」准; none for defer (`item.defer`, nothing
- * is sent) and change (the client puts 「设置页间距」 in the composer to be written on).
+ * One answer a decision offers (an agent's block post with chat_post `options`): a short phrase that reads on its own,
+ * a line on what it leads to, and whether the agent recommends it.
  */
-export interface WorkAnswer {
+export interface DecisionOption {
 	label: string;
-	kind: string;
-	text?: string;
-}
-
-/**
- * A piece of work in a chat (an agent declares them with chat_post): as its station keeps it, with what the core puts
- * in for the viewer (work.rs): whether it waits on them, its card's lines, and the answers it offers.
- */
-export interface WorkItem {
-	/** Its name in the chat: the same key is the same piece of work. */
-	key: string;
-	/** The agent that declared it last. */
-	session: string;
-	title: string;
-	/** working | waiting | done | dropped */
-	state: string;
-	/** Whom it waits on while waiting, each as a chat's people are (`shown`: as the core names them). */
-	waitingOn: Creator[];
-	/** What is asked of them, in the agent's words; absent for a plain yes. */
-	ask?: WorkAsk;
-	/** A line under its title: a branch, a commit, where it went. */
 	detail?: string;
-	/** The entry (its number in the chat) that declared it so. */
-	evidence?: number;
-	createdAt: number;
-	updatedAt: number;
-	/** Its times in words, by field. */
-	time?: Record<string, Stamp>;
-	/** It waits on the viewer. */
-	mine: boolean;
-	/** The viewer set it aside (待定): last of those waiting on them, still waiting. Absent otherwise. */
-	deferred?: boolean;
-	/** Its card's top line while it waits: 奏, 等王磊决定, 等王磊、小李决定. Empty otherwise. */
-	lead: string;
-	/** The line under its title: its detail and when it was last declared so (分支 settings-gap · 3 分钟前). */
-	line: string;
-	/** Its card's main line: what is to be decided (`ask.question`), its title when the agent gave none. */
-	question: string;
-	/** Its card's quiet top line: lead, title and since when (奏 · 设置页间距 · 3 分钟前). */
-	head: string;
-	/** What its card offers while it waits, in order; none otherwise. */
-	answers: WorkAnswer[];
+	recommended?: boolean;
 }
 
 /**
- * A row's second line while something in it waits: how many wait on the viewer and how many only on others, and
- * the line (奏 · 设置页间距 · 另 2 件; 等王磊 · 设置页间距).
+ * A chat's decision still pending (a row's, a chat page's): the block post's entry, its options in the order they are
+ * shown (the recommended one last), whether the viewer dismissed it, and its line (奏 · …) while it is the viewer's.
  */
-export interface RowWaiting {
-	mine: number;
-	others: number;
-	text: string;
+export interface RowDecision {
+	seq: number;
+	options: DecisionOption[];
+	dismissed?: boolean;
+	/** 奏 · <the post's first line, cut to about 40 characters>: the row's second line. Absent once dismissed. */
+	text?: string;
 }
 
 /** An item of the sidebar, as its station puts it together for the viewer, and where it is. */
@@ -895,25 +860,25 @@ export interface ChatItem {
 	/** A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise. */
 	watch?: RowWatch;
 	/**
-	 * Its pieces of work (core, work.rs), as its station keeps them, oldest first. Absent when it has none (and from a
-	 * station before them).
+	 * The decision it waits on (an agent's block post with options no one has answered yet), as the viewer sees it.
+	 * Absent when there is none (and from a station before decisions).
 	 */
-	items?: WorkItem[];
+	decision?: RowDecision;
 	/**
-	 * Of `items`, those waiting on someone, in the order its page shows them one at a time: those waiting on the
-	 * viewer (set aside last), then those waiting only on others (set aside last). Absent when none waits.
-	 */
-	asks?: WorkItem[];
-	/** Its second line while something in it waits (奏 · 设置页间距 · 另 1 件等王磊). Absent otherwise. */
-	waiting?: RowWaiting;
-	/**
-	 * It has pieces of work and all are done or dropped, with nothing at work or unread in it: drawn faded. Absent
-	 * otherwise.
+	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no decision waiting for the viewer,
+	 * nothing unread. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
 	 */
 	settled?: boolean;
+	/** With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise. */
+	archivable?: boolean;
 	/**
-	 * Its mark, the most urgent first: alert (blocked or failed), wait (something waits on the viewer), busy (at
-	 * work), done (something unread), other (something waits only on others). Absent for none.
+	 * Where it stands, in words, for its second line: 奏 · … (a decision waiting for the viewer), 要你帮忙：…, 出问题：…,
+	 * 在等：…, 做完了. Absent while it is at work or with nothing to say.
+	 */
+	stateText?: string;
+	/**
+	 * Its mark, the most urgent first: alert (blocked or failed), wait (a decision waits, not dismissed by the viewer),
+	 * busy (at work), done (something unread). Absent for none.
 	 */
 	tone?: string;
 }
@@ -962,6 +927,25 @@ export interface MessageBy {
 }
 
 /**
+ * Where a decision in a chat's messages stands (core, decisions.rs): still waiting (no person has written since it was
+ * asked, and no newer one replaced it), or `resolved`, with who answered and whether by picking an option.
+ */
+export interface MessageDecision {
+	resolved: boolean;
+	/** Still waiting, and the viewer dismissed it (off their list; the options still work). */
+	dismissed?: boolean;
+	/**
+	 * Who answered it (the first person to write after it), by name; absent while it waits, or when a newer decision
+	 * replaced it.
+	 */
+	answeredBy?: string;
+	/** The option they picked (their message quoted it with an option's label), its label. */
+	chosen?: string;
+	/** Resolved, in words: 林晓 选了「先不改」, 林晓 回复了, 已换成新的问题. */
+	text?: string;
+}
+
+/**
  * A message of a chat, with what the core decides of it: the viewer's (their bubble), ember's own notice, who said
  * it, and whether its agents have yet to take it.
  */
@@ -978,7 +962,10 @@ export interface ChatMessage {
 	text: string;
 	attachments: Attachment[];
 	quotes: Quote[];
+	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */
 	declared?: string;
+	/** all_done, need_decision, need_help: how the post ended its agent's turn. A station yet to update says nothing. */
+	ending?: string;
 	createdAt: number;
 	editedAt?: number;
 	mine: boolean;
@@ -994,6 +981,13 @@ export interface ChatMessage {
 	said?: boolean;
 	/** Its times in words, by field (`createdAt`). */
 	time?: Record<string, Stamp>;
+	/**
+	 * An agent's block post asking people to decide: the answers to pick, in the order they are shown (the one the
+	 * agent recommends last). Absent for every other message.
+	 */
+	options?: DecisionOption[];
+	/** With `options`: whether it still waits for an answer, and who answered it how. */
+	decision?: MessageDecision;
 }
 
 /**
@@ -1096,11 +1090,13 @@ export interface ChatView {
 	failed?: string;
 	/** Its link while it is down or coming back, in words; absent while it is up (and from a core before it). */
 	connection?: LinkShown;
+	/** The decision it waits on, as its row has it. Absent when there is none. */
+	decision?: RowDecision;
 	/**
-	 * Its pieces of work waiting on someone, in the order its card shows them (as its row's `asks`). Absent when
-	 * none waits.
+	 * Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
+	 * (`chat.archive`). Absent otherwise.
 	 */
-	asks?: WorkItem[];
+	archivable?: boolean;
 }
 
 export interface StationState {
@@ -1223,6 +1219,40 @@ export interface Counts {
 	sessions: number;
 	running: number;
 	warm: number;
+}
+
+/**
+ * One decision on the decisions page: where it is, the post that asks it (as a chat shows messages) and the messages
+ * just before it, its options as shown, and whether the viewer set it aside on this device.
+ */
+export interface DecisionItem {
+	station: string;
+	stationName: string;
+	/** Its chat's item id (its session's key): what its page opens by. */
+	session: string;
+	thread: number;
+	/** Its chat's title. */
+	title: string;
+	seq: number;
+	message: ChatMessage;
+	/** The one or two messages before it, oldest first. */
+	before: ChatMessage[];
+	options: DecisionOption[];
+	/** Set aside (待定) on this device: last in the list, still pending. */
+	deferred?: boolean;
+	/** 奏 · <the post's first line> */
+	text: string;
+}
+
+/**
+ * The decisions waiting in a workspace's chats for the viewer (the `decisions` view, core decisions.rs): pending, not
+ * dismissed by them, those they set aside (待定) last; `count` for the home page's 奏 N.
+ */
+export interface DecisionsView {
+	items: DecisionItem[];
+	count: number;
+	/** Some station's chats are still being read: more may come. */
+	loading: boolean;
 }
 
 /** What this device is, as its host told the core at start (`client.device`), and what follows from it. */
@@ -2246,15 +2276,17 @@ export interface UsageView {
 
 /**
  * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
- * have something unread; of all its chats, how many wait on them (`wait`); its `tone` (alert | wait | done, as a
+ * have something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a
  * chat's mark) and in words, none when it is 0 and 0; the chat last
  * open in it.
  */
 export interface WorkspaceMark {
 	alert: number;
 	unread: number;
-	/** How many have something waiting on them (a piece of work's decision), not counted in `alert`. Absent for 0. */
+	/** How many have a decision waiting (not dismissed by them), not counted in `alert`. Absent for 0. */
 	wait?: number;
+	/** How many decisions wait in it for them in all (the home page's 奏 N). Absent for 0. */
+	decisions?: number;
 	tone?: string;
 	/** 2 个需要处理 · 1 个等你决定 · 3 个有新消息 */
 	label?: string;

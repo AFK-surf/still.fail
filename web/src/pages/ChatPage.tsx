@@ -4,7 +4,7 @@
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Boxes, Close, Edit, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, Edit, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -338,6 +338,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           ))}
         </div>
         <div className={css.pageBarActions}>
+          {/* Nothing left in it (the core's `archivable`): archived with one press. */}
+          {chat.archivable && keeper && <IconButton label="归档" icon={Archive} shortcut="chat.archive" onClick={() => { if (chat.watch) setAskArchive(true); else void archive(); }} />}
           <JobsPanel station={station.address} view={jobsView} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (

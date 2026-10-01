@@ -43,6 +43,11 @@ export const mHomeToolbar = style({
     "(min-width: 680px)": { position: "fixed", left: "auto", right: "10px", padding: "0 0 calc(10px + var(--m-foot))" },
   },
 });
+/** 奏 N: a frosted capsule as tall as the new-chat one, left of it. */
+export const mDecisions = style({
+  display: "flex", alignItems: "center", gap: "6px", height: "56px", padding: "0 22px", marginRight: "10px",
+  borderRadius: "999px", color: "var(--m-ink)", cursor: "pointer", pointerEvents: "auto",
+});
 export const mHomeCapsule = style({
   display: "flex", alignItems: "center", gap: "6px", padding: "6px", borderRadius: "999px", pointerEvents: "auto",
 });
@@ -152,3 +157,15 @@ globalStyle(`${mRecentRows} ${mChatRow}`, { height: "60px", padding: "0 12px 0 1
 globalStyle(`${mRecentRows} ${mChatRow}[data-open]`, { background: "var(--m-accent-bg)" });
 globalStyle(`${mRecentRows} ${mChatRow}[data-open] ${mChatTitle}`, { color: "var(--m-accent-ink)", fontWeight: "600" });
 globalStyle(`${mNewChat}[data-small]`, { width: "32px", height: "32px" });
+
+/** A row with 归档 at its end (the core's `archivable`): the button beside the row's own, not in it. */
+export const mChatRowWrap = style({ position: "relative" });
+globalStyle(`${mChatRow}[data-archivable]`, { paddingRight: "56px" });
+export const mRowArchive = style({
+  position: "absolute", top: "15px", right: "12px", display: "grid", placeItems: "center", width: "36px", height: "36px",
+  padding: "0", border: "0", borderRadius: "50%", background: "none", color: "var(--m-muted)", cursor: "pointer",
+  selectors: { "&:disabled": { opacity: ".4" } },
+});
+globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-muted)" });
+globalStyle(`${mDecisions} b`, { fontSize: "17px", fontWeight: "600", lineHeight: "24px" });
+globalStyle(`${mDecisions} span`, { fontSize: "16px", lineHeight: "24px", fontVariantNumeric: "tabular-nums" });

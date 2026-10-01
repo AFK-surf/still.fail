@@ -1249,6 +1249,39 @@ async fn chats_are_pinned_by_each_viewer_for_themselves() {
 }
 
 #[tokio::test]
+async fn a_pending_decision_is_on_its_chats_row_and_each_viewer_dismisses_it_for_themselves() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let thread = made["thread"]["id"].as_i64().unwrap();
+    t.call("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "改一下统计" }))).await;
+    let decision = |rows: Value| rows.as_array().unwrap().iter().find(|r| r["id"] == key).map(|r| r.get("decision").cloned().unwrap_or(Value::Null)).unwrap();
+    assert_eq!(decision(t.get("/chats").await), Value::Null);
+    t.store.insert_message(NewMessage::new(thread, "9.000001", AuthorKind::Agent, &key, "先看看")).unwrap();
+    let options = json!([{ "label": "按今天累计", "recommended": true }, { "label": "先不改" }]);
+    let (n, _) = t.store.insert_message(NewMessage { declared: Some("block".into()), options: Some(options.clone()), ..NewMessage::new(thread, "9.000002", AuthorKind::Agent, &key, "改成按今天累计吗？") }).unwrap();
+    let d = decision(t.get("/chats").await);
+    assert_eq!((d["seq"].clone(), d["options"].clone(), d.get("dismissed")), (json!(n), options.clone(), None));
+    assert_eq!((d["message"]["seq"].clone(), d["message"]["text"].clone(), d["message"]["options"].clone()), (json!(n), json!("改成按今天累计吗？"), options.clone()));
+    let before: Vec<Value> = d["before"].as_array().unwrap().iter().map(|m| m["text"].clone()).collect();
+    assert_eq!(before, vec![json!("改一下统计"), json!("先看看")], "the two messages before it");
+    // Its entry carries its options for the chat page.
+    let entries = t.get(&format!("/threads/{thread}/entries")).await;
+    assert_eq!(entries["entries"].as_array().unwrap().last().unwrap()["options"], options);
+    // Dismissed by one viewer: on their rows as dismissed, on everyone else's as it was.
+    let dismiss = format!("/threads/{thread}/dismissed");
+    assert_eq!(t.call("PUT", &dismiss, Some(json!({ "n": n }))).await, (200, json!({ "dismissed": { "thread": thread, "n": n } })));
+    assert_eq!(decision(t.get("/chats").await)["dismissed"], json!(true));
+    assert_eq!(decision(t.call_as("GET", "/chats", None, dev()).await.1).get("dismissed"), None);
+    assert_eq!(t.call("PUT", &dismiss, Some(json!({ "n": n - 1 }))).await.0, 404, "a message that asks nothing");
+    assert_eq!(t.call("PUT", &dismiss, Some(json!({ "n": "x" }))).await.0, 400);
+    // A person answers it: gone from every row.
+    t.call_as("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "先不改", "quotes": [{ "author": "agent", "text": "改成按今天累计吗？", "ts": "9.000002", "role": "agent" }] })), dev()).await;
+    assert_eq!(decision(t.get("/chats").await), Value::Null);
+    assert_eq!(decision(t.call_as("GET", "/chats", None, dev()).await.1), Value::Null);
+}
+
+#[tokio::test]
 async fn a_chat_is_renamed_by_hand_and_named_by_its_agent_or_first_message_again_when_the_name_is_cleared() {
     let t = setup().await;
     let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;

@@ -116,6 +116,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         })(),
         // A chat kept at the top of the viewer's list, or let go: by its item's id, its session's key.
         "chat.pin" => op(if p.bool("pinned") { "PUT" } else { "DELETE" }, p.at("session").map(|k| format!("/sessions/{k}/pin")), None, Effect::Session(p.word("session"))),
+        // A decision the viewer will not take up (decisions.rs): off their list on every device, pending for the rest.
+        "decision.dismiss" => (|| op("PUT", Ok(format!("/threads/{}/dismissed", p.u64("thread")?)), Some(json!({ "n": p.u64("seq")? })), Effect::Thread { archived: false }))(),
         // A new chat: its session and its thread, made before its first message (`chat.create` makes one behind the page).
         "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort"])), Effect::Session(None)),
         "chats.archived" => op("GET", Ok("/chats?archived=1".into()), None, Effect::None),
@@ -272,6 +274,13 @@ mod tests {
         let r = req("chat.pin", json!({ "station": "ws/st", "session": "ember:c-1", "pinned": true }));
         assert_eq!((r.method, r.path.as_str()), ("PUT", "/sessions/ember%3Ac-1/pin"));
         assert_eq!(req("chat.pin", json!({ "station": "ws/st", "session": "k", "pinned": false })).method, "DELETE");
+    }
+
+    #[test]
+    fn a_decision_is_dismissed_on_its_chats_thread() {
+        let r = req("decision.dismiss", json!({ "station": "ws/st", "thread": 7, "seq": 4 }));
+        assert_eq!((r.target, r.method, r.path.as_str(), r.body), (Target::Station("ws/st".into()), "PUT", "/threads/7/dismissed", Some(json!({ "n": 4 }))));
+        assert!(request("decision.dismiss", &json!({ "station": "ws/st", "thread": 7 })).unwrap().is_err());
     }
 
     #[test]

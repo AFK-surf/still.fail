@@ -453,6 +453,8 @@ impl AdminApi {
             }
         }
         let mut rows = Vec::new();
+        // The decisions the viewer said they will not take up.
+        let dismissed = store.dismissed(&viewer.id())?;
         for t in threads.iter().filter(|t| t.thread.surface == STILLFAIL_SURFACE && listed(t) && !in_chat(t).is_empty()) {
             let from = t.sessions.iter().find_map(|m| origins.get(&m.session).copied());
             let agents: Vec<Value> = in_chat(t).iter().map(|key| agent(key)).collect();
@@ -495,10 +497,10 @@ impl AdminApi {
             if let Some(client) = key.as_str().and_then(|k| self.deps.hub.client_key(k)) {
                 row["clientKey"] = json!(client);
             }
-            // Its pieces of work (chat_post items), with whom each waits on in words; a chat with none says nothing.
-            let items = self.items_view(t.thread.id);
-            if !items.is_empty() {
-                row["items"] = json!(items);
+            // The decision it waits on, if any (an agent's block post with options no one has answered yet), and
+            // whether the viewer dismissed it; a chat with none says nothing.
+            if !archived && let Some(decision) = self.decision_view(t.thread.id, &dismissed, &mut names) {
+                row["decision"] = decision;
             }
             if archived {
                 row["archived"] = match t.thread.home.as_ref().and_then(|home| all.get(home)) {
@@ -553,38 +555,21 @@ impl AdminApi {
         Ok(rows)
     }
 
-    /// A chat's pieces of work for its row: each as kept, with `waitingOn` as people (`{id, name, email, via}`), and
-    /// `answered` once someone answered one that waits (a person's message 「<title>」… after the post that asked): it is
-    /// the agent's to take up then, on every device, until it declares it again.
-    fn items_view(&self, thread: i64) -> Vec<Value> {
+    /// A chat's decision still pending (store `pending_decision`), for its row: `seq` (the block post's entry), its
+    /// `options` as the agent gave them, `dismissed` when the viewer will not take it up, the post itself (`message`, as
+    /// lists show messages, with its options) and the two messages before it (`before`), for a page of decisions to
+    /// show without reading the chat.
+    fn decision_view(&self, thread: i64, dismissed: &HashSet<(i64, i64)>, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Option<Value> {
         let store = &self.deps.store;
-        let items = store.items(thread).unwrap_or_default();
-        let since = items.iter().filter(|it| it.state == "waiting").filter_map(|it| it.evidence).min();
-        let said: Vec<(i64, String)> = match since {
-            Some(since) => store
-                .messages_before(thread, None, 200)
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|m| m.n > since && m.author_kind == AuthorKind::Person)
-                .map(|m| (m.n, m.text))
-                .collect(),
-            None => vec![],
-        };
-        items
-            .into_iter()
-            .map(|it| {
-                let people = self.people(&it.waiting_on);
-                let asked = format!("「{}」", it.title);
-                let answered = it.state == "waiting"
-                    && it.evidence.is_some_and(|e| said.iter().any(|(n, text)| *n > e && text.trim_start().starts_with(&asked)));
-                let mut v = json!(it);
-                v["waitingOn"] = json!(people);
-                if answered {
-                    v["answered"] = json!(true);
-                }
-                v
-            })
-            .collect()
+        let (m, options) = store.pending_decision(thread).ok().flatten()?;
+        let mut message = message_view(&m, names);
+        message["options"] = options.clone();
+        let before: Vec<Value> = store.messages_before(thread, Some(m.n), 2).unwrap_or_default().iter().map(|b| message_view(b, names)).collect();
+        let mut v = json!({ "seq": m.n, "options": options, "message": message, "before": before });
+        if dismissed.contains(&(thread, m.n)) {
+            v["dismissed"] = json!(true);
+        }
+        Some(v)
     }
 
     /// Whether a person is the viewer: by id, by email, or as a Slack user the viewer said is them.
@@ -694,6 +679,7 @@ impl AdminApi {
             .map(|e| {
                 let mut v = serde_json::to_value(e).unwrap_or(Value::Null);
                 v["authorName"] = json!(names(e.author_kind, &e.author));
+                declared_view(&mut v, e.declared.as_deref());
                 v
             })
             .collect()
@@ -716,10 +702,21 @@ impl AdminApi {
 
 /// A merged message as lists show it (a thread's latest), with its author's name.
 pub fn message_view(m: &MessageRow, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Value {
-    json!({
+    let mut v = json!({
         "seq": m.n, "thread": m.thread, "ts": m.ts, "authorKind": m.author_kind, "author": m.author, "authorName": names(m.author_kind, &m.author),
         "text": m.text, "attachments": m.attachments, "quotes": m.quotes, "declared": m.declared, "createdAt": m.created_at, "editedAt": m.edited_at,
-    })
+    });
+    declared_view(&mut v, m.declared.as_deref());
+    v
+}
+
+/// A post's declared kind as the pages read it: `declared` in the words from before (final, block), which clients from
+/// before know, and `ending` in today's (all_done, need_decision, need_help).
+fn declared_view(v: &mut Value, declared: Option<&str>) {
+    if let Some(d) = declared {
+        v["declared"] = json!(crate::store::said_before(d));
+        v["ending"] = json!(crate::store::ending(d));
+    }
 }
 
 #[allow(dead_code)]

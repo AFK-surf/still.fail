@@ -218,21 +218,16 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Clears a session's ended jobs (stopped, failed, ended by itself) off its pages, as the station keeps them. */
     suspend fun clearEndedJobs(session: String) { op("job.clearEnded") { put("session", session) } }
 
-    // ── a chat's pieces of work (client/core/src/work.rs) ──
+    // ── decisions (client/core/src/decisions.rs) ──
 
-    /**
-     * Answers a piece of work waiting on the viewer, said in its chat in the viewer's name: `answer`, its answer's
-     * `text`; or `reply`, words written of it (the core says them of it: 「设置页间距」words).
-     */
-    suspend fun answerItem(session: String, thread: Long?, key: String, answer: String? = null, reply: String? = null) {
-        op("item.answer") {
-            put("session", session); if (thread != null) put("thread", thread); put("key", key)
-            if (answer != null) put("answer", answer)
-            if (reply != null) put("reply", reply)
-        }
+    /** Answers a decision with one of its options: the viewer's message in its chat, the label quoting the post. */
+    suspend fun answerDecision(thread: Long, seq: Long, option: String) {
+        op("decision.answer") { put("thread", thread); put("seq", seq); put("option", option) }
     }
-    /** Sets a piece of work aside (待定): last of those waiting on the viewer, still waiting; nothing is said. */
-    suspend fun deferItem(session: String, key: String) { op("item.defer") { put("session", session); put("key", key) } }
+    /** Sets a decision aside on this device (待定): last on the decisions page, still pending; nothing is sent. */
+    suspend fun deferDecision(thread: Long, seq: Long) { op("decision.defer") { put("thread", thread); put("seq", seq) } }
+    /** Dismisses a decision for the viewer, on every device of theirs: off their list, still pending for others. */
+    suspend fun dismissDecision(thread: Long, seq: Long) { op("decision.dismiss") { put("thread", thread); put("seq", seq) } }
 
     // ── the archive (web/src/pages/Archive.tsx) ──
 

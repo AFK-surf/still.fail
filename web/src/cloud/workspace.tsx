@@ -14,7 +14,8 @@ import { useTopics } from "../core/react.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
-import { ChatList, StationTrouble } from "../Sidebar.tsx";
+import { ChatList, DecisionsEntry, StationTrouble } from "../Sidebar.tsx";
+import { DecisionsPage } from "../pages/Decisions.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
 import { OpenJobs } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
@@ -62,7 +63,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const path = useLocation().pathname;
   const navigate = useNavigate();
   useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
-  const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$)/.test(path);
+  const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
@@ -115,6 +116,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
             <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
+            <Route path="decisions" element={<DecisionsPage scope={entry.id} back={`/w/${entry.id}`} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
@@ -200,6 +202,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
       <div className={nav.navFoot}>
         <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
+        <DecisionsEntry scope={entry.id} to={`/w/${entry.id}/decisions`} />
         <WorkspaceOpenJobs scope={entry.id} />
         <div className={nav.navFootRow}>
           <WorkspaceSwitcher current={entry} />

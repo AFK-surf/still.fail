@@ -8,9 +8,23 @@ use serde_json::{Value, json};
 use crate::format;
 use crate::protocol::Topic;
 
-/// Where a session stands: running (also while it waits on work it started, which brings it back), queued, final,
-/// block, failed, aborted, unexpected (a turn that ended without saying final or block, or was left open by a crash),
-/// or idle.
+/// How a session's last turn ended, in today's words (all_done, need_decision, need_help, waiting): the station's
+/// `ending`, else its `declared` as a station from before them says it (final all_done, block need_help).
+pub fn ending(s: &Value) -> Option<&str> {
+    let turn = s.get("lastTurn").filter(|t| t.is_object())?;
+    match turn.get("ending").and_then(Value::as_str) {
+        Some(ending) => Some(ending),
+        None => match turn.get("declared").and_then(Value::as_str)? {
+            "final" => Some("all_done"),
+            "block" => Some("need_help"),
+            other => Some(other),
+        },
+    }
+}
+
+/// Where a session stands: running (also while it waits on work it started, which brings it back), queued, final
+/// (all done), block (it needs a person's help), decision (a person has to pick), failed, aborted, unexpected (a turn
+/// that ended without a state, or was left open by a crash), or idle.
 pub fn session_status(s: &Value) -> &'static str {
     if s.get("process").and_then(Value::as_str) == Some("running") {
         return "running";
@@ -19,9 +33,10 @@ pub fn session_status(s: &Value) -> &'static str {
         return "queued";
     }
     let Some(turn) = s.get("lastTurn").filter(|t| t.is_object()) else { return "idle" };
-    match turn.get("declared").and_then(Value::as_str) {
-        Some("final") => return "final",
-        Some("block") => return "block",
+    match ending(s) {
+        Some("all_done") => return "final",
+        Some("need_help") => return "block",
+        Some("need_decision") => return "decision",
         Some("waiting") => return "running",
         _ => {}
     }
@@ -37,7 +52,7 @@ pub fn session_status(s: &Value) -> &'static str {
 /// turn ended, and at most how many seconds until it is asked again; null otherwise.
 pub fn waiting(s: &Value) -> Value {
     let turn = s.get("lastTurn").filter(|t| t.is_object());
-    let since = turn.filter(|t| t.get("declared").and_then(Value::as_str) == Some("waiting")).and_then(|t| t.get("endedAt")).and_then(Value::as_i64);
+    let since = turn.filter(|_| ending(s) == Some("waiting")).and_then(|t| t.get("endedAt")).and_then(Value::as_i64);
     match since {
         Some(since) if session_status(s) == "running" && s.get("process").and_then(Value::as_str) != Some("running") => {
             json!({ "since": since, "seconds": turn.and_then(|t| t.get("waitSeconds")).cloned().unwrap_or(Value::Null) })
@@ -79,11 +94,12 @@ pub fn mark_of(s: &Value) -> Option<&'static str> {
     badge(shown_status(s))
 }
 
-/// A status as a client's small mark: run (at work), block, failed; none for the rest.
+/// A status as a client's small mark: run (at work), block (it needs a person: help or a decision), failed; none for
+/// the rest.
 pub fn badge(status: &str) -> Option<&'static str> {
     match status {
         "running" | "queued" => Some("run"),
-        "block" => Some("block"),
+        "block" | "decision" => Some("block"),
         "failed" | "unexpected" => Some("failed"),
         _ => None,
     }
@@ -93,6 +109,41 @@ pub fn badge(status: &str) -> Option<&'static str> {
 pub fn row_state(agents: &[Value]) -> Option<&'static str> {
     let marks: Vec<&str> = agents.iter().filter_map(mark_of).collect();
     ["block", "run", "failed"].into_iter().find(|b| marks.contains(b))
+}
+
+/// A chat with nothing left in it (`settled`, `archivable`): each of its agents ended its last turn all_done (or final,
+/// from a station before), none at work, no decision waiting for the viewer, nothing unread. Drawn faded and below the
+/// rest of its day; one tap archives it.
+pub fn settled(row: &Value) -> bool {
+    let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+    !agents.is_empty()
+        && agents.iter().all(|a| shown_status(a) == "final")
+        && !crate::decisions::waits(row)
+        && row.get("unread").and_then(Value::as_bool) != Some(true)
+}
+
+/// Where a chat stands, in words, for its second line (`stateText`): a decision waiting for the viewer (奏 · …), else
+/// its agents' most pressing state: what one needs (要你帮忙：…), what went wrong (出问题：…), what one waits for
+/// (在等：…), 做完了 when all are done. None while one is at work (its activity says), or with nothing to say.
+pub fn row_state_text(row: &Value) -> Option<String> {
+    if let Some(text) = row.get("decision").filter(|_| crate::decisions::waits(row)).and_then(|d| d.get("text")).and_then(Value::as_str) {
+        return Some(text.to_string());
+    }
+    let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+    let text_of = |a: &Value| a.get("statusText").and_then(Value::as_str).map(str::to_string);
+    let status = |a: &Value| shown_status(a);
+    if agents.iter().any(|a| matches!(status(a), "queued") || (status(a) == "running" && waiting(a).is_null())) {
+        return None;
+    }
+    for wanted in [&["block"][..], &["failed", "unexpected", "aborted"][..]] {
+        if let Some(a) = agents.iter().find(|a| wanted.contains(&status(a))) {
+            return text_of(a);
+        }
+    }
+    if let Some(a) = agents.iter().find(|a| !waiting(a).is_null()) {
+        return text_of(a);
+    }
+    settled(row).then(|| "做完了".to_string())
 }
 
 /// Whether a person (an email, "local", a Slack user id) is the viewer: by id, by email, or as a Slack user the
@@ -321,6 +372,17 @@ pub fn session(s: &mut Value) {
     let status = shown_status(s);
     let (text, tone) = format::status_text(status);
     let mut text = text.to_string();
+    let turn = s.get("lastTurn").cloned().unwrap_or(Value::Null);
+    let said = |k: &str| turn.get(k).and_then(Value::as_str).map(str::trim).filter(|w| !w.is_empty()).map(str::to_string);
+    match status {
+        // What it needs, in its words (要你帮忙：要 Stripe 的测试 key).
+        "block" => if let Some(need) = said("need") {
+            text = format!("要你帮忙：{need}");
+        },
+        // Why, in words (出问题：额度用完).
+        "failed" => text = format!("出问题：{}", format::failure_text(&said("detail").unwrap_or_default())),
+        _ => {}
+    }
     if !waiting(s).is_null() {
         // Waiting on a watch of its own: the watch brings it back, however long (the station does not ask it again).
         // Otherwise on what it said it waits for (an older station says nothing of it).
@@ -357,7 +419,7 @@ pub fn session(s: &mut Value) {
 /// A mark in words: what it says when pointed at.
 pub fn badge_text(badge: &str) -> &'static str {
     match badge {
-        "block" => "Block：agent 停下来等人处理",
+        "block" => "agent 停下来等人处理",
         "run" => "工作中",
         _ => "失败了，需要处理",
     }
@@ -598,6 +660,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::SlackTokens { .. } => s::conform::<s::SlackTokensView>(value),
         Topic::Doing => s::conform::<s::DoingView>(value),
         Topic::WorkspaceMarks { .. } => s::conform::<s::WorkspaceMarksView>(value),
+        Topic::Decisions { .. } => s::conform::<s::DecisionsView>(value),
         _ => Ok(value),
     }
 }
@@ -720,6 +783,12 @@ mod tests {
         assert_eq!(session_status(&json!({"process": "running"})), "running");
         assert_eq!(session_status(&json!({"process": "warm", "pending": 1})), "queued");
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "outcome": "completed"}})), "block");
+        // Today's words, as the station says them besides the words from before.
+        assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "ending": "need_decision", "outcome": "completed"}})), "decision");
+        assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "ending": "need_help", "outcome": "completed"}})), "block");
+        assert_eq!(session_status(&json!({"lastTurn": {"declared": "final", "ending": "all_done", "outcome": "completed"}})), "final");
+        assert_eq!(session_status(&json!({"lastTurn": {"declared": "final", "outcome": "completed"}})), "final");
+        assert_eq!(session_status(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "ending": "waiting", "outcome": "completed"}})), "running");
         assert_eq!(session_status(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed"}})), "running");
         assert_eq!(session_status(&json!({"lastTurn": {"outcome": "completed"}})), "unexpected");
         let waits = json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitSeconds": 600}});
@@ -787,6 +856,54 @@ mod tests {
     }
 
     #[test]
+    fn how_a_turn_ended_says_itself_in_words() {
+        let words = |turn: Value| {
+            let mut s = json!({"process": "warm", "lastTurn": turn});
+            session(&mut s);
+            s["statusText"].as_str().unwrap().to_string()
+        };
+        assert_eq!(words(json!({"declared": "final", "ending": "all_done", "outcome": "completed"})), "做完了");
+        assert_eq!(words(json!({"declared": "block", "ending": "need_help", "need": "要 Stripe 的测试 key", "outcome": "completed"})), "要你帮忙：要 Stripe 的测试 key");
+        assert_eq!(words(json!({"declared": "block", "outcome": "completed"})), "要你帮忙");
+        assert_eq!(words(json!({"declared": "block", "ending": "need_decision", "outcome": "completed"})), "等你决定");
+        assert_eq!(words(json!({"outcome": "failed", "detail": "rate_limit: You've hit your limit"})), "出问题：额度用完");
+        assert_eq!(words(json!({"outcome": "failed", "detail": "auth: 401"})), "出问题：登录失效");
+        assert_eq!(words(json!({"outcome": "aborted"})), "出问题：被停止");
+        assert_eq!(words(json!({"outcome": "completed"})), "出问题：没说一声就停了");
+        let mut decided = json!({"process": "warm", "lastTurn": {"declared": "block", "ending": "need_decision", "outcome": "completed"}});
+        session(&mut decided);
+        assert_eq!(decided["mark"], "block", "a decision marks it as help does: the row's decision says which");
+    }
+
+    #[test]
+    fn a_chat_with_nothing_left_is_settled_and_says_where_it_stands() {
+        let agent = |turn: Value, process: &str| {
+            let mut a = json!({"key": "k", "process": process, "pending": 0, "lastTurn": turn});
+            session(&mut a);
+            a
+        };
+        let done = agent(json!({"declared": "final", "ending": "all_done", "outcome": "completed"}), "warm");
+        let helped = agent(json!({"declared": "block", "ending": "need_help", "need": "要 key", "outcome": "completed"}), "warm");
+        let waits = agent(json!({"declared": "waiting", "ending": "waiting", "waitFor": "CI 跑完", "outcome": "completed", "endedAt": 5}), "warm");
+        let works = agent(Value::Null, "running");
+        let row = |agents: Vec<Value>, unread: bool| json!({"agents": agents, "unread": unread});
+        assert!(settled(&row(vec![done.clone()], false)));
+        assert_eq!(row_state_text(&row(vec![done.clone()], false)).as_deref(), Some("做完了"));
+        assert!(!settled(&row(vec![done.clone()], true)), "something unread in it");
+        assert!(!settled(&row(vec![done.clone(), helped.clone()], false)));
+        assert_eq!(row_state_text(&row(vec![done.clone(), helped.clone()], false)).as_deref(), Some("要你帮忙：要 key"));
+        assert_eq!(row_state_text(&row(vec![done.clone(), waits.clone()], false)).as_deref(), Some("在等：CI 跑完"));
+        assert_eq!(row_state_text(&row(vec![done.clone(), works], false)), None, "at work: its activity says");
+        assert!(!settled(&row(vec![], false)));
+        // A decision waiting for the viewer comes first, and keeps it from being settled.
+        let mut asked = row(vec![done.clone()], false);
+        asked["decision"] = json!({"seq": 4, "text": "奏 · 合吗？"});
+        assert_eq!((settled(&asked), row_state_text(&asked).as_deref()), (false, Some("奏 · 合吗？")));
+        asked["decision"]["dismissed"] = json!(true);
+        assert!(settled(&asked), "dismissed: nothing waits for the viewer");
+    }
+
+    #[test]
     fn what_a_profile_can_enable_and_which_machine_logins_are_offered() {
         let mut p = json!({"models": ["mine", "b"], "check": {"models": ["a", "b"]}});
         profile(&mut p);
@@ -812,7 +929,7 @@ mod tests {
         // A session: where it stands in words, its title, label and maker, and its runtime's efforts.
         let mut s = json!({"runtime": "codex", "model": "gpt-6-astra", "effort": "medium", "process": "warm", "lastTurn": {"declared": "block"}, "firstText": "<@U1> 看看 CI"});
         session(&mut s);
-        assert_eq!((s["statusText"].as_str(), s["tone"].as_str(), s["badgeText"].as_str()), (Some("Block"), Some("blue"), Some("Block：agent 停下来等人处理")));
+        assert_eq!((s["statusText"].as_str(), s["tone"].as_str(), s["badgeText"].as_str()), (Some("要你帮忙"), Some("blue"), Some("agent 停下来等人处理")));
         assert_eq!((s["titleText"].as_str(), s["agentText"].as_str(), s["maker"]["id"].as_str()), (Some("看看 CI"), Some("GPT-6 Astra · medium"), Some("openai")));
         assert_eq!(s["modelName"], "GPT-6 Astra");
         assert_eq!((s["processText"].as_str(), s["efforts"][0].as_str()), (Some("保温中"), Some("minimal")));

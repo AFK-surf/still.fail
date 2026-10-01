@@ -192,6 +192,9 @@ pub enum Topic {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         workspace: Option<String>,
     },
+    /// A view: the decisions waiting for the viewer in a workspace's chats (decisions.rs), those set aside last, and how
+    /// many (the home page's 奏 N).
+    Decisions { workspace: String },
 }
 
 impl Topic {
@@ -205,7 +208,7 @@ impl Topic {
             // The core's own (pill.rs, changelog.rs).
             Topic::Changelog | Topic::Doing | Topic::SlackTokens { .. } => None,
             Topic::Connection { .. } => None,
-            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } | Topic::Usage { .. } => None,
+            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } | Topic::Usage { .. } | Topic::Decisions { .. } => None,
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => None,
             Topic::NewChat { .. } | Topic::Pick { .. } => None,
             // The core's own (jobs.rs), not the station module's.
@@ -214,6 +217,6 @@ impl Topic {
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::WorkspaceMarks { .. } | Topic::Usage { .. } | Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::ChatJobs { .. } | Topic::LongJobs { .. } | Topic::WorkspaceMarks { .. } | Topic::Decisions { .. } | Topic::Usage { .. } | Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. })
     }
 }

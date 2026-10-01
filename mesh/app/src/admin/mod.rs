@@ -851,6 +851,18 @@ impl AdminApi {
                         self.deps.store.set_thread_title(thread_id, title.as_deref())?;
                         return ok(self.thread(thread_id, viewer)?);
                     }
+                    // A decision the viewer will not take up (its block post's entry `n`): off their list, on every device
+                    // of theirs; still pending for everyone else.
+                    (Some("dismissed"), "PUT") => {
+                        let input = read_json(body).await?;
+                        let n = input.get("n").and_then(Value::as_f64).filter(|n| n.fract() == 0.0 && *n > 0.0).ok_or_else(|| http_error(400, "n 必须是整数"))? as i64;
+                        let asked = self.deps.store.entries_between(thread_id, n, n)?.into_iter().next().filter(|e| e.options.is_some());
+                        if asked.is_none() {
+                            return Err(http_error(404, "这条消息没有要决定的事"));
+                        }
+                        self.deps.store.dismiss(&viewer.id(), thread_id, n)?;
+                        return ok(json!({ "dismissed": { "thread": thread_id, "n": n } }));
+                    }
                     // A chat archived or shown again: with its session when it is that session's own (Hub::archive_chat).
                     (Some("archive"), "POST" | "DELETE") => {
                         self.deps.hub.archive_chat(thread_id, method == "POST").map_err(|e| http_error(400, e.to_string()))?;

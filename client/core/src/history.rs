@@ -350,7 +350,7 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                     "kind": "post",
                     "text": text("text").unwrap_or(""),
                     "place": place(text("to")),
-                    "block": text("kind") == Some("block"),
+                    "block": matches!(text("kind"), Some("block" | "need_help" | "need_decision")),
                     "failed": failed_of(&steps[*step]),
                 })
             }
@@ -374,8 +374,9 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                 json!({ "kind": "mark", "text": text, "wait": wait })
             }
             Item::Mark(kind, _) => json!({ "kind": "mark", "text": match kind.as_str() {
-                "final" => "标记为已完成".to_string(),
-                "block" => "进入 block 状态：agent 停下来等人处理".to_string(),
+                "final" | "all_done" => "标记为做完了".to_string(),
+                "block" | "need_help" => "停下来等人帮忙".to_string(),
+                "need_decision" => "停下来等人决定".to_string(),
                 other => format!("标记为 {other}"),
             } }),
             Item::Group(members, thinking) => group(timeline, &steps, members, thinking),
@@ -594,7 +595,7 @@ mod tests {
         assert_eq!(g["thinking"][0]["first"], "plan it");
         assert_eq!(items[1]["entries"], json!([1, 6]));
         assert_eq!((items[2]["body"]["content"]["block"].as_bool(), items[2]["body"]["content"]["place"]["name"].as_str()), (Some(true), Some("#ops")));
-        assert_eq!(items[3]["body"]["content"]["text"], "标记为已完成");
+        assert_eq!(items[3]["body"]["content"]["text"], "标记为做完了");
         let waits = |args: &str| {
             let live = json!({"loaded": true, "timeline": [{"kind": "tool_call", "tool": "mcp__ember__chat_state", "text": args}]});
             present(&live, &cx(&threads, &members, &slack))["items"][0]["body"]["content"].clone()

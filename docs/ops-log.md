@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 决定和新的结束状态（block-options）：chat 里的「事」（items）整套去掉，换成 agent 的 `need_decision` 帖子带 `options`；结束状态改名 all_done / need_decision / need_help（带 `need`）/ waiting，旧的 final/block 照收。station：entries 加 `options` 列、turns 加 `need` 列（旧库打开时自动补），新表 `dismissed`；chat 行带可选的 `decision`，新路由 `PUT /threads/:id/dismissed {n}`；turns/entries 里存新词，但接口里的 `declared` 仍给旧词（final/block），另加 `ending` 给新词，旧客户端照常显示；agent 指令和 nudge 改了（session.txt 快照同步）。core：行的 `decision`/`stateText`/`settled`/`archivable`，消息的 `options`/`decision`，新 topic `decisions`，调用 `decision.answer`/`decision.defer`/`decision.dismiss`，workspace 计数 `decisions`；旧的 `item.*` 调用没了。界面：web/手机 web/安卓只留了行上的「奏 · …」，卡片删了，决定页和消息下的选项按钮等界面会话来做。station 要发包，web 跟部署走，安卓要发一版。新 station + 旧客户端：看不到选项，agent 照常说话，行状态照旧；旧 station + 新客户端：没有 decision，状态文字按 declared 推。items 表留在库里不再用。上线后验：让 agent 用 need_decision 问一个问题，chat 行显示「奏 · …」和蓝圈，`decisions` 里有它；另一个人回一句后它消失；agent 以 all_done 结束的 chat 变淡沉到当天底部。
 - core 与多端精简（simplify-core-operations）：发布 web（含 WASM）、桌面 core、Android；station/cloud API 无变更，无部署顺序要求。新版 web 配旧桌面 core 的 Slack token 表单会退回原校验逻辑；旧页面配新 core 的 `slack.verify` 保留。token 草稿只在内存中，关闭表单/断开客户端清除。上线后验：三端新增连接与更换 token，修改输入后原校验失效、旧校验结果不推进下一步；旧 station 的归档 404 回退仍正常。
 
 - Slack 会话自动标题（slack-auto-title）：station 允许 agent 用 chat_post.title 为 Slack 线程设置 still.fail 列表标题，沿用手动标题保护和改名频率限制；同步 agent 指令。只需发 station，新旧客户端均沿用现有 title 字段。上线后验：Slack 线程首个最终回复后，still.fail 列表显示概括标题；手动命名后不会被覆盖。已有会话在 agent 下次提供标题时生效，不批量回填。

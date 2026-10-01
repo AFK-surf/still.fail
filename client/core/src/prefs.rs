@@ -17,7 +17,7 @@ const FIELDS: &[&str] = &["onlyMine", "onlyWatching", "appearance", "rowPicture"
 const MAPS: &[&str] = &["keys", "lastChat", "chatTabs", "resume"];
 /// How many chats keep their tabs: the latest used.
 const TABS_KEPT: usize = 200;
-/// How many pieces of work set aside are kept: the latest.
+/// How many decisions set aside are kept: the latest.
 const DEFERRED_KEPT: usize = 200;
 
 /// What is kept, as kept (no defaults filled in).
@@ -106,30 +106,21 @@ pub fn chat_opened(data: &Data, station: &str, key: &str) {
     data.set(&Topic::Prefs, Value::Object(prefs));
 }
 
-/// A piece of work set aside (待定, work.rs) at the request it was set aside at (its `evidence`), kept as `deferred`
-/// by where it is (`work::deferral_key`); the latest [`DEFERRED_KEPT`]. Not in `prefs.set`'s fields: only the core sets it.
-pub fn defer(data: &Data, at: &str, evidence: Option<i64>, now: f64) {
-    keep_work(data, "deferred", at, evidence, now);
-}
-
-/// A piece of work answered here (work.rs `answered_of`) at the request it was answered at, kept as `answered` the
-/// way deferrals are.
-pub fn answered(data: &Data, at: &str, evidence: Option<i64>, now: f64) {
-    keep_work(data, "answered", at, evidence, now);
-}
-
-fn keep_work(data: &Data, field: &str, at: &str, evidence: Option<i64>, now: f64) {
+/// A decision set aside on this device (待定, decisions.rs), kept as `decisionsDeferred` by where it is
+/// (`decisions::deferral_key`) with when: last on the decisions page, still pending. The latest [`DEFERRED_KEPT`]. Not
+/// in `prefs.set`'s fields: only the core sets it.
+pub fn defer_decision(data: &Data, at: &str, now: f64) {
     let mut prefs = kept(data);
-    let map = prefs.entry(field).or_insert_with(|| json!({}));
+    let map = prefs.entry("decisionsDeferred").or_insert_with(|| json!({}));
     if !map.is_object() {
         *map = json!({});
     }
     let Some(map) = map.as_object_mut() else { return };
     // After every other, the clock however it goes: it goes last.
-    let last = map.values().filter_map(|v| v.get("at")?.as_f64()).fold(0.0, f64::max);
-    map.insert(at.to_string(), json!({ "evidence": evidence, "at": now.max(last + 1.0) }));
+    let last = map.values().filter_map(Value::as_f64).fold(0.0, f64::max);
+    map.insert(at.to_string(), json!(now.max(last + 1.0)));
     if map.len() > DEFERRED_KEPT {
-        let mut by_age: Vec<(f64, String)> = map.iter().map(|(k, v)| (v.get("at").and_then(Value::as_f64).unwrap_or(0.0), k.clone())).collect();
+        let mut by_age: Vec<(f64, String)> = map.iter().map(|(k, v)| (v.as_f64().unwrap_or(0.0), k.clone())).collect();
         by_age.sort_by(|a, b| a.0.total_cmp(&b.0));
         for (_, key) in by_age.into_iter().take(map.len() - DEFERRED_KEPT) {
             map.remove(&key);
@@ -138,10 +129,10 @@ fn keep_work(data: &Data, field: &str, at: &str, evidence: Option<i64>, now: f64
     data.set(&Topic::Prefs, Value::Object(prefs));
 }
 
-/// A piece of work no longer set aside (answered).
-pub fn undefer(data: &Data, at: &str) {
+/// A decision no longer set aside (answered, or dismissed).
+pub fn undefer_decision(data: &Data, at: &str) {
     let mut prefs = kept(data);
-    let Some(map) = prefs.get_mut("deferred").and_then(Value::as_object_mut) else { return };
+    let Some(map) = prefs.get_mut("decisionsDeferred").and_then(Value::as_object_mut) else { return };
     if map.remove(at).is_some() {
         data.set(&Topic::Prefs, Value::Object(prefs));
     }

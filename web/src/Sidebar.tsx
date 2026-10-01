@@ -12,7 +12,7 @@ import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
-import { ChatMark, WaitingText } from "./ChatMark.tsx";
+import { ChatMark, stateLine, WaitingText } from "./ChatMark.tsx";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
@@ -21,7 +21,9 @@ import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
 import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
+import { useWorkspaceMarks } from "./lastChat.ts";
 import * as nav from "./Sidebar.css.ts";
+import * as decisionsCss from "./Decisions.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 
@@ -89,6 +91,21 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
       {waiting?.items.length ? <Tip label={<WaitingItems status={waiting} />} side="top">{row}</Tip> : row}
       {retry && <Retry />}
     </div>
+  );
+}
+
+/**
+ * 奏 N in the sidebar's foot, by the stations: the decisions waiting for the viewer in the workspace (the core's
+ * `decisions` count), leading to their page. Nothing while there are none (or from a core before them).
+ */
+export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
+  const n = useWorkspaceMarks(scope)?.workspaces[scope]?.decisions ?? 0;
+  if (n <= 0) return null;
+  return (
+    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} aria-label={`奏：${n} 件等你决定`}>
+      <span className={decisionsCss.sideEntryLead}>奏</span>
+      <span className={decisionsCss.sideEntryCount}>{n} 件等你决定</span>
+    </NavLink>
   );
 }
 
@@ -208,8 +225,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         </span>
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
-          {/* While something in it waits: who it waits on and what, instead (the core's words). */}
-          {item.waiting ? <WaitingText waiting={item.waiting} className={nav.navSessionLast} />
+          {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
+          {stateLine(item) ? <WaitingText text={stateLine(item)!} className={nav.navSessionLast} />
             : item.last ? <LastMessage item={item} /> : <span className={nav.navSessionLast} />}
           <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           <Time className={nav.navTime} stamp={item.time?.lastActiveAt} fixed />
@@ -218,7 +235,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     </NavLink>
   );
   return (
-    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)}>
+    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)} data-archivable={item.archivable || undefined}>
     {menu ? (
       // Right-clicking a row: what can be done to the chat.
       <ContextMenu.Root modal={false}>

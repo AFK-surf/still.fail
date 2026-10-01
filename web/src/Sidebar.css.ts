@@ -171,7 +171,10 @@ globalStyle(`${sessionKind} ${kindMark}`, { margin: -1 });
 export const rowArchive = style({
   position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
   selectors: { [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" } },
+  // Nothing left in it (the core's `archivable`): on a touch screen, always there to archive it with one tap.
+  "@media": { "(hover: none)": { selectors: { [`${navSessionWrap}[data-archivable] &`]: { opacity: 1, pointerEvents: "auto" } } } },
 });
+globalStyle(`${navSessionWrap}[data-archivable] ${navSessionHead}`, { "@media": { "(hover: none)": { paddingRight: 24 } } });
 
 /** Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
 export const stationTrouble = style({ marginBottom: 4, color: vars.text });

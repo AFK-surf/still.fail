@@ -152,6 +152,8 @@ sealed interface Screen {
     data class NewProfile(val station: String) : Screen { override val id = "new-profile/$station" }
     /** Chats archived, of every station online: put back in the list, or deleted for good. */
     data object Archive : Screen { override val id = "archive" }
+    /** The decisions waiting for the viewer in the workspace's chats, one at a time (奏 N on the home page). */
+    data object Decisions : Screen { override val id = "decisions" }
 
     /** The agents' memory on a station. */
     data class Memory(val station: String) : Screen { override val id = "memory/$station" }
@@ -646,6 +648,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.NewConnect -> fail.still.android.screens.NewConnectScreen(screen.station)
                     is Screen.NewProfile -> fail.still.android.screens.NewProfileScreen(current, screen.station)
                     Screen.Archive -> fail.still.android.screens.ArchiveScreen(current)
+                    Screen.Decisions -> fail.still.android.screens.DecisionsScreen(current)
                     is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
                     is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
                     is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {

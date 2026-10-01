@@ -39,8 +39,7 @@ import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast } from "./toast.tsx";
-import { AskCards } from "./Asks.tsx";
-import * as asksCss from "./Asks.css.ts";
+import { MessageDecision } from "./Decisions.tsx";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -70,7 +69,6 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   made?: string;
 }) {
   const station = useStation();
-  const toast = useToast();
   const list = useRef<HTMLDivElement>(null);
   const composerHeight = useComposerHeight();
   const floor = useRef<HTMLDivElement>(null);
@@ -123,8 +121,6 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
-      {/* What waits to be decided, one at a time, right over the composer (Asks.tsx); not while nothing can be sent. */}
-      {!chat.offline && !chat.archived && <AskCards asks={chat.asks} station={station.address} thread={id} onError={toast} className={asksCss.wideAsks} />}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? "还原对话后才能发送" : "发消息"} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
@@ -154,6 +150,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
 }) {
   const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
   const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
+  // Where a decision's options answer: none while nothing can be sent.
+  const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
   return (
     <>
       {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
@@ -170,7 +168,7 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
         return (
           <Fragment key={m.seq}>
             {line}
-            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught}
+            <MessageRow message={m} enter={enter} emitted={emitted} caught={caught} thread={thread}
               agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory} />
           </Fragment>
         );
@@ -713,8 +711,12 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory }: {
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true }: {
   message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
+  /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
+  thread: number | null;
+  /** A decision's options under it (the decisions page has them at its foot instead). */
+  options?: boolean;
   /** Whose files are whose, in a word: when it changes, the files are drawn again. */
   owners: string;
   owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
@@ -745,9 +747,19 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       {m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
+      {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
+      {options && m.options && <MessageDecision message={m} thread={thread} />}
     </OthersMessage>
   );
-}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && sameMessage(a.message, b.message));
+}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
+  && a.options === b.options && sameMessage(a.message, b.message));
+
+/** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
+export function StaticMessage({ message, owner }: { message: ChatMessage; owner: (file: Attachment) => string | null }) {
+  return <MessageRow message={message} enter={undefined} emitted={null} caught={undefined} agentHere={false} thread={null} options={false}
+    owners="" owner={owner} onOpenHistory={noHistory} />;
+}
+const noHistory = () => {};
 
 type Data = { [key: `data-${string}`]: string | number | boolean | undefined };
 

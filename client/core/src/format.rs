@@ -336,16 +336,28 @@ pub fn mode_text(mode: &str, require_mention: bool) -> (&'static str, &'static s
     }
 }
 
+/// Why a turn failed, in words, from its `detail` (`<reason>: <message>`, the station's FailureReason).
+pub fn failure_text(detail: &str) -> &'static str {
+    match detail.split(':').next().unwrap_or("").trim() {
+        "rate_limit" => "额度用完",
+        "auth" => "登录失效",
+        "model" => "模型出错",
+        "exited" => "进程退出了",
+        _ => "出错了",
+    }
+}
+
 /// A status in words, and its tone (accent, green, blue, red, neutral).
 pub fn status_text(status: &str) -> (&'static str, &'static str) {
     match status {
         "running" => ("进行中", "accent"),
         "queued" => ("排队中", "accent"),
-        "final" => ("已完成", "green"),
-        "block" => ("Block", "blue"),
-        "failed" => ("失败", "red"),
-        "unexpected" => ("意外停止", "red"),
-        "aborted" => ("已停止", "neutral"),
+        "final" => ("做完了", "green"),
+        "block" => ("要你帮忙", "blue"),
+        "decision" => ("等你决定", "blue"),
+        "failed" => ("出问题", "red"),
+        "unexpected" => ("出问题：没说一声就停了", "red"),
+        "aborted" => ("出问题：被停止", "neutral"),
         _ => ("未开始", "neutral"),
     }
 }

@@ -275,6 +275,10 @@ pub struct EntryRow {
     /// message: for ember's notice about one of the station's profiles (its sign-in failed), that profile's id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// message: an agent's block post that asks people to decide, its answers to pick from (chat_post `options`):
+    /// `[{label, detail?, recommended?}]`. None for every other message (and from stations before it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub options: Option<Value>,
     pub at: i64,
 }
 
@@ -333,7 +337,15 @@ pub struct ThreadSummary {
 pub struct TurnSummary {
     pub kind: String,
     pub outcome: Option<String>,
+    /// How the agent ended it, in the words from before (final, block, waiting): what clients from before read.
     pub declared: Option<String>,
+    /// How the agent ended it: all_done, need_decision, need_help or waiting (a turn from before them as its words
+    /// mean: final all_done, block need_help).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ending: Option<String>,
+    /// For need_help: what a person has to give or do, in the agent's words.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub need: Option<String>,
     /// For waiting: at most how long, in seconds, until the agent is asked again.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wait_seconds: Option<i64>,
@@ -388,29 +400,24 @@ pub struct Post {
     pub at: i64,
 }
 
-/// A piece of work in a chat (the `items` table): what it is, where it stands, and whom it waits on.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct ItemRow {
-    pub key: String,
-    /// The session that declared it last.
-    pub session: String,
-    pub title: String,
-    /// working, waiting, done or dropped.
-    pub state: String,
-    /// Whom it waits on while waiting: creator references (an email, `slack:<connect>:<user>`), as entries' authors.
-    pub waiting_on: Vec<String>,
-    /// What is asked of them: `{label?, options?: [string]}`, the agent's words for the answers; null for a plain yes.
-    pub ask: Option<Value>,
-    /// A line under its title: a branch, a commit, where it went.
-    pub detail: Option<String>,
-    /// The entry (its number in the thread) that shows it: the post that declared it so.
-    pub evidence: Option<i64>,
-    pub created_at: i64,
-    pub updated_at: i64,
+/// How a turn ended or a post was declared (turns.declared, entries.declared) in the words from before all_done,
+/// need_decision and need_help: final, block, waiting. What clients from before read, and the station's checks of it.
+pub fn said_before(declared: &str) -> &str {
+    match declared {
+        "all_done" => "final",
+        "need_decision" | "need_help" => "block",
+        other => other,
+    }
 }
 
-pub const ITEM_STATES: [&str; 4] = ["working", "waiting", "done", "dropped"];
+/// The same in today's words: final is all_done, block need_help.
+pub fn ending(declared: &str) -> &str {
+    match declared {
+        "final" => "all_done",
+        "block" => "need_help",
+        other => other,
+    }
+}
 
 /// A message being recorded.
 #[derive(Debug, Clone)]
@@ -426,12 +433,14 @@ pub struct NewMessage {
     pub client: Option<String>,
     /// ember's notice about a profile: its id (EntryRow::profile).
     pub profile: Option<String>,
+    /// An agent's block post that asks people to decide: its answers (EntryRow::options).
+    pub options: Option<Value>,
     pub at: Option<i64>,
 }
 
 impl NewMessage {
     pub fn new(thread: i64, ts: &str, author_kind: AuthorKind, author: &str, text: &str) -> NewMessage {
-        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, client: None, profile: None, at: None }
+        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, client: None, profile: None, options: None, at: None }
     }
 }
 
@@ -535,6 +544,8 @@ pub enum StoreChange {
     Identities(String),
     /// The chats a viewer pinned changed.
     Pins(String),
+    /// The decisions a viewer dismissed changed.
+    Dismissed(String),
     /// The recorded runtime processes changed.
     Processes,
     /// A background job started, started again, ended or said something (its session changes as well).
@@ -611,6 +622,7 @@ CREATE TABLE IF NOT EXISTS entries (
   at INTEGER NOT NULL,
   client TEXT,
   profile TEXT,
+  options TEXT,
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
@@ -650,7 +662,8 @@ CREATE TABLE IF NOT EXISTS turns (
   detail TEXT,
   declared TEXT,
   wait_seconds INTEGER,
-  wait_for TEXT
+  wait_for TEXT,
+  need TEXT
 );
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
@@ -719,6 +732,15 @@ CREATE TABLE IF NOT EXISTS items (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (thread, key)
+);
+-- Pending decisions (an agent's block post with options) a viewer said they will not take up: not on their list
+-- any more, still pending for everyone else. By the post's thread and entry number.
+CREATE TABLE IF NOT EXISTS dismissed (
+  viewer TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (viewer, thread, n)
 );
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same.
@@ -821,6 +843,10 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
     if !has("turns", "wait_for")? {
         db.execute_batch("ALTER TABLE turns ADD COLUMN wait_for TEXT")?;
     }
+    // Came with need_help's `need`: what a person has to give or do.
+    if !has("turns", "need")? {
+        db.execute_batch("ALTER TABLE turns ADD COLUMN need TEXT")?;
+    }
     // Came with usage (store/usage.rs): whom a turn worked for, where, and on which profile.
     for (column, kind) in [("profile", "TEXT"), ("person", "TEXT"), ("thread", "INTEGER")] {
         if !has("turns", column)? {
@@ -874,6 +900,13 @@ fn add_client_column(db: &Connection) -> Result<()> {
     if !has("entries", "profile")? {
         db.execute_batch("ALTER TABLE entries ADD COLUMN profile TEXT")?;
     }
+    // A block post's answers to pick from (entries.options) came later, the same way; the `merged` view has no need of
+    // them (a decision is read from its entry).
+    if !has("entries", "options")? {
+        db.execute_batch("ALTER TABLE entries ADD COLUMN options TEXT")?;
+    }
+    // A chat's latest decision is looked for on every list of chats: only its posts with options are read.
+    db.execute_batch("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL")?;
     if !has("merged", "client")? {
         db.execute_batch(&format!("BEGIN; DROP VIEW IF EXISTS merged; {MERGED} COMMIT;"))?;
     }
@@ -928,6 +961,7 @@ fn to_entry(r: &Row) -> rusqlite::Result<EntryRow> {
         declared: r.get("declared")?,
         client: r.get("client")?,
         profile: r.get("profile")?,
+        options: r.get::<_, Option<String>>("options")?.and_then(|o| serde_json::from_str(&o).ok()),
         at: r.get("at")?,
     })
 }
@@ -1291,6 +1325,7 @@ impl Store {
                 tx.execute("DELETE FROM entries WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM reads WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM items WHERE thread = ?", [thread])?;
+                tx.execute("DELETE FROM dismissed WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM threads WHERE id = ?", [thread])?;
             }
             tx.commit()?;
@@ -1525,6 +1560,7 @@ impl Store {
                     declared: m.declared,
                     client: m.client,
                     profile: m.profile,
+                    options: m.options,
                     at: m.at.unwrap_or_else(now_ms),
                 },
                 changes,
@@ -1557,6 +1593,7 @@ impl Store {
                     declared: None,
                     client: None,
                     profile: None,
+                    options: None,
                     at: now_ms(),
                 },
                 changes,
@@ -1809,55 +1846,52 @@ impl Store {
         })
     }
 
-    // ── items ─────────────────────────────────────────────────────────────
+    // ── decisions ─────────────────────────────────────────────────────────
 
-    /// A thread's pieces of work, in the order they were first declared.
-    pub fn items(&self, thread: i64) -> Result<Vec<ItemRow>> {
+    /// The thread's decision still pending, if any: its latest block post with options (a newer one replaces an older
+    /// one), as long as no person has written in the thread since. The post as merged, and its options.
+    pub fn pending_decision(&self, thread: i64) -> Result<Option<(MessageRow, Value)>> {
         self.with(|i, _| {
-            let mut stmt = i.db.prepare(
-                "SELECT key, session, title, state, waiting_on, ask, detail, evidence, created_at, updated_at FROM items WHERE thread = ? ORDER BY created_at, rowid",
-            )?;
-            let rows = stmt.query_map([thread], |r| {
-                Ok(ItemRow {
-                    key: r.get(0)?,
-                    session: r.get(1)?,
-                    title: r.get(2)?,
-                    state: r.get(3)?,
-                    waiting_on: from_json_list(r.get(4)?),
-                    ask: r.get::<_, Option<String>>(5)?.and_then(|a| serde_json::from_str(&a).ok()),
-                    detail: r.get(6)?,
-                    evidence: r.get(7)?,
-                    created_at: r.get(8)?,
-                    updated_at: r.get(9)?,
-                })
-            })?;
-            Ok(rows.collect::<rusqlite::Result<_>>()?)
+            if i.is_archived(thread)? {
+                return Ok(None);
+            }
+            let asked: Option<(i64, String)> = i
+                .db
+                .query_row(
+                    "SELECT n, options FROM entries WHERE thread = ? AND kind = 'message' AND options IS NOT NULL ORDER BY n DESC LIMIT 1",
+                    [thread],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            let Some((n, options)) = asked else { return Ok(None) };
+            let answered = i
+                .db
+                .query_row("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", params![thread, n], |_| Ok(()))
+                .optional()?
+                .is_some();
+            if answered {
+                return Ok(None);
+            }
+            let Ok(options) = serde_json::from_str::<Value>(&options) else { return Ok(None) };
+            let message = i.db.query_row("SELECT * FROM merged WHERE thread = ? AND n = ?", params![thread, n], to_message).optional()?;
+            Ok(message.map(|m| (m, options)))
         })
     }
 
-    /// Records pieces of work as declared (by key: a known one is updated, keeping when it was first declared), and
-    /// tells the thread's lists.
-    pub fn put_items(&self, thread: i64, items: &[ItemRow]) -> Result<()> {
-        if items.is_empty() {
-            return Ok(());
-        }
+    /// The decisions a viewer dismissed, as (thread, n).
+    pub fn dismissed(&self, viewer: &str) -> Result<HashSet<(i64, i64)>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT thread, n FROM dismissed WHERE viewer = ?")?;
+            let rows = stmt.query_map([viewer], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+            Ok(rows)
+        })
+    }
+
+    /// A viewer will not take up a decision (the block post at `n`): it leaves their list, on every device of theirs.
+    pub fn dismiss(&self, viewer: &str, thread: i64, n: i64) -> Result<()> {
         self.with(|i, changes| {
-            let tx = i.db.transaction()?;
-            for it in items {
-                tx.execute(
-                    "INSERT INTO items (thread, key, session, title, state, waiting_on, ask, detail, evidence, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                     ON CONFLICT (thread, key) DO UPDATE SET session = excluded.session, title = excluded.title, state = excluded.state,
-                       waiting_on = excluded.waiting_on, ask = excluded.ask, detail = excluded.detail,
-                       evidence = COALESCE(excluded.evidence, items.evidence), updated_at = excluded.updated_at",
-                    params![
-                        thread, it.key, it.session, it.title, it.state, json_list(&it.waiting_on),
-                        it.ask.as_ref().map(|a| a.to_string()), it.detail, it.evidence, it.created_at, it.updated_at
-                    ],
-                )?;
-            }
-            tx.commit()?;
-            changes.push(StoreChange::Thread { id: thread, entries: vec![] });
+            i.db.execute("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", params![viewer, thread, n, now_ms()])?;
+            changes.push(StoreChange::Dismissed(viewer.to_string()));
             Ok(())
         })
     }
@@ -1920,6 +1954,14 @@ impl Store {
         })
     }
 
+    /// What a turn needs of a person once it ends as need_help (`need`), in the agent's words.
+    pub fn set_need(&self, id: &str, what: &str) -> Result<()> {
+        self.with(|i, _| {
+            i.db.execute("UPDATE turns SET need = ? WHERE id = ?", params![what, id])?;
+            Ok(())
+        })
+    }
+
     /// Ends a turn; `wait_seconds` is how long a turn ending as waiting waits at most.
     pub fn end_turn(&self, id: &str, outcome: &str, detail: Option<&str>, declared: Option<&str>, wait_seconds: Option<u64>) -> Result<()> {
         self.with(|i, changes| {
@@ -1957,7 +1999,9 @@ impl Store {
                 Ok(TurnSummary {
                     kind: r.get("kind")?,
                     outcome: r.get("outcome")?,
-                    declared: r.get("declared")?,
+                    declared: r.get::<_, Option<String>>("declared")?.map(|d| said_before(&d).to_string()),
+                    ending: r.get::<_, Option<String>>("declared")?.map(|d| ending(&d).to_string()),
+                    need: r.get("need")?,
                     wait_seconds: r.get("wait_seconds")?,
                     wait_for: r.get("wait_for")?,
                     detail: r.get("detail")?,
@@ -1978,7 +2022,9 @@ impl Store {
                     summary: TurnSummary {
                         kind: r.get("kind")?,
                         outcome: r.get("outcome")?,
-                        declared: r.get("declared")?,
+                        declared: r.get::<_, Option<String>>("declared")?.map(|d| said_before(&d).to_string()),
+                        ending: r.get::<_, Option<String>>("declared")?.map(|d| ending(&d).to_string()),
+                        need: r.get("need")?,
                         wait_seconds: r.get("wait_seconds")?,
                     wait_for: r.get("wait_for")?,
                         detail: r.get("detail")?,
@@ -2000,7 +2046,7 @@ impl Store {
                    (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
                    (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
                      WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
-                   l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.detail, l.started_at, l.ended_at
+                   l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.detail, l.started_at, l.ended_at
                  FROM sessions s
                  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
                  {}",
@@ -2020,7 +2066,9 @@ impl Store {
                             Some(started_at) => Some(TurnSummary {
                                 kind: r.get("kind")?,
                                 outcome: r.get("outcome")?,
-                                declared: r.get("declared")?,
+                                declared: r.get::<_, Option<String>>("declared")?.map(|d| said_before(&d).to_string()),
+                                ending: r.get::<_, Option<String>>("declared")?.map(|d| ending(&d).to_string()),
+                                need: r.get("need")?,
                                 wait_seconds: r.get("wait_seconds")?,
                     wait_for: r.get("wait_for")?,
                                 detail: r.get("detail")?,
@@ -2572,7 +2620,7 @@ impl Inner {
 
 fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
     db.execute(
-        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             e.thread,
             e.n,
@@ -2587,6 +2635,7 @@ fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
             e.declared,
             e.client,
             e.profile,
+            e.options.as_ref().map(Value::to_string),
             e.at
         ],
     )?;

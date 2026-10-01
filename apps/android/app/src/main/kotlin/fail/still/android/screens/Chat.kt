@@ -262,40 +262,9 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     // The messages run under the bar and the composer, which are frosted glass over them.
     val haze = host.haze
     // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
-    // What waits on someone in it, a card at a time over the composer (AskCard.kt); the list keeps clear of it too.
-    var asksHeight by remember { mutableIntStateOf(0) }
-    val asks = remember(station, of) { AskLocal() }
     Box(Modifier.fillMaxSize().background(C.bg)) {
-        Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { (host.roomForList() + asksHeight).toDp() }, host)
+        Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { host.roomForList().toDp() }, host)
         ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
-        AskCards(
-            if (view.archived == true) emptyList() else view.asks.orEmpty(), asks, haze,
-            Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { host.composerHeight.toDp() }).onSizeChanged { asksHeight = it.height },
-            onAnswer = { item, answer ->
-                val session = (of as? ChatOf.Session)?.key ?: item.session
-                val thread = view.thread?.id ?: (of as? ChatOf.Thread)?.id
-                app.scope.launch {
-                    try { app.api(station).answerItem(session, thread, item.key, answer = answer.text!!) }
-                    catch (e: CoreException) { asks.undo(item.key); app.toast = "没能回复「${item.title}」：${e.message}" }
-                }
-            },
-            onDefer = { item ->
-                val session = (of as? ChatOf.Session)?.key ?: item.session
-                app.scope.launch {
-                    try { app.api(station).deferItem(session, item.key) }
-                    catch (e: CoreException) { asks.undo(item.key); app.toast = "没能待定：${e.message}" }
-                }
-            },
-            onShow = { item -> item.evidence?.let { host.showSaid?.invoke(it) } },
-            onReply = { item, words ->
-                val session = (of as? ChatOf.Session)?.key ?: item.session
-                val thread = view.thread?.id ?: (of as? ChatOf.Thread)?.id
-                app.scope.launch {
-                    try { app.api(station).answerItem(session, thread, item.key, reply = words) }
-                    catch (e: CoreException) { asks.undo(item.key, words); app.toast = "没能回复「${item.title}」：${e.message}" }
-                }
-            },
-        )
     }
 }
 
@@ -309,7 +278,16 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
     val thread = view.thread
     val jobs by rememberTopic<ChatJobsView>(app.core, Topics.chatJobs(station, of))
     val alarm = jobs.value?.alarm?.let(::toneOf)
+    // Nothing left in it: archived with one tap from its bar (as its row's 归档).
+    val session = (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
     BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier, trailing = {
+        if (view.archivable == true && view.archived != true && session != null) {
+            val archiving = app.isDoing("chat.archive", "station" to station, "session" to session)
+            Box(Modifier.semantics { contentDescription = "归档" }) {
+                if (archiving) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
+                else NavButton(Icons.Archive, { app.act("归档") { app.api(station).setArchived(thread?.id, session, true); app.toast = "已归档" } })
+            }
+        }
         if (jobs.value?.jobs?.isNotEmpty() == true) Box {
             NavButton(Icons.Web, { openJobs(app, station, of) })
             if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(11.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
@@ -383,12 +361,15 @@ private val Entry.place get() = if (this is Entry.Said) "m:${m.ts}" else id
  * it started, since when and for how long at most. */
 class AgentAtWork(val key: String, val who: String, val runtime: String, val maker: Maker?, val live: Live?, val since: Long?, val wait: AgentWait? = null)
 
-/** What the messages need to know about the chat: who is who, and whose workspace keeps a file. */
-internal class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>) {
+/**
+ * What the messages need to know about the chat: who is who, and whose workspace keeps a file. `orOwner`: the session
+ * that keeps files when no agent of the chat is known (the decisions page shows a chat's messages without its agents).
+ */
+internal class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>, val orOwner: String? = null) {
     fun agent(key: String) = agents.firstOrNull { it.key == key }
     fun mine(m: ChatMessage) = m.mine
     /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
-    fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key
+    fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key ?: orOwner
 }
 
 /** How an activity glides to a new place (web useActivityGlide: a spring, 0.3s, no bounce). */
@@ -965,8 +946,18 @@ private fun Said(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.compose
     CompositionLocalProvider(LocalTextMark provides mark) { SaidRow(ctx, m, draft, list, rows, waitingNow) }
 }
 
+/**
+ * A message drawn as the chat draws it, outside its list (the decisions page, Decisions.kt): the same row, without its
+ * options (the page has them at its foot) and without a draft to put follow-ups in.
+ */
 @Composable
-private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, waitingNow: Boolean) {
+internal fun SaidAlone(ctx: Here, m: ChatMessage) {
+    val list = rememberLazyListState()
+    SaidRow(ctx, m, null, list, emptyList(), waitingNow = false, decide = false)
+}
+
+@Composable
+private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, waitingNow: Boolean, decide: Boolean = true) {
     val app = LocalApp.current
     val jump = rememberJump(list, rows)
     val ink = chatInk()
@@ -1014,6 +1005,8 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.comp
             }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
             if (m.authorKind == "person") Files(ctx, m.attachments)
+            // A decision it asks (its options): them under it, a line saying how it went once it has.
+            if (decide) DecisionUnder(ctx, m)
         }
     }
 }

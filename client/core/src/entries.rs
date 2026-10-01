@@ -27,9 +27,18 @@ pub fn merge(entries: &[Value]) -> Vec<Value> {
                     "attachments": entry.get("attachments").cloned().unwrap_or(json!([])), "quotes": entry.get("quotes").cloned().unwrap_or(json!([])),
                     "declared": field("declared"), "createdAt": field("at"), "editedAt": null,
                 });
+                // How it ended its agent's turn in today's words (a station from before says only `declared`).
+                if let Some(ending) = entry.get("ending").filter(|e| e.is_string()) {
+                    message["ending"] = ending.clone();
+                }
                 // ember's notice about a profile (its sign-in failed): which one. Stations before it say none.
                 if let Some(profile) = entry.get("profile").filter(|p| p.is_string()) {
                     message["profile"] = profile.clone();
+                }
+                // An agent's block post asking people to decide: its answers to pick (decisions.rs). Stations before
+                // them say none.
+                if let Some(options) = entry.get("options").filter(|o| o.as_array().is_some_and(|o| !o.is_empty())) {
+                    message["options"] = options.clone();
                 }
                 messages.insert(n, message);
             }
@@ -72,6 +81,14 @@ mod tests {
         assert_eq!(merged[1]["authorName"], "阿");
         // Changes to messages before the run have nothing to change.
         assert_eq!(merge(&entries[2..]).iter().map(|m| m["seq"].clone()).collect::<Vec<_>>(), vec![json!(4), json!(6)]);
+    }
+
+    #[test]
+    fn a_block_post_keeps_its_options() {
+        let mut asked = message(1, "选哪个？");
+        asked["options"] = json!([{"label": "A"}]);
+        let merged = merge(&[asked, message(2, "A")]);
+        assert_eq!((merged[0]["options"].clone(), merged[1].get("options")), (json!([{"label": "A"}]), None));
     }
 
     #[test]

@@ -491,6 +491,7 @@ impl Views {
             Topic::Archive { scope } => self.archive(scope),
             Topic::Usage { scope, days } => self.usage(scope, days.unwrap_or(7)),
             Topic::WorkspaceMarks { workspace } => self.marks(workspace.as_deref()),
+            Topic::Decisions { workspace } => self.decisions(workspace),
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => self.admin(view),
             Topic::ChatJobs { station, thread, session } => {
                 let chat = Topic::Chat { station: station.clone(), thread: *thread, session: session.clone() };
@@ -565,7 +566,7 @@ impl Views {
         let mut topics = HashSet::new();
         let (scope, per_station): (&str, fn(String) -> Vec<Topic>) = match view {
             // Its overview says which Slack users are the viewer (a row's last thing said by one is "你").
-            Topic::Chats { scope, .. } | Topic::ChatSearch { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
+            Topic::Chats { scope, .. } | Topic::ChatSearch { scope, .. } | Topic::Decisions { workspace: scope } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station: station.clone() }, Topic::Net { station }]),
             Topic::Archive { scope } => (scope.as_str(), |station| vec![Topic::ArchivedRows { station }]),
             Topic::LongJobs { scope } => (scope.as_str(), |station| vec![Topic::Jobs { station }]),
@@ -630,8 +631,6 @@ impl Views {
                 topics.insert(Topic::ChatRows { station: station.clone() });
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
-                // What the viewer set aside of its pieces of work (work.rs).
-                topics.insert(Topic::Prefs);
                 if let Some((scope, _)) = station.split_once('/') {
                     topics.insert(Topic::Workspace { workspace: scope.to_string() });
                 }
@@ -639,7 +638,8 @@ impl Views {
             }
             _ => return topics,
         };
-        if let Topic::Chats { .. } = view {
+        // The device's prefs: whose pictures lead; what the viewer set aside of the decisions.
+        if let Topic::Chats { .. } | Topic::Decisions { .. } = view {
             topics.insert(Topic::Prefs);
         }
         topics.insert(Topic::Workspace { workspace: scope.to_string() });
@@ -737,9 +737,6 @@ impl Views {
         let me = self.me(scope);
         // The workspace's people, by email: a row's last speaker is named and pictured as they are here.
         let members: Vec<Value> = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
-        // What the viewer set aside (work.rs), and the clock its lines are said by.
-        let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
-        let clock = self.clock();
         let mut states = Vec::new();
         let mut troubles: Vec<(&str, String)> = Vec::new();
         let mut rows = Vec::new();
@@ -814,11 +811,17 @@ impl Views {
                         let model = row["last"]["by"]["model"].as_str().map(str::to_string);
                         row["last"]["by"]["maker"] = crate::present::maker(model.as_deref());
                     }
-                    // Its pieces of work as the viewer sees them, its second line while one waits, its mark (work.rs).
-                    let session = row.get("session").or_else(|| row.get("id")).and_then(Value::as_str).unwrap_or("").to_string();
-                    let deferred = crate::work::deferred_of(&prefs, &s.address, &session);
-                    let answered = crate::work::answered_of(&prefs, &s.address, &session);
-                    crate::work::present(&mut row, &crate::work::Viewer { me: &me, slack_users: &slack_users, members: &members }, &deferred, &answered, clock);
+                    // The decision it waits on as the viewer sees it, its second line, its mark (decisions.rs).
+                    crate::decisions::present(&mut row);
+                    // Nothing left in it: faded, below the rest of its day, one tap from the archive; and where it
+                    // stands in words.
+                    if crate::present::settled(&row) {
+                        row["settled"] = json!(true);
+                        row["archivable"] = json!(true);
+                    }
+                    if let Some(text) = crate::present::row_state_text(&row) {
+                        row["stateText"] = json!(text);
+                    }
                     rows.push(row);
                 }
             }
@@ -891,8 +894,10 @@ impl Views {
         for row in rows.iter_mut().filter(|row| row.get("pinned").is_some()) {
             row["pinned"] = json!(false);
         }
-        rows.sort_by(|a, b| at(b).total_cmp(&at(a)));
         let day = |ms: f64| ((ms + self.host.utc_offset_min(ms) as f64 * 60_000.0) / DAY_MS).floor() as i64;
+        // Newest first; in each day, the chats with nothing left in them (`settled`) below the rest.
+        let settled = |row: &Value| row.get("settled").and_then(Value::as_bool) == Some(true);
+        rows.sort_by(|a, b| day(at(b)).cmp(&day(at(a))).then(settled(a).cmp(&settled(b))).then(at(b).total_cmp(&at(a))));
         let today = day(self.host.now_ms());
         let mut days: Vec<(i64, f64, Vec<Value>)> = Vec::new();
         for row in rows {
@@ -1040,37 +1045,7 @@ impl Views {
         let written: Vec<(u64, String)> = messages.iter().filter(|m| m.get("authorKind").and_then(Value::as_str) == Some("person"))
             .filter_map(|m| Some((m.get("seq").and_then(Value::as_u64)?, m.get("text").and_then(Value::as_str).unwrap_or("").to_string()))).collect();
         for m in messages.iter_mut() {
-            let kind = m.get("authorKind").and_then(Value::as_str).unwrap_or("").to_string();
-            let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
-            let said_name = m.get("authorName").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
-            m["mine"] = json!(kind == "person" && crate::present::is_viewer(&viewer, &author, &slack_users));
-            // What ember itself says in a chat (a limit hit, a failure): a notice, not someone's message.
-            m["system"] = json!(kind == "ember");
-            // Who said it, as its line shows them: an agent by its label and mark, a person by name and picture.
-            m["by"] = match kind.as_str() {
-                "agent" => {
-                    let agent = agents.iter().find(|a| a["session"].get("key").and_then(Value::as_str) == Some(&author));
-                    let session = agent.map(|a| &a["session"]);
-                    json!({
-                        "name": session.and_then(|s| s.get("agentText")).and_then(Value::as_str).map(str::to_string).or(said_name).unwrap_or_else(|| "agent".into()),
-                        "agent": agent.map(|_| author.clone()),
-                        "maker": session.map(|s| s["maker"].clone()),
-                        "runtime": session.and_then(|s| s.get("runtime")).cloned(),
-                    })
-                }
-                "ember" => json!({ "name": crate::brand::name() }),
-                _ => {
-                    let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
-                    let name = crate::present::member_name(&members, &author).map(str::to_string).or(said_name)
-                        // "local": written on a station's own page, in chats from before it went.
-                        .unwrap_or_else(|| if author == "local" { "本机".into() } else { author.clone() });
-                    json!({ "name": name, "picture": member.and_then(|x| x.get("picture")).filter(|p| p.as_str().is_some_and(|p| !p.is_empty())) })
-                }
-            };
-            if kind == "person" {
-                let text = m.get("text").and_then(Value::as_str).unwrap_or("").to_string();
-                m["text"] = json!(crate::present::mentions(&text, &bots, &members));
-            }
+            shown_message(m, &agents, &viewer, &slack_users, &members, &bots);
             m["waiting"] = json!(m.get("seq").and_then(Value::as_u64).is_some_and(|s| waits.contains(&s)));
         }
         // A sent message leaves the outbox as its own entry (or anything later) arrives. Its entry often comes before the
@@ -1149,8 +1124,12 @@ impl Views {
             });
         let slack_url = workspace_url.filter(|_| slack).map(|url| format!("{url}archives/{channel}/p{}", str_of(&thread, "threadTs").replace('.', "")));
         // Its item in the sidebar, as the station has it for the viewer (as kept, until read).
-        let row = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok)
-            .and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id)).cloned());
+        let rows = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok);
+        let row = rows.as_ref().and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id)).cloned());
+        // Where each decision in it stands: the one its row names waits (the rows read, a chat with no row waits on
+        // none); the rows not read, as its messages say.
+        let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(d))));
+        crate::decisions::in_messages(&mut messages, pending);
         Some(Ok(json!({
             "me": self.me(scope),
             "place": place,
@@ -1187,23 +1166,119 @@ impl Views {
             if let Some(watch) = crate::present::row_watch(&sessions) {
                 view["watch"] = watch;
             }
-            // Its pieces of work waiting on someone, for its card, as its row has them (work.rs).
-            if let Some(mut row) = row.clone() {
-                let session = row.get("session").or_else(|| row.get("id")).and_then(Value::as_str).unwrap_or("").to_string();
-                let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
-                let deferred = crate::work::deferred_of(&prefs, station, &session);
-                let answered = crate::work::answered_of(&prefs, station, &session);
-                crate::work::present(&mut row, &crate::work::Viewer { me: &viewer, slack_users: &slack_users, members: &members }, &deferred, &answered, self.clock());
-                if let Some(asks) = row.get("asks") {
-                    view["asks"] = asks.clone();
-                }
+            // The decision it waits on, as its row has it (decisions.rs).
+            if let Some(decision) = row.as_ref().and_then(crate::decisions::of_row) {
+                view["decision"] = crate::decisions::shown(decision);
+            }
+            // Nothing left in it: one tap archives it (chat.archive).
+            if row.as_ref().is_some_and(crate::present::settled) && view["archived"] != true {
+                view["archivable"] = json!(true);
             }
             view
         }))
     }
 }
 
+/// A message as a chat shows it (`ChatMessage`, but `waiting`): whether it is the viewer's, ember's own notice, who said
+/// it (an agent by its label and mark, a person by name and picture), and mentions named. `agents`: the chat's, each
+/// `{session}` as its view has them.
+fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &[String], members: &[Value], bots: &[(String, String)]) {
+    let kind = m.get("authorKind").and_then(Value::as_str).unwrap_or("").to_string();
+    let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
+    let said_name = m.get("authorName").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
+    m["mine"] = json!(kind == "person" && crate::present::is_viewer(viewer, &author, slack_users));
+    // What ember itself says in a chat (a limit hit, a failure): a notice, not someone's message.
+    m["system"] = json!(kind == "ember");
+    // Who said it, as its line shows them: an agent by its label and mark, a person by name and picture.
+    m["by"] = match kind.as_str() {
+        "agent" => {
+            let agent = agents.iter().find(|a| a["session"].get("key").and_then(Value::as_str) == Some(&author));
+            let session = agent.map(|a| &a["session"]);
+            json!({
+                "name": session.and_then(|s| s.get("agentText")).and_then(Value::as_str).map(str::to_string).or(said_name).unwrap_or_else(|| "agent".into()),
+                "agent": agent.map(|_| author.clone()),
+                "maker": session.map(|s| s["maker"].clone()),
+                "runtime": session.and_then(|s| s.get("runtime")).cloned(),
+            })
+        }
+        "ember" => json!({ "name": crate::brand::name() }),
+        _ => {
+            let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
+            let name = crate::present::member_name(members, &author).map(str::to_string).or(said_name)
+                // "local": written on a station's own page, in chats from before it went.
+                .unwrap_or_else(|| if author == "local" { "本机".into() } else { author.clone() });
+            json!({ "name": name, "picture": member.and_then(|x| x.get("picture")).filter(|p| p.as_str().is_some_and(|p| !p.is_empty())) })
+        }
+    };
+    if kind == "person" {
+        let text = m.get("text").and_then(Value::as_str).unwrap_or("").to_string();
+        m["text"] = json!(crate::present::mentions(&text, bots, members));
+    }
+}
+
 impl Views {
+    /// The decisions waiting for the viewer in a workspace's chats (the `decisions` view): each pending one its
+    /// station's rows have, not dismissed by them, with its post and the messages before it as a chat shows them; those
+    /// set aside on this device last.
+    fn decisions(&self, scope: &str) -> Option<Result<Value>> {
+        let stations = match self.stations(scope)? {
+            Ok(stations) => stations,
+            Err(error) => return Some(Err(error)),
+        };
+        let me = self.me(scope);
+        let members: Vec<Value> = self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
+        let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
+        let mut loading = false;
+        let mut items: Vec<(Value, f64, Option<f64>)> = Vec::new();
+        for s in &stations {
+            let rows = match self.store.value(&Topic::ChatRows { station: s.address.clone() }) {
+                Some(Ok(rows)) => rows,
+                Some(Err(_)) => continue,
+                None => {
+                    loading |= s.online;
+                    continue;
+                }
+            };
+            let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
+                .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
+                .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
+            for row in rows.as_array().into_iter().flatten().filter(|r| !self.being_archived(&s.address, r)) {
+                let Some(d) = crate::decisions::of_row(row).filter(|d| !crate::decisions::dismissed(d)) else { continue };
+                let (Some(thread), Some(seq)) = (row.get("thread").and_then(Value::as_u64), d.get("seq").and_then(Value::as_u64)) else { continue };
+                let agents: Vec<Value> = row.get("agents").and_then(Value::as_array).into_iter().flatten().map(|a| {
+                    let mut a = a.clone();
+                    crate::present::session(&mut a);
+                    json!({ "session": a })
+                }).collect();
+                let shown = |m: &Value| {
+                    let mut m = m.clone();
+                    shown_message(&mut m, &agents, &me, &slack_users, &members, &[]);
+                    m["waiting"] = json!(false);
+                    m
+                };
+                let options = crate::decisions::options_shown(&d["options"]);
+                let mut message = shown(&d["message"]);
+                message["options"] = json!(options);
+                message["decision"] = json!({ "resolved": false });
+                let before: Vec<Value> = d.get("before").and_then(Value::as_array).into_iter().flatten().map(shown).collect();
+                let deferred = crate::decisions::deferred_at(&prefs, &s.address, thread, seq);
+                let asked = message.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0);
+                let item = json!({
+                    "station": s.address, "stationName": s.name,
+                    "session": row.get("id").cloned().unwrap_or(Value::Null), "thread": thread,
+                    "title": row.get("title").cloned().unwrap_or(json!("")),
+                    "seq": seq, "message": message, "before": before, "options": options,
+                    "deferred": deferred.map(|_| true),
+                    "text": crate::decisions::line(d["message"].get("text").and_then(Value::as_str).unwrap_or("")),
+                });
+                items.push((item, asked, deferred));
+            }
+        }
+        crate::decisions::order(&mut items);
+        let count = items.len();
+        Some(Ok(json!({ "items": items.into_iter().map(|i| i.0).collect::<Vec<_>>(), "count": count, "loading": loading })))
+    }
+
     /// An agent's execution history (history.rs): its transcript read with its threads, its connect's bot, and the
     /// workspace's people. It shows as soon as its transcript does; the rest names things as it arrives.
     fn history(&self, station: &str, key: &str) -> Option<Result<Value>> {
@@ -1946,6 +2021,94 @@ mod tests {
         })
     }
 
+    /// A message as the station's rows give it (admin views.rs `message_view`).
+    fn said(seq: u64, kind: &str, author: &str, text: &str, at: f64) -> Value {
+        json!({ "seq": seq, "thread": 7, "ts": format!("9.{seq:06}"), "authorKind": kind, "author": author, "authorName": null, "text": text,
+            "attachments": [], "quotes": [], "declared": null, "createdAt": at as i64, "editedAt": null })
+    }
+
+    /// A row waiting on a decision (its block post at `seq`), dismissed by the viewer or not.
+    fn deciding(id: &str, thread: u64, seq: u64, at: f64, dismissed: bool) -> Value {
+        let mut r = row(id, at);
+        r["thread"] = json!(thread);
+        r["session"] = json!(id);
+        let options = json!([{ "label": "合", "recommended": true }, { "label": "先不改", "detail": "留到下周" }]);
+        let mut message = said(seq, "agent", id, &format!("**{id}** 要合吗？\n细节"), at);
+        message["options"] = options.clone();
+        r["decision"] = json!({ "seq": seq, "options": options, "message": message,
+            "before": [said(seq - 2, "person", "me@x.com", "改一下", at - 20.0), said(seq - 1, "agent", id, "好", at - 10.0)] });
+        if dismissed {
+            r["decision"]["dismissed"] = json!(true);
+        }
+        r
+    }
+
+    #[test]
+    fn the_decisions_page_lists_those_waiting_for_the_viewer_set_aside_last() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Decisions { workspace: "ws".into() });
+            t.read(&mut ui, 1).await;
+            t.set(workspace(), one_station());
+            t.set(Topic::Prefs, json!({}));
+            t.read(&mut ui, 1).await;
+            assert_eq!(sorted(t.started()), sorted(vec![workspace(), Topic::Prefs, link("ws/st"), rows("ws/st"), overview("ws/st")]));
+            t.set(link("ws/st"), json!({"state": "online"}));
+            let now = t.host.now_ms();
+            t.set(rows("ws/st"), json!([deciding("k1", 7, 5, now - 1000.0, false), deciding("k2", 8, 3, now - 5000.0, false), deciding("k3", 9, 4, now - 9000.0, true), row("10", now)]));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            let order = |v: &Value| v["items"].as_array().unwrap().iter().map(|i| i["session"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+            assert_eq!(order(&v), ["k2", "k1"], "oldest asked first; dismissed ones not at all");
+            assert_eq!((v["count"].clone(), v["loading"].clone()), (json!(2), json!(false)));
+            let it = &v["items"][0];
+            assert_eq!((it["station"].as_str(), it["stationName"].as_str(), it["thread"].as_u64(), it["seq"].as_u64(), it["title"].as_str()), (Some("ws/st"), Some("studio"), Some(8), Some(3), Some("k2 的标题")));
+            assert_eq!(it["text"], "奏 · k2 要合吗？");
+            assert_eq!(it["options"], json!([{ "label": "先不改", "detail": "留到下周" }, { "label": "合", "recommended": true }]), "the recommended one last");
+            assert_eq!(it["message"]["options"], it["options"]);
+            assert_eq!(it["message"]["decision"], json!({ "resolved": false }));
+            assert_eq!(it["message"]["by"]["agent"], "k2", "its agent, as the chat names it");
+            assert_eq!((it["before"][0]["mine"].clone(), it["before"].as_array().unwrap().len()), (json!(true), 2));
+            // Set aside here: last.
+            t.set(Topic::Prefs, json!({ "decisionsDeferred": { crate::decisions::deferral_key("ws/st", 8, 3): 50.0 } }));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            assert_eq!(order(&v), ["k1", "k2"]);
+            assert_eq!((v["items"][1]["deferred"].clone(), v["items"][0].get("deferred")), (json!(true), None));
+        });
+    }
+
+    #[test]
+    fn a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace() {
+        run(async {
+            let t = setup();
+            let (mut chats, mut marks) = (Ui::default(), Ui::default());
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
+            t.subscribe(2, Topic::WorkspaceMarks { workspace: None });
+            t.read_all(&mut [(&mut chats, 1), (&mut marks, 2)]).await;
+            t.set(Topic::Workspaces, json!([{ "workspaces": [{ "id": "ws" }] }]));
+            t.set(workspace(), one_station());
+            t.set(Topic::Prefs, json!({}));
+            t.read_all(&mut [(&mut chats, 1), (&mut marks, 2)]).await;
+            t.set(link("ws/st"), json!({"state": "online"}));
+            let now = t.host.now_ms();
+            let mut blocked = deciding("k1", 7, 5, now - 1000.0, false);
+            blocked["agents"][0]["lastTurn"] = json!({ "kind": "message", "declared": "block", "ending": "need_decision", "outcome": "completed", "startedAt": 1, "endedAt": 1 });
+            blocked["mine"] = json!(true);
+            t.set(rows("ws/st"), json!([blocked, deciding("k2", 8, 3, now - 2000.0, true), deciding("k3", 9, 4, now - 3000.0, false)]));
+            t.read_all(&mut [(&mut chats, 1), (&mut marks, 2)]).await;
+            let v = chats.value.clone().unwrap();
+            let all: Vec<Value> = v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().clone()).collect();
+            let of = |id: &str| all.iter().find(|r| r["id"] == id).cloned().unwrap_or_else(|| panic!("{id} in {v}"));
+            assert_eq!((of("k1")["tone"].as_str(), of("k1")["decision"]["text"].as_str()), (Some("wait"), Some("奏 · k1 要合吗？")), "blocked on a decision: wait, not alert");
+            assert_eq!((of("k2").get("tone"), of("k2")["decision"]["dismissed"].clone(), of("k2")["decision"].get("text")), (None, json!(true), None));
+            let m = marks.value.clone().unwrap();
+            assert_eq!(m["workspaces"]["ws"]["decisions"], 2);
+            assert_eq!((m["workspaces"]["ws"]["wait"].clone(), m["workspaces"]["ws"]["alert"].clone(), m["workspaces"]["ws"]["label"].clone()), (json!(2), json!(0), json!("2 个等你决定")));
+        });
+    }
+
     fn ids(v: &Value) -> Vec<String> {
         v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string())).collect()
     }
@@ -2486,7 +2649,7 @@ mod tests {
 
     /// A value without what the clients show of it (present.rs): what a view puts together, alone.
     fn plain(v: &Value) -> Value {
-        const SHOWN: [&str; 39] = ["face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary", "modelsText"];
+        const SHOWN: [&str; 42] = ["settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary", "modelsText"];
         match v {
             Value::Array(items) => Value::Array(items.iter().map(plain).collect()),
             // An absent option is left out, as the shapes send it.
@@ -2573,6 +2736,45 @@ mod tests {
     }
 
     #[test]
+    fn a_chats_decisions_show_their_options_and_where_they_stand() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, chat_topic("ws/a", 7));
+            t.read(&mut ui, 1).await;
+            let now = t.host.now_ms();
+            t.set(threads("ws/a"), json!([thread(7, &["k"], now)]));
+            let mut asked = entry(2, "先 A 还是 B？");
+            asked["authorKind"] = json!("agent");
+            asked["author"] = json!("k");
+            asked["declared"] = json!("block");
+            asked["ending"] = json!("need_decision");
+            asked["options"] = json!([{ "label": "A", "recommended": true }, { "label": "B" }]);
+            let mut picked = entry(3, "B");
+            picked["quotes"] = json!([{ "author": "agent", "text": "先 A 还是 B？", "comment": "", "ts": "2.0", "role": "agent" }]);
+            let mut again = entry(4, "那 C 呢？");
+            again["authorKind"] = json!("agent");
+            again["author"] = json!("k");
+            again["options"] = json!([{ "label": "C" }]);
+            t.set(page_of("ws/a", 7), json!({"first": 1, "last": 4, "entries": [entry(1, "做吧"), asked, picked, again], "thread": null}));
+            let mut chat_row = row("k", now);
+            chat_row["thread"] = json!(7);
+            chat_row["decision"] = json!({ "seq": 4, "options": [{ "label": "C" }], "message": { "seq": 4, "text": "那 C 呢？" }, "before": [] });
+            t.set(rows("ws/a"), json!([chat_row]));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            let m = &v["messages"];
+            assert_eq!(m[1]["options"], json!([{ "label": "B" }, { "label": "A", "recommended": true }]));
+            assert_eq!(m[1]["ending"], "need_decision");
+            assert_eq!((m[1]["decision"]["resolved"].clone(), m[1]["decision"]["chosen"].clone()), (json!(true), json!("B")));
+            assert_eq!(m[3]["decision"], json!({ "resolved": false }), "the one its row names waits");
+            assert_eq!(m[0].get("decision"), None);
+            assert_eq!(v["decision"]["text"], "奏 · 那 C 呢？");
+            assert_eq!(v.get("archivable"), None);
+        });
+    }
+
+    #[test]
     fn chat_is_a_thread_its_messages_and_its_agents() {
         run(async {
             let t = setup();
@@ -2580,8 +2782,8 @@ mod tests {
             t.subscribe(1, chat_topic("ws/a", 7));
             t.read(&mut ui, 1).await;
             // Its thread and its messages are asked for at once.
-            // And its workspace, which says whether the station is online; the prefs, what the viewer set aside.
-            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), Topic::Prefs, workspace()]));
+            // And its workspace, which says whether the station is online.
+            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
             assert!(ui.value.is_none(), "nothing before the thread is read");
 
             let now = t.host.now_ms();

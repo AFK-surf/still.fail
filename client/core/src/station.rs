@@ -1031,6 +1031,10 @@ impl Stations {
                 } else if let (Some(thread), Some(n)) = (answer.get("thread").and_then(Value::as_u64), answer.get("n").and_then(Value::as_u64)) {
                     self.put_read(&name, thread, n);
                 }
+                // A decision dismissed: the viewer's rows say so.
+                if answer.get("dismissed").is_some() {
+                    touched.push(Topic::ChatRows { station: name.clone() });
+                }
                 // Into the archive or back: out of one list and into the other.
                 if *archived {
                     touched.retain(|t| !matches!(t, Topic::ChatRows { .. }));

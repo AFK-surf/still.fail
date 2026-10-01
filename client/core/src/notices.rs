@@ -1,6 +1,6 @@
 //! What a person hears about while a client runs (the `notices` topic; docs/notifications.md): a chat of theirs
 //! whose agent is blocked on them, went wrong (the station's ⚠️ in it), or finished with something new to read, or where someone else said
-//! something; a chat with a piece of work newly waiting on them (work.rs), whoever's it is. Noticed from the chat rows the core keeps in sync anyway (sync.rs), by how each row changed; a
+//! something, or where a decision newly waits for them (decisions.rs). Noticed from the chat rows the core keeps in sync anyway (sync.rs), by how each row changed; a
 //! station's first rows are where it starts from. Each workspace hears of its own (workspace.rs): a workspace's
 //! `notices` are its chats', the plain topic every workspace's.
 
@@ -27,8 +27,8 @@ struct Seen {
     state: Option<&'static str>,
     /// The last message it has noticed (or found there at first).
     seq: i64,
-    /// Its pieces of work waiting on the viewer: each its key and the request (evidence) it waits by.
-    waits: Vec<(String, Option<i64>)>,
+    /// The decision waiting for the viewer in it (its post's seq), if any.
+    decision: Option<u64>,
 }
 
 /// What a workspace has heard of its chats: how each of its stations' rows stood when last looked at, by id, and
@@ -93,7 +93,7 @@ impl Notices {
             let slack_users: Vec<String> = self.store.get(&Topic::Overview { station: station.clone() })
                 .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned()).unwrap_or_default()
                 .iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
-            let now: HashMap<String, Seen> = rows.iter().filter_map(|row| Some((row.get("id")?.as_str()?.to_string(), seen(row, &me, &slack_users)))).collect();
+            let now: HashMap<String, Seen> = rows.iter().filter_map(|row| Some((row.get("id")?.as_str()?.to_string(), seen(row)))).collect();
             let before = its.heard.borrow_mut().seen.insert(station.clone(), now);
             // Its first rows are where it starts from.
             let Some(before) = before else { continue };
@@ -136,10 +136,10 @@ impl Notices {
     }
 }
 
-fn seen(row: &Value, me: &Value, slack_users: &[String]) -> Seen {
+fn seen(row: &Value) -> Seen {
     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
-    let waits = crate::work::waiting_on_me(row, me, slack_users).into_iter().map(|(key, _, evidence)| (key, evidence)).collect();
-    Seen { state: crate::present::row_state(&agents), seq: last_seq(row), waits }
+    let decision = crate::decisions::of_row(row).filter(|d| !crate::decisions::dismissed(d)).and_then(|d| d.get("seq")?.as_u64());
+    Seen { state: crate::present::row_state(&agents), seq: last_seq(row), decision }
 }
 
 fn last_seq(row: &Value) -> i64 {
@@ -147,29 +147,28 @@ fn last_seq(row: &Value) -> i64 {
 }
 
 /// What a row's change is worth telling its person, and in what words: its kind (wait, block, failed, done, message)
-/// and body. Only rows of still.fail's own chats (a Slack thread has Slack's notifications): a piece of work newly
-/// waiting on the viewer in any (a new one, or one asked again), the rest in the viewer's.
+/// and body. Only rows of still.fail's own chats (a Slack thread has Slack's notifications) that are the viewer's: a
+/// decision newly waiting for them (wait), an agent blocked on them otherwise, …
 fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String], members: &[Value]) -> Option<(&'static str, String)> {
-    if row.get("connect").is_some_and(|c| !c.is_null()) {
+    if row.get("mine").and_then(Value::as_bool) != Some(true) || row.get("connect").is_some_and(|c| !c.is_null()) {
         return None;
     }
-    let now = seen(row, me, slack_users);
-    let then = then.cloned().unwrap_or(Seen { state: None, seq: 0, waits: Vec::new() });
+    let now = seen(row);
+    let then = then.cloned().unwrap_or(Seen { state: None, seq: 0, decision: None });
     let by = crate::present::last_by(row, me, slack_users, members);
     let mine = by.as_ref().and_then(|b| b.get("mine")).and_then(Value::as_bool) == Some(true);
-    // Waiting on the viewer anew: unless the viewer said the last thing in it (they are at it).
-    let asked = crate::work::waiting_on_me(row, me, slack_users).into_iter().find(|(key, _, evidence)| !then.waits.contains(&(key.clone(), *evidence)));
-    if let Some((_, title, _)) = asked.filter(|_| !mine) {
-        return Some(("wait", body("wait", "", &title)));
-    }
-    if row.get("mine").and_then(Value::as_bool) != Some(true) {
-        return None;
+    // A decision waiting for the viewer anew: its first line.
+    if let Some(decision) = crate::decisions::of_row(row).filter(|_| now.decision.is_some() && now.decision != then.decision) {
+        let text = decision.get("message").and_then(|m| m.get("text")).and_then(Value::as_str).unwrap_or("");
+        let line = crate::decisions::line(text);
+        return Some(("wait", body("wait", "", line.strip_prefix("奏 · ").unwrap_or(&line))));
     }
     let last = row.get("last").filter(|l| l.is_object());
     let text = last.map(|l| crate::format::clean_text(l.get("text").and_then(Value::as_str).unwrap_or(""))).unwrap_or_default();
     let text = if text.is_empty() && last.is_some() { "（文件）".to_string() } else { text };
     let by_name = by.as_ref().and_then(|b| b.get("name")).and_then(Value::as_str).unwrap_or("").to_string();
-    if now.state == Some("block") && then.state != Some("block") {
+    // Blocked on a decision is told as the decision (above), or not at all once dismissed.
+    if now.state == Some("block") && then.state != Some("block") && crate::decisions::of_row(row).is_none() {
         return Some(("block", body("block", &by_name, &text)));
     }
     let fresh = now.seq > then.seq;
@@ -370,42 +369,38 @@ mod tests {
     }
 
     #[test]
-    fn a_piece_of_work_newly_waiting_on_me_is_noticed_once() {
+    fn a_decision_newly_waiting_for_me_is_noticed_once() {
         run(async {
             let (_host, store, notices) = setup();
             let rows = Topic::ChatRows { station: "ws/st".into() };
             let stations = ["ws/st".to_string()];
             let _watch = store.watch(&rows, Rc::new(|| {}));
-            let me = json!({ "id": "me@x.y", "name": "me", "email": "me@x.y", "via": "cloud" });
-            let wl = json!({ "id": "wl@x.y", "name": "王磊", "email": "wl@x.y", "via": "cloud" });
-            let with = |items: Value, by: (&str, &str), seq: i64| {
-                // Not the viewer's chat: what waits on them is still theirs to hear of.
-                let mut r = row(None, seq, false, by);
-                r["mine"] = json!(false);
-                r["items"] = items;
+            let with = |decision: Value, seq: i64| {
+                let mut r = row(Some("block"), seq, false, ("agent", "ds:C1:1.2"));
+                r["decision"] = decision;
                 r
             };
-            let item = |key: &str, on: &Value, evidence: i64| json!({ "key": key, "title": format!("设置页{key}"), "state": "waiting", "waitingOn": [on], "evidence": evidence });
+            let asked = |seq: i64, text: &str| json!({ "seq": seq, "options": [{ "label": "A" }], "message": { "seq": seq, "text": text } });
             // Found waiting at first: old news.
-            store.set(&rows, Ok(json!([with(json!([item("a", &me, 3)]), ("agent", "ds:C1:1.2"), 3)])));
+            store.set(&rows, Ok(json!([with(asked(3, "旧的？"), 3)])));
             notices.look(&stations);
             assert!(kinds(&notices).is_empty());
-            // Another, and one on someone else: the one on me.
-            store.set(&rows, Ok(json!([with(json!([item("a", &me, 3), item("b", &me, 4), item("c", &wl, 4)]), ("agent", "ds:C1:1.2"), 4)])));
+            // A newer one: heard, as a decision, not as blocked.
+            store.set(&rows, Ok(json!([with(asked(5, "**合吗？**\n细节"), 5)])));
             notices.look(&stations);
             assert_eq!(kinds(&notices), ["wait"]);
-            assert_eq!(notices.value(None)["items"][0]["body"], "等你决定 · 设置页b");
+            assert_eq!(notices.value(None)["items"][0]["body"], "等你决定 · 合吗？");
             notices.look(&stations);
             assert_eq!(kinds(&notices).len(), 1, "once");
-            // Asked again (another entry declares it): heard again.
-            store.set(&rows, Ok(json!([with(json!([item("a", &me, 5), item("b", &me, 4)]), ("agent", "ds:C1:1.2"), 5)])));
+            // Dismissed, then another: only the other is heard.
+            let mut dismissed = asked(6, "这个？");
+            dismissed["dismissed"] = json!(true);
+            store.set(&rows, Ok(json!([with(dismissed, 6)])));
+            notices.look(&stations);
+            assert_eq!(kinds(&notices).len(), 1);
+            store.set(&rows, Ok(json!([with(asked(7, "那这个？"), 7)])));
             notices.look(&stations);
             assert_eq!(kinds(&notices), ["wait", "wait"]);
-            assert_eq!(notices.value(None)["items"][1]["body"], "等你决定 · 设置页a");
-            // The viewer said the last thing: they are at it.
-            store.set(&rows, Ok(json!([with(json!([item("a", &me, 5), item("b", &me, 4), item("d", &me, 6)]), ("person", "me@x.y"), 6)])));
-            notices.look(&stations);
-            assert_eq!(kinds(&notices).len(), 2);
         });
     }
 

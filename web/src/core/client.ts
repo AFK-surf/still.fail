@@ -84,7 +84,10 @@ export type Topic =
   | { topic: "changelog" }
   // What each workspace has waiting (how many chats want their person, how many are unread) and the chat last open in
   // it; of those other than `workspace` (the one in view), the most urgent (client/core/src/views/marks.rs).
-  | { topic: "workspaceMarks"; workspace?: string };
+  | { topic: "workspaceMarks"; workspace?: string }
+  // The decisions waiting for the viewer in a workspace's chats, those set aside last, and how many
+  // (client/core/src/decisions.rs). A core from before it answers an error.
+  | { topic: "decisions"; workspace: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

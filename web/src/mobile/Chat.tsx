@@ -43,7 +43,6 @@ import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 
 import { NAME } from "../channel.ts";
-import { AskCards } from "../Asks.tsx";
 export function ChatScreen() {
   const { chat: address = "" } = useParams();
   // A chat made here keeps the key the core gave it when its address becomes its station's (below).
@@ -105,9 +104,6 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   return (
     <div className={chatCss.mChat}>
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
-      {/* What waits to be decided, one at a time, over the composer (../Asks.tsx): 你定 and 待定 by swiping it. */}
-      {!view.offline && !view.archived && <AskCards asks={view.asks} station={station.address} thread={view.thread?.id ?? null}
-        swipe onError={app.toast} className={`${css.mAsks} ${rootCss.wide}`} />}
       <ChatBar view={view} here={here} />
     </div>
   );
@@ -120,7 +116,11 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
   const jobs = useChatJobs(here.station, { session: here.key }).value;
   return (
     <BarFrame title={view.title} more={!!thread} onMore={() => thread && openChatInfo(app, here, thread)}
-      trailing={jobs && jobs.jobs.length > 0 ? <JobsButton here={here} alarm={jobs.alarm} /> : null}>
+      trailing={<>
+        {/* Nothing left in it (the core's `archivable`): archived with one tap. */}
+        {view.archivable && thread && <ArchiveButton here={here} view={view} thread={thread} />}
+        {jobs && jobs.jobs.length > 0 && <JobsButton here={here} alarm={jobs.alarm} />}
+      </>}>
       <PeopleStack people={view.people} max={5} />
       {view.agents.map((a) => (
         <button key={a.session.key} type="button" className={css.mBarAgent} onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={`${a.session.agentText} 的执行历史`}>
@@ -618,6 +618,23 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
       </InfoList>
     </>
   );
+}
+
+/** In the bar while nothing is left in the chat: archives it with one tap, back to the list at once (as ArchiveRow). */
+function ArchiveButton({ here, view, thread }: { here: Here; view: ChatView; thread: ChatThread }) {
+  const app = useApp();
+  const call = useStationCall(here.station);
+  const api = useMemo(() => stationApi(call), [call]);
+  const of = { thread: thread.id, session: view.agents[0]?.session.key ?? here.key };
+  const archive = () => {
+    if (view.watch) {
+      confirm(app, { title: `归档「${view.title}」？`, text: view.watch.ask, action: "归档", run: () => api.archive(of, true).then(() => { app.pop(); app.toast("已归档"); }) });
+      return;
+    }
+    app.pop();
+    api.archive(of, true).then(() => app.toast("已归档"), (error) => app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`));
+  };
+  return <NavButton icon={Archive} label="归档" onClick={archive} />;
 }
 
 function InfoDetail({ label, value, extra }: { label: string; value: string; extra?: ReactNode }) {

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
-import type { RowWaiting, WorkspaceMark } from "./core/shapes.ts";
+import type { WorkspaceMark } from "./core/shapes.ts";
 import { reducedMotion } from "./motion.ts";
 import * as css from "./ChatMark.css.ts";
 
@@ -63,15 +63,21 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 }
 
 /**
- * A row's second line while something in it waits (the core's `waiting`): in ink when it is the viewer's turn, its
- * lead (奏, up to the first ·) bold; 等王磊 … stays quiet, as the last message would be.
+ * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
+ * 奏 · … in ink, its lead (奏) bold; 要你帮忙：… in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
+ * last message would be.
  */
-export function WaitingText({ waiting, className }: { waiting: RowWaiting; className: string }) {
-  const turn = waiting.mine > 0;
-  const lead = turn ? waiting.text.split(" · ")[0]! : "";
+export function WaitingText({ text, className }: { text: string; className: string }) {
+  const lead = text.startsWith("奏") ? text.split(" · ")[0]! : "";
+  const turn = lead !== "" || text.startsWith("要你帮忙");
   return (
     <span className={className} data-turn={turn || undefined}>
-      {lead && <b className={css.waitingLead}>{lead}</b>}{waiting.text.slice(lead.length)}
+      {lead && <b className={css.waitingLead}>{lead}</b>}{text.slice(lead.length)}
     </span>
   );
+}
+
+/** What a row's second line says of where its chat stands, if anything (an older core: only a decision's line). */
+export function stateLine(item: ChatItem): string | undefined {
+  return item.stateText ?? item.decision?.text;
 }
