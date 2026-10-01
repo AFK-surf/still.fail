@@ -204,6 +204,9 @@ impl AgentDriver for ClaudeDriver {
         // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
         // session, they took up to 36 s before a new session could start. One the user chose wins.
         env.entry("CLAUDE_CODE_CERT_STORE".into()).or_insert_with(|| "bundled".into());
+        // Claude Code nudges a model that has gone a few turns without writing to the user to say what it is doing. Here
+        // ordinary output reaches nobody, so the nudge turned into status posts in the chat; the instructions say when to post.
+        env.entry("CLAUDE_CODE_SILENT_TURN_REMINDER".into()).or_insert_with(|| "0".into());
 
         let label = format!("claude {session_id}");
         let (command, store) = (self.command.clone(), self.store.clone());
