@@ -2,10 +2,11 @@
 #   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
-#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf.
+#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf,
+#             its station release (then studio's station updates to it) and its Android app.
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
-# Not here: the relay (deploying it drops every connection), the station's release, the stable channel and the apps:
-# ~/bin/ember-deploy and ~/bin/ember-promote on studio.
+# Not here: the relay (deploying it drops every connection), the beta desktop app (until a release of it is quick), the
+# stable channel and its apps: ~/bin/ember-deploy and ~/bin/ember-promote on studio, scripts/release.sh.
 name: pipeline
 on:
   push:
@@ -26,6 +27,8 @@ jobs:
       api: ${{ steps.plan.outputs.api }}
       static: ${{ steps.plan.outputs.static }}
       relay: ${{ steps.plan.outputs.relay }}
+      station: ${{ steps.plan.outputs.station }}
+      android: ${{ steps.plan.outputs.android }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -45,14 +48,20 @@ jobs:
           if printf '%s\n' "$changed" | grep -E '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' | grep -qvE '^cloud/src/(relay|relay-worker|limits|preview)\.ts$'; then api=true; fi
           relay=false
           if has '^cloud/(src/(relay|relay-worker|limits|auth)\.ts|Dockerfile|relay-entrypoint\.sh|wrangler\.relay\.jsonc)$'; then relay=true; fi
+          station=false
+          if has '^(src/|mesh/|vendor/|client/|bin/|scripts/(release|station-bundle|linux-station)\.sh$|scripts/posthog-key\.ts$)'; then station=true; fi
+          android=false
+          if has '^(apps/android/|client/|web/src/viz/|scripts/release\.sh$)'; then android=true; fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
             echo "static=$([ ${#static[@]} -gt 0 ] && echo true || echo false)"
             echo "api=$api"
             echo "relay=$relay"
+            echo "station=$station"
+            echo "android=$android"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android relay=$relay"
 
   check:
     needs: plan
@@ -122,10 +131,47 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "cloud-web-${{ github.sha }}", path: dist/cloud-web, retention-days: 90 }
 
+  # The test channel's station release: what a station on it updates to (studio's at once, the others when they update).
+  station:
+    needs: [plan, check, api]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # the release's number is the commits in the history
+      - uses: ./.github/actions/setup
+      - name: Release the station (darwin-arm64, linux-x64, linux-arm64)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: sh .github/release.sh station
+      - name: studio's station takes it
+        # As any station on the test channel would; handed over in place (studio's /tmp/ember-station-update.log).
+        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1; tail -2 /tmp/ember-station-update.log'
+
+  # The test channel's Android app (fail.still.android.beta), on android/beta/latest.json.
+  android:
+    needs: [plan, check, api]
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # versionCode is the commits in the history
+      - uses: ./.github/actions/setup
+      - name: Release the beta Android app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: sh .github/release.sh android
+
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, check, api, static]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
+    needs: [plan, check, api, static, station, android]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result)
     runs-on: [self-hosted, mini1]
     steps:
       - uses: actions/checkout@v5
