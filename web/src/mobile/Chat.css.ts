@@ -90,6 +90,7 @@ export const mJobStop = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "46px", border: "0",
   borderRadius: "999px", background: "color-mix(in srgb, var(--m-red) 12%, transparent)", color: "var(--m-red)",
   font: "inherit", fontSize: "15px", fontWeight: "500", cursor: "pointer",
+  selectors: { "&:disabled": { cursor: "default" } },
 });
 export const mJobCommand = style({
   font: "11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace", color: "var(--m-muted)", overflowWrap: "anywhere",
@@ -111,7 +112,12 @@ export const mJobsAll = style({
   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px", marginTop: "14px",
   padding: "6px 2px", border: "0", background: "none", color: "var(--m-accent)", font: "inherit", fontSize: "14px",
   textAlign: "left", cursor: "pointer",
+  selectors: { "&:disabled": { cursor: "default" } },
 });
+/** Its words with a spinner before them while it is under way. */
+export const mJobsAllLine = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
+// Not the small note under it (./Connects.css.ts): the button's own words.
+globalStyle(`${mJobsAll} ${mJobsAllLine}`, { fontSize: "inherit", color: "inherit" });
 globalStyle(`${mAttach} button`, {
   flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", padding: "16px 0 12px",
   border: "0", borderRadius: "18px", background: "var(--m-chip)", cursor: "pointer",

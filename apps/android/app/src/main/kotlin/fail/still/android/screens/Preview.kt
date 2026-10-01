@@ -360,7 +360,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
                     }, loaded = {
                         if (state.marking) js("__stillfailMarks&&__stillfailMarks.on(true)")
                     }, leave = { url ->
-                        app.openLink(url.toString()) { try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url)) } catch (_: Exception) {} }
+                        app.openLink(url.toString()) { try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url)) } catch (_: Exception) { app.toast = "打不开这个链接" } }
                     })
                     loadUrl("https://$PREVIEW_HOST/")
                 }

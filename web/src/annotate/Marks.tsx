@@ -23,6 +23,8 @@ type Said =
 
 /** The pictures: one per mark (`shots`), or, from a frame before those, the whole page with them all (`png`). */
 interface Shot { shots?: { n: number; png: ArrayBuffer }[]; png?: ArrayBuffer; error?: string }
+/** How long the page has to send its screenshots. */
+const SHOT_TIMEOUT_MS = 10_000;
 
 /**
  * The marks of the preview in `frame` (at `origin`, told apart by `nonce`), for the chat whose draft is `draftKey`.
@@ -105,8 +107,10 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
     setEditing(null);
     try {
       const id = ++shot.current;
-      const got = await new Promise<Shot>((done) => {
-        shots.current.set(id, done);
+      // The page may never answer (gone, or busy): given up on after a while, said as any failure.
+      const got = await new Promise<Shot>((done, fail) => {
+        const timer = setTimeout(() => { shots.current.delete(id); fail(new Error("截图超时：网页一直没有回应")); }, SHOT_TIMEOUT_MS);
+        shots.current.set(id, (shot) => { clearTimeout(timer); done(shot); });
         tell({ capture: id, each: true });
       });
       const stamp = new Date().toTimeString().slice(0, 8).replaceAll(":", "");

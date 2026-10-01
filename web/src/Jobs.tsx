@@ -8,9 +8,11 @@ import { stationApi, useStationCall } from "./api.ts";
 import { useTopic } from "./core/react.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "./icons.tsx";
 import { Empty, Segmented, Tip } from "./ui.tsx";
-import { useToast } from "./toast.tsx";
+import { useAct } from "./toast.tsx";
+import { useDoing } from "./doing.ts";
 import * as css from "./Jobs.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core/src/
 // jobs.rs): `tone` (up, live, restart, fail, off), `meta`, `detail`, a notice's `ago` and `clock`; a chat's all
@@ -56,19 +58,41 @@ export function useJobLog(station: string, id: string | null, lines: number): Jo
 /** Stops a job from the page (its agent is told who did). */
 export function useStopJob(station: string): (job: Job) => void {
   const call = useStationCall(station);
-  const toast = useToast();
-  return (job) => void stationApi(call).stopJob(job.id)
-    .catch((e: Error) => toast(`没能停下「${job.name}」：${e.message}`));
+  const act = useAct();
+  return (job) => act(stationApi(call).stopJob(job.id), `停下「${job.name}」`);
 }
 
 /** Clears a chat's jobs that are over from the page (each session's, as the station keeps them: `clear`). */
 export function useClearEnded(station: string): (sessions: string[]) => void {
   const call = useStationCall(station);
-  const toast = useToast();
+  const act = useAct();
   return (sessions) => {
-    void Promise.all(sessions.map((s) => stationApi(call).clearEndedJobs(s)))
-      .catch((e: Error) => toast(`没能清掉已结束的任务：${e.message}`));
+    act(Promise.all(sessions.map((s) => stationApi(call).clearEndedJobs(s))), "清掉已结束的任务");
   };
+}
+
+/**
+ * A job's stop button (`children` after its icon): turning in its icon's place, not pressed again, while the job is
+ * being stopped, wherever that was asked (the core's `doing`).
+ */
+export function JobStop({ station, job, stop, className, label, size = 14, children }:
+  { station: string; job: Job; stop: (job: Job) => void; className: string; label?: string; size?: number; children?: ReactNode }) {
+  const stopping = useDoing("job.stop", { station, id: job.id });
+  return (
+    <button type="button" className={className} aria-label={label} disabled={stopping} aria-busy={stopping || undefined} onClick={() => stop(job)}>
+      {stopping ? <span className={`${waitingCss.spinner} ${css.jobSpinner}`} aria-hidden="true" /> : <Stop size={size} />}{children}
+    </button>
+  );
+}
+
+/** Clearing a chat's jobs that are over: the button says how many, turning while they go. */
+function ClearEnded({ station, view, clear }: { station: string; view: ChatJobsView; clear: (sessions: string[]) => void }) {
+  const clearing = useDoing("job.clearEnded", { station });
+  return (
+    <button type="button" className={css.jobsClear} disabled={clearing} aria-busy={clearing || undefined} onClick={() => clear(view.clear)}>
+      {clearing && <span className={`${waitingCss.spinner} ${css.jobSpinner}`} aria-hidden="true" />}{view.clearText}
+    </button>
+  );
 }
 
 /** The last line a job wrote, and when (the job's own word for it until its output is read). */
@@ -134,7 +158,7 @@ export function JobsPopover({ station, view, onService, onTab }:
                   <Notices job={j} limit={3} />
                   <LastOutput station={station} job={j} />
                   <div className={css.jobActions}>
-                    {j.state === "running" && <button type="button" className={css.jobAction} onClick={() => stop(j)}><Stop size={14} />停止</button>}
+                    {j.state === "running" && <JobStop station={station} job={j} stop={stop} className={css.jobAction}>停止</JobStop>}
                     <button type="button" className={css.jobAction} onClick={() => onTab(j.id)}><PanelOpen size={14} />在侧栏看</button>
                   </div>
                 </div>
@@ -149,7 +173,7 @@ export function JobsPopover({ station, view, onService, onTab }:
           {view.allText} · 在侧栏看
         </button>
         {/* What the popover leaves out is all over: the button to clear them says how many. */}
-        {view.ended > 0 && <button type="button" className={css.jobsClear} onClick={() => clear(view.clear)}>{view.clearText}</button>}
+        {view.ended > 0 && <ClearEnded station={station} view={view} clear={clear} />}
       </div>
     </>
   );
@@ -187,7 +211,7 @@ export function JobsTab({ station, view, picked, onPick, onService }:
             {plain.map((j) => <JobRow key={j.id} job={j} selected={j.id === job?.id} onClick={() => onPick(j.id)} />)}
           </section>
         )}
-        {view.ended > 0 && <button type="button" className={css.jobsClear} onClick={() => clear(view.clear)}>{view.clearText}</button>}
+        {view.ended > 0 && <ClearEnded station={station} view={view} clear={clear} />}
       </div>
       {job && (
         <div className={css.jobDetail}>
@@ -197,7 +221,7 @@ export function JobsTab({ station, view, picked, onPick, onService }:
             <span className={css.jobDetailState}>{job.detail}</span>
             <span className={css.jobDetailGrow} />
             <Segmented<"notices" | "output"> label="看什么" value={tab} onChange={setTab} options={[{ value: "notices", label: "通知" }, { value: "output", label: "输出" }]} />
-            {job.state === "running" && <Tip label="停止"><button type="button" className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} aria-label="停止" onClick={() => stop(job)}><Stop size={16} /></button></Tip>}
+            {job.state === "running" && <Tip label="停止"><JobStop station={station} job={job} stop={stop} className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} label="停止" size={16} /></Tip>}
           </div>
           {job.command && <Tip label={job.command} cut><div className={css.jobDetailCommand}>{job.command}</div></Tip>}
           {tab === "notices"

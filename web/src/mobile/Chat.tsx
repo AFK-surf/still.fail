@@ -25,6 +25,7 @@ import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
+import { doingMatches, useDoing, useDoingList } from "../doing.ts";
 import type { ChatJobsView, Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
@@ -378,6 +379,8 @@ function JobsNow({ here }: { here: Here }) {
   const [all, setAll] = useState(false);
   const shown = all ? jobs : jobs.filter((j) => j.current);
   const clear = useClearEnded(here.station);
+  // Clearing: under way while any of its sessions' is.
+  const clearing = useDoingList().some((d) => view.clear.some((session) => doingMatches(d, "job.clearEnded", { station: here.station, session })));
   return (
     <>
       <SheetGrab />
@@ -391,7 +394,11 @@ function JobsNow({ here }: { here: Here }) {
             {all ? "只看眼下的" : <>{view.allText}<span>{view.hiddenText}</span></>}
           </button>
         )}
-        {view.ended > 0 && <button type="button" className={css.mJobsAll} onClick={() => clear(view.clear)}>{view.clearText}</button>}
+        {view.ended > 0 && (
+          <button type="button" className={css.mJobsAll} data-busy={clearing || undefined} disabled={clearing} onClick={() => clear(view.clear)}>
+            <span className={css.mJobsAllLine}>{clearing && <Spinner size={13} />}{view.clearText}</span>
+          </button>
+        )}
       </div>
     </>
   );
@@ -457,6 +464,7 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
   const service = !!job?.service;
   const tab = service ? 1 : picked;
   const running = job?.state === "running";
+  const stopping = useDoing("job.stop", { station, id: jobId });
   // Its last line, as it grows.
   const last = useJobLog(station, job && tab === 0 ? job.id : null, 1);
   if (!job) return <><SheetGrab /><SheetHead title="任务" />{jobs.value && <p className={homeCss.mNote}>这个任务已经不在了。</p>}</>;
@@ -480,7 +488,7 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
           )
           : <JobOutput station={station} job={job} />}
         {tab === 0 && said && <div className={css.mJobLast}><span>{said}</span>{last?.last && <code>{last.last}</code>}</div>}
-        {running && <button type="button" className={css.mJobStop} onClick={() => stop(job)}><Stop size={16} />停止</button>}
+        {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner size={16} color="var(--m-red)" /> : <Stop size={16} />}{stopping ? "正在停止…" : "停止"}</button>}
       </div>
     </>
   );
@@ -515,6 +523,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const jobs = useChatJobs(here.station, { session: here.key }).value ?? NO_JOBS;
   const thread = view.thread ?? first;
   const call = useStationCall(here.station);
+  const pinning = useDoing("chat.pin", { station: here.station, session: here.key });
   return (
     <>
       <SheetGrab />
@@ -530,8 +539,8 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             </InfoRow>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {view.pinned != null && (
-              <InfoRow onClick={() => void stationApi(call).pin({ session: here.key }, !view.pinned)
-                .catch((error) => app.toast(`没能${view.pinned ? "取消固定" : "固定"}：${error instanceof Error ? error.message : String(error)}`))}>
+              <InfoRow busy={pinning} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
+                .catch((error) => app.toast(`没能${view.pinned ? "取消固定" : "固定"}：${error instanceof Error ? error.message : String(error)}`)); }}>
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? "取消固定" : "固定到列表顶部"}</span>
               </InfoRow>
             )}
@@ -583,22 +592,21 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
   // A sheet lies over the page, outside its station's context: the API by the station's address.
   const call = useStationCall(here.station);
   const api = useMemo(() => stationApi(call), [call]);
-  const archive = async () => {
+  const of = { thread: thread.id, session: view.agents[0]?.session.key ?? here.key };
+  // At once: the list's row says it is under way (Home.tsx), the toast how it ended.
+  const archive = () => {
     app.sheet(null);
     app.pop();
-    try {
-      await api.archive({ thread: thread.id, session: view.agents[0]?.session.key ?? here.key }, true);
-      app.toast("已归档");
-    } catch (error) {
-      app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
-    }
+    api.archive(of, true).then(() => app.toast("已归档"), (error) => app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`));
   };
+  // Asked first: its sheet waits and says what went wrong; back to the list once it is done.
+  const asked = () => api.archive(of, true).then(() => { app.pop(); app.toast("已归档"); });
   return (
     <>
       <GroupLabel>归档</GroupLabel>
       <InfoList>
         {/* A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words). */}
-        <InfoRow onClick={() => view.watch ? confirm(app, { title: `归档「${view.title}」？`, text: view.watch.ask, action: "归档", run: archive }) : void archive()}><Archive size={16} /><span className={partsCss.mGrow}>归档对话</span></InfoRow>
+        <InfoRow onClick={() => view.watch ? confirm(app, { title: `归档「${view.title}」？`, text: view.watch.ask, action: "归档", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>归档对话</span></InfoRow>
       </InfoList>
     </>
   );

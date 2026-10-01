@@ -64,6 +64,7 @@ import fail.still.android.data.StationView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
+import fail.still.android.data.errorText
 import fail.still.android.ui.C
 import fail.still.android.ui.Card
 import fail.still.android.ui.IconIn
@@ -85,12 +86,9 @@ import fail.still.android.ui.SlackMark
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 private val SIGNING_IN = setOf("starting", "needs_code", "needs_approval", "verifying")
@@ -176,6 +174,7 @@ internal fun ProfileRow(station: String, p: Profile) {
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
+        if (app.isDoing(setOf("profile.check", "profile.quota"), "station" to station, "id" to p.id)) Spinner(14.dp)
         QuotaRings(p.quota)
         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
     }
@@ -192,8 +191,32 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
         Loading(stations.error?.message ?: if (s?.overview != null) "没有这个 Profile。" else "正在读取…")
     }
     val api = app.api(address)
-    val scope = rememberCoroutineScope()
-    val save = { body: JsonObject, done: String -> scope.launch { try { api.putProfile(p.id, body); app.toast = done } catch (e: CoreException) { app.toast = e.message } }; Unit }
+    // Models ticked ahead of the station: shown at once, the next tick built on them; sent one put at a time (the latest
+    // each time), back to the station's when refused.
+    val ticks = remember { Ticks() }
+    val setModels = { models: List<String> ->
+        ticks.wanted = models
+        if (ticks.sending) ticks.dirty = true
+        else {
+            ticks.sending = true
+            app.scope.launch {
+                try {
+                    do {
+                        ticks.dirty = false
+                        val m = ticks.wanted ?: break
+                        api.setModels(p.id, m)
+                    } while (ticks.dirty)
+                } catch (e: CoreException) {
+                    app.toast = "没能保存模型：${errorText(e)}"
+                } finally {
+                    ticks.wanted = null; ticks.sending = false
+                }
+            }
+        }
+        Unit
+    }
+    // The switch flipped and not answered yet: shown flipped, with a spinner.
+    var flipping by remember { mutableStateOf<Boolean?>(null) }
     val users = p.usedBy.mapNotNull { u -> s.overview?.connects?.firstOrNull { it.id == u } }
     val kind = p.access.kind
     Column(Modifier.fillMaxSize()) {
@@ -204,7 +227,10 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProviderMark(p.runtime, kind, 26.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TonePill(p.checkText, p.checkTone)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            TonePill(p.checkText, p.checkTone)
+                            if (app.isDoing("profile.check", "station" to address, "id" to p.id)) { Spinner(12.dp); Text("正在检查…", fontSize = 12.sp, color = C.muted) }
+                        }
                         Text(
                             (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: "还没检查过") + (p.check?.time?.get("checkedAt")?.let { " · ${it.ago}检查" } ?: ""),
                             fontSize = 13.sp, color = C.muted,
@@ -213,18 +239,26 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 }
             }
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
-            QuotaSection(p)
-            ModelsSection(p) { models -> save(buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } }, "已保存") }
+            QuotaSection(p, refreshing = app.isDoing("profile.quota", "station" to address, "id" to p.id))
+            ModelsSection(p, ticks.wanted ?: p.models, ticks.sending) { models -> setModels(models) }
             // A station older than the setting says nothing of it.
-            val background = p.backgroundOnMessage
+            val background = flipping ?: p.backgroundOnMessage
             if ("claude" in p.runtimes && background != null) {
                 SectionHeader("运行", start = 24.dp)
                 ListCard {
-                    ListRow(onClick = { save(buildJsonObject { put("backgroundOnMessage", !background) }, if (background) "已关闭" else "已打开") }) {
+                    ListRow(onClick = if (flipping != null) null else ({
+                        flipping = !background
+                        app.scope.launch {
+                            try { api.putProfile(p.id, buildJsonObject { put("backgroundOnMessage", !background) }); app.toast = if (background) "已关闭" else "已打开" }
+                            catch (e: CoreException) { app.toast = "没能保存：${errorText(e)}" }
+                            finally { flipping = null }
+                        }
+                    })) {
                         Column(Modifier.weight(1f)) {
                             Text("新消息到来时，把正在执行的命令转到后台", fontSize = 15.sp, color = C.ink)
                             Text(if (background) "命令和 subagent 转到后台继续跑，agent 马上读到消息。" else "新消息要等正在执行的命令或 subagent 结束后才会读到。", fontSize = 13.sp, color = C.muted)
                         }
+                        if (flipping != null) Spinner(14.dp)
                         Switch(background)
                     }
                 }
@@ -288,14 +322,16 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
 private fun openProfileMenu(app: AppState, station: String, p: Profile) {
     val api = app.api(station)
     app.sheet = SheetSpec(0.5f) {
-        val scope = rememberCoroutineScope()
-        val run = { done: String, call: suspend () -> Unit -> app.sheet = null; scope.launch { try { call(); app.toast = done } catch (e: CoreException) { app.toast = e.message } }; Unit }
+        // Goes on past the sheet; the profile's page shows it under way (a spinner by its state or its allowance).
+        val run = { what: String, done: String, call: suspend () -> Unit -> app.sheet = null; app.act(what, done) { call() } }
+        val checking = app.isDoing("profile.check", "station" to station, "id" to p.id)
+        val refreshing = app.isDoing("profile.quota", "station" to station, "id" to p.id)
         SheetGrab()
         SheetHead(p.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             if (p.machine != true) PickRow("改名") { ask(app, "Profile 的名字", p.name, "名字", "保存") { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = "已改名" } }
-            PickRow("重新检查") { run("已检查") { api.checkProfile(p.id) } }
-            PickRow("刷新额度") { run("已刷新额度") { api.refreshQuota(p.id) } }
+            PickRow("重新检查", busy = checking) { run("检查", "已检查") { api.checkProfile(p.id) } }
+            PickRow("刷新额度", busy = refreshing) { run("刷新额度", "已刷新额度") { api.refreshQuota(p.id) } }
             // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
             val machine = p.machine == true
             PickRow((if (machine) "停用" else "删除 Profile") + if (p.usedBy.isNotEmpty()) "（还有连接在用）" else "", color = C.red, enabled = p.usedBy.isEmpty()) {
@@ -310,12 +346,20 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
     }
 }
 
+/** The models a profile's page ticked ahead of its station (ProfileScreen): null when none wait. */
+private class Ticks {
+    var wanted by mutableStateOf<List<String>?>(null)
+    var sending by mutableStateOf(false)
+    /** Ticked again while a put was out: the latest goes once it is answered. */
+    var dirty = false
+}
+
 /** Its allowance, window by window: what is left and when it refills; why it cannot be read, when the provider says. */
 @Composable
-private fun QuotaSection(p: Profile) {
+private fun QuotaSection(p: Profile, refreshing: Boolean = false) {
     val windows = p.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     val trouble = quotaTrouble(p.quota)
-    val checked = p.quota?.time?.get("checkedAt")?.let { "${it.ago}查询" }
+    val checked = if (refreshing) "正在刷新…" else p.quota?.time?.get("checkedAt")?.let { "${it.ago}查询" }
     if (trouble != null) {
         val blocked = p.quota?.state == "blocked"
         SectionHeader("额度", checked, start = 24.dp)
@@ -347,36 +391,38 @@ internal fun TonePill(text: String, tone: String, size: androidx.compose.ui.unit
 
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
 @Composable
-private fun ModelsSection(p: Profile, onSave: (List<String>) -> Unit) {
+private fun ModelsSection(p: Profile, models: List<String>, saving: Boolean, onSave: (List<String>) -> Unit) {
     var filter by remember { mutableStateOf("") }
     val all = ((p.check?.models ?: emptyList()) + p.models).distinct().sorted()
     val shown = all.filter { m -> listOf(m, p.names[m] ?: m).any { it.contains(filter.trim(), ignoreCase = true) } }
     val save = { models: List<String> -> onSave(models.distinct().sorted()) }
     val suffix = if (filter.isBlank()) "" else "筛选结果"
-    SectionHeader("模型 · 启用 ${p.models.size} / ${all.size}", start = 24.dp)
+    SectionHeader("模型 · 启用 ${models.size} / ${all.size}", start = 24.dp)
     Text(
         if (all.isEmpty()) "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" else "只有勾选的模型能在新对话和连接里选。",
         fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
     )
     if (all.isNotEmpty()) Row(Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (all.size > 10) Field(filter, { filter = it }, "筛选模型", modifier = Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
-        Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models + shown) })
-        Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models - shown.toSet()) })
+        Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models + shown) })
+        Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(models - shown.toSet()) })
     }
     // Plain rows on the page, no card behind them; by series, newest first (the core's).
     p.series.forEach { series ->
         val list = series.models.filter { it in shown }
         if (list.isNotEmpty()) Text(series.name, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(top = 14.dp, bottom = 2.dp))
         list.forEach { m ->
-            val on = m in p.models
+            val on = m in models
             Row(
-                Modifier.fillMaxWidth().clickable { save(if (on) p.models - m else p.models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
+                Modifier.fillMaxWidth().clickable { save(if (on) models - m else models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
                     if (on) IconIn(Icons.Check, 13.dp, C.bg)
                 }
                 Text(p.names[m] ?: m, fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Ticked here, not the station's yet.
+                if (saving && on != (m in p.models)) Spinner(12.dp)
             }
         }
     }
@@ -403,7 +449,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (active) {
                 LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
-                Button("取消登录", primary = false) { scope.launch { try { api.cancelLogin(p.id) } catch (e: CoreException) { app.toast = e.message } } }
+                Button("取消登录", primary = false, busy = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)) { app.act("取消登录") { api.cancelLogin(p.id) } }
             } else {
                 Text(
                     when (job?.state) { "failed" -> "上次登录没成功：${job.error}"; "done" -> "已登录。换账号的话重新登录一次。"; else -> "登录在运行 ${BuildConfig.APP_NAME} 的机器上完成，你只需要在浏览器里授权。" },
@@ -411,7 +457,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
                 )
                 Button(if (job?.state == "done" || !needed) "重新登录" else "登录", primary = needed, busy = busy) {
                     busy = true
-                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = e.message } finally { busy = false } }
+                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = "没能开始登录：${errorText(e)}" } finally { busy = false } }
                 }
                 Text("也可以在那台机器上手动登录", fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
                 if (manual) CommandBox(p.loginCommand)
@@ -561,7 +607,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
             if (l != null) {
                 if (job?.state == "failed" || job?.state == "cancelled") {
                     Text(job.error ?: "登录没有完成。", fontSize = 13.sp, color = C.red)
-                    Button("重新开始", primary = false) { scope.launch { try { api.dropLogin(l) } catch (_: CoreException) {} }; login = null }
+                    Button("重新开始", primary = false) { app.act("重新开始") { api.dropLogin(l) }; login = null }
                 } else LoginSteps(job, provider) { code -> api.newLoginCode(l, code) }
             } else {
                 // The machine's own logins not used yet: a profile on one needs no sign-in.

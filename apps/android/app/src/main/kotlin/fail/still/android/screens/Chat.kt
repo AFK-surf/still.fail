@@ -136,6 +136,7 @@ import fail.still.android.data.Quote
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
+import fail.still.android.data.errorText
 import fail.still.android.data.state
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
@@ -746,10 +747,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         // opacity 180ms and the rest 220ms --m-standard; going, 150ms and 180ms; turned back mid-way from where it is).
         // Short of the chat's end it shows at the list's end too, saying how many new messages wait there; it puts the
         // chat's latest page in place of what shows and goes to its end at once.
-        JumpToLatest(awayFromEnd(list) || short, thread?.unread?.takeIf { short && it > 0 }, haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp)) {
+        // Its latest page asked for and not come yet: a spinner in it, not asked again.
+        val fetching = thread != null && app.isDoing("chat.latest", "station" to api.station, "thread" to thread.id)
+        JumpToLatest(awayFromEnd(list) || short, thread?.unread?.takeIf { short && it > 0 }, haze, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = bottom + 2.dp), busy = fetching) {
             if (!short || thread == null) return@JumpToLatest follow.jump()
             toLatest[0] = true
-            try { api.latest(thread.id) } catch (_: CoreException) { toLatest[0] = false }
+            try { api.latest(thread.id) } catch (e: CoreException) { toLatest[0] = false; app.toast = "没能跳到最新：${errorText(e)}" }
         }
       }
         // The avatar flying with a message out of it: over the list, under the bars and the composer (as the web's, in
@@ -790,7 +793,7 @@ private fun Flyer(motion: ChatMotion, atWork: List<AgentAtWork>) {
 }
 
 @Composable
-private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier: Modifier, onJump: suspend () -> Unit) {
+private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier: Modifier, busy: Boolean = false, onJump: suspend () -> Unit) {
     val scope = rememberCoroutineScope()
     // What it says stays as it goes.
     val said = remember { mutableStateOf<Long?>(null) }
@@ -805,14 +808,14 @@ private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier
             translationY = rise * (1f - grow)
             scaleX = 0.6f + 0.4f * grow; scaleY = scaleX
         }.height(36.dp).widthIn(min = 36.dp).floating(haze, CircleShape)
-            .clickable(enabled = shown) { scope.launch { onJump() } }
+            .clickable(enabled = shown && !busy) { scope.launch { onJump() } }
             .semantics { contentDescription = "跳到最新" },
         contentAlignment = Alignment.Center,
     ) {
         val n = said.value
-        if (n == null) IconIn(Icons.ArrowDown, 18.dp, C.ink)
+        if (n == null) { if (busy) Spinner(16.dp) else IconIn(Icons.ArrowDown, 18.dp, C.ink) }
         else Row(Modifier.padding(start = 10.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconIn(Icons.ArrowDown, 18.dp, C.ink)
+            if (busy) Spinner(16.dp) else IconIn(Icons.ArrowDown, 18.dp, C.ink)
             Text("$n 条新消息", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)
         }
     }
@@ -1028,7 +1031,6 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
 @Composable
 private fun Out(ctx: Here, o: Outgoing) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     val thread = ctx.view.thread
     // A chat made here has no thread until its station makes it: what failed in it goes by its key.
     val pending = (ctx.of as? ChatOf.Session)?.key?.takeIf { it.startsWith("new:") }
@@ -1053,24 +1055,28 @@ private fun Out(ctx: Here, o: Outgoing) {
             ) {
                 IconIn(Icons.Info, 12.dp, C.red); Text("未发送", fontSize = 13.sp, color = C.red)
             }
-            UnsentButton(Icons.Retry, "重试", enabled = !ctx.view.offline && ctx.view.archived != true) {
-                scope.launch { try { if (thread != null) app.api(ctx.station).retry(thread.id, o.id) else pending?.let { app.api(ctx.station).retryIn(it, o.id) } } catch (_: CoreException) {} }
+            // Either under way: a spinner on it, neither pressed again.
+            val retrying = app.isDoing("chat.retry", "station" to ctx.station, "id" to o.id)
+            val discarding = app.isDoing("chat.discard", "station" to ctx.station, "id" to o.id)
+            UnsentButton(Icons.Retry, "重试", enabled = !ctx.view.offline && ctx.view.archived != true && !discarding, busy = retrying) {
+                app.act("重新发送") { if (thread != null) app.api(ctx.station).retry(thread.id, o.id) else pending?.let { app.api(ctx.station).retryIn(it, o.id) } }
             }
-            UnsentButton(Icons.Trash, "删除") {
-                scope.launch { try { if (thread != null) app.api(ctx.station).discard(thread.id, o.id) else pending?.let { app.api(ctx.station).discardIn(it, o.id) } } catch (_: CoreException) {} }
+            UnsentButton(Icons.Trash, "删除", enabled = !retrying, busy = discarding) {
+                app.act("删除") { if (thread != null) app.api(ctx.station).discard(thread.id, o.id) else pending?.let { app.api(ctx.station).discardIn(it, o.id) } }
             }
         } else if (slow) Waiting("正在发送")
     }
 }
 
 @Composable
-private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, busy: Boolean = false, onClick: () -> Unit) {
     val muted = chatMuted()
     Row(
-        Modifier.alpha(if (enabled) 1f else 0.5f).clip(RoundedCornerShape(7.dp)).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 7.dp, vertical = 3.dp),
+        Modifier.alpha(if (enabled) 1f else 0.5f).clip(RoundedCornerShape(7.dp)).clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        IconIn(icon, 12.dp, muted); Text(label, fontSize = 13.sp, color = muted)
+        if (busy) Spinner(12.dp) else IconIn(icon, 12.dp, muted)
+        Text(label, fontSize = 13.sp, color = muted)
     }
 }
 

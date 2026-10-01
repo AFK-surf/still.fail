@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.boundsInRoot
 import fail.still.android.ui.MenuItem
 import fail.still.android.ui.MenuSpec
-import fail.still.core.CoreException
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -359,7 +358,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
-    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
+    ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
         detectTapGestures(
             onPress = { tryAwaitRelease(); held = false },
             onLongPress = { at ->
@@ -382,11 +381,10 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true) {
  * new chat its station has not made yet, or one on a station offline.
  */
 private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
-    if (item.offline != null || item.pending == true) return null
+    // Pinning or archiving under way (a spinner on the row): not asked again meanwhile.
+    if (item.offline != null || item.pending == true || rowBusy(app, item)) return null
     val api = app.api(item.station)
-    fun run(what: String, block: suspend () -> Unit) = app.scope.launch {
-        try { block() } catch (e: CoreException) { app.toast = "没能$what：${e.message}" }
-    }
+    fun run(what: String, block: suspend () -> Unit) = app.act(what) { block() }
     return listOfNotNull(
         // A station from before pins says nothing of them: its chats are not pinned from here.
         item.pinned?.let { pinned -> MenuItem(if (pinned) "取消固定" else "固定", Icons.Pin) { run(if (pinned) "取消固定" else "固定") { api.setPinned(item.session, !pinned) } } },
@@ -400,9 +398,13 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
     )
 }
 
-/** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`. */
+/** Whether the row's menu set its chat's pin or archive going, not answered yet. */
+private fun rowBusy(app: AppState, item: ChatItem): Boolean =
+    app.isDoing(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
+
+/** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`; `busy`: a spinner where its mark goes. */
 @Composable
-internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, modifier: Modifier = Modifier) {
+internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, modifier: Modifier = Modifier) {
     Box(
         Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
             .then(modifier),
@@ -421,7 +423,8 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, modifier: 
                 // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                     val reconnecting = item.reconnecting
-                    if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
+                    if (busy) Spinner(11.dp)
+                    else if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { Spinner(11.dp) }
                     else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
                 }

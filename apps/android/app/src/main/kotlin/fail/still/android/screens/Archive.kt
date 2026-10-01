@@ -43,25 +43,13 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.SectionHeader
-import fail.still.core.CoreException
-import kotlinx.coroutines.launch
 
 @Composable
 fun ArchiveScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     // Every station's archive as the core puts it together, and takes a chat out of once restored or deleted.
     val archive by rememberTopic<ArchiveView>(app.core, Topics.archive(current.workspace.id))
-    val restore = { item: ArchiveItem ->
-        app.scope.launch {
-            try {
-                app.api(item.station).setArchived(item.thread, item.session, false)
-                app.toast = "已恢复到列表"
-            } catch (e: CoreException) {
-                app.toast = "没能恢复：${e.message}"
-            }
-        }
-        Unit
-    }
+    val restore = { item: ArchiveItem -> app.act("恢复", "已恢复到列表") { app.api(item.station).setArchived(item.thread, item.session, false) } }
     val delete = { item: ArchiveItem ->
         confirm(app, "删除「${item.title}」？", "它的会话、对话记录和 workspace 目录都会删掉，不能恢复。", "删除", danger = true) {
             app.api(item.station).deleteSession(item.session)
@@ -82,13 +70,18 @@ fun ArchiveScreen(current: WorkspaceEntry) {
         if (note != null) Text(note, fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
         view?.days?.forEach { day ->
             SectionHeader(day.label)
-            day.items.forEach { item -> ArchiveRow(item, { restore(item) }, { delete(item) }) }
+            day.items.forEach { item ->
+                // Restoring or deleting it under way: a spinner in place of its actions.
+                val busy = app.isDoing("chat.archive", "station" to item.station, "session" to item.session) ||
+                    app.isDoing("session.delete", "station" to item.station, "key" to item.session)
+                ArchiveRow(item, busy, { restore(item) }, { delete(item) })
+            }
         }
     }
 }
 
 @Composable
-private fun ArchiveRow(item: ArchiveItem, onRestore: () -> Unit, onDelete: () -> Unit) {
+private fun ArchiveRow(item: ArchiveItem, busy: Boolean, onRestore: () -> Unit, onDelete: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
         Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.title, fontSize = 16.sp, lineHeight = 22.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -98,7 +91,8 @@ private fun ArchiveRow(item: ArchiveItem, onRestore: () -> Unit, onDelete: () ->
                 fontSize = 12.sp, color = C.subtle, maxLines = 1,
                 modifier = Modifier.semantics { contentDescription = item.how },
             )
-            Row {
+            if (busy) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
+            else Row {
                 Action(Icons.Retry, "恢复「${item.title}」", onRestore)
                 if (item.deletable) Action(Icons.Trash, "删除「${item.title}」", onDelete)
             }

@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 操作的即时反馈（op-feedback）：core 加 `doing` topic（client/core/src/doing.rs：用户发起的写调用从发出到回答都列在里面），三端按它在对应的行或按钮上转圈、禁止重复点，吞掉的错误都改成提示。改了 core、shapes、web、手机 web、安卓；station 和 cloud 不用动。web 跟部署走，安卓要发一版（安卓的 core 和界面在同一个包里，一起发）。上线后验：网页上右键一个 chat 选「固定」，那一行立刻转圈；把 station 停掉再固定，约 30 秒后提示「没能固定：…」，转圈消失；安卓上长按 chat 选固定，那一行转圈。
 - 安卓列表从 chat 返回时离底部不远会往上偏（android-chatlist-scroll）：只改了安卓 Home.kt（上下两条栏的高度跟页面状态一起存），要发一版。上线后验：列表滚到靠近底部，进一个 chat 再返回，停在原来的行上；新加的 motion 测试 `ListPlaceTest` 在 studio 上 `sh apps/android/app/src/androidTest/motion.sh fail.still.android.motion.ListPlaceTest` 能跑。
 - agent 不再在 chat 里逐步播报（quieter-progress）：只改了 station。station 启动 claude 时设 `CLAUDE_CODE_SILENT_TURN_REMINDER=0`（关掉 Claude Code「用户很久没听到你的消息」的提醒，profile 里自己设了的优先）；指令里讲进度的那句收紧。station 包跟 CI 走；已在跑的 claude 进程要重启（新会话或 station 更新后新起的进程）才生效。上线后验：新开 chat 让 agent 做一件十几轮工具的活，中途只在计划变了、要人看或拍板、卡住、要等很久时才发消息；`ps` 看 claude 进程的环境（`ps eww <pid>`）里有 `CLAUDE_CODE_SILENT_TURN_REMINDER=0`。
 - station 更新进度看得见（station-update-progress）：安装脚本（cloud/src/install.ts）每一步写 `run/update.step`（download/handoff/drain/restart），station 把它转成一句话放进 `SoftwareVersion.progress`；从页面点的更新会写 `run/update.started`，交接或重启后起来的新进程接着盯完，结果放进 `done`，显示 10 分钟。页面不再一律写「等 agent 这一轮跑完」；「查不到最新版本」改成「检查更新失败，点「检查更新」重试」。改了 cloud（安装脚本）、station、shapes、web、手机 web、安卓，新字段都可选。顺序：api 上线后安装脚本才写步骤（只发 station 时进度只显示「正在更新…」，结果照样有）；station 要发包，从旧 station 升到这一版的那一次没有结果提示（旧进程不写 update.started），之后每次都有；安卓要发一版。上线后验：在一台正式安装的 station 上从页面点更新，依次看到「正在下载新版本…」「正在交接给新版本（agent 不中断）…」，结束后显示「已更新到 0.1.x，agent 没有中断」，10 分钟后消失；`run/` 里不留 update.started、update.step。

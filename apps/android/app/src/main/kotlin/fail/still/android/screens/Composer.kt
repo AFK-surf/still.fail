@@ -116,6 +116,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.floating
 import fail.still.core.CoreException
+import fail.still.android.data.errorText
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -379,7 +380,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
             val mark = try {
                 app.core.call("chat.ref", buildJsonObject { put("station", item.station); put("id", item.id); put("title", item.title); put("base", app.cloudOrigin) })
                     .jsonObject["mark"]?.jsonPrimitive?.content
-            } catch (_: CoreException) { null } ?: return@launch
+            } catch (e: CoreException) { app.toast = "没能引用这个对话：${errorText(e)}"; null } ?: return@launch
             val now = draft.input.text
             if (now.getOrNull(start) != '@' || caret > now.length) return@launch
             draft.input = TextFieldValue(now.substring(0, start) + mark + " " + now.substring(caret), TextRange(start + mark.length + 1))
@@ -782,11 +783,21 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
                 // Its words stay where they were typed until its row is in the list, then go there.
                 host.sending(draft.text.trim(), carried = false)
                 val taken = draft.take()
+                // Refused by the core before it reached the outbox (`invalid_params`: no such chat, a bad address): the words
+                // come back if nothing was written since, and why is said. A station's failure is in the outbox (未发送, 重试).
+                val refused = { e: CoreException ->
+                    host.notSent()
+                    if (e.code == "invalid_params") {
+                        if (draft.empty) { draft.restore(taken); draft.error = errorText(e) }
+                        else app.toast = "没能发送：${errorText(e)}"
+                    }
+                    Unit
+                }
                 scope.launch {
                     // A chat made here (`new:…`) is sent to by its key until its station has made it.
                     val pending = (of as? ChatOf.Session)?.key?.takeIf { thread == null && it.startsWith("new:") }
                     if (pending != null) {
-                        app.scope.launch { try { api.sendIn(pending, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (_: CoreException) { host.notSent() } }
+                        app.scope.launch { try { api.sendIn(pending, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (e: CoreException) { refused(e) } }
                         return@launch
                     }
                     val to = thread?.id ?: try {
@@ -802,7 +813,7 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
                         draft.starting = false
                     }
                     // Sent from the app's scope: the page may move to the new chat before the station answers.
-                    app.scope.launch { try { api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (_: CoreException) { host.notSent() } }
+                    app.scope.launch { try { api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (e: CoreException) { refused(e) } }
                 }
             }
         },

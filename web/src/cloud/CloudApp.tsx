@@ -10,7 +10,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, usePa
 import { ToastProvider } from "../toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
-import { signIn, signOut, useAccounts } from "./accounts.ts";
+import { useAccounts, useSignIn, useSignOut } from "./accounts.ts";
 import { Callback, SignInPage } from "./gate.tsx";
 import { BetaGate } from "./beta.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
@@ -118,6 +118,8 @@ function Landing() {
   const workspaces = useWorkspaces().value;
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
+  const signIn = useSignIn();
+  const signOut = useSignOut();
   const create = useAction(
     (code: string) => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`, code),
     (w) => { track("workspace_created", { first: true }); navigate(`/w/${w.id}`, { replace: true }); },
@@ -144,8 +146,8 @@ function Landing() {
         <Illustration name="sign-in" />
         <h1>{blocked.blocked}</h1>
         <p>{blocked.account.email}</p>
-        <Button variant="primary" onClick={() => void signOut(blocked.account.sub)}>退出这个账号</Button>
-        <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+        <Button variant="primary" busy={signOut.busy(blocked.account.sub)} onClick={() => void signOut.signOut(blocked.account.sub)}>退出这个账号</Button>
+        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
       </div>
     );
   }
@@ -160,9 +162,11 @@ function Landing() {
             <Button variant="primary" busy={accept.busy && accept.arg?.id === i.id} onClick={() => accept.run({ sub: i.account.sub, id: i.id })}>加入</Button>
           </div>
         ))}
+        {accept.error && <p className={controlsCss.fieldError} role="alert">没能加入：{errorText(accept.error)}</p>}
         {asking
           ? <InviteCodeForm create={create} />
           : <Button variant="ghost" busy={create.busy} onClick={() => create.run(inviteCode())}>不加入，建一个自己的 workspace</Button>}
+        {!asking && create.error && !needsInviteCode(create.error) && <p className={controlsCss.fieldError} role="alert">{errorText(create.error)}</p>}
       </div>
     );
   }
@@ -173,7 +177,7 @@ function Landing() {
         <h1>{NAME} 目前只对受邀的人开放</h1>
         <p>有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 {NAME} 的人把 {list[0]!.email} 邀请进他们的 workspace。</p>
         <InviteCodeForm create={create} />
-        <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
       </div>
     );
   }
@@ -185,7 +189,7 @@ function Landing() {
         <p>可以请已经在用 {NAME} 的人把 {list[0]!.email} 邀请进他们的 workspace，也可以自己建一个。</p>
         <Button variant="primary" busy={create.busy} onClick={() => create.run(inviteCode())}>建一个 workspace</Button>
         {create.error && <p className={controlsCss.fieldError} role="alert">{errorText(create.error)}</p>}
-        <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
       </div>
     );
   }
@@ -245,6 +249,7 @@ function Invite() {
     return () => { current = false; };
   }, [sub, token]);
   const accept = useAction(() => cloud.acceptInvitation(sub, token), (w) => location.assign(`/w/${w.id}`));
+  const signIn = useSignIn();
   if (!list) return <Splash />;
   if (list.length === 0) return <SignInPage lead={`你收到了一个 ${NAME} workspace 的邀请。先用 Google 账号登录，再决定是否加入。`} />;
   return (
@@ -260,7 +265,7 @@ function Invite() {
             <div className={css.inviteAccount}><Select value={sub} onChange={setChosen} label="用哪个账号加入" options={list.map((a) => ({ value: a.sub, label: a.email }))} /></div>
           )}
           <div className={css.inviteActions}>
-            <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+            <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
             <Button variant="primary" busy={accept.busy} onClick={() => accept.run()}>以 {list.find((a) => a.sub === sub)?.email} 加入</Button>
           </div>
           {accept.error && <p className={controlsCss.fieldError} role="alert">{errorText(accept.error)}</p>}

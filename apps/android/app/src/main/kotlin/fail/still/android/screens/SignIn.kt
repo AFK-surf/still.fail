@@ -75,7 +75,10 @@ fun SignInScreen() {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
+    var asked by remember { mutableStateOf(false) }
+    val busy = asked || app.isDoing("auth.begin")
+    // A dev account signing in (DEBUG against a dev cloud only).
+    var dev by remember { mutableStateOf<String?>(null) }
     Column(
         Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 30.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
@@ -86,7 +89,7 @@ fun SignInScreen() {
         Spacer(Modifier.height(6.dp))
         Row(
             Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(C.ink)
-                .clickable(enabled = !busy) { busy = true; scope.launch { signIn(app, context); busy = false } },
+                .clickable(enabled = !busy) { asked = true; scope.launch { signIn(app, context); asked = false } },
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
             GoogleDot()
@@ -95,7 +98,8 @@ fun SignInScreen() {
         Text("多个账号可以都登录，随时切换 workspace。", color = C.muted, fontSize = 12.sp)
         if (BuildConfig.DEBUG && DEV_CLOUD.matches(app.cloudOrigin)) {
             Row {
-                for (user in listOf("alice", "bob")) Text("用开发账号登录（$user）", color = C.accent, fontSize = 14.sp, modifier = Modifier.clickable { scope.launch { devSignIn(app, user) } }.padding(8.dp))
+                for (user in listOf("alice", "bob")) Text(if (dev == user) "正在登录…" else "用开发账号登录（$user）", color = C.accent, fontSize = 14.sp,
+                    modifier = Modifier.clickable(enabled = dev == null) { dev = user; scope.launch { try { devSignIn(app, user) } finally { dev = null } } }.padding(8.dp))
             }
         }
     }

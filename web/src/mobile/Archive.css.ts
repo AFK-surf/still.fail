@@ -19,7 +19,7 @@ export const mArchiveActions = style({ display: "flex", flex: "none", color: "va
 export const mArchiveAction = style({
   display: "grid", placeItems: "center", width: "34px", height: "34px", padding: "0", border: "0", borderRadius: "50%",
   background: "none", cursor: "pointer",
-  selectors: { "&:active": { background: "var(--m-chip)" } },
+  selectors: { "&:active": { background: "var(--m-chip)" }, "&:disabled": { cursor: "default", background: "none" } },
 });
 export const mArchiveLast = style({
   paddingRight: "10px", fontSize: "14px", lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",

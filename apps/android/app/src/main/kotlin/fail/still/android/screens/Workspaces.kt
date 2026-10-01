@@ -144,7 +144,7 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 Title("${BuildConfig.APP_NAME} 目前只对受邀的人开放")
                 Lead("有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 ${BuildConfig.APP_NAME} 的人把 ${first.email} 邀请进他们的 workspace。")
                 InviteCodeForm(create, make)
-                Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
+                Button("换一个账号", primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
             }
             else -> {
                 Title("你还不在任何 workspace 里")
@@ -152,7 +152,7 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 Button("建一个 workspace", primary = true, busy = create.busy) { make("") }
                 create.error?.let { Error(errorText(it)) }
                 Button("用邀请链接加入", primary = false) { openInviteLink(app) }
-                Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
+                Button("换一个账号", primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
             }
         }
     }
@@ -174,7 +174,7 @@ fun Blocked(entry: AccountWorkspaces) {
         Lead(entry.account.email)
         Button("退出这个账号", primary = true, busy = out.busy) { app.run(out, entry.account.sub) { Auth.signOut(app.core, entry.account.sub) } }
         out.error?.let { Error(it.message) }
-        Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
+        Button("换一个账号", primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
     }
 }
 
@@ -418,7 +418,7 @@ private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
             Text("你收到了一个 ${BuildConfig.APP_NAME} workspace 的邀请。先用 Google 账号登录，再决定是否加入。", fontSize = 14.sp, color = C.muted)
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }
-                Button("使用 Google 账号登录", primary = true) { scope.launch { signIn(app, context) } }
+                Button("使用 Google 账号登录", primary = true, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
             }
         }
         return

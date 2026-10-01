@@ -42,8 +42,12 @@ export const inviteDot = style({
   width: "8px", height: "8px", borderRadius: "50%", background: vars.accent, flex: "none",
 });
 export const menuInvite = style({
-  display: "flex", alignItems: "center", gap: "10px", padding: "6px 10px", fontSize: vars.textSm,
+  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", padding: "6px 10px", fontSize: vars.textSm,
 });
+/** What went wrong answering it, on a line of its own under it. */
+export const menuInviteError = style({ flexBasis: "100%", margin: "0" });
+/** Something asked from the menu on its way: in the chevron's place. */
+export const accountSpinner = style({ marginLeft: "auto" });
 export const menuInviteActions = style({ display: "flex", gap: "4px", flex: "none" });
 export const menuInviteBtn = style({
   height: "28px", padding: "0 12px", outline: "none",

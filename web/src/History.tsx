@@ -1,7 +1,8 @@
 // Execution history, after Zork's: a readable account of what actually ran. The core puts it together
 // (client/core/src/history.rs): messages in and out, state marks and the agent's words stand alone; the tool calls and
 // thinking between them fold into one group. Here it is only drawn.
-import { useToast } from "./toast.tsx";
+import { failure, useToast } from "./toast.tsx";
+import { useDoing } from "./doing.ts";
 import { ChevronDown, ChevronRight, Hourglass, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -9,7 +10,7 @@ import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
 import { ICON, Pill, SlackLogo, Tip } from "./ui.tsx";
-import { useLink } from "./station.tsx";
+import { useLink, useStation } from "./station.tsx";
 import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
 import { ToolCall, ToolResult } from "./ToolStep.tsx";
@@ -22,6 +23,7 @@ import * as controlsCss from "./styles/controls.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as additionsCss from "./styles/additions.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
 
 import { NAME } from "./channel.ts";
 /**
@@ -164,12 +166,16 @@ const HistoryItemView = memo(function HistoryItemView({ item, where }: { item: H
 function SlackName({ user, name, bound }: { user: string; name: string; bound: boolean }) {
   const api = useApi();
   const toast = useToast();
+  // Said to the station: the name turns until it answers.
+  const saying = useDoing("slack.identity", { station: useStation().address, user });
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger className={css.hPerson}>{name}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger className={css.hPerson} disabled={saying} aria-busy={saying || undefined}>
+        {name}{saying && <span className={`${waitingCss.spinner} ${css.hPersonSpinner}`} aria-hidden="true" />}
+      </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align="start" sideOffset={4} collisionPadding={8}>
-          <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => void api.slackIdentity(user, !bound).catch((error: unknown) => toast(`${bound ? "解除" : "绑定"}没有成功：${error instanceof Error ? error.message : String(error)}`))}>{bound ? "不是我" : "这是我"}</DropdownMenu.Item>
+          <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => void api.slackIdentity(user, !bound).catch((error: unknown) => toast(`${bound ? "解除" : "绑定"}没有成功：${failure(error)}`))}>{bound ? "不是我" : "这是我"}</DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

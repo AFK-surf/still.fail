@@ -13,6 +13,7 @@ import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
 import { isChatLink } from "./chatRefs.ts";
 import { Tip } from "./ui.tsx";
+import { failure, useToast } from "./toast.tsx";
 import { Mermaid } from "./Viz.tsx";
 
 let highlighter: Promise<HighlighterCore> | null = null;
@@ -66,6 +67,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 /** A block of code as markdown shows one: highlighted when its language is known (a name or a file extension Shiki knows), with a copy button. */
 export function Code({ text, language }: { text: string; language?: string | undefined }) {
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
   const [html, setHtml] = useState<string | null>(null);
   useEffect(() => {
     if (!language) return;
@@ -78,7 +80,7 @@ export function Code({ text, language }: { text: string; language?: string | und
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    });
+    }, (e: unknown) => toast(`没能复制：${failure(e)}`));
   };
   const current = html && cache.get(`${language}\n${text}`) === html ? html : null;
   return (

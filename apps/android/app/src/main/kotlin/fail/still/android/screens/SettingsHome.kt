@@ -128,17 +128,19 @@ fun SettingsScreen(current: WorkspaceEntry) {
 private fun Notify() {
     val app = LocalApp.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val ask = rememberNotificationAsk(app, once = false)
-    ListRow(onClick = {
+    // Switched and not answered yet: shown as asked, with a spinner, and not switched again meanwhile.
+    val pending = app.isDoing("notify.set")
+    ListRow(onClick = if (pending) null else ({
         val on = !app.notify
         if (on) ask()
-        scope.launch { Push.sync(context.applicationContext, app.core, app.useNotify(on)) }
-    }) {
+        app.scope.launch { Push.sync(context.applicationContext, app.core, app.useNotify(on)) }
+    })) {
         Column(Modifier.weight(1f)) {
             Text("通知", fontSize = 15.sp, color = C.ink)
             Text(if (app.notify) "做完、要处理、出错、有人说话时提醒你" else "不会收到通知。", fontSize = 13.sp, color = C.muted)
         }
+        if (pending) Spinner(14.dp)
         Switch(app.notify)
     }
 }

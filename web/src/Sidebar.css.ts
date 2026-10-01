@@ -183,9 +183,10 @@ globalStyle(`${stationRow} > ${stationTrouble}`, { marginBottom: 0 });
 globalStyle(`${stationRow} > ${stationTrouble}[data-retry]`, { paddingRight: 64 });
 export const waitingRetry = style({
   flex: "none", height: 22, padding: "0 10px", marginRight: -4, borderRadius: 999, border: 0, cursor: "pointer",
-  background: vars.hover, color: vars.text, fontSize: vars.textSm,
+  background: vars.hover, color: vars.text, fontSize: vars.textSm, display: "inline-flex", alignItems: "center", gap: 5,
   selectors: {
-    "&:hover": { background: vars.line },
+    "&:hover:not(:disabled)": { background: vars.line },
+    "&:disabled": { cursor: "progress" },
     [`${stationRow} > &`]: { position: "absolute", right: 6, top: 5, marginRight: 0 },
   },
 });

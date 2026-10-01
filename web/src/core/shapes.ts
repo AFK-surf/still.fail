@@ -1147,6 +1147,24 @@ export interface DiskRoom {
 }
 
 /**
+ * A call under way: its name (`job.stop`), its params that are words, numbers or yes/no, as words (what a page
+ * matches it by), and since when.
+ */
+export interface DoingItem {
+	call: string;
+	params: Record<string, string>;
+	since: number;
+}
+
+/**
+ * What people set going on this device and the core has not finished (the `doing` topic; client/core/src/doing.rs),
+ * oldest first.
+ */
+export interface DoingView {
+	doing: DoingItem[];
+}
+
+/**
  * What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages
  * it quotes with what is said about them, and the files already up (the station keeps them in no chat until a
  * message takes them). Files still going up are the page's own.

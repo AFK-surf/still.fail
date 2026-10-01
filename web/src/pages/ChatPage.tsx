@@ -24,10 +24,12 @@ import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady } from "../core/react.ts";
-import { useToast } from "../toast.tsx";
+import { failure, useAct, useToast } from "../toast.tsx";
+import { useDoing } from "../doing.ts";
 import { AgentMark, Confirm, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
-import { TitleInput } from "../Rename.tsx";
+import { TitleInput, useRenaming } from "../Rename.tsx";
+import * as waitingCss from "../styles/waiting.css.ts";
 import * as renameCss from "../Rename.css.ts";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
@@ -250,9 +252,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const api = stationApi(call);
   const toast = useToast();
   const running = agents.filter((a) => a.status === "running" || a.status === "queued");
+  const act = useAct();
   useShortcut("chat.stop", running.length ? () => {
-    for (const a of running) void api.stop(a.session.key).catch(() => {});
-    toast("已请求停止");
+    act(Promise.all(running.map((a) => api.stop(a.session.key))), "停止", "已请求停止");
   } : null);
   // The history tab in front closes the panel; else the first agent's opens.
   useShortcut("chat.history", agents[0] ? () => {
@@ -285,7 +287,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const rename = (title: string | null) => {
     setRenaming(false);
     if (title === null || !keeper) return;
-    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(`没能改名：${error instanceof Error ? error.message : String(error)}`));
+    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(`没能改名：${failure(error)}`));
   };
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>读不到这个对话：{chatView.error.message}</p></Empty>;
@@ -324,7 +326,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         <div className={conversationCss.pageBarTitle}>
           {renaming
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
-            : <h1 onDoubleClick={renamable ? () => setRenaming(true) : undefined}>{chat.title}</h1>}
+            : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
           {renamable && !renaming && <IconButton label="重命名" icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={() => setRenaming(true)} />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
@@ -601,16 +603,30 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   );
 }
 
+/** The chat's name in its bar: while a new one goes (`chat.rename`), that one, a turning ring beside it; its own again if it did not. */
+function ChatTitle({ station, session, title, onRename }: { station: string; session: string | null; title: string; onRename: (() => void) | undefined }) {
+  const renamingTo = useRenaming(station, session);
+  return (
+    <>
+      <h1 onDoubleClick={onRename}>{renamingTo ?? title}</h1>
+      {renamingTo !== undefined && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在改名" />}
+    </>
+  );
+}
+
 /** What can be done to it right now: stop a turn, release an idle process. */
 function SessionActions({ session, status }: { session: Session; status: Status }) {
   const api = useApi();
-  const toast = useToast();
-  const stop = useAction(() => api.stop(session.key), () => toast("已请求停止"));
-  const evict = useAction(() => api.evict(session.key), () => toast("已释放进程"));
+  const act = useAct();
+  const station = useStation().address;
+  // Under way: the button turns, wherever it was asked from (the shortcut too).
+  const stopping = useDoing("session.stop", { station, key: session.key });
+  const evicting = useDoing("session.evict", { station, key: session.key });
   return (
     <>
-      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} shortcut="chat.stop" onClick={() => void stop.run()} disabled={stop.busy} />}
-      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} onClick={() => void evict.run()} disabled={evict.busy} />}
+      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} shortcut="chat.stop" busy={stopping}
+        onClick={() => act(api.stop(session.key), "停止", "已请求停止")} />}
+      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} busy={evicting} onClick={() => act(api.evict(session.key), "释放进程", "已释放进程")} />}
     </>
   );
 }

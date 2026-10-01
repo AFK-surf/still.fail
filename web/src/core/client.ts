@@ -71,6 +71,9 @@ export type Topic =
   | { topic: "job"; station: string; id: string }
   // How its person likes it on this device, and what the device is (prefs.ts).
   | { topic: "prefs" }
+  // What people set going on this device and the core has not finished: each call that changes something, until it
+  // answers (client/core/src/doing.rs; doing.ts).
+  | { topic: "doing" }
   // What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen`
   // (client/core/src/changelog.rs).
   | { topic: "changelog" }

@@ -76,15 +76,15 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 }
                 // A station from before pins says nothing of them: its chats are not pinned from here.
                 view!!.pinned?.let { pinned ->
-                    InfoRow(onClick = {
-                        val session = (of as? ChatOf.Session)?.key ?: view.agents.firstOrNull()?.session?.key ?: ""
-                        app.scope.launch {
-                            try { app.api(station).setPinned(session, !pinned) }
-                            catch (e: CoreException) { app.toast = "没能${if (pinned) "取消固定" else "固定"}：${e.message}" }
-                        }
-                    }) {
+                    val session = (of as? ChatOf.Session)?.key ?: view.agents.firstOrNull()?.session?.key ?: ""
+                    // Under way: a spinner on the row, not tapped again.
+                    val pinning = app.isDoing("chat.pin", "station" to station, "session" to session)
+                    InfoRow(onClick = if (pinning) null else ({
+                        app.act(if (pinned) "取消固定" else "固定") { app.api(station).setPinned(session, !pinned) }
+                    })) {
                         IconIn(Icons.Pin, 16.dp, C.ink)
                         Text(if (pinned) "取消固定" else "固定到列表顶部", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        if (pinning) Spinner(14.dp)
                     }
                 }
             }

@@ -159,7 +159,6 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
     val view = topic.value
     val me = current.account
     val cloud = Cloud(app.core, me.sub)
-    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack("设置", app::pop, trailing = if (view?.manager == true) ({
             NavButton(Icons.UserPlus, { app.sheet = SheetSpec(0.8f, draggable = true) { AddSheet(current, view, cloud) } }, 20.dp)
@@ -184,9 +183,9 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                         Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1)
                         Text("${ROLE_LABEL[a.role] ?: a.role} · 还没登录过，第一次登录时自动加入", fontSize = 13.sp, color = C.muted)
                     }
-                    Text("移除", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable {
-                        scope.launch { try { cloud.removeAdded(view.id, a.email); app.toast = "已移除" } catch (e: CoreException) { app.toast = e.message } }
-                    })
+                    RowAction("移除", C.accent, app.isDoing("workspace.removeAdded", "workspace" to view.id, "email" to a.email)) {
+                        app.act("移除", "已移除") { cloud.removeAdded(view.id, a.email) }
+                    }
                 }
             }
             if (view.manager) view.invitations.forEach { i ->
@@ -196,9 +195,9 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                         Text(i.email ?: "任何拿到链接的人", fontSize = 15.sp, color = C.ink)
                         Text("${ROLE_LABEL[i.role] ?: i.role} · 邀请 · ${i.time?.get("expires_at")?.until ?: ""}过期", fontSize = 13.sp, color = C.muted)
                     }
-                    Text("撤回", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable {
-                        scope.launch { try { cloud.revokeInvitation(view.id, i.id); app.toast = "已撤回邀请" } catch (e: CoreException) { app.toast = e.message } }
-                    })
+                    RowAction("撤回", C.accent, app.isDoing("workspace.revokeInvitation", "workspace" to view.id, "invitation" to i.id)) {
+                        app.act("撤回邀请", "已撤回邀请") { cloud.revokeInvitation(view.id, i.id) }
+                    }
                 }
             }
         }
@@ -237,6 +236,13 @@ private fun MemberRow(view: WorkspaceView, m: Member, me: String, cloud: Cloud) 
     }
 }
 
+/** A word at a row's end that does something (移除, 撤回, 退出): a spinner in its place while it is under way. */
+@Composable
+private fun RowAction(label: String, color: androidx.compose.ui.graphics.Color, busy: Boolean, onClick: () -> Unit) {
+    if (busy) Spinner(14.dp)
+    else Text(label, fontSize = 14.sp, color = color, modifier = Modifier.clickable(onClick = onClick))
+}
+
 @Composable
 private fun You(text: String) =
     Text(text, fontSize = 12.sp, color = C.accentInk, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(C.accentBg).padding(horizontal = 6.dp))
@@ -248,9 +254,11 @@ private fun ColumnScope.MemberSheet(view: WorkspaceView, m: Member, cloud: Cloud
     SheetGrab()
     SheetHead(m.name.ifEmpty { m.email })
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        // A role being set: a spinner on the one tapped, none tapped meanwhile; the sheet closes once it is done.
+        val setting = { r: String? -> app.isDoing("workspace.setRole", "workspace" to view.id, "member" to m.sub, "role" to r) }
         if (view.role == "owner") listOf("owner", "admin", "member").forEach { r ->
-            PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = m.role == r) {
-                scope.launch { try { cloud.setRole(view.id, m.sub, r); app.toast = "已更改角色"; app.sheet = null } catch (e: CoreException) { app.toast = e.message } }
+            PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = m.role == r, enabled = !setting(null), busy = setting(r)) {
+                scope.launch { try { cloud.setRole(view.id, m.sub, r); app.toast = "已更改角色"; app.sheet = null } catch (e: CoreException) { app.toast = "没能更改角色：${errorText(e)}" } }
             }
         }
         PickRow("移出 workspace", color = C.red) {
@@ -371,7 +379,6 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
 @Composable
 fun Devices(current: WorkspaceEntry) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     val topic by rememberTopic<List<LoginSession>>(app.core, Topics.loginSessions(current.account.sub))
     val list = topic.value ?: return Text(topic.error?.let { "读不到登录记录：${it.message}" } ?: "正在读取…", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
     val cloud = Cloud(app.core, current.account.sub)
@@ -385,9 +392,12 @@ fun Devices(current: WorkspaceEntry) {
                     }
                     Text("${s.time?.get("created_at")?.ago ?: ""}登录 · ${s.time?.get("expires_at")?.until ?: ""}过期", fontSize = 13.sp, color = C.muted)
                 }
-                if (!s.current) Text("退出", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
-                    scope.launch { try { cloud.revokeLoginSession(s.id); app.toast = "已让那台设备退出" } catch (e: CoreException) { app.toast = e.message } }
-                })
+                if (!s.current) {
+                    if (app.isDoing("loginSession.revoke", "id" to s.id)) Spinner(14.dp)
+                    else Text("退出", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                        app.act("让那台设备退出", "已让那台设备退出") { cloud.revokeLoginSession(s.id) }
+                    })
+                }
             }
         }
     }

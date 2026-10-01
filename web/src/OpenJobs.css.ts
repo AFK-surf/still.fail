@@ -33,8 +33,8 @@ export const openJobStop = style({
   position: "absolute", top: "50%", right: 6, width: 24, height: 24, marginTop: -12, display: "grid", placeItems: "center",
   border: 0, borderRadius: vars.rOption, background: "none", color: vars.muted, cursor: "pointer", opacity: 0, pointerEvents: "none",
   selectors: {
-    [`${openJob}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" },
-    "&:hover": { color: vars.red, background: vars.hover },
+    [`${openJob}:hover &, &:focus-visible, &[aria-busy="true"]`]: { opacity: 1, pointerEvents: "auto" },
+    "&:hover:not(:disabled)": { color: vars.red, background: vars.hover },
   },
   "@media": { "(hover: none)": { opacity: 1, pointerEvents: "auto" } },
 });

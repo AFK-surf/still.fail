@@ -119,6 +119,8 @@ struct Inner {
     asks: crate::asks::Asks,
     /// What changed in still.fail, for this app (changelog.rs).
     changelog: Rc<crate::changelog::Changelog>,
+    /// What people set going here, until it is done (doing.rs).
+    doing: crate::doing::Doing,
 }
 
 struct Socket {
@@ -266,6 +268,7 @@ impl Core {
                 preview_sockets: Rc::default(),
                 asks: crate::asks::Asks::new(host.clone()),
                 changelog,
+                doing: crate::doing::Doing::default(),
             }
         });
         // Whom each account reaches, as the data center has it from the last run: views put together before the
@@ -318,47 +321,60 @@ impl Core {
     /// A message from a UI. Answers and values go out through `Host::emit`.
     pub fn receive(&self, client: ClientId, message: ClientMessage) {
         match message {
-            ClientMessage::Call { id, call: name, params } => match parse_call(&name, params) {
-                Err(error) => self.inner.host.emit(client, answer(id, Err(error))),
-                Ok(call) => {
-                    // Each call is a trace: what it asks of stations and still.fail cloud are its spans.
-                    let tracer = &self.inner.tracer;
-                    let mut span = tracer.root(name, Kind::Internal);
-                    if let Some(station) = call.station() {
-                        span.set("stillfail.station", station_id(station).to_string());
-                    }
-                    let inner = self.inner.clone();
-                    // How far a call has got, for a UI that asked to hear it: values under the call's id, before its answer.
-                    let progress: Progress = {
-                        let inner = self.inner.clone();
-                        Rc::new(move |value| inner.host.emit(client, CoreMessage::Value { id, value }))
-                    };
-                    // Only a call that holds something open for its page can be stopped (and is, with the page):
-                    // one that changes something (a message sent, a file uploaded) runs to its end whoever waits.
-                    let registration = call.cancellable().then(|| {
-                        let (abort, registration) = AbortHandle::new_pair();
-                        self.inner.calls.borrow_mut().insert((client, id), abort);
-                        registration
-                    });
-                    self.inner.host.spawn(tracer.instrument(Some(span.context()), async move {
-                        let run = inner.execute(call, progress, (client, id));
-                        let result = match registration {
-                            Some(registration) => {
-                                let result = Abortable::new(run, registration).await.unwrap_or_else(|_| Err(CoreError::new("cancelled", "已取消")));
-                                inner.calls.borrow_mut().remove(&(client, id));
-                                result
-                            }
-                            None => run.await,
-                        };
-                        if let Err(error) = &result {
-                            span.fail();
-                            span.set("error.type", error.code.clone());
+            ClientMessage::Call { id, call: name, params } => {
+                let asked = (!crate::doing::heavy(&name)).then(|| params.clone());
+                match parse_call(&name, params) {
+                    Err(error) => self.inner.host.emit(client, answer(id, Err(error))),
+                    Ok(call) => {
+                        // Under way from now until it answers, for every page to show where it is (doing.rs).
+                        let doing = asked.filter(|_| crate::doing::counts(&call, &name)).map(|params| {
+                            let at = self.inner.doing.start(&name, &params, self.inner.host.now_ms());
+                            self.inner.store.invalidate(&Topic::Doing);
+                            at
+                        });
+                        // Each call is a trace: what it asks of stations and still.fail cloud are its spans.
+                        let tracer = &self.inner.tracer;
+                        let mut span = tracer.root(name, Kind::Internal);
+                        if let Some(station) = call.station() {
+                            span.set("stillfail.station", station_id(station).to_string());
                         }
-                        span.end();
-                        inner.host.emit(client, answer(id, result));
-                    }));
+                        let inner = self.inner.clone();
+                        // How far a call has got, for a UI that asked to hear it: values under the call's id, before its answer.
+                        let progress: Progress = {
+                            let inner = self.inner.clone();
+                            Rc::new(move |value| inner.host.emit(client, CoreMessage::Value { id, value }))
+                        };
+                        // Only a call that holds something open for its page can be stopped (and is, with the page):
+                        // one that changes something (a message sent, a file uploaded) runs to its end whoever waits.
+                        let registration = call.cancellable().then(|| {
+                            let (abort, registration) = AbortHandle::new_pair();
+                            self.inner.calls.borrow_mut().insert((client, id), abort);
+                            registration
+                        });
+                        self.inner.host.spawn(tracer.instrument(Some(span.context()), async move {
+                            let run = inner.execute(call, progress, (client, id));
+                            let result = match registration {
+                                Some(registration) => {
+                                    let result = Abortable::new(run, registration).await.unwrap_or_else(|_| Err(CoreError::new("cancelled", "已取消")));
+                                    inner.calls.borrow_mut().remove(&(client, id));
+                                    result
+                                }
+                                None => run.await,
+                            };
+                            if let Err(error) = &result {
+                                span.fail();
+                                span.set("error.type", error.code.clone());
+                            }
+                            span.end();
+                            if let Some(at) = doing {
+                                inner.doing.end(at);
+                                inner.store.invalidate(&Topic::Doing);
+                            }
+                            inner.host.emit(client, answer(id, result));
+                        }));
+                    }
                 }
-            },
+            }
             ClientMessage::Subscribe { id, subscribe } => self.inner.store.subscribe(client, id, subscribe),
             ClientMessage::Unsubscribe { id, .. } => self.inner.store.unsubscribe(client, id),
             ClientMessage::Cancel { id, .. } => {
@@ -403,7 +419,7 @@ fn station_id(address: &str) -> &str {
 impl Source for Router {
     fn start(&self, topic: &Topic) {
         // Always kept (status.rs): only computed while shown.
-        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. }) {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Doing) {
             if let Some(core) = self.core.upgrade() {
                 core.store.invalidate(topic);
             }
@@ -462,7 +478,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs) {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs | Topic::Doing) {
             return;
         }
         if let Topic::Connection { .. } = topic {
@@ -503,6 +519,9 @@ impl Source for Router {
         }
         if let Topic::Notify { workspace } = topic {
             return Some(Ok(self.attend.value(workspace.as_deref())));
+        }
+        if *topic == Topic::Doing {
+            return self.core.upgrade().map(|core| Ok(core.doing.value()));
         }
         if let Topic::Connection { .. } = topic {
             return self.pills.compute(topic).map(Ok);
@@ -1810,7 +1829,7 @@ fn answer(id: RequestId, result: Result<Value>) -> CoreMessage {
 type Progress = Rc<dyn Fn(Value)>;
 
 #[derive(Debug, PartialEq)]
-enum Call {
+pub(crate) enum Call {
     /// A client could not do something with what the core gave it (a view it cannot read, say): recorded as an error
     /// span, so it is seen with the rest of the trace, the same one at most once a minute.
     ClientError { source: String, message: String },
@@ -2573,6 +2592,28 @@ mod tests {
             core.receive(ui, ClientMessage::Call { id: 2, call: "loginSession.revoke".into(), params: json!({"account": "s1", "id": "d2"}) });
             host.settle().await;
             assert_eq!(count(&host, "/v1/auth/sessions"), before + 1);
+        });
+    }
+
+    #[test]
+    fn what_a_person_does_is_under_way_until_it_answers_and_reads_are_not() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Doing });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!({ "doing": [] }));
+            core.receive(ui, ClientMessage::Call { id: 2, call: "loginSession.revoke".into(), params: json!({"account": "s1", "id": "d2"}) });
+            core.receive(ui, ClientMessage::Call { id: 3, call: "admin.me".into(), params: json!({"account": "s1"}) });
+            let doing = core.inner.doing.value();
+            assert_eq!(doing["doing"].as_array().map(Vec::len), Some(1));
+            assert_eq!(doing["doing"][0]["call"], "loginSession.revoke");
+            assert_eq!(doing["doing"][0]["params"], json!({"account": "s1", "id": "d2"}));
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!({ "doing": [] }));
         });
     }
 

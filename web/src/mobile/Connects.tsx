@@ -15,7 +15,7 @@ import { useTokenCheck, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
-import { Button, Field, GroupLabel, LargeTitle, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, SectionHeader, Seg, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { Button, Field, GroupLabel, LargeTitle, LinkButton, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, SectionHeader, Seg, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
@@ -30,6 +30,7 @@ import * as css from "./Connects.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
+import { useDoing } from "../doing.ts";
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
 export function Presence({ state }: { state: string }) {
   return <span className={settingsCss.mPresence} data-state={state} />;
@@ -241,21 +242,27 @@ function ConnectMenu({ connect }: { connect: Connect }) {
   const app = useApp();
   const api = useApi();
   const workspace = connect.connection.workspace;
+  const station = useStation().address;
+  // What is under way shows on its row; the sheet stays until it answers (a failure says so and leaves it open).
+  const reconnecting = useDoing("connect.reconnect", { station, id: connect.id });
+  const putting = useDoing("connect.put", { station, id: connect.id });
+  const deleting = useDoing("connect.delete", { station, id: connect.id });
+  const busy = reconnecting || putting || deleting;
   const done = (text: string) => () => { app.toast(text); app.sheet(null); };
-  const failed = (e: Error) => app.toast(e.message);
+  const failed = (what: string) => (e: Error) => app.toast(`没能${what}：${e.message}`);
   return (
     <>
       <SheetGrab />
       <SheetHead title={connect.name} />
       <div className={sheetsCss.mSheetScroll}>
-        <PickRow label="重新连接" onClick={() => void api.reconnect(connect.id).then(done("已重新连接"), failed)} />
+        <PickRow label="重新连接" busy={reconnecting} enabled={!busy} onClick={() => { api.reconnect(connect.id).then(done("已重新连接"), failed("重新连接")); }} />
         <PickRow label="更换 token" onClick={() => openTokens(app, connect)} />
         {workspace?.url && <PickRow label="打开 Slack" onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
         {connect.enabled
-          ? <PickRow label="停用" sub="Slack 连接会断开" onClick={() => void api.putConnect(connect.id, { enabled: false }).then(done("已停用，Slack 连接已断开"), failed)} />
-          : <PickRow label="启用" onClick={() => void api.putConnect(connect.id, { enabled: true }).then(done("已启用"), failed)} />}
-        <PickRow label="更改所属用户" sub={connect.createdBy?.shown?.display ?? connect.createdBy?.name} onClick={() => app.sheet({ height: 0.6, content: () => <OwnerSheet connect={connect} /> })} />
-        <PickRow label="删除连接" accent onClick={() => confirm(app, {
+          ? <PickRow label="停用" sub="Slack 连接会断开" busy={putting} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: false }).then(done("已停用，Slack 连接已断开"), failed("停用")); }} />
+          : <PickRow label="启用" busy={putting} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: true }).then(done("已启用"), failed("启用")); }} />}
+        <PickRow label="更改所属用户" sub={connect.createdBy?.shown?.display ?? connect.createdBy?.name} enabled={!busy} onClick={() => app.sheet({ height: 0.6, content: () => <OwnerSheet connect={connect} /> })} />
+        <PickRow label="删除连接" accent busy={deleting} enabled={!busy} onClick={() => confirm(app, {
           title: `删除「${connect.name}」？`, action: "删除连接", danger: true,
           text: `Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`,
           run: () => api.deleteConnect(connect.id).then(() => { app.toast("已删除连接"); app.pop(); }),
@@ -270,6 +277,10 @@ function OwnerSheet({ connect }: { connect: Connect }) {
   const app = useApp();
   const api = useApi();
   const members = useWorkspace(app.entry.id).value?.members ?? [];
+  // The one picked, its row busy while the station changes it (connect.put says not which field: this sheet knows).
+  const [picked, setPicked] = useState<string | null>(null);
+  const putting = useDoing("connect.put", { station: useStation().address, id: connect.id });
+  const asked = putting ? picked : null;
   return (
     <>
       <SheetGrab />
@@ -278,7 +289,12 @@ function OwnerSheet({ connect }: { connect: Connect }) {
         <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>连接属于谁，决定它出现在谁的「我添加的」里。</p>
         {members.map((m) => (
           <PickRow key={m.sub} label={m.name || m.email} sub={m.email} checked={m.email.toLowerCase() === connect.createdBy?.id.toLowerCase()}
-            onClick={() => void api.putConnect(connect.id, { owner: { id: m.email, name: m.name || m.email } }).then(() => { app.toast("已更改所属用户"); app.sheet(null); }, (e: Error) => app.toast(e.message))} />
+            busy={asked === m.email} enabled={!putting}
+            onClick={() => {
+              setPicked(m.email);
+              api.putConnect(connect.id, { owner: { id: m.email, name: m.name || m.email } })
+                .then(() => { app.toast("已更改所属用户"); app.sheet(null); }, (e: Error) => app.toast(`没能更改所属用户：${e.message}`));
+            }} />
         ))}
       </div>
     </>
@@ -591,7 +607,13 @@ export function NewConnectScreen() {
         {step === "manual" && (
           <>
             <ol className={css.mStepsList}>
-              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl(NAME).then(({ url }) => window.open(url, "_blank", "noopener"))}>用 {NAME} 的配置在 Slack 新建一个 app</button>。</li>
+              <li><LinkButton busy={busy} label={`用 ${NAME} 的配置在 Slack 新建一个 app`} onClick={() => {
+                // The page opens now, while the tap still counts (one opened once the station answers is blocked), and goes
+                // to Slack once its address is here; with no page to open, this one goes there.
+                const page = window.open("", "_blank");
+                if (page) page.opener = null;
+                run(() => api.createAppUrl(NAME).then(({ url }) => { if (page) page.location.href = url; else window.location.assign(url); }, (e: unknown) => { page?.close(); throw e; }));
+              }} />。</li>
               <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
               <li>把两个 token 填在下面。</li>
@@ -693,7 +715,7 @@ function AppLook({ settings, onChange, icon, onIcon }: {
             setPicked({ upload: true, bg });
             onIcon(i, null);
             if (!colourSet) onChange({ ...settings, backgroundColor: bg });
-          }, () => onIcon(null, "读不了这张图片"));
+          }).catch(() => onIcon(null, "读不了这张图片"));
         }} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(48px, 1fr))", gap: 10 }} aria-label="头像">

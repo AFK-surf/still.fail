@@ -22,4 +22,5 @@ export const mOpenWhere = style({ ...ellipsis, fontSize: "12px", lineHeight: "16
 export const mOpenStop = style({
   display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", padding: "0", border: "0",
   borderRadius: "50%", background: "none", color: "var(--m-muted) !important", cursor: "pointer",
+  selectors: { "&:disabled": { cursor: "default" } },
 });

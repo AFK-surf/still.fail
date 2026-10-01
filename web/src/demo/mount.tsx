@@ -40,6 +40,7 @@ function valueOf(topic: Topic): unknown {
     case "connection": return { items: [] };
     // Nothing chosen: the defaults (the core's shape leaves them out).
     case "prefs": return {};
+    case "doing": return { doing: [] };
     case "chats": return chatsView(chats);
     case "chat": return chat ? chatView(chat, station.runs()) : null;
     case "slackApp": return station.slackApp();

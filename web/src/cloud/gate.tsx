@@ -2,7 +2,7 @@
 // avatars, the sign-in page and where a sign-in comes back to.
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../ui.tsx";
-import { completeSignIn, signIn } from "./accounts.ts";
+import { completeSignIn, useSignIn } from "./accounts.ts";
 import { Illustration } from "../brand.tsx";
 import * as cloudCss from "../styles/cloud.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -18,12 +18,13 @@ export function Avatar({ account, size = 24 }: { account: { name: string; email:
 }
 
 export function SignInPage({ title = `登录 ${NAME}`, lead }: { title?: string; lead?: ReactNode }) {
+  const signIn = useSignIn();
   return (
     <div className={`${shellCss.gate} ${css.signInPage}`}>
       <Illustration name="sign-in" />
       <h1>{title}</h1>
       <p>{lead ?? "用 Google 账号登录，管理你的 workspace 和里面的 station。"}</p>
-      <Button variant="primary" onClick={() => void signIn()}>使用 Google 账号登录</Button>
+      <Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn()}>使用 Google 账号登录</Button>
     </div>
   );
 }
@@ -31,6 +32,7 @@ export function SignInPage({ title = `登录 ${NAME}`, lead }: { title?: string;
 /** /auth/callback: finishes the sign-in, then goes where it started. */
 export function Callback() {
   const [error, setError] = useState<string | null>(null);
+  const signIn = useSignIn();
   useEffect(() => {
     completeSignIn().then((next) => location.replace(next), (e: Error) => setError(e.message));
   }, []);
@@ -38,7 +40,7 @@ export function Callback() {
     <div className={shellCss.gate}>
       <Illustration name="sign-in" />
       <h1>{error ? "登录没有完成" : "正在登录…"}</h1>
-      {error && <><p>{error}</p><Button variant="primary" onClick={() => void signIn("/")}>重新登录</Button></>}
+      {error && <><p>{error}</p><Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn("/")}>重新登录</Button></>}
     </div>
   );
 }

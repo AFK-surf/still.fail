@@ -3,9 +3,11 @@
 // each row put back in the list or deleted for good. With no pointer to point with, a row's actions are always there,
 // and what the archive is is said at the top.
 import { Retry, Trash } from "../icons.tsx";
+import type { ArchiveItem } from "../core/shapes.ts";
+import { useDoing } from "../doing.ts";
 import { ABOUT, DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";
 import { useApp } from "./app.tsx";
-import { LargeTitle, SectionHeader, TopBack } from "./parts.tsx";
+import { LargeTitle, SectionHeader, Spinner, TopBack } from "./parts.tsx";
 import { confirm } from "./sheets.tsx";
 import * as css from "./Archive.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -23,29 +25,41 @@ export function ArchiveScreen() {
       {days.map((day) => (
         <section key={day.label} aria-label={day.label}>
           <SectionHeader title={day.label} />
-          {day.items.map((item) => (
-            <div key={itemKey(item)} className={css.mArchiveRow}>
-              <div className={css.mArchiveHead}>
-                <span className={css.mArchiveTitle}>{item.title}</span>
-                <span className={css.mArchiveWhen} aria-label={item.how}>
-                  {item.place && <span>{item.place}</span>}{item.clock}
-                </span>
-                <span className={css.mArchiveActions}>
-                  <button type="button" className={css.mArchiveAction} aria-label={`恢复「${item.title}」`} onClick={() => void restore(item)}><Retry size={16} /></button>
-                  {item.deletable && (
-                    <button type="button" className={css.mArchiveAction} aria-label={`删除「${item.title}」`}
-                      onClick={() => confirm(app, { title: `删除「${item.title}」？`, text: DELETE_TEXT, action: "删除", danger: true, run: () => remove(item) })}>
-                      <Trash size={16} />
-                    </button>
-                  )}
-                </span>
-              </div>
-              <span className={css.mArchiveLast}>{item.last}</span>
-            </div>
-          ))}
+          {day.items.map((item) => <Row key={itemKey(item)} item={item} restore={restore} remove={remove} />)}
         </section>
       ))}
       <div style={{ height: 24 }} />
+    </div>
+  );
+}
+
+/** A row, with its actions; while one is under way its spinner stands for both (it says how it ended in the toast). */
+function Row({ item, restore, remove }: { item: ArchiveItem; restore: (item: ArchiveItem) => Promise<void>; remove: (item: ArchiveItem) => Promise<void> }) {
+  const app = useApp();
+  const restoring = useDoing("chat.archive", { station: item.station, session: item.session, thread: item.thread ?? undefined, archived: false });
+  const deleting = useDoing("session.delete", { station: item.station, key: item.session });
+  const busy = restoring || deleting;
+  return (
+    <div className={css.mArchiveRow}>
+      <div className={css.mArchiveHead}>
+        <span className={css.mArchiveTitle}>{item.title}</span>
+        <span className={css.mArchiveWhen} aria-label={item.how}>
+          {item.place && <span>{item.place}</span>}{item.clock}
+        </span>
+        <span className={css.mArchiveActions}>
+          {/* restore says how it went itself (../pages/Archive.tsx useArchive) */}
+          <button type="button" className={css.mArchiveAction} aria-label={`恢复「${item.title}」`} disabled={busy} aria-busy={restoring || undefined} onClick={() => void restore(item)}>
+            {restoring ? <Spinner size={16} /> : <Retry size={16} />}
+          </button>
+          {item.deletable && (
+            <button type="button" className={css.mArchiveAction} aria-label={`删除「${item.title}」`} disabled={busy} aria-busy={deleting || undefined}
+              onClick={() => confirm(app, { title: `删除「${item.title}」？`, text: DELETE_TEXT, action: "删除", danger: true, run: () => remove(item) })}>
+              {deleting ? <Spinner size={16} /> : <Trash size={16} />}
+            </button>
+          )}
+        </span>
+      </div>
+      <span className={css.mArchiveLast}>{item.last}</span>
     </div>
   );
 }

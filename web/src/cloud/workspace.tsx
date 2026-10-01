@@ -32,7 +32,7 @@ import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip 
 import { toMadeChat } from "../Chat.tsx";
 import { ComposerDock } from "../dock.tsx";
 import { Previews } from "../Previews.tsx";
-import { signIn, useAccounts, type Account } from "./accounts.ts";
+import { useAccounts, useSignIn, type Account } from "./accounts.ts";
 import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
@@ -43,6 +43,7 @@ import * as css from "./workspace.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
+import * as waitingCss from "../styles/waiting.css.ts";
 import * as chatMarkCss from "../ChatMark.css.ts";
 
 import { NAME } from "../channel.ts";
@@ -219,6 +220,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
+  const signIn = useSignIn();
   const respond = useAction(
     ({ invite, accept }: { invite: InvitationEntry; accept: boolean }) =>
       accept ? cloud.acceptInvitationById(invite.account.sub, invite.id) : cloud.declineInvitation(invite.account.sub, invite.id).then(() => null),
@@ -244,7 +246,9 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             {othersTone
               ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} title={marks?.othersLabel ?? undefined} />
               : pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={`${pending.length} 个邀请`} />}
-            <ChevronsUpDown {...ICON} size={14} />
+            {respond.busy || signIn.busy
+              ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? "正在打开登录" : "正在回复邀请"} />
+              : <ChevronsUpDown {...ICON} size={14} />}
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
@@ -269,10 +273,20 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                       <span>{invite.inviter || "有人"}邀请你加入「{invite.name}」</span>
                       <span className={shellCss.muted}>{invite.account.email}{list.length > 1 ? "" : ""}</span>
                     </span>
+                    {/* The menu stays open while it goes: the button turns, and what went wrong shows under it. */}
                     <span className={css.menuInviteActions}>
-                      <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.menuInviteBtn}`} onSelect={() => respond.run({ invite, accept: true })}>加入</DropdownMenu.Item>
-                      <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.menuInviteBtn}`} onSelect={() => respond.run({ invite, accept: false })}>忽略</DropdownMenu.Item>
+                      <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.menuInviteBtn}`} disabled={respond.busy}
+                        aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept) || undefined}
+                        onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: true }); }}>
+                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}加入
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.menuInviteBtn}`} disabled={respond.busy}
+                        aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept) || undefined}
+                        onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: false }); }}>
+                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}忽略
+                      </DropdownMenu.Item>
                     </span>
+                    {respond.error && respond.arg?.invite.id === invite.id && <p className={`${controlsCss.fieldError} ${css.menuInviteError}`} role="alert">{respond.arg.accept ? "没能加入" : "没能忽略"}：{errorText(respond.error)}</p>}
                   </div>
                 ))}
                 <DropdownMenu.Separator className={controlsCss.menuSep} />
@@ -298,7 +312,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             })}
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
-            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
+            <DropdownMenu.Item className={controlsCss.menuItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -323,7 +337,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>新建</Button></>}>
       <Field label="名字" htmlFor="ws-name">
         <input id="ws-name" className={controlsCss.input} value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：产品团队" maxLength={80}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) create.run(); }} />
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && !create.busy) create.run(); }} />
       </Field>
       {list.length > 1 && (
         <Field label="属于哪个账号" htmlFor="ws-owner">
@@ -334,7 +348,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
         <Field label="邀请码" htmlFor="ws-code" error={create.error && needsInviteCode(create.error) && code.trim() ? errorText(create.error) : undefined}
           hint={`${NAME} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。`}>
           <input id="ws-code" className={`${controlsCss.input} ${shellCss.mono}`} value={code} autoFocus onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && code.trim()) create.run(); }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && code.trim() && !create.busy) create.run(); }} />
         </Field>
       )}
       {create.error && !needsInviteCode(create.error) && <p className={controlsCss.fieldError} role="alert">{errorText(create.error)}</p>}

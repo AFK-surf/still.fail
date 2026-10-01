@@ -20,6 +20,7 @@ import * as css from "./ui.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
+import { failure, useToast } from "./toast.tsx";
 
 
 export const ICON = { size: 16, strokeWidth: 1.7 } as const;
@@ -33,20 +34,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
     return (
       <button ref={ref} type="button" {...rest} aria-busy={busy || undefined} disabled={rest.disabled || busy}
         className={`${controlsCss.btn} ${VARIANT[variant]}${className ? ` ${className}` : ""}`}>
-        {Icon && <Icon {...ICON} />}
+        {busy ? <span className={waitingCss.spinner} aria-hidden="true" /> : Icon && <Icon {...ICON} />}
         {children}
       </button>
     );
   },
 );
 
-/** An icon-only button; its label shows as a tooltip and names it for screen readers. */
-export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType; shortcut?: Action }>(
-  function IconButton({ label, icon: Icon, className, shortcut, ...rest }, ref) {
+/** An icon-only button; its label shows as a tooltip and names it for screen readers. `busy`: a spinner in its place, not pressed again. */
+export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType; shortcut?: Action; busy?: boolean | undefined }>(
+  function IconButton({ label, icon: Icon, className, shortcut, busy, ...rest }, ref) {
     return (
       <Tip label={label} {...(shortcut ? { shortcut } : {})}>
-        <button ref={ref} type="button" aria-label={label} {...rest} className={`${pagesCss.iconBtn}${className ? ` ${className}` : ""}`}>
-          <Icon {...ICON} />
+        <button ref={ref} type="button" aria-label={label} {...rest} aria-busy={busy || undefined} disabled={rest.disabled || busy}
+          className={`${pagesCss.iconBtn}${className ? ` ${className}` : ""}`}>
+          {busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Icon {...ICON} />}
         </button>
       </Tip>
     );
@@ -150,17 +152,21 @@ export function Choices<T extends string>({ options, value, onChange, label }:
 }
 
 /** `small`: one to sit in a line of small text. */
-export function Switch({ checked, onChange, label, disabled, id, small = false }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean | undefined; id?: string; small?: boolean }) {
+/** `busy`: what it set is on its way, a small ring before it, not switched again meanwhile. */
+export function Switch({ checked, onChange, label, disabled, id, small = false, busy }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean | undefined; id?: string; small?: boolean; busy?: boolean | undefined }) {
   return (
-    <RSwitch.Root id={id} className={small ? `${css.switch_} ${css.switchSmall}` : css.switch_} checked={checked} onCheckedChange={onChange} disabled={disabled ?? false} aria-label={label}>
-      <RSwitch.Thumb className={small ? `${css.switchThumb} ${css.switchThumbSmall}` : css.switchThumb} />
-    </RSwitch.Root>
+    <>
+      {busy && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在保存" />}
+      <RSwitch.Root id={id} className={small ? `${css.switch_} ${css.switchSmall}` : css.switch_} checked={checked} onCheckedChange={onChange} disabled={(disabled || busy) ?? false} aria-busy={busy || undefined} aria-label={label}>
+        <RSwitch.Thumb className={small ? `${css.switchThumb} ${css.switchThumbSmall}` : css.switchThumb} />
+      </RSwitch.Root>
+    </>
   );
 }
 
 /** A setting row: what it is on the left, its switch on the right. */
-export function SwitchRow({ title, description, checked, onChange, disabled }:
-  { title: ReactNode; description?: ReactNode; checked: boolean; onChange(checked: boolean): void; disabled?: boolean | undefined }) {
+export function SwitchRow({ title, description, checked, onChange, disabled, busy }:
+  { title: ReactNode; description?: ReactNode; checked: boolean; onChange(checked: boolean): void; disabled?: boolean | undefined; busy?: boolean | undefined }) {
   const id = useId();
   return (
     <div className={css.switchRow}>
@@ -168,7 +174,7 @@ export function SwitchRow({ title, description, checked, onChange, disabled }:
         <span>{title}</span>
         {description && <span className={shellCss.muted}>{description}</span>}
       </Label.Root>
-      <Switch id={id} checked={checked} onChange={onChange} disabled={disabled ?? false} />
+      <Switch id={id} checked={checked} onChange={onChange} disabled={disabled ?? false} busy={busy} />
     </div>
   );
 }
@@ -304,11 +310,12 @@ export function Menu({ label = "更多操作", items }: { label?: string; items:
 
 export function CopyCommand({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
   return (
     <div className={css.command}>
       <code>{text}</code>
       <IconButton label={copied ? "已复制" : "复制"} icon={copied ? Check : Copy}
-        onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); })} />
+        onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, (e: unknown) => toast(`没能复制：${failure(e)}`))} />
     </div>
   );
 }

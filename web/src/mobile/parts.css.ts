@@ -111,6 +111,8 @@ export const mPickRow = style({
   cursor: "pointer",
   selectors: {
     "&:disabled": { color: "var(--m-subtle)" },
+    // Under way, not out of reach: it keeps its ink.
+    "&[data-busy]:disabled": { color: "var(--m-ink)", cursor: "default" },
     "&[data-accent]": { color: "var(--m-accent) !important" },
     [`${mForm} &`]: { width: "100%", margin: "0" },
   },
@@ -184,3 +186,8 @@ globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTo
 globalStyle(`${mListRow} ${mRunLabel}`, { width: "32px", flex: "none", fontSize: "13px", color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-quote-source > span, and wins over it. */
 globalStyle(`${mJobHead} span`, { display: "flex", flexDirection: "column", minWidth: "0" });
+/** A link's button: its spinner before its words while what it asked is under way. */
+export const mLinkButton = style({
+  display: "inline-flex", alignItems: "center", gap: "6px", textAlign: "left",
+  selectors: { "&:disabled": { cursor: "default" } },
+});

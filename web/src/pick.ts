@@ -3,6 +3,8 @@
 // what it runs on now and what its panel picked). The pages only show them and say what was picked.
 import { useMemo } from "react";
 import { useCall, useTopic } from "./core/react.ts";
+import { useDoing } from "./doing.ts";
+import { failure, useToast } from "./toast.tsx";
 import type { NewChatView, PickView, RuntimeKind } from "./core/shapes.ts";
 
 /** A pick: each field given changes only that; null is the default depth, the station's pick of account. */
@@ -12,12 +14,13 @@ export interface PickPatch { model?: string; runtime?: RuntimeKind; effort?: str
 export function useNewChat(scope: string) {
   const state = useTopic<NewChatView>({ topic: "newChat", scope });
   const call = useCall();
+  const toast = useToast();
   const actions = useMemo(() => ({
     /** The station it starts on (its id) and what it runs there, kept for next time. */
-    pick: (p: PickPatch & { station?: string }) => void call("newChat.pick", { scope, ...p }).catch(() => undefined),
+    pick: (p: PickPatch & { station?: string }) => void call("newChat.pick", { scope, ...p }).catch((e: unknown) => toast(`没能选上：${failure(e)}`)),
     /** The chat, made on `station` with what is picked there (as `chat.create` makes it). */
     create: (station: string) => call("newChat.create", { station }) as Promise<{ key: string; runtime: RuntimeKind; model: string; effort?: string }>,
-  }), [call, scope]);
+  }), [call, scope, toast]);
   return { ...state, ...actions };
 }
 
@@ -27,6 +30,8 @@ export interface Picking {
   set(patch: PickPatch & { open?: boolean; clear?: boolean }): void;
   /** What the panel picked becomes what it runs on (nothing changed: nothing done). */
   save(): Promise<{ saved: boolean }>;
+  /** What was picked on its way to being what it runs on (`pick.save` under way). */
+  saving?: boolean;
 }
 
 /**
@@ -37,9 +42,11 @@ export function usePick(station: string, of: string, page?: NewChatView): Pickin
   const own = useTopic<PickView>(page ? null : { topic: "pick", station, of }).value;
   const value = page ? page.pick : own;
   const call = useCall();
+  const toast = useToast();
+  const saving = useDoing("pick.save", { station, of });
   const actions = useMemo(() => ({
-    set: (patch: PickPatch & { open?: boolean; clear?: boolean }) => void call("pick.set", { station, of, ...patch }).catch(() => undefined),
+    set: (patch: PickPatch & { open?: boolean; clear?: boolean }) => void call("pick.set", { station, of, ...patch }).catch((e: unknown) => toast(`没能选上：${failure(e)}`)),
     save: () => call("pick.save", { station, of }) as Promise<{ saved: boolean }>,
-  }), [call, station, of]);
-  return useMemo(() => ({ view: value, ...actions }), [value, actions]);
+  }), [call, station, of, toast]);
+  return useMemo(() => ({ view: value, saving, ...actions }), [value, saving, actions]);
 }

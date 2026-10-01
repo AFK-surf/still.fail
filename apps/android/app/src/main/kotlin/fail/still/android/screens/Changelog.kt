@@ -27,6 +27,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,7 +107,10 @@ fun ChangelogNews() {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val topic by rememberTopic<ChangelogView>(app.core, Topics.changelog)
+    // Let go (知道了): gone at once, before the core has it.
+    var gone by remember { mutableStateOf<Any?>(null) }
     val news = topic.value?.news ?: return
+    if (gone == news) return
     val lines = news.entries.flatMap { it.text }
     Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
         Column(Modifier.fillMaxWidth().clickable { app.push(Screen.Changelog) }.padding(start = 16.dp, end = 44.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -115,7 +121,7 @@ fun ChangelogNews() {
             lines.take(3).forEach { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             if (lines.size > 3) Text("还有 ${lines.size - 3} 项", fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
         }
-        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).clickable { scope.launch { seen(app) } }.semantics { contentDescription = "知道了" }, contentAlignment = Alignment.Center) {
+        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).clickable { gone = news; app.scope.launch { seen(app) } }.semantics { contentDescription = "知道了" }, contentAlignment = Alignment.Center) {
             IconIn(Icons.Close, 16.dp, C.muted)
         }
     }

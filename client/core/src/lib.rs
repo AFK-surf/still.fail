@@ -14,6 +14,7 @@ pub mod cloud;
 pub mod data;
 pub mod core;
 pub mod delta;
+pub mod doing;
 pub mod entries;
 pub mod error;
 pub mod format;

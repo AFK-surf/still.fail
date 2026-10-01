@@ -17,6 +17,7 @@ export function CreateAppSteps({ name }: { name: string }) {
       <li>
         <span>用 {NAME} 的配置在 Slack 新建一个 app，名字是「{name.trim() || NAME}」。</span>
         <Button icon={External} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
+        {open.error && <p className={controlsCss.fieldError} role="alert">没能打开 Slack：{open.error.message}</p>}
       </li>
       <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
       <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>

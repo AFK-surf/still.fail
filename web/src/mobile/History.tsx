@@ -77,8 +77,8 @@ function Act({ icon: I, label, run }: { icon: Icon; label: string; run: () => Pr
   const [busy, setBusy] = useState(false);
   return (
     <button type="button" className={css.mHAct} disabled={busy} aria-label={label}
-      onClick={() => { setBusy(true); run().catch((e: unknown) => app.toast(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false)); }}>
-      <I size={14} />
+      onClick={() => { setBusy(true); run().catch((e: unknown) => app.toast(`没能${label}：${e instanceof Error ? e.message : String(e)}`)).finally(() => setBusy(false)); }}>
+      {busy ? <Spinner size={14} /> : <I size={14} />}
     </button>
   );
 }

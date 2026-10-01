@@ -5,10 +5,11 @@
 // The core keeps each on the device by its key (`draft.put` as it changes, `draft.get`), so it outlives the page; what
 // is on its way up stays with the page. A reference's mark goes as written: the core makes it a link as it is sent.
 import { createContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
-import { useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
+import { CoreError, useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { core } from "./core/react.ts";
 import type { DraftView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
+import { useToast } from "./toast.tsx";
 
 export const MAX_FILE = 50 * 1024 * 1024;
 
@@ -113,6 +114,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   quotes?: [DraftQuote[], Update<DraftQuote[]>];
 }): Draft {
   const chat = useChatSend(station);
+  const toast = useToast();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
   const [ownQuotes, setOwnQuotes] = useState<DraftQuote[]>([]);
@@ -258,6 +260,7 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
   };
   const send: Draft["send"] = async (open, { first = false, onSending } = {}) => {
     const back = { text, files, quotes };
+    const from = shown.current;
     const { text: value } = take();
     const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
     const sent = quotes.map(({ author, text: t, comment, ts, role, file }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) }));
@@ -275,12 +278,26 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     } finally {
       setStarting(false);
     }
-    for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+    // Its files' pictures go once it is sent (or kept in the outbox); back in the composer, they come with it.
+    const drop = () => { for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview); };
     const at = performance.now();
     const counts = { attachments: attachments.length, quotes: sent.length, first };
-    void chat.send(to, value, attachments, sent).then(
-      () => track("message_sent", { ...counts, ok: true, ms: Math.round(performance.now() - at) }),
-      () => track("message_sent", { ...counts, ok: false }),
+    chat.send(to, value, attachments, sent).then(
+      () => { drop(); track("message_sent", { ...counts, ok: true, ms: Math.round(performance.now() - at) }); },
+      (failure: unknown) => {
+        track("message_sent", { ...counts, ok: false });
+        // One the station did not take waits in the outbox, which says so; one that never got there comes back to the
+        // composer (unless something new is written there), and says why.
+        const why = `没发出去：${failure instanceof Error ? failure.message : String(failure)}`;
+        const { text: written, files: held, quotes: kept } = now.current;
+        if (refused(failure) && (shown.current === from || from === undefined) && !written.trim() && !held.length && !kept.length) {
+          restore(back);
+          setError(why);
+          return;
+        }
+        drop();
+        if (refused(failure)) toast(why);
+      },
     );
     return to;
   };
@@ -293,6 +310,14 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     text, setText, files, add, remove, quotes, setQuotes, quote, focusQuote, quoteFocused: () => setFocusQuote(null),
     uploading, ready, starting, error, setError, take, restore, send,
   };
+}
+
+/**
+ * A send that never got into the outbox: the core refused it, or went away with it (its worker restarted or closed).
+ * One the station failed stays in the outbox, which says so and offers to send it again.
+ */
+function refused(failure: unknown): boolean {
+  return failure instanceof CoreError && ["invalid_params", "core_restarted", "closed"].includes(failure.code);
 }
 
 function isKept(file: Pending): boolean {

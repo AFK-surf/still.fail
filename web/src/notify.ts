@@ -85,7 +85,7 @@ export function useNotifyState(): NotifyState {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, state);
 }
 
-/** Turns them on (asking the browser first) or off, on this browser. */
+/** Turns them on (asking the browser first) or off, on this browser; rejects, as it was, when that could not be kept. */
 export async function setNotify(on: boolean): Promise<NotifyState> {
   if (DESKTOP) {
     await DESKTOP.set(on);
@@ -95,7 +95,7 @@ export async function setNotify(on: boolean): Promise<NotifyState> {
   }
   if (!NOTIFIES) return "unsupported";
   const set = async (on: boolean) => {
-    try { kept = await core().call("notify.set", { on }) as NotifyView; } catch { /* not now: as it was */ }
+    kept = await core().call("notify.set", { on }) as NotifyView;
   };
   if (on) {
     const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;

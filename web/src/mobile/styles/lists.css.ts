@@ -5,6 +5,7 @@ export const mCard = style({
   border: "0", borderRadius: "20px", background: "var(--m-surface)", color: "var(--m-ink)", textAlign: "left",
   selectors: {
     "button&": { cursor: "pointer" },
+    "button&:disabled": { cursor: "default" },
   },
 });
 export const mRowText = style({ display: "flex", flexDirection: "column" });

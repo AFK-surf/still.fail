@@ -1,6 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { spinKeyframes } from "../styles/keyframes.css.ts";
 
 export const identityNameInput = style({ fontSize: vars.textMd, fontWeight: "600", maxWidth: "360px" });
 export const envTable = style({ display: "grid", gap: "8px" });
@@ -32,4 +31,3 @@ export const modelPoolGone = style({ fontSize: vars.textXs });
 export const machineLogins = style({ width: "100%", marginTop: "20px", display: "grid", gap: "4px", textAlign: "left" });
 export const machineLoginsHead = style({ margin: "0", fontSize: vars.textXs, color: vars.muted });
 globalStyle(`${deviceCode} p`, { margin: "0", fontSize: vars.textSm });
-globalStyle(`${profileState} [data-busy] svg`, { animation: `${spinKeyframes} 0.9s linear infinite` });

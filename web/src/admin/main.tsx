@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "@fontsource-variable/inter";
 import { Illustration } from "../brand.tsx";
-import { signIn, signOut, useAccounts } from "../cloud/accounts.ts";
+import { useAccounts, useSignIn, useSignOut } from "../cloud/accounts.ts";
 import { Callback, SignInPage } from "../cloud/gate.tsx";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Loading } from "../ui.tsx";
@@ -47,13 +47,15 @@ function Home() {
 /** Signed in, but with no account that is the admin's. */
 function NoPermission() {
   const list = useAccounts() ?? [];
+  const signIn = useSignIn();
+  const signOut = useSignOut();
   return (
     <div className={shellCss.gate}>
       <Illustration name="sign-in" />
       <h1>没有权限</h1>
       <p>{list.map((a) => a.email).join("、")} 不是 {NAME} 的管理员。</p>
-      <Button variant="primary" onClick={() => void Promise.all(list.map((a) => signOut(a.sub)))}>退出登录</Button>
-      <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+      <Button variant="primary" busy={signOut.busy()} onClick={() => { for (const a of list) void signOut.signOut(a.sub); }}>退出登录</Button>
+      <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
     </div>
   );
 }

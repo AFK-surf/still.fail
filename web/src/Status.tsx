@@ -1,5 +1,6 @@
 import { useStatus, type StatusView } from "./api.ts";
 import { core } from "./core/react.ts";
+import { useDoing } from "./doing.ts";
 import { StatusDot, Tip } from "./ui.tsx";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -35,7 +36,12 @@ export function WaitingItems({ status }: { status: StatusView }) {
 
 /** Tried again at once: no more waiting, the connections tried against new ones (client/core/src/wake.rs `retry`). */
 export function Retry() {
-  return <button type="button" className={nav.waitingRetry} onClick={() => core().retry()}>重试</button>;
+  const trying = useDoing("client.wake", { retry: true });
+  return (
+    <button type="button" className={nav.waitingRetry} disabled={trying} aria-busy={trying || undefined} onClick={() => core().retry()}>
+      {trying ? <><span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" />正在重试</> : "重试"}
+    </button>
+  );
 }
 
 /**

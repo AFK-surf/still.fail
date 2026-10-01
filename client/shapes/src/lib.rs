@@ -1400,6 +1400,27 @@ pub struct ChangelogNews {
     pub entries: Vec<ChangelogItem>,
 }
 
+/// What people set going on this device and the core has not finished (the `doing` topic; client/core/src/doing.rs),
+/// oldest first.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DoingView {
+    pub doing: Vec<DoingItem>,
+}
+
+/// A call under way: its name (`job.stop`), its params that are words, numbers or yes/no, as words (what a page
+/// matches it by), and since when.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DoingItem {
+    pub call: String,
+    pub params: HashMap<String, String>,
+    #[typeshare(serialized_as = "I54")]
+    pub since: i64,
+}
+
 /// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.
 #[typeshare]
 #[skip_serializing_none]

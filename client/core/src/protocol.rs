@@ -165,6 +165,9 @@ pub enum Topic {
     Job { station: String, id: String },
     /// What this device keeps of how its person likes it, and what it is (prefs.rs; `prefs.set`, `client.device`).
     Prefs,
+    /// What people set going on this device and the core has not finished (doing.rs): each call that changes
+    /// something, from when it is asked until it answers, with its plain params; the pages show it where it is.
+    Doing,
     /// What changed in still.fail, as this app shows it (changelog.rs): by day, each change saying where it is and
     /// whether this app has it, and what this app got since it was last shown (`changelog.seen`).
     Changelog,
@@ -185,7 +188,7 @@ impl Topic {
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
             // The core's own (pill.rs, changelog.rs).
-            Topic::Changelog => None,
+            Topic::Changelog | Topic::Doing => None,
             Topic::Connection { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } => None,
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => None,

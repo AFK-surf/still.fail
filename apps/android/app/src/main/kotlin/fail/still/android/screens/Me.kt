@@ -39,6 +39,7 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
 import fail.still.core.CoreException
+import fail.still.android.data.errorText
 import kotlinx.coroutines.launch
 
 @Composable
@@ -67,21 +68,25 @@ fun MeScreen(current: WorkspaceEntry) {
             list.forEach { a ->
                 ListRow {
                     Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(if (list.size > 1) "退出" else "退出登录", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                    // Signing out under way: a spinner in its place, not asked twice.
+                    if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(14.dp)
+                    else Text(if (list.size > 1) "退出" else "退出登录", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
                         scope.launch {
                             try {
                                 Auth.signOut(app.core, a.sub)
                                 app.home()
                                 if (list.size > 1) app.toast = "已退出 ${a.email}"
                             } catch (e: CoreException) {
-                                app.toast = "没能退出：${e.message}"
+                                app.toast = "没能退出：${errorText(e)}"
                             }
                         }
                     })
                 }
             }
-            ListRow(onClick = { scope.launch { signIn(app, context) } }) {
-                Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent)
+            val opening = app.isDoing("auth.begin")
+            ListRow(onClick = if (opening) null else ({ scope.launch { signIn(app, context) } })) {
+                Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                if (opening) Spinner(14.dp)
             }
         }
         SectionHeader("登录的地方", start = 24.dp)

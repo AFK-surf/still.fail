@@ -1,7 +1,10 @@
 // The Google accounts signed in on this browser. The core keeps them, with
 // their ember cloud sessions (docs/client-core.md): the page sees who is
 // signed in, starts and finishes a sign-in, and signs out; tokens never reach it.
+import { useCallback } from "react";
 import { core, useTopic } from "../core/react.ts";
+import { doingMatches, useDoing, useDoingList } from "../doing.ts";
+import { failure, useToast } from "../toast.tsx";
 import { signedOut, telemetrySettled, track } from "../telemetry.ts";
 
 /** A signed-in account, as the `accounts` topic lists it. */
@@ -41,4 +44,25 @@ export async function completeSignIn(): Promise<string> {
 export async function signOut(sub: string): Promise<void> {
   await core().call("auth.signOut", { account: sub });
   signedOut(sub);
+}
+
+/**
+ * Signing in from a button: `busy` while ember cloud is asked where to go (`auth.begin`), what went wrong said in a
+ * toast. `signIn` answers whether the browser is on its way.
+ */
+export function useSignIn(): { signIn(returnTo?: string): Promise<boolean>; busy: boolean } {
+  const toast = useToast();
+  const busy = useDoing("auth.begin");
+  const go = useCallback((returnTo?: string) => (returnTo === undefined ? signIn() : signIn(returnTo))
+    .then(() => true, (e: unknown) => { toast(`没能登录：${failure(e)}`); return false; }), [toast]);
+  return { signIn: go, busy };
+}
+
+/** Signing out from a button: `busy(sub)` while that account is signed out (`auth.signOut`), what went wrong said in a toast. */
+export function useSignOut(): { signOut(sub: string): Promise<boolean>; busy(sub?: string): boolean } {
+  const toast = useToast();
+  const doing = useDoingList();
+  const go = useCallback((sub: string) => signOut(sub)
+    .then(() => true, (e: unknown) => { toast(`没能退出登录：${failure(e)}`); return false; }), [toast]);
+  return { signOut: go, busy: (sub) => doing.some((item) => doingMatches(item, "auth.signOut", { account: sub })) };
 }

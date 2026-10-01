@@ -9,8 +9,9 @@
 // a button at the bottom left of the screen, level with the composer, opens the latest chats over the page: another chat
 // from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
+import { ToastTo } from "../toast.tsx";
 import { afterBack, useBackClose } from "../backClose.ts";
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
@@ -129,6 +130,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   const [sheet, setSheet] = useState<SheetSpec | null>(null);
   const [menu, setMenu] = useState<MenuSpec | null>(null);
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
+  const showToast = useCallback((text: string) => setToast({ text, n: Date.now() }), []);
   const [reader, setReader] = useState<ReaderSpec | null>(null);
   const wide = useWide();
   // The latest chats over the page (WIDE).
@@ -162,7 +164,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     home: () => afterBack(() => navigate(home)),
     sheet: setSheet,
     menu: setMenu,
-    toast: (text) => setToast({ text, n: Date.now() }),
+    toast: showToast,
     reader: setReader,
   };
 
@@ -199,40 +201,43 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   const below = pages.at(-2)?.key;
   return (
     <Context.Provider value={app}>
-      <div className={rootCss.m}>
-        {shown.map((p) => {
-          const isTop = p.key === top.key;
-          const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
-          const role = !moving ? (isTop ? "top" : swipe !== null && p.key === below ? "peek" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
-          const way = moving ? wayOf((moving.forward ? moving.to : moving.from).location.pathname) : "side";
-          const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
-          if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
-          if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;
-          // A page swiped back leaves from where the finger let it go.
-          if (role === "out" && moving && !moving.forward) style["--m-from"] = `${from.current}px`;
-          return (
-            <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-              data-swiping={(swipe !== null && isTop) || undefined} style={style}>
-              {routes(p.location)}
+      {/* What shared parts say (../toast.tsx useToast, useAct) shows as the phone's own toast. */}
+      <ToastTo show={showToast}>
+        <div className={rootCss.m}>
+          {shown.map((p) => {
+            const isTop = p.key === top.key;
+            const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
+            const role = !moving ? (isTop ? "top" : swipe !== null && p.key === below ? "peek" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
+            const way = moving ? wayOf((moving.forward ? moving.to : moving.from).location.pathname) : "side";
+            const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
+            if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
+            if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;
+            // A page swiped back leaves from where the finger let it go.
+            if (role === "out" && moving && !moving.forward) style["--m-from"] = `${from.current}px`;
+            return (
+              <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
+                data-swiping={(swipe !== null && isTop) || undefined} style={style}>
+                {routes(p.location)}
+              </div>
+            );
+          })}
+          {/* Where a swipe back starts: a strip along the left edge that the browser leaves to it (a finger only). */}
+          {!home_ && !moving && <div className={css.mEdge} {...swipeProps} />}
+          {/* The latest chats, from the screen's bottom left, level with the composer; over the page, rising from the button. */}
+          {wide && !home_ && <>
+            <button type="button" className={`${pagesCss.mFloating} ${css.mRecentButton}`} data-open={drawer || undefined}
+              onClick={() => setDrawer((open) => !open)} aria-label="最近的会话" aria-expanded={drawer}><Chats size={22} /></button>
+            <div className={css.mRecentLayer} data-open={drawer || undefined} inert={!drawer}>
+              <div className={css.mRecentCatch} onClick={() => setDrawer(false)} />
+              <div className={css.mRecent}>{drawer && recent()}</div>
             </div>
-          );
-        })}
-        {/* Where a swipe back starts: a strip along the left edge that the browser leaves to it (a finger only). */}
-        {!home_ && !moving && <div className={css.mEdge} {...swipeProps} />}
-        {/* The latest chats, from the screen's bottom left, level with the composer; over the page, rising from the button. */}
-        {wide && !home_ && <>
-          <button type="button" className={`${pagesCss.mFloating} ${css.mRecentButton}`} data-open={drawer || undefined}
-            onClick={() => setDrawer((open) => !open)} aria-label="最近的会话" aria-expanded={drawer}><Chats size={22} /></button>
-          <div className={css.mRecentLayer} data-open={drawer || undefined} inert={!drawer}>
-            <div className={css.mRecentCatch} onClick={() => setDrawer(false)} />
-            <div className={css.mRecent}>{drawer && recent()}</div>
-          </div>
-        </>}
-        <SheetHost spec={sheet} close={() => setSheet(null)} />
-        <ReaderHost spec={reader} close={() => setReader(null)} />
-        <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
-        <ToastHost toast={toast} />
-      </div>
+          </>}
+          <SheetHost spec={sheet} close={() => setSheet(null)} />
+          <ReaderHost spec={reader} close={() => setReader(null)} />
+          <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
+          <ToastHost toast={toast} />
+        </div>
+      </ToastTo>
     </Context.Provider>
   );
 }

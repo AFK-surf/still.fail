@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { spinner } from "./styles/waiting.css.ts";
 import { fadeInKeyframes } from "./styles/keyframes.css.ts";
 import { msg, pageBarTitle } from "./styles/conversation.css.ts";
 import { sessionPage } from "./styles/session.css.ts";
@@ -48,10 +49,15 @@ export const hLabel = style({
 /** A Slack user's name: a button that says whether it is the viewer. */
 export const hPerson = style({
   font: "inherit", color: "inherit", background: "none", border: "0", padding: "0", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: "4px",
   selectors: {
-    "&:hover": { textDecoration: "underline" },
+    "&:hover:not(:disabled)": { textDecoration: "underline" },
+    "&:disabled": { cursor: "progress" },
   },
 });
+/** "这是我" / "不是我" on its way: a small ring after the name. */
+export const hPersonSpinner = style({});
+globalStyle(`${hPersonSpinner}${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 export const hPlace = style({
   selectors: {
     "a&": { cursor: "pointer" },

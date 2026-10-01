@@ -198,6 +198,8 @@ object Topics {
     fun notify(workspace: String? = null) = buildJsonObject { put("topic", "notify"); workspace?.let { put("workspace", it) } }
     /** How its person likes it on this device, and what the device is (Prefs.kt). */
     val prefs = buildJsonObject { put("topic", "prefs") }
+    /** What people set going here and the core has not finished, until it answers (client/core/src/doing.rs; AppState.isDoing). */
+    val doing = buildJsonObject { put("topic", "doing") }
     /** What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen` (Changelog.kt). */
     val changelog = buildJsonObject { put("topic", "changelog") }
     /**

@@ -28,6 +28,7 @@ export function Versions({ station, updates, manager, beta = false }: { station:
               <span className={css.mVersionName}>测试版</span>
               <span className={css.mVersionNote}>新版本先到这里，可能不稳定</span>
             </span>
+            {channel.busy && <Spinner size={13} />}
             <span className={connectsCss.mSwitch} data-on={on || undefined} />
           </ListRow>
         )}

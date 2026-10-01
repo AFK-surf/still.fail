@@ -74,11 +74,12 @@ function Ask({ title, value: first, placeholder, action, hint, secret = false, e
 
 /** A command to run elsewhere, with a button that copies it. */
 export function CommandBox({ text }: { text: string }) {
+  const app = useApp();
   const [copied, setCopied] = useState(false);
   return (
     <div className={css.mCommand}>
       <code>{text}</code>
-      <button type="button" aria-label={copied ? "已复制" : "复制"} onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); })}>
+      <button type="button" aria-label={copied ? "已复制" : "复制"} onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, () => app.toast("没能复制，长按命令自己复制"))}>
         {copied ? <Check size={16} /> : <Copy size={16} />}
       </button>
     </div>

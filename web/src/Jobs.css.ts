@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { spinner } from "./styles/waiting.css.ts";
 import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
 import { msg } from "./styles/conversation.css.ts";
 import { segmented, segmentedOption } from "./ui.css.ts";
@@ -84,9 +85,12 @@ export const jobAction = style({
   borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
   fontSize: vars.textXs, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover": { background: vars.selected, color: vars.text },
+    "&:hover:not(:disabled)": { background: vars.selected, color: vars.text },
+    "&:disabled": { cursor: "progress" },
   },
 });
+/** A stop or a clear under way: a small ring in place of its icon. */
+export const jobSpinner = style({});
 export const jobsHead = style({
   display: "flex", alignItems: "baseline", gap: "6px", padding: "8px 12px 4px", fontSize: vars.textXs,
   fontWeight: "500", color: vars.muted,
@@ -110,8 +114,10 @@ export const jobsClear = style({
   flex: "none", alignSelf: "flex-start", height: "38px", padding: "0 12px", border: "0", borderRadius: vars.rOption,
   background: "none", color: vars.muted, font: "inherit", fontSize: vars.textSm, whiteSpace: "nowrap", cursor: "pointer",
   cornerShape: vars.cornerShape,
+  display: "inline-flex", alignItems: "center", gap: "6px",
   selectors: {
-    "&:hover": { background: vars.hover, color: vars.text },
+    "&:hover:not(:disabled)": { background: vars.hover, color: vars.text },
+    "&:disabled": { cursor: "progress" },
   },
 });
 export const jobsQuiet = style({ margin: "8px 12px 0 32px", fontSize: vars.textSm, color: vars.muted });
@@ -224,3 +230,4 @@ globalStyle(`${tokenGuide} li`, {
 /** A message its agents have not taken yet says so only after a second (most are taken before). */
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(msgWaitingLate, { animation: `${msgWaitingInKeyframes} 0s linear 1s both` });
+globalStyle(`${jobSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });

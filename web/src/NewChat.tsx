@@ -8,6 +8,7 @@ import type { RuntimeKind, StationView } from "./api.ts";
 import type { NewChatView } from "./core/shapes.ts";
 import { useReady } from "./core/react.ts";
 import { useNewChat, usePick } from "./pick.ts";
+import { useAct } from "./toast.tsx";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
@@ -70,6 +71,7 @@ function NewChatOn({ choice, view, station, stations, onStation, create, onCreat
   const model = choice.model?.model;
   const runtime = choice.runtime;
   const pick = usePick(station.address, "new", choice);
+  const act = useAct();
   const [addingProfile, setAddingProfile] = useState(false);
   const [profileKind, setProfileKind] = useState<ProfileKind>("claude-sub");
   // Made with what is picked here; the next new chat starts here too (the core keeps it).
@@ -85,10 +87,10 @@ function NewChatOn({ choice, view, station, stations, onStation, create, onCreat
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Link className={chatCss.chooser} to={profilesPage(station)}>没有可用模型 · 去勾选</Link>
       ) : (
-        <ModelTriple side="top" pick={pick} onConfirm={() => void pick.save().catch(() => undefined)} />
+        <ModelTriple side="top" pick={pick} onConfirm={() => act(pick.save(), "改模型")} />
       )}
     </>
-  ), [stations, station, runtime, model, pick]);
+  ), [stations, station, runtime, model, pick, act]);
 
   const carry = useCarryDraft();
   // The chat pages' one composer (dock.tsx): here in the page, then, once the first message is sent, in the chat's page,

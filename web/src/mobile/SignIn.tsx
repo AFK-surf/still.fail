@@ -7,14 +7,21 @@ import * as css from "./SignIn.css.ts";
 
 export function MobileSignIn() {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // On its way the page leaves for Google's: the button waits till then; if it cannot, it says why.
+  const go = () => {
+    setBusy(true); setError(null);
+    signIn().catch((e: unknown) => { setBusy(false); setError(`没能打开登录：${e instanceof Error ? e.message : String(e)}`); });
+  };
   return (
     <div className={`${rootCss.m} ${css.mSignIn}`}>
       <Illustration name="sign-in" width={300} />
       <h1>让 agent 一直在干活</h1>
       <p>登录后，你所在 workspace 的所有 station 和会话都会出现在这里。</p>
-      <button type="button" className={css.mGoogle} disabled={busy} onClick={() => { setBusy(true); void signIn().finally(() => setBusy(false)); }}>
+      <button type="button" className={css.mGoogle} disabled={busy} onClick={go}>
         <GoogleDot />{busy ? "正在打开…" : "用 Google 登录"}
       </button>
+      {error && <p className={css.mSignInError} role="alert">{error}</p>}
       <small>多个账号可以都登录，随时切换 workspace。</small>
     </div>
   );

@@ -66,8 +66,6 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
-import fail.still.core.CoreException
-import kotlinx.coroutines.launch
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core/src/
 // jobs.rs): `tone`, `meta`, `detail`, a notice's `ago` and `clock`; a chat's all together, what matters first, is its
@@ -123,17 +121,18 @@ fun rememberJobLog(station: String, id: String?, lines: Int): JobLogView? {
 
 /** Stops a job from the app; a failure is said in a toast. */
 fun AppState.stopJob(station: String, job: Job) {
-    scope.launch {
-        try { api(station).stopJob(job.id) } catch (e: CoreException) { toast = "没能停下「${job.name}」：${e.message}" }
-    }
+    if (!stopping(station, job)) act("停下「${job.name}」") { api(station).stopJob(job.id) }
 }
+
+/** Whether a job's stop was asked and not answered yet: its 停止 shows a spinner, not pressed again. */
+fun AppState.stopping(station: String, job: Job): Boolean = isDoing("job.stop", "station" to station, "id" to job.id)
 
 /** Clears a chat's jobs that are over (each session's, as the station keeps them: `clear`); a failure in a toast. */
 fun AppState.clearEnded(station: String, sessions: List<String>) {
-    scope.launch {
-        try { sessions.forEach { api(station).clearEndedJobs(it) } } catch (e: CoreException) { toast = "没能清掉已结束的任务：${e.message}" }
-    }
+    if (!clearing(station)) act("清掉已结束的任务") { sessions.forEach { api(station).clearEndedJobs(it) } }
 }
+
+fun AppState.clearing(station: String): Boolean = isDoing("job.clearEnded", "station" to station)
 
 /** A job's row: its dot on its name's line, what it is up to under it; over ones faded. */
 @Composable
@@ -197,7 +196,12 @@ fun openJobs(app: AppState, station: String, of: ChatOf) {
                     Text(view.hiddenText, fontSize = 12.sp, color = C.muted)
                 }
             }
-            if (view.ended > 0) SheetLink({ app.clearEnded(station, view.clear) }) { Text(view.clearText, fontSize = 14.sp, color = C.accent) }
+            if (view.ended > 0) SheetLink({ app.clearEnded(station, view.clear) }) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(view.clearText, fontSize = 14.sp, color = C.accent)
+                    if (app.clearing(station)) Spinner(12.dp)
+                }
+            }
         }
     }
 }
@@ -277,10 +281,10 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
             }
         }
         if (running) Row(
-            Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.red.copy(alpha = 0.12f)).clickable { app.stopJob(station, job) },
+            Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.red.copy(alpha = 0.12f)).clickable(enabled = !app.stopping(station, job)) { app.stopJob(station, job) },
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconIn(Icons.Stop, 16.dp, C.red)
+            if (app.stopping(station, job)) Spinner(16.dp) else IconIn(Icons.Stop, 16.dp, C.red)
             Text("停止", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.red)
         }
     }

@@ -13,7 +13,9 @@ import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, useTokenCheck, type TokenState } from "../slack.tsx";
-import { useToast } from "../toast.tsx";
+import { useAct, useToast } from "../toast.tsx";
+import { useDoing } from "../doing.ts";
+import * as waitingCss from "../styles/waiting.css.ts";
 import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Connect.css.ts";
@@ -67,6 +69,11 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const [replacing, setReplacing] = useState(false);
   const remove = useAction(() => api.deleteConnect(connect.id), () => { toast("已删除连接"); navigate(`${station.settings}/connects`); });
   const reconnect = useAction(() => api.reconnect(connect.id), () => toast("已重新连接"));
+  // Reconnecting, or its settings on their way (from the menu or a section below): said in its status line meanwhile.
+  const reconnecting = useDoing("connect.reconnect", { station: station.address, id: connect.id });
+  const saving = useDoing("connect.put", { station: station.address, id: connect.id });
+  const switching = save.busy && save.args?.[0].enabled !== undefined;
+  const doing = reconnecting ? "正在重新连接…" : switching ? (connect.enabled ? "正在停用…" : "正在启用…") : saving ? "正在保存…" : null;
   const c = connect.connection;
   const workspace = c.state === "connected" || c.state === "reconnecting" ? c.workspace : null;
 
@@ -79,26 +86,29 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
         <div className={pagesCss.identityText}>
           <h1 className={pagesCss.identityName}>{connect.name}</h1>
           <p className={pagesCss.identitySub}>
-            <span className={css.connectStatus}><StatusDot state={connect.presence} />{connect.statusText}</span>
+            <span className={css.connectStatus} role="status">
+              {doing ? <><span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />{doing}</> : <><StatusDot state={connect.presence} />{connect.statusText}</>}
+            </span>
             <span className={css.kindTag}><SlackLogo size={13} />{connect.team ?? "Slack"}</span>
             {station.name && <span className={cloudCss.stationTag}>{station.name}</span>}
             <span className={css.ownerLine}>所属 <OwnerLabel owner={connect.createdBy} /></span>
           </p>
         </div>
         <Menu items={[
-          { label: "重新连接", icon: Refresh, onSelect: () => void reconnect.run() },
+          { label: "重新连接", icon: Refresh, disabled: reconnecting, onSelect: () => void reconnect.run() },
           { label: "更换 token", icon: Key, onSelect: () => setReplacing(true) },
           ...(workspace?.url ? [{ label: "打开 Slack", icon: External, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
           "separator",
           connect.enabled
-            ? { label: "停用", icon: Power, onSelect: () => save.put({ enabled: false }, () => toast("已停用，Slack 连接已断开")) }
-            : { label: "启用", icon: Power, onSelect: () => save.put({ enabled: true }, () => toast("已启用")) },
+            ? { label: "停用", icon: Power, disabled: saving, onSelect: () => save.put({ enabled: false }, () => toast("已停用，Slack 连接已断开")) }
+            : { label: "启用", icon: Power, disabled: saving, onSelect: () => save.put({ enabled: true }, () => toast("已启用")) },
           { label: "更改所属用户", icon: User, onSelect: () => setOwning(true) },
           "separator",
           { label: "删除连接", icon: Trash, danger: true, onSelect: () => setDeleting(true) },
         ]} />
       </header>
       {save.error && <p className={`${controlsCss.fieldError} ${css.pageError}`} role="alert">{save.error.message}</p>}
+      {reconnect.error && <p className={`${controlsCss.fieldError} ${css.pageError}`} role="alert">没能重新连接：{reconnect.error.message}</p>}
 
       <SlackSection connect={connect} />
       <RunSection item={item} />
@@ -405,6 +415,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
   // The model first; the runtime only when the model runs on more than one (the core's pick of a connect being added).
   const models = useStationModels();
   const pick = usePick(station.address, "connect-new");
+  const act = useAct();
   const bound = pick.view?.value;
   const [mode, setMode] = useState<{ mode: ConnectMode; requireMention: boolean }>({ mode: "multi-session", requireMention: true });
   // The workspace chosen, else the only one there is.
@@ -501,7 +512,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
           <Field label="模型" hint={(pick.view?.valueOption?.runtimes.length ?? 0) > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
             {models.length === 0
               ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
-              : <ModelTriple pick={pick} onConfirm={() => void pick.save().catch(() => undefined)} />}
+              : <ModelTriple pick={pick} onConfirm={() => act(pick.save(), "改模型")} />}
           </Field>
           <Field label="会话方式">
             <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />

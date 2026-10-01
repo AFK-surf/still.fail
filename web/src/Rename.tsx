@@ -2,7 +2,8 @@
 // typed, Escape leaves the name as it was. An empty name gives the chat back its own (its agent's, else its first message).
 import { useEffect, useRef } from "react";
 import { stationApi, useStationCall } from "./api.ts";
-import { useToast } from "./toast.tsx";
+import { doingMatches, useDoingList } from "./doing.ts";
+import { failure, useToast } from "./toast.tsx";
 import * as css from "./Rename.css.ts";
 
 export function TitleInput({ value, onDone, className }: { value: string; onDone: (title: string | null) => void; className?: string }) {
@@ -39,6 +40,15 @@ export function useRename(station: string) {
   const toast = useToast();
   return (of: { thread?: number | null; session: string }, title: string | null) => {
     if (title === null) return;
-    api.rename(of, title).catch((error: unknown) => toast(`没能改名：${error instanceof Error ? error.message : String(error)}`));
+    api.rename(of, title).catch((error: unknown) => toast(`没能改名：${failure(error)}`));
   };
+}
+
+/**
+ * A chat's name on its way (`chat.rename` under way for its session): what it shows meanwhile, its own name when the
+ * new one is empty (null); undefined when none.
+ */
+export function useRenaming(station: string, session: string | null | undefined): string | null | undefined {
+  const asked = useDoingList().find((item) => session != null && doingMatches(item, "chat.rename", { station, session }));
+  return asked && (asked.params.title?.trim() || null);
 }

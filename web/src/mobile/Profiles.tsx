@@ -4,7 +4,7 @@
 // key or variables; renaming, checking and deleting under "…"), and a new one.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useOverview, useStationCall, useStations, type LoginJob, type Profile, type ProfileInput, type Quota, type StationView, type Tone } from "../api.ts";
+import { stationApi, useOverview, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, ChevronRight, More, Plus } from "../icons.tsx";
@@ -13,7 +13,8 @@ import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, Field, LargeTitle, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { Button, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { doingMatches, useDoing, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
@@ -138,7 +139,9 @@ function ProfilePage({ p }: { p: Profile }) {
   const station = useStation();
   const overview = useOverview(station.address).value;
   const users = p.usedBy.map((id) => overview?.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
-  const save = (input: ProfileInput, done: string) => api.putProfile(p.id, input).then(() => app.toast(done), (e: Error) => app.toast(e.message));
+  // Asked from its menu, which has closed by then: the card says it is under way.
+  const checking = useDoing("profile.check", { station: station.address, id: p.id });
+  const refreshing = useDoing("profile.quota", { station: station.address, id: p.id });
   const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
   const keyed = KEYED.has(p.access.kind);
   return (
@@ -151,23 +154,18 @@ function ProfilePage({ p }: { p: Profile }) {
           <span className={partsCss.mGrow}>
             <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
             <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}{p.check?.time?.checkedAt ? ` · ${p.check.time.checkedAt.ago}检查` : ""}</span>
+            {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner size={12} />{checking ? "正在检查…" : "正在刷新额度…"}</span>}
           </span>
         </div>
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         <Quota p={p} />
-        <Models p={p} onSave={(models) => void save({ models }, "已保存")} />
+        <Models p={p} put={(models) => api.putProfile(p.id, { models })} />
         {/* A station older than the setting says nothing of it. */}
         {p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
           <>
             <SectionHeader title="运行" start={24} />
             <ListCard>
-              <ListRow onClick={() => void save({ backgroundOnMessage: !p.backgroundOnMessage }, p.backgroundOnMessage ? "已关闭" : "已打开")}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                  <span className={listsCss.mRowTitle}>新消息到来时，把正在执行的命令转到后台</span>
-                  <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.backgroundOnMessage ? "命令和 subagent 转到后台继续跑，agent 马上读到消息。" : "新消息要等正在执行的命令或 subagent 结束后才会读到。"}</span>
-                </span>
-                <span className={connectsCss.mSwitch} data-on={p.backgroundOnMessage || undefined} />
-              </ListRow>
+              <BackgroundRow p={p} put={(on) => api.putProfile(p.id, { backgroundOnMessage: on })} />
             </ListCard>
           </>
         )}
@@ -211,15 +209,19 @@ function ProfilePage({ p }: { p: Profile }) {
 function ProfileMenu({ p }: { p: Profile }) {
   const app = useApp();
   const api = useApi();
-  const failed = (e: Error) => app.toast(e.message);
+  const station = useStation().address;
+  const failed = (what: string) => (e: Error) => app.toast(`没能${what}：${e.message}`);
+  // The sheet closes at once; the profile's card says it is under way (ProfilePage), and these rows if opened again.
+  const checking = useDoing("profile.check", { station, id: p.id });
+  const refreshing = useDoing("profile.quota", { station, id: p.id });
   return (
     <>
       <SheetGrab />
       <SheetHead title={p.name} />
       <div className={sheetsCss.mSheetScroll}>
         {!p.machine && <PickRow label="改名" onClick={() => ask(app, { title: "Profile 的名字", value: p.name, placeholder: "名字", action: "保存", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast("已改名")) })} />}
-        <PickRow label="重新检查" onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed); }} />
-        <PickRow label="刷新额度" onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed); }} />
+        <PickRow label="重新检查" busy={checking} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed("检查")); }} />
+        <PickRow label="刷新额度" busy={refreshing} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed("刷新额度")); }} />
         <PickRow label={`${p.machine ? "停用" : "删除 Profile"}${p.usedBy.length ? "（还有连接在用）" : ""}`} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
           title: `停用「${p.name}」？`, text: `${NAME} 不再用这台机器上的这份登录；机器上的登录不受影响，之后可以再用。`, action: "停用", danger: true,
           run: () => api.deleteProfile(p.id).then(() => { app.toast("已停用"); app.pop(); }),
@@ -260,22 +262,75 @@ function Quota({ p }: { p: Profile }) {
   );
 }
 
+/**
+ * What was asked of a setting, shown at once while the station saves it (`put`), then the station's own again. Each ask
+ * builds on the one before, not on what the station said last; one at a time goes, the latest asked waiting for it, so
+ * two quick taps both count. Failing, it goes back to how it is (and the toast says why).
+ */
+function useAsked<T>(real: T, put: (value: T) => Promise<unknown>, what: string): { value: T; busy: boolean; ask: (value: T) => void } {
+  const app = useApp();
+  const [asked, setAsked] = useState<{ value: T; done: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const going = useRef(false);
+  const next = useRef<{ value: T } | null>(null);
+  const latest = useRef(real);
+  latest.current = real;
+  // The station's word after the last went through: its own again.
+  useEffect(() => { setAsked((a) => (a?.done ? null : a)); }, [real]);
+  const send = (value: T) => {
+    going.current = true;
+    setBusy(true);
+    put(value).then(
+      () => { if (!next.current) setAsked(JSON.stringify(latest.current) === JSON.stringify(value) ? null : { value, done: true }); },
+      (e: unknown) => { app.toast(`没能${what}：${e instanceof Error ? e.message : String(e)}`); if (!next.current) setAsked(null); },
+    ).finally(() => {
+      const waiting = next.current;
+      next.current = null;
+      if (waiting) send(waiting.value);
+      else { going.current = false; setBusy(false); }
+    });
+  };
+  const ask = (value: T) => {
+    setAsked({ value, done: false });
+    if (going.current) next.current = { value };
+    else send(value);
+  };
+  return { value: asked ? asked.value : real, busy, ask };
+}
+
+/** Whether a new message sends what runs to the background: the switch goes over at once, a spinner by it till saved. */
+function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<unknown> }) {
+  const { value: on, busy, ask } = useAsked(!!p.backgroundOnMessage, put, "保存");
+  return (
+    <ListRow onClick={() => ask(!on)}>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}>新消息到来时，把正在执行的命令转到后台</span>
+        <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{on ? "命令和 subagent 转到后台继续跑，agent 马上读到消息。" : "新消息要等正在执行的命令或 subagent 结束后才会读到。"}</span>
+      </span>
+      {busy && <Spinner size={14} />}
+      <span className={connectsCss.mSwitch} data-on={on || undefined} />
+    </ListRow>
+  );
+}
+
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
-function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void }) {
+function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unknown> }) {
   const [filter, setFilter] = useState("");
   const all = [...(p.available ?? [])].sort();
   const shown = all.filter((m) => [m, p.names[m] ?? m].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
-  const save = (models: string[]) => onSave([...new Set(models)].sort());
+  // Ticked at once; each tick builds on the last asked (useAsked), not on the station's list from before it.
+  const { value: models, busy, ask } = useAsked(p.models, put, "保存模型");
+  const save = (next: string[]) => ask([...new Set(next)].sort());
   const suffix = filter.trim() ? "筛选结果" : "";
   return (
     <>
-      <SectionHeader title={`模型 · 启用 ${p.models.length} / ${all.length}`} start={24} />
+      <SectionHeader title={`模型 · 启用 ${models.length} / ${all.length}${busy ? " · 正在保存…" : ""}`} start={24} />
       <p className={css.mProfileNote}>{all.length === 0 ? "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" : "只有勾选的模型能在新对话和连接里选。"}</p>
       {all.length > 0 && (
         <div className={settingsCss.mProfileTools}>
           {all.length > 10 ? <span className={partsCss.mGrow}><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></span> : <span className={partsCss.mGrow} />}
-          <button type="button" className={partsCss.mLink} onClick={() => save([...p.models, ...shown])}>全选{suffix}</button>
-          <button type="button" className={partsCss.mLink} onClick={() => save(p.models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
+          <button type="button" className={partsCss.mLink} onClick={() => save([...models, ...shown])}>全选{suffix}</button>
+          <button type="button" className={partsCss.mLink} onClick={() => save(models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
         </div>
       )}
       {/* By series, newest first (the core's). */}
@@ -286,11 +341,14 @@ function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void 
           <div key={s.name}>
             <div className={listsCss.mGroupLabel} style={{ paddingLeft: 24, paddingRight: 24 }}>{s.name}</div>
             {list.map((m) => {
-              const on = p.models.includes(m);
+              const on = models.includes(m);
+              // Not yet as the station has it: on its way.
+              const saving = busy && on !== p.models.includes(m);
               return (
-                <button key={m} type="button" className={settingsCss.mModelRow} onClick={() => save(on ? p.models.filter((x) => x !== m) : [...p.models, m])}>
+                <button key={m} type="button" className={settingsCss.mModelRow} onClick={() => save(on ? models.filter((x) => x !== m) : [...models, m])}>
                   <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={14} />}</span>
                   <span className={partsCss.mGrow}>{p.names[m] ?? m}</span>
+                  {saving && <Spinner size={13} />}
                 </button>
               );
             })}
@@ -309,6 +367,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
   const provider = p.runtime === "claude" ? "Claude" : "ChatGPT";
   const [busy, setBusy] = useState(false);
+  const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
   const previous = useRef(job?.state);
   useEffect(() => {
     if (job?.state === "done" && previous.current && previous.current !== "done") app.toast("登录成功");
@@ -321,13 +380,14 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
         {active ? (
           <>
             <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} />
-            <Button label="取消登录" primary={false} onClick={() => void api.cancelLogin(p.id)} />
+            <Button label="取消登录" primary={false} busy={cancelling}
+              onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(`没能取消登录：${e.message}`)); }} />
           </>
         ) : (
           <>
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : `登录在运行 ${NAME} 的机器上完成，你只需要在浏览器里授权。`}</p>
             <Button label={job?.state === "done" || !needed ? "重新登录" : "登录"} primary={needed} busy={busy}
-              onClick={() => { setBusy(true); api.startLogin(p.id).catch((e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
+              onClick={() => { setBusy(true); api.startLogin(p.id).catch((e: Error) => app.toast(`没能开始登录：${e.message}`)).finally(() => setBusy(false)); }} />
             <details className={css.mDetails}><summary>也可以在那台机器上手动登录</summary><CommandBox text={p.loginCommand} /></details>
           </>
         )}
@@ -338,6 +398,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
 
 /** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), or copy the code and open the page (Codex). */
 function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown> }) {
+  const app = useApp();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -350,7 +411,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
       <>
         <span className={css.mDeviceCode}>{job.userCode}</span>
         <Button label={copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"} primary
-          onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => {}).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+          onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast("没能复制代码，照着上面抄一下")).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>在打开的 OpenAI 页面用要给 {NAME} 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
       </>
     );
@@ -441,7 +502,8 @@ export function NewProfileScreen() {
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, "已登录，添加了 Profile"); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
   // Leaving before a sign-in made its profile leaves nothing behind.
-  const leave = () => { if (login && !pending?.created) void api.dropLogin(login).catch(() => {}); app.pop(); };
+  const dropped = (e: Error) => app.toast(`没能丢掉没完成的登录：${e.message}`);
+  const leave = () => { if (login && !pending?.created) api.dropLogin(login).catch(dropped); app.pop(); };
   const provider = runtime === "claude" ? "Claude" : "ChatGPT";
   const job = pending?.job ?? null;
   return (
@@ -452,7 +514,7 @@ export function NewProfileScreen() {
           pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
             <>
               <p className={partsCss.mError}>{pending?.error ?? job?.error ?? "登录没有完成。"}</p>
-              <Button label="重新开始" primary={false} onClick={() => { void api.dropLogin(login).catch(() => {}); setLogin(null); }} />
+              <Button label="重新开始" primary={false} onClick={() => { api.dropLogin(login).catch(dropped); setLogin(null); }} />
             </>
           ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login, code)} />
         ) : (
@@ -506,15 +568,15 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
   const app = useApp();
   const api = useApi();
   const station = useStation();
-  const [busy, setBusy] = useState(false);
+  // The one asked spins till the station has made its profile; the others wait.
+  const doing = useDoingList().filter((d) => doingMatches(d, "profile.useMachineLogin", { station: station.address }));
   const offers = machineOffers(logins);
   if (!offers.length) return null;
   const use = (l: MachineLogin) => {
-    setBusy(true);
     api.useMachineLogin(l.runtime).then(({ id }) => {
       app.toast("已添加 Profile，用的是这台机器的登录");
       app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`);
-    }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false));
+    }, (e: Error) => app.toast(`没能添加 Profile：${e.message}`));
   };
   return (
     <>
@@ -534,7 +596,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
               </span>
               <QuotaRings quota={l.quota} />
               {blocked ? null : l.usable
-                ? <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => use(l)}>用这个账号</button>
+                ? <LinkButton label="用这个账号" busy={doing.some((d) => d.params.runtime === l.runtime)} enabled={doing.length === 0} onClick={() => use(l)} />
                 : <button type="button" className={partsCss.mLink} onClick={() => onSignIn(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</button>}
             </ListRow>
           );

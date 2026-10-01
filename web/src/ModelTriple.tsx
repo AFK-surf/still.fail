@@ -14,6 +14,7 @@ import * as css2 from "./ModelTriple.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
@@ -79,7 +80,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
   return (
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { pick.set({ open: true }); setFilter(""); setModelsWidth(null); setShowAccounts(false); } }}>
       <span className={css2.modelTripleFit} ref={fit}>
-        <Popover.Trigger className={css2.modelTriple} disabled={options.length === 0} data-drop={DROPS[drop]}>
+        <Popover.Trigger className={css2.modelTriple} disabled={options.length === 0 || pick.saving} aria-busy={pick.saving || undefined} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
             <>
               <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span></Tip>
@@ -95,7 +96,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
               )}
             </>
           )}
-          <ChevronDown size={12} className={chatCss.chooserChevron} />
+          {/* What was picked on its way: a ring in place of the chevron, not opened again meanwhile. */}
+          {pick.saving ? <span className={`${waitingCss.spinner} ${css2.tripleSpinner}`} role="status" aria-label="正在保存" /> : <ChevronDown size={12} className={chatCss.chooserChevron} />}
         </Popover.Trigger>
       </span>
       <Popover.Portal>

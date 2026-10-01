@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
             app = made
             launch { made.followNotify() }
             launch { made.followPrefs() }
+            launch { made.followDoing() }
             handle(intent)
             listen()
             // Back to an activity made anew (the last one closed with back, the process kept): as back on screen.

@@ -24,6 +24,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { Tip } from "../ui.tsx";
+import { useDoing } from "../doing.ts";
 
 export function Home() {
   const app = useApp();
@@ -198,7 +199,11 @@ function Empty({ view, filter }: { view: ChatsView; filter: ChatFilter }) {
 function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const app = useApp();
   const [held, setHeld] = useState(false);
-  const menu = useRowMenu(item);
+  // Pinned, renamed or archived from its menu (closed by then): the row says it is under way until it answers.
+  const pinning = useDoing("chat.pin", { station: item.station, session: item.session });
+  const changing = useDoing(["chat.rename", "chat.archive"], { station: item.station, session: item.session, thread: item.thread });
+  const busy = pinning || changing;
+  const menu = useRowMenu(item, busy);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const longPressed = useRef(false);
   const holding = useRef(false);
@@ -235,7 +240,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         <ChatMark item={item} inline />
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
-        {item.offline ? <Tip label={item.offline}><span className={css.mChatMark}><Unplug size={14} /></span></Tip>
+        {busy ? <span className={css.mChatMark} aria-label="正在处理"><Spinner size={12} /></span>
+          : item.offline ? <Tip label={item.offline}><span className={css.mChatMark}><Unplug size={14} /></span></Tip>
           : item.reconnecting ? <Tip label={item.reconnecting}><span className={css.mChatMark} aria-label={item.reconnecting}><Spinner size={12} /></span></Tip>
           : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark size={14} /></span></Tip>}</span>}
       </span>
@@ -253,23 +259,25 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
  * What can be done to a chat from its row: pin it, rename it, archive it. None for a new chat its station has not made
  * yet, or one on a station offline.
  */
-function useRowMenu(item: ChatItem) {
+function useRowMenu(item: ChatItem, busy: boolean) {
   const app = useApp();
   const api = stationApi(useStationCall(item.station));
-  if (item.offline || item.pending) return null;
+  // One thing at a time: while one asked of it is under way, its menu waits.
+  if (item.offline || item.pending || busy) return null;
   const failed = (what: string) => (error: unknown) => app.toast(`没能${what}：${error instanceof Error ? error.message : String(error)}`);
   return (anchor: DOMRect, onDismiss: () => void) => app.menu({ anchor, onDismiss, items: [
     // A station from before pins says nothing of them: its chats are not pinned from here.
-    ...(item.pinned == null ? [] : [{ label: item.pinned ? "取消固定" : "固定", icon: <Pin size={16} />, action: () => void api.pin(item, !item.pinned).catch(failed(item.pinned ? "取消固定" : "固定")) }]),
+    ...(item.pinned == null ? [] : [{ label: item.pinned ? "取消固定" : "固定", icon: <Pin size={16} />, action: () => { api.pin(item, !item.pinned).catch(failed(item.pinned ? "取消固定" : "固定")); } }]),
     { label: "重命名", icon: <Edit size={16} />, action: () => ask(app, {
       title: "重命名对话", value: item.title, placeholder: "对话名称", action: "保存", empty: true, hint: "留空则用第一句话作名字",
       run: (title) => api.rename(item, title),
     }) },
     // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
     { label: "归档", icon: <Archive size={16} />, action: () => {
-      const archive = () => api.archive(item, true).then(() => app.toast("已归档"), failed("归档"));
+      const archive = () => api.archive(item, true).then(() => app.toast("已归档"));
+      // Asked first, its sheet says what went wrong and stays; else the toast does.
       if (item.watch) confirm(app, { title: `归档「${item.title}」？`, text: item.watch.ask, action: "归档", run: archive });
-      else void archive();
+      else archive().catch(failed("归档"));
     } },
   ] });
 }

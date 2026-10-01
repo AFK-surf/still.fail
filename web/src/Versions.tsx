@@ -14,7 +14,7 @@ export function Versions({ station, updates, manager, beta = false, rows = false
   if (!updates?.length) return null;
   const checked = updates[0]?.checkedAt;
   const on = onBeta(updates, channel);
-  const error = update.error ?? channel.error;
+  const error = update.error ?? channel.error ?? (check.error && new Error(`没能检查更新：${check.error.message}`));
   return (
     <div className={`${css.versions}${rows ? ` ${css.rows}` : ""}`}>
       {updates.map((v) => <Item key={v.id} v={v} manager={manager} busy={update.busy && update.args?.[0] === v.id} onUpdate={() => void update.run(v.id)} />)}

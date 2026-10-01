@@ -87,6 +87,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.core.CoreException
+import fail.still.android.data.errorText
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -272,16 +273,19 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         val act = { done: String, call: suspend () -> Unit ->
-            scope.launch { try { call(); app.toast = done; app.sheet = null } catch (e: CoreException) { app.toast = e.message } }; Unit
+            scope.launch { try { call(); app.toast = done; app.sheet = null } catch (e: CoreException) { app.toast = errorText(e) } }; Unit
         }
+        // Under way: a spinner on the row tapped, and neither tapped again; the sheet closes once it is done.
+        val reconnecting = app.isDoing("connect.reconnect", "station" to station, "id" to connect.id)
+        val switching = app.isDoing("connect.put", "station" to station, "id" to connect.id)
         SheetGrab()
         SheetHead(connect.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("重新连接") { act("已重新连接") { api.reconnect(connect.id) } }
+            PickRow("重新连接", enabled = !switching, busy = reconnecting) { act("已重新连接") { api.reconnect(connect.id) } }
             PickRow("更换 token") { openTokens(app, station, connect) }
             connect.connection.workspace?.url?.let { url -> PickRow("打开 Slack") { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-            if (connect.enabled) PickRow("停用", "Slack 连接会断开") { act("已停用，Slack 连接已断开") { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
-            else PickRow("启用") { act("已启用") { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
+            if (connect.enabled) PickRow("停用", "Slack 连接会断开", enabled = !reconnecting, busy = switching) { act("已停用，Slack 连接已断开") { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
+            else PickRow("启用", enabled = !reconnecting, busy = switching) { act("已启用") { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
             PickRow("更改所属用户", connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
             PickRow("删除连接", color = C.red) {
                 confirm(app, "删除「${connect.name}」？",
@@ -300,15 +304,18 @@ private fun ColumnScope.OwnerSheet(station: String, connect: Connect) {
     val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(station.substringBefore('/')))
     SheetGrab()
     SheetHead("更改所属用户")
+    // The one picked, until the station has it: a spinner on its row, none picked meanwhile.
+    var picking by remember { mutableStateOf<String?>(null) }
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         Text("连接属于谁，决定它出现在谁的「我添加的」里。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         ws.value?.members.orEmpty().forEach { m ->
-            PickRow(m.name.ifEmpty { m.email }, m.email, checked = m.email.equals(connect.createdBy?.id, ignoreCase = true)) {
+            PickRow(m.name.ifEmpty { m.email }, m.email, checked = m.email.equals(connect.createdBy?.id, ignoreCase = true), enabled = picking == null, busy = picking == m.email) {
+                picking = m.email
                 scope.launch {
                     try {
                         app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("owner") { put("id", m.email); put("name", m.name.ifEmpty { m.email }) } })
                         app.toast = "已更改所属用户"; app.sheet = null
-                    } catch (e: CoreException) { app.toast = e.message }
+                    } catch (e: CoreException) { app.toast = "没能更改所属用户：${errorText(e)}" } finally { picking = null }
                 }
             }
         }
@@ -565,11 +572,16 @@ fun ConnectRunScreen(station: String, id: String) {
                         try {
                             app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("bind") { put("model", model ?: ""); put("effort", effort); put("profile", profile) } })
                             app.toast = "已保存，新会话会用新的设置"; app.pop()
-                        } catch (e: CoreException) { app.toast = e.message } finally { busy = false }
+                        } catch (e: CoreException) { app.toast = "没能保存：${errorText(e)}" } finally { busy = false }
                     }
                 }.padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(if (changed) "改成 ${named(model) ?: "默认模型"} · ${effort.ifEmpty { "默认深度" }}" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink) }
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = if (changed) C.bg else C.muted, strokeWidth = 1.5.dp)
+                Text(if (changed) "改成 ${named(model) ?: "默认模型"} · ${effort.ifEmpty { "默认深度" }}" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink)
+            }
+        }
     }
 }
 

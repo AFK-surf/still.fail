@@ -76,6 +76,9 @@ import fail.still.android.data.AccountWorkspaces
 import fail.still.android.data.Account
 import fail.still.android.data.ChatOf
 import fail.still.android.data.PrefsView
+import fail.still.android.data.DoingItem
+import fail.still.android.data.DoingView
+import fail.still.android.data.errorText
 import fail.still.android.data.decode
 import fail.still.core.CoreException
 import kotlinx.serialization.json.JsonNull
@@ -176,14 +179,20 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     /** Changes sent and not answered yet; the core's values meanwhile wait, the latest shown once all are. */
     private var sending = 0
     private var waiting: PrefsView? = null
+    /** The core's own, last heard: what a change it refused goes back to. */
+    private var known: PrefsView = kept
+    private var refused = false
 
-    /** Changes them: shown at once (`shown`), then as the core has them (`patch`). */
+    /** Changes them: shown at once (`shown`), then as the core has them (`patch`); refused, back as they were, and said. */
     private fun setPrefs(shown: PrefsView, patch: JsonObject) {
         kept = shown
         sending++
         scope.launch {
-            try { core.call("prefs.set", patch) } catch (_: CoreException) {}
-            if (--sending == 0) waiting?.let { kept = it; waiting = null }
+            try { core.call("prefs.set", patch) } catch (e: CoreException) { refused = true; toast = "没能保存设置：${errorText(e)}" }
+            if (--sending == 0) {
+                kept = waiting ?: if (refused) known else kept
+                waiting = null; refused = false
+            }
         }
     }
 
@@ -191,7 +200,42 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     suspend fun followPrefs() {
         core.topic(Topics.prefs).collect { state ->
             val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(PrefsView.serializer(), it) }.getOrNull() } ?: return@collect
+            known = value
             if (sending > 0) waiting = value else kept = value
+        }
+    }
+
+    /** What people set going here and the core has not finished (the `doing` topic, client/core/src/doing.rs). */
+    var doing by mutableStateOf(emptyList<DoingItem>()); private set
+
+    /** Follows what is under way for the app's life. */
+    suspend fun followDoing() {
+        core.topic(Topics.doing).collect { state ->
+            val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(DoingView.serializer(), it) }.getOrNull() } ?: return@collect
+            doing = value.doing
+        }
+    }
+
+    /**
+     * Whether one of `calls` is under way about what `on` names (its params, as words; null is any), wherever it was
+     * asked: the row or button it is about shows it at once (a spinner, not pressed again), the menu that asked gone.
+     */
+    fun isDoing(calls: Set<String>, vararg on: Pair<String, Any?>): Boolean =
+        doing.any { item -> item.call in calls && on.all { (k, v) -> v == null || item.params[k] == v.toString() } }
+    fun isDoing(call: String, vararg on: Pair<String, Any?>): Boolean = isDoing(setOf(call), *on)
+
+    /**
+     * Lets what a person did go on by itself (past the page or menu that asked it), and says how it ended:
+     * `没能<what>：<why>` when it failed, `done` (if any) when it went through.
+     */
+    fun act(what: String, done: String? = null, run: suspend () -> Unit) {
+        scope.launch {
+            try {
+                run()
+                done?.let { toast = it }
+            } catch (e: CoreException) {
+                toast = "没能$what：${errorText(e)}"
+            }
         }
     }
 
@@ -232,13 +276,19 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
      * core wants this device to hold pushes now.
      */
     suspend fun useNotify(on: Boolean): Boolean {
+        val was = notify
         notify = on
         return try {
             val view = decode(NotifyView.serializer(), core.call("notify.set", buildJsonObject { put("on", on) }))
             notify = view.on
             view.push
-        } catch (_: Exception) {
-            on
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Refused (or not understood): as it was, and said.
+            notify = was
+            toast = "没能${if (on) "打开" else "关掉"}通知：${(e as? CoreException)?.let(::errorText) ?: e.message.orEmpty()}"
+            was
         }
     }
 

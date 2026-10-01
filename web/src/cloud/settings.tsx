@@ -22,7 +22,7 @@ import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from 
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
 import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
-import { signOut, type Account } from "./accounts.ts";
+import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
 import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
@@ -94,6 +94,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => toast("已让那台设备退出"));
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
+  const signOut = useSignOut();
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label="设置" />
@@ -118,6 +119,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
             ))}
           </ul>
         )}
+        {revoke.error && <p className={controlsCss.fieldError} role="alert">没能让那台设备退出：{revoke.error.message}</p>}
       </Section>
       <Section title="退出登录">
         <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
@@ -125,7 +127,8 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <Button icon={LogOut} onClick={() => setSigningOut(true)}>退出账号</Button>
         </div>
       </Section>
-      <Confirm open={signingOut} onClose={() => setSigningOut(false)} onConfirm={() => void signOut(account.sub).then(() => { toast(`已退出 ${account.email}`); navigate("/"); })}
+      <Confirm open={signingOut} onClose={() => setSigningOut(false)} busy={signOut.busy(account.sub)}
+        onConfirm={() => void signOut.signOut(account.sub).then((out) => { if (!out) return; toast(`已退出 ${account.email}`); navigate("/"); })}
         title={`退出 ${account.email}？`} action="退出账号" description="这个浏览器上不再使用这个账号；它所在的 workspace 也会从这里消失。其他已登录的账号不受影响。" />
     </div>
   );
@@ -156,7 +159,7 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
     <Page title="Workspace" back={`/w/${entry.id}/settings`}>
       <Section title="名字">
         <div className={pagesCss.card}>
-          <Field label="Workspace 名字" htmlFor="ws-rename" hint={manager ? undefined : "只有 owner 和管理员能改名。"}>
+          <Field label="Workspace 名字" htmlFor="ws-rename" hint={manager ? undefined : "只有 owner 和管理员能改名。"} error={rename.error ? `没能改名：${rename.error.message}` : undefined}>
             <div className={additionsCss.inputRow}>
               <input id="ws-rename" className={controlsCss.input} value={name} maxLength={80} disabled={!manager} onChange={(e) => setName(e.target.value)} />
               {manager && <Button variant="primary" disabled={!name.trim() || name.trim() === view.name} busy={rename.busy} onClick={() => rename.run()}>保存</Button>}
@@ -311,12 +314,18 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const [removing, setRemoving] = useState<StationView | null>(null);
   const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id), () => setRemoving(null));
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
+  const renaming = (s: StationView) => rename.busy && rename.arg?.id === s.id;
   return (
     <Section title={`${stations.length} 台`} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button></>}>
-      <StationList stations={stations} manager={manager} menu={(s) => manager && <Menu items={[
-        { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
-        { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
-      ]} />} />
+      {/* A name on its way shows at once, a ring beside its menu until the cloud has it. */}
+      <StationList stations={stations.map((s) => (renaming(s) ? { ...s, name: rename.arg!.name } : s))} manager={manager} menu={(s) => manager && <>
+        {renaming(s) && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在改名" />}
+        <Menu items={[
+          { label: "改名", disabled: renaming(s), onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim() && n.trim() !== s.name) rename.run({ id: s.id, name: n.trim() }); } },
+          { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
+        ]} />
+      </>} />
+      {rename.error && <p className={controlsCss.fieldError} role="alert">没能给「{stations.find((s) => s.id === rename.arg?.id)?.name ?? "station"}」改名：{rename.error.message}</p>}
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.busy} onConfirm={() => removing && remove.run(removing)}
         title={`移除「${removing?.name ?? ""}」？`} action="移除 station"
@@ -345,7 +354,7 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
       {!enroll.result ? (
         <Field label="名字" htmlFor="station-name">
           <input id="station-name" className={controlsCss.input} value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && !enroll.busy) enroll.run(); }} />
         </Field>
       ) : joined ? (
         <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>「{joined.name}」已加入，现在可以打开它了。</span></div>
@@ -418,7 +427,7 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
       <Field label="给这台机器起个名字" htmlFor="first-station-name">
         <div className={css.onboardingRow}>
           <input id="first-station-name" className={controlsCss.input} value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && !enroll.busy) enroll.run(); }} />
           <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>
         </div>
       </Field>
@@ -447,17 +456,22 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
             </span>
             {view.role === "owner" && m.sub !== account.sub ? (
               <div className={css.roleSelect}>
-                <Select value={m.role} onChange={(role) => setRole.run({ sub: m.sub, role: role as Role })} label="角色"
+                <Select value={setRole.busy && setRole.arg?.sub === m.sub ? setRole.arg.role : m.role} disabled={setRole.busy && setRole.arg?.sub === m.sub}
+                  onChange={(role) => setRole.run({ sub: m.sub, role: role as Role })} label="角色"
                   options={(["owner", "admin", "member"] as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
               </div>
             ) : <Pill>{ROLE_LABEL[m.role]}</Pill>}
-            {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && (
+            {(setRole.busy && setRole.arg?.sub === m.sub) || (remove.busy && remove.arg === m.sub)
+              ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={remove.busy && remove.arg === m.sub ? "正在移出" : "正在更改角色"} />
+              : null}
+            {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && !(remove.busy && remove.arg === m.sub) && (
               <Menu items={[{ label: "移出 workspace", icon: Trash, danger: true, onSelect: () => { if (window.confirm(`把 ${m.email} 移出「${view.name}」？`)) remove.run(m.sub); } }]} />
             )}
           </li>
         ))}
       </ul>
       {(setRole.error || remove.error) && <p className={controlsCss.fieldError} role="alert">{(setRole.error ?? remove.error)!.message}</p>}
+      {unadd.error && <p className={controlsCss.fieldError} role="alert">没能移除 {unadd.arg}：{unadd.error.message}</p>}
       {manager && view.added.length > 0 && (
         <>
           <div className={css.groupHead}><strong>还没登录过</strong><span className={shellCss.muted}>{view.added.length} 人 · 第一次登录 {NAME} 时自动加入</span></div>
@@ -488,6 +502,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
               </li>
             ))}
           </ul>
+          {revoke.error && <p className={controlsCss.fieldError} role="alert">没能撤回邀请：{revoke.error.message}</p>}
         </>
       )}
       {inviting && <AddDialog view={view} account={account} onClose={() => setInviting(false)} />}

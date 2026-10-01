@@ -163,9 +163,14 @@ export const msgUnsentBtn = style({
   borderRadius: `calc(7px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover": { background: vars.hover, color: vars.text },
+    "&:hover:not(:disabled)": { background: vars.hover, color: vars.text },
+    "&:disabled": { opacity: ".55", cursor: "default" },
+    "&[aria-busy=\"true\"]": { cursor: "progress" },
   },
 });
+/** Sending it again or dropping it under way: a ring in place of the button's icon. */
+export const msgUnsentSpinner = style({});
+globalStyle(`${msgUnsentSpinner}${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 /**
  * Someone's message has its avatar out in the margin, left of its text (which takes no less room for it), held in view
  * while the message scrolls past: however long a reply, whose it is shows at the top of the pane. An agent at work has

@@ -9,7 +9,8 @@ import { useTopic } from "../core/react.ts";
 import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Check, UserPlus } from "../icons.tsx";
-import { Avatar, Button, Field, LargeTitle, ListCard, ListRow, Loading, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Avatar, Button, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { doingMatches, useDoingList } from "../doing.ts";
 import { ask, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -39,6 +40,10 @@ export function WorkspaceScreen() {
     run: (name) => cloud.renameWorkspace(me.sub, view.id, name).then(() => app.toast("已改名")) });
   const add = () => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> });
   const waiting = manager ? view.added.length + view.invitations.length : 0;
+  // A row's link waits, spinning, until still.fail cloud answers; the toast says how it ended.
+  const doing = useDoingList();
+  const removing = (email: string) => doing.some((d) => doingMatches(d, "workspace.removeAdded", { account: me.sub, workspace: view.id, email }));
+  const revoking = (id: string) => doing.some((d) => doingMatches(d, "workspace.revokeInvitation", { account: me.sub, workspace: view.id, invitation: id }));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label="设置" onBack={app.pop} trailing={manager ? <NavButton icon={UserPlus} iconSize={20} label="添加成员" onClick={add} /> : undefined} />
@@ -55,14 +60,14 @@ export function WorkspaceScreen() {
           <ListRow key={a.email}>
             <Avatar id={a.email} name={a.email} size={28} />
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{a.email}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[a.role]} · 还没登录过，第一次登录时自动加入</span></span>
-            <button type="button" className={partsCss.mLink} onClick={() => void cloud.removeAdded(me.sub, view.id, a.email).then(() => app.toast("已移除"), (e: Error) => app.toast(e.message))}>移除</button>
+            <LinkButton label="移除" busy={removing(a.email)} onClick={() => { cloud.removeAdded(me.sub, view.id, a.email).then(() => app.toast("已移除"), (e: Error) => app.toast(`没能移除：${e.message}`)); }} />
           </ListRow>
         ))}
         {manager && view.invitations.map((i) => (
           <ListRow key={i.id}>
             <Avatar id={i.email ?? i.id} name={i.email ?? "?"} size={28} />
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{i.email ?? "任何拿到链接的人"}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[i.role]} · 邀请 · {stamp(i, "expires_at")?.until}过期</span></span>
-            <button type="button" className={partsCss.mLink} onClick={() => void cloud.revokeInvitation(me.sub, view.id, i.id).then(() => app.toast("已撤回邀请"), (e: Error) => app.toast(e.message))}>撤回</button>
+            <LinkButton label="撤回" busy={revoking(i.id)} onClick={() => { cloud.revokeInvitation(me.sub, view.id, i.id).then(() => app.toast("已撤回邀请"), (e: Error) => app.toast(`没能撤回邀请：${e.message}`)); }} />
           </ListRow>
         ))}
       </ListCard>
@@ -96,16 +101,19 @@ function MemberRow({ view, m, me }: { view: WorkspaceView; m: MemberView; me: st
 function MemberSheet({ view, m }: { view: WorkspaceView; m: MemberView }) {
   const app = useApp();
   const me = app.entry.account;
-  const setRole = (role: Role) => cloud.setRole(me.sub, view.id, m.sub, role).then(() => { app.toast("已更改角色"); app.sheet(null); }, (e: Error) => app.toast(e.message));
+  // The role asked shows its spinner on its row until still.fail cloud answers; the sheet stays open if it fails.
+  const doing = useDoingList().find((d) => doingMatches(d, "workspace.setRole", { account: me.sub, workspace: view.id, member: m.sub }));
+  const setRole = (role: Role) => { cloud.setRole(me.sub, view.id, m.sub, role).then(() => { app.toast("已更改角色"); app.sheet(null); }, (e: Error) => app.toast(`没能更改角色：${e.message}`)); };
   return (
     <>
       <SheetGrab />
       <SheetHead title={m.name || m.email} />
       <div className={sheetsCss.mSheetScroll}>
         {view.role === "owner" && (["owner", "admin", "member"] as Role[]).map((r) => (
-          <PickRow key={r} label={ROLE_LABEL[r]} sub={ROLE_HINT[r]} checked={m.role === r} onClick={() => void setRole(r)} />
+          <PickRow key={r} label={ROLE_LABEL[r]} sub={ROLE_HINT[r]} checked={m.role === r}
+            busy={doing?.params.role === r} enabled={!doing} onClick={() => setRole(r)} />
         ))}
-        <PickRow label="移出 workspace" accent onClick={() => removeMember(app, view, m)} />
+        <PickRow label="移出 workspace" accent enabled={!doing} onClick={() => removeMember(app, view, m)} />
       </div>
     </>
   );
@@ -207,6 +215,8 @@ export function Devices() {
   const app = useApp();
   const me = app.entry.account;
   const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: me.sub });
+  const doing = useDoingList();
+  const revoking = (id: string) => doing.some((d) => doingMatches(d, "loginSession.revoke", { account: me.sub, id }));
   if (!devices.value) return <p className={homeCss.mNote}>{devices.error ? `读不到登录记录：${devices.error.message}` : "正在读取…"}</p>;
   return (
     <ListCard>
@@ -216,7 +226,7 @@ export function Devices() {
             <span className={listsCss.mRowTitle}>{s.name || "未命名设备"}{s.current && <span className={css.mYou}>这里</span>}</span>
             <span className={listsCss.mRowNote}>{stamp(s, "created_at")?.ago}登录 · {stamp(s, "expires_at")?.until}过期</span>
           </span>
-          {!s.current && <button type="button" className={partsCss.mLink} onClick={() => void cloud.revokeLoginSession(me.sub, s.id).then(() => app.toast("已让那台设备退出"), (e: Error) => app.toast(e.message))}>退出</button>}
+          {!s.current && <LinkButton label="退出" busy={revoking(s.id)} onClick={() => { cloud.revokeLoginSession(me.sub, s.id).then(() => app.toast("已让那台设备退出"), (e: Error) => app.toast(`没能让那台设备退出：${e.message}`)); }} />}
         </ListRow>
       ))}
     </ListCard>

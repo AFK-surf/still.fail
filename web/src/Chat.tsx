@@ -37,6 +37,8 @@ import * as controlsCss from "./styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
 import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
+import { useDoing } from "./doing.ts";
+import { failure, useToast } from "./toast.tsx";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -99,16 +101,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
     <section className={sessionCss.chat} aria-label="对话" data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
-      {rows.away && (
-        <Tip label="跳到最新" shortcut="chat.latest" side="top">
-        <button type="button" className={css.chatToBottom} aria-label="跳到最新" data-count={rows.waiting > 0 || undefined}
-          // Glides down, and follows new messages again (scroll.ts); from a window short of the end, goes there at once.
-          onClick={rows.toEnd}>
-          <ArrowDown size={16} strokeWidth={2} />
-          {rows.waiting > 0 && <span>{rows.waiting} 条新消息</span>}
-        </button>
-        </Tip>
-      )}
+      {rows.away && <ToLatest station={station.address} thread={id} waiting={rows.waiting} onClick={rows.toEnd} />}
       <Gallery.Provider value={stable.images}>
       <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps}
         onClick={(e) => {
@@ -188,11 +181,33 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
   );
 }
 
+/**
+ * Over the list away from its end: glides down, and follows new messages again (scroll.ts); from a window short of the
+ * end, goes there at once, turning while the latest page comes (`chat.latest`), not pressed again meanwhile.
+ */
+function ToLatest({ station, thread, waiting, onClick }: { station: string; thread: number | null; waiting: number; onClick(): void }) {
+  const coming = useDoing("chat.latest", { station, thread: thread ?? "" }) && thread !== null;
+  return (
+    <Tip label="跳到最新" shortcut="chat.latest" side="top">
+      <button type="button" className={css.chatToBottom} aria-label="跳到最新" data-count={waiting > 0 || undefined}
+        disabled={coming} aria-busy={coming || undefined} onClick={onClick}>
+        {coming ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <ArrowDown size={16} strokeWidth={2} />}
+        {waiting > 0 && <span>{waiting} 条新消息</span>}
+      </button>
+    </Tip>
+  );
+}
+
 const SENDING_SHOWS_MS = 800;
 
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; locked: boolean; owner: (file: Attachment) => string | null }) {
   const sending = useChatSend();
+  const station = useStation().address;
+  const toast = useToast();
+  const retrying = useDoing("chat.retry", { station, id: o.id });
+  const dropping = useDoing("chat.discard", { station, id: o.id });
+  const busy = retrying || dropping;
   // "正在发送" shows once it has been on its way a while, counted from when it was sent: the row is drawn anew as a chat
   // made here takes the page, and copies of it fly in (madeChat.ts, by `data-shows-at`), all showing it at one time.
   const showsAt = o.createdAt + SENDING_SHOWS_MS;
@@ -206,8 +221,12 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
             <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
               <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />未发送</span>
             </Tip>
-            <button type="button" className={css.msgUnsentBtn} disabled={locked} onClick={() => void (to !== null && sending.retry(to, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
-            <button type="button" className={css.msgUnsentBtn} onClick={() => void (to !== null && sending.discard(to, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
+            <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
+              onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(`没能重新发送：${failure(e)}`)); }}>
+              {retrying ? <span className={`${waitingCss.spinner} ${css.msgUnsentSpinner}`} aria-hidden="true" /> : <Retry size={12} strokeWidth={2} />}重试</button>
+            <button type="button" className={css.msgUnsentBtn} disabled={busy} aria-busy={dropping || undefined}
+              onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(`没能删除：${failure(e)}`)); }}>
+              {dropping ? <span className={`${waitingCss.spinner} ${css.msgUnsentSpinner}`} aria-hidden="true" /> : <Trash size={12} strokeWidth={2} />}删除</button>
           </div>
         : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
     </MineMessage>
@@ -345,6 +364,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
  * puts the latest page in place as it sends); sent from up the list, straight to its bottom.
  */
 function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: () => Promise<unknown>): () => void {
+  const toast = useToast();
   const short = !!chat.newer;
   // Going to the end: once the latest page is in, the list goes to its bottom.
   const going = useRef(false);
@@ -373,7 +393,7 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
       return;
     }
     going.current = true;
-    void latest().catch(() => { going.current = false; });
+    latest().catch((e: unknown) => { going.current = false; toast(`没能跳到最新：${failure(e)}`); });
   };
 }
 
@@ -1212,6 +1232,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
   placeholder: string; className: string; lines?: number; enterSends?: boolean; onType(): void; onSubmit(): void;
 }): { menu: ReactNode; field: ReactNode } {
   const { text, setText, add } = draft;
+  const toast = useToast();
   // `@` and a few letters: a menu of the station's other chats, the one chosen put in as a link (ChatRef.tsx).
   const [reference, setReference] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
@@ -1242,7 +1263,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
       if (now[start] !== "@") return;
       caretAt.current = start + mark.length + 1;
       setText(`${now.slice(0, start)}${mark} ${now.slice(end)}`);
-    }, () => undefined);
+    }, (e: unknown) => toast(`没能引用「${item.title}」：${failure(e)}`));
   };
   // Where the caret goes once the text changed by hand is drawn (before anything more is typed).
   const caretAt = useRef<number | null>(null);

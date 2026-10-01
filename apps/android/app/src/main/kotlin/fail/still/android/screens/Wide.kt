@@ -136,7 +136,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                     val here = top is Screen.Chat && top.station == item.station && top.of == item.page
                     ChatRowBody(
                         item, view.leading ?: "agents", false,
-                        Modifier.clip(RoundedCornerShape(14.dp)).background(if (here) C.accentBg else Color.Transparent)
+                        modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (here) C.accentBg else Color.Transparent)
                             .clickable { open = false; if (!here) app.open(Screen.Chat(item.station, item.page)) },
                     )
                 }

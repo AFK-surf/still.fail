@@ -6,10 +6,9 @@ import { useState } from "react";
 import { NavLink } from "react-router";
 import type { Job, LongJobsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import { useToast } from "./toast.tsx";
+import { failure, useToast } from "./toast.tsx";
 import { stationBase } from "./station.tsx";
-import { JobDot } from "./Jobs.tsx";
-import { Stop } from "./icons.tsx";
+import { JobDot, JobStop } from "./Jobs.tsx";
 import { Tip } from "./ui.tsx";
 import * as css from "./OpenJobs.css.ts";
 
@@ -27,7 +26,7 @@ export function useLongJobs(scope: string, toast: (text: string) => void) {
   const call = useCall();
   // The core puts the job in place as it is now: gone from here, stopped in its chat.
   const stop = (job: Job) => void (call("job.stop", { station: job.station, id: job.id }) as Promise<unknown>)
-    .catch((e: Error) => toast(`没能停下「${job.name}」：${e.message}`));
+    .catch((e: unknown) => toast(`没能停下「${job.name}」：${failure(e)}`));
   return { groups, stop };
 }
 
@@ -56,7 +55,7 @@ export function OpenJobs({ scope }: { scope: string }) {
       <div key={`${job.station}/${job.id}`} className={css.openJob}>
         {chat ? <NavLink className={css.openJobRow} to={chat}>{body}</NavLink> : <div className={css.openJobRow}>{body}</div>}
         <Tip label="停止" side="top">
-          <button type="button" className={css.openJobStop} aria-label={`停止「${job.name}」`} onClick={() => stop(job)}><Stop size={14} /></button>
+          <JobStop station={job.station ?? ""} job={job} stop={stop} className={css.openJobStop} label={`停止「${job.name}」`} />
         </Tip>
       </div>
     );

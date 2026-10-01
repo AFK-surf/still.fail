@@ -83,6 +83,7 @@ import fail.still.android.data.PickView
 import fail.still.android.data.Host
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
+import fail.still.android.data.errorText
 import fail.still.android.data.state
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
@@ -163,7 +164,7 @@ private fun Actions(station: String, agent: ChatAgent) {
                 }
             },
             contentAlignment = Alignment.Center,
-        ) { IconIn(icon, 14.dp, if (busy) C.subtle else C.ink) }
+        ) { if (busy) Spinner(12.dp) else IconIn(icon, 14.dp, C.ink) }
     }
     if (st == "running" || st == "queued") act(Icons.Stop, "已请求停止") { app.api(station).stop(s.key) }
     if (s.process == "warm") act(Icons.Unplug, "已释放进程") { app.api(station).evict(s.key) }
@@ -392,22 +393,20 @@ private fun Place(station: String, of: ChatOf, place: fail.still.android.data.Pl
 @Composable
 private fun SlackName(station: String, user: String, name: String, mine: Boolean) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     var bounds by remember { mutableStateOf(Rect.Zero) }
-    Text(
-        name, fontSize = 13.sp, color = C.accentInk, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(RoundedCornerShape(4.dp)).clickable {
-            app.menu = MenuSpec(bounds, listOf(MenuItem(if (mine) "不是我" else "这是我", if (mine) Icons.Close else Icons.Check) {
-                scope.launch {
-                    try {
-                        app.api(station).slackIdentity(user, !mine)
-                    } catch (e: CoreException) {
-                        app.toast = "${if (mine) "解除" else "绑定"}没有成功：${e.message}"
-                    }
-                }
-            }))
-        },
-    )
+    // Said and not answered yet: a spinner beside the name, the menu not offered again meanwhile.
+    val binding = app.isDoing("slack.identity", "station" to station, "user" to user)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            name, fontSize = 13.sp, color = C.accentInk, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(RoundedCornerShape(4.dp)).clickable(enabled = !binding) {
+                app.menu = MenuSpec(bounds, listOf(MenuItem(if (mine) "不是我" else "这是我", if (mine) Icons.Close else Icons.Check) {
+                    app.act(if (mine) "解除" else "绑定") { app.api(station).slackIdentity(user, !mine) }
+                }))
+            },
+        )
+        if (binding) Spinner(10.dp)
+    }
 }
 
 @Composable
@@ -525,7 +524,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
     val pickOf = "session:$key"
     val picking by rememberTopic<PickView>(app.core, Topics.pick(station, pickOf))
     val v = picking.value
-    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet(pickOf, fill) } catch (_: CoreException) {} }; Unit }
+    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet(pickOf, fill) } catch (e: CoreException) { app.toast = "没能选上：${errorText(e)}" } }; Unit }
     // Picked from what it runs on now, each time it is opened.
     LaunchedEffect(station, key) { pick { put("open", true) } }
     // A long list (the models, the accounts) is a list of its own, picked from and back.
@@ -581,14 +580,17 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                     busy = true
                     scope.launch {
                         try { app.api(station).pickSave(pickOf); app.toast = "已改，下一轮起生效"; app.pop() }
-                        catch (err: CoreException) { app.toast = err.message }
+                        catch (err: CoreException) { app.toast = "没能保存：${errorText(err)}" }
                         finally { busy = false }
                     }
                 }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(v.saveText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = if (v.changed) C.bg else C.muted, strokeWidth = 1.5.dp)
+                Text(v.saveText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center)
+            }
         }
     }
 }

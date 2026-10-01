@@ -17,3 +17,6 @@ export const mGoogleMark = style({
 globalStyle(`${mSignIn} h1`, { margin: "10px 0 0", fontSize: "28px", fontWeight: "700", letterSpacing: "-0.5px" });
 globalStyle(`${mSignIn} p`, { fontSize: "15px", color: "var(--m-muted)" });
 globalStyle(`${mSignIn} small`, { fontSize: "12px", color: "var(--m-muted)" });
+/** Why signing in could not start: in red, over the muted lines'. */
+export const mSignInError = style({ fontSize: "14px" });
+globalStyle(`${mSignIn} ${mSignInError}`, { color: "var(--m-red)" });

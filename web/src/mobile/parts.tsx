@@ -209,13 +209,13 @@ export function ListRow({ onClick, children }: { onClick?: (() => void) | undefi
 }
 
 /** A row of a picking sheet: what, a line under it, two short notes at its end (each by one of those lines), and a check on the chosen one. */
-/** `mark`: a small mark after the label (what a workspace has waiting). */
-export function PickRow({ label, sub, aside, checked = false, enabled = true, accent = false, leading, mark, onClick }: {
-  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
+/** `mark`: a small mark after the label (what a workspace has waiting); `busy`: what it asked is under way (a spinner at its end, not pressed again). */
+export function PickRow({ label, sub, aside, checked = false, enabled = true, busy = false, accent = false, leading, mark, onClick }: {
+  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; busy?: boolean; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
 }) {
   const title = mark ? <span className={css.mPickLabel}><span className={css.mPickLabelText}>{label}</span>{mark}</span> : <span>{label}</span>;
   return (
-    <button type="button" className={css.mPickRow} disabled={!enabled} data-accent={accent || undefined} onClick={onClick}>
+    <button type="button" className={css.mPickRow} disabled={!enabled || busy} data-accent={accent || undefined} data-busy={busy || undefined} aria-busy={busy || undefined} onClick={onClick}>
       {leading}
       {aside === undefined
         ? <span className={css.mPickText}>{title}{sub !== undefined && <small>{sub}</small>}</span>
@@ -225,7 +225,7 @@ export function PickRow({ label, sub, aside, checked = false, enabled = true, ac
             {sub !== undefined ? <small>{sub}</small> : <span />}<small className={css.mPickAside}>{aside[1]}</small>
           </span>
         )}
-      {checked && <Check size={14} className={partsCss.mAccent} />}
+      {busy ? <Spinner size={14} /> : checked && <Check size={14} className={partsCss.mAccent} />}
     </button>
   );
 }
@@ -238,9 +238,10 @@ export function InfoList({ children }: { children: ReactNode }) {
   return <div className={css.mInfoList}>{children}</div>;
 }
 
-export function InfoRow({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
+/** `busy`: what it asked is under way (a spinner at its end, not pressed again). */
+export function InfoRow({ onClick, busy = false, children }: { onClick?: () => void; busy?: boolean; children: ReactNode }) {
   return onClick
-    ? <button type="button" className={listsCss.mInfoRow} onClick={onClick}>{children}</button>
+    ? <button type="button" className={listsCss.mInfoRow} disabled={busy} aria-busy={busy || undefined} onClick={onClick}>{children}{busy && <Spinner size={14} />}</button>
     : <div className={listsCss.mInfoRow}>{children}</div>;
 }
 
@@ -253,6 +254,15 @@ export function Button({ label, primary, busy = false, enabled = true, onClick }
   return (
     <button type="button" className={css.mButton} data-primary={primary || undefined} disabled={!enabled || busy} onClick={onClick}>
       {busy && <Spinner size={14} />}{label}
+    </button>
+  );
+}
+
+/** A link's button (in the accent, no frame); `busy`: what it asked is under way, a spinner before its words, not pressed again. */
+export function LinkButton({ label, busy = false, enabled = true, className, onClick }: { label: ReactNode; busy?: boolean; enabled?: boolean; className?: string; onClick: () => void }) {
+  return (
+    <button type="button" className={`${partsCss.mLink} ${css.mLinkButton}${className ? ` ${className}` : ""}`} disabled={!enabled || busy} aria-busy={busy || undefined} onClick={onClick}>
+      {busy && <Spinner size={13} />}{label}
     </button>
   );
 }

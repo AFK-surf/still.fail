@@ -2,7 +2,8 @@
 // SettingsHome.kt): who is signed in, then the workspace's (its people, stations, connects, profiles, memory), then this
 // device's (how it looks, whether it notifies). Each row says how things stand at its end, what is wrong in red, so the
 // page is worth a look before anything is opened.
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useDoing } from "../doing.ts";
 import { useStations, useConnects } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
@@ -13,7 +14,7 @@ import { useApp } from "./app.tsx";
 import { useChangelog } from "../changelog.ts";
 import { Presence } from "./Connects.tsx";
 import { quotaTrouble } from "./Profiles.tsx";
-import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
+import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -84,18 +85,30 @@ export function SettingsScreen() {
 function Notify() {
   const app = useApp();
   const state = useNotifyState();
+  // What was asked shows at once, with a spinner, while the browser asks for leave and the core answers (`notify.set`);
+  // then how it is, and a word if that is not what was asked.
+  const [asked, setAsked] = useState<boolean | null>(null);
+  const setting = useDoing("notify.set");
   if (!CAN_NOTIFY) return null;
+  const busy = asked !== null || setting;
+  const on = asked ?? state === "on";
   const note = state === "denied" ? "浏览器拦下了通知，要在浏览器的网站设置里打开" : "做完、要处理、出错、有人说话时提醒你";
   return (
-    <ListRow onClick={() => {
+    <ListRow onClick={busy ? undefined : () => {
       if (state === "denied" || state === "unsupported") return;
-      void setNotify(state !== "on").then((now) => { if (now === "denied") app.toast("浏览器没有允许通知"); });
+      const want = state !== "on";
+      setAsked(want);
+      setNotify(want).then((now) => {
+        if (now === "denied") app.toast("浏览器没有允许通知");
+        else if ((now === "on") !== want) app.toast(`没能${want ? "打开" : "关掉"}通知`);
+      }, (e: unknown) => app.toast(`没能${want ? "打开" : "关掉"}通知：${e instanceof Error ? e.message : String(e)}`)).finally(() => setAsked(null));
     }}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}>通知</span>
         <span className={listsCss.mRowNote}>{note}</span>
       </span>
-      <span className={connectsCss.mSwitch} data-on={state === "on" || undefined} />
+      {busy && <Spinner size={14} />}
+      <span className={connectsCss.mSwitch} data-on={on || undefined} />
     </ListRow>
   );
 }

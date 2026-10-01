@@ -87,6 +87,13 @@ function NewWorkspaceSheet() {
     app.replace(`/w/${w.id}`);
   });
   const asked = needsInviteCode(create.error);
+  // Signing in leaves for Google's page once still.fail says where: under way till then; if it cannot, why, here.
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const signInHere = () => {
+    setSigningIn(true); setSignInError(null);
+    signIn().catch((e: unknown) => { setSigningIn(false); setSignInError(`没能登录：${e instanceof Error ? e.message : String(e)}`); });
+  };
   return (
     <>
       <SheetGrab />
@@ -115,7 +122,8 @@ function NewWorkspaceSheet() {
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label="新建" primary busy={create.busy} enabled={!!name.trim() && !!sub} onClick={() => create.run()} />
         </div>
-        {accounts.length === 0 && <Button label="登录" primary={false} onClick={() => void signIn()} />}
+        {accounts.length === 0 && <Button label="登录" primary={false} busy={signingIn} onClick={signInHere} />}
+        {signInError && <p className={partsCss.mError}>{signInError}</p>}
       </div>
     </>
   );

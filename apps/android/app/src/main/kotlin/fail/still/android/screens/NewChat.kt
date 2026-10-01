@@ -71,6 +71,7 @@ import fail.still.android.data.NewChatView
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
+import fail.still.android.data.errorText
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
@@ -89,7 +90,7 @@ import kotlinx.serialization.json.put
 
 /** Picks for a new chat in a scope (`station`: its id; the core keeps them, client/core/src/choose.rs): each given changes only that. */
 private fun AppState.pickNew(scope: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {
-    this.scope.launch { try { core.call("newChat.pick", buildJsonObject { put("scope", scope); fill() }) } catch (_: CoreException) {} }
+    this.scope.launch { try { core.call("newChat.pick", buildJsonObject { put("scope", scope); fill() }) } catch (e: CoreException) { toast = "没能选上：${errorText(e)}" } }
 }
 
 /**
@@ -273,7 +274,7 @@ private fun openRunPicker(app: AppState, station: String) {
     app.sheet = SheetSpec(0.66f) {
         val scope = rememberCoroutineScope()
         val topic by rememberTopic<PickView>(app.core, Topics.pick(station, "new"))
-        val set = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet("new", fill) } catch (_: CoreException) {} }; Unit }
+        val set = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet("new", fill) } catch (e: CoreException) { app.toast = "没能选上：${errorText(e)}" } }; Unit }
         // Picked from what it runs on now, each time it is opened.
         LaunchedEffect(Unit) { set { put("open", true) } }
         var accounts by remember { mutableStateOf(false) }
@@ -333,13 +334,22 @@ private fun openRunPicker(app: AppState, station: String) {
                 Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 IconIn(Icons.ChevronRight, 14.dp, C.muted)
             }
-            Text(
-                if (v.changed) "确定" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink,
-                modifier = Modifier.clip(RoundedCornerShape(19.dp)).background(if (v.changed) C.ink else C.chip).clickable(enabled = v.option != null) {
-                    app.sheet = null
-                    if (v.changed) scope.launch { try { app.api(station).pickSave("new") } catch (err: CoreException) { app.toast = err.message } }
+            // Saving: a spinner in it, the sheet open until the core has it (closed then, unless another took its place).
+            val saving = app.isDoing("pick.save", "station" to station, "of" to "new")
+            Row(
+                Modifier.clip(RoundedCornerShape(19.dp)).background(if (v.changed) C.ink else C.chip).clickable(enabled = v.option != null && !saving) {
+                    if (!v.changed) { app.sheet = null; return@clickable }
+                    val sheet = app.sheet
+                    app.scope.launch {
+                        try { app.api(station).pickSave("new"); if (app.sheet === sheet) app.sheet = null }
+                        catch (err: CoreException) { app.toast = "没能保存：${errorText(err)}" }
+                    }
                 }.padding(horizontal = 22.dp, vertical = 9.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (saving) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = C.bg, strokeWidth = 1.5.dp)
+                Text(if (v.changed) "确定" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink)
+            }
         }
     }
 }

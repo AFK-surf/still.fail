@@ -6,6 +6,7 @@ import { command, field, skeletonRow } from "../ui.css.ts";
 import { newChatStatus } from "../NewChat.css.ts";
 import { signIn } from "../pages/Accounts.css.ts";
 import { stepActions } from "../pages/Connect.css.ts";
+import { spinner } from "./waiting.css.ts";
 
 export const btn = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "32px",
@@ -15,7 +16,7 @@ export const btn = style({
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
     "&:disabled": { opacity: ".45", cursor: "default" },
-    "&[aria-busy=\"true\"]": { cursor: "progress" },
+    "&[aria-busy=\"true\"]": { cursor: "progress", opacity: ".7" },
   },
 });
 export const btnPrimary = style({
@@ -24,6 +25,14 @@ export const btnPrimary = style({
     "&:hover:not(:disabled)": { background: vars.primaryHover, borderColor: vars.primaryHover },
   },
 });
+/** A button's call under way: a small ring where its icon goes, in its text's colour. */
+globalStyle(`${btn} ${spinner}`, {
+  width: "14px", height: "14px", borderWidth: "1.5px", borderColor: "color-mix(in srgb, currentColor 30%, transparent)",
+  borderTopColor: "currentColor",
+});
+/** The same in an icon-only button (ui.tsx IconButton). */
+export const iconSpinner = style({});
+globalStyle(`${iconSpinner}${spinner}`, { width: "14px", height: "14px", borderWidth: "1.5px" });
 export const btnGhost = style({ borderColor: "transparent", background: "transparent" });
 // Here, after btn, as the other variants: in ui.css.ts (which cascades before this file) btn's colour won over them.
 export const btnDanger = style({ color: vars.red });

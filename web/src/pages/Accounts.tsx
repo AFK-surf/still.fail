@@ -57,7 +57,7 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
       {offers.map((l) => (
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
-          ? <Tip label="直接用这台机器的登录，不用再登录；在这台机器上换号或登出，它也跟着变"><Button disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button></Tip>
+          ? <Tip label="直接用这台机器的登录，不用再登录；在这台机器上换号或登出，它也跟着变"><Button busy={use.busy && use.args?.[0] === l.runtime} disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button></Tip>
           : <Tip label={`这份登录在 station 读不到的钥匙串里，不能直接用：为 ${NAME} 单独登录一次，这台机器上原来的登录不受影响`}><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button></Tip>} />
       ))}
       {use.error && <p className={controlsCss.fieldError} role="alert">{use.error.message}</p>}
@@ -157,6 +157,8 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
     : { item: "删除 Profile", title: `删除「${profile.name}」？`, action: "删除 Profile", description: `只从 ${NAME} 的配置里移除；配置目录和里面的登录状态不会删除。` };
   const check = useAction(() => api.checkProfile(profile.id));
   const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
+  // Its new name shows while it is saved.
+  const renamingTo = save.busy ? save.args?.[0].name : undefined;
   const rename = () => {
     setEditingName(false);
     if (name.trim() && name.trim() !== profile.name) saveThen({ name: name.trim() }, () => toast("已改名"));
@@ -179,15 +181,17 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
             <input className={`${controlsCss.input} ${css.identityNameInput}`} value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
-            <h1 className={pagesCss.identityName}>{profile.name}<RuntimeTags runtimes={profile.runtimes} />{!profile.machine && <IconButton label="改名" icon={Edit} onClick={() => setEditingName(true)} />}</h1>
+            <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
+              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在改名" />}<RuntimeTags runtimes={profile.runtimes} />{!profile.machine && <IconButton label="改名" icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
             <Pill tone={profile.checkTone}>{profile.checkText}</Pill>
             {/* The pill already says it works; the detail says what else it found. */}
             <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}</span>
             {latest && <span className={shellCss.muted}><Time stamp={latest.time?.checkedAt} />检查</span>}
-            <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={Refresh} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
+            <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={Refresh} busy={check.busy} onClick={() => void check.run()} />
           </p>
+          {check.error && <p className={controlsCss.fieldError} role="alert">没能检查：{check.error.message}</p>}
         </div>
         <Menu items={[{ label: profile.usedBy.length ? `${removal.item}（还有连接在用）` : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
@@ -197,7 +201,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 
       <QuotaSection profile={profile} />
 
-      <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => void save.run({ models })} />
+      <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => save.run({ models })} />
 
       {/* A station older than the setting says nothing of it. */}
       {profile.runtimes.includes("claude") && profile.backgroundOnMessage !== undefined && (
@@ -373,6 +377,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
         <div className={pagesCss.cardRowText}><strong>正在登录 {provider}</strong><span className={shellCss.muted}>15 分钟内完成，过期会自动取消。</span></div>
         <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>取消</Button>
       </div>
+      {cancel.error && <p className={controlsCss.fieldError} role="alert">没能取消：{cancel.error.message}</p>}
       <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
     </div>
   );
@@ -384,8 +389,10 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
  */
 function DeviceCode({ url, code }: { url: string; code: string }) {
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
   const go = () => {
-    void navigator.clipboard.writeText(code).then(() => setCopied(true), () => {}).finally(() => window.open(url, "_blank", "noopener"));
+    // Not copied: the page opens all the same, the code to type in by hand.
+    void navigator.clipboard.writeText(code).then(() => setCopied(true), () => toast("没能复制代码，请照着输入")).finally(() => window.open(url, "_blank", "noopener"));
   };
   return (
     <div className={css.deviceCode}>
@@ -414,7 +421,7 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
             <span>同意后页面上会显示一段授权码，复制过来：</span>
             <div className={additionsCss.inputRow}>
               <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="粘贴授权码" aria-label="授权码"
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && code.trim()) send(); }} />
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && code.trim() && !sending) send(); }} />
               <Button variant="primary" disabled={!code.trim()} busy={sending} onClick={() => send()}>完成登录</Button>
             </div>
             {sendError && <p className={controlsCss.fieldError} role="alert">{sendError}</p>}
@@ -437,6 +444,7 @@ function QuotaSection({ profile }: { profile: Profile }) {
     <Section title={<>额度{quota?.time?.checkedAt && <About>{quota.time.checkedAt.ago}查询，每几分钟自动更新</About>}</>}
       actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
       <QuotaBars quota={quota} />
+      {refresh.error && <p className={controlsCss.fieldError} role="alert">没能刷新额度：{refresh.error.message}</p>}
     </Section>
   );
 }
@@ -446,7 +454,7 @@ function QuotaSection({ profile }: { profile: Profile }) {
  * and connects offer only enabled models, and the account pool sends a chat
  * only to a profile that has its model enabled.
  */
-function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): void }) {
+function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): Promise<unknown> }) {
   const [enabled, setEnabled] = useState(() => new Set(profile.models));
   const [filter, setFilter] = useState("");
   useEffect(() => setEnabled(new Set(profile.models)), [profile.models.join("\n")]);
@@ -455,7 +463,9 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   const shown = all.filter((m) => [m, name(m)].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
   const commit = (next: Set<string>) => {
     setEnabled(next);
-    onSave([...next].sort());
+    // Not saved (the page says why): back to what the station has.
+    const before = profile.models;
+    void onSave([...next].sort()).then((saved) => { if (saved === undefined) setEnabled(new Set(before)); });
   };
   const toggle = (m: string) => {
     const next = new Set(enabled);

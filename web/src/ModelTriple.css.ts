@@ -11,6 +11,7 @@ import { chooserChevron, modelPoolItem } from "./styles/chat.css.ts";
 import { onboardingRow } from "./cloud/settings.css.ts";
 import { sessionDetails } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
+import { spinner } from "./styles/waiting.css.ts";
 
 /** A series of models in the control's list: its models one under another, each as wide as the list. */
 export const series = style({ display: "flex", flexDirection: "column", gap: 1 });
@@ -157,3 +158,7 @@ globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.text
 globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", marginTop: "-5px" });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${onboardingRow} ${input}`, { flex: "1", minWidth: "0" });
+
+/** A pick on its way (pick.save): a small ring where the chevron goes. */
+export const tripleSpinner = style({});
+globalStyle(`${tripleSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });

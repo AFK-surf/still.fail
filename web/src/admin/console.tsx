@@ -9,9 +9,9 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
-import { useToast } from "../toast.tsx";
+import { failure, useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, Time, ICON, type Presence, type Tone } from "../ui.tsx";
-import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
+import { useAccounts, useSignOut, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type FeedbackStatus } from "../cloud/api.ts";
 import { Prose } from "../Prose.tsx";
 import { Avatar } from "../cloud/gate.tsx";
@@ -95,6 +95,7 @@ const narrow = () => matchMedia("(max-width: 700px)").matches;
 
 export function Console({ account }: { account: Account }) {
   const atIndex = useLocation().pathname === "/";
+  const signOut = useSignOut();
   return (
     <div className={shellCss.shell} data-detail={!atIndex}>
       <nav className={nav.sidebar} aria-label="管理后台">
@@ -110,7 +111,7 @@ export function Console({ account }: { account: Account }) {
         </div>
         <div className={`${nav.navFootRow} ${css.adminFoot}`}>
           <span className={css.adminAccount}><Avatar account={account} size={20} /><span className={css.accountEmail}>{account.email}</span></span>
-          <IconButton label="退出登录" icon={LogOut} onClick={() => void signOut(account.sub)} />
+          <IconButton label="退出登录" icon={LogOut} busy={signOut.busy(account.sub)} onClick={() => void signOut.signOut(account.sub)} />
         </div>
       </nav>
       <main className={shellCss.main}>
@@ -286,7 +287,7 @@ function CodeRow({ account, row }: { account: Account; row: Row }) {
   const toast = useToast();
   const [revoking, setRevoking] = useState(false);
   const revoke = useAction(() => admin.revokeCode(account.sub, row.id), () => { setRevoking(false); toast("已撤回邀请码"); });
-  const copy = () => void navigator.clipboard.writeText(row.url ?? "").then(() => toast("已复制注册链接"));
+  const copy = () => void navigator.clipboard.writeText(row.url ?? "").then(() => toast("已复制注册链接"), (e: unknown) => toast(`没能复制：${failure(e)}`));
   const at = row.state === "used" ? stamp(row, "used_at") : row.state === "revoked" ? stamp(row, "revoked_at") : stamp(row, "created_at");
   return (
     <div className={css.row} data-static>
@@ -499,7 +500,7 @@ function NewCodeDialog({ account, onClose }: { account: Account; onClose(): void
         <>
           <Field label="备注" htmlFor="code-note" hint="可选：给谁的，方便之后认出来。">
             <input id="code-note" className={controlsCss.input} value={note} autoFocus maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="例如：给产品团队的小王"
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) make.run(); }} />
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && !make.busy) make.run(); }} />
           </Field>
           <Field label="有效期">
             <Select value={days} onChange={setDays} label="有效期" options={DAYS.map((d) => ({ value: String(d), label: `${d} 天` }))} />
