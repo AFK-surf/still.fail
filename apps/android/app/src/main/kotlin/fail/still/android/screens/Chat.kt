@@ -736,9 +736,14 @@ private fun Flyer(motion: ChatMotion, atWork: List<AgentAtWork>) {
     val agent = atWork.firstOrNull { it.key == turn.agent } ?: return
     val density = LocalDensity.current
     val ring = with(density) { 3.dp.toPx() }
+    // Said where it is put (the list's rows are placed and drawn in the same frame, after it is composed): the real avatar
+    // hides in the frame this one first shows, and shows in the frame it is gone.
+    DisposableEffect(Unit) { onDispose { motion.copied = null } }
     Box(
         Modifier.offset {
-            val at = motion.flight(density)?.at ?: Offset(-10_000f, 0f)
+            val f = motion.flight(density)
+            motion.copied = if (f != null) turn.agent else null
+            val at = f?.at ?: Offset(-10_000f, 0f)
             IntOffset((at.x - ring).roundToInt(), (at.y - ring).roundToInt())
         }.graphicsLayer {
             val f = motion.flight(density)
@@ -1162,7 +1167,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
     ) {
         // The avatar where its message lands (the messages' 18dp), its ring 3dp round it.
         // Read as it is drawn: hidden and shown in the very frame its flying copy takes over and lets go.
-        Box(Modifier.size(24.dp).offset(x = (-3).dp).graphicsLayer { alpha = if (motion?.away(agent.key) == true) 0f else 1f }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(24.dp).offset(x = (-3).dp).graphicsLayer { alpha = if (motion?.copied == agent.key) 0f else 1f }, contentAlignment = Alignment.Center) {
             Box(Modifier.onGloballyPositioned { motion?.activityAvatars?.set(agent.key, it) }) { AgentAvatar(agent.maker, agent.runtime) }
             WorkRing(waiting = wait != null, leaving = leaving, shared = motion?.ring)
         }
