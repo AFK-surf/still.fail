@@ -34,22 +34,29 @@ import kotlinx.coroutines.launch
 import fail.still.android.data.ChatMessage
 import fail.still.android.ui.Ease
 import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 internal val LocalChatMotion = staticCompositionLocalOf<ChatMotion?> { null }
 
 /**
  * A message an agent posts while its activity shows comes out of the activity's avatar, one at a time (web
- * useEmissions): the activity folds to its avatar (Fold), the avatar floats to where the message goes (Float), the
- * message comes out of it, growing into its place (Spit), and the avatar goes on down to where the activity now is,
- * which unfolds again (Return). Until its turn a message waits out of the list. With animations off messages just
+ * useEmissions): the activity folds to its avatar (Fold), the avatar hops to where the message goes (Float: up, slowing,
+ * then falling ever faster, stretched, stopping dead there), the message comes out of it as it lands, the avatar
+ * flattened by the fall and springing back (Spit), and the avatar goes on down to where the activity now is, which
+ * unfolds again (Return). Until its turn a message waits out of the list. With animations off messages just
  * appear, and so do those no one watches come out: arriving while the page is not in front or the reader has scrolled
  * up, and all still waiting when that happens.
  */
 @Stable
 internal class ChatMotion(private val reduced: Boolean) {
-    enum class Pose(val ms: Int) { Fold(170), Float(240), Spit(380), Return(320) }
+    enum class Pose(val ms: Int) { Fold(170), Float(440), Spit(380), Return(320) }
+    /** Where the flying avatar's 18dp face is, in the pane, and how it is scaled about its middle (`sx`, `sy`). */
+    class Flying(val at: Offset, val sx: Float, val sy: Float)
     class Turn(val seq: Long, val agent: String, val pose: Pose)
 
     private val decided = HashMap<Long, Boolean>()
@@ -153,10 +160,13 @@ internal class ChatMotion(private val reduced: Boolean) {
 
     /**
      * Where the flying avatar's 18dp face is, in the pane, or null when none flies: each frame between where it set out
-     * and where it is going, both read anew (the message growing moves the one, the activity pushed down the other),
-     * the way eased cubic-out; `swell` its scale, a small swell as it lets the message out.
+     * and where it is going, both read anew (the message growing moves the one, the activity pushed down the other).
+     * Out (web useEmissions → float): thrown up from the avatar, it slows to the top (34dp over the higher end), hangs
+     * a moment, then drops ever faster onto the landing, stretched more as it falls; across, it eases in and out.
+     * Letting the message out (spit): flattened by the landing (116% wide, 80% high), it springs back (stiffness 520,
+     * damping 14, as the web's), with a small swell. Home (return): eased cubic-out.
      */
-    fun flight(density: Density): Pair<Offset, Float>? {
+    fun flight(density: Density): Flying? {
         val c = current ?: return null
         if (c.pose == Pose.Fold) return null
         val pane = pane?.takeIf { it.isAttached } ?: return null
@@ -166,11 +176,29 @@ internal class ChatMotion(private val reduced: Boolean) {
         // there, and the activity moves down), 3dp down its row as a message's avatar sits.
         val landing = at(landings[c.seq]) ?: at(activityRows[c.agent])?.let { it + Offset(0f, with(density) { 3.dp.toPx() }) } ?: return null
         val t = clock.value
-        val e = 1f - (1f - t) * (1f - t) * (1f - t)
         return when (c.pose) {
-            Pose.Float -> lerp(avatar, landing, e) to 1f
-            Pose.Spit -> landing to 1f + 0.16f * sin(PI.toFloat() * min(1f, t / 0.6f))
-            else -> lerp(landing, avatar, e) to 1f
+            Pose.Float -> {
+                val top = min(avatar.y, landing.y) - with(density) { HOP.toPx() }
+                val up = t / RISE
+                val down = (t - RISE) / (1f - RISE)
+                val y = if (t < RISE) avatar.y + (top - avatar.y) * (1f - (1f - up).pow(2.5f)) else top + (landing.y - top) * down.pow(2.5f)
+                val across = if (t < 0.5f) 4f * t * t * t else 1f - (-2f * t + 2f).pow(3) / 2f
+                val stretch = if (t < RISE) 0.07f * sin(PI.toFloat() * up) else 0.14f * down * down
+                Flying(Offset(avatar.x + (landing.x - avatar.x) * across, y), 1f - stretch * 0.6f, 1f + stretch)
+            }
+            Pose.Spit -> {
+                val k = settle(t * Pose.Spit.ms / 1000f)
+                val swell = 1f + 0.12f * when {
+                    t < 0.4f -> smooth(t / 0.4f)
+                    t < 0.75f -> 1f - smooth((t - 0.4f) / 0.35f)
+                    else -> 0f
+                }
+                Flying(landing, swell * (1f + 0.16f * k), swell * (1f - 0.2f * k))
+            }
+            else -> {
+                val e = 1f - (1f - t) * (1f - t) * (1f - t)
+                Flying(lerp(landing, avatar, e), 1f, 1f)
+            }
         }
     }
 
@@ -238,6 +266,20 @@ internal fun Modifier.flashed(motion: ChatMotion?, ts: String?, color: Color): M
     }
 
 private fun lerp(a: Offset, b: Offset, t: Float) = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
+
+/** The hop: how high over the higher of its two ends, and the share of its time spent going up. */
+private val HOP = 34.dp
+private const val RISE = 0.42f
+
+/** What is left, at `s` seconds, of a spring let go from 1 (stiffness 520, damping 14, mass 1: under-damped). */
+private fun settle(s: Float): Float {
+    val w0 = sqrt(520f)
+    val z = 14f / (2f * w0)
+    val wd = w0 * sqrt(1f - z * z)
+    return exp(-z * w0 * s) * (cos(wd * s) + z * w0 / wd * sin(wd * s))
+}
+
+private fun smooth(t: Float) = t * t * (3f - 2f * t)
 
 /** Its top `share`, what shows of a message unrolling from its avatar (the web's clip-path inset from the bottom). */
 private class TopShare(private val share: Float) : Shape {

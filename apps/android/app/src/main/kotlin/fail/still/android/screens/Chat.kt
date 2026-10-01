@@ -360,6 +360,9 @@ internal class Here(val station: String, val of: ChatOf, val view: ChatView, val
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key
 }
 
+/** How an activity glides to a new place (web useActivityGlide: a spring, 0.3s, no bounce). */
+private val ACTIVITY_GLIDE = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 300f, visibilityThreshold = IntOffset(1, 1))
+
 /** The list's gap between messages (web mobile: --list-gap 20px). */
 private val GAP = 20.dp
 
@@ -683,7 +686,11 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 // Only what goes from the chat fades out (an activity done, a message dropped from the outbox); rows going
                 // because the window moved or was put elsewhere (a page in at the other end, the latest page) are gone at once.
                 val fades = row is Entry.Working || row is Entry.Out || row is Entry.Floor
-                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
+                // An activity pushed by what comes in above it (a message, one coming out of an avatar) glides to its new
+                // place, going on from where it is and its speed when pushed again (web useActivityGlide); folded to an
+                // avatar that is out flying it shows nothing, and is put there at once for the avatar to fly to.
+                val glides = row is Entry.Working && !motion.away(row.agent.key)
+                Box(Modifier.animateItem(fadeInSpec = null, placementSpec = if (glides) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.
@@ -729,11 +736,13 @@ private fun Flyer(motion: ChatMotion, atWork: List<AgentAtWork>) {
     val ring = with(density) { 3.dp.toPx() }
     Box(
         Modifier.offset {
-            val at = motion.flight(density)?.first ?: Offset(-10_000f, 0f)
+            val at = motion.flight(density)?.at ?: Offset(-10_000f, 0f)
             IntOffset((at.x - ring).roundToInt(), (at.y - ring).roundToInt())
         }.graphicsLayer {
-            val swell = motion.flight(density)?.second ?: 1f
-            scaleX = swell; scaleY = swell
+            val f = motion.flight(density)
+            scaleX = f?.sx ?: 1f; scaleY = f?.sy ?: 1f
+            // Squashed and stretched standing on its foot, the face's bottom (9dp under its middle).
+            translationY = 9.dp.toPx() * (1f - scaleY)
         }.size(24.dp),
         contentAlignment = Alignment.Center,
     ) {

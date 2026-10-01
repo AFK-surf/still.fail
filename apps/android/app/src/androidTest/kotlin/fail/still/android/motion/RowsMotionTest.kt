@@ -76,6 +76,23 @@ class RowsMotionTest {
         r.end()
     }
 
+    /** Something said above the activity while it shows: the activity glides down to its new place, not there at once. */
+    @Test
+    fun activityPushedDown() {
+        val h = open(asked)
+        val r = h.record("activity-pushed")
+        h.fake.put(topic, chat(asked, running = true))
+        h.deliver()
+        r.frames(30)
+        h.fake.put(topic, chat(asked + Fixtures.mine(6, "顺便看一下 Safari 上那个按钮", later(), said = true), running = true))
+        h.deliver()
+        r.frames(50)
+        h.fake.put(topic, chat(asked + Fixtures.mine(6, "顺便看一下 Safari 上那个按钮", later(), said = true), running = false))
+        h.deliver()
+        r.frames(40)
+        r.end()
+    }
+
     /** Two replies at once: one after the other, the second straight from where the first left the avatar. */
     @Test
     fun twoRepliesOneAfterTheOther() {
