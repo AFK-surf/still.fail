@@ -21,6 +21,7 @@ pub mod login;
 pub mod machine_logins;
 pub mod machine_sessions;
 pub mod mcp;
+pub mod migrations;
 pub mod no_keychain;
 pub mod pool;
 pub mod ports;

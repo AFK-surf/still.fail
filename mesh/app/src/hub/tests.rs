@@ -2184,3 +2184,29 @@ async fn codex_model_efforts_validate_new_chats_changes_and_pinned_accounts() {
     r.hub.configure(&key, SessionChange { profile: Some(None), model: None, effort: Some(None) }).await.unwrap();
     assert_eq!(r.session(&key).effort, None);
 }
+
+#[tokio::test]
+async fn a_session_from_before_a_change_is_told_it_once_and_a_new_one_never() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    assert!(!r.claude.last().prompts()[0].contains("still.fail changed how you work"), "a new session has today's instructions");
+    r.call(&key, "chat_state", json!({ "kind": "all_done", "done": "答完了它问的事" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    // As a session from before the notes: told them with its next turn, once.
+    r.store.set_told_notes(&key, 0).unwrap();
+    r.accept(&reply(&m, "9999.1", "还有一件")).await;
+    settle().await;
+    let prompts = r.claude.last().prompts();
+    assert!(prompts.last().unwrap().starts_with("[still.fail changed how you work"), "{:?}", prompts.last());
+    assert_eq!(r.store.told_notes(&key).unwrap(), crate::migrations::latest());
+    r.call(&key, "chat_state", json!({ "kind": "all_done", "done": "答完了它问的事" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    r.accept(&reply(&m, "9999.2", "再一件")).await;
+    settle().await;
+    assert!(!r.claude.last().prompts().last().unwrap().contains("still.fail changed how you work"));
+}

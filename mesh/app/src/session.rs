@@ -829,6 +829,15 @@ impl SessionActor {
                     None => text,
                 }
             };
+            // What changed in how it works since it was last told (migrations.rs): once, before what it is handed.
+            let told = deps.store().told_notes(&self.key).unwrap_or(crate::migrations::latest());
+            let prompt = match crate::migrations::untold(told) {
+                notes if notes.is_empty() => prompt,
+                notes => {
+                    let _ = deps.store().set_told_notes(&self.key, crate::migrations::latest());
+                    format!("{notes}\n\n{prompt}")
+                }
+            };
             // The runtime may have started a turn on its own (late input became a turn); join it.
             if agent.busy() && agent.steer(&prompt).await {
                 return Ok(());

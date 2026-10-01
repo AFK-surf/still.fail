@@ -892,6 +892,11 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
     if !has("turns", "wait_for")? {
         db.execute_batch("ALTER TABLE turns ADD COLUMN wait_for TEXT")?;
     }
+    // Came with migration notes (migrations.rs): the last one each session was told. A session from before them was told
+    // none.
+    if !has("sessions", "told_notes")? {
+        db.execute_batch("ALTER TABLE sessions ADD COLUMN told_notes INTEGER")?;
+    }
     // Came with need_help's `need`: what a person has to give or do.
     if !has("turns", "need")? {
         db.execute_batch("ALTER TABLE turns ADD COLUMN need TEXT")?;
@@ -1209,11 +1214,13 @@ impl Store {
     pub fn insert_session(&self, s: &NewSession) -> Result<()> {
         self.with(|i, changes| {
             i.db.execute(
-                "INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     s.key, s.connect, s.scope.unwrap_or(SessionScope::Thread).as_str(), s.title, s.created_by, s.runtime, s.profile,
-                    s.profile_pinned as i64, s.model, s.effort, s.workspace, s.cwd, s.runtime_session_id, s.token, s.created_at, s.last_active_at
+                    s.profile_pinned as i64, s.model, s.effort, s.workspace, s.cwd, s.runtime_session_id, s.token, s.created_at, s.last_active_at,
+                    // A new session begins with today's instructions: no note is news to it.
+                    crate::migrations::latest()
                 ],
             )?;
             changes.push(StoreChange::Session(s.key.clone()));
@@ -2040,6 +2047,18 @@ impl Store {
     }
 
     /// What a turn needs of a person once it ends as need_help (`need`), in the agent's words.
+    /// The last migration note a session was told (migrations.rs); 0 for one never told any.
+    pub fn told_notes(&self, key: &str) -> Result<i64> {
+        self.with(|i, _| Ok(i.db.query_row("SELECT told_notes FROM sessions WHERE key = ?", [key], |r| r.get::<_, Option<i64>>(0)).optional()?.flatten().unwrap_or(0)))
+    }
+
+    pub fn set_told_notes(&self, key: &str, n: i64) -> Result<()> {
+        self.with(|i, _| {
+            i.db.execute("UPDATE sessions SET told_notes = ? WHERE key = ?", params![n, key])?;
+            Ok(())
+        })
+    }
+
     pub fn set_need(&self, id: &str, what: &str) -> Result<()> {
         self.with(|i, _| {
             i.db.execute("UPDATE turns SET need = ? WHERE id = ?", params![what, id])?;
