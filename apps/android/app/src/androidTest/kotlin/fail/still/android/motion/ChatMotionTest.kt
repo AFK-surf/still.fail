@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextReplacement
 import fail.still.android.Screen
 import fail.still.android.data.ChatOf
 import fail.still.android.data.Topics
+import fail.still.android.data.NewChatView
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -194,11 +195,16 @@ class ChatMotionTest {
         val made = Topics.chat(Fixtures.STATION, ChatOf.Session("new:1"))
         h.fake.answer = { name, _ ->
             when (name) {
-                "chat.create" -> buildJsonObject { put("key", "new:1") }
+                "newChat.create" -> buildJsonObject { put("key", "new:1") }
                 "chat.send" -> { h.fake.put(made, Fixtures.chat(emptyList(), listOf(Fixtures.outgoing("out-1", text)), thread = null, title = text)); JsonNull }
                 else -> JsonNull
             }
         }
+        h.fake.put(Topics.newChat(Fixtures.WS), NewChatView(
+            kept = Fixtures.STATION, stations = listOf(Fixtures.station), any = true, station = Fixtures.station,
+            model = Fixtures.station.models.first(), runtime = "claude", efforts = listOf("high"),
+            accounts = emptyList(), pickAccount = false, waiting = false,
+        ))
         h.launch(listOf(Screen.Home, Screen.NewChat))
         h.type(text)
         h.keyboard()
