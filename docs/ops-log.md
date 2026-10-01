@@ -26,6 +26,7 @@
 - 去掉「侧栏头像 / 会话列表的头像」设置（remove-row-picture-setting）：web 外观页、手机 web 和安卓的外观里都没了；手机 web 和安卓的主题从三行列表改成三段 switch。core 的 chats 视图 `leading` 固定为 `agents`（字段和 `rowPicture` 偏好都留着，旧客户端的这项设置不再起作用，不报错）。只改客户端，web 和 wasm 一起跟部署走，安卓要发一版，cloud 和 station 不用动。上线后验：web 设置 → 外观只剩主题；有别人参与的 chat，行尾先是 agent 标志、后是人的头像；手机外观页主题是三段 switch，点深色立刻变深色。
 - 手机上在官网 demo 里划也能滚页面（site-demo-scroll-chain）：只改官网（`web/src/demo/demo.css.ts`），部署 `site` 即可，App 和 cloud 不动。上线后验：手机打开 still.fail，手指放在 demo 里往上划，列表到底后页面接着往下走。
 - 安卓从设置手势返回时往左退（android-settings-back-left）：设置从左边进来，点返回本来就往左退，但系统返回手势把它往右推了出去。只改了安卓 app（`App.kt`），要发一版安卓才能用上，cloud、station、web 都不动。验证：首页左上角齿轮进设置，从屏幕边缘划返回，设置跟着手指往左走，首页从右边露出来，阴影在设置的右边。
+- 官网手机版 demo 的框改成大圆角（site-demo-phone-radius）：宽 ≤747px 时框 36px、光边 37px（输入框胶囊 26px + 10px 间距，同心），手机 App 顶上留 24px 状态栏的位置。只改官网，部署 `site` 即可。上线后验：手机打开 still.fail，demo 四角是大圆角，和底部输入框同心，标题栏不贴顶。
 
 下面各条的 cloud、web、admin 部分已经随 1bf61c4 上线（2026-10-01 11:13），剩下的是要发版的安卓和桌面部分。
 

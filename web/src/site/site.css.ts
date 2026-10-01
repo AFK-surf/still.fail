@@ -270,20 +270,22 @@ export const stageGlow = style({
  */
 const beamAngle = createVar({ syntax: "<angle>", inherits: false, initialValue: "0deg" });
 const turn = keyframes({ to: { vars: { [beamAngle]: "360deg" } } });
+/** Where the demo shows the phone's app (under 700 wide, the box being the page's width less its margins): its box
+ *  has a phone's large corners, around its composer's: the capsule's 26px plus the 10px it sits in from the box. */
+const PHONE_BOX = "screen and (max-width: 747px)";
 export const edge = style({
   position: "relative", padding: "1px", borderRadius: "20px",
   background: `conic-gradient(from ${beamAngle}, transparent 0 72%, ${EMBER} 84%, #FFE2D2 89%, transparent 95%), ${ink(14)}`,
   animation: `${turn} 7s linear infinite`,
-  "@media": { [NARROW]: { borderRadius: "14px" }, [STILL]: { animation: "none" } },
+  "@media": { [NARROW]: { borderRadius: "14px" }, [PHONE_BOX]: { borderRadius: "37px" }, [STILL]: { animation: "none" } },
 });
 /** The demo's box (demo/): the app in it, at its size. */
 export const demo = style({
   position: "relative", height: "720px", borderRadius: "19px", overflow: "hidden", background: vars.canvas,
-  "@media": { [NARROW]: { borderRadius: "13px", height: "620px" } },
+  "@media": { [NARROW]: { borderRadius: "13px", height: "620px" }, [PHONE_BOX]: { borderRadius: "36px" } },
 });
 /** The demo's opening frame, built into the page: the phone's app where the box is narrow (as the demo picks: under
  *  700 wide, the box being the page's width less its margins), the desktop's elsewhere. */
-const PHONE_BOX = "screen and (max-width: 747px)";
 export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
 export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "550", whiteSpace: "nowrap" });
