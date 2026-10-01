@@ -75,10 +75,11 @@ export const m = style({
         },
       },
     },
-    // Wider than a phone (a foldable opened, a phone on its side): the app keeps a phone's column in the middle, its
-    // pages moving within it; the page's colour goes on to the edges.
-    "(min-width: 721px)": {
-      left: "calc(50% - 360px)", right: "calc(50% - 360px)", boxShadow: "0 0 0 100vmax var(--m-bg)",
+    // Wider than a phone (a foldable opened, a phone on its side; ../app.tsx WIDE): the pages keep a column up to 680
+    // wide in the middle, with at least 72 of room either side (the list's button sits in the left's); the page's
+    // colour goes on to the edges.
+    "(min-width: 680px)": {
+      left: "max(72px, calc(50% - 340px))", right: "max(72px, calc(50% - 340px))", boxShadow: "0 0 0 100vmax var(--m-bg)",
     },
   },
 });

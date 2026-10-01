@@ -4,7 +4,7 @@
 import { useRef, useState } from "react";
 import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, ChevronDown, Edit, Filter, Pin, Settings, Unplug } from "../icons.tsx";
+import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Pin, Settings, Unplug } from "../icons.tsx";
 import { ask } from "./sheets.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
@@ -65,10 +65,32 @@ export function Home() {
       {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent in a glass ring. */}
       {!none && <div className={css.mHomeToolbar}>
         <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
-          <button type="button" className={css.mNewChat} onClick={() => app.push(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
+          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
         </div>
       </div>}
     </div>
+  );
+}
+
+/**
+ * The latest chats, over the page from the bottom left on a wider screen (app.tsx WIDE): the list's first few, the open
+ * one marked; a new chat at their head, the whole list at their foot.
+ */
+export function Recent() {
+  const app = useApp();
+  const view = useChats(app.entry.id, false).value;
+  const items = view?.days.flatMap((day) => day.items).slice(0, 6) ?? [];
+  return (
+    <>
+      <div className={css.mRecentHead}>
+        <b>最近的会话</b>
+        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label="新建对话"><Edit size={17} /></button>
+      </div>
+      <div className={css.mRecentRows}>
+        {!view ? <Note text="正在读取会话…" /> : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
+      </div>
+      <button type="button" className={css.mRecentAll} onClick={app.home}>全部会话<ChevronRight size={16} /></button>
+    </>
   );
 }
 
@@ -185,8 +207,10 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     const r = row.getBoundingClientRect();
     menu(new DOMRect(x - 90, r.top, 0, r.height), () => { holding.current = false; setHeld(false); });
   };
+  const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   return (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
+      data-open={app.current === path || undefined}
       aria-label={item.offline ? `${item.title}（${item.offline}）` : undefined}
       onPointerDown={(e) => {
         longPressed.current = false;
@@ -197,7 +221,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       onPointerUp={release} onPointerCancel={release} onPointerLeave={release}
       // A long press has its menu already; a right click with a mouse opens it.
       onContextMenu={(e) => { e.preventDefault(); if (!touched.current) hold(e.currentTarget, e.clientX); }}
-      onClick={() => { if (!longPressed.current) app.push(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
+      onClick={() => { if (!longPressed.current) app.open(path); }}>
       <span className={css.mChatText}>
       <span className={css.mChatLine1}>
         <ChatMark item={item} inline />

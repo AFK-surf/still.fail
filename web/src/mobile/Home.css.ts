@@ -33,6 +33,10 @@ export const mHomeWorkspace = style({
 export const mHomeToolbar = style({
   position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
   display: "flex", justifyContent: "flex-end", padding: "10px 16px calc(10px + var(--m-foot))", pointerEvents: "none",
+  "@media": {
+    // Wider (app.tsx WIDE): at the screen's corner, not the column's.
+    "(min-width: 680px)": { position: "fixed", left: "auto", right: "10px", padding: "0 0 calc(10px + var(--m-foot))" },
+  },
 });
 export const mHomeCapsule = style({
   display: "flex", alignItems: "center", gap: "6px", padding: "6px", borderRadius: "999px", pointerEvents: "auto",
@@ -123,3 +127,19 @@ export const mLastText = style({
 });
 globalStyle(`${mHomeWorkspace} svg`, { flex: "none", color: "var(--m-muted)" });
 globalStyle(`${mEmpty} p`, { fontSize: "14px", color: "var(--m-muted)" });
+
+/** The latest chats (Home.tsx Recent): a head, a few rows, the way to them all. */
+export const mRecentHead = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", flex: "none", padding: "12px 12px 6px 18px",
+  fontSize: "15px",
+});
+export const mRecentRows = style({ flex: "1", minHeight: "0", overflowY: "auto", padding: "0 6px 6px" });
+export const mRecentAll = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", flex: "none", width: "100%", boxSizing: "border-box",
+  padding: "12px 16px 12px 18px", border: "0", borderTop: "0.5px solid var(--m-line)", background: "none",
+  color: "var(--m-accent-ink) !important", fontSize: "14px !important", cursor: "pointer",
+});
+globalStyle(`${mRecentRows} ${mChatRow}`, { height: "60px", padding: "0 12px 0 14px", borderRadius: "14px" });
+globalStyle(`${mRecentRows} ${mChatRow}[data-open]`, { background: "var(--m-accent-bg)" });
+globalStyle(`${mRecentRows} ${mChatRow}[data-open] ${mChatTitle}`, { color: "var(--m-accent-ink)", fontWeight: "600" });
+globalStyle(`${mNewChat}[data-small]`, { width: "32px", height: "32px" });

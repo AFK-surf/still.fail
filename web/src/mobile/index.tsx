@@ -10,7 +10,7 @@ import { ArchiveScreen } from "./Archive.tsx";
 import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
 import { RunSettingsScreen } from "./History.tsx";
-import { Home } from "./Home.tsx";
+import { Home, Recent } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
 import { MemoriesScreen, MemoryScreen } from "./Memory.tsx";
 import { PreviewScreen } from "./Preview.tsx";
@@ -59,7 +59,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
     </Routes>
   );
-  return <MobileShell entry={entry} routes={routes} />;
+  return <MobileShell entry={entry} routes={routes} recent={() => <Recent />} />;
 }
 
 /** A station's page: its station in context, once the workspace's stations are known. */
