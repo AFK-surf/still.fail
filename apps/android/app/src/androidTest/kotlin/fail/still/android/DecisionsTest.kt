@@ -248,11 +248,11 @@ class DecisionsTest {
         assertOneCall(h, "decision.dismiss", gap)
     }
 
-    @Test fun emptyPageSaysSo() {
+    @Test fun initiallyEmptyPageReturns() {
         val h = Harness(rule)
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false))
         h.launch(listOf(Screen.Home, Screen.Decisions))
-        rule.onNodeWithText("没有等你决定的事").assertExists()
+        rule.runOnIdle { assertEquals(listOf(Screen.Home), h.app.stack) }
     }
 
     // ── a text card ──
