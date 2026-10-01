@@ -134,12 +134,12 @@ fun SheetHost(app: AppState) {
                 val target = spec.height * total
                 if (offset.value > 1f) {
                     height.snapTo(target)
-                    offset.animateTo(0f, tween(380, easing = Ease.Arrive))
+                    offset.animateTo(0f, SheetSpring)
                 } else {
-                    height.animateTo(target, tween(320, easing = Ease.Arrive))
+                    height.animateTo(target, SheetSpring)
                 }
             } else {
-                offset.animateTo(height.value, tween(300, easing = Ease.Arrive))
+                offset.animateTo(height.value, SheetSpring)
                 shown = null
             }
         }
@@ -229,6 +229,10 @@ fun SheetHead(title: String, trailing: (@Composable () -> Unit)? = null) {
 class MenuItem(val label: String, val icon: ImageVector?, val action: () -> Unit)
 class MenuSpec(val anchor: Rect, val items: List<MenuItem>, val onDismiss: () -> Unit = {})
 
+// A short, nearly critically damped spring: quick off the mark, soft at its
+// destination, and continuous in speed when the user reverses it.
+private val MenuSpring = motionSpring<Float>(0.24f, bounce = 0.08f, visibilityThreshold = 0.001f)
+
 @Composable
 fun MenuHost(app: AppState) {
     val spec = app.menu
@@ -258,8 +262,8 @@ fun MenuHost(app: AppState) {
         AnimatedVisibility(
             visible,
             Modifier.offset(x, y),
-            enter = fadeIn(tween(200)) + scaleIn(tween(200), 0.9f, origin),
-            exit = fadeOut(tween(150)) + scaleOut(tween(150), 0.9f, origin),
+            enter = fadeIn(tween(160, easing = Ease.Out)) + scaleIn(MenuSpring, 0.9f, origin),
+            exit = fadeOut(tween(120, easing = Ease.CssOut)) + scaleOut(MenuSpring, 0.9f, origin),
         ) {
             Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(C.surface)) {
                 current.items.forEachIndexed { i, item ->
