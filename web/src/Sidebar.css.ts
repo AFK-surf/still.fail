@@ -201,10 +201,15 @@ export const navHead = style({});
  */
 export const glassSide = style({ position: "relative" });
 globalStyle(`${glassSide} > :is(${navHead}, ${navFoot})`, {
-  position: "relative", zIndex: 1, margin: 8, borderRadius: vars.rCard, cornerShape: vars.cornerShape,
+  position: "relative", zIndex: 1, margin: 8,
+  "@media": { [wide]: { minWidth: `calc(${fallbackVar(vars.sidebarW, "240px")} - 17px)` } },
+});
+// The glass is a layer under the card's contents, not the card itself: a backdrop-filter would hold the fixed things in it
+// (the buddy, 更新: brand.css.ts) to the card.
+globalStyle(`${glassSide} > :is(${navHead}, ${navFoot})::before`, {
+  content: "", position: "absolute", inset: 0, zIndex: -1, borderRadius: vars.rCard, cornerShape: vars.cornerShape,
   background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
   backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
-  "@media": { [wide]: { minWidth: `calc(${fallbackVar(vars.sidebarW, "240px")} - 17px)` } },
 });
 globalStyle(`${glassSide} > ${navFoot}`, { marginTop: "auto", borderTop: 0 });
 // In the card the brand keeps its place: 8px in from the card is 16px in from the sidebar, as before.
