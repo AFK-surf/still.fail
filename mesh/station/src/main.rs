@@ -23,6 +23,7 @@
 //! A request's `traceparent` header is passed on to the admin API (see telemetry.rs).
 
 mod errors;
+mod keep;
 mod local;
 mod notify;
 mod telemetry;
@@ -655,7 +656,8 @@ fn strings(value: &Value) -> Vec<String> {
 }
 
 /// Keeps the station's relays still.fail's, the ones browsers reach (relay-only, they know no others), iroh homing
-/// on the nearest: a station in mainland China on the relay there, one abroad on Cloudflare's. Those the cloud adds or
+/// on the nearest: a station in mainland China on the relay there, one abroad on Cloudflare's; it stays on the others
+/// too (`keep::Keepers`), so a device that reaches only some of them still reaches it. Those the cloud adds or
 /// takes away later are put in or taken out as it says so. iroh's public relays are added only while none of ours
 /// answers, so the station can still be reached (the DHT says where), and taken away once one does again, so the
 /// station goes back home: with them in the map beside ours iroh could pick one of them as home, and browsers would
@@ -664,6 +666,8 @@ async fn keep_relays(endpoint: Endpoint, station: Arc<Station>) {
     let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().expect("http client");
     let public: Vec<Arc<iroh::RelayConfig>> = iroh::defaults::prod::default_relay_map().relays();
     let mut ours: Vec<RelayUrl> = relays(&station.state.lock().unwrap());
+    let mut keepers = keep::Keepers::default();
+    keepers.set(&endpoint, &ours);
     let mut added = false;
     loop {
         let now = relays(&station.state.lock().unwrap());
@@ -675,6 +679,7 @@ async fn keep_relays(endpoint: Endpoint, station: Arc<Station>) {
             for url in ours.iter().filter(|url| !now.contains(url)) {
                 endpoint.remove_relay(url).await;
             }
+            keepers.set(&endpoint, &now);
             ours = now;
         }
         // Two tries each: one lost request is not the relay down.

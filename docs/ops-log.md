@@ -17,6 +17,7 @@
 
 ## 待部署
 
+- station 常驻 still.fail 的每个中继，不只「家」那个（station-multi-relay）：只改了 station（新文件 `mesh/station/src/keep.rs`），客户端、cloud 和接口都没动，新旧混跑没问题。要发一版 station 包（`release.sh station`），各台用 `stillfail update` 原地交接。修的是：海外的 station（如 bft，在东京）家中继是 Cloudflare，国内手机经北京或香港中继拨号到不了它。每个中继多一条只有 keep-alive 的连接，Cloudflare 上每台 station 约多 $0.02/月。验证：bft 的 `~/.stillfail/stillfail.log` 里每个中继各有一行 `held on this relay`；`lsof` 能看到 station 连着 39.105.157.122 和 47.76.247.168；Axiom 里安卓连 `d70ccd…` 的 `mesh.connect` 基本都是 OK。
 - 从单台 station 页进连接/Profile 只列这台（station-scoped-lists）：web 用 `?station=<id>`，安卓 Screen.Connects/Profiles 带 station；连接列表某台没连接时按它自己的 overview 显示「还没有连接」，不再等所有 station 回话。只改手机 web 和安卓，安卓要发一版。验证：手机设置 → Station → 某台 → 连接，标题上写「<名字> 上的」，只列这台。
 
 下面各条的 cloud、web、admin 部分已经随 1bf61c4 上线（2026-10-01 11:13），剩下的是要发版的安卓和桌面部分。
