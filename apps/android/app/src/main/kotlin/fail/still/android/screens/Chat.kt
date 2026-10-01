@@ -15,6 +15,7 @@ import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -278,6 +279,9 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
  * The chat's bar: its title from the left, then its people, then its agents' marks (each opens its history); its
  * services and jobs (with a dot when one died lately or a service restarts), and "…", the chat's own page.
  */
+// A quick start and a soft landing, shared by both archive actions.
+private val ArchiveEase = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
+
 @Composable
 private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, modifier: Modifier = Modifier) {
     val app = LocalApp.current
@@ -290,8 +294,8 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
         val canArchive = view.archivable == true && view.archived != true && session != null
         AnimatedVisibility(
             visible = canArchive,
-            enter = fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.85f) + expandHorizontally(tween(240), expandFrom = Alignment.End, clip = false),
-            exit = fadeOut(tween(240)) + scaleOut(tween(240), targetScale = 0.85f) + shrinkHorizontally(tween(240), shrinkTowards = Alignment.End, clip = false),
+            enter = fadeIn(tween(280, easing = ArchiveEase)) + scaleIn(tween(280, easing = ArchiveEase), initialScale = 0.85f) + expandHorizontally(tween(280, easing = ArchiveEase), expandFrom = Alignment.End, clip = false),
+            exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f) + shrinkHorizontally(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.End, clip = false),
         ) {
             val archiving = app.isDoing("chat.archive", "station" to station, "session" to session)
             Box(Modifier.semantics { contentDescription = "归档" }) {
@@ -1050,8 +1054,8 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             // Keep the button alive until its exit finishes; the rest of the row closes the space with it.
             if (decide) AnimatedVisibility(
                 visible = ctx.archiveUnder == m.seq,
-                enter = fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + expandVertically(tween(240), expandFrom = Alignment.Top, clip = false),
-                exit = fadeOut(tween(240)) + scaleOut(tween(240), targetScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + shrinkVertically(tween(240), shrinkTowards = Alignment.Top, clip = false),
+                enter = fadeIn(tween(280, easing = ArchiveEase)) + scaleIn(tween(280, easing = ArchiveEase), initialScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + expandVertically(tween(280, easing = ArchiveEase), expandFrom = Alignment.Top, clip = false),
+                exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + shrinkVertically(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.Top, clip = false),
             ) { ArchiveUnder(ctx, enabled = ctx.archiveUnder == m.seq) }
         }
     }
