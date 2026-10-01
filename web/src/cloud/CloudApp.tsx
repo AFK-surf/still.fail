@@ -7,6 +7,7 @@ import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ServicePage } from "../Preview.tsx";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
+import { WebUpdate } from "../WebUpdate.tsx";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
@@ -33,6 +34,7 @@ import { NAME } from "../channel.ts";
 export function CloudApp() {
   return (
     <ToastProvider>
+      <WebUpdate />
       <Tooltip.Provider delayDuration={400}>
         <BrowserRouter>
           <PageViews />

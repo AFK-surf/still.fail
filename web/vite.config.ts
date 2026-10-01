@@ -41,6 +41,7 @@ export default defineConfig(({ mode }) => {
   // The admin's console reports nothing.
   const posthog = consoleBuild ? null : posthogKey();
   const build = buildNumber();
+  const revision = build ? execFileSync("git", ["rev-parse", "HEAD"], { cwd: here("."), encoding: "utf8" }).trim() : null;
   return {
     root: here(consoleBuild ? "admin" : "."),
     publicDir: here("public"),
@@ -54,7 +55,7 @@ export default defineConfig(({ mode }) => {
         name: "stillfail-build",
         apply: "build",
         generateBundle() {
-          if (!consoleBuild && build) this.emitFile({ type: "asset", fileName: "build.json", source: `${JSON.stringify({ version: build, build: Number(build.split(".")[2]) })}\n` });
+          if (!consoleBuild && build) this.emitFile({ type: "asset", fileName: "build.json", source: `${JSON.stringify({ version: build, build: Number(build.split(".")[2]), revision })}\n` });
         },
       },
     ],
@@ -64,6 +65,7 @@ export default defineConfig(({ mode }) => {
       __BUILT_AT__: JSON.stringify(Date.now()),
       // Which build it is, as the app a message was sent from (src/api.ts).
       __BUILD__: JSON.stringify(build),
+      __WEB_REVISION__: JSON.stringify(revision),
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
       __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
     },

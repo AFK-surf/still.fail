@@ -9,6 +9,9 @@ import { CloudApp } from "./cloud/CloudApp.tsx";
 import { nameTitle } from "./cloud/beta.tsx";
 import { startTelemetry } from "./telemetry.ts";
 
+import { webUpdates } from "./core/webUpdates.ts";
+
+if (import.meta.env.PROD) webUpdates.start();
 followAppearance();
 startScrollbars();
 

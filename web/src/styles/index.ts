@@ -92,6 +92,7 @@ import "../mobile/OpenJobs.css.ts";
 import "../mobile/Settings.css.ts";
 import "../cloud/StationCards.css.ts";
 import "../Versions.css.ts";
+import "../WebUpdate.css.ts";
 import "../RowPicture.css.ts";
 import "../Sidebar.css.ts";
 import "../OpenJobs.css.ts";
