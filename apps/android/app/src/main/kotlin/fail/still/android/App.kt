@@ -120,8 +120,9 @@ sealed interface Screen {
     data object NewChat : Screen { override val id = "new" }
     data object Stations : Screen { override val id = "stations" }
     data class Station(val address: String) : Screen { override val id = "station/$address" }
+    /** An agent’s execution history, opened as a page over its chat. */
+    data class History(val station: String, val of: ChatOf, val key: String, val entry: Long? = null) : Screen { override val id = "history/${Chat(station, of).id}/$key/$entry" }
     /** How an agent runs, changed: its model, how hard it thinks, who runs it. */
-    data class History(val station: String, val of: ChatOf, val key: String, val entry: Long? = null) : Screen { override val id = "history/$station/${of.key}/$key/$entry" }
     data class RunSettings(val station: String, val of: ChatOf, val key: String) : Screen { override val id = "run/$station/$key" }
     /** A profile's models, to pick which may be used. */
     data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
