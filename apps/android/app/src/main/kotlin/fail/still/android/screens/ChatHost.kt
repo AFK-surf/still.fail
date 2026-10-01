@@ -83,6 +83,7 @@ import fail.still.android.ui.ComposerCorner
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.Ease
 import fail.still.android.ui.floating
+import fail.still.android.ui.floatingStill
 import fail.still.android.ui.reducedMotion
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -392,7 +393,7 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
 internal const val SCENE_LEAVE_MS = 140
 
 @Composable
-internal fun HostComposer(host: Host, modifier: Modifier) {
+internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean = true) {
     val spec = host.spec ?: return
     val draft = spec.draft
     val morph = rememberMorph()
@@ -405,7 +406,8 @@ internal fun HostComposer(host: Host, modifier: Modifier) {
         // A capsule floating over the page, which runs on around it.
         Box(Modifier.fillMaxWidth().onSizeChanged { host.composerHeight = it.height }.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)) {
             Column(
-                Modifier.fillMaxWidth().onGloballyPositioned { host.capsule = it }.floating(host.haze, RoundedCornerShape(ComposerCorner))
+                Modifier.fillMaxWidth().onGloballyPositioned { host.capsule = it }
+                    .then(if (overContent) Modifier.floating(host.haze, RoundedCornerShape(ComposerCorner)) else Modifier.floatingStill(RoundedCornerShape(ComposerCorner)))
                     // A tap on the capsule's own room is a tap on the field.
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }
                     .padding(ComposerInset).morph(morph)

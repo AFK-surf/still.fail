@@ -468,5 +468,5 @@ private fun DecisionComposer(item: DecisionItem, placeholder: String?, onField: 
         station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: "发消息",
         onPlus = { openAttach(app, launchers) }, onSend = onReply,
     )
-    HostComposer(host, Modifier.onGloballyPositioned(onField))
+    HostComposer(host, Modifier.onGloballyPositioned(onField), overContent = false)
 }
