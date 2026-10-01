@@ -172,30 +172,23 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchi
           <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
         </div>
       )}
-      {[...messages.map((m) => {
+      {messages.map((m) => {
         const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
         const { enter, emitted, caught } = rowOf(m);
         // Keyed as a whole: a bare [line, row] pair is placed by its index, and an older page coming in above would
         // shift every index and draw every message anew.
         return (
-          <Fragment key={m.outgoing ? `outgoing:${m.outgoing}` : m.seq}>
+          <Fragment key={m.seq}>
             {line}
-            {m.mine
-              ? <OwnMessage message={m} enter={enter} caught={caught} owners={owners} owner={owner} />
-              : <MessageRow message={m} focus={chat.focusLast === true && m.seq === messages.at(-1)?.seq} enter={enter} emitted={emitted} caught={caught} thread={thread}
-                  agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
-                  {...(archiveAt === m.seq ? { archive: onArchive } : {})} />}
+            <MessageRow message={m} focus={chat.focusLast === true && m.seq === messages.at(-1)?.seq} enter={enter} emitted={emitted} caught={caught} thread={thread}
+              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
+              {...(archiveAt === m.seq ? { archive: onArchive } : {})} />
           </Fragment>
         );
-      }),
-      // One flat keyed list: an outbox row keeps its component and DOM when the receipt moves it into messages.
-      ...(chat.newer ? [<div key="newer" className={css.chatNewer} aria-hidden="true"><span className={waitingCss.spinner} /></div>] : []),
-      ...chat.outbox.map((o) => (
-        <Fragment key={`outgoing:${o.id}`}>
-          {null}
-          <OwnMessage pending={o} to={to} locked={chat.offline || !!chat.archived} owners={owners} owner={owner} />
-        </Fragment>
-      ))]}
+      })}
+      {/* The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it. */}
+      {chat.newer && <div className={css.chatNewer} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
+      {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
       {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
       {shown.map(({ agent, leaving }) => (
         <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
@@ -226,29 +219,8 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
 
 const SENDING_SHOWS_MS = 800;
 
-/** The same bubble throughout sending, receipt and agent pickup; only its status changes. */
-const OwnMessage = memo(function OwnMessage({ message, pending, enter, caught, to = null, locked = false, owner }: {
-  message?: ChatMessage; pending?: Outgoing; enter?: true | undefined; caught?: true | undefined;
-  to?: ChatTo | null; locked?: boolean; owners: string; owner: (file: Attachment) => string | null;
-}) {
-  // A receipt must not remove data-enter midway through its animation or restart it from the beginning.
-  const [entered] = useState(() => pending ? true : enter);
-  const words = message ?? pending!;
-  return (
-    <MineMessage data-author="你" data-ts={message?.ts} data-role="person" data-enter={entered} data-caught={caught}
-      data-unsent={pending?.state === "failed" || undefined}>
-      <MineWords message={words} owner={owner} />
-      {pending ? <OutboxStatus o={pending} to={to} locked={locked} />
-        : message?.waiting
-          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
-          : <Time className={conversationCss.msgTime} stamp={message?.time?.createdAt} />}
-    </MineMessage>
-  );
-}, (a, b) => a.enter === b.enter && a.caught === b.caught && a.owners === b.owners && a.to === b.to && a.locked === b.locked
-  && a.pending === b.pending && (a.message === b.message || !!a.message && !!b.message && sameMessage(a.message, b.message)));
-
-/** A message on its way, or failed with a way to send it again or drop it. */
-function OutboxStatus({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: boolean }) {
+/** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
+function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; locked: boolean; owner: (file: Attachment) => string | null }) {
   const sending = useChatSend();
   const station = useStation().address;
   const toast = useToast();
@@ -263,7 +235,8 @@ function OutboxStatus({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locke
   const showsAt = o.createdAt + SENDING_SHOWS_MS;
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
-    <>
+    <MineMessage data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
+      <MineWords message={o} owner={owner} />
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -278,7 +251,7 @@ function OutboxStatus({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locke
               <DoingShown state={drop} className={css.msgUnsentSpinner} idle={<Trash size={12} strokeWidth={2} />} />删除</button>
           </div>
         : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
-    </>
+    </MineMessage>
   );
 }
 
@@ -823,7 +796,7 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, focus, owners }: {
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, focus }: {
   focus?: boolean;
   message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
@@ -836,7 +809,17 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   /** Its chat is all done: 归档 under it (ArchiveOption). */
   archive?: (() => void) | undefined;
 }) {
-  if (m.mine) return <OwnMessage message={m} enter={enter} caught={caught} owners={owners} owner={owner} />;
+  if (m.mine) {
+    return (
+      <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
+        <MineWords message={m} owner={owner} />
+        {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
+        {m.waiting
+          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
+          : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
+      </MineMessage>
+    );
+  }
   // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
   if (m.system) return <SystemNotice text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
@@ -892,7 +875,8 @@ export function MineMessage({ children, ...data }: Data & { children: ReactNode 
   return <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} {...data}>{children}</div>;
 }
 
-/** A viewer's words, quotes and files, kept mounted as its sending status changes. */
+/** What a viewer's own message says, its quotes and files with it: the same whether the station has it yet (a
+ * MessageRow) or it is still on its way (an OutboxRow), so it does not change as the one takes the other's place. */
 function MineWords({ message: m, owner }: { message: Pick<ChatMessage, "text" | "quotes" | "attachments">; owner: (file: Attachment) => string | null }) {
   return (
     <>

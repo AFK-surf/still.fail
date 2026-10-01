@@ -228,8 +228,9 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     for (const el of list.querySelectorAll<HTMLElement>(mine)) {
       if (before.has(el) || rows.includes(el)) continue;
       el.style.animation = "none";
-      // Not visibility: what eases in inside it (its time's "sending") would show through.
-      el.style.opacity = "0";
+      // Hide the row and its delayed status together, without changing opacity: the chat's emphasis transition
+      // would otherwise fade the real row back in after its flying copy has already gone.
+      el.dataset.sendCovered = "";
       rows.push(el);
     }
     return rows.findLast((el) => el.isConnected) ?? null;
@@ -251,7 +252,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     clock?.cancel();
     ghost?.remove();
     stand.remove();
-    for (const el of rows) el.style.opacity = "";
+    for (const el of rows) delete el.dataset.sendCovered;
     delete root.dataset.madeHint;
     // The hint eases back (data-sent), then the field is as it was.
     setTimeout(() => {
@@ -268,7 +269,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       // The first, or the one that took its place: drawn as it is now.
       of = row;
       const next = row.cloneNode(true) as HTMLElement;
-      next.style.opacity = "";
+      delete next.dataset.sendCovered;
       for (const el of next.querySelectorAll<HTMLElement>("[data-shows-at]")) showAt(el);
       if (copy) copy.replaceWith(next); else ghost.append(next);
       copy = next;
