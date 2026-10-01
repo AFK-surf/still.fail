@@ -60,8 +60,12 @@ function carryOverUserData(): void {
   if (dir !== app.getPath("userData")) app.setPath("userData", dir);
 }
 
-// The beta app never had a name before: what the released app left there is the released app's.
-if (!BETA) carryOverUserData();
+// STILLFAIL_USER_DATA: the app's data somewhere else (signed in apart, a core of its own), for trying it against a dev
+// cloud beside the app in use; with STILLFAIL_DATA (station.ts) and STILLFAIL_CLOUD_ORIGIN nothing of the real one is
+// touched. Unset, as always outside tests. The beta app never had a name before: what the released app left there is
+// the released app's.
+if (process.env.STILLFAIL_USER_DATA) app.setPath("userData", process.env.STILLFAIL_USER_DATA);
+else if (!BETA) carryOverUserData();
 
 // A standard, secure origin: the page's absolute paths, storage and clipboard work as on https://.
 protocol.registerSchemesAsPrivileged([
@@ -733,8 +737,9 @@ async function stopStation(): Promise<void> {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  // Run from the source (Electron's own app with this directory, dev.sh), the links open it with the directory.
-  for (const scheme of SCHEMES) {
+  // Run from the source (Electron's own app with this directory, dev.sh), the links open it with the directory. One
+  // tried apart (STILLFAIL_USER_DATA) leaves the links to the app in use.
+  for (const scheme of process.env.STILLFAIL_USER_DATA ? [] : SCHEMES) {
     if (app.isPackaged) app.setAsDefaultProtocolClient(scheme);
     else app.setAsDefaultProtocolClient(scheme, process.execPath, [app.getAppPath()]);
   }

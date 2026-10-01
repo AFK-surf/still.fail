@@ -30,9 +30,11 @@ export class LocalStation {
   /**
    * The data directory: ~/.stillfail; ~/.ember while that is where the data still is (only there, not moved yet), so
    * the log goes where the data is and the station, given it, moves it (nothing may be put in ~/.stillfail first: a
-   * directory with anything in it is taken for one in use, and the old one is then left where it is).
+   * directory with anything in it is taken for one in use, and the old one is then left where it is). $STILLFAIL_DATA
+   * instead when set, as stillfail-station itself takes it: for trying the app with a station of its own (a dev cloud).
    */
   get data(): string {
+    if (process.env.STILLFAIL_DATA) return process.env.STILLFAIL_DATA;
     const now = join(homedir(), ".stillfail");
     const former = join(homedir(), ".ember");
     return !inUse(now) && inUse(former) ? former : now;
