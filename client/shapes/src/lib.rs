@@ -886,6 +886,24 @@ pub struct Overview {
     pub updates: Vec<SoftwareVersion>,
     /// Its agents' processes, in a line.
     pub processes_text: String,
+    /// How much of the disk it takes (none from a station older than the footprint page, which then is not offered).
+    pub footprint: Option<FootprintBrief>,
+}
+
+/// How much of the disk a station takes, for the row that opens its footprint page.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintBrief {
+    /// None before its first measure.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub bytes: Option<i64>,
+    #[serde(default)]
+    pub scanning: bool,
+    /// What the core says of it: 12.3 GB, 正在统计….
+    #[serde(default)]
+    pub text: String,
 }
 
 #[typeshare]
@@ -2763,6 +2781,149 @@ pub struct HistoryView {
     pub loaded: bool,
     /// Older entries exist: `history.older` loads the page before them.
     pub more: Option<bool>,
+}
+
+// ── a station's usage (client/core/src/footprint.rs) ─────────────────────────
+
+/// How much of the machine a station takes, as its footprint page shows it: everything in words, with what can be cleaned
+/// and how (each clean a choice: the call, the chats it is for and the questions asked before it, in order).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintView {
+    /// Measured at least once: before, the page says it is being measured.
+    pub measured: bool,
+    pub scanning: bool,
+    /// The viewer may clean up (an owner or admin).
+    pub manage: bool,
+    /// 3 分钟前统计, 正在统计….
+    pub checked_text: String,
+    /// still.fail 在这台机器上占用.
+    pub lead: String,
+    pub total_text: String,
+    /// The disk in one bar: the station's parts, the rest that is used, and what is free (percent of the disk).
+    pub bar: Vec<FootprintSegment>,
+    pub legend: Vec<FootprintLegend>,
+    pub parts: Vec<FootprintPart>,
+    /// Beside the data directory: shown, not counted or cleaned.
+    pub elsewhere: Vec<FootprintPart>,
+    pub elsewhere_note: String,
+    /// What can be cleaned up (only for those who may).
+    pub actions: Vec<FootprintAction>,
+    /// Why there is nothing to clean, or why the viewer cannot.
+    pub actions_note: Option<String>,
+    pub chats: Vec<FootprintChat>,
+    /// 213 个 chat · 8.6 GB.
+    pub chats_text: String,
+    /// Chats of others the viewer cannot see, counted.
+    pub unseen_text: Option<String>,
+    /// 内存 · 共 6 GB，已用 5.2 GB.
+    pub memory_title: String,
+    pub memory: Vec<FootprintRow>,
+}
+
+/// A piece of the disk's bar: `tone` is the part's colour (chart-1…6), `rest` (used by others) or `free`.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintSegment {
+    pub id: String,
+    pub percent: f64,
+    pub tone: String,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintLegend {
+    pub text: String,
+    /// Its dot's colour (as FootprintSegment's), or none for words alone.
+    pub tone: String,
+    pub level: Level,
+}
+
+/// A part of the data directory (or a place beside it): `chats` opens the list of chats.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintPart {
+    pub id: String,
+    pub label: String,
+    pub note: String,
+    pub text: String,
+    pub tone: String,
+    pub opens: bool,
+}
+
+/// A clean-up offered: its line, and the choices it has (one, or several: all archived chats, or the older ones).
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintAction {
+    pub id: String,
+    pub title: String,
+    pub note: String,
+    /// The button's words.
+    pub action: String,
+    pub danger: bool,
+    /// Asked first when there are several: which one.
+    pub pick: Option<String>,
+    pub choices: Vec<FootprintChoice>,
+}
+
+/// One way to clean: `call` (footprint.rebuild, footprint.delete, footprint.evict) with `keys`, after each of `confirms` is agreed
+/// to in turn; `done` is said after.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintChoice {
+    pub label: String,
+    pub call: String,
+    pub keys: Vec<String>,
+    pub confirms: Vec<FootprintConfirm>,
+    pub done: String,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintConfirm {
+    pub title: String,
+    pub text: String,
+    pub action: String,
+    pub danger: bool,
+}
+
+/// A chat's directory: its size, what can be made again in it, how long since it was used, and what can be done.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintChat {
+    pub key: String,
+    /// The chat to open, by its id in the list.
+    pub chat: Option<String>,
+    pub title: String,
+    pub archived: bool,
+    pub text: String,
+    pub note: String,
+    pub choices: Vec<FootprintChoice>,
+}
+
+/// A line of the memory part: the station, the agents together, or one agent's process (`key`: its chat's session).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FootprintRow {
+    pub label: String,
+    pub text: String,
+    pub note: Option<String>,
+    /// Under the line before it (an agent's process under the agents).
+    pub nested: bool,
+    pub chat: Option<String>,
+    pub choice: Option<FootprintChoice>,
 }
 
 // ── conforming ───────────────────────────────────────────────────────────

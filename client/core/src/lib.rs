@@ -38,6 +38,7 @@ pub mod sync;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod trace;
+pub mod footprint;
 pub mod views;
 pub mod wake;
 pub mod work;

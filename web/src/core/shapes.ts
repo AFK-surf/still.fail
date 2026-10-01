@@ -1270,6 +1270,130 @@ export interface DraftView {
 	files: Attachment[];
 }
 
+export interface FootprintConfirm {
+	title: string;
+	text: string;
+	action: string;
+	danger: boolean;
+}
+
+/**
+ * One way to clean: `call` (footprint.rebuild, footprint.delete, footprint.evict) with `keys`, after each of `confirms` is agreed
+ * to in turn; `done` is said after.
+ */
+export interface FootprintChoice {
+	label: string;
+	call: string;
+	keys: string[];
+	confirms: FootprintConfirm[];
+	done: string;
+}
+
+/** A clean-up offered: its line, and the choices it has (one, or several: all archived chats, or the older ones). */
+export interface FootprintAction {
+	id: string;
+	title: string;
+	note: string;
+	/** The button's words. */
+	action: string;
+	danger: boolean;
+	/** Asked first when there are several: which one. */
+	pick?: string;
+	choices: FootprintChoice[];
+}
+
+/** How much of the disk a station takes, for the row that opens its footprint page. */
+export interface FootprintBrief {
+	/** None before its first measure. */
+	bytes?: number;
+	scanning?: boolean;
+	/** What the core says of it: 12.3 GB, 正在统计…. */
+	text?: string;
+}
+
+/** A chat's directory: its size, what can be made again in it, how long since it was used, and what can be done. */
+export interface FootprintChat {
+	key: string;
+	/** The chat to open, by its id in the list. */
+	chat?: string;
+	title: string;
+	archived: boolean;
+	text: string;
+	note: string;
+	choices: FootprintChoice[];
+}
+
+export interface FootprintLegend {
+	text: string;
+	/** Its dot's colour (as FootprintSegment's), or none for words alone. */
+	tone: string;
+	level: Level;
+}
+
+/** A part of the data directory (or a place beside it): `chats` opens the list of chats. */
+export interface FootprintPart {
+	id: string;
+	label: string;
+	note: string;
+	text: string;
+	tone: string;
+	opens: boolean;
+}
+
+/** A line of the memory part: the station, the agents together, or one agent's process (`key`: its chat's session). */
+export interface FootprintRow {
+	label: string;
+	text: string;
+	note?: string;
+	/** Under the line before it (an agent's process under the agents). */
+	nested: boolean;
+	chat?: string;
+	choice?: FootprintChoice;
+}
+
+/** A piece of the disk's bar: `tone` is the part's colour (chart-1…6), `rest` (used by others) or `free`. */
+export interface FootprintSegment {
+	id: string;
+	percent: number;
+	tone: string;
+}
+
+/**
+ * How much of the machine a station takes, as its footprint page shows it: everything in words, with what can be cleaned
+ * and how (each clean a choice: the call, the chats it is for and the questions asked before it, in order).
+ */
+export interface FootprintView {
+	/** Measured at least once: before, the page says it is being measured. */
+	measured: boolean;
+	scanning: boolean;
+	/** The viewer may clean up (an owner or admin). */
+	manage: boolean;
+	/** 3 分钟前统计, 正在统计…. */
+	checkedText: string;
+	/** still.fail 在这台机器上占用. */
+	lead: string;
+	totalText: string;
+	/** The disk in one bar: the station's parts, the rest that is used, and what is free (percent of the disk). */
+	bar: FootprintSegment[];
+	legend: FootprintLegend[];
+	parts: FootprintPart[];
+	/** Beside the data directory: shown, not counted or cleaned. */
+	elsewhere: FootprintPart[];
+	elsewhereNote: string;
+	/** What can be cleaned up (only for those who may). */
+	actions: FootprintAction[];
+	/** Why there is nothing to clean, or why the viewer cannot. */
+	actionsNote?: string;
+	chats: FootprintChat[];
+	/** 213 个 chat · 8.6 GB. */
+	chatsText: string;
+	/** Chats of others the viewer cannot see, counted. */
+	unseenText?: string;
+	/** 内存 · 共 6 GB，已用 5.2 GB. */
+	memoryTitle: string;
+	memory: FootprintRow[];
+}
+
 export interface HistoryFrom {
 	name: string;
 	slackUser?: string;
@@ -1703,6 +1827,8 @@ export interface Overview {
 	updates?: SoftwareVersion[];
 	/** Its agents' processes, in a line. */
 	processesText: string;
+	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
+	footprint?: FootprintBrief;
 }
 
 /**

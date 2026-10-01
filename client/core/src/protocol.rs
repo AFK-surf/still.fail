@@ -49,6 +49,9 @@ pub enum Topic {
     Session { station: String, key: String },
     Live { station: String, key: String },
     Host { station: String },
+    /// How much of the machine the station takes, and what can be cleaned (footprint.rs): read when watched, sent again
+    /// by the station when it measured or cleaned.
+    Footprint { station: String },
     /// How this device's connection to the station runs (station.rs `sample_net`): its path, its round trip and
     /// bytes each way over the last minute, sampled while it is watched. None for a station with no link of its own.
     Net { station: String },
@@ -193,7 +196,7 @@ impl Topic {
     /// The station a station topic belongs to; `None` for the account topics and the views.
     pub fn station(&self) -> Option<&str> {
         match self {
-            Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Net { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
+            Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Footprint { station } | Topic::Net { station } | Topic::Threads { station } | Topic::ChatRows { station } | Topic::Jobs { station } => Some(station),
             Topic::ArchivedRows { station } | Topic::StationUsage { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,

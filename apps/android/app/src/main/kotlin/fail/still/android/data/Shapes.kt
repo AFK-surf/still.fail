@@ -1271,6 +1271,136 @@ data class DraftView (
 )
 
 @Serializable
+data class FootprintConfirm (
+	val title: String,
+	val text: String,
+	val action: String,
+	val danger: Boolean
+)
+
+/// One way to clean: `call` (footprint.rebuild, footprint.delete, footprint.evict) with `keys`, after each of `confirms` is agreed
+/// to in turn; `done` is said after.
+@Serializable
+data class FootprintChoice (
+	val label: String,
+	val call: String,
+	val keys: List<String>,
+	val confirms: List<FootprintConfirm>,
+	val done: String
+)
+
+/// A clean-up offered: its line, and the choices it has (one, or several: all archived chats, or the older ones).
+@Serializable
+data class FootprintAction (
+	val id: String,
+	val title: String,
+	val note: String,
+	/// The button's words.
+	val action: String,
+	val danger: Boolean,
+	/// Asked first when there are several: which one.
+	val pick: String? = null,
+	val choices: List<FootprintChoice>
+)
+
+/// How much of the disk a station takes, for the row that opens its footprint page.
+@Serializable
+data class FootprintBrief (
+	/// None before its first measure.
+	val bytes: Long? = null,
+	val scanning: Boolean? = null,
+	/// What the core says of it: 12.3 GB, 正在统计….
+	val text: String? = null
+)
+
+/// A chat's directory: its size, what can be made again in it, how long since it was used, and what can be done.
+@Serializable
+data class FootprintChat (
+	val key: String,
+	/// The chat to open, by its id in the list.
+	val chat: String? = null,
+	val title: String,
+	val archived: Boolean,
+	val text: String,
+	val note: String,
+	val choices: List<FootprintChoice>
+)
+
+@Serializable
+data class FootprintLegend (
+	val text: String,
+	/// Its dot's colour (as FootprintSegment's), or none for words alone.
+	val tone: String,
+	val level: Level
+)
+
+/// A part of the data directory (or a place beside it): `chats` opens the list of chats.
+@Serializable
+data class FootprintPart (
+	val id: String,
+	val label: String,
+	val note: String,
+	val text: String,
+	val tone: String,
+	val opens: Boolean
+)
+
+/// A line of the memory part: the station, the agents together, or one agent's process (`key`: its chat's session).
+@Serializable
+data class FootprintRow (
+	val label: String,
+	val text: String,
+	val note: String? = null,
+	/// Under the line before it (an agent's process under the agents).
+	val nested: Boolean,
+	val chat: String? = null,
+	val choice: FootprintChoice? = null
+)
+
+/// A piece of the disk's bar: `tone` is the part's colour (chart-1…6), `rest` (used by others) or `free`.
+@Serializable
+data class FootprintSegment (
+	val id: String,
+	val percent: Double,
+	val tone: String
+)
+
+/// How much of the machine a station takes, as its footprint page shows it: everything in words, with what can be cleaned
+/// and how (each clean a choice: the call, the chats it is for and the questions asked before it, in order).
+@Serializable
+data class FootprintView (
+	/// Measured at least once: before, the page says it is being measured.
+	val measured: Boolean,
+	val scanning: Boolean,
+	/// The viewer may clean up (an owner or admin).
+	val manage: Boolean,
+	/// 3 分钟前统计, 正在统计….
+	val checkedText: String,
+	/// still.fail 在这台机器上占用.
+	val lead: String,
+	val totalText: String,
+	/// The disk in one bar: the station's parts, the rest that is used, and what is free (percent of the disk).
+	val bar: List<FootprintSegment>,
+	val legend: List<FootprintLegend>,
+	val parts: List<FootprintPart>,
+	/// Beside the data directory: shown, not counted or cleaned.
+	val elsewhere: List<FootprintPart>,
+	val elsewhereNote: String,
+	/// What can be cleaned up (only for those who may).
+	val actions: List<FootprintAction>,
+	/// Why there is nothing to clean, or why the viewer cannot.
+	val actionsNote: String? = null,
+	val chats: List<FootprintChat>,
+	/// 213 个 chat · 8.6 GB.
+	val chatsText: String,
+	/// Chats of others the viewer cannot see, counted.
+	val unseenText: String? = null,
+	/// 内存 · 共 6 GB，已用 5.2 GB.
+	val memoryTitle: String,
+	val memory: List<FootprintRow>
+)
+
+@Serializable
 data class HistoryFrom (
 	val name: String,
 	val slackUser: String? = null,
@@ -1737,7 +1867,9 @@ data class Overview (
 	/// The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them).
 	val updates: List<SoftwareVersion>? = null,
 	/// Its agents' processes, in a line.
-	val processesText: String
+	val processesText: String,
+	/// How much of the disk it takes (none from a station older than the footprint page, which then is not offered).
+	val footprint: FootprintBrief? = null
 )
 
 /// This device's connection to a station, in words (its card's network line): how it goes, its round trip now and

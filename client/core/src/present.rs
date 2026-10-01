@@ -553,6 +553,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::Session { .. } => s::conform::<s::SessionDetail>(value),
         Topic::Threads { .. } => s::conform::<Vec<s::ChatThread>>(value),
         Topic::Host { .. } => s::conform::<s::Host>(value),
+        Topic::Footprint { .. } => s::conform::<s::FootprintView>(value),
         Topic::Status { .. } => s::conform::<s::StatusView>(value),
         Topic::Connection { .. } => s::conform::<s::ConnectionView>(value),
         Topic::Notices { .. } => s::conform::<s::NoticesView>(value),
@@ -579,6 +580,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
 pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
     match topic {
         Topic::Host { .. } => return host(value),
+        Topic::Footprint { .. } => return *value = crate::footprint::shown(value, c),
         _ if !ticks(topic) => return,
         Topic::Sessions { .. } => value.as_array_mut().into_iter().flatten().for_each(session),
         Topic::Session { .. } => {
@@ -595,6 +597,9 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
                 } else {
                     format!("{} 个 agent 进程 {}", processes.len(), if mb >= 1024.0 { format!("{:.1} GB", mb / 1024.0) } else { format!("{mb} MB") })
                 });
+            }
+            if let Some(usage) = value.get_mut("footprint").filter(|u| u.is_object()) {
+                crate::footprint::brief(usage);
             }
             value.get_mut("connects").and_then(Value::as_array_mut).into_iter().flatten().for_each(connect);
             value.get_mut("profiles").and_then(Value::as_array_mut).into_iter().flatten().for_each(profile);

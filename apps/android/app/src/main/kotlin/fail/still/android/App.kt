@@ -160,6 +160,9 @@ sealed interface Screen {
 
     /** The agents' memory on a station. */
     data class Memory(val station: String) : Screen { override val id = "memory/$station" }
+    /** How much a station takes of its machine, and cleaning it up; its chats' directories on a page of their own. */
+    data class Footprint(val station: String) : Screen { override val id = "footprint/$station" }
+    data class FootprintChats(val station: String) : Screen { override val id = "footprint-chats/$station" }
     /** A connect's Slack app: its name, icon, colour and permissions. */
     data class SlackApp(val station: String, val connect: String) : Screen { override val id = "slack-app/$station/$connect" }
 }
@@ -649,6 +652,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.NewProfile -> fail.still.android.screens.NewProfileScreen(current, screen.station)
                     Screen.Archive -> fail.still.android.screens.ArchiveScreen(current)
                     is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
+                    is Screen.Footprint -> fail.still.android.screens.FootprintScreen(current, screen.station)
+                    is Screen.FootprintChats -> fail.still.android.screens.FootprintChatsScreen(screen.station)
                     is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
                     is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {
                         fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)

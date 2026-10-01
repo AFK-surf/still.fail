@@ -151,6 +151,12 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         "job.clearEnded" => op("DELETE", p.at("session").map(|key| format!("/sessions/{key}/jobs")), None),
         // ── the station itself ──
         "memory.get" => op("GET", Ok("/memory".into()), None),
+        // How much it takes (the `footprint` topic): measured again; what can be made again in chats' workspaces removed,
+        // archived chats deleted, idle agents' processes ended; each for `keys` (the footprint page's choices say which).
+        "footprint.scan" => op("POST", Ok("/footprint/scan".into()), None),
+        "footprint.rebuild" => op("POST", Ok("/footprint/rebuild".into()), Some(p.pick(&["keys"]))),
+        "footprint.delete" => op("POST", Ok("/footprint/delete".into()), Some(p.pick(&["keys"]))),
+        "footprint.evict" => op("POST", Ok("/footprint/evict".into()), Some(p.pick(&["keys"]))),
         "software.update" => op("POST", Ok("/updates".into()), Some(p.pick(&["id"]))),
         "software.check" => op("POST", Ok("/updates/check".into()), None),
         // The station's update channel: { channel: "stable" | "beta" }. Back to stable from a beta, the stable release

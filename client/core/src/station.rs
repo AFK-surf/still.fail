@@ -1007,6 +1007,8 @@ impl Stations {
                 touched.push(Topic::ChatRows { station: name.clone() });
                 // One archived, restored or deleted.
                 touched.push(Topic::ArchivedRows { station: name.clone() });
+                // Deleted, or its process ended: the footprint page counts it.
+                touched.push(Topic::Footprint { station: name.clone() });
                 // A new chat answers its thread.
                 if let Some(thread) = answer.get("thread").filter(|t| t.is_object()) {
                     self.put_thread(&name, thread);
@@ -1038,6 +1040,11 @@ impl Stations {
                 }
             }
             Some("profiles") => touched.push(Topic::Overview { station: name.clone() }),
+            // Cleaned up or measured again: the footprint page, and the overview's line of it.
+            Some("footprint") => {
+                touched.push(Topic::Footprint { station: name.clone() });
+                touched.push(Topic::Overview { station: name.clone() });
+            }
             // The station's software: updated, checked, or put on another channel (its versions are the overview's).
             Some("updates") => touched.push(Topic::Overview { station: name.clone() }),
             // The workspace's Slack settings (its app configuration token): every connect's app reads through them.
@@ -1130,6 +1137,7 @@ impl Stations {
                 let from = local - local.rem_euclid(day) - 29 * day - offset * 60_000;
                 format!("/usage?from={from}&tz={offset}")
             }
+            Topic::Footprint { .. } => "/footprint".to_string(),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
             Topic::JobLog { job, lines, .. } => format!("/jobs/{}/log?lines={lines}", encode(job)),
             // A thread shown at its end only asks for what came after it; one short of its end has nothing to catch up
@@ -1721,6 +1729,7 @@ impl Stations {
             "host" => self.set_live(Topic::Host { station: station.into() }, data),
             // It recorded more of what its agents spent (about once a minute while they work).
             "usage" => self.refetch(&Topic::StationUsage { station: station.into() }),
+            "footprint" => self.set_live(Topic::Footprint { station: station.into() }, data),
             _ => {}
         }
     }
@@ -2688,7 +2697,7 @@ impl Source for Stations {
                     this.set_link(&station, link);
                 });
             }
-            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::ArchivedRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Jobs { .. } | Topic::StationUsage { .. } => {
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::ArchivedRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Jobs { .. } | Topic::StationUsage { .. } | Topic::Footprint { .. } => {
                 self.refetch(topic)
             }
             Topic::Thread { thread, .. } => {

@@ -37,3 +37,4 @@ pub mod thumbs;
 pub mod transcript;
 pub mod updates;
 pub mod usage;
+pub mod footprint;

@@ -14,6 +14,7 @@ import { Home, Recent } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
 import { MemoriesScreen, MemoryScreen } from "./Memory.tsx";
 import { UsageScreen } from "./Usage.tsx";
+import { FootprintChatsScreen, FootprintScreen } from "./Footprint.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
@@ -54,6 +55,8 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
       <Route path="s/:station/memory" element={<InStation stations={stations}><MemoryScreen /></InStation>} />
+      <Route path="s/:station/footprint" element={<InStation stations={stations}><FootprintScreen /></InStation>} />
+      <Route path="s/:station/footprint/chats" element={<InStation stations={stations}><FootprintChatsScreen /></InStation>} />
       <Route path="s/:station/connects/new" element={<InStation stations={stations}><NewConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id" element={<InStation stations={stations}><ConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id/run" element={<InStation stations={stations}><ConnectRunScreen /></InStation>} />

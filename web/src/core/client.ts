@@ -20,6 +20,7 @@ export type Topic =
   | { topic: "session"; station: string; key: string }
   | { topic: "live"; station: string; key: string }
   | { topic: "host"; station: string }
+  | { topic: "footprint"; station: string }
   | { topic: "threads"; station: string }
   | { topic: "slackApp"; station: string; connect: string }
   // A station's background jobs still up, each with the chat it is in.

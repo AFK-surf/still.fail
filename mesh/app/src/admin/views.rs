@@ -22,7 +22,7 @@ fn secret_key(key: &str) -> bool {
 }
 
 /// Memory of each recorded runtime process group, from ps (kB).
-fn process_memory(pgids: &[i64]) -> HashMap<i64, i64> {
+pub(super) fn process_memory(pgids: &[i64]) -> HashMap<i64, i64> {
     let mut rss = HashMap::new();
     if pgids.is_empty() {
         return rss;
@@ -197,6 +197,8 @@ impl AdminApi {
             "mesh": self.deps.mesh.as_ref().map(|m| m.status()),
             "connects": connects,
             "profiles": profiles,
+            // How much of the disk the station takes (footprint.rs); its presence says the station has the footprint page.
+            "footprint": self.footprint_brief(),
             "processes": processes.iter().map(|p| {
                 let mut v = serde_json::to_value(p).unwrap_or(Value::Null);
                 v["rssMb"] = json!(memory.get(&p.pgid).map(|kb| (*kb as f64 / 1024.0).round() as i64));
