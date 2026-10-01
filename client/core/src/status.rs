@@ -150,6 +150,11 @@ impl Status {
         }
     }
 
+    /// Whether something at `place` is waited on as `what` now.
+    pub fn waits(&self, place: &Place, what: &str) -> bool {
+        self.inner.borrow().waits.values().any(|w| w.place == *place && w.what == what)
+    }
+
     /// A request (or, `connecting`, a connection being opened) starts.
     pub fn begin(&self, place: Place, what: impl Into<String>, connecting: bool) -> Waiting {
         let id = {

@@ -159,6 +159,16 @@ impl Mesh {
         }).collect()
     }
 
+    /// Waits `ms` on this device's clock.
+    pub fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
+        self.host.sleep(ms)
+    }
+
+    /// This device's clock.
+    pub fn now_ms(&self) -> f64 {
+        self.host.now_ms()
+    }
+
     /// The station's link now, if one is open.
     pub fn current(&self, station_id: &str) -> Option<Rc<Link>> {
         self.links.borrow().get(station_id).and_then(|o| o.peek().and_then(|l| l.as_ref().ok().cloned()))
@@ -980,6 +990,8 @@ mod tests {
         /// This many connections coming are never answered, not even their handshake: a device whose way there is
         /// gone (its endpoint's relay connection dead) dialing.
         unanswered: Rc<Cell<usize>>,
+        /// Says it keeps writes to once (`stillfail-idempotent`, mesh/app/src/admin/once.rs).
+        idempotent: Rc<Cell<bool>>,
     }
 
     impl Station {
@@ -997,8 +1009,8 @@ mod tests {
                 .bind()
                 .await
                 .unwrap();
-            let station = Station { endpoint: endpoint.clone(), grants: Rc::default(), conns: Rc::default(), dead_below: Rc::default(), unanswered: Rc::default() };
-            let (grants, conns, dead_below, unanswered) = (station.grants.clone(), station.conns.clone(), station.dead_below.clone(), station.unanswered.clone());
+            let station = Station { endpoint: endpoint.clone(), grants: Rc::default(), conns: Rc::default(), dead_below: Rc::default(), unanswered: Rc::default(), idempotent: Rc::default() };
+            let (grants, conns, dead_below, unanswered, idempotent) = (station.grants.clone(), station.conns.clone(), station.dead_below.clone(), station.unanswered.clone(), station.idempotent.clone());
             tokio::task::spawn_local(async move {
                 let mut ignored = Vec::new();
                 while let Some(incoming) = endpoint.accept().await {
@@ -1011,7 +1023,7 @@ mod tests {
                     let index = conns.borrow().len();
                     conns.borrow_mut().push(conn.clone());
                     let dead = { let dead_below = dead_below.clone(); Rc::new(move || index < dead_below.get()) };
-                    tokio::task::spawn_local(serve(conn, grants.clone(), dead));
+                    tokio::task::spawn_local(serve(conn, grants.clone(), dead, idempotent.clone()));
                 }
             });
             station
@@ -1031,7 +1043,7 @@ mod tests {
         send.write_all(format!("{value}\n").as_bytes()).await.unwrap();
     }
 
-    async fn serve(conn: Connection, grants: Rc<RefCell<Vec<String>>>, dead: Rc<dyn Fn() -> bool>) {
+    async fn serve(conn: Connection, grants: Rc<RefCell<Vec<String>>>, dead: Rc<dyn Fn() -> bool>, idempotent: Rc<Cell<bool>>) {
         let Ok((mut send, mut recv)) = conn.accept_bi().await else { return };
         let mut carry = Vec::new();
         let answer = |line: &str, grants: &Rc<RefCell<Vec<String>>>| {
@@ -1060,7 +1072,7 @@ mod tests {
             }
         });
         while let Ok((mut send, mut recv)) = conn.accept_bi().await {
-            let dead = dead.clone();
+            let (dead, once) = (dead.clone(), idempotent.get());
             tokio::task::spawn_local(async move {
                 let mut carry = Vec::new();
                 let head = read_line(&mut recv, &mut carry).await.unwrap().unwrap();
@@ -1074,7 +1086,11 @@ mod tests {
                     // Never answered; held so the stream stays open.
                     futures::future::pending::<()>().await;
                 }
-                write_line(&mut send, &json!({ "status": 200, "headers": { "content-type": "text/event-stream", "x-method": head["method"] } })).await;
+                let mut headers = json!({ "content-type": "text/event-stream", "x-method": head["method"] });
+                if once {
+                    headers["stillfail-idempotent"] = json!("1");
+                }
+                write_line(&mut send, &json!({ "status": 200, "headers": headers })).await;
                 send.write_all(format!("{}|{}", head, String::from_utf8_lossy(&body)).as_bytes()).await.unwrap();
                 // Then a stream that trickles, like /events.
                 for part in ["|one", "|two", "|three"] {
@@ -1358,7 +1374,33 @@ mod tests {
             wakes.wake(network(&host));
             // It ends with the old way when that is closed (RETIRE_MS), never asked on the new one.
             let answered = tokio::time::timeout(Duration::from_millis(2_000), asked).await.expect("ends with the old link").unwrap();
-            assert!(answered.is_err(), "not sent again");
+            // Gone unanswered, it may have been done: said so, not that it failed.
+            assert_eq!(answered.err().map(|e| e.code), Some("unconfirmed".to_string()));
+        });
+    }
+
+    #[test]
+    fn a_write_whose_link_went_before_its_answer_is_asked_again_once_its_station_is_back() {
+        run(async {
+            use crate::station::{MeshWire, StationAddr, StationWire};
+            let (mesh, station, _wakes, host) = waking(Station::start().await).await;
+            station.idempotent.set(true);
+            let id = station.id();
+            let source = { let mesh = mesh.clone(); Rc::new(move || { let mesh = mesh.clone(); async move { Ok::<_, CoreError>(mesh) }.boxed_local() }) };
+            let count = Rc::new(Cell::new(0));
+            let wire = MeshWire::new(source, Rc::new(move |_: &str| grants("ok", count.clone())), crate::status::one(crate::status::Status::new(host.clone())));
+            let addr = StationAddr { workspace: "w".into(), station: id.clone() };
+            // Its first answer says it keeps writes to once.
+            wire.request(&addr, RequestHead { method: "GET".into(), path: "/admin/api/overview".into(), headers: vec![] }, Vec::new()).await.unwrap();
+            station.dead_below.set(station.conns.borrow().len());
+            let write = RequestHead { method: "POST".into(), path: "/admin/api/sessions/k/pin".into(), headers: vec![("idempotency-key".into(), "k1".into())] };
+            let asked = tokio::task::spawn_local(wire.request(&addr, write, Vec::new()));
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            // Its link goes before it is answered (the station restarting): asked again, with its key, on the next.
+            station.conns.borrow()[0].close(0u32.into(), b"restart");
+            let reply = tokio::time::timeout(Duration::from_millis(5_000), asked).await.expect("asked again").unwrap().unwrap();
+            assert_eq!(reply.status, 200);
+            assert_eq!(station.conns.borrow().len(), 2);
         });
     }
 

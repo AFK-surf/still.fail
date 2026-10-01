@@ -10,13 +10,15 @@ import * as waitingCss from "./styles/waiting.css.ts";
 type Words = Record<string, string | number | boolean | null | undefined>;
 
 /** Where one of `calls` about what `on` names is: under way, or failed a moment ago and why. */
-export interface DoingState { running: boolean; error?: string | undefined }
+export interface DoingState { running: boolean; error?: string | undefined; note?: string | undefined }
 
 /** One of `calls` about what `on` names: under way, or why it failed a moment ago (shown a few seconds). */
 export function useDoingState(calls: string | readonly string[], on: Words = {}): DoingState {
   const list = useDoingList().filter((item) => doingMatches(item, calls, on));
   const failing = list.findLast(failed);
-  return { running: list.some((item) => !failed(item)), error: failing ? (failing.error ?? "失败了") : undefined };
+  // A write its station went quiet on is asked again once it is back: the spinner says so.
+  const note = list.find((item) => item.stage === "rechecking")?.note;
+  return { running: list.some((item) => !failed(item)), error: failing ? (failing.error ?? "失败了") : undefined, note };
 }
 
 interface MarkProps {
@@ -38,7 +40,8 @@ interface MarkProps {
 export function DoingShown({ state, className, size = 12, idle = null, label, side, bare }: MarkProps & { state: DoingState }) {
   if (state.running) {
     const cls = className ? `${waitingCss.spinner} ${className}` : waitingCss.spinner;
-    return label ? <span className={cls} role="status" aria-label={label} /> : <span className={cls} aria-hidden="true" />;
+    const spinner = label || state.note ? <span className={cls} role="status" aria-label={state.note ?? label} /> : <span className={cls} aria-hidden="true" />;
+    return state.note && !bare ? <Tip label={state.note} {...(side ? { side } : {})}>{spinner}</Tip> : spinner;
   }
   if (state.error !== undefined) {
     const mark = <span className={css.failedMark} style={{ width: size, height: size, fontSize: size - 4 }} role="img" aria-label={`失败：${state.error}`}>!</span>;

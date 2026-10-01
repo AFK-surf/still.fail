@@ -4,10 +4,18 @@ import * as css from "./toast.css.ts";
 
 const ToastContext = createContext<(message: string) => void>(() => {});
 
+/**
+ * What a toast says. A write its station did not answer may have been done (the core's `unconfirmed`, client/core/src/
+ * station.rs): said as not known, whatever the page put before it ("没能固定：不确定做没做成：…" → "固定：不确定做没做成：…").
+ */
+export function said(message: string): string {
+  return message.replace(/^没能([^：]*)：(不确定做没做成：)/, "$1：$2");
+}
+
 /** A short confirmation at the bottom of the screen, named after the action that happened. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
-  const show = useCallback((message: string) => setToast({ id: Date.now(), message }), []);
+  const show = useCallback((message: string) => setToast({ id: Date.now(), message: said(message) }), []);
   return (
     <ToastContext.Provider value={show}>
       <Toast.Provider duration={2600} swipeDirection="down">

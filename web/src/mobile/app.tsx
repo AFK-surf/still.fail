@@ -9,7 +9,7 @@
 // a button at the bottom left of the screen, level with the composer, opens the latest chats over the page: another chat
 // from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
-import { ToastTo } from "../toast.tsx";
+import { said, ToastTo } from "../toast.tsx";
 import { afterBack, useBackClose } from "../backClose.ts";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
@@ -130,7 +130,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   const [sheet, setSheet] = useState<SheetSpec | null>(null);
   const [menu, setMenu] = useState<MenuSpec | null>(null);
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
-  const showToast = useCallback((text: string) => setToast({ text, n: Date.now() }), []);
+  const showToast = useCallback((text: string) => setToast({ text: said(text), n: Date.now() }), []);
   const [reader, setReader] = useState<ReaderSpec | null>(null);
   const wide = useWide();
   // The latest chats over the page (WIDE).

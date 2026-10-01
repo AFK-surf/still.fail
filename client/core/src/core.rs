@@ -210,6 +210,8 @@ impl Core {
                     Rc::new(move |id: &str| {
                         if let Some(store) = store.upgrade() {
                             store.invalidate_all(|t| matches!(t, Topic::Status { workspace } if workspace.as_deref().is_none_or(|w| w == id)));
+                            // What is under way says when its station is waited on to say whether it was done.
+                            store.invalidate(&Topic::Doing);
                         }
                     })
                 },
@@ -537,7 +539,14 @@ impl Source for Router {
             return Some(Ok(self.attend.value(workspace.as_deref())));
         }
         if *topic == Topic::Doing {
-            return self.core.upgrade().map(|core| Ok(core.doing.value()));
+            // A write on a station that went quiet is being asked again (station.rs): it says so.
+            let rechecking = |params: &std::collections::HashMap<String, String>| {
+                params.get("station").is_some_and(|address| {
+                    let place = crate::status::Place::Station(address.clone());
+                    self.workspaces.of_station(address).status.waits(&place, crate::station::RECHECKING)
+                })
+            };
+            return self.core.upgrade().map(|core| Ok(core.doing.value(&rechecking)));
         }
         if let Topic::Connection { .. } = topic {
             return self.pills.compute(topic).map(Ok);
@@ -2688,7 +2697,7 @@ mod tests {
             assert_eq!(values[&1], json!({ "doing": [] }));
             core.receive(ui, ClientMessage::Call { id: 2, call: "loginSession.revoke".into(), params: json!({"account": "s1", "id": "d2"}) });
             core.receive(ui, ClientMessage::Call { id: 3, call: "admin.me".into(), params: json!({"account": "s1"}) });
-            let doing = core.inner.doing.value();
+            let doing = core.inner.doing.value(&|_| false);
             assert_eq!(doing["doing"].as_array().map(Vec::len), Some(1));
             assert_eq!(doing["doing"][0]["call"], "loginSession.revoke");
             assert_eq!(doing["doing"][0]["params"], json!({"account": "s1", "id": "d2"}));

@@ -96,6 +96,17 @@ pub const IDEMPOTENCY_KEY: &str = "idempotency-key";
 pub const IDEMPOTENT: &str = "stillfail-idempotent";
 
 /// A request the wire may send twice: a read, or a write with its key to a station known to keep it to once.
+/// A write asked again with its key once its station is back, while it was not answered: this long at most (a station
+/// keeps a write's answer 10 minutes, mesh/app/src/admin/once.rs). Past it, nobody can say whether it was done.
+pub const RECHECK_MS: f64 = 5.0 * 60.0 * 1000.0;
+/// What a write asked again is waited on as (status.rs): the `doing` topic says so of the calls on that station.
+pub const RECHECKING: &str = "等它回来确认";
+
+/// A write that went and was not answered (its link gone, its station quiet): it may have been done, or not.
+pub fn unconfirmed(why: &CoreError) -> CoreError {
+    CoreError::new("unconfirmed", format!("不确定做没做成：{}", why.message))
+}
+
 fn may_repeat(head: &RequestHead, idempotent: bool) -> bool {
     head.method.eq_ignore_ascii_case("GET") || (idempotent && head.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENCY_KEY)))
 }
@@ -302,6 +313,7 @@ impl StationWire for MeshWire {
                 mesh.link(&station, credentials.clone()).await?
             };
             let repeats = may_repeat(&head, idempotent.borrow().contains(&station));
+            let write = !head.method.eq_ignore_ascii_case("GET") && !head.method.eq_ignore_ascii_case("HEAD");
             let ask = |link: Rc<Link>, head: RequestHead, body: Vec<u8>| async move { link.request(head, body).await.map(|reply| (link, reply)) }.boxed_local();
             let first = ask(link.clone(), head.clone(), body.clone());
             let (link, reply) = if repeats {
@@ -309,6 +321,28 @@ impl StationWire for MeshWire {
                 // `race`): asked again on the new one at once, and whichever answers first is the answer. A read may be
                 // asked twice; a write only with its key, to a station that keeps it to once.
                 match futures::future::select(first, mesh.replaced(&station, &link)).await {
+                    // A write gone and not answered: asked again with its key whenever its station is back, a while, so
+                    // what is said is what happened (the station answers the first time's answer, or does it now).
+                    Either::Left((Err(error), _)) if error.code == "mesh" && write => {
+                        let _waiting = status.begin(address, RECHECKING, true);
+                        let started = mesh.now_ms();
+                        let mut pause = 1_000;
+                        loop {
+                            let again = async {
+                                let link = mesh.link(&station, credentials.clone()).await?;
+                                ask(link, head.clone(), body.clone()).await
+                            };
+                            match again.await {
+                                Ok(answered) => break answered,
+                                Err(e) if e.code != "mesh" => return Err(e),
+                                Err(e) if mesh.now_ms() - started >= RECHECK_MS => return Err(unconfirmed(&e)),
+                                Err(_) => {
+                                    mesh.sleep(pause).await;
+                                    pause = (pause * 2).min(15_000);
+                                }
+                            }
+                        }
+                    }
                     Either::Left((Err(error), _)) if error.code == "mesh" => {
                         // Its link went before it was answered (the station restarting, a network change): once more,
                         // on the link opened in its place.
@@ -328,7 +362,8 @@ impl StationWire for MeshWire {
                     }
                 }
             } else {
-                first.await?
+                // A station that may do a write twice is not asked again: one gone and not answered may have been done.
+                first.await.map_err(|e| if write && e.code == "mesh" { unconfirmed(&e) } else { e })?
             };
             if reply.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENT)) {
                 idempotent.borrow_mut().insert(reply_station);

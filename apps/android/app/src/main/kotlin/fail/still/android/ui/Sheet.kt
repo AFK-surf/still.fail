@@ -269,9 +269,15 @@ fun MenuHost(app: AppState) {
 
 // ── a short note ───────────────────────────────────────────────────────
 
+/**
+ * What a toast says. A write its station did not answer may have been done (the core's `unconfirmed`, client/core/src/
+ * station.rs): said as not known, whatever the page put before it ("没能固定：不确定做没做成：…" → "固定：不确定做没做成：…").
+ */
+fun said(message: String): String = Regex("^没能([^：]*)：(不确定做没做成：)").replace(message, "$1：$2")
+
 @Composable
 fun ToastHost(app: AppState) {
-    val text = app.toast
+    val text = app.toast?.let(::said)
     LaunchedEffect(text) { if (text != null) { delay(2600); app.toast = null } }
     // Kept while it fades, so it fades with its words.
     var last by remember { mutableStateOf("") }

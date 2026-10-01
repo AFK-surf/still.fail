@@ -2,7 +2,9 @@
 //! something (a chat pinned, a job stopped, a member's role) from the moment it is asked until its answer, whichever
 //! page or menu asked it. The pages show it where it is, on the row or button it is about, at once: a person sees
 //! that what they did is under way, and does not do it again. One that failed stays a few seconds more, with why
-//! (`stage` failed, `error`), so the place that turned says so too, whoever asked it.
+//! (`stage` failed, `error`), so the place that turned says so too, whoever asked it. A write whose station went
+//! quiet before it answered is asked again once the station is back (station.rs `RECHECK_MS`): meanwhile its stage is
+//! `rechecking`, with what it waits on (`note`).
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -51,10 +53,15 @@ impl Doing {
         }
     }
 
-    /// The topic's value: what is under way, oldest first.
-    pub fn value(&self) -> Value {
+    /// The topic's value: what is under way, oldest first; `rechecking` says of a call's params whether its station is
+    /// being waited on to say whether it was done.
+    pub fn value(&self, rechecking: &dyn Fn(&HashMap<String, String>) -> bool) -> Value {
         let doing: Vec<Value> = self.list.borrow().iter().map(|e| {
-            let mut item = json!({ "call": e.call, "params": e.params, "since": e.since as i64, "stage": if e.failed.is_some() { "failed" } else { "running" } });
+            let stage = if e.failed.is_some() { "failed" } else if rechecking(&e.params) { "rechecking" } else { "running" };
+            let mut item = json!({ "call": e.call, "params": e.params, "since": e.since as i64, "stage": stage });
+            if stage == "rechecking" {
+                item["note"] = json!("station 没有回应，等它回来确认做没做成");
+            }
             if let Some(why) = &e.failed {
                 item["error"] = json!(why);
             }
@@ -103,14 +110,14 @@ mod tests {
         let doing = Doing::default();
         let a = doing.start("job.stop", &json!({ "station": "w/s", "id": "j1", "input": { "x": 1 } }), 1000.5);
         let b = doing.start("chat.pin", &json!({ "station": "w/s", "session": "k", "pinned": true, "thread": 7 }), 2000.0);
-        assert_eq!(doing.value(), json!({ "doing": [
+        assert_eq!(doing.value(&|_| false), json!({ "doing": [
             { "call": "job.stop", "params": { "station": "w/s", "id": "j1" }, "since": 1000, "stage": "running" },
             { "call": "chat.pin", "params": { "station": "w/s", "session": "k", "pinned": "true", "thread": "7" }, "since": 2000, "stage": "running" },
         ] }));
         doing.fail(a, "连不上这台 station：没有回应");
-        assert_eq!(doing.value()["doing"][0], json!({ "call": "job.stop", "params": { "station": "w/s", "id": "j1" }, "since": 1000, "stage": "failed", "error": "连不上这台 station：没有回应" }));
+        assert_eq!(doing.value(&|_| false)["doing"][0], json!({ "call": "job.stop", "params": { "station": "w/s", "id": "j1" }, "since": 1000, "stage": "failed", "error": "连不上这台 station：没有回应" }));
         doing.end(a);
         doing.end(b);
-        assert_eq!(doing.value(), json!({ "doing": [] }));
+        assert_eq!(doing.value(&|_| false), json!({ "doing": [] }));
     }
 }

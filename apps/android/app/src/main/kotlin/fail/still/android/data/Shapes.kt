@@ -1240,15 +1240,17 @@ data class DiskRoom (
 )
 
 /// A call under way: its name (`job.stop`), its params that are words, numbers or yes/no, as words (what a page
-/// matches it by), and since when; `stage` running, or failed (kept a few seconds, `error` saying why). A core from
-/// before stages gives none: running.
+/// matches it by), and since when; `stage` running, rechecking (its station went quiet before it answered: asked again
+/// once it is back, `note` saying so), or failed (kept a few seconds, `error` saying why). A core from before stages
+/// gives none: running.
 @Serializable
 data class DoingItem (
 	val call: String,
 	val params: Map<String, String>,
 	val since: Long,
 	val stage: String? = null,
-	val error: String? = null
+	val error: String? = null,
+	val note: String? = null
 )
 
 /// What people set going on this device and the core has not finished (the `doing` topic; client/core/src/doing.rs),
