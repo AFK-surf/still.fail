@@ -497,37 +497,37 @@ mod tests {
                 v
             };
             let agents = |a: &str, b: &str| json!([{ "session": { "key": "a" }, "status": a }, { "session": { "key": "b" }, "status": b }]);
-            attend.focus(1, focus(json!({ "visible": true, "chat": { "station": "local", "thread": 7 } })));
+            attend.focus(1, focus(json!({ "visible": true, "chat": { "station": "ws/st", "thread": 7 } })));
             // Opened from what was kept (2), its agent a at work already: nothing comes in.
             let mut v = at(2, 2, agents("running", "idle"));
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert!(said(&v).is_empty() && started(&v).is_empty());
             // Caught up on from the station (3, 4 read after what was kept): there at once, however a works on.
             let mut v = at(4, 4, agents("running", "idle"));
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert!(said(&v).is_empty());
             // Told as said (5, 6, an event: caught stays), and b starts: they come in.
             let mut v = at(6, 4, agents("running", "running"));
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert_eq!((said(&v), started(&v)), (vec![5, 6], vec!["b".to_string()]));
             // Caught up on past them later (the link came back): what came in stays so; 7, read, does not.
             let mut v = at(7, 7, agents("running", "running"));
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert_eq!(said(&v), vec![5, 6]);
             // b's turn ends: it is not starting any more.
             let mut v = at(7, 7, agents("running", "idle"));
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert!(started(&v).is_empty());
             // Left and opened again: all of it is there at once.
             attend.focus(1, focus(json!({ "chat": null })));
-            attend.focus(1, focus(json!({ "chat": { "station": "local", "thread": 7 } })));
+            attend.focus(1, focus(json!({ "chat": { "station": "ws/st", "thread": 7 } })));
             let mut v = at(7, 7, agents("running", "idle"));
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert!(said(&v).is_empty());
             // Not shown: nothing is decided.
             attend.focus(1, focus(json!({ "chat": null })));
             let mut v = at(9, 7, agents("running", "idle"));
-            attend.chat("local", None, &mut v);
+            attend.chat("ws/st", None, &mut v);
             assert!(said(&v).is_empty());
         });
     }
