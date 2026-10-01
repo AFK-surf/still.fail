@@ -231,6 +231,11 @@ class ArchiveTest {
     private fun chat(): Harness {
         val h = Harness(rule)
         val of = ChatOf.Thread(Fixtures.THREAD)
+        putChats(h, listOf(busy, done, alsoDone))
+        h.fake.answer = { name, _ ->
+            if (name == "chat.archive") putChats(h, listOf(busy, alsoDone))
+            JsonNull
+        }
         h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, key = done.session))
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)))
         return h
