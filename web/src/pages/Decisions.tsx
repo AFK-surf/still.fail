@@ -15,7 +15,10 @@ export function DecisionsPage({ scope, back }: { scope: string; back: string }) 
         <MobileBack to={back} label="对话" />
         <div className={conversationCss.pageBarTitle}><h1>奏</h1></div>
       </header>
-      <DecisionDeck workspace={scope} swipe={false} inline={false} onOpen={(path) => navigate(path)} />
+      <DecisionDeck workspace={scope} swipe={false} inline={false} onEmpty={() => {
+        if (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0) navigate(-1);
+        else navigate(back, { replace: true });
+      }} onOpen={(path) => navigate(path)} />
     </div>
   );
 }

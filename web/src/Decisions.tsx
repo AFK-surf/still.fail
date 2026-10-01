@@ -122,10 +122,19 @@ const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
  * `swipe`: the phone's (left 待定, right 不再提醒); otherwise those two are words in the hint line, and ← → on the
  * keyboard. `inline`: the messages' avatars in line with their names (the phone's). `onOpen` opens the decision's chat.
  */
-export function DecisionDeck({ workspace, swipe, inline, onOpen, className }: {
-  workspace: string; swipe: boolean; inline: boolean; onOpen: (path: string) => void; className?: string;
+export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, className }: {
+  workspace: string; swipe: boolean; inline: boolean; onOpen: (path: string) => void; onEmpty?: (() => void) | undefined; className?: string;
 }) {
   const view = useTopic<DecisionsView>({ topic: "decisions", workspace });
+  // Let the core confirm that nothing remains: a locally hidden card can still come back on failure.
+  const empty = !!view.value && !view.value.loading && view.value.count === 0 && !view.error;
+  const returned = useRef(false);
+  useEffect(() => {
+    if (empty && onEmpty && !returned.current) {
+      returned.current = true;
+      onEmpty();
+    }
+  }, [empty, onEmpty]);
   const stations = useStations(workspace).value;
   const call = useCall();
   const act = useAct();

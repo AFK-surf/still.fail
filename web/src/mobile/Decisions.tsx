@@ -11,7 +11,7 @@ export function DecisionsScreen() {
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back="会话" onBack={app.pop} title="奏" />
-      <DecisionDeck workspace={app.entry.id} swipe inline className={rootCss.wide} onOpen={(path) => app.push(path)} />
+      <DecisionDeck workspace={app.entry.id} swipe inline onEmpty={app.current === app.at("/decisions") ? app.pop : undefined} className={rootCss.wide} onOpen={(path) => app.push(path)} />
     </div>
   );
 }

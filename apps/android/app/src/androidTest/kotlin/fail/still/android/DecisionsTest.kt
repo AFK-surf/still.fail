@@ -162,6 +162,38 @@ class DecisionsTest {
 
     // ── the decisions page ──
 
+    @Test fun emptyQueueReturnsToPreviousPage() {
+        val h = page()
+        val recording = h.record("decisions-empty-back")
+        recording.frames(30)
+        recording.frame { h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false)) }
+        recording.frames(40)
+        recording.end()
+        rule.runOnIdle { assertEquals(listOf(Screen.Home), h.app.stack) }
+    }
+
+    @Test fun loadingEmptyQueueStaysUntilLoaded() {
+        val h = Harness(rule)
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = true))
+        h.launch(listOf(Screen.Home, Screen.Settings, Screen.Decisions))
+        rule.runOnIdle { assertEquals(Screen.Decisions, h.app.stack.last()) }
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false))
+        h.settle()
+        rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Settings), h.app.stack) }
+    }
+
+    @Test fun emptyQueueDoesNotPopPageAboveIt() {
+        val h = page()
+        rule.runOnUiThread { h.app.push(Screen.Appearance) }
+        h.settle()
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false))
+        h.settle()
+        rule.runOnIdle { assertEquals(Screen.Appearance, h.app.stack.last()) }
+        rule.runOnUiThread { h.app.pop() }
+        h.settle()
+        rule.runOnIdle { assertEquals(listOf(Screen.Home), h.app.stack) }
+    }
+
     @Test fun swipeLeftSetsItAside() {
         val h = page()
         val y = postAt().center.y
