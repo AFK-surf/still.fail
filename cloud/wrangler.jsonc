@@ -41,10 +41,11 @@
     "ADMIN_ORIGIN": "https://admin.still.fail",
     "ADMIN_ORIGIN_ALIASES": "https://admin.ember.3720.org",
     // Relays beside still.fail's own (src/relays.ts): one in Beijing (Alibaba Cloud, by its IP: no ICP filing), for
-    // stations and devices in mainland China, where Cloudflare's is slow or out of reach.
-    "RELAY_URLS": "https://39.105.157.122",
+    // stations and devices in mainland China, where Cloudflare's is slow or out of reach; one in Hong Kong (Alibaba
+    // Cloud, on a line tuned for the mainland), near enough to both the mainland and abroad.
+    "RELAY_URLS": "https://39.105.157.122,https://47.76.247.168",
     // What they are called on a station's card (经中继北京).
-    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京" },
+    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港" },
     "GOOGLE_CLIENT_ID": "",
   },
   // The stations' releases (scripts/release.sh puts them, install.sh gets them from /releases/).
