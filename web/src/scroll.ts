@@ -144,7 +144,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       }
       // Following on down glides (messages arriving or growing); the first position, back up, or anything else that
       // changed is taken at once.
-      if (settled && glides && target > el.scrollTop + 0.5) {
+      // A glide under way goes on (its own steps come back here as scroll events, with nothing new to glide for).
+      if (settled && (glides || frame) && target > el.scrollTop + 0.5) {
         goal = target;
         if (!frame) { lastFrame = performance.now(); frame = requestAnimationFrame(glide); }
         return;

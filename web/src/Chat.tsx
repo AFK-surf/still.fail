@@ -1718,7 +1718,12 @@ function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork
   useLayoutEffect(() => {
     const el = row.current!;
     if (leaving !== was.current.leaving) {
+      // Reading where it goes lays the list out with its room folded for a moment, shorter than the pane scrolled to its
+      // end: the browser pulls the pane up then, and it is put back (the list is held where it was while it folds).
+      const pane = el.parentElement;
+      const top = pane?.scrollTop ?? 0;
       moveState([[el, ["grid-template-rows", "opacity"]]], () => el.toggleAttribute("data-leaving", leaving), { duration: FADE_MS / 1000, ease: EASE_OUT });
+      if (pane && pane.scrollTop !== top) pane.scrollTop = top;
     }
     if (pose.folded !== was.current.folded) {
       moveState([[tail.current!, ["width", "opacity"]]], () => el.toggleAttribute("data-folded", pose.folded), { duration: FOLD_MS / 1000, ease: EASE_OUT });
