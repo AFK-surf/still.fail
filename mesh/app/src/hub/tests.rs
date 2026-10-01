@@ -1780,7 +1780,7 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
         (p.id, p.name) = ("cc2".into(), "second".into());
         c.profiles.push(p);
     });
-    let spent = |message: &str| TurnOutcome::Failed { reason: FailureReason::RateLimit, message: message.into() };
+    let spent = |message: &str| TurnOutcome::Failed { reason: crate::runtime::claude::classify_result(message), message: message.into() };
     let m = message();
     r.accept(&m).await;
     settle().await;
@@ -1788,7 +1788,7 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
     let key = first.options.route.clone();
     let on = r.session(&key).profile;
     // Left to the station: another account takes it on, in a process of its own, and goes on.
-    first.end(spent("usage limit reached"));
+    first.end(spent("You've hit your session limit · resets 3:40am (Asia/Tokyo)"));
     settle().await;
     assert!(first.disposed(), "its process ran on the account left");
     let second = r.claude.last();

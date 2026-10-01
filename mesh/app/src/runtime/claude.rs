@@ -48,7 +48,10 @@ pub fn classify_result(text: &str) -> FailureReason {
     let word = |w: &str| lower.split(|c: char| !c.is_alphanumeric()).any(|x| x == w);
     if word("401") || word("403") || lower.contains("authenticat") || lower.contains("api key") {
         FailureReason::Auth
-    } else if word("429") || lower.contains("rate limit") || lower.contains("rate-limit") || lower.contains("rate_limit") || lower.contains("ratelimit") || lower.contains("usage limit") || lower.contains("overloaded") {
+    } else if word("429") || lower.contains("rate limit") || lower.contains("rate-limit") || lower.contains("rate_limit") || lower.contains("ratelimit") || lower.contains("usage limit") || lower.contains("overloaded")
+        || ["session", "weekly", "daily"].iter().any(|window| lower.contains(&format!("hit your {window} limit")))
+        || lower.contains("you've hit your limit")
+    {
         FailureReason::RateLimit
     } else {
         FailureReason::Model
@@ -552,6 +555,29 @@ mod tests {
                 json!({ "kind": "end", "id": "m2:0" }),
             ]
         );
+    }
+
+    #[test]
+    fn allowance_result_frames_trigger_failover_but_successful_text_does_not() {
+        for message in [
+            "You've hit your session limit · resets 3:40am (Asia/Tokyo)",
+            "You've hit your weekly limit · resets Oct 8",
+            "You've hit your daily limit",
+            "You've hit your limit · resets 3am",
+        ] {
+            for is_error in [true, false] {
+                let turn = Mutex::new(Turn { busy: true, ..Turn::default() });
+                let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+                on_frame(&json!({ "type": "result", "subtype": "success", "is_error": is_error, "result": message }), &turn, &events, &Mutex::new(None));
+                let RuntimeEvent::TurnEnded(outcome) = receiver.try_recv().unwrap() else { panic!("expected turn end") };
+                if is_error {
+                    assert!(matches!(outcome, TurnOutcome::Failed { reason: FailureReason::RateLimit, .. }));
+                } else {
+                    assert!(matches!(outcome, TurnOutcome::Completed));
+                }
+            }
+        }
+        assert_eq!(classify_result("session limit configuration is invalid"), FailureReason::Model);
     }
 
     #[test]
