@@ -6,7 +6,6 @@ package fail.still.android.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +55,7 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
 import fail.still.android.ui.Card
+import fail.still.android.ui.Markdown
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.Seg
 
@@ -238,21 +238,19 @@ fun UsagePricesScreen(current: WorkspaceEntry, days: Int) {
                     Text(table.station, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                     Text(table.note, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
                     if (table.rows.isEmpty()) Text("这段时间没有模型用量", fontSize = 12.sp, color = C.muted)
-                    else Column(Modifier.horizontalScroll(rememberScrollState())) {
-                        Row {
-                            Text("模型", fontSize = 12.sp, color = C.muted, modifier = Modifier.width(140.dp).padding(vertical = 12.dp))
-                            table.rows.first().rates.forEach { rate ->
-                                Text(rate.label, fontSize = 12.sp, color = C.muted, textAlign = TextAlign.End, modifier = Modifier.width(70.dp).padding(10.dp))
+                    else {
+                        // Serialize already-formatted cells for the app's existing Markdown table renderer.
+                        fun cell(value: String) = buildString {
+                            value.forEach { c ->
+                                if (c == '\n' || c == '\r') append(' ')
+                                else { if (c in "\\`*_[]<>|") append('\\'); append(c) }
                             }
                         }
-                        table.rows.forEachIndexed { index, row ->
-                            Row(Modifier.background(if (index % 2 == 0) C.chip else Color.Transparent)) {
-                                Text(row.model, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.ink, modifier = Modifier.width(140.dp).padding(vertical = 12.dp))
-                                row.rates.forEach { rate ->
-                                    Text(rate.value, fontSize = 12.sp, color = C.ink, textAlign = TextAlign.End, modifier = Modifier.width(70.dp).padding(10.dp))
-                                }
-                            }
-                        }
+                        fun line(cells: List<String>) = cells.joinToString(" | ", "| ", " |", transform = ::cell)
+                        val header = listOf("模型") + table.rows.first().rates.map { it.label }
+                        val markdown = (listOf(line(header), line(header.map { "---" })) +
+                            table.rows.map { row -> line(listOf(row.model) + row.rates.map { it.value }) }).joinToString("\n")
+                        Markdown(markdown)
                     }
                 }
             }

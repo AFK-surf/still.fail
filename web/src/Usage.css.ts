@@ -134,10 +134,3 @@ globalStyle(`${pick} > button, ${pickLists} > button`, { whiteSpace: "nowrap", p
 export const tileLink = style({ color: "inherit", textDecoration: "none", selectors: { "&:hover": { background: u.hover } } });
 export const priceStation = style({ fontSize: "16px", margin: "0 0 8px", fontWeight: 600 });
 export const priceNote = style({ fontSize: "12px", color: u.muted, margin: "0 0 20px", lineHeight: 1.6 });
-export const priceScroll = style({ overflowX: "auto" });
-export const priceTable = style({ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontVariantNumeric: "tabular-nums" });
-globalStyle(`${priceTable} th, ${priceTable} td`, { padding: "12px 10px", textAlign: "right", whiteSpace: "nowrap" });
-globalStyle(`${priceTable} thead th`, { fontWeight: 500, color: u.muted, whiteSpace: "normal", minWidth: "60px" });
-globalStyle(`${priceTable} th:first-child`, { textAlign: "left", paddingLeft: 0 });
-globalStyle(`${priceTable} tbody th`, { fontWeight: 500 });
-globalStyle(`${priceTable} tbody tr:nth-child(odd)`, { background: u.hover });
