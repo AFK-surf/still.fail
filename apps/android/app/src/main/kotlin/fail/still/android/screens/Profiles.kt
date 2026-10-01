@@ -246,7 +246,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             }
             if (p.trouble != null) ProfileRecovery(s, p)
             if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
-            QuotaSection(address, p)
+            if (p.trouble?.action != "quota") QuotaSection(address, p)
             ModelsSection(address, p, ticks.wanted ?: p.models, ticks.sending) { models -> setModels(models) }
             // A station older than the setting says nothing of it.
             val background = flipping ?: p.backgroundOnMessage

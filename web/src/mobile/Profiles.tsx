@@ -167,7 +167,7 @@ function ProfilePage({ p }: { p: Profile }) {
         </div>
         {p.trouble && <ProfileRecovery p={p} />}
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
-        <Quota p={p} />
+        {p.trouble?.action !== "quota" && <Quota p={p} />}
         <Models p={p} put={(models) => api.putProfile(p.id, { models })} />
         {/* A station older than the setting says nothing of it. */}
         {p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
