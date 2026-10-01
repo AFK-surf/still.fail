@@ -21,7 +21,7 @@
 
 - Android New chat 首条发送闪动（fix/android-new-chat-flash）：随下次 Android 发版；仅视图修复，无接口、数据迁移或 station/cloud 顺序要求。浅色/深色点 New chat 发首条消息，输入框底色不应闪灰。Studio 完整 Android 检查和两项逐帧回归已通过，原版回归均能在第 2 帧捕获灰闪。
 
-- 安卓菜单动效（android-menu-motion）：只改 Android 共用 MenuHost/SheetHost，需要发安卓包；无协议、core 或数据变化。修复首次展开跳过动画、底部菜单遮罩突变与滑入前空程。studio 完整检查通过，MenuMotionTest 浅深色展开/收起/快速重开录屏已获用户认可。发版后检查首页筛选、长按菜单和附件底部菜单进出动效。
+- 安卓菜单动效（android-menu-motion）：只改 Android 共用 MenuHost/SheetHost，需要发安卓包；无协议、core 或数据变化。修复首次展开跳过动画、底部菜单遮罩突变与滑入前空程；菜单缩放及底部菜单位移改为弹簧减速，连续开关承接当前速度。studio 完整检查通过，MenuMotionTest 浅深色展开/收起/快速重开录屏已获用户认可。发版后检查首页筛选、长按菜单和附件底部菜单进出动效。
 
 - 安卓分屏键盘动效（fix/android-ime-motion）：需发安卓包；仅视图变化，无 core/API 或数据迁移依赖。多窗口缺少系统 IME 中间帧时补升降过渡，有原生帧及全屏继续直通。studio 安卓完整检查和 KeyboardInsetsTest 两项通过，Android 16 双应用分屏浅/深色录屏已确认。发版后在厂商折叠屏实机验分屏升降、快速反向收放，以及退出分屏后的全屏键盘。
 - 奏折输入框（memorial-composer）：奏折直接复用 chat 的输入组件（PC ComposerView、手机 web MobileComposer、Android HostComposer），带附件、引用、@ 对话与原有伸缩；草稿按奏折保存；发 web（含新 wasm core）、桌面和 Android 包，不能只换视图而继续用旧 core（旧 core 的 decision.reply 只接收问答类卡片且不接附件）。沿用 chat 消息和引用接口，兼容旧 station，无数据迁移。上线后验：有选项的奏折输入多行回复并发送、选项仍可点；加附件或引用后可发送，内容进入原 chat；左右滑动后回来保留草稿；失败保留文字；处理最后一件返回列表。
