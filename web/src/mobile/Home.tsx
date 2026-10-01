@@ -245,8 +245,8 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
         {busy ? <span className={css.mChatMark} aria-label="正在处理"><Spinner size={12} /></span>
           : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>
-          : item.offline ? <Tip label={item.offline}><span className={css.mChatMark}><Unplug size={14} /></span></Tip>
-          : item.reconnecting ? <Tip label={item.reconnecting}><span className={css.mChatMark} aria-label={item.reconnecting}><Spinner size={12} /></span></Tip>
+          // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
+          : item.offline || item.reconnecting ? <Tip label={item.offline ?? item.reconnecting}><span className={css.mChatMark} aria-label={item.offline ?? item.reconnecting}><Unplug size={14} /></span></Tip>
           : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark size={14} /></span></Tip>}</span>}
       </span>
       <span className={css.mChatLine2}>

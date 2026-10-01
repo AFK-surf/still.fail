@@ -22,7 +22,6 @@ import * as controlsCss from "./styles/controls.css.ts";
 import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import * as nav from "./Sidebar.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 
@@ -200,11 +199,10 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
           {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} className={nav.rowSpinner} label="正在保存" side="right" /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
-          {/* Its station offline: greyed, and marked there instead (the core says so, row by row). */}
-          {item.offline
-            ? <Tip label={item.offline} side="right"><span className={nav.sessionKind} aria-label={item.offline}><Unplug size={12} /></span></Tip>
-            : item.reconnecting
-            ? <Tip label={item.reconnecting} side="right"><span className={nav.sessionKind} aria-label={item.reconnecting}><span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" /></span></Tip>
+          {/* Its station offline, or its link coming back: marked unplugged there (the core says which, row by row). A
+              spinner on a row is only ever something its person did, under way. */}
+          {item.offline || item.reconnecting
+            ? <Tip label={item.offline ?? item.reconnecting} side="right"><span className={nav.sessionKind} aria-label={item.offline ?? item.reconnecting}><Unplug size={12} /></span></Tip>
             : connect && <Tip label={item.originText ?? "Slack"} side="right"><span className={nav.sessionKind}><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
         </span>
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}

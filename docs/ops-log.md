@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- chat 行上的重连标记（reconnect-mark）：station 在重连时，chat 行上从转圈改成断开图标（同离线），转圈只表示用户点的操作在进行。只改了 web、手机 web、安卓 Home.kt；web 跟部署走，安卓要发一版。上线后验：断网再连时，侧栏 chat 行显示断开图标，悬停是「正在重连…」。
 - 失败原地标出（op-stages）：core 的 `doing` 里失败的调用多留 6 秒（`stage: failed`、`error`），三端原来转圈的地方变成红色「!」带原因（桌面悬停、手机/安卓点一下看）。改了 core、shapes、web、手机 web、安卓；新字段可选，旧 core 没有 stage 时按进行中处理。web 跟部署走，安卓要发一版。上线后验：停掉 station 后在网页上固定一个 chat，约 30 秒后那一行变成红色「!」，悬停显示「连不上这台 station：没有回应」，6 秒后消失。
 - 操作的即时反馈（op-feedback）：core 加 `doing` topic（client/core/src/doing.rs：用户发起的写调用从发出到回答都列在里面），三端按它在对应的行或按钮上转圈、禁止重复点，吞掉的错误都改成提示。改了 core、shapes、web、手机 web、安卓；station 和 cloud 不用动。web 跟部署走，安卓要发一版（安卓的 core 和界面在同一个包里，一起发）。上线后验：网页上右键一个 chat 选「固定」，那一行立刻转圈；把 station 停掉再固定，约 30 秒后提示「没能固定：…」，转圈消失；安卓上长按 chat 选固定，那一行转圈。
 - 安卓列表从 chat 返回时离底部不远会往上偏（android-chatlist-scroll）：只改了安卓 Home.kt（上下两条栏的高度跟页面状态一起存），要发一版。上线后验：列表滚到靠近底部，进一个 chat 再返回，停在原来的行上；新加的 motion 测试 `ListPlaceTest` 在 studio 上 `sh apps/android/app/src/androidTest/motion.sh fail.still.android.motion.ListPlaceTest` 能跑。
