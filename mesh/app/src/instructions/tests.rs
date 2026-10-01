@@ -117,6 +117,15 @@ fn a_mark_with_a_screenshot_of_its_own_is_said_to_be_in_that_one() {
 }
 
 #[test]
+fn a_numbered_mark_on_an_image_is_said_to_be_pinned_on_the_image_attached() {
+    let mut m = message(2, "101.0", "U1", false, AuthorKind::Person);
+    m.quotes = vec![Quote { author: "图片 a.png 标注 1".into(), text: "框 · 左上角 (10, 20)，30×40\n在图片 a-标注.png 上，编号 1".into(), comment: "这里对不齐".into(), ts: None, role: Some("image".into()), file: None }];
+    assert!(message_for_agent(&m).starts_with(
+        "[Quote] From an image marked in the chat (图片 a.png 标注 1), its number pinned on the marked image attached:\n> 框 · 左上角 (10, 20)，30×40\n> 在图片 a-标注.png 上，编号 1\nTheir comment on it: 这里对不齐"
+    ));
+}
+
+#[test]
 fn widget_models_are_one_section_each_with_where_it_was_posted() {
     assert_eq!(format_widget_models(&[]), "");
     let models = [

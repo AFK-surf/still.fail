@@ -29,6 +29,7 @@
 - 安卓从设置手势返回时往左退（android-settings-back-left）：设置从左边进来，点返回本来就往左退，但系统返回手势把它往右推了出去。只改了安卓 app（`App.kt`），要发一版安卓才能用上，cloud、station、web 都不动。验证：首页左上角齿轮进设置，从屏幕边缘划返回，设置跟着手指往左走，首页从右边露出来，阴影在设置的右边。
 - 官网手机版 demo 的框改成大圆角（site-demo-phone-radius）：宽 ≤747px 时框 36px、光边 37px（输入框胶囊 26px + 10px 间距，同心），手机 App 顶上留 24px 状态栏的位置。只改官网，部署 `site` 即可。上线后验：手机打开 still.fail，demo 四角是大圆角，和底部输入框同心，标题栏不贴顶。
 - 图片预览左右切换（image-viewer-swipe）：PC 和安卓切换时前后两张像胶片一样滑动，拖动跟手（拖动时旁边那张也露出来），松手翻页或弹回；修了安卓切图后画面一直停在第一张（`produceState` 留着上一张的数据）。只改客户端：web 跟部署走，安卓要发一版，cloud、station 不动。验证：打开一个有几张图的 chat，点开一张，PC 按 ← → 或用鼠标拖、手机左右滑，图跟着走，松手滑到下一张，标题的「2 / 3」和画面一致。
+- 图片标注带编号和评论（image-marks-comments）：PC/手机 web 的图片标注里，框和箭头带编号圆点和评论气泡；放进对话时除了画好的图，每处编号一张引用卡片（quote 的 role 新加 `image`）。改了 web 和 station（`admin/files.rs` 收下 role `image`，`instructions.rs` 告诉 agent 这是图片上的第 N 处）。新页面配旧 station：role 被丢掉，卡片当普通引用显示，agent 读到「a message from 图片 … 标注 N」，位置和评论都还在；旧页面配新 station 不受影响。web 跟部署走，station 要发包（`stillfail update`）。验证：在 chat 里点开一张图 → 标注 → 画个框写句评论 → 放进对话 → 发送，消息里的卡片带橙色编号，agent 收到的引用是「From an image marked in the chat (…)」。
 
 下面各条的 cloud、web、admin 部分已经随 1bf61c4 上线（2026-10-01 11:13），剩下的是要发版的安卓和桌面部分。
 

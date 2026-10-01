@@ -829,8 +829,9 @@ function besideQuotes<F extends { name: string }>(quotes: Quote[] | undefined, f
  * Also the composer's pending quote, with an editable comment.
  */
 function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote; onJump?: ((from: Element) => void) | undefined; comment?: ReactNode; onRemove?: () => void; picture?: ReactNode }) {
-  // A mark on a previewed page (annotate/Marks.tsx): its pin's number and what it is; where it is is for the agent.
-  const pin = quote.role === "page" ? /(\d+)$/.exec(quote.author)?.[1] : undefined;
+  // A mark on a previewed page (annotate/Marks.tsx) or an image (annotate/ImageMarks.tsx): its pin's number and what
+  // it is; where it is is for the agent.
+  const pin = quote.role === "page" || quote.role === "image" ? /(\d+)$/.exec(quote.author)?.[1] : undefined;
   return (
     <div className={css.quoteCard}>
       <Tip label={onJump ? "跳到原消息" : pin ? quote.text : undefined}><button type="button" className={css.quoteCardSource} onClick={onJump ? (e) => onJump(e.currentTarget) : undefined} disabled={!onJump}>

@@ -520,7 +520,7 @@ data class Quote (
 	val text: String,
 	val comment: String,
 	val ts: String? = null,
-	/// agent | person
+	/// agent | person | page (a mark on a previewed page) | image (a numbered mark on an image)
 	val role: String? = null,
 	/// The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot).
 	val file: String? = null

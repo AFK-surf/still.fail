@@ -131,7 +131,7 @@ pub fn quotes_of(input: Option<&Value>) -> Vec<Quote> {
             text: text(q, "text", "", 4000),
             comment: text(q, "comment", "", 4000),
             ts: q.get("ts").and_then(Value::as_str).filter(|ts| ts.split_once('.').is_some_and(|(a, b)| !a.is_empty() && !b.is_empty() && a.chars().chain(b.chars()).all(|c| c.is_ascii_digit()))).map(String::from),
-            role: q.get("role").and_then(Value::as_str).filter(|r| matches!(*r, "agent" | "person" | "page")).map(String::from),
+            role: q.get("role").and_then(Value::as_str).filter(|r| matches!(*r, "agent" | "person" | "page" | "image")).map(String::from),
             file: q.get("file").and_then(Value::as_str).filter(|f| !f.is_empty()).map(|f| f.chars().take(200).collect()),
         })
         .filter(|q| !q.text.trim().is_empty())

@@ -91,6 +91,9 @@ pub fn message_for_agent(m: &MessageRow) -> String {
                     Some(shot) => format!("a web page shown in the chat's preview ({}), marked with its number in its own screenshot {}", q.author, shot.path),
                     None => format!("a web page shown in the chat's preview ({}), marked with its number in the attached screenshot", q.author),
                 },
+                // A numbered mark drawn on an image (web/src/annotate/ImageMarks.tsx): its pin is in the image attached,
+                // which its text names.
+                Some("image") => format!("an image marked in the chat ({}), its number pinned on the marked image attached", q.author),
                 _ => format!("a message from {}", q.author),
             };
             let which = match &q.ts {

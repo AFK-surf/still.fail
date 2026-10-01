@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { iconBtn } from "../styles/pages.css.ts";
 import { glass } from "../FilePreview.css.ts";
+import { note as marksNote, said as marksSaid } from "./Marks.css.ts";
 
 /** What is drawn on an image: still.fail's accent, as a preview's marks are (literal: the image viewer redefines the theme's). */
 export const INK = "oklch(68% .175 39)";
@@ -76,3 +77,15 @@ export const done = style({
   },
 });
 export const error = style({ color: vars.red, fontSize: vars.textXs, whiteSpace: "nowrap", padding: "0 6px" });
+
+/** Over the sheet, placed as it is: the numbered marks' pins (and their bubbles), only those taking the pointer. */
+export const pins = style({
+  position: "absolute", left: "50%", top: "50%", transformOrigin: "center", pointerEvents: "none",
+});
+/** A pin's point on the image, drawn back at its own size (`scale(1 / zoom)`) from there. */
+export const pinAt = style({ position: "absolute", width: "0", height: "0", transformOrigin: "0 0", pointerEvents: "auto" });
+/** A mark's bubble and what was said, as a preview's (Marks.css.ts) but in the viewer's own dark glass: readable over any picture. */
+export const note = style([marksNote, { ...glass, boxShadow: "0 2px 10px rgb(0 0 0 / .25)", color: "rgba(255, 255, 255, .94)" }]);
+export const said = style([marksSaid, { ...glass, boxShadow: "0 2px 10px rgb(0 0 0 / .25)", color: "rgba(255, 255, 255, .94)" }]);
+globalStyle(`${note} input`, { color: "inherit" });
+globalStyle(`${note} input::placeholder, ${note} span`, { color: "rgba(255, 255, 255, .5)" });

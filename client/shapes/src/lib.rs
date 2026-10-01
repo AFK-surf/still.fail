@@ -296,7 +296,7 @@ pub struct Quote {
     pub text: String,
     pub comment: String,
     pub ts: Option<String>,
-    /// agent | person
+    /// agent | person | page (a mark on a previewed page) | image (a numbered mark on an image)
     pub role: Option<String>,
     /// The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot).
     pub file: Option<String>,

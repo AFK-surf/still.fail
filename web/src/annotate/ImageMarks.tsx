@@ -1,12 +1,15 @@
 // Marking an image opened over the page (FilePreview.tsx): boxes, arrows, lines drawn by hand and words, drawn on the
-// image where it is shown (zoomed and panned with it); picked again to move, resize, recolour or remove. Done, the
-// image with its marks goes into the chat's draft as a new file (or, outside a chat, is downloaded).
+// image where it is shown (zoomed and panned with it); picked again to move, resize, recolour or remove. Boxes and
+// arrows are numbered, as a preview's marks are (Marks.tsx): a pin on each, and something said about it in a frosted
+// bubble beside it. Done, the image with its marks (and their pins) goes into the chat's draft as a new file, with a
+// quote per numbered mark saying where it is and what was said about it (or, outside a chat, is downloaded).
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowUpRight, Cursor, Download, Edit, Redo, Retry, Scribble, Send, Square, Text, Trash } from "../icons.tsx";
-import { DraftKey, offerToDraft } from "../draft.ts";
+import { DraftKey, offerToDraft, type DraftQuote } from "../draft.ts";
 import { Tip } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./ImageMarks.css.ts";
+import * as marksCss from "./Marks.css.ts";
 
 type Tool = "select" | "rect" | "arrow" | "pen" | "text";
 interface P { x: number; y: number }
@@ -87,6 +90,21 @@ function measure(text: string, w: number): number {
   return measurer.measureText(text).width;
 }
 
+/** A box or an arrow: numbered, with something said about it. */
+const numbered = (s: Shape): s is Shape & { tool: "rect" | "arrow" } => s.tool === "rect" || s.tool === "arrow";
+/** The numbered marks' numbers, in the order they were drawn (one removed, those after it move up). */
+function numbersOf(shapes: Shape[]): Map<number, number> {
+  return new Map(shapes.filter(numbered).map((s, i) => [s.id, i + 1]));
+}
+/**
+ * Where a numbered mark's pin points (a box's top-left corner, an arrow's tail), kept in the image whole: the pin, 24
+ * by 24 in the size its mark's line was drawn at, sits up and to the right of its point.
+ */
+function pinPoint(s: Shape & { tool: "rect" | "arrow" }, natural: { w: number; h: number }): P {
+  const k = s.w / LINE, p = s.tool === "rect" ? (({ x, y }) => ({ x, y }))(boxOf(s)) : s.a;
+  return { x: Math.min(Math.max(p.x, 2 * k), natural.w - 22 * k), y: Math.min(Math.max(p.y, 22 * k), natural.h - 2 * k) };
+}
+
 /** The box a shape takes. */
 function boxOf(s: Shape): Box {
   if (s.tool === "text") return { x: s.at.x, y: s.at.y, w: measure(s.text, s.w), h: s.w * LINE_HEIGHT };
@@ -152,6 +170,30 @@ async function render(url: string, natural: { w: number; h: number }, shapes: Sh
       g.stroke(new Path2D(pathOf(s)));
     }
   }
+  // The pins over them all, as they show while marking: the mark's colour, edged and numbered in its halo.
+  for (const [id, n] of numbersOf(shapes)) {
+    const s = shapes.find((x) => x.id === id) as Shape & { tool: "rect" | "arrow" };
+    const k = s.w / LINE, p = pinPoint(s, natural), halo = haloOf(s.color);
+    const x = p.x - 2 * k, y = p.y - 22 * k, size = 24 * k, edge = 2 * k;
+    g.save();
+    g.shadowColor = "rgba(0, 0, 0, .22)";
+    g.shadowBlur = 6 * k;
+    g.shadowOffsetY = 2 * k;
+    g.fillStyle = halo;
+    g.beginPath();
+    g.roundRect(x, y, size, size, [12 * k, 12 * k, 12 * k, 3 * k]);
+    g.fill();
+    g.restore();
+    g.fillStyle = s.color;
+    g.beginPath();
+    g.roundRect(x + edge, y + edge, size - 2 * edge, size - 2 * edge, [10 * k, 10 * k, 10 * k, 1.5 * k]);
+    g.fill();
+    g.fillStyle = halo;
+    g.font = `650 ${11 * k}px ${FONT}`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(String(n), x + size / 2, y + size / 2 + 0.5 * k);
+  }
   return new Promise((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error("没能画出图片"))), "image/png"));
 }
 
@@ -184,12 +226,16 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
   const [picked, setPicked] = useState<number | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [writing, setWriting] = useState<Writing | null>(null);
+  // What is said about each numbered mark (by its id; kept apart from the marks, so undoing a mark's move keeps them),
+  // and the one whose bubble is open.
+  const [comments, setComments] = useState<Map<number, string>>(new Map());
+  const [note, setNote] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const nextId = useRef(1);
-  const live = useRef({ doc, writing, picked, drag });
-  live.current = { doc, writing, picked, drag };
+  const live = useRef({ doc, writing, picked, drag, note });
+  live.current = { doc, writing, picked, drag, note };
 
   /** Changes the marks, as one step to undo. */
   const commit = useCallback((next: Shape[], before?: Shape[]) => {
@@ -198,14 +244,17 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
   const undo = useCallback(() => {
     setDoc((d) => d.past.length ? { shapes: d.past[d.past.length - 1]!, past: d.past.slice(0, -1), future: [d.shapes, ...d.future] } : d);
     setPicked(null);
+    setNote(null);
   }, []);
   const redo = useCallback(() => {
     setDoc((d) => d.future.length ? { shapes: d.future[0]!, past: [...d.past, d.shapes], future: d.future.slice(1) } : d);
     setPicked(null);
+    setNote(null);
   }, []);
   const remove = useCallback((id: number) => {
     commit(live.current.doc.shapes.filter((s) => s.id !== id));
     setPicked(null);
+    setNote(null);
   }, [commit]);
 
   /** The words being written, put down (all of them gone: the text they were, removed). */
@@ -228,6 +277,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
 
   const leave = useCallback(() => {
     setOn(false); setDoc({ shapes: [], past: [], future: [] }); setPicked(null); setDrag(null); setWriting(null); setError(null); setPalette(false);
+    setComments(new Map()); setNote(null);
   }, []);
   const pickTool = useCallback((t: Tool) => { putDown(); setTool(t); if (t !== "select") setPicked(null); }, [putDown]);
   /** A colour to draw in next; the picked mark (or the words being written) takes it at once. */
@@ -239,13 +289,17 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     else if (id !== null) commit(d.shapes.map((s) => (s.id === id ? { ...s, color: c } : s)));
   }, [commit]);
 
-  // Keys while marking: Esc puts down the words being written, lets go of the picked mark, else stops marking;
+  // Keys while marking: Esc closes a mark's bubble (the keys typed in it are its own), puts down the words being written, lets go of the picked mark, else stops marking;
   // ⌘/Ctrl+Z undoes (with ⇧, redoes); Delete removes the picked mark; a tool's letter picks it. Heard before the
   // dialog's own Esc (which would close the image), and before the viewer's keys.
   useEffect(() => {
     if (!on) return;
     const onKey = (e: KeyboardEvent) => {
-      const { writing: w, picked: id } = live.current;
+      const { writing: w, picked: id, note: open } = live.current;
+      if (open !== null) {
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setNote(null); }
+        return;
+      }
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -302,6 +356,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     if (onTouchDown(e)) return;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     if (live.current.writing) { putDown(); return; }
+    if (live.current.note !== null) { setNote(null); return; }
     const p = at(e);
     if (tool === "select") { setPicked(null); return; }
     if (tool === "text") {
@@ -321,6 +376,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     setPalette(false);
     if (onTouchDown(e)) return;
     svg.current?.setPointerCapture(e.pointerId);
+    setNote(null);
     // Words pressed twice (a double click or tap: the second press, as the pointer is held by the sheet) are written again.
     const now = performance.now(), again = lastDown.current.id === s.id && now - lastDown.current.at < 400;
     lastDown.current = { id: s.id, at: now };
@@ -367,7 +423,11 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
       // A click, not a drag: nothing drawn.
       const s = d.shape, first = s.tool === "pen" ? s.points[0]! : s.tool === "text" ? s.at : s.a;
       const points = s.tool === "pen" ? s.points : s.tool === "text" ? [] : [s.b];
-      if (points.some((q) => Math.hypot(q.x - first.x, q.y - first.y) > 4 / scale)) commit([...live.current.doc.shapes, s]);
+      if (points.some((q) => Math.hypot(q.x - first.x, q.y - first.y) > 4 / scale)) {
+        commit([...live.current.doc.shapes, s]);
+        // A box or an arrow, drawn: what to say about it, at once.
+        if (numbered(s)) setNote(s.id);
+      }
     } else if (d.changed) {
       setDoc((x) => ({ shapes: x.shapes, past: [...x.past, d.before], future: [] }));
     }
@@ -388,11 +448,23 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
       }
       putDown();
       setPicked(null);
+      setNote(null);
       const png = await render(url, natural, all);
       const stamp = new Date().toTimeString().slice(0, 8).replaceAll(":", "");
       const fileName = `${name.replace(/\.[^.]+$/, "")}-标注-${stamp}.png`;
       if (how === "draft") {
-        if (!draftKey || !offerToDraft(draftKey, { files: [new File([png], fileName, { type: "image/png" })], quotes: [] })) {
+        // A quote per numbered mark: where it is, for the agent (the first line is also what the composer shows), and what was said.
+        const quotes: DraftQuote[] = [...numbersOf(all)].map(([id, n]) => {
+          const s = all.find((x) => x.id === id)!, r = (v: number) => Math.round(v);
+          const what = s.tool === "rect"
+            ? (({ x, y, w, h }) => `框 · 左上角 (${r(x)}, ${r(y)})，${r(w)}×${r(h)}`)(boxOf(s))
+            : s.tool === "arrow" ? `箭头 · 从 (${r(s.a.x)}, ${r(s.a.y)}) 指向 (${r(s.b.x)}, ${r(s.b.y)})` : "";
+          return {
+            id: `image-${stamp}-${n}-${Math.random().toString(36).slice(2, 8)}`, author: `图片 ${name} 标注 ${n}`, role: "image",
+            text: `${what}\n在图片 ${fileName}（${natural.w}×${natural.h}，原图 ${name}）上，编号 ${n}`, comment: comments.get(id)?.trim() ?? "",
+          };
+        });
+        if (!draftKey || !offerToDraft(draftKey, { files: [new File([png], fileName, { type: "image/png" })], quotes })) {
           throw new Error("这个对话现在不能发消息");
         }
         leave();
@@ -480,7 +552,46 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
 
   const drawn = drag?.kind === "draw" ? [...shapes, drag.shape] : shapes;
   const reach = REACH / scale;
-  const sheet = (place: CSSProperties | null) => natural && place && on ? (
+  const numbers = numbersOf(shapes);
+  /** How much room the window has right of a point on the image (for which side a bubble goes). */
+  const roomRight = (p: P) => {
+    const r = svg.current?.getBoundingClientRect();
+    return r && natural ? window.innerWidth - (r.left + (p.x / natural.w) * r.width) : Infinity;
+  };
+  // The numbered marks' pins, over the sheet and placed as it is, each drawn at its own size whatever the zoom: its
+  // number, and what is said about it beside it (being written: open, in a bubble).
+  const pins = (place: CSSProperties) => natural && numbers.size > 0 ? (
+    <div className={css.pins} style={place}>
+      {shapes.map((s) => {
+        const n = numbers.get(s.id);
+        if (n === undefined || !numbered(s)) return null;
+        const p = pinPoint(s, natural), open = note === s.id, comment = comments.get(s.id) ?? "", halo = haloOf(s.color);
+        const right = roomRight(p) >= (open ? 320 : 120);
+        return (
+          <div key={s.id} className={css.pinAt} style={{ left: p.x, top: p.y, transform: `scale(${1 / scale})` }}
+            onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+            <Tip label={open ? undefined : comment || "写点什么"}><button type="button" className={marksCss.pin} data-open={open || undefined}
+              style={{ left: 0, top: 0, background: s.color, borderColor: halo, color: halo }} aria-label={`标注 ${n}`}
+              onClick={() => { putDown(); setPicked(null); setNote(open ? null : s.id); }}>{n}</button></Tip>
+            {open
+              ? <div className={css.note} style={right ? { left: 28, top: -28 } : { right: 8, top: -28 }}>
+                  <input className={marksCss.noteInput} autoFocus value={comment} placeholder="对这处说点什么" aria-label={`标注 ${n} 的说明`}
+                    onChange={(e) => { const v = e.target.value; setComments((all) => new Map(all).set(s.id, v)); }}
+                    // Keys typed here are the comment's (not the viewer's zoom or steps).
+                    onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); setNote(null); } }} />
+                  <span className={marksCss.noteKey} aria-hidden="true">↵</span>
+                  <Tip label="删掉这处标注"><button type="button" className={marksCss.noteRemove} aria-label="删掉这处标注" onClick={() => remove(s.id)}>
+                    <Trash size={14} strokeWidth={1.75} />
+                  </button></Tip>
+                </div>
+              : comment.trim() && <button type="button" className={css.said} style={right ? { left: 28, top: -23, maxWidth: 260 } : { right: 6, top: -23, maxWidth: 260 }}
+                  onClick={() => { putDown(); setPicked(null); setNote(s.id); }}>{comment}</button>}
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
+  const sheet = (place: CSSProperties | null) => natural && place && on ? (<>
     <svg ref={svg} className={css.sheet} data-tool={tool} style={place} viewBox={`0 0 ${natural.w} ${natural.h}`}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
       onDoubleClick={(e) => e.stopPropagation()}>
@@ -528,7 +639,8 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
         </foreignObject>
       )}
     </svg>
-  ) : null;
+    {pins(place)}
+  </>) : null;
 
   return { on, bar, tools, sheet };
 }

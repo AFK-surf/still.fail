@@ -499,7 +499,7 @@ export interface Quote {
 	text: string;
 	comment: string;
 	ts?: string;
-	/** agent | person */
+	/** agent | person | page (a mark on a previewed page) | image (a numbered mark on an image) */
 	role?: string;
 	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot). */
 	file?: string;
