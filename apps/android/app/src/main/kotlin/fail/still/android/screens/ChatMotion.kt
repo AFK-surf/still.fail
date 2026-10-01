@@ -208,13 +208,16 @@ internal class ChatMotion(private val reduced: Boolean) {
         val pane = pane?.takeIf { it.isAttached } ?: return null
         fun at(l: LayoutCoordinates?) = l?.takeIf { it.isAttached }?.let { pane.localPositionOf(it, Offset.Zero) }
         val avatar = at(activityAvatars[c.agent]) ?: return null
-        // Before the message is in the list: where its avatar will be, the activity's place (the message comes in
-        // there, and the activity moves down), 3dp down its row as a message's avatar sits.
+        // Before the message is in the list: where its avatar will be, the first activity's place (the message comes in
+        // there, and the activities move down), 3dp down its row as a message's avatar sits.
         // As it comes in, the message is laid out a frame before its avatar says where it is, and the activity has moved
         // down already: until then, where it was aimed at.
         val known = at(landings[c.seq])
         val held = aimed?.takeIf { aimedAt == c.seq && c.pose != Pose.Float }
-        val landing = known ?: held ?: at(activityRows[c.agent])?.let { it + Offset(0f, with(density) { 3.dp.toPx() }) } ?: return null
+        // Not in the list yet, the message comes in over all the activities (they are the last things in the chat), not at
+        // its own agent's: where the first of them is.
+        val first = activityRows.values.mapNotNull { at(it) }.minByOrNull { it.y }
+        val landing = known ?: held ?: first?.let { it + Offset(0f, with(density) { 3.dp.toPx() }) } ?: return null
         aimed = landing; aimedAt = c.seq
         val t = clock.value
         return when (c.pose) {
