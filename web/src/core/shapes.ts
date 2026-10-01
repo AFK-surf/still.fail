@@ -212,6 +212,13 @@ export interface Creator {
 	shown?: PersonShown;
 }
 
+/** The message a turn's state is about: its thread, its seq there, its ts. */
+export interface TurnAbout {
+	thread: number;
+	seq: number;
+	ts: string;
+}
+
 export interface TurnSummary {
 	kind: string;
 	outcome?: string;
@@ -221,12 +228,21 @@ export interface TurnSummary {
 	/** For waiting: what it waits for, in the agent's words (a station yet to update says nothing). */
 	waitFor?: string;
 	/**
-	 * How the agent ended it in today's words: all_done, need_decision, need_help or waiting (`declared` keeps the
-	 * words from before: final, block). A station yet to update says nothing.
+	 * How the agent ended it in today's words: all_done, need_help or waiting (`declared` keeps the words from before:
+	 * final, block; a station before cards may say need_decision, which the core reads as need_help). A station yet to
+	 * update says nothing.
 	 */
 	ending?: string;
-	/** For need_help: what a person has to give or do, in the agent's words. */
+	/**
+	 * For need_help: what a person has to give, do or decide, in the agent's words; for all_done, what the chat ends
+	 * with.
+	 */
 	need?: string;
+	/**
+	 * The message its state is about (the agent's `about`; for need_help, the card waiting by default). A station
+	 * before it says nothing.
+	 */
+	about?: TurnAbout;
 	detail?: string;
 	startedAt: number;
 	endedAt?: number;
@@ -809,14 +825,29 @@ export interface DecisionOption {
 }
 
 /**
- * A chat's decision still pending (a row's, a chat page's): the block post's entry, its options in the order they are
- * shown (the recommended one last), whether the viewer dismissed it, and its line (奏 · …) while it is the viewer's.
+ * What an agent's message asks people to answer it with (core decisions.rs): `type` options (`options`, as shown: the
+ * recommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;
+ * `decision.reply`). A type a UI does not know: answered by writing in the chat.
+ */
+export interface MessageCard {
+	/** options | text */
+	type: string;
+	options?: DecisionOption[];
+	placeholder?: string;
+}
+
+/**
+ * A chat's card still pending (a row's, a chat page's; named for when the only cards were decisions): its post's entry,
+ * the card as shown, an options card's options in the order they are shown (the recommended one last; empty for a
+ * text card), whether the viewer dismissed it, and its line (奏 · …) while it is the viewer's.
  */
 export interface RowDecision {
 	seq: number;
 	options: DecisionOption[];
+	/** The card itself. A core before cards says none: an options card. */
+	card?: MessageCard;
 	dismissed?: boolean;
-	/** 奏 · <the post's first line, cut to about 40 characters>: the row's second line. Absent once dismissed. */
+	/** 奏 · <the post's first line, cut to about 40 characters>. Absent once dismissed. */
 	text?: string;
 }
 
@@ -866,25 +897,31 @@ export interface ChatItem {
 	/** A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise. */
 	watch?: RowWatch;
 	/**
-	 * The decision it waits on (an agent's block post with options no one has answered yet), as the viewer sees it.
-	 * Absent when there is none (and from a station before decisions).
+	 * The card it waits on (an agent's post with a card no one has answered yet), as the viewer sees it. Absent when
+	 * there is none (and from a station before decisions).
 	 */
 	decision?: RowDecision;
 	/**
-	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no decision waiting for the viewer,
+	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
 	 * nothing unread. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
 	 */
 	settled?: boolean;
 	/** With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise. */
 	archivable?: boolean;
 	/**
-	 * Where it stands, in words, for its second line: 奏 · … (a decision waiting for the viewer), 要你帮忙：…, 出问题：…,
-	 * 在等：…, 做完了. Absent while it is at work or with nothing to say.
+	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
+	 * card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
+	 * no card waiting, or with nothing to say.
 	 */
 	stateText?: string;
 	/**
-	 * Its mark, the most urgent first: alert (blocked or failed), wait (a decision waits, not dismissed by the viewer),
-	 * busy (at work), done (something unread). Absent for none.
+	 * The message `stateText` is about (a seq in this chat): the card, or the one the agent's state names. Opening the
+	 * chat from the line may go to it. Absent when none.
+	 */
+	stateAbout?: number;
+	/**
+	 * Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an
+	 * agent needs them: need_help), busy (at work), done (something unread). Absent for none.
 	 */
 	tone?: string;
 }
@@ -988,11 +1025,13 @@ export interface ChatMessage {
 	/** Its times in words, by field (`createdAt`). */
 	time?: Record<string, Stamp>;
 	/**
-	 * An agent's block post asking people to decide: the answers to pick, in the order they are shown (the one the
-	 * agent recommends last). Absent for every other message.
+	 * An agent's post with an options card: the answers to pick, in the order they are shown (the one the agent
+	 * recommends last), as `card.options`; drawn under the message. Absent for every other message.
 	 */
 	options?: DecisionOption[];
-	/** With `options`: whether it still waits for an answer, and who answered it how. */
+	/** The card it carries (options to pick, or a text field), as shown. Absent for a message with none. */
+	card?: MessageCard;
+	/** With a card: whether it still waits for an answer, and who answered it how. */
 	decision?: MessageDecision;
 }
 
@@ -1096,7 +1135,7 @@ export interface ChatView {
 	failed?: string;
 	/** Its link while it is down or coming back, in words; absent while it is up (and from a core before it). */
 	connection?: LinkShown;
-	/** The decision it waits on, as its row has it. Absent when there is none. */
+	/** The card it waits on, as its row has it. Absent when there is none. */
 	decision?: RowDecision;
 	/**
 	 * Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
@@ -1360,8 +1399,9 @@ export interface Counts {
 }
 
 /**
- * One decision on the decisions page: where it is, the post that asks it (as a chat shows messages) and the messages
- * just before it, its options as shown, and whether the viewer set it aside on this device.
+ * One card on the 奏 page: where it is, the post that asks (as a chat shows messages, with its card) and the messages
+ * just before it, the card (an options card's options as shown, also as `options`), and whether the viewer set it
+ * aside on this device. An options card is answered with `decision.answer`, a text card with `decision.reply`.
  */
 export interface DecisionItem {
 	station: string;
@@ -1376,6 +1416,8 @@ export interface DecisionItem {
 	/** The one or two messages before it, oldest first. */
 	before: ChatMessage[];
 	options: DecisionOption[];
+	/** The card. A core before cards says none: an options card. */
+	card?: MessageCard;
 	/** Set aside (待定) on this device: last in the list, still pending. */
 	deferred?: boolean;
 	/** 奏 · <the post's first line> */
@@ -1383,8 +1425,8 @@ export interface DecisionItem {
 }
 
 /**
- * The decisions waiting in a workspace's chats for the viewer (the `decisions` view, core decisions.rs): pending, not
- * dismissed by them, those they set aside (待定) last; `count` for the home page's 奏 N.
+ * The cards waiting in a workspace's chats for the viewer (the `decisions` view, the 奏 page, core decisions.rs):
+ * pending whatever their agents do, not dismissed by them, those they set aside (待定) last; `count` for 奏 N.
  */
 export interface DecisionsView {
 	items: DecisionItem[];
@@ -2347,12 +2389,15 @@ export interface UsageView {
 export interface WorkspaceMark {
 	alert: number;
 	unread: number;
-	/** How many have a decision waiting (not dismissed by them), not counted in `alert`. Absent for 0. */
+	/**
+	 * How many have a card waiting (not dismissed by them) or an agent needing them (need_help), not counted in
+	 * `alert`. Absent for 0.
+	 */
 	wait?: number;
-	/** How many decisions wait in it for them in all (the home page's 奏 N). Absent for 0. */
+	/** How many cards wait in it for them in all (奏 N). Absent for 0. */
 	decisions?: number;
 	tone?: string;
-	/** 2 个需要处理 · 1 个等你决定 · 3 个有新消息 */
+	/** 2 个需要处理 · 1 个在等你 · 3 个有新消息 */
 	label?: string;
 	chat?: OpenChat;
 }

@@ -364,11 +364,13 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     var held by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
+    // Its state line (in the root, as `bounds`): tapped while it names a message (`stateAbout`), the chat opens there.
+    var line by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
     // Nothing left in it: archived with one tap on the 归档 at its end (as its menu's 归档), or swiped away to the left.
     val archivable = live && item.archivable == true && item.offline == null && item.pending != true
     val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
-    val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending) {
+    val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending, item.stateAbout) {
         detectTapGestures(
             onPress = { tryAwaitRelease(); held = false },
             onLongPress = { at ->
@@ -381,12 +383,15 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
                 val x = bounds.left + at.x - 90.dp.toPx()
                 app.menu = MenuSpec(Rect(x, bounds.top, x, bounds.bottom), items, onDismiss = { menuOpen = false })
             },
-            onTap = { app.push(Screen.Chat(item.station, item.page)) },
+            onTap = { at ->
+                val about = item.stateAbout?.takeIf { line.contains(bounds.topLeft + at) }
+                app.push(Screen.Chat(item.station, item.page, at = about))
+            },
         )
     })
-    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), modifier = body)
+    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onStateLine = { line = it }, modifier = body)
     SwipeToArchive(item, motion) {
-        ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, modifier = body)
+        ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     }
 }
 
@@ -522,7 +527,7 @@ private fun rowFailed(app: AppState, item: ChatItem): String? =
 
 /** What a row shows, `lead` leading who is in it (RowPicture.kt); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
-internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, onStateLine: (Rect) -> Unit = {}, modifier: Modifier = Modifier) {
     Box(
         Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
             .then(modifier),
@@ -554,7 +559,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                                 Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) {
                     // Where it stands (奏 · …, 在等：…, 做完了), from a station that says; else what was said last.
                     val state = item.stateText ?: item.decision?.text
-                    if (state != null) StateLine(state) else item.last?.let { LastMessage(item) }
+                    if (state != null) StateLine(state, Modifier.fillMaxWidth().onGloballyPositioned { onStateLine(it.boundsInRoot()) }) else item.last?.let { LastMessage(item) }
                 }
                 if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
                 else RowAside(item, lead, Modifier.alpha(dim))
@@ -603,7 +608,7 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
     val tone = rowTone(item) ?: return
     val label = when (tone) {
         RowTone.Busy -> "工作中"; RowTone.Done -> "做完了，有新消息"; RowTone.Alert -> "需要处理"
-        RowTone.Wait -> "等你决定"; RowTone.Other -> "等别人决定"
+        RowTone.Wait -> "在等你"; RowTone.Other -> "在等别人"
     }
     // A mark that comes while the chat is in view pops in (web: ChatMark.tsx, 320 ms ease-out, 0 → 1.3 at 60 % → 1);
     // ones there when the list is first drawn do not.
@@ -639,27 +644,30 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
 }
 
 /**
- * What a workspace has waiting, as the core says (views/marks.rs): `alert` a red dot with a soft halo, `done` a blue
- * one; as a chat's mark (ChatMark), still. `label` says it in words.
+ * What a workspace has waiting, as the core says (views/marks.rs): `alert` a red dot with a soft halo, `wait` a blue
+ * ring (a card or an agent waits on them), `done` a blue dot; as a chat's mark (ChatMark), still. `label` says it in words.
  */
 @Composable
 internal fun WorkspaceMark(tone: String, label: String) {
     Canvas(Modifier.size(10.dp).semantics { contentDescription = label }) {
         val r = size.minDimension / 2 - 1.dp.toPx()
+        val ring = 2.dp.toPx()
         if (tone == "alert") drawCircle(MarkRed.copy(alpha = 0.25f), r + 3.dp.toPx())
-        drawCircle(if (tone == "alert") MarkRed else MarkBlue, r)
+        if (tone == "wait") drawCircle(MarkBlue, 4.5.dp.toPx() - ring / 2, style = Stroke(ring))
+        else drawCircle(if (tone == "alert") MarkRed else MarkBlue, r)
     }
 }
 
 /**
  * What a workspace has waiting, after its name in the switcher (web: ChatMark.tsx MarkCounts): a red dot and how many
- * of the chats its person takes part in want them, a blue one and how many are unread; nothing for none.
+ * of the chats its person takes part in want them, a blue ring and how many wait on them, a blue dot and how many are
+ * unread; nothing for none.
  */
 @Composable
 internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
     if (mark.tone == null) return
     Row(Modifier.semantics(mergeDescendants = true) { contentDescription = mark.label.orEmpty() }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("alert" to mark.alert, "done" to mark.unread).filter { it.second > 0u }.forEach { (tone, n) ->
+        listOf("alert" to mark.alert, "wait" to (mark.wait ?: 0u), "done" to mark.unread).filter { it.second > 0u }.forEach { (tone, n) ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 WorkspaceMark(tone, "")
                 Text("$n", fontSize = 12.sp, color = C.muted)
@@ -673,14 +681,14 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
  * (奏 · …) in ink with its 奏 bold; anything else (在等：…, 做完了) in the secondary colour.
  */
 @Composable
-private fun StateLine(state: String) {
+private fun StateLine(state: String, modifier: Modifier = Modifier) {
     val decide = state.startsWith("奏")
     val text = androidx.compose.ui.text.buildAnnotatedString {
         if (decide) { pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append("奏"); pop(); append(state.substring(1)) }
         else append(state)
     }
     Text(
-        text, fontSize = 14.sp, lineHeight = 20.sp, color = if (decide) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        text, modifier, fontSize = 14.sp, lineHeight = 20.sp, color = if (decide) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),

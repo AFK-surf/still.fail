@@ -3,7 +3,9 @@
 // the decisions page swiped left sets the decision aside (decision.defer), right dismisses it (decision.dismiss); short
 // of the threshold it springs back; up or down is not a swipe; a tap on an option answers (decision.answer), and a swipe
 // begun on an option is still a swipe. In a chat, a tap on an option under the post answers; an answered one has no
-// buttons, only its line. `shots` pictures them (light and dark) into the app's files/shots.
+// buttons, only its line. A text card: words typed in its field and sent (the button or the keyboard's send) reply
+// (decision.reply); refused, the words stay; a swipe begun in the field is not a swipe, one begun elsewhere still is.
+// A card of a type unknown here sends to its chat. `shots` pictures them (light and dark) into the app's files/shots.
 package fail.still.android
 
 import android.graphics.Bitmap
@@ -16,6 +18,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -29,6 +34,7 @@ import fail.still.android.data.ChatsView
 import fail.still.android.data.DecisionItem
 import fail.still.android.data.DecisionOption
 import fail.still.android.data.DecisionsView
+import fail.still.android.data.MessageCard
 import fail.still.android.data.MessageDecision
 import fail.still.android.data.RowAgent
 import fail.still.android.data.RowDecision
@@ -40,6 +46,7 @@ import fail.still.android.data.WorkspaceMarksView
 import fail.still.android.motion.Fixtures
 import fail.still.android.motion.Harness
 import fail.still.android.motion.MotionRule
+import fail.still.core.CoreException
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.abs
@@ -72,6 +79,13 @@ class DecisionsTest {
         message = m, before = before, options = m.options!!, text = "奏 · ${m.text.take(20)}",
     )
     private val first = item(gap, talk, "侧栏和设置的几处间距", "ember:c-1")
+
+    private val keyAsked = "Stripe 的测试 key 还没配，发我一个 sk_test_ 开头的 key，我配到 dev 环境里跑一遍支付流程。"
+    private val keyPost = Fixtures.agent(12, keyAsked).copy(card = MessageCard("text", placeholder = "sk_test_…"), decision = MessageDecision(resolved = false))
+    private val keyItem = DecisionItem(
+        station = Fixtures.STATION, stationName = "studio", session = "ember:c-7", thread = keyPost.thread, title = "支付流程接 Stripe", seq = keyPost.seq,
+        message = keyPost, before = listOf(Fixtures.mine(11, "支付那块先在 dev 上跑通")), options = emptyList(), card = keyPost.card, text = "奏 · Stripe 的测试 key 还没配",
+    )
     private val second = item(archive, listOf(Fixtures.mine(8, "归档页时间那块看着挤")), "归档页时间", "ember:c-2")
 
     // ── driving ──
@@ -209,6 +223,112 @@ class DecisionsTest {
         rule.onNodeWithText("没有等你决定的事").assertExists()
     }
 
+    // ── a text card ──
+
+    private fun textPage(dark: Boolean = false, card: MessageCard = keyPost.card!!): Harness {
+        // As the app's activity (MainActivity, the manifest): edge to edge, resized for the keyboard, not panned.
+        val h = Harness(rule)
+        val it = keyItem.copy(card = card, message = keyPost.copy(card = card))
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(listOf(it, first), 2u, loading = false))
+        h.launch(listOf(Screen.Home, Screen.Decisions), dark)
+        rule.runOnUiThread {
+            @Suppress("DEPRECATION") rule.activity.window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            android.util.Log.i("DecisionsTest", "softInputMode=" + rule.activity.window.attributes.softInputMode)
+        }
+        return h
+    }
+    private fun field(): Rect = rule.onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot
+    private fun sendButton(): Rect = rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("发送")).fetchSemanticsNodes().first().boundsInRoot
+    private fun keyAt(): Rect = bounds("Stripe 的测试 key")
+
+    private fun typeIn(text: String) {
+        tap(field().center)
+        rule.onNode(hasSetTextAction()).performTextInput(text)
+        // The keyboard up and the page laid out above it.
+        Thread.sleep(1200); rule.waitForIdle()
+        origin = null
+    }
+
+    @Test fun textCardShowsItsPlaceholder() {
+        textPage()
+        rule.onNodeWithText("sk_test_…").assertExists()
+        rule.onNodeWithText("← 待定　不再提醒 →").assertExists()
+    }
+
+    @Test fun textCardSendReplies() {
+        val h = textPage()
+        typeIn("sk_test_51Hx")
+        tap(sendButton().center)
+        assertOneCall(h, "decision.reply", keyPost)
+        assertEquals("sk_test_51Hx", h.acted()[0].second["text"]!!.jsonPrimitive.content)
+        // Replied: the next one is in front.
+        rule.onNodeWithText(first.title).assertExists()
+    }
+
+    @Test fun textCardKeyboardSendReplies() {
+        val h = textPage()
+        typeIn("sk_test_9")
+        rule.onNode(hasSetTextAction()).performImeAction()
+        assertOneCall(h, "decision.reply", keyPost)
+        assertEquals("sk_test_9", h.acted()[0].second["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun textCardEmptySendsNothing() {
+        val h = textPage()
+        tap(sendButton().center)
+        h.settle()
+        assertTrue("acted: ${h.acted()}", h.acted().isEmpty())
+    }
+
+    @Test fun textCardRefusedKeepsTheWords() {
+        val h = textPage()
+        h.fake.answer = { name, _ -> if (name == "decision.reply") throw CoreException("station_offline", "station 不在线", null) else kotlinx.serialization.json.JsonNull }
+        typeIn("sk_test_kept")
+        tap(sendButton().center)
+        h.settle()
+        assertEquals(listOf("decision.reply"), h.acted().map { it.first })
+        rule.onNodeWithText("sk_test_kept").assertExists()
+        rule.onNodeWithText(keyItem.title).assertExists()
+        rule.onNodeWithText("没能回复", substring = true).assertExists()
+    }
+
+    @Test fun swipeBegunInTheFieldIsNotASwipe() {
+        val h = textPage()
+        val f = field()
+        val before = keyAt()
+        drag(Offset(f.left + 8f, f.center.y), Offset(width * 0.95f, f.center.y))
+        drag(Offset(f.right - 8f, f.center.y), Offset(width * 0.05f, f.center.y))
+        h.settle(2000)
+        assertTrue("acted: ${h.acted()}", h.acted().isEmpty())
+        assertTrue("moved: $before -> ${keyAt()}", abs(keyAt().left - before.left) < 1f)
+        rule.onNodeWithText(keyItem.title).assertExists()
+    }
+
+    @Test fun swipeElsewhereOnATextCardSetsItAside() {
+        val h = textPage()
+        val y = keyAt().center.y
+        drag(Offset(width * 0.8f, y), Offset(width * 0.1f, y))
+        assertOneCall(h, "decision.defer", keyPost)
+    }
+
+    @Test fun swipeElsewhereOnATextCardDismissesIt() {
+        val h = textPage()
+        typeIn("半截")
+        // The keyboard up, the messages shorter: just above the field, on what the card shows.
+        val y = field().top - 120f
+        drag(Offset(width * 0.2f, y), Offset(width * 0.9f, y))
+        assertOneCall(h, "decision.dismiss", keyPost)
+    }
+
+    @Test fun unknownCardGoesToItsChat() {
+        val h = textPage(card = MessageCard("date"))
+        rule.onNodeWithText("去 chat 里回").assertExists()
+        tap(bounds("去 chat 里回").center)
+        h.settle()
+        assertTrue("acted: ${h.acted()}", h.acted().isEmpty())
+        assertTrue(h.fake.calls.toString(), rule.onAllNodesWithText("去 chat 里回").fetchSemanticsNodes().isEmpty())
+    }
+
     // ── in a chat ──
 
     private val resolved = post(
@@ -229,6 +349,15 @@ class DecisionsTest {
         tap(option(change).center)
         assertOneCall(h, "decision.answer", gap.copy(seq = 5))
         assertEquals(change.label, h.acted()[0].second["option"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun inChatTextCardHasNothingUnder() {
+        val h = Harness(rule)
+        h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(listOf(Fixtures.mine(1, "支付那块先在 dev 上跑通"), keyPost.copy(seq = 2, ts = "t2")), title = "支付流程接 Stripe"))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        rule.onNodeWithText("Stripe 的测试 key", substring = true).assertExists()
+        rule.onNodeWithText("sk_test_…").assertDoesNotExist()
+        rule.onNodeWithText("去 chat 里回").assertDoesNotExist()
     }
 
     @Test fun inChatAnsweredHasItsLineNoButtons() {
@@ -302,6 +431,21 @@ class DecisionsTest {
         }
         assertTrue("acted: ${h.acted()}", h.acted().isEmpty())
     }
+
+    private fun textPictures(dark: Boolean) {
+        val theme = if (dark) "dark" else "light"
+        textPage(dark).settle()
+        shot("decisions-text-$theme")
+        typeIn("sk_test_51HxQ2eLkd")
+        Thread.sleep(600); rule.waitForIdle()
+        shot("decisions-text-typing-$theme")
+        // With the keyboard, as the screen shows it.
+        val screen = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "shots").apply { mkdirs() }
+        FileOutputStream(File(dir, "decisions-text-typing-screen-$theme.png")).use { screen.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun shotsText() { textPictures(false) }
 
     @Test fun shots() {
         pictures(false)

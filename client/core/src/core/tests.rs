@@ -133,6 +133,13 @@ fn parses_each_call() {
     assert_eq!(code(parse_call("decision.answer", json!({"station": "w/s", "thread": 7, "option": "x"}))), "invalid_params");
     assert_eq!(parse_call("decision.defer", json!({"station": "w/s", "thread": 7, "seq": 4})).unwrap(), Call::DecisionDefer { station: "w/s".into(), thread: 7, seq: 4 });
     assert_eq!(code(parse_call("decision.defer", json!({"station": "w/s", "thread": 7}))), "invalid_params");
+    // A text card answered with what was written.
+    assert_eq!(
+        parse_call("decision.reply", json!({"station": "w/s", "thread": 7, "seq": 4, "text": " sk_test_1 "})).unwrap(),
+        Call::DecisionReply { station: "w/s".into(), thread: 7, seq: 4, text: "sk_test_1".into() }
+    );
+    assert_eq!(code(parse_call("decision.reply", json!({"station": "w/s", "thread": 7, "seq": 4, "text": "  "}))), "invalid_params");
+    assert_eq!(code(parse_call("decision.reply", json!({"station": "w/s", "thread": 7, "text": "x"}))), "invalid_params");
     assert_eq!(parse_call("chat.discard", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatDiscardIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
 }
 
@@ -956,6 +963,23 @@ fn a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_t
         let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 4 | 5, .. })).count();
         assert_eq!(refused, 2);
         assert_eq!(posted(&host).len(), 1);
+        // An options card is not written in; a text card is, and is not picked from.
+        core.receive(ui, ClientMessage::Call { id: 8, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 4, "text": "随便" }) });
+        host.settle().await;
+        assert!(host.take_emitted().into_iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 8, .. })));
+        let card = json!({ "seq": 6, "card": { "type": "text", "placeholder": "sk_" }, "message": { "seq": 6, "ts": "9.000006", "text": "key？", "authorName": "Claude" }, "before": [] });
+        core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{ "id": "k1", "session": "k1", "thread": 7, "card": card }]));
+        core.receive(ui, ClientMessage::Call { id: 9, call: "decision.answer".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 6, "option": "sk_" }) });
+        core.receive(ui, ClientMessage::Call { id: 10, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 5, "text": "sk_test_1" }) });
+        host.settle().await;
+        let refused = host.take_emitted().into_iter().filter(|(_, m)| matches!(m, CoreMessage::Error { id: 9 | 10, .. })).count();
+        assert_eq!(refused, 2, "an option of a text card; a card no longer pending");
+        core.receive(ui, ClientMessage::Call { id: 11, call: "decision.reply".into(), params: json!({ "station": "ws/st", "thread": 7, "seq": 6, "text": " sk_test_1 " }) });
+        host.settle().await;
+        let sent = posted(&host);
+        assert_eq!(sent.len(), 2);
+        assert_eq!(sent[1]["text"], "sk_test_1");
+        assert_eq!(sent[1]["quotes"], json!([{ "author": "Claude", "text": "key？", "comment": "", "role": "agent", "ts": "9.000006" }]));
     });
 }
 

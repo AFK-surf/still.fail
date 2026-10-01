@@ -1293,19 +1293,45 @@ impl Hub {
         vec![
             Tool {
                 name: "chat_post".into(),
-                description: "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for a still.fail chat. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished), need_decision (a person picks one of your options) or need_help (a person has to give or do something: need says what).".into(),
+                description: "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for a still.fail chat. In a still.fail chat a message that asks people something can carry a card for their answer: options to pick from, or a field to write in. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_help (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "to": to.clone(),
-                        "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written). With options: the question and the facts it turns on, so it can be decided on from this message alone." },
-                        "kind": { "type": "string", "enum": ["all_done", "need_decision", "need_help"], "description": "Omit for a progress update. all_done: the chat has nothing unfinished at all (no branch left unmerged, no open question, nothing waiting for a yes). need_decision: a person has to choose; give options. need_help: a person has to give or do something, or answer an open question; give need." },
-                        "need": { "type": "string", "description": "For need_help (required): what the person has to give or do, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key)." },
+                        "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written). With a card: what it asks and the facts it turns on, so it can be answered from this message alone." },
+                        "kind": { "type": "string", "enum": ["all_done", "need_help"], "description": "Omit for a progress update. all_done: the chat has nothing unfinished at all (no branch left unmerged, no open question, nothing waiting for a yes); give done. need_help: a person has to give, do or decide something, or answer an open question (a card you posted included); give need. (need_decision, from before cards, is still taken: options, the turn ends need_help.)" },
+                        "need": { "type": "string", "description": "For need_help (required): what the person has to give, do or decide, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key, 选统计口径); to verify something, where, how and what to look at; work of yours still running, after the ask (e.g. 选统计口径；CI 还在跑)." },
+                        "about": { "type": "string", "description": "With kind, optional: the ts of the message in this conversation the state is about (all_done: the one with the result; need_help: the one that asks, by default the card still waiting there, this post's own when it carries one). People's lists jump to it." },
+                        "done": { "type": "string", "description": "For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused." },
                         "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they are uploaded below the text). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                         "title": { "type": "string", "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first post that ends a turn in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
+                        "card": {
+                            "type": "object",
+                            "description": "Still.fail chats only: what people answer this message with, shown with it and on their list of things waiting for them (奏). {\"type\": \"options\", \"options\": [...]} when they choose between answers you can name (1 to 6, recommend one if you can): shown under the message, a tap answers. {\"type\": \"text\", \"placeholder\": \"…\"} when they must write something (a value, a name, a key): a field on their 奏 page. Either way an answer reaches you as their message quoting this one, and anything they write in the chat instead answers it too. A card waits until a person writes in the chat or you post a newer one. It says nothing of your turn: end the turn need_help (with need) after posting one.",
+                            "properties": {
+                                "type": { "type": "string", "enum": ["options", "text"] },
+                                "options": {
+                                    "type": "array",
+                                    "description": "For an options card (required): the answers (1 to 6).",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "label": { "type": "string", "description": "A short phrase that reads on its own, in the language people use there (e.g. 按今天累计, 先不改)." },
+                                            "detail": { "type": "string", "description": "One line on what choosing it leads to." },
+                                            "recommended": { "type": "boolean", "description": "The one you recommend (at most one)." },
+                                        },
+                                        "required": ["label"],
+                                        "additionalProperties": false,
+                                    },
+                                },
+                                "placeholder": { "type": "string", "description": "For a text card: a hint shown in the empty field (e.g. sk_test_…)." },
+                            },
+                            "required": ["type"],
+                            "additionalProperties": false,
+                        },
                         "options": {
                             "type": "array",
-                            "description": "For need_decision (required), in a still.fail chat: the answers people can pick with one tap (1 to 6), shown under this message. A pick reaches you as their message quoting this one and saying the option's label; they may also just write something else.",
+                            "description": "As said before cards: the same as card {\"type\": \"options\", \"options\": …}. Prefer card.",
                             "items": {
                                 "type": "object",
                                 "properties": {
@@ -1350,12 +1376,14 @@ impl Hub {
             },
             Tool {
                 name: "chat_state".into(),
-                description: "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished), need_help (a person has to give or do something: need says what) or waiting (work you started runs on and will bring you back). A decision (need_decision) is posted with chat_post and its options.".into(),
+                description: "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished: done says why, with the evidence), need_help (a person has to give, do or decide something, a card you posted included: need says what) or waiting (only for work you started that brings you back on its own, such as CI, a build, a job: for says what; waiting on a person is need_help).".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "kind": { "type": "string", "enum": ["all_done", "need_help", "waiting"] },
-                        "need": { "type": "string", "description": "For need_help (required): what the person has to give or do, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key)." },
+                        "need": { "type": "string", "description": "For need_help (required): what the person has to give, do or decide, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key, 选统计口径); to verify something, where, how and what to look at; work of yours still running, after the ask (e.g. 选统计口径；CI 还在跑)." },
+                        "about": { "type": "string", "description": "Optional: the ts of the message in your conversation the state is about (all_done: the one with the result; need_help: the one that asks, by default the card still waiting; waiting: the one saying what you started). People's lists jump to it." },
+                        "done": { "type": "string", "description": "For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused." },
                         "seconds": { "type": "integer", "minimum": MIN_WAIT_SECONDS, "maximum": MAX_WAIT_SECONDS, "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch)." },
                         "for": { "type": "string", "description": "For waiting (required): what you wait for, in a few words people read under your name, in the language they use there (e.g. 安卓滑动测试在模拟器上跑完)." },
                     },
@@ -1364,25 +1392,28 @@ impl Hub {
                 }),
                 run: run(|hub, key, args| {
                     Box::pin(async move {
-                        let kind = match args.get("kind") {
+                        // Checked whole before anything is recorded: its words (what it waits for, needs, ends with)
+                        // and what it is about.
+                        let (kind, words) = match args.get("kind") {
                             Some(Value::String(s)) if s == "waiting" => {
                                 let seconds = args.get("seconds").and_then(js_number).ok_or_else(|| anyhow!("seconds is required for waiting: how long until the work brings you back"))?;
                                 let what = args.get("for").map(js_string).map(|w| w.trim().to_string()).filter(|w| !w.is_empty())
                                     .ok_or_else(|| anyhow!("for is required for waiting: what you wait for, in a few words people read"))?;
-                                hub.wait_for(&key, &what);
-                                DeclaredState::Waiting((seconds.max(0.0) as u64).clamp(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
+                                (DeclaredState::Waiting((seconds.max(0.0) as u64).clamp(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS)), Some(what))
                             }
                             kind => match state_arg(kind)? {
-                                Some((DeclaredState::NeedDecision, _)) => bail!("need_decision is posted with chat_post, with its options and the question in the text"),
-                                Some((kind, legacy)) => {
-                                    if let Some(need) = need_arg(&args, kind, legacy)? {
-                                        hub.need(&key, &need);
-                                    }
-                                    kind
-                                }
+                                Some((_, Said::Decision)) => bail!("need_decision is posted with chat_post: the question in the text, its options in a card; then the turn ends need_help"),
+                                Some((kind, said)) => (kind, need_arg(&args, kind, said)?),
                                 None => bail!("kind is required"),
                             },
                         };
+                        let about = hub.state_about(&key, kind, &args)?;
+                        match (kind, &words) {
+                            (DeclaredState::Waiting(_), Some(what)) => hub.wait_for(&key, what),
+                            (_, Some(need)) => hub.need(&key, need),
+                            _ => {}
+                        }
+                        hub.about(&key, about.as_ref().map(|(thread, n, ts)| (*thread, *n, ts.as_str())));
                         hub.declare(&key, kind);
                         Ok(match kind {
                             DeclaredState::Waiting(seconds) => format!("Recorded state waiting: you are asked again in {seconds} seconds unless something brings you back first."),
@@ -1467,6 +1498,33 @@ impl Hub {
         }
     }
 
+    fn about(&self, key: &str, about: Option<(i64, i64, &str)>) {
+        let actor = self.actors.lock().unwrap().get(key).cloned();
+        if let Some(actor) = actor {
+            actor.about(about);
+        }
+    }
+
+    /// What a state recorded with chat_state is about: the message `about` names (by its ts, in one of the session's
+    /// threads); else for need_help, the card still pending in its chats (the latest, if several).
+    fn state_about(&self, key: &str, kind: DeclaredState, args: &Map<String, Value>) -> Result<Option<(i64, i64, String)>> {
+        let threads = self.store.session_threads(key)?;
+        if let Some(ts) = about_ts(args)? {
+            for t in &threads {
+                if let Some(m) = self.store.message_at(t.thread.id, &ts)? {
+                    return Ok(Some((m.thread, m.n, m.ts)));
+                }
+            }
+            bail!("about must be the ts of a message in one of your conversations (or leave it out), got {ts}");
+        }
+        if kind != DeclaredState::NeedHelp {
+            return Ok(None);
+        }
+        let mut pending: Vec<_> = threads.iter().filter_map(|t| self.store.pending_card(t.thread.id).ok().flatten()).map(|(m, _)| m).collect();
+        pending.sort_by_key(|m| m.created_at);
+        Ok(pending.pop().map(|m| (m.thread, m.n, m.ts)))
+    }
+
     fn declare(&self, key: &str, kind: DeclaredState) {
         let actor = self.actors.lock().unwrap().get(key).cloned();
         if let Some(actor) = actor {
@@ -1498,29 +1556,40 @@ impl Hub {
         let text = args.get("text").map(js_string).unwrap_or_default().trim().to_string();
         let paths: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().map(js_string).collect()).unwrap_or_default();
         let given = state_arg(args.get("kind"))?;
-        let options = options_arg(args.get("options"))?;
-        let kind = match (given, &options) {
-            (Some((DeclaredState::NeedDecision, _)), None) => bail!("need_decision carries options: the answers people can pick"),
-            // A session from before need_decision asks with block and options.
-            (Some((DeclaredState::NeedHelp, true)), Some(_)) => Some(DeclaredState::NeedDecision),
-            (Some((DeclaredState::NeedDecision, _)), Some(_)) => Some(DeclaredState::NeedDecision),
-            (_, Some(_)) => bail!("options go only with kind \"need_decision\": a post that needs a person's decision"),
-            (given, None) => given.map(|(kind, _)| kind),
-        };
+        let card = card_arg(args.get("card"), args.get("options"))?;
+        // need_decision, as said before cards: a post with a card that ends the turn need_help.
+        if matches!(given, Some((_, Said::Decision))) && card.is_none() {
+            bail!("need_decision carries options: a card {{\"type\": \"options\", \"options\": [...]}} people pick from (or end with kind \"need_help\" and say in need what they have to decide)");
+        }
+        let kind = given.map(|(kind, _)| kind);
         let need = match given {
-            Some((kind, legacy)) => need_arg(args, kind, legacy)?,
-            None => need_arg(args, DeclaredState::AllDone, true)?,
+            Some((kind, said)) => need_arg(args, kind, said)?,
+            // A progress update says neither.
+            None => need_arg(args, DeclaredState::Waiting(0), Said::Now)?,
         };
+        // Without a need of its own, a decision asked the words from before needs what its post asks: its first line.
+        let need = need.or_else(|| {
+            matches!(given, Some((DeclaredState::NeedHelp, Said::Decision | Said::Before))).then(|| card.as_ref().map(|_| first_line(&text))).flatten().filter(|l| !l.is_empty())
+        });
+        if kind.is_none() && args.get("about").is_some_and(|a| !a.is_null()) {
+            bail!("about goes with kind: the message the state this post records is about");
+        }
         if text.is_empty() && paths.is_empty() {
             bail!("text is empty");
         }
         let thread = self.target(key, args.get("to"))?;
-        if options.is_some() && thread.thread.surface != STILLFAIL_SURFACE {
-            bail!("options are shown only in still.fail chats (EMBER/…); in a Slack thread, write the choices in the text and end with kind \"need_help\"");
+        if card.is_some() && thread.thread.surface != STILLFAIL_SURFACE {
+            bail!("cards (options, a text field) are shown only in still.fail chats (EMBER/…); in a Slack thread, write the choices or the question in the text and end with kind \"need_help\"");
         }
-        if options.is_some() && text.is_empty() {
-            bail!("text is required with options: the question and the facts it turns on");
+        if card.is_some() && text.is_empty() {
+            bail!("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");
         }
+        let about = match about_ts(args)? {
+            Some(ts) => Some(self.store.message_at(thread.thread.id, &ts)?.map(|m| (m.thread, m.n, m.ts)).ok_or_else(|| {
+                anyhow!("about must be the ts of a message in {} (or leave it out), got {ts}", thread_address(&thread.thread.channel, &thread.thread.thread_ts))
+            })?),
+            None => None,
+        };
         // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
         // them in still.fail instead.
         let slack = thread.thread.surface != STILLFAIL_SURFACE && !paths.is_empty();
@@ -1540,11 +1609,11 @@ impl Hub {
         } else {
             (chat.post(&here, &text, &files).await?, text)
         };
-        let offered = options.as_ref().map(options_said).unwrap_or_default();
+        let offered = card.as_ref().map(card_said).unwrap_or_default();
         let (n, _) = self.store.insert_message(NewMessage {
             attachments: files,
             declared: kind.map(|k| k.as_str().to_string()),
-            options,
+            card,
             ..NewMessage::new(thread.thread.id, &ts, AuthorKind::Agent, key, &text)
         })?;
         self.shared(thread.thread.id, n, key, &text)?;
@@ -1555,6 +1624,12 @@ impl Hub {
             self.need(key, need);
         }
         if let Some(kind) = kind {
+            // What the state is about: as said, else for need_help the card still pending in this chat (this post's,
+            // when it carries one).
+            let about = about.or_else(|| {
+                (kind == DeclaredState::NeedHelp).then(|| self.store.pending_card(thread.thread.id).ok().flatten().map(|(m, _)| (m.thread, m.n, m.ts))).flatten()
+            });
+            self.about(key, about.as_ref().map(|(thread, n, ts)| (*thread, *n, ts.as_str())));
             self.declare(key, kind);
         }
         let titled = match args.get("title").and_then(Value::as_str) {
@@ -1868,9 +1943,9 @@ const MAX_WAIT_SECONDS: u64 = 3600;
 /// How many answers a decision may offer.
 const MAX_OPTIONS: usize = 6;
 
-/// The answers a decision offers (chat_post `options`), as kept with its post: `[{label, detail?, recommended?}]`,
-/// each label trimmed. 1 to 6, labels not empty and not repeated, at most one recommended (only with need_decision:
-/// chat_post checks). A runtime whose tool list is from before the parameter sends it as JSON text: read too.
+/// The answers an options card offers (its `options`, or chat_post `options` as said before cards), as kept with its
+/// post: `[{label, detail?, recommended?}]`, each label trimmed. 1 to 6, labels not empty and not repeated, at most one
+/// recommended. A runtime whose tool list is from before the parameter sends it as JSON text: read too.
 fn options_arg(value: Option<&Value>) -> Result<Option<Value>> {
     let parsed = match value {
         Some(Value::String(text)) if !text.trim().is_empty() => {
@@ -1919,6 +1994,90 @@ fn options_arg(value: Option<&Value>) -> Result<Option<Value>> {
     Ok(Some(Value::Array(out)))
 }
 
+/// The kinds of card a post can carry.
+const CARDS: [&str; 2] = ["options", "text"];
+
+/// How long a text card's placeholder may be, in characters.
+const MAX_PLACEHOLDER: usize = 80;
+
+/// The card a post carries (chat_post `card`, or its `options` as said before cards: an options card), as kept with it:
+/// `{type: "options", options}` (options_arg) or `{type: "text", placeholder?}`. A card of a type not known is refused,
+/// naming those that are. A runtime whose tool list is from before the parameter sends it as JSON text: read too.
+fn card_arg(card: Option<&Value>, options: Option<&Value>) -> Result<Option<Value>> {
+    let shape = "card must be an object: {\"type\": \"options\", \"options\": [{label, detail?, recommended?}]} or {\"type\": \"text\", \"placeholder\"?}";
+    let card = match card {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) if text.trim().is_empty() => None,
+        Some(Value::String(text)) => Some(serde_json::from_str::<Value>(text).map_err(|_| anyhow!("{shape}"))?),
+        Some(card) => Some(card.clone()),
+    };
+    let legacy = options_arg(options)?;
+    let Some(card) = card else { return Ok(legacy.map(crate::store::options_card)) };
+    if legacy.is_some() {
+        bail!("give the options in card ({{\"type\": \"options\", \"options\": [...]}}), not also as options");
+    }
+    let Some(fields) = card.as_object() else { bail!("{shape}") };
+    let kind = fields.get("type").map(js_string).unwrap_or_default().trim().to_string();
+    match kind.as_str() {
+        "options" => {
+            let options = options_arg(fields.get("options"))?.ok_or_else(|| anyhow!("an options card has options: 1 to {MAX_OPTIONS} answers {{label, detail?, recommended?}}"))?;
+            Ok(Some(crate::store::options_card(options)))
+        }
+        "text" => {
+            let placeholder = fields.get("placeholder").map(js_string).map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+            if placeholder.as_ref().is_some_and(|p| p.chars().count() > MAX_PLACEHOLDER) {
+                bail!("a text card's placeholder is at most {MAX_PLACEHOLDER} characters: a hint of what to write");
+            }
+            let mut kept = json!({ "type": "text" });
+            if let Some(placeholder) = placeholder {
+                kept["placeholder"] = json!(placeholder);
+            }
+            Ok(Some(kept))
+        }
+        "" => bail!("a card says its type: one of {}", CARDS.join(", ")),
+        other => bail!("unknown card type {other:?}: the types known are {}", CARDS.join(", ")),
+    }
+}
+
+/// What chat_post says of the card it posted.
+fn card_said(card: &Value) -> String {
+    match card.get("type").and_then(Value::as_str) {
+        Some("options") => options_said(&card["options"]),
+        _ => " People can write their answer in the card's field; it reaches you as their message quoting this one, and anything they write in the chat instead is their answer too.".into(),
+    }
+}
+
+/// A post's first line, without markup, cut to about 40 characters: what a decision asked the words from before needs.
+fn first_line(text: &str) -> String {
+    let first = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+    let clean = first.replace("**", "").replace("__", "").replace('`', "");
+    let clean = clean.trim_start_matches(['#', '>', '-', '*', ' ']).trim();
+    let cut: String = clean.chars().take(40).collect();
+    if clean.chars().count() > 40 { format!("{}…", cut.trim_end()) } else { cut }
+}
+
+/// Whether all_done's `done` gives a reason, not only the word: at least a few characters, and not one of the words
+/// that say only that it is done.
+fn is_reason(done: &str) -> bool {
+    let bare: String = done.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+    const EMPTY: [&str; 9] = ["做完了", "已完成", "全部完成", "都完成了", "done", "ok", "alldone", "finished", "allfinished"];
+    bare.chars().count() >= MIN_REASON && !EMPTY.contains(&bare.as_str())
+}
+
+/// How many letters (or characters) all_done's `done` has at least.
+const MIN_REASON: usize = 6;
+
+/// The ts `about` names, if it is given.
+fn about_ts(args: &Map<String, Value>) -> Result<Option<String>> {
+    match args.get("about") {
+        None | Some(Value::Null) => Ok(None),
+        Some(about) => {
+            let ts = js_string(about).trim().to_string();
+            if ts.is_empty() { Ok(None) } else { Ok(Some(ts)) }
+        }
+    }
+}
+
 /// What chat_post says of the answers it offered.
 fn options_said(options: &Value) -> String {
     let labels: Vec<String> = options
@@ -1933,29 +2092,61 @@ fn options_said(options: &Value) -> String {
     format!(" People can pick: {}; a pick reaches you as their message quoting this one with the option's label, and anything they write instead is their answer too.", labels.join("; "))
 }
 
-/// How a post or chat_state ends the turn (`kind`), and whether in the words from before (final, block: a session
-/// whose instructions are from before all_done, need_decision and need_help). Waiting is chat_state's own.
-fn state_arg(value: Option<&Value>) -> Result<Option<(DeclaredState, bool)>> {
+/// In which words a turn's state was given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Said {
+    /// Today's: all_done, need_help, waiting.
+    Now,
+    /// From before all_done and need_help (final, block): a session whose instructions are older.
+    Before,
+    /// need_decision, from before cards: a post with an options card that ends the turn need_help.
+    Decision,
+}
+
+/// How a post or chat_state ends the turn (`kind`), and in which words. Waiting is chat_state's own.
+fn state_arg(value: Option<&Value>) -> Result<Option<(DeclaredState, Said)>> {
     match value {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(s)) if s.is_empty() => Ok(None),
         Some(Value::String(s)) if s != "waiting" && DeclaredState::parse(s, 0).is_some() => {
-            Ok(DeclaredState::parse(s, 0).map(|kind| (kind, s == "final" || s == "block")))
+            let said = match s.as_str() {
+                "final" | "block" => Said::Before,
+                "need_decision" => Said::Decision,
+                _ => Said::Now,
+            };
+            Ok(DeclaredState::parse(s, 0).map(|kind| (kind, said)))
         }
-        Some(other) => bail!("kind must be \"all_done\", \"need_decision\" or \"need_help\" (or \"waiting\", with chat_state), got {other}"),
+        Some(other) => bail!("kind must be \"all_done\" or \"need_help\" (or \"waiting\", with chat_state), got {other}"),
     }
 }
 
-/// What a need_help turn needs of a person (`need`): required with need_help, unless asked with block (a session from
-/// before it); refused with any other kind.
-fn need_arg(args: &Map<String, Value>, kind: DeclaredState, legacy: bool) -> Result<Option<String>> {
-    let need = args.get("need").map(js_string).map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
-    match (kind, need) {
-        (DeclaredState::NeedHelp, Some(need)) => Ok(Some(need)),
-        (DeclaredState::NeedHelp, None) if legacy => Ok(None),
-        (DeclaredState::NeedHelp, None) => bail!("need is required for need_help: what the person has to give or do, in one sentence"),
-        (_, Some(_)) => bail!("need goes only with kind \"need_help\""),
-        (_, None) => Ok(None),
+/// The turn's words kept with it (turns.need): what a need_help turn needs of a person (`need`), or what an all_done
+/// one leaves the chat with (`done`). Each goes only with its kind, and is required with it, unless the kind is given in
+/// the words from before (block, final, need_decision: a session from before them).
+fn need_arg(args: &Map<String, Value>, kind: DeclaredState, said: Said) -> Result<Option<String>> {
+    let text = |k: &str| args.get(k).map(js_string).map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+    let (need, done) = (text("need"), text("done"));
+    if need.is_some() && kind != DeclaredState::NeedHelp {
+        bail!("need goes only with kind \"need_help\"");
+    }
+    if done.is_some() && kind != DeclaredState::AllDone {
+        bail!("done goes only with kind \"all_done\"");
+    }
+    if let Some(done) = &done
+        && !is_reason(done)
+    {
+        bail!("done must say why nothing in the chat is left, so people can trust it: what was finished and where it landed or how it was confirmed (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以; not just that it is done");
+    }
+    match kind {
+        DeclaredState::NeedHelp if need.is_none() && said == Said::Now => {
+            bail!("need is required for need_help: what the person has to give, do or decide, in one sentence")
+        }
+        DeclaredState::AllDone if done.is_none() && said == Said::Now => {
+            bail!("done is required for all_done: why nothing in the chat is left, with the evidence (e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以)")
+        }
+        DeclaredState::NeedHelp => Ok(need),
+        DeclaredState::AllDone => Ok(done),
+        DeclaredState::Waiting(_) => Ok(None),
     }
 }
 

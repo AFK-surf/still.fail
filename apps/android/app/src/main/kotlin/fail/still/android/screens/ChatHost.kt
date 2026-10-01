@@ -244,6 +244,8 @@ class Host {
     internal var layer: GraphicsLayer? = null
     /** Shows the chat's message `seq` (in the list, in its middle, flashing), if it is loaded: set by the list. */
     internal var showSaid: ((Long) -> Unit)? = null
+    /** A message (seq) to show once the chat's list is in place (Screen.Chat.at), the pages before it brought in. */
+    internal var goTo: Long? = null
     var flight by mutableStateOf<Flight?>(null)
         private set
     /** The composer's hint is away (words just sent are over it). */
@@ -368,6 +370,7 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     host.still = reducedMotion()
     host.density = LocalDensity.current
     val chat = screen as? Screen.Chat
+    remember(chat?.id, chat?.at) { host.goTo = chat?.at; Unit }
     CompositionLocalProvider(LocalSendTextWidth provides host.fieldWidth) {
       Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         if (chat != null) key(chat.id) { ChatScreen(chat.station, chat.of, host) }

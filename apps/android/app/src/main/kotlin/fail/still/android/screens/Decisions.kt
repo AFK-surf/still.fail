@@ -7,6 +7,9 @@
 // draws them, and at the foot its options, the hint and `1 / N`. The whole decision is swiped: left 待定 (set aside on
 // this device: last of the page, still waiting), right 不再提醒 (dismissed for the viewer). Let go past about a third
 // of the width, or flung, it flies off and the next comes in; short of that it springs back.
+// A card is options (the buttons above) or text: on the page a one-line field and a round send button where the options
+// go (the reply is the viewer's message quoting the post, `decision.reply`); a swipe never starts in the field. A card
+// of a type this app does not know is answered in its chat. In a chat only an options card has anything under it.
 package fail.still.android.screens
 
 import androidx.compose.animation.core.Animatable
@@ -24,7 +27,21 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -128,13 +145,16 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
  */
 @Composable
 internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
-    val options = m.options ?: return
+    val card = m.card
+    if (card == null && m.options == null) return
+    // Buttons only for an options card (a core before cards: `options` alone); a text card is answered on the 奏 page.
+    val options = if (card != null) card.options.takeIf { card.type == "options" } else m.options
     val decision = m.decision
     if (decision?.resolved == true || decision?.dismissed == true) {
         decision.text?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
         return
     }
-    if (options.isEmpty()) return
+    if (options.isNullOrEmpty()) return
     val app = LocalApp.current
     val station = ctx.station
     val busy = options.firstOrNull { app.isDoing("decision.answer", "station" to station, "thread" to m.thread, "seq" to m.seq, "option" to it.label) }?.label
@@ -186,7 +206,7 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     val items = view?.items.orEmpty()
     SideEffect { local.caughtUp(items) }
     val shown = local.shown(items)
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars)) {
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         TopBack("会话", app::pop)
         if (shown.isEmpty()) {
             val note = when {
@@ -226,6 +246,14 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     }
     var width by remember { mutableIntStateOf(1) }
     var busy by remember { mutableStateOf(false) }
+    // The deck's frame and a text card's field in it: a touch that begins in the field is the field's (no swipe).
+    var frame by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var field by remember(item.key) { mutableStateOf<LayoutCoordinates?>(null) }
+    fun inField(p: Offset): Boolean {
+        val f = field?.takeIf { it.isAttached } ?: return false
+        val box = frame?.takeIf { it.isAttached } ?: return false
+        return box.localBoundingBoxOf(f).contains(p)
+    }
 
     /** Says it to the core; refused, the decision is back and why is said. */
     fun call(what: String, run: suspend () -> Unit) {
@@ -258,14 +286,26 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     val defer = { go(-1) { local.later.remove(item.key); local.later.add(item.key); call("待定") { app.api(item.station).deferDecision(item.thread, item.seq) } } }
     val dismiss = { go(1) { local.gone.add(item.key); call("不再提醒") { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
     val answer = { o: DecisionOption -> go(0) { local.gone.add(item.key); call("回答") { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
+    // A text card's reply: it stays (a spinner on its send) until the core has it, then goes as an answer does; refused,
+    // what was written stays and why is said.
+    val reply = { text: String ->
+        app.scope.launch {
+            try {
+                app.api(item.station).replyDecision(item.thread, item.seq, text)
+                go(0) { local.gone.add(item.key) }
+            } catch (e: CoreException) { app.toast = "没能回复：${errorText(e)}" }
+        }
+        Unit
+    }
 
     Column(modifier.fillMaxWidth()) {
         Box(
             Modifier.weight(1f).fillMaxWidth().clipToBounds().onSizeChanged { width = it.width.coerceAtLeast(1) }
+                .onGloballyPositioned { frame = it }
                 .pointerInput(item.key, still) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        if (busy) return@awaitEachGesture
+                        if (busy || inField(down.position)) return@awaitEachGesture
                         val tracker = VelocityTracker()
                         var pos = drag.value
                         var across = 0f
@@ -331,7 +371,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                     rotationZ = drag.value / width * 4f
                     alpha = a * fade.value
                 }.background(C.bg),
-            ) { Face(item, onPick = answer) }
+            ) { Face(item, onPick = answer, onReply = reply, onField = { field = it }) }
         }
         // The hint and where this one is among them, still.
         Row(
@@ -349,7 +389,9 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
  * draws them (scrolled to the post), its options at its foot.
  */
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.Face(item: DecisionItem, onPick: (DecisionOption) -> Unit) {
+private fun androidx.compose.foundation.layout.ColumnScope.Face(
+    item: DecisionItem, onPick: (DecisionOption) -> Unit, onReply: (String) -> Unit, onField: (LayoutCoordinates) -> Unit,
+) {
     val app = LocalApp.current
     val messages = item.before + item.message
     // The chat as far as these messages go: enough for them to be drawn as in it (files kept by the post's agent).
@@ -388,5 +430,59 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(item: DecisionIt
         }
     }
     Spacer(Modifier.height(4.dp))
-    DecisionOptions(item.options, Modifier.padding(horizontal = 14.dp), onPick = onPick)
+    val card = item.card
+    when (card?.type ?: "options") {
+        "options" -> DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 14.dp), onPick = onPick)
+        "text" -> TextReply(item, card?.placeholder, onField, onReply)
+        // A card this app does not know: answered in its chat, at the post.
+        else -> Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("这张卡片要在 chat 里回", fontSize = 13.sp, color = C.muted)
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink)
+                    .clickable { app.push(Screen.Chat(item.station, of, at = item.seq)) }.padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("去 chat 里回", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }
+        }
+    }
+}
+
+/**
+ * A text card's foot: a one-line field (the agent's placeholder, else 写点什么…) and a round send button in ink; the
+ * keyboard's send or the button replies. While the reply is under way, a spinner on the button and nothing pressed again;
+ * refused, what was written stays.
+ */
+@Composable
+private fun TextReply(item: DecisionItem, placeholder: String?, onField: (LayoutCoordinates) -> Unit, onReply: (String) -> Unit) {
+    val app = LocalApp.current
+    var text by remember(item.key) { mutableStateOf("") }
+    val doing = app.isDoing("decision.reply", "station" to item.station, "thread" to item.thread, "seq" to item.seq)
+    val ready = text.isNotBlank() && !doing
+    val send = { if (ready) onReply(text.trim()) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp)).background(C.chip).onGloballyPositioned(onField)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (text.isEmpty()) Text(placeholder?.takeIf { it.isNotBlank() } ?: "写点什么…", fontSize = 15.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicTextField(
+                text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = "回复" },
+                enabled = !doing, singleLine = true,
+                textStyle = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = C.ink), cursorBrush = SolidColor(C.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { send() }),
+            )
+        }
+        // Nothing to send: the ink faint over the page (as the composer's).
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).background(if (ready || doing) C.ink else C.ink.copy(alpha = 0.18f).compositeOver(C.bg))
+                .clickable(enabled = ready) { send() }.semantics { contentDescription = "发送" },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (doing) CircularProgressIndicator(Modifier.size(16.dp), color = C.bg, strokeWidth = 2.dp)
+            else IconIn(Icons.ArrowUp, 18.dp, C.bg)
+        }
+    }
 }

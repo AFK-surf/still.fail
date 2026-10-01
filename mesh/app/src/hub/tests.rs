@@ -655,7 +655,7 @@ async fn chat_state_rejects_kinds_it_does_not_know() {
     let m = message();
     r.accept(&m).await;
     let refused = r.call(&session_key("cl", "C1", &m.thread_ts), "chat_state", json!({ "kind": "wait" })).await.unwrap_err();
-    assert!(refused.to_string().contains("\"all_done\", \"need_decision\" or \"need_help\" (or \"waiting\""), "{refused}");
+    assert!(refused.to_string().contains("\"all_done\" or \"need_help\" (or \"waiting\""), "{refused}");
 }
 
 #[tokio::test]
@@ -1159,7 +1159,7 @@ async fn a_chat_opened_on_the_admin_page_reaches_the_session_like_slack_and_the_
     assert!(prompt.contains(&format!("<message via=\"web\" connect=\"ember\" thread=\"EMBER/{}\" from=\"管理员 (local)\"", thread.thread_ts)), "{prompt}");
     assert!(prompt.contains("现在进展如何"));
     let to = format!("EMBER/{}", thread.thread_ts);
-    assert_eq!(r.call(&key, "chat_post", json!({ "to": to, "text": "快好了", "kind": "all_done" })).await.unwrap(), format!("Posted to {to}, and recorded state all_done."));
+    assert_eq!(r.call(&key, "chat_post", json!({ "to": to, "text": "快好了", "kind": "all_done", "done": "答了进展：快好了，没有别的要做" })).await.unwrap(), format!("Posted to {to}, and recorded state all_done."));
     let said: Vec<(AuthorKind, String)> = r.said(thread.id).into_iter().map(|x| (x.author_kind, x.text)).collect();
     assert_eq!(said, [(AuthorKind::Person, "现在进展如何？".to_string()), (AuthorKind::Agent, "快好了".into())]);
     assert_eq!(r.chat.texts().len(), 1, "only the Slack thread's own answer went to Slack");
@@ -1847,50 +1847,123 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
 }
 
 #[tokio::test]
-async fn a_block_post_offers_options_kept_with_it_and_checked() {
+async fn a_post_carries_a_card_kept_with_it_and_checked() {
     let r = setup();
     let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "ada@x.com", "fix the spacing", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
+    let kept = |r: &Rig| {
+        let n = r.said(thread.id).last().unwrap().n;
+        r.store.entries_between(thread.id, n, n).unwrap().remove(0)
+    };
     let options = json!([
         { "label": " 按今天累计 ", "detail": "重连不清零，零点归零", "recommended": true },
         { "label": "先不改", "detail": "", "recommended": false },
     ]);
-    let said = r.call(&web, "chat_post", json!({ "to": to, "text": "「共」改成按今天累计吗？", "kind": "need_decision", "options": options })).await.unwrap();
-    assert!(said.starts_with(&format!("Posted to {to}, and recorded state need_decision. People can pick: 按今天累计 (recommended); 先不改;")), "{said}");
-    let n = r.said(thread.id).last().unwrap().n;
-    let kept = r.store.entries_between(thread.id, n, n).unwrap().remove(0);
-    assert_eq!(kept.options, Some(json!([{ "label": "按今天累计", "detail": "重连不清零，零点归零", "recommended": true }, { "label": "先不改" }])));
-    assert_eq!(kept.declared.as_deref(), Some("need_decision"));
-    // As JSON text, from a runtime whose tool list is from before options, asking with block; a bare phrase is a label.
+    let shown = json!([{ "label": "按今天累计", "detail": "重连不清零，零点归零", "recommended": true }, { "label": "先不改" }]);
+    // An options card, with the turn ending need_help: the card is the message's, the state the turn's.
+    let said = r.call(&web, "chat_post", json!({ "to": to, "text": "「共」改成按今天累计吗？", "kind": "need_help", "need": "选统计口径", "card": { "type": "options", "options": options } })).await.unwrap();
+    assert!(said.starts_with(&format!("Posted to {to}, and recorded state need_help. People can pick: 按今天累计 (recommended); 先不改;")), "{said}");
+    let entry = kept(&r);
+    assert_eq!(entry.card, Some(json!({ "type": "options", "options": shown })));
+    assert_eq!(entry.options, Some(shown.clone()), "kept as options too: what stations and clients from before cards read");
+    assert_eq!(entry.declared.as_deref(), Some("need_help"));
+    // A text card, on a progress post (no kind): any post may carry one.
+    let said = r.call(&web, "chat_post", json!({ "to": to, "text": "测试 key 是多少？", "card": { "type": "text", "placeholder": " sk_test_… " } })).await.unwrap();
+    assert!(said.starts_with(&format!("Posted to {to}. People can write their answer")), "{said}");
+    let entry = kept(&r);
+    assert_eq!((entry.card, entry.options, entry.declared), (Some(json!({ "type": "text", "placeholder": "sk_test_…" })), None, None));
+    r.call(&web, "chat_post", json!({ "to": to, "text": "名字？", "card": "{\"type\": \"text\"}" })).await.unwrap();
+    assert_eq!(kept(&r).card, Some(json!({ "type": "text" })), "as JSON text, from a runtime whose tool list is from before cards");
+    // need_decision, from before cards: an options card, the turn need_help needing what it asks.
+    let said = r.call(&web, "chat_post", json!({ "to": to, "text": "**「共」改成按今天累计吗？**\n细节", "kind": "need_decision", "options": options })).await.unwrap();
+    assert!(said.contains("recorded state need_help. People can pick"), "{said}");
+    assert_eq!((kept(&r).card, kept(&r).declared), (Some(json!({ "type": "options", "options": shown })), Some("need_help".into())));
+    assert_eq!(r.store.last_turn(&web).unwrap().unwrap().need.as_deref(), Some("「共」改成按今天累计吗？"), "it needs what the post asks");
+    // Options as JSON text, asking with block; a bare phrase is a label.
     let said = r.call(&web, "chat_post", json!({ "to": to, "text": "选哪个？", "kind": "block", "options": "[\"A\", {\"label\": \"B\"}]" })).await.unwrap();
-    assert!(said.contains("recorded state need_decision."), "{said}");
-    let n = r.said(thread.id).last().unwrap().n;
-    assert_eq!(r.store.entries_between(thread.id, n, n).unwrap()[0].options, Some(json!([{ "label": "A" }, { "label": "B" }])));
-    // A post without options keeps none.
+    assert!(said.contains("recorded state need_help."), "{said}");
+    assert_eq!(kept(&r).options, Some(json!([{ "label": "A" }, { "label": "B" }])));
+    // Options without a kind: an options card all the same.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "顺便：哪个？", "options": [{ "label": "A" }] })).await.unwrap();
+    assert_eq!(kept(&r).card, Some(json!({ "type": "options", "options": [{ "label": "A" }] })));
+    // A post without a card keeps none.
     r.call(&web, "chat_post", json!({ "to": to, "text": "进度" })).await.unwrap();
-    let n = r.said(thread.id).last().unwrap().n;
-    assert_eq!(r.store.entries_between(thread.id, n, n).unwrap()[0].options, None);
+    assert_eq!((kept(&r).card, kept(&r).options), (None, None));
     let refused = |args: Value| {
         let r = &r;
         let web = web.clone();
         async move { r.call(&web, "chat_post", args).await.unwrap_err().to_string() }
     };
     let one = json!([{ "label": "A" }]);
-    assert!(refused(json!({ "to": to, "text": "x", "options": one })).await.contains("only with kind \"need_decision\""));
-    assert!(refused(json!({ "to": to, "text": "x", "kind": "all_done", "options": one })).await.contains("only with kind \"need_decision\""));
-    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_help", "need": "y", "options": one })).await.contains("only with kind \"need_decision\""));
+    assert!(refused(json!({ "to": to, "text": "x", "card": { "type": "poll" } })).await.contains("unknown card type \"poll\": the types known are options, text"));
+    assert!(refused(json!({ "to": to, "text": "x", "card": {} })).await.contains("one of options, text"));
+    assert!(refused(json!({ "to": to, "text": "x", "card": ["A"] })).await.contains("card must be an object"));
+    assert!(refused(json!({ "to": to, "text": "x", "card": { "type": "options" } })).await.contains("an options card has options"));
+    assert!(refused(json!({ "to": to, "text": "x", "card": { "type": "options", "options": one }, "options": one })).await.contains("not also as options"));
+    assert!(refused(json!({ "to": to, "text": "x", "card": { "type": "text", "placeholder": "字".repeat(81) } })).await.contains("at most 80"));
+    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_help", "card": { "type": "text" } })).await.contains("need is required"));
     assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision" })).await.contains("carries options"));
     assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [] })).await.contains("1 to 6"));
     let seven: Vec<Value> = (0..7).map(|i| json!({ "label": format!("选项{i}") })).collect();
-    assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": seven })).await.contains("1 to 6"));
+    assert!(refused(json!({ "to": to, "text": "x", "card": { "type": "options", "options": seven } })).await.contains("1 to 6"));
     assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [{ "label": " " }] })).await.contains("label is empty"));
     assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [{ "label": "A" }, { "label": "A" }] })).await.contains("repeats"));
     assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": [{ "label": "A", "recommended": true }, { "label": "B", "recommended": true }] })).await.contains("only one"));
     assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": { "label": "A" } })).await.contains("must be an array"));
     assert!(refused(json!({ "to": to, "text": "x", "kind": "need_decision", "options": "not json" })).await.contains("must be an array"));
-    assert!(refused(json!({ "to": to, "files": [], "kind": "need_decision", "options": one })).await.contains("text is empty"));
+    assert!(refused(json!({ "to": to, "files": [], "card": { "type": "text" } })).await.contains("text is empty"));
+}
+
+#[tokio::test]
+async fn a_state_says_which_message_it_is_about_the_pending_card_by_default() {
+    let r = setup();
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    r.hub.say(thread.id, "ada@x.com", "上线吧", vec![], vec![], None).unwrap();
+    settle().await;
+    let to = format!("EMBER/{}", thread.thread_ts);
+    let last = || r.store.last_turn(&web).unwrap().unwrap();
+    let about = || last().about.map(|a| (a.thread, a.seq, a.ts));
+    // need_help after a card: about the card, by default.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "合吗？", "card": { "type": "options", "options": [{ "label": "合" }] } })).await.unwrap();
+    let card = r.said(thread.id).last().unwrap().clone();
+    r.call(&web, "chat_post", json!({ "to": to, "text": "等你看一下", "kind": "need_help", "need": "决定合不合" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!(about(), Some((thread.id, card.n, card.ts.clone())));
+    let turn = serde_json::to_value(last()).unwrap();
+    assert_eq!(turn["about"], json!({ "thread": thread.id, "seq": card.n, "ts": card.ts }), "as the clients read it");
+    // all_done about the message with the result, given by its ts; with chat_state too.
+    r.hub.say(thread.id, "ada@x.com", "合", vec![], vec![], None).unwrap();
+    settle().await;
+    r.call(&web, "chat_post", json!({ "to": to, "text": "已合进 main" })).await.unwrap();
+    let result = r.said(thread.id).last().unwrap().clone();
+    assert_eq!(r.call(&web, "chat_state", json!({ "kind": "all_done", "done": "已合进 main 82f108a5", "about": result.ts })).await.unwrap(), "Recorded state all_done.");
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!(about(), Some((thread.id, result.n, result.ts.clone())));
+    // waiting about the message saying what was started; need_help with no card waiting is about nothing.
+    r.hub.say(thread.id, "ada@x.com", "再跑一遍测试", vec![], vec![], None).unwrap();
+    settle().await;
+    r.call(&web, "chat_post", json!({ "to": to, "text": "测试开始跑了" })).await.unwrap();
+    let started = r.said(thread.id).last().unwrap().clone();
+    r.call(&web, "chat_state", json!({ "kind": "waiting", "seconds": 60, "for": "测试跑完", "about": started.ts })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!(about().map(|a| a.1), Some(started.n));
+    r.hub.say(thread.id, "ada@x.com", "怎样了", vec![], vec![], None).unwrap();
+    settle().await;
+    r.call(&web, "chat_post", json!({ "to": to, "text": "卡住了", "kind": "need_help", "need": "要 key" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!(about(), None, "no card waiting, none given");
+    // A ts not in the chat, or about with no kind: refused.
+    r.hub.say(thread.id, "ada@x.com", "给你", vec![], vec![], None).unwrap();
+    settle().await;
+    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "kind": "all_done", "done": "已合进 main 82f108a5", "about": "1.000001" })).await.unwrap_err().to_string().contains("about must be the ts of a message"));
+    assert!(r.call(&web, "chat_state", json!({ "kind": "all_done", "done": "已合进 main 82f108a5", "about": "1.000001" })).await.unwrap_err().to_string().contains("about must be the ts of a message"));
+    assert!(r.call(&web, "chat_post", json!({ "to": to, "text": "x", "about": started.ts })).await.unwrap_err().to_string().contains("about goes with kind"));
 }
 
 #[tokio::test]
@@ -1902,23 +1975,25 @@ async fn options_are_refused_in_a_slack_thread() {
     let key = session_key("cl", "C1", &m.thread_ts);
     let refused = r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "选哪个？", "kind": "need_decision", "options": [{ "label": "A" }] })).await.unwrap_err();
     assert!(refused.to_string().contains("only in still.fail chats"), "{refused}");
+    let refused = r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "key？", "card": { "type": "text" } })).await.unwrap_err();
+    assert!(refused.to_string().contains("only in still.fail chats"), "{refused}");
 }
 
 #[tokio::test]
-async fn a_decision_is_pending_until_a_person_writes_and_a_newer_one_replaces_it() {
+async fn a_card_is_pending_until_a_person_writes_and_a_newer_one_replaces_it() {
     let r = setup();
     let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "ada@x.com", "fix the spacing", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
-    let pending = || r.store.pending_decision(thread.id).unwrap().map(|(m, options)| (m.n, options));
+    let pending = || r.store.pending_card(thread.id).unwrap().map(|(m, card)| (m.n, card));
     assert_eq!(pending(), None);
     // Help asked for asks nothing to pick.
     r.call(&web, "chat_post", json!({ "to": to, "text": "要 key", "kind": "need_help", "need": "要 Stripe 的测试 key" })).await.unwrap();
     assert_eq!(pending(), None);
     r.call(&web, "chat_post", json!({ "to": to, "text": "合吗？", "kind": "need_decision", "options": [{ "label": "合" }] })).await.unwrap();
     let first = r.said(thread.id).last().unwrap().n;
-    assert_eq!(pending(), Some((first, json!([{ "label": "合" }]))));
+    assert_eq!(pending(), Some((first, json!({ "type": "options", "options": [{ "label": "合" }] }))));
     // The agent saying more without options leaves it pending; only people answer it.
     r.call(&web, "chat_post", json!({ "to": to, "text": "顺便说一下进度" })).await.unwrap();
     assert_eq!(pending().map(|p| p.0), Some(first));
@@ -1931,6 +2006,12 @@ async fn a_decision_is_pending_until_a_person_writes_and_a_newer_one_replaces_it
     assert_eq!(pending(), None);
     r.call(&web, "chat_post", json!({ "to": to, "text": "那这样？", "kind": "need_decision", "options": [{ "label": "好" }] })).await.unwrap();
     assert!(pending().is_some());
+    // A text card replaces it as well, on a post with no kind.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "域名填哪个？", "card": { "type": "text", "placeholder": "example.com" } })).await.unwrap();
+    let text = r.said(thread.id).last().unwrap().n;
+    assert_eq!(pending(), Some((text, json!({ "type": "text", "placeholder": "example.com" }))));
+    r.hub.say(thread.id, "ada@x.com", "still.fail", vec![], vec![], None).unwrap();
+    assert_eq!(pending(), None);
 }
 
 #[tokio::test]
@@ -1955,7 +2036,14 @@ async fn a_turn_ends_all_done_needing_a_decision_or_help_or_waiting_and_the_word
     // need goes only with need_help; need_decision only posted, with options.
     r.accept(&reply(&m, "9999.1", "给你 key")).await;
     settle().await;
-    assert!(r.call(&key, "chat_state", json!({ "kind": "all_done", "need": "x" })).await.unwrap_err().to_string().contains("only with kind \"need_help\""));
+    assert!(r.call(&key, "chat_state", json!({ "kind": "all_done", "need": "x", "done": "y" })).await.unwrap_err().to_string().contains("only with kind \"need_help\""));
+    assert!(r.call(&key, "chat_state", json!({ "kind": "all_done" })).await.unwrap_err().to_string().contains("done is required"));
+    // done is a reason people can trust, not the word done.
+    for empty in ["做完了", " 完成。", "已完成", "Done!", "ok", "好了", "全部搞定"] {
+        let refused = r.call(&key, "chat_state", json!({ "kind": "all_done", "done": empty })).await.unwrap_err().to_string();
+        assert!(refused.contains("done must say why nothing in the chat is left"), "{empty}: {refused}");
+    }
+    assert!(r.call(&key, "chat_state", json!({ "kind": "need_help", "need": "x", "done": "y" })).await.unwrap_err().to_string().contains("only with kind \"all_done\""));
     assert!(r.call(&key, "chat_state", json!({ "kind": "need_decision" })).await.unwrap_err().to_string().contains("posted with chat_post"));
     assert!(r.call(&key, "chat_state", json!({ "kind": "need_help" })).await.unwrap_err().to_string().contains("need is required"));
     assert!(r.call(&key, "chat_state", json!({ "kind": "done" })).await.unwrap_err().to_string().contains("all_done"));
@@ -1963,8 +2051,15 @@ async fn a_turn_ends_all_done_needing_a_decision_or_help_or_waiting_and_the_word
     r.claude.last().complete();
     settle().await;
     assert_eq!((last().ending.as_deref(), last().need.as_deref()), (Some("need_help"), Some("确认一下要不要上线")));
+    // all_done says what the chat ends with, kept as need is.
+    r.accept(&reply(&m, "9999.2", "上了")).await;
+    settle().await;
+    assert_eq!(r.call(&key, "chat_state", json!({ "kind": "all_done", "done": "已合并所有代码" })).await.unwrap(), "Recorded state all_done.");
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!((last().ending.as_deref(), last().need.as_deref()), (Some("all_done"), Some("已合并所有代码")));
     // The words from before: block needs no need; final is all_done.
-    r.accept(&reply(&m, "9999.2", "上吧")).await;
+    r.accept(&reply(&m, "9999.25", "上吧")).await;
     settle().await;
     assert_eq!(r.call(&key, "chat_state", json!({ "kind": "block" })).await.unwrap(), "Recorded state need_help.");
     r.claude.last().complete();

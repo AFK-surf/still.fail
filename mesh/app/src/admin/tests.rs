@@ -1282,6 +1282,34 @@ async fn a_pending_decision_is_on_its_chats_row_and_each_viewer_dismisses_it_for
 }
 
 #[tokio::test]
+async fn a_pending_card_is_on_its_chats_row_an_options_card_as_its_decision_too() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let thread = made["thread"]["id"].as_i64().unwrap();
+    t.call("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "上线" }))).await;
+    let row = |rows: Value| rows.as_array().unwrap().iter().find(|r| r["id"] == key).cloned().unwrap();
+    // An options card: `card`, and `decision` as before cards.
+    let card = json!({ "type": "options", "options": [{ "label": "合", "recommended": true }] });
+    let (n, _) = t.store.insert_message(NewMessage { card: Some(card.clone()), ..NewMessage::new(thread, "9.000001", AuthorKind::Agent, &key, "合吗？") }).unwrap();
+    let r = row(t.get("/chats").await);
+    assert_eq!((r["card"]["seq"].clone(), r["card"]["card"].clone(), r["card"]["message"]["card"].clone()), (json!(n), card.clone(), card.clone()));
+    assert_eq!((r["decision"]["seq"].clone(), r["decision"]["options"].clone(), r["decision"].get("card")), (json!(n), card["options"].clone(), None));
+    assert_eq!(r["decision"]["message"]["options"], card["options"]);
+    // A text card: `card` only (clients from before cards know only options), and dismissed the same way.
+    let text = json!({ "type": "text", "placeholder": "sk_test_…" });
+    let (n, _) = t.store.insert_message(NewMessage { card: Some(text.clone()), ..NewMessage::new(thread, "9.000002", AuthorKind::Agent, &key, "key 是多少？") }).unwrap();
+    let r = row(t.get("/chats").await);
+    assert_eq!((r["card"]["seq"].clone(), r["card"]["card"].clone(), r.get("decision")), (json!(n), text.clone(), None));
+    assert_eq!(r["card"]["message"].get("options"), None);
+    let entries = t.get(&format!("/threads/{thread}/entries")).await;
+    let last = entries["entries"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!((last["card"].clone(), last.get("options")), (text.clone(), None));
+    assert_eq!(t.call("PUT", &format!("/threads/{thread}/dismissed"), Some(json!({ "n": n }))).await.0, 200);
+    assert_eq!(row(t.get("/chats").await)["card"]["dismissed"], json!(true));
+}
+
+#[tokio::test]
 async fn a_chat_is_renamed_by_hand_and_named_by_its_agent_or_first_message_again_when_the_name_is_cleared() {
     let t = setup().await;
     let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;

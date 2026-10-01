@@ -132,7 +132,8 @@ fn turn_notice(turn: &TurnSummary, last: Option<&MessageRow>, key: &str) -> Opti
     let theirs = last.filter(|m| m.author_kind == AuthorKind::Agent && m.author == key && m.created_at >= turn.started_at);
     let text = theirs.map(|m| m.text.clone()).filter(|t| !t.trim().is_empty());
     match (turn.declared.as_deref(), turn.outcome.as_deref()) {
-        (Some("block"), _) => Some(("block", text.unwrap_or_default())),
+        // What it needs, in its words (need_help's `need`), else what it said last.
+        (Some("block"), _) => Some(("block", turn.need.clone().filter(|n| !n.trim().is_empty()).or(text).unwrap_or_default())),
         (_, Some("failed")) => None,
         (Some("final"), _) => theirs.map(|_| ("done", text.unwrap_or_else(|| "（文件）".into()))),
         _ => None,
@@ -161,7 +162,7 @@ mod tests {
     use super::*;
 
     fn turn(declared: Option<&str>, outcome: &str) -> TurnSummary {
-        TurnSummary { kind: "message".into(), outcome: Some(outcome.into()), declared: declared.map(str::to_string), ending: None, need: None, wait_seconds: None, wait_for: None, detail: Some("rate_limit: 用完了".into()), started_at: 100, ended_at: Some(200) }
+        TurnSummary { kind: "message".into(), outcome: Some(outcome.into()), declared: declared.map(str::to_string), ending: None, need: None, about: None, wait_seconds: None, wait_for: None, detail: Some("rate_limit: 用完了".into()), started_at: 100, ended_at: Some(200) }
     }
 
     fn said(kind: AuthorKind, author: &str, at: i64) -> MessageRow {
@@ -173,6 +174,9 @@ mod tests {
         let mine = said(AuthorKind::Agent, "k", 150);
         assert_eq!(turn_notice(&turn(Some("final"), "completed"), Some(&mine), "k"), Some(("done", "修好了".into())));
         assert_eq!(turn_notice(&turn(Some("block"), "completed"), Some(&mine), "k"), Some(("block", "修好了".into())));
+        // need_help says what it needs: that, rather than its last words.
+        let needs = TurnSummary { need: Some("要 Stripe 的测试 key".into()), ..turn(Some("block"), "completed") };
+        assert_eq!(turn_notice(&needs, Some(&mine), "k"), Some(("block", "要 Stripe 的测试 key".into())));
         // Said nothing this turn: done says nothing, failed says why.
         let old = said(AuthorKind::Agent, "k", 50);
         assert_eq!(turn_notice(&turn(Some("final"), "completed"), Some(&old), "k"), None);

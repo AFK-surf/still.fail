@@ -40,6 +40,11 @@ pub fn merge(entries: &[Value]) -> Vec<Value> {
                 if let Some(options) = entry.get("options").filter(|o| o.as_array().is_some_and(|o| !o.is_empty())) {
                     message["options"] = options.clone();
                 }
+                // The card it carries (options to pick, a field to write in); a station from before cards gives only
+                // an options card's `options`.
+                if let Some(card) = entry.get("card").filter(|c| c.is_object()) {
+                    message["card"] = card.clone();
+                }
                 messages.insert(n, message);
             }
             Some("edit") => {
@@ -89,6 +94,9 @@ mod tests {
         asked["options"] = json!([{"label": "A"}]);
         let merged = merge(&[asked, message(2, "A")]);
         assert_eq!((merged[0]["options"].clone(), merged[1].get("options")), (json!([{"label": "A"}]), None));
+        let mut typed = message(1, "key？");
+        typed["card"] = json!({"type": "text"});
+        assert_eq!(merge(&[typed])[0]["card"], json!({"type": "text"}));
     }
 
     #[test]

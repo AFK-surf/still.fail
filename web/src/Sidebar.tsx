@@ -12,7 +12,7 @@ import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
-import { ChatMark, stateLine, WaitingText } from "./ChatMark.tsx";
+import { ChatMark, jumpFromLine, stateLine, WaitingText } from "./ChatMark.tsx";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
@@ -199,6 +199,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} data-settled={item.settled || undefined} onClick={(e) => {
         if (editing) { e.preventDefault(); return; }
         chatClicked();
+        if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) jumpFromLine(item, e.target);
         move(e, to, "chat");
         if (!here && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setGoing(to);
       }}

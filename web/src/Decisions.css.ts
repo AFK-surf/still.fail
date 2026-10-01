@@ -128,3 +128,36 @@ export const sideEntryCount = style({ flex: "1", color: vars.muted, fontVariantN
 
 /** The wide screen's page (pages/Decisions.tsx): its bar, then the decision filling the pane. */
 export const page = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column", background: vars.canvas });
+
+// ── a text card ───────────────────────────────────────────────────────
+
+/** Its field and send button, where an options card's options are: the field a chip, the button round, in ink. */
+export const reply = style({
+  display: "flex", alignItems: "center", gap: "6px", padding: "4px 4px 4px 14px", borderRadius: vars.rField,
+  cornerShape: vars.cornerShape, background: chip,
+});
+export const replyInput = style({
+  flex: "1", minWidth: "0", height: "32px", padding: "0", border: "0", outline: "none", background: "none",
+  color: vars.text, fontFamily: "inherit", fontSize: vars.textSm, lineHeight: "20px",
+  selectors: { "&::placeholder": { color: vars.subtle } },
+});
+export const replySend = style({
+  flex: "none", display: "grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0",
+  borderRadius: "50%", background: vars.text, color: ground, cursor: "pointer",
+  transition: `opacity ${vars.dur}`,
+  selectors: {
+    "&:hover:not(:disabled)": { opacity: ".88" },
+    "&:disabled": { cursor: "default", background: `color-mix(in srgb, ${vars.text} 18%, transparent)` },
+    "&[aria-busy]": { background: vars.text },
+  },
+});
+export const replySpinner = style({});
+globalStyle(`${replySpinner}${spinner}`, { width: "14px", height: "14px", borderWidth: "1.5px", borderColor: `color-mix(in srgb, ${ground} 35%, transparent)`, borderTopColor: ground });
+
+/** A card this page does not know: the way to its chat, to answer there. */
+export const elsewhere = style({
+  display: "block", width: "100%", height: "38px", padding: "0 14px", border: "0", borderRadius: vars.rField,
+  cornerShape: vars.cornerShape, background: chip, color: vars.text, fontFamily: "inherit", fontSize: vars.textSm,
+  fontWeight: "500", cursor: "pointer",
+  selectors: { "&:hover": { filter: "brightness(.96)" } },
+});

@@ -5,17 +5,21 @@
 // queue on this device, 不再提醒 stops asking this viewer. The phone swipes for those two (left, right); the wide
 // screen has them as words in the hint line, and ← →.
 //
-// Everything said goes through the core's calls (decision.answer / defer / dismiss); what is under way shows on its
-// button (doing.ts), what failed in a toast (useAct).
+// A text card (`card.type` text) has a field to write in and a send button where the options would be
+// (decision.reply); a card of a type this page does not know, only a way to its chat, to answer there.
+//
+// Everything said goes through the core's calls (decision.answer / reply / defer / dismiss); what is under way shows
+// on its button (doing.ts), what failed in a toast (useAct).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView } from "./core/shapes.ts";
+import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { useStations } from "./api.ts";
 import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
-import { doingMatches, failed, useDoingList } from "./doing.ts";
+import { doingMatches, failed, useDoing, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
 import { reducedMotion } from "./motion.ts";
 import { StaticMessage } from "./Chat.tsx";
+import { ArrowUp } from "./icons.tsx";
 import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -57,13 +61,54 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
   );
 }
 
+/** What kind of card it is: its `type`, or (a core before cards) options when it has some. */
+export function cardType(card: MessageCard | undefined, options: readonly DecisionOption[] | undefined): string | undefined {
+  return card?.type ?? (options?.length ? "options" : undefined);
+}
+
+/**
+ * A text card's field and send button: Enter or the button sends what is written (`decision.reply`), a spinner on the
+ * button meanwhile; failed, the words stay and a toast says why. `onSent` once it went through.
+ */
+export function DecisionReply({ station, thread, seq, placeholder, onSent }: {
+  station: string; thread: number; seq: number; placeholder?: string | undefined; onSent?: () => void;
+}) {
+  const call = useCall();
+  const act = useAct();
+  // Under way: the core's doing list says so, or (a core that does not list it) this call not yet answered.
+  const [asked, setAsked] = useState(false);
+  const sending = useDoing("decision.reply", { station, thread, seq }) || asked;
+  const [text, setText] = useState("");
+  const ready = text.trim() !== "" && !sending;
+  const send = () => {
+    if (!ready) return;
+    setAsked(true);
+    const reply = call("decision.reply", { station, thread, seq, text: text.trim() });
+    act(reply, "回复");
+    reply.then(() => { setText(""); onSent?.(); }, () => undefined).finally(() => setAsked(false));
+  };
+  return (
+    <form className={css.reply} onSubmit={(e) => { e.preventDefault(); send(); }}
+      // A finger on the field writes in it: no swipe starts there.
+      onPointerDown={(e) => e.stopPropagation()}>
+      <input className={css.replyInput} value={text} placeholder={placeholder || "写点什么…"} aria-label={placeholder || "回复"}
+        readOnly={sending} enterKeyHint="send" onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
+      <button type="submit" className={css.replySend} disabled={!ready} aria-label="发送" aria-busy={sending || undefined}>
+        {sending ? <span className={`${waitingCss.spinner} ${css.replySpinner}`} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+      </button>
+    </form>
+  );
+}
+
 /**
  * Under an agent's post with options, in its chat: the options while it waits for the viewer (none in a chat that
  * cannot be written to: `thread` null), else how it was settled, quietly, if the core says.
  */
 export function MessageDecision({ message: m, thread }: { message: ChatMessage; thread: number | null }) {
   const station = useStation().address;
-  if (!m.options?.length) return null;
+  // Only an options card draws anything here; a text card is answered on the 奏 page (or by writing in the chat).
+  if (cardType(m.card, m.options) !== "options" || !m.options?.length) return null;
   const d = m.decision;
   const open = !d?.resolved && !d?.dismissed;
   if (open && thread !== null) return <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />;
@@ -203,7 +248,12 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, className }: {
           </div>
           <div className={css.foot}>
             <div className={css.footColumn}>
-              <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.options} onPick={() => answered(d)} />
+              {(() => {
+                const type = cardType(d.card, d.options);
+                if (type === "options") return <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={() => answered(d)} />;
+                if (type === "text") return <DecisionReply key={keyOf(d)} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} />;
+                return <button type="button" className={css.elsewhere} onClick={() => onOpen(path)}>去 chat 里回</button>;
+              })()}
               {swipe
                 ? <div className={css.hint} aria-hidden="true"><span>← 待定</span><span>不再提醒 →</span></div>
                 : (

@@ -27,7 +27,7 @@ struct Seen {
     state: Option<&'static str>,
     /// The last message it has noticed (or found there at first).
     seq: i64,
-    /// The decision waiting for the viewer in it (its post's seq), if any.
+    /// The card waiting for the viewer in it (its post's seq), if any.
     decision: Option<u64>,
     /// A new message seen while running, held until the agents settle.
     pending: bool,
@@ -150,7 +150,7 @@ impl Notices {
 
 fn seen(row: &Value) -> Seen {
     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
-    let decision = crate::decisions::of_row(row).filter(|d| !crate::decisions::dismissed(d)).and_then(|d| d.get("seq")?.as_u64());
+    let decision = crate::decisions::pending(row).and_then(|d| d.get("seq")?.as_u64());
     Seen { state: crate::present::row_state(&agents), seq: last_seq(row), decision, pending: false }
 }
 
@@ -169,7 +169,7 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
     let then = then.cloned().unwrap_or(Seen { state: None, seq: 0, decision: None, pending: false });
     let by = crate::present::last_by(row, me, slack_users, members);
     let mine = by.as_ref().and_then(|b| b.get("mine")).and_then(Value::as_bool) == Some(true);
-    // A decision waiting for the viewer anew: its first line.
+    // A card waiting for the viewer anew: its first line.
     if let Some(decision) = crate::decisions::of_row(row).filter(|_| now.decision.is_some() && now.decision != then.decision) {
         let text = decision.get("message").and_then(|m| m.get("text")).and_then(Value::as_str).unwrap_or("");
         let line = crate::decisions::line(text);
@@ -179,9 +179,16 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
     let text = last.map(|l| crate::format::clean_text(l.get("text").and_then(Value::as_str).unwrap_or(""))).unwrap_or_default();
     let text = if text.is_empty() && last.is_some() { "（文件）".to_string() } else { text };
     let by_name = by.as_ref().and_then(|b| b.get("name")).and_then(Value::as_str).unwrap_or("").to_string();
-    // Blocked on a decision is told as the decision (above), or not at all once dismissed.
+    // Needing them (need_help): what it needs, in its words, else what was said last. Needing an answer to a card is
+    // told as the card (above), or not at all once dismissed.
     if now.state == Some("block") && then.state != Some("block") && crate::decisions::of_row(row).is_none() {
-        return Some(("block", body("block", &by_name, &text)));
+        let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+        let need = agents.iter().filter(|a| crate::present::session_status(a) == "block")
+            .find_map(|a| a.get("lastTurn")?.get("need")?.as_str().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string));
+        return Some(("block", match need {
+            Some(need) => body("block", "", &need),
+            None => body("block", &by_name, &text),
+        }));
     }
     let fresh = now.seq > then.seq;
     let kind = by.as_ref().and_then(|b| b.get("kind")).and_then(Value::as_str);
@@ -207,7 +214,7 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
 pub fn body(kind: &str, by: &str, text: &str) -> String {
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let line = match kind {
-        "block" => format!("需要处理 · {text}"),
+        "block" => format!("要你帮忙 · {text}"),
         "wait" => format!("等你决定 · {text}"),
         "failed" => format!("出错了 · {text}"),
         _ if !by.is_empty() => format!("{by}: {text}"),
@@ -354,7 +361,7 @@ mod tests {
             store.set(&rows, Ok(json!([row(Some("block"), 7, true, ("agent", "ds:C1:1.2"))])));
             notices.look(&stations);
             assert_eq!(kinds(&notices), ["done", "block"]);
-            assert!(notices.value(None)["items"][1]["body"].as_str().unwrap().starts_with("需要处理 · 修好了"));
+            assert!(notices.value(None)["items"][1]["body"].as_str().unwrap().starts_with("要你帮忙 · 修好了"));
             // Someone else says something.
             store.set(&rows, Ok(json!([row(None, 8, true, ("person", "you@x.y"))])));
             notices.look(&stations);
@@ -446,6 +453,31 @@ mod tests {
             store.set(&rows, Ok(json!([with(asked(7, "那这个？"), 7)])));
             notices.look(&stations);
             assert_eq!(kinds(&notices), ["wait", "wait"]);
+            // A text card, from a station with cards (`card`), with its agent still at work: heard the same.
+            let mut typed = row(Some("run"), 8, false, ("agent", "ds:C1:1.2"));
+            typed["card"] = json!({ "seq": 8, "card": { "type": "text" }, "message": { "seq": 8, "text": "域名填哪个？" } });
+            store.set(&rows, Ok(json!([typed])));
+            notices.look(&stations);
+            assert_eq!(kinds(&notices), ["wait", "wait", "wait"]);
+            assert_eq!(notices.value(None)["items"][2]["body"], "等你决定 · 域名填哪个？");
+        });
+    }
+
+    #[test]
+    fn needing_help_is_told_by_what_it_needs() {
+        run(async {
+            let (_host, store, notices) = setup();
+            let rows = Topic::ChatRows { station: "ws/st".into() };
+            let stations = ["ws/st".to_string()];
+            let _watch = store.watch(&rows, Rc::new(|| {}));
+            store.set(&rows, Ok(json!([row(Some("run"), 3, false, ("agent", "ds:C1:1.2"))])));
+            notices.look(&stations);
+            let mut needs = row(Some("block"), 4, true, ("agent", "ds:C1:1.2"));
+            needs["agents"][0]["lastTurn"]["need"] = json!("要 Stripe 的测试 key");
+            store.set(&rows, Ok(json!([needs])));
+            notices.look(&stations);
+            assert_eq!(kinds(&notices), ["block"]);
+            assert_eq!(notices.value(None)["items"][0]["body"], "要你帮忙 · 要 Stripe 的测试 key");
         });
     }
 

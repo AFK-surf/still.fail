@@ -217,6 +217,10 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun answerDecision(thread: Long, seq: Long, option: String) {
         op("decision.answer") { put("thread", thread); put("seq", seq); put("option", option) }
     }
+    /** Answers a text card with what the viewer wrote: their message in its chat, quoting the post. */
+    suspend fun replyDecision(thread: Long, seq: Long, text: String) {
+        op("decision.reply") { put("thread", thread); put("seq", seq); put("text", text) }
+    }
     /** Sets a decision aside on this device (待定): last on the decisions page, still pending; nothing is sent. */
     suspend fun deferDecision(thread: Long, seq: Long) { op("decision.defer") { put("thread", thread); put("seq", seq) } }
     /** Dismisses a decision for the viewer, on every device of theirs: off their list, still pending for others. */

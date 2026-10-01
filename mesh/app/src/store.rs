@@ -275,11 +275,33 @@ pub struct EntryRow {
     /// message: for ember's notice about one of the station's profiles (its sign-in failed), that profile's id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
-    /// message: an agent's block post that asks people to decide, its answers to pick from (chat_post `options`):
-    /// `[{label, detail?, recommended?}]`. None for every other message (and from stations before it).
+    /// message: an agent's post with an options card, the answers to pick from: `[{label, detail?, recommended?}]`, as
+    /// `card.options` (what clients from before cards read). None for every other message.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub options: Option<Value>,
+    /// message: the card an agent's post carries (chat_post `card`): `{type: "options", options}` or `{type: "text",
+    /// placeholder?}`. None for every other message (and from stations before cards: their `options` are an options
+    /// card, see [`EntryRow::card`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<Value>,
     pub at: i64,
+}
+
+impl EntryRow {
+    /// The card it carries: its own, else its options as an options card (a post from before cards).
+    pub fn card(&self) -> Option<Value> {
+        self.card.clone().or_else(|| self.options.as_ref().map(|o| options_card(o.clone())))
+    }
+}
+
+/// Options to pick from as a card.
+pub fn options_card(options: Value) -> Value {
+    serde_json::json!({ "type": "options", "options": options })
+}
+
+/// A message's card as kept: its `card` column, else its `options` (from before cards) as an options card.
+fn card_of(card: Option<String>, options: Option<String>) -> Option<Value> {
+    card.and_then(|c| serde_json::from_str(&c).ok()).or_else(|| options.and_then(|o| serde_json::from_str(&o).ok()).map(options_card))
 }
 
 /// A message as it reads now: its latest edit's words, files and quotes.
@@ -343,9 +365,12 @@ pub struct TurnSummary {
     /// mean: final all_done, block need_help).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ending: Option<String>,
-    /// For need_help: what a person has to give or do, in the agent's words.
+    /// For need_help: what a person has to give or do, in the agent's words; for all_done, what the chat ends with.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub need: Option<String>,
+    /// The message its state is about (chat_post / chat_state `about`; for need_help, the pending card by default).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub about: Option<TurnAbout>,
     /// For waiting: at most how long, in seconds, until the agent is asked again.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wait_seconds: Option<i64>,
@@ -355,6 +380,23 @@ pub struct TurnSummary {
     pub detail: Option<String>,
     pub started_at: i64,
     pub ended_at: Option<i64>,
+}
+
+/// The message a turn's state is about: its thread, entry (`seq`, as the clients number messages) and ts.
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnAbout {
+    pub thread: i64,
+    pub seq: i64,
+    pub ts: String,
+}
+
+fn to_about(r: &Row) -> rusqlite::Result<Option<TurnAbout>> {
+    let (thread, n, ts): (Option<i64>, Option<i64>, Option<String>) = (r.get("about_thread")?, r.get("about_n")?, r.get("about_ts")?);
+    Ok(match (thread, n, ts) {
+        (Some(thread), Some(seq), Some(ts)) => Some(TurnAbout { thread, seq, ts }),
+        _ => None,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -410,11 +452,12 @@ pub fn said_before(declared: &str) -> &str {
     }
 }
 
-/// The same in today's words: final is all_done, block need_help.
+/// The same in today's words: final is all_done, block need_help; need_decision (before cards: a post with options that
+/// ended the turn) need_help too.
 pub fn ending(declared: &str) -> &str {
     match declared {
         "final" => "all_done",
-        "block" => "need_help",
+        "block" | "need_decision" => "need_help",
         other => other,
     }
 }
@@ -433,14 +476,16 @@ pub struct NewMessage {
     pub client: Option<String>,
     /// ember's notice about a profile: its id (EntryRow::profile).
     pub profile: Option<String>,
-    /// An agent's block post that asks people to decide: its answers (EntryRow::options).
+    /// The card an agent's post carries (EntryRow::card); an options card is kept as `options` too.
+    pub card: Option<Value>,
+    /// Answers to pick from, as said before cards: an options card (EntryRow::options).
     pub options: Option<Value>,
     pub at: Option<i64>,
 }
 
 impl NewMessage {
     pub fn new(thread: i64, ts: &str, author_kind: AuthorKind, author: &str, text: &str) -> NewMessage {
-        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, client: None, profile: None, options: None, at: None }
+        NewMessage { thread, ts: ts.into(), author_kind, author: author.into(), text: text.into(), attachments: vec![], quotes: vec![], declared: None, client: None, profile: None, card: None, options: None, at: None }
     }
 }
 
@@ -623,6 +668,7 @@ CREATE TABLE IF NOT EXISTS entries (
   client TEXT,
   profile TEXT,
   options TEXT,
+  card TEXT,
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
@@ -663,7 +709,10 @@ CREATE TABLE IF NOT EXISTS turns (
   declared TEXT,
   wait_seconds INTEGER,
   wait_for TEXT,
-  need TEXT
+  need TEXT,
+  about_thread INTEGER,
+  about_n INTEGER,
+  about_ts TEXT
 );
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
@@ -847,6 +896,12 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
     if !has("turns", "need")? {
         db.execute_batch("ALTER TABLE turns ADD COLUMN need TEXT")?;
     }
+    // Came with `about`: the message a turn's state is about.
+    for (column, kind) in [("about_thread", "INTEGER"), ("about_n", "INTEGER"), ("about_ts", "TEXT")] {
+        if !has("turns", column)? {
+            db.execute_batch(&format!("ALTER TABLE turns ADD COLUMN {column} {kind}"))?;
+        }
+    }
     // Came with usage (store/usage.rs): whom a turn worked for, where, and on which profile.
     for (column, kind) in [("profile", "TEXT"), ("person", "TEXT"), ("thread", "INTEGER")] {
         if !has("turns", column)? {
@@ -905,8 +960,14 @@ fn add_client_column(db: &Connection) -> Result<()> {
     if !has("entries", "options")? {
         db.execute_batch("ALTER TABLE entries ADD COLUMN options TEXT")?;
     }
-    // A chat's latest decision is looked for on every list of chats: only its posts with options are read.
+    // A message's card (entries.card) came later, the same way; an options card is kept in `options` too, which
+    // stations from before cards read.
+    if !has("entries", "card")? {
+        db.execute_batch("ALTER TABLE entries ADD COLUMN card TEXT")?;
+    }
+    // A chat's latest card is looked for on every list of chats: only its posts with one are read.
     db.execute_batch("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL")?;
+    db.execute_batch("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL")?;
     if !has("merged", "client")? {
         db.execute_batch(&format!("BEGIN; DROP VIEW IF EXISTS merged; {MERGED} COMMIT;"))?;
     }
@@ -962,6 +1023,7 @@ fn to_entry(r: &Row) -> rusqlite::Result<EntryRow> {
         client: r.get("client")?,
         profile: r.get("profile")?,
         options: r.get::<_, Option<String>>("options")?.and_then(|o| serde_json::from_str(&o).ok()),
+        card: r.get::<_, Option<String>>("card")?.and_then(|c| serde_json::from_str(&c).ok()),
         at: r.get("at")?,
     })
 }
@@ -1560,7 +1622,11 @@ impl Store {
                     declared: m.declared,
                     client: m.client,
                     profile: m.profile,
-                    options: m.options,
+                    // An options card is kept as options too (what stations and clients from before cards read).
+                    options: m.options.clone().or_else(|| {
+                        m.card.as_ref().filter(|c| c.get("type").and_then(Value::as_str) == Some("options")).and_then(|c| c.get("options").cloned())
+                    }),
+                    card: m.card.or_else(|| m.options.map(options_card)),
                     at: m.at.unwrap_or_else(now_ms),
                 },
                 changes,
@@ -1594,6 +1660,7 @@ impl Store {
                     client: None,
                     profile: None,
                     options: None,
+                    card: None,
                     at: now_ms(),
                 },
                 changes,
@@ -1846,24 +1913,30 @@ impl Store {
         })
     }
 
-    // ── decisions ─────────────────────────────────────────────────────────
+    // ── cards ─────────────────────────────────────────────────────────────
 
-    /// The thread's decision still pending, if any: its latest block post with options (a newer one replaces an older
-    /// one), as long as no person has written in the thread since. The post as merged, and its options.
-    pub fn pending_decision(&self, thread: i64) -> Result<Option<(MessageRow, Value)>> {
+    /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long
+    /// as no person has written in the thread since. The post as merged, and its card (EntryRow::card).
+    pub fn pending_card(&self, thread: i64) -> Result<Option<(MessageRow, Value)>> {
         self.with(|i, _| {
             if i.is_archived(thread)? {
                 return Ok(None);
             }
-            let asked: Option<(i64, String)> = i
-                .db
-                .query_row(
-                    "SELECT n, options FROM entries WHERE thread = ? AND kind = 'message' AND options IS NOT NULL ORDER BY n DESC LIMIT 1",
-                    [thread],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?;
-            let Some((n, options)) = asked else { return Ok(None) };
+            // The latest of each kind (cards, and options from before cards), each read by its own index.
+            let latest = |column: &str| -> Result<Option<(i64, Option<String>, Option<String>)>> {
+                Ok(i.db
+                    .query_row(
+                        &format!("SELECT n, card, options FROM entries WHERE thread = ? AND kind = 'message' AND {column} IS NOT NULL ORDER BY n DESC LIMIT 1"),
+                        [thread],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )
+                    .optional()?)
+            };
+            let asked = match (latest("card")?, latest("options")?) {
+                (Some(a), Some(b)) => Some(if a.0 >= b.0 { a } else { b }),
+                (a, b) => a.or(b),
+            };
+            let Some((n, card, options)) = asked else { return Ok(None) };
             let answered = i
                 .db
                 .query_row("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", params![thread, n], |_| Ok(()))
@@ -1872,13 +1945,13 @@ impl Store {
             if answered {
                 return Ok(None);
             }
-            let Ok(options) = serde_json::from_str::<Value>(&options) else { return Ok(None) };
+            let Some(card) = card_of(card, options) else { return Ok(None) };
             let message = i.db.query_row("SELECT * FROM merged WHERE thread = ? AND n = ?", params![thread, n], to_message).optional()?;
-            Ok(message.map(|m| (m, options)))
+            Ok(message.map(|m| (m, card)))
         })
     }
 
-    /// The decisions a viewer dismissed, as (thread, n).
+    /// The cards a viewer dismissed, as (thread, n).
     pub fn dismissed(&self, viewer: &str) -> Result<HashSet<(i64, i64)>> {
         self.with(|i, _| {
             let mut stmt = i.db.prepare("SELECT thread, n FROM dismissed WHERE viewer = ?")?;
@@ -1887,7 +1960,7 @@ impl Store {
         })
     }
 
-    /// A viewer will not take up a decision (the block post at `n`): it leaves their list, on every device of theirs.
+    /// A viewer will not take up a card (the post at `n`): it leaves their list, on every device of theirs.
     pub fn dismiss(&self, viewer: &str, thread: i64, n: i64) -> Result<()> {
         self.with(|i, changes| {
             i.db.execute("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", params![viewer, thread, n, now_ms()])?;
@@ -1954,6 +2027,18 @@ impl Store {
         })
     }
 
+    /// The message a turn's state is about (`about`: thread, entry and ts), or none.
+    pub fn set_about(&self, id: &str, about: Option<(i64, i64, &str)>) -> Result<()> {
+        self.with(|i, _| {
+            let (thread, n, ts) = match about {
+                Some((thread, n, ts)) => (Some(thread), Some(n), Some(ts)),
+                None => (None, None, None),
+            };
+            i.db.execute("UPDATE turns SET about_thread = ?, about_n = ?, about_ts = ? WHERE id = ?", params![thread, n, ts, id])?;
+            Ok(())
+        })
+    }
+
     /// What a turn needs of a person once it ends as need_help (`need`), in the agent's words.
     pub fn set_need(&self, id: &str, what: &str) -> Result<()> {
         self.with(|i, _| {
@@ -2002,6 +2087,7 @@ impl Store {
                     declared: r.get::<_, Option<String>>("declared")?.map(|d| said_before(&d).to_string()),
                     ending: r.get::<_, Option<String>>("declared")?.map(|d| ending(&d).to_string()),
                     need: r.get("need")?,
+                    about: to_about(r)?,
                     wait_seconds: r.get("wait_seconds")?,
                     wait_for: r.get("wait_for")?,
                     detail: r.get("detail")?,
@@ -2025,6 +2111,7 @@ impl Store {
                         declared: r.get::<_, Option<String>>("declared")?.map(|d| said_before(&d).to_string()),
                         ending: r.get::<_, Option<String>>("declared")?.map(|d| ending(&d).to_string()),
                         need: r.get("need")?,
+                        about: to_about(r)?,
                         wait_seconds: r.get("wait_seconds")?,
                     wait_for: r.get("wait_for")?,
                         detail: r.get("detail")?,
@@ -2046,7 +2133,7 @@ impl Store {
                    (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
                    (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
                      WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
-                   l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.detail, l.started_at, l.ended_at
+                   l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
                  FROM sessions s
                  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
                  {}",
@@ -2069,6 +2156,7 @@ impl Store {
                                 declared: r.get::<_, Option<String>>("declared")?.map(|d| said_before(&d).to_string()),
                                 ending: r.get::<_, Option<String>>("declared")?.map(|d| ending(&d).to_string()),
                                 need: r.get("need")?,
+                                about: to_about(r)?,
                                 wait_seconds: r.get("wait_seconds")?,
                     wait_for: r.get("wait_for")?,
                                 detail: r.get("detail")?,
@@ -2620,7 +2708,7 @@ impl Inner {
 
 fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
     db.execute(
-        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, card, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             e.thread,
             e.n,
@@ -2636,6 +2724,7 @@ fn insert_entry(db: &Connection, e: &EntryRow) -> Result<()> {
             e.client,
             e.profile,
             e.options.as_ref().map(Value::to_string),
+            e.card.as_ref().map(Value::to_string),
             e.at
         ],
     )?;

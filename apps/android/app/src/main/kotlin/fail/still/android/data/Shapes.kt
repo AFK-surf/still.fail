@@ -222,6 +222,14 @@ data class Creator (
 	val shown: PersonShown? = null
 )
 
+/// The message a turn's state is about: its thread, its seq there, its ts.
+@Serializable
+data class TurnAbout (
+	val thread: Long,
+	val seq: Long,
+	val ts: String
+)
+
 @Serializable
 data class TurnSummary (
 	val kind: String,
@@ -231,11 +239,16 @@ data class TurnSummary (
 	val waitSeconds: Long? = null,
 	/// For waiting: what it waits for, in the agent's words (a station yet to update says nothing).
 	val waitFor: String? = null,
-	/// How the agent ended it in today's words: all_done, need_decision, need_help or waiting (`declared` keeps the
-	/// words from before: final, block). A station yet to update says nothing.
+	/// How the agent ended it in today's words: all_done, need_help or waiting (`declared` keeps the words from before:
+	/// final, block; a station before cards may say need_decision, which the core reads as need_help). A station yet to
+	/// update says nothing.
 	val ending: String? = null,
-	/// For need_help: what a person has to give or do, in the agent's words.
+	/// For need_help: what a person has to give, do or decide, in the agent's words; for all_done, what the chat ends
+	/// with.
 	val need: String? = null,
+	/// The message its state is about (the agent's `about`; for need_help, the card waiting by default). A station
+	/// before it says nothing.
+	val about: TurnAbout? = null,
 	val detail: String? = null,
 	val startedAt: Long,
 	val endedAt: Long? = null
@@ -830,14 +843,28 @@ data class DecisionOption (
 	val recommended: Boolean? = null
 )
 
-/// A chat's decision still pending (a row's, a chat page's): the block post's entry, its options in the order they are
-/// shown (the recommended one last), whether the viewer dismissed it, and its line (奏 · …) while it is the viewer's.
+/// What an agent's message asks people to answer it with (core decisions.rs): `type` options (`options`, as shown: the
+/// recommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;
+/// `decision.reply`). A type a UI does not know: answered by writing in the chat.
+@Serializable
+data class MessageCard (
+	/// options | text
+	val type: String,
+	val options: List<DecisionOption>? = null,
+	val placeholder: String? = null
+)
+
+/// A chat's card still pending (a row's, a chat page's; named for when the only cards were decisions): its post's entry,
+/// the card as shown, an options card's options in the order they are shown (the recommended one last; empty for a
+/// text card), whether the viewer dismissed it, and its line (奏 · …) while it is the viewer's.
 @Serializable
 data class RowDecision (
 	val seq: Long,
 	val options: List<DecisionOption>,
+	/// The card itself. A core before cards says none: an options card.
+	val card: MessageCard? = null,
 	val dismissed: Boolean? = null,
-	/// 奏 · <the post's first line, cut to about 40 characters>: the row's second line. Absent once dismissed.
+	/// 奏 · <the post's first line, cut to about 40 characters>. Absent once dismissed.
 	val text: String? = null
 )
 
@@ -883,19 +910,23 @@ data class ChatItem (
 	val pinned: Boolean? = null,
 	/// A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise.
 	val watch: RowWatch? = null,
-	/// The decision it waits on (an agent's block post with options no one has answered yet), as the viewer sees it.
-	/// Absent when there is none (and from a station before decisions).
+	/// The card it waits on (an agent's post with a card no one has answered yet), as the viewer sees it. Absent when
+	/// there is none (and from a station before decisions).
 	val decision: RowDecision? = null,
-	/// Nothing is left in it: each of its agents ended all_done, nothing at work, no decision waiting for the viewer,
+	/// Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
 	/// nothing unread. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise.
 	val settled: Boolean? = null,
 	/// With `settled`: offer to archive it with one tap (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,
-	/// Where it stands, in words, for its second line: 奏 · … (a decision waiting for the viewer), 要你帮忙：…, 出问题：…,
-	/// 在等：…, 做完了. Absent while it is at work or with nothing to say.
+	/// Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
+	/// card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
+	/// no card waiting, or with nothing to say.
 	val stateText: String? = null,
-	/// Its mark, the most urgent first: alert (blocked or failed), wait (a decision waits, not dismissed by the viewer),
-	/// busy (at work), done (something unread). Absent for none.
+	/// The message `stateText` is about (a seq in this chat): the card, or the one the agent's state names. Opening the
+	/// chat from the line may go to it. Absent when none.
+	val stateAbout: Long? = null,
+	/// Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an
+	/// agent needs them: need_help), busy (at work), done (something unread). Absent for none.
 	val tone: String? = null
 )
 
@@ -990,10 +1021,12 @@ data class ChatMessage (
 	val said: Boolean? = null,
 	/// Its times in words, by field (`createdAt`).
 	val time: Map<String, Stamp>? = null,
-	/// An agent's block post asking people to decide: the answers to pick, in the order they are shown (the one the
-	/// agent recommends last). Absent for every other message.
+	/// An agent's post with an options card: the answers to pick, in the order they are shown (the one the agent
+	/// recommends last), as `card.options`; drawn under the message. Absent for every other message.
 	val options: List<DecisionOption>? = null,
-	/// With `options`: whether it still waits for an answer, and who answered it how.
+	/// The card it carries (options to pick, or a text field), as shown. Absent for a message with none.
+	val card: MessageCard? = null,
+	/// With a card: whether it still waits for an answer, and who answered it how.
 	val decision: MessageDecision? = null
 )
 
@@ -1089,7 +1122,7 @@ data class ChatView (
 	val failed: String? = null,
 	/// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
 	val connection: LinkShown? = null,
-	/// The decision it waits on, as its row has it. Absent when there is none.
+	/// The card it waits on, as its row has it. Absent when there is none.
 	val decision: RowDecision? = null,
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	/// (`chat.archive`). Absent otherwise.
@@ -1352,8 +1385,9 @@ data class Counts (
 	val warm: Long
 )
 
-/// One decision on the decisions page: where it is, the post that asks it (as a chat shows messages) and the messages
-/// just before it, its options as shown, and whether the viewer set it aside on this device.
+/// One card on the 奏 page: where it is, the post that asks (as a chat shows messages, with its card) and the messages
+/// just before it, the card (an options card's options as shown, also as `options`), and whether the viewer set it
+/// aside on this device. An options card is answered with `decision.answer`, a text card with `decision.reply`.
 @Serializable
 data class DecisionItem (
 	val station: String,
@@ -1368,14 +1402,16 @@ data class DecisionItem (
 	/// The one or two messages before it, oldest first.
 	val before: List<ChatMessage>,
 	val options: List<DecisionOption>,
+	/// The card. A core before cards says none: an options card.
+	val card: MessageCard? = null,
 	/// Set aside (待定) on this device: last in the list, still pending.
 	val deferred: Boolean? = null,
 	/// 奏 · <the post's first line>
 	val text: String
 )
 
-/// The decisions waiting in a workspace's chats for the viewer (the `decisions` view, core decisions.rs): pending, not
-/// dismissed by them, those they set aside (待定) last; `count` for the home page's 奏 N.
+/// The cards waiting in a workspace's chats for the viewer (the `decisions` view, the 奏 page, core decisions.rs):
+/// pending whatever their agents do, not dismissed by them, those they set aside (待定) last; `count` for 奏 N.
 @Serializable
 data class DecisionsView (
 	val items: List<DecisionItem>,
@@ -2367,12 +2403,13 @@ data class UsageView (
 data class WorkspaceMark (
 	val alert: UInt,
 	val unread: UInt,
-	/// How many have a decision waiting (not dismissed by them), not counted in `alert`. Absent for 0.
+	/// How many have a card waiting (not dismissed by them) or an agent needing them (need_help), not counted in
+	/// `alert`. Absent for 0.
 	val wait: UInt? = null,
-	/// How many decisions wait in it for them in all (the home page's 奏 N). Absent for 0.
+	/// How many cards wait in it for them in all (奏 N). Absent for 0.
 	val decisions: UInt? = null,
 	val tone: String? = null,
-	/// 2 个需要处理 · 1 个等你决定 · 3 个有新消息
+	/// 2 个需要处理 · 1 个在等你 · 3 个有新消息
 	val label: String? = null,
 	val chat: OpenChat? = null
 )

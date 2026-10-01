@@ -42,6 +42,7 @@ import { failure, useToast } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
+import { jumped, useJump } from "./jumpTo.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -345,6 +346,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
+  useJumpTo(list, station, id, messages, chat.more, older);
   const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
   useNewerOnScroll(list, short, chat.messages.at(-1)?.seq, newer);
   useShowing(floor, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
@@ -434,6 +436,41 @@ function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessa
       || (before.last !== undefined && last !== undefined && last < before.last);
     if (moved) list.current?.dispatchEvent(new Event("trimmed"));
   }, [list, first, last]);
+}
+
+/**
+ * A message asked to be shown (jumpTo.ts: a row's state line pressed): once it is in the list, scrolled to the middle
+ * and flashed, after the list has been put where it opens (the unread line, where it was left). Older than the window:
+ * older pages load until it is in; not there at all, nothing.
+ */
+function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
+  const seq = useJump(station, thread);
+  const loading = useRef(false);
+  useEffect(() => {
+    if (seq === null || !messages.length || loading.current) return;
+    const message = messages.find((m) => m.seq === seq);
+    if (!message) {
+      if (more && seq < messages[0]!.seq) {
+        loading.current = true;
+        void older().catch(() => jumped()).finally(() => { loading.current = false; });
+      } else jumped();
+      return;
+    }
+    // A frame later: after the list has been put where it opens.
+    const frame = requestAnimationFrame(() => {
+      jumped();
+      const pane = list.current;
+      const target = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${CSS.escape(message.ts)}"]`);
+      if (!pane || !target) return;
+      // A reader's move: the pane keeps it rather than holding its bottom.
+      pane.dispatchEvent(new WheelEvent("wheel"));
+      target.scrollIntoView({ block: "center" });
+      target.classList.remove(css.msgFlash);
+      void target.offsetWidth;
+      target.classList.add(css.msgFlash);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [seq, messages, more]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too). */

@@ -2,6 +2,14 @@
 use super::*;
 
 impl Inner {
+    /// The card a chat waits on, as its row has it, if it is the one at `seq` (decisions.rs).
+    fn pending_card(&self, station: &str, thread: u64, seq: u64) -> Result<Value> {
+        let rows = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok).unwrap_or(Value::Null);
+        let row = rows.as_array().into_iter().flatten().find(|r| r.get("thread").and_then(Value::as_u64) == Some(thread));
+        row.and_then(crate::decisions::of_row).filter(|d| d.get("seq").and_then(Value::as_u64) == Some(seq))
+            .ok_or_else(|| CoreError::invalid("这件事已经有人回复了"))
+    }
+
     /// Runs a call; `at` is the client and id it came with.
     pub(super) async fn execute(&self, call: Call, progress: Progress, at: (ClientId, RequestId)) -> Result<Value> {
         let at_call = at;
@@ -220,12 +228,17 @@ impl Inner {
                 }
             }
             Call::DecisionAnswer { station, thread, seq, option } => {
-                // As its chat's row has it: still pending, and the option one it offers.
-                let rows = self.store.value(&Topic::ChatRows { station: station.clone() }).and_then(Result::ok).unwrap_or(Value::Null);
-                let row = rows.as_array().into_iter().flatten().find(|r| r.get("thread").and_then(Value::as_u64) == Some(thread));
-                let decision = row.and_then(crate::decisions::of_row).filter(|d| d.get("seq").and_then(Value::as_u64) == Some(seq))
-                    .ok_or_else(|| CoreError::invalid("这个决定已经有人回复了"))?;
-                let (text, quotes) = crate::decisions::answer(decision, &option).ok_or_else(|| CoreError::invalid("没有这个选项"))?;
+                // As its chat's row has it: still pending, an options card, and the option one it offers.
+                let card = self.pending_card(&station, thread, seq)?;
+                let (text, quotes) = crate::decisions::answer(&card, &option).ok_or_else(|| CoreError::invalid("没有这个选项"))?;
+                crate::prefs::undefer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq));
+                let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
+                Box::pin(self.execute(send, progress, at)).await
+            }
+            Call::DecisionReply { station, thread, seq, text } => {
+                // As its chat's row has it: still pending, and a text card.
+                let card = self.pending_card(&station, thread, seq)?;
+                let (text, quotes) = crate::decisions::reply(&card, &text).ok_or_else(|| CoreError::invalid("这张卡片不用填写，请选一个选项"))?;
                 crate::prefs::undefer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq));
                 let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await

@@ -11,7 +11,7 @@ import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
-import { ChatMark, stateLine, WaitingText } from "../ChatMark.tsx";
+import { ChatMark, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
@@ -248,7 +248,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       onPointerUp={release} onPointerCancel={release} onPointerLeave={release}
       // A long press has its menu already; a right click with a mouse opens it.
       onContextMenu={(e) => { e.preventDefault(); if (!touched.current) hold(e.currentTarget, e.clientX); }}
-      onClick={() => { if (!longPressed.current) app.open(path); }}>
+      onClick={(e) => { if (!longPressed.current) { jumpFromLine(item, e.target); app.open(path); } }}>
       <span className={css.mChatText}>
       <span className={css.mChatLine1}>
         <ChatMark item={item} inline />

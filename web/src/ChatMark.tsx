@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
 import type { WorkspaceMark } from "./core/shapes.ts";
 import { reducedMotion } from "./motion.ts";
+import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
@@ -20,7 +21,7 @@ export function chatTone(item: ChatItem): ChatTone | undefined {
   return item.unread ? "done" : undefined;
 }
 
-const LABEL: Record<ChatTone, string> = { busy: "工作中", done: "做完了，有新消息", alert: "需要处理", wait: "等你决定", other: "等别人决定" };
+const LABEL: Record<ChatTone, string> = { busy: "工作中", done: "做完了，有新消息", alert: "需要处理", wait: "在等你", other: "在等别人" };
 
 /**
  * The mark each chat has and since when, to know one that has just come: every list the chat is in pops it (all and
@@ -71,10 +72,19 @@ export function WaitingText({ text, className }: { text: string; className: stri
   const lead = text.startsWith("奏") ? text.split(" · ")[0]! : "";
   const turn = lead !== "" || text.startsWith("要你帮忙");
   return (
-    <span className={className} data-turn={turn || undefined}>
+    <span className={className} data-turn={turn || undefined} data-state-line="">
       {lead && <b className={css.waitingLead}>{lead}</b>}{text.slice(lead.length)}
     </span>
   );
+}
+
+/**
+ * A row pressed on its state line (WaitingText) when the core says which message the state is about (`stateAbout`):
+ * its chat, as it opens, goes to that message (jumpTo.ts). Pressed elsewhere, or about none: nothing here.
+ */
+export function jumpFromLine(item: ChatItem, target: EventTarget): void {
+  if (item.stateAbout == null || item.thread == null || !(target instanceof Element) || !target.closest("[data-state-line]")) return;
+  jumpTo({ station: item.station, thread: item.thread, seq: item.stateAbout });
 }
 
 /** What a row's second line says of where its chat stands, if anything (an older core: only a decision's line). */

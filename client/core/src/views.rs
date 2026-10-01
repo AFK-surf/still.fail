@@ -811,16 +811,19 @@ impl Views {
                         let model = row["last"]["by"]["model"].as_str().map(str::to_string);
                         row["last"]["by"]["maker"] = crate::present::maker(model.as_deref());
                     }
-                    // The decision it waits on as the viewer sees it, its second line, its mark (decisions.rs).
+                    // The card it waits on as the viewer sees it, its mark (decisions.rs).
                     crate::decisions::present(&mut row);
                     // Nothing left in it: faded, below the rest of its day, one tap from the archive; and where it
                     // stands in words.
-                    if crate::present::settled(&row) {
+                    if crate::present::settled(&row) && !crate::present::pinned(&row) {
                         row["settled"] = json!(true);
                         row["archivable"] = json!(true);
                     }
-                    if let Some(text) = crate::present::row_state_text(&row) {
+                    if let Some((text, about)) = crate::present::row_state_line(&row) {
                         row["stateText"] = json!(text);
+                        if let Some(seq) = about {
+                            row["stateAbout"] = json!(seq);
+                        }
                     }
                     rows.push(row);
                 }
@@ -1126,9 +1129,9 @@ impl Views {
         // Its item in the sidebar, as the station has it for the viewer (as kept, until read).
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok);
         let row = rows.as_ref().and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id)).cloned());
-        // Where each decision in it stands: the one its row names waits (the rows read, a chat with no row waits on
-        // none); the rows not read, as its messages say.
-        let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(d))));
+        // Where each card in it stands: the one its row names waits (the rows read, a chat with no row waits on none);
+        // the rows not read, as its messages say.
+        let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(&d))));
         crate::decisions::in_messages(&mut messages, pending);
         Some(Ok(json!({
             "me": self.me(scope),
@@ -1166,12 +1169,12 @@ impl Views {
             if let Some(watch) = crate::present::row_watch(&sessions) {
                 view["watch"] = watch;
             }
-            // The decision it waits on, as its row has it (decisions.rs).
-            if let Some(decision) = row.as_ref().and_then(crate::decisions::of_row) {
-                view["decision"] = crate::decisions::shown(decision);
+            // The card it waits on, as its row has it (decisions.rs).
+            if let Some(card) = row.as_ref().and_then(crate::decisions::of_row) {
+                view["decision"] = crate::decisions::shown(&card);
             }
             // Nothing left in it: one tap archives it (chat.archive).
-            if row.as_ref().is_some_and(crate::present::settled) && view["archived"] != true {
+            if row.as_ref().is_some_and(|r| crate::present::settled(r) && !crate::present::pinned(r)) && view["archived"] != true {
                 view["archivable"] = json!(true);
             }
             view
@@ -1217,9 +1220,9 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
 }
 
 impl Views {
-    /// The decisions waiting for the viewer in a workspace's chats (the `decisions` view): each pending one its
-    /// station's rows have, not dismissed by them, with its post and the messages before it as a chat shows them; those
-    /// set aside on this device last.
+    /// The cards waiting for the viewer in a workspace's chats (the `decisions` view, the 奏 page): each pending one its
+    /// station's rows have, whatever its agents' states, not dismissed by them, with its post and the messages before it
+    /// as a chat shows them; those set aside on this device last.
     fn decisions(&self, scope: &str) -> Option<Result<Value>> {
         let stations = match self.stations(scope)? {
             Ok(stations) => stations,
@@ -1243,7 +1246,7 @@ impl Views {
                 .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
                 .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
             for row in rows.as_array().into_iter().flatten().filter(|r| !self.being_archived(&s.address, r)) {
-                let Some(d) = crate::decisions::of_row(row).filter(|d| !crate::decisions::dismissed(d)) else { continue };
+                let Some(d) = crate::decisions::pending(row) else { continue };
                 let (Some(thread), Some(seq)) = (row.get("thread").and_then(Value::as_u64), d.get("seq").and_then(Value::as_u64)) else { continue };
                 let agents: Vec<Value> = row.get("agents").and_then(Value::as_array).into_iter().flatten().map(|a| {
                     let mut a = a.clone();
@@ -1256,9 +1259,15 @@ impl Views {
                     m["waiting"] = json!(false);
                     m
                 };
-                let options = crate::decisions::options_shown(&d["options"]);
+                let card = crate::decisions::card_shown(&d["card"]);
+                let options = card.get("options").cloned().unwrap_or(json!([]));
                 let mut message = shown(&d["message"]);
-                message["options"] = json!(options);
+                if crate::decisions::kind(&d["card"]) == "options" {
+                    message["options"] = options.clone();
+                } else if let Some(m) = message.as_object_mut() {
+                    m.remove("options");
+                }
+                message["card"] = card.clone();
                 message["decision"] = json!({ "resolved": false });
                 let before: Vec<Value> = d.get("before").and_then(Value::as_array).into_iter().flatten().map(shown).collect();
                 let deferred = crate::decisions::deferred_at(&prefs, &s.address, thread, seq);
@@ -1267,7 +1276,7 @@ impl Views {
                     "station": s.address, "stationName": s.name,
                     "session": row.get("id").cloned().unwrap_or(Value::Null), "thread": thread,
                     "title": row.get("title").cloned().unwrap_or(json!("")),
-                    "seq": seq, "message": message, "before": before, "options": options,
+                    "seq": seq, "message": message, "before": before, "options": options, "card": card,
                     "deferred": deferred.map(|_| true),
                     "text": crate::decisions::line(d["message"].get("text").and_then(Value::as_str).unwrap_or("")),
                 });
@@ -2119,7 +2128,58 @@ mod tests {
             assert_eq!((of("k2").get("tone"), of("k2")["decision"]["dismissed"].clone(), of("k2")["decision"].get("text")), (None, json!(true), None));
             let m = marks.value.clone().unwrap();
             assert_eq!(m["workspaces"]["ws"]["decisions"], 2);
-            assert_eq!((m["workspaces"]["ws"]["wait"].clone(), m["workspaces"]["ws"]["alert"].clone(), m["workspaces"]["ws"]["label"].clone()), (json!(2), json!(0), json!("2 个等你决定")));
+            assert_eq!((m["workspaces"]["ws"]["wait"].clone(), m["workspaces"]["ws"]["alert"].clone(), m["workspaces"]["ws"]["label"].clone()), (json!(2), json!(0), json!("2 个在等你")));
+        });
+    }
+
+    /// A row waiting on a text card (its post at `seq`), as a station with cards gives it (`card`, no `decision`).
+    fn typing(id: &str, thread: u64, seq: u64, at: f64) -> Value {
+        let mut r = row(id, at);
+        r["thread"] = json!(thread);
+        r["session"] = json!(id);
+        let card = json!({ "type": "text", "placeholder": "sk_test_…" });
+        let mut message = said(seq, "agent", id, "Stripe 的测试 key 是多少？", at);
+        message["card"] = card.clone();
+        r["card"] = json!({ "seq": seq, "card": card, "message": message, "before": [] });
+        r
+    }
+
+    #[test]
+    fn a_text_card_is_on_the_page_and_its_row_whatever_its_agent_does() {
+        run(async {
+            let t = setup();
+            let (mut page, mut chats) = (Ui::default(), Ui::default());
+            t.subscribe(1, Topic::Decisions { workspace: "ws".into() });
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
+            t.read_all(&mut [(&mut page, 1), (&mut chats, 2)]).await;
+            t.set(workspace(), one_station());
+            t.set(Topic::Prefs, json!({}));
+            t.read_all(&mut [(&mut page, 1), (&mut chats, 2)]).await;
+            t.set(link("ws/st"), json!({"state": "online"}));
+            let now = t.host.now_ms();
+            // Its agent at work: the card waits all the same.
+            let mut working = typing("k1", 7, 5, now - 1000.0);
+            working["agents"][0]["process"] = json!("running");
+            // An agent that needs something, about a message of the chat.
+            let mut needs = row("k2", now - 2000.0);
+            needs["thread"] = json!(8);
+            needs["agents"][0]["lastTurn"] = json!({ "kind": "message", "declared": "block", "ending": "need_help", "need": "要 key", "about": { "thread": 8, "seq": 9, "ts": "9.000009" }, "outcome": "completed", "startedAt": 1, "endedAt": 1 });
+            t.set(rows("ws/st"), json!([working, needs]));
+            t.read_all(&mut [(&mut page, 1), (&mut chats, 2)]).await;
+            let v = page.value.clone().unwrap();
+            assert_eq!(v["count"], 1);
+            let it = &v["items"][0];
+            assert_eq!((it["card"].clone(), it["options"].clone()), (json!({ "type": "text", "placeholder": "sk_test_…" }), json!([])));
+            assert_eq!((it["message"]["card"].clone(), it["message"].get("options"), it["text"].clone()), (it["card"].clone(), None, json!("奏 · Stripe 的测试 key 是多少？")));
+            stillfail_shapes::conform::<stillfail_shapes::DecisionsView>(v.clone()).unwrap();
+            let v = chats.value.clone().unwrap();
+            let all: Vec<Value> = v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().clone()).collect();
+            let of = |id: &str| all.iter().find(|r| r["id"] == id).cloned().unwrap_or_else(|| panic!("{id} in {v}"));
+            let k1 = of("k1");
+            assert_eq!((k1["stateText"].as_str(), k1["stateAbout"].as_u64(), k1["tone"].as_str()), (Some("奏 · Stripe 的测试 key 是多少？"), Some(5), Some("wait")));
+            assert_eq!((k1["decision"]["card"]["type"].as_str(), k1.get("card")), (Some("text"), None));
+            let k2 = of("k2");
+            assert_eq!((k2["stateText"].as_str(), k2["stateAbout"].as_u64(), k2["tone"].as_str()), (Some("要你帮忙：要 key"), Some(9), Some("wait")), "need_help: blue, not red");
         });
     }
 
@@ -2782,6 +2842,7 @@ mod tests {
             assert_eq!(m[1]["ending"], "need_decision");
             assert_eq!((m[1]["decision"]["resolved"].clone(), m[1]["decision"]["chosen"].clone()), (json!(true), json!("B")));
             assert_eq!(m[3]["decision"], json!({ "resolved": false }), "the one its row names waits");
+            assert_eq!((m[1]["card"]["type"].clone(), m[3]["card"].clone()), (json!("options"), json!({ "type": "options", "options": [{ "label": "C" }] })));
             assert_eq!(m[0].get("decision"), None);
             assert_eq!(v["decision"]["text"], "奏 · 那 C 呢？");
             assert_eq!(v.get("archivable"), None);

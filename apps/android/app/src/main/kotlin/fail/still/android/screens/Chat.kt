@@ -564,6 +564,23 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // A card over the composer tapped (AskCard.kt): the message that asked it, as a quote's (no passage: it flashes whole).
     val jumpTo = rememberJump(list, rows, motion)
     SideEffect { host.showSaid = { seq -> rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == seq } }?.let { jumpTo(it.ts, "") } } }
+    // The page before asked for (once per page: here, or near the top below).
+    val asked = remember { mutableStateOf<Long?>(null) }
+    // Opened at a message (a row's state line: what it is about), once the list is in place: there, flashing; the
+    // pages before brought in until it is loaded (none left, or it is gone: where the chat opened).
+    LaunchedEffect(follow.placed, first, reveal.revealing) {
+        val target = host.goTo ?: return@LaunchedEffect
+        if (!follow.placed || reveal.revealing) return@LaunchedEffect
+        val m = rows.firstNotNullOfOrNull { (it as? Entry.Said)?.m?.takeIf { m -> m.seq == target } }
+        when {
+            m != null -> { host.goTo = null; jumpTo(m.ts, "") }
+            view.more && thread != null && first != null && first > target -> {
+                asked.value = first
+                try { api.older(thread.id) } catch (_: CoreException) { host.goTo = null }
+            }
+            else -> host.goTo = null
+        }
+    }
     // Put in place once: at the unread line (even coming back: something unread goes over where the chat was left),
     // else back where the chat was left, else where the core opened it (`at`), else at the newest.
     val lineShown = remember { mutableStateOf(false) }
@@ -703,7 +720,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         }
     }
     // Near the top: the page before comes in (once per page); what is on screen stays put.
-    val asked = remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(view.more, first, follow.placed, reveal.revealing) {
         if (!view.more || thread == null || !follow.placed || reveal.revealing) return@LaunchedEffect
         snapshotFlow { list.firstVisibleItemIndex }.collect { index ->

@@ -21,20 +21,21 @@ pub(super) fn workspace_ids(workspaces: Option<Value>) -> Vec<String> {
         .collect()
 }
 
-/// What a chat's row asks of its person: `alert` (its agent blocked on them or failed), `done` (something in it
-/// unread), or nothing; as its mark in the list says (web ChatMark.tsx). Only a chat they take part in (`mine`) asks
-/// anything: the others are theirs who are in them. Blocked on a decision is no alert: the decision counts (`wait`),
-/// for everyone who has not dismissed it.
+/// What a chat's row asks of its person: `alert` (its agent failed), `wait` (its agent needs them: need_help), `done`
+/// (something in it unread), or nothing; as its mark in the list says (web ChatMark.tsx). Only a chat they take part in
+/// (`mine`) asks anything: the others are theirs who are in them. A card waiting counts as `wait` too, for everyone who
+/// has not dismissed it (`marks`).
 pub fn row_tone(row: &Value) -> Option<&'static str> {
     if row.get("mine").and_then(Value::as_bool) != Some(true) {
         return None;
     }
     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
     let state = crate::present::row_state(&agents);
-    if state == Some("failed") || (state == Some("block") && crate::decisions::of_row(row).is_none()) {
-        return Some("alert");
+    match state {
+        Some("failed") => Some("alert"),
+        Some("block") => Some("wait"),
+        _ => (row.get("unread").and_then(Value::as_bool) == Some(true) && state != Some("run")).then_some("done"),
     }
-    (row.get("unread").and_then(Value::as_bool) == Some(true) && state != Some("run")).then_some("done")
 }
 
 /// The chat last open in a workspace, from the prefs: as the core keeps it (`openChat`), else as a page from before
@@ -87,7 +88,7 @@ impl Views {
                         decisions += u64::from(waits);
                         match (row_tone(row), waits) {
                             (Some("alert"), _) => counts.alert += 1,
-                            (_, true) => counts.wait += 1,
+                            (Some("wait"), _) | (_, true) => counts.wait += 1,
                             (Some(_), false) => counts.unread += 1,
                             (None, false) => {}
                         }
@@ -124,8 +125,8 @@ impl Views {
     }
 }
 
-/// How many chats want their person, each counted once by its most urgent: blocked or failed (`alert`), a decision
-/// waiting for them (`wait`), something unread.
+/// How many chats want their person, each counted once by its most urgent: failed (`alert`), a card waiting for them
+/// or an agent needing them (`wait`), something unread.
 #[derive(Default, Clone, Copy)]
 struct Counts {
     alert: u64,
@@ -138,14 +139,14 @@ impl Counts {
         if self.alert > 0 { Some("alert") } else if self.wait > 0 { Some("wait") } else if self.unread > 0 { Some("done") } else { None }
     }
 
-    /// 2 个需要处理 · 1 个等你决定 · 3 个有新消息
+    /// 2 个需要处理 · 1 个在等你 · 3 个有新消息
     fn label(&self) -> String {
         let mut parts = Vec::new();
         if self.alert > 0 {
             parts.push(format!("{} 个需要处理", self.alert));
         }
         if self.wait > 0 {
-            parts.push(format!("{} 个等你决定", self.wait));
+            parts.push(format!("{} 个在等你", self.wait));
         }
         if self.unread > 0 {
             parts.push(format!("{} 个有新消息", self.unread));
@@ -168,14 +169,14 @@ mod tests {
 
     #[test]
     fn only_a_row_its_person_takes_part_in_wants_them() {
-        assert_eq!(row_tone(&json!({ "mine": true, "agents": [agent("blocked")] })), Some("alert"));
+        assert_eq!(row_tone(&json!({ "mine": true, "agents": [agent("blocked")] })), Some("wait"), "need_help: it waits for them, nothing went wrong");
+        assert_eq!(row_tone(&json!({ "mine": true, "agents": [{ "key": "k", "lastTurn": { "outcome": "failed" } }] })), Some("alert"));
         assert_eq!(row_tone(&json!({ "mine": false, "agents": [agent("blocked")] })), None);
         assert_eq!(row_tone(&json!({ "mine": true, "unread": true, "agents": [] })), Some("done"));
         assert_eq!(row_tone(&json!({ "mine": false, "unread": true, "agents": [] })), None);
         assert_eq!(row_tone(&json!({ "mine": true, "unread": true, "agents": [agent("running")] })), None);
         assert_eq!(row_tone(&json!({ "mine": true, "agents": [] })), None);
-        // Blocked on a decision: the decision counts, not an alert.
-        assert_eq!(row_tone(&json!({ "mine": true, "agents": [agent("blocked")], "decision": { "seq": 4 } })), None);
+        assert_eq!(row_tone(&json!({ "mine": true, "agents": [agent("blocked")], "decision": { "seq": 4 } })), Some("wait"));
     }
 
     #[test]
@@ -197,7 +198,7 @@ mod tests {
         assert_eq!(counts(0, 0, 3).tone(), Some("done"));
         assert_eq!(counts(0, 0, 0).tone(), None);
         assert_eq!(counts(2, 0, 3).label(), "2 个需要处理 · 3 个有新消息");
-        assert_eq!(counts(0, 1, 1).label(), "1 个等你决定 · 1 个有新消息");
+        assert_eq!(counts(0, 1, 1).label(), "1 个在等你 · 1 个有新消息");
         assert_eq!(counts(0, 0, 1).label(), "1 个有新消息");
     }
 }

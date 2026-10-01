@@ -8,23 +8,25 @@ use serde_json::{Value, json};
 use crate::format;
 use crate::protocol::Topic;
 
-/// How a session's last turn ended, in today's words (all_done, need_decision, need_help, waiting): the station's
-/// `ending`, else its `declared` as a station from before them says it (final all_done, block need_help).
+/// How a session's last turn ended, in today's words (all_done, need_help, waiting): the station's `ending`, else its
+/// `declared` as a station from before them says it (final all_done, block need_help). need_decision (a station from
+/// before cards: a post with options that ended the turn) is need_help: the card is the message's.
 pub fn ending(s: &Value) -> Option<&str> {
     let turn = s.get("lastTurn").filter(|t| t.is_object())?;
-    match turn.get("ending").and_then(Value::as_str) {
-        Some(ending) => Some(ending),
-        None => match turn.get("declared").and_then(Value::as_str)? {
-            "final" => Some("all_done"),
-            "block" => Some("need_help"),
-            other => Some(other),
-        },
-    }
+    let said = match turn.get("ending").and_then(Value::as_str) {
+        Some(ending) => ending,
+        None => turn.get("declared").and_then(Value::as_str)?,
+    };
+    Some(match said {
+        "final" => "all_done",
+        "block" | "need_decision" => "need_help",
+        other => other,
+    })
 }
 
 /// Where a session stands: running (also while it waits on work it started, which brings it back), queued, final
-/// (all done), block (it needs a person's help), decision (a person has to pick), failed, aborted, unexpected (a turn
-/// that ended without a state, or was left open by a crash), or idle.
+/// (all done), block (it needs a person: need_help), failed, aborted, unexpected (a turn that ended without a state, or
+/// was left open by a crash), or idle.
 pub fn session_status(s: &Value) -> &'static str {
     if s.get("process").and_then(Value::as_str) == Some("running") {
         return "running";
@@ -36,7 +38,6 @@ pub fn session_status(s: &Value) -> &'static str {
     match ending(s) {
         Some("all_done") => return "final",
         Some("need_help") => return "block",
-        Some("need_decision") => return "decision",
         Some("waiting") => return "running",
         _ => {}
     }
@@ -126,28 +127,69 @@ pub fn settled(row: &Value) -> bool {
         && row.get("unread").and_then(Value::as_bool) != Some(true)
 }
 
-/// Where a chat stands, in words, for its second line (`stateText`): a decision waiting for the viewer (奏 · …), else
-/// its agents' most pressing state: what one needs (要你帮忙：…), what went wrong (出问题：…), what one waits for
-/// (在等：…), 做完了 when all are done. None while one is at work (its activity says), or with nothing to say.
-pub fn row_state_text(row: &Value) -> Option<String> {
-    if let Some(text) = row.get("decision").filter(|_| crate::decisions::waits(row)).and_then(|d| d.get("text")).and_then(Value::as_str) {
-        return Some(text.to_string());
-    }
+/// A chat the viewer pinned: one they keep for the long run, never drawn as finished (faded, one tap from the archive)
+/// however its agents ended (`pinned`: when, from the station; true once the core has said so).
+pub fn pinned(row: &Value) -> bool {
+    row.get("pinned").is_some_and(|p| p.is_number() || p == true)
+}
+
+/// The message an agent's state is about (its last turn's `about`), when it is in this chat: its seq.
+pub fn state_about(agent: &Value, thread: Option<u64>) -> Option<u64> {
+    let about = agent.get("lastTurn")?.get("about").filter(|a| a.is_object())?;
+    (about.get("thread").and_then(Value::as_u64) == thread || thread.is_none()).then(|| about.get("seq").and_then(Value::as_u64)).flatten()
+}
+
+/// Where a chat stands, in words, for its second line (`stateText`), and the message that is about (`stateAbout`, a
+/// seq), from its agents' states first: what one needs (要你帮忙：…), what went wrong (出问题：…); then a card waiting
+/// for the viewer (奏 · …: whatever its agents do, at work included, but for a need, which says more); then what one
+/// waits for (在等：…), 做完了 when all are done. None while one is at work with no card waiting, or with nothing to say.
+pub fn row_state_line(row: &Value) -> Option<(String, Option<u64>)> {
+    let thread = row.get("thread").and_then(Value::as_u64);
+    // Its line: as the row shows it already (decisions::present), else from its post.
+    let card = crate::decisions::pending(row).map(|c| {
+        let line = c.get("text").and_then(Value::as_str).map(str::to_string)
+            .unwrap_or_else(|| crate::decisions::line(c.get("message").and_then(|m| m.get("text")).and_then(Value::as_str).unwrap_or("")));
+        (line, c.get("seq").and_then(Value::as_u64))
+    });
     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
     let text_of = |a: &Value| a.get("statusText").and_then(Value::as_str).map(str::to_string);
     let status = |a: &Value| shown_status(a);
-    if agents.iter().any(|a| matches!(status(a), "queued") || (status(a) == "running" && waiting(a).is_null())) {
-        return None;
-    }
-    for wanted in [&["block"][..], &["failed", "unexpected", "aborted"][..]] {
-        if let Some(a) = agents.iter().find(|a| wanted.contains(&status(a))) {
-            return text_of(a);
+    let at_work = agents.iter().any(|a| matches!(status(a), "queued") || (status(a) == "running" && waiting(a).is_null()));
+    if !at_work {
+        // A need: in its words, about its message (the card it asks with, by default). Said without words (from
+        // before them), a card waiting says more.
+        if let Some(a) = agents.iter().find(|a| status(a) == "block") {
+            let need = a.get("lastTurn").and_then(|t| t.get("need")).and_then(Value::as_str).is_some_and(|n| !n.trim().is_empty());
+            match (&card, need) {
+                (Some(card), false) => return Some(card.clone()),
+                _ => return text_of(a).map(|t| (t, state_about(a, thread).or(card.as_ref().and_then(|c| c.1)))),
+            }
+        }
+        if let Some(a) = agents.iter().find(|a| matches!(status(a), "failed" | "unexpected" | "aborted")) {
+            return text_of(a).map(|t| (t, state_about(a, thread)));
         }
     }
-    if let Some(a) = agents.iter().find(|a| !waiting(a).is_null()) {
-        return text_of(a);
+    if let Some(card) = card {
+        return Some(card);
     }
-    settled(row).then(|| "做完了".to_string())
+    if at_work {
+        return None;
+    }
+    if let Some(a) = agents.iter().find(|a| !waiting(a).is_null()) {
+        return text_of(a).map(|t| (t, state_about(a, thread)));
+    }
+    // What one of them says the chat ends with (做完了：已合并所有代码), else 做完了.
+    settled(row).then(|| {
+        let done = agents.iter().find(|a| a.get("statusText").and_then(Value::as_str).is_some_and(|t| t.starts_with("做完了：")));
+        let text = done.and_then(text_of).unwrap_or_else(|| "做完了".to_string());
+        let about = done.and_then(|a| state_about(a, thread)).or_else(|| agents.iter().find_map(|a| state_about(a, thread)));
+        (text, about)
+    })
+}
+
+/// Where a chat stands, in words (`row_state_line`'s words).
+pub fn row_state_text(row: &Value) -> Option<String> {
+    row_state_line(row).map(|(text, _)| text)
 }
 
 /// Whether a person (an email, "local", a Slack user id) is the viewer: by id, by email, or as a Slack user the
@@ -382,6 +424,10 @@ pub fn session(s: &mut Value) {
         // What it needs, in its words (要你帮忙：要 Stripe 的测试 key).
         "block" => if let Some(need) = said("need") {
             text = format!("要你帮忙：{need}");
+        },
+        // What it leaves the chat with (做完了：已合并所有代码).
+        "final" => if let Some(done) = said("need") {
+            text = format!("做完了：{done}");
         },
         // Why, in words (出问题：额度用完).
         "failed" => text = format!("出问题：{}", format::failure_text(&said("detail").unwrap_or_default())),
@@ -789,7 +835,7 @@ mod tests {
         assert_eq!(session_status(&json!({"process": "warm", "pending": 1})), "queued");
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "outcome": "completed"}})), "block");
         // Today's words, as the station says them besides the words from before.
-        assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "ending": "need_decision", "outcome": "completed"}})), "decision");
+        assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "ending": "need_decision", "outcome": "completed"}})), "block", "need_decision from a station before cards: need_help");
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "ending": "need_help", "outcome": "completed"}})), "block");
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "final", "ending": "all_done", "outcome": "completed"}})), "final");
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "final", "outcome": "completed"}})), "final");
@@ -871,7 +917,7 @@ mod tests {
         assert_eq!(words(json!({"declared": "final", "ending": "all_done", "outcome": "completed"})), "做完了");
         assert_eq!(words(json!({"declared": "block", "ending": "need_help", "need": "要 Stripe 的测试 key", "outcome": "completed"})), "要你帮忙：要 Stripe 的测试 key");
         assert_eq!(words(json!({"declared": "block", "outcome": "completed"})), "要你帮忙");
-        assert_eq!(words(json!({"declared": "block", "ending": "need_decision", "outcome": "completed"})), "等你决定");
+        assert_eq!(words(json!({"declared": "block", "ending": "need_decision", "outcome": "completed"})), "要你帮忙");
         assert_eq!(words(json!({"outcome": "failed", "detail": "rate_limit: You've hit your limit"})), "出问题：额度用完");
         assert_eq!(words(json!({"outcome": "failed", "detail": "auth: 401"})), "出问题：登录失效");
         assert_eq!(words(json!({"outcome": "aborted"})), "出问题：被停止");
@@ -894,19 +940,52 @@ mod tests {
         let works = agent(Value::Null, "running");
         let row = |agents: Vec<Value>, unread: bool| json!({"agents": agents, "unread": unread});
         assert!(settled(&row(vec![done.clone()], false)));
+        let mut kept = row(vec![done.clone()], false);
+        kept["pinned"] = json!(1700000000000i64);
+        assert!(pinned(&kept), "pinned: kept for the long run, not drawn as finished");
+        assert!(!pinned(&row(vec![done.clone()], false)));
         assert_eq!(row_state_text(&row(vec![done.clone()], false)).as_deref(), Some("做完了"));
+        let merged = agent(json!({"declared": "final", "ending": "all_done", "need": "已合并所有代码", "outcome": "completed"}), "warm");
+        assert_eq!(merged["statusText"], "做完了：已合并所有代码");
+        assert_eq!(row_state_text(&row(vec![merged], false)).as_deref(), Some("做完了：已合并所有代码"));
         assert!(!settled(&row(vec![done.clone()], true)), "something unread in it");
         assert!(!settled(&row(vec![done.clone(), helped.clone()], false)));
         assert_eq!(row_state_text(&row(vec![done.clone(), helped.clone()], false)).as_deref(), Some("要你帮忙：要 key"));
         assert_eq!(row_state_text(&row(vec![done.clone(), waits.clone()], false)).as_deref(), Some("在等：CI 跑完"));
         assert_eq!(row_state_text(&row(vec![done.clone(), works], false)), None, "at work: its activity says");
         assert!(!settled(&row(vec![], false)));
-        // A decision waiting for the viewer comes first, and keeps it from being settled.
+        // A card waiting for the viewer keeps it from being settled, and says itself over all done, a wait, or work.
+        let card = json!({"seq": 4, "card": {"type": "text"}, "message": {"seq": 4, "text": "**域名用哪个？**\n细节"}});
         let mut asked = row(vec![done.clone()], false);
-        asked["decision"] = json!({"seq": 4, "text": "奏 · 合吗？"});
-        assert_eq!((settled(&asked), row_state_text(&asked).as_deref()), (false, Some("奏 · 合吗？")));
-        asked["decision"]["dismissed"] = json!(true);
+        asked["card"] = card.clone();
+        assert_eq!((settled(&asked), row_state_line(&asked)), (false, Some(("奏 · 域名用哪个？".to_string(), Some(4)))));
+        asked["agents"] = json!([agent(Value::Null, "running")]);
+        assert_eq!(row_state_text(&asked).as_deref(), Some("奏 · 域名用哪个？"), "at work: the card still says");
+        asked["agents"] = json!([waits.clone()]);
+        assert_eq!(row_state_text(&asked).as_deref(), Some("奏 · 域名用哪个？"));
+        // But a need says itself first (about the card, unless it says what it is about); and so does a failure.
+        asked["agents"] = json!([helped.clone()]);
+        assert_eq!(row_state_line(&asked), Some(("要你帮忙：要 key".to_string(), Some(4))));
+        let failed = agent(json!({"outcome": "failed", "detail": "auth: 401"}), "warm");
+        asked["agents"] = json!([failed]);
+        assert_eq!(row_state_text(&asked).as_deref(), Some("出问题：登录失效"));
+        // A need said without words (a station from before them): the card says more.
+        asked["agents"] = json!([agent(json!({"declared": "block", "ending": "need_decision", "outcome": "completed"}), "warm")]);
+        assert_eq!(row_state_text(&asked).as_deref(), Some("奏 · 域名用哪个？"));
+        asked["card"]["dismissed"] = json!(true);
+        assert_eq!(row_state_text(&asked).as_deref(), Some("要你帮忙"));
+        asked["agents"] = json!([done.clone()]);
         assert!(settled(&asked), "dismissed: nothing waits for the viewer");
+        // A state about a message in this chat: its seq; one in another chat of the agent's: none.
+        let about = |about: Value| agent(json!({"declared": "final", "ending": "all_done", "need": "已合进 main", "about": about, "outcome": "completed"}), "warm");
+        let mut here = row(vec![about(json!({"thread": 7, "seq": 12, "ts": "1.2"}))], false);
+        here["thread"] = json!(7);
+        assert_eq!(row_state_line(&here), Some(("做完了：已合进 main".to_string(), Some(12))));
+        here["agents"] = json!([about(json!({"thread": 8, "seq": 12, "ts": "1.2"}))]);
+        assert_eq!(row_state_line(&here), Some(("做完了：已合进 main".to_string(), None)));
+        let mut waiting = row(vec![agent(json!({"declared": "waiting", "ending": "waiting", "waitFor": "CI", "about": {"thread": 7, "seq": 3, "ts": "1.1"}, "outcome": "completed", "endedAt": 5}), "warm")], false);
+        waiting["thread"] = json!(7);
+        assert_eq!(row_state_line(&waiting), Some(("在等：CI".to_string(), Some(3))));
     }
 
     #[test]

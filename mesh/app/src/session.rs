@@ -30,9 +30,9 @@ use crate::store::{AuthorKind, STILLFAIL_SURFACE, NewMessage, PendingMessage, St
 pub enum DeclaredState {
     /// The chat has nothing unfinished at all: no branch left to merge, no open question, nothing awaiting a yes.
     AllDone,
-    /// A person has to pick: the post carries the answers (chat_post `options`).
-    NeedDecision,
-    /// A person has to give or do something (the turn's `need` says what), or answer an open question.
+    /// A person has to give, do or decide something (the turn's `need` says what), or answer an open question. A card
+    /// (a message's options to pick, or a field to fill in) is the message's own, not a state: need_decision, as said
+    /// before cards, is a post with an options card that ends the turn need_help.
     NeedHelp,
     /// The work goes on after the turn (a background agent or command of the runtime's) and will bring the agent back
     /// on its own; if nothing has by then, the agent is asked again after this many seconds.
@@ -44,19 +44,17 @@ impl DeclaredState {
     pub fn as_str(self) -> &'static str {
         match self {
             DeclaredState::AllDone => "all_done",
-            DeclaredState::NeedDecision => "need_decision",
             DeclaredState::NeedHelp => "need_help",
             DeclaredState::Waiting(_) => "waiting",
         }
     }
 
-    /// A kind as kept or given, the words from before these included: final is all_done, block need_help. `wait`: a
-    /// wait's seconds.
+    /// A kind as kept or given, the words from before these included: final is all_done, block and need_decision
+    /// need_help. `wait`: a wait's seconds.
     pub fn parse(kind: &str, wait: u64) -> Option<DeclaredState> {
         match kind {
             "all_done" | "final" => Some(DeclaredState::AllDone),
-            "need_decision" => Some(DeclaredState::NeedDecision),
-            "need_help" | "block" => Some(DeclaredState::NeedHelp),
+            "need_help" | "block" | "need_decision" => Some(DeclaredState::NeedHelp),
             "waiting" => Some(DeclaredState::Waiting(wait)),
             _ => None,
         }
@@ -319,6 +317,14 @@ impl SessionActor {
         let id = self.st().turn.as_ref().map(|t| t.id.clone());
         if let (Some(id), Some(deps)) = (id, self.deps.upgrade()) {
             let _ = deps.store().set_need(&id, what);
+        }
+    }
+
+    /// The message the running turn's state is about (`about`: a thread's entry and its ts), or none.
+    pub fn about(&self, about: Option<(i64, i64, &str)>) {
+        let id = self.st().turn.as_ref().map(|t| t.id.clone());
+        if let (Some(id), Some(deps)) = (id, self.deps.upgrade()) {
+            let _ = deps.store().set_about(&id, about);
         }
     }
 

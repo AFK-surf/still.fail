@@ -498,10 +498,19 @@ impl AdminApi {
             if let Some(client) = key.as_str().and_then(|k| self.deps.hub.client_key(k)) {
                 row["clientKey"] = json!(client);
             }
-            // The decision it waits on, if any (an agent's block post with options no one has answered yet), and
-            // whether the viewer dismissed it; a chat with none says nothing.
-            if !archived && let Some(decision) = self.decision_view(t.thread.id, &dismissed, &mut names) {
-                row["decision"] = decision;
+            // The card it waits on, if any (an agent's post with a card no one has answered yet), and whether the viewer
+            // dismissed it; a chat with none says nothing. An options card is its `decision` too, as clients from before
+            // cards read it.
+            if !archived && let Some(card) = self.card_view(t.thread.id, &dismissed, &mut names) {
+                if card["card"]["type"] == "options" {
+                    let mut decision = card.clone();
+                    if let Some(d) = decision.as_object_mut() {
+                        d.remove("card");
+                    }
+                    decision["options"] = card["card"]["options"].clone();
+                    row["decision"] = decision;
+                }
+                row["card"] = card;
             }
             if archived {
                 row["archived"] = match t.thread.home.as_ref().and_then(|home| all.get(home)) {
@@ -556,17 +565,19 @@ impl AdminApi {
         Ok(rows)
     }
 
-    /// A chat's decision still pending (store `pending_decision`), for its row: `seq` (the block post's entry), its
-    /// `options` as the agent gave them, `dismissed` when the viewer will not take it up, the post itself (`message`, as
-    /// lists show messages, with its options) and the two messages before it (`before`), for a page of decisions to
-    /// show without reading the chat.
-    fn decision_view(&self, thread: i64, dismissed: &HashSet<(i64, i64)>, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Option<Value> {
+    /// A chat's card still pending (store `pending_card`), for its row: `seq` (its post's entry), the `card` as the agent
+    /// gave it, `dismissed` when the viewer will not take it up, the post itself (`message`, as lists show messages, with
+    /// its card) and the two messages before it (`before`), for a page of them to show without reading the chat.
+    fn card_view(&self, thread: i64, dismissed: &HashSet<(i64, i64)>, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Option<Value> {
         let store = &self.deps.store;
-        let (m, options) = store.pending_decision(thread).ok().flatten()?;
+        let (m, card) = store.pending_card(thread).ok().flatten()?;
         let mut message = message_view(&m, names);
-        message["options"] = options.clone();
+        if card["type"] == "options" {
+            message["options"] = card["options"].clone();
+        }
+        message["card"] = card.clone();
         let before: Vec<Value> = store.messages_before(thread, Some(m.n), 2).unwrap_or_default().iter().map(|b| message_view(b, names)).collect();
-        let mut v = json!({ "seq": m.n, "options": options, "message": message, "before": before });
+        let mut v = json!({ "seq": m.n, "card": card, "message": message, "before": before });
         if dismissed.contains(&(thread, m.n)) {
             v["dismissed"] = json!(true);
         }
@@ -681,6 +692,10 @@ impl AdminApi {
                 let mut v = serde_json::to_value(e).unwrap_or(Value::Null);
                 v["authorName"] = json!(names(e.author_kind, &e.author));
                 declared_view(&mut v, e.declared.as_deref());
+                // Its card, a post's options from before cards (kept so, in an archive file too) as an options card.
+                if let Some(card) = e.card() {
+                    v["card"] = card;
+                }
                 v
             })
             .collect()
