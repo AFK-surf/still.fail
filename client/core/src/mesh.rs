@@ -728,7 +728,11 @@ async fn bind_pinned(secret: &[u8; 32], relay: &str) -> Result<Endpoint> {
 async fn bind_relay(secret: &[u8; 32], relay: &str, relay_only: bool) -> Result<Endpoint> {
     let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relay_mode(&[relay.to_string()])?).transport_config(transport());
     // Production probes must not turn a successful LAN/UDP hole punch into a relay's reported RTT.
+    #[cfg(not(target_arch = "wasm32"))]
     let builder = if relay_only { builder.clear_ip_transports() } else { builder };
+    // Browser endpoints have no IP transports in the first place.
+    #[cfg(target_arch = "wasm32")]
+    let _ = relay_only;
     #[cfg(test)]
     let builder = builder.ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify());
     builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
