@@ -17,7 +17,8 @@ const BASE = import.meta.env.BASE_URL;
 
 // On the test channel (app.youdid.wtf, the beta desktop app) the name is its own, drawn the same way.
 const OWN = NAME !== "still.fail";
-const WORDMARK = OWN ? { name: "wordmark-beta", width: 128 } : { name: "wordmark", width: 81 };
+// youdid.wtf's y goes below the line: its drawing is taller (64 to still.fail's 60), at the same scale.
+const WORDMARK = OWN ? { name: "wordmark-beta", width: 128, height: 23.5 } : { name: "wordmark", width: 81, height: 22 };
 const LOCKUP = OWN ? { name: "lockup-beta", width: 371 } : { name: "lockup", width: 264 };
 
 /** A light asset and its -dark twin, as the page's 外观 has it. */
@@ -44,7 +45,7 @@ export function Lockup({ height = 30, alt = NAME }: { height?: number; alt?: str
 export function SidebarBrand() {
   return (
     <>
-      {!window.stillfailDesktop && <Themed name={WORDMARK.name} width={WORDMARK.width} height={22} alt={NAME} className={css.brandWordmark} />}
+      {!window.stillfailDesktop && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
       {!window.stillfailDesktop && <span className={css.brandPhone}><Lockup /></span>}
       <SidebarBuddy />
       <UpdateButton />
@@ -54,7 +55,7 @@ export function SidebarBrand() {
 
 /** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
 export function PageBrand() {
-  return window.stillfailDesktop ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={22} alt={NAME} className={css.brandWordmark} />;
+  return window.stillfailDesktop ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />;
 }
 
 type Pose = "push" | "hop" | "rest";
