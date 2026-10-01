@@ -81,6 +81,10 @@ jobs:
         run: |
           range='${{ needs.plan.outputs.range }}'
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+      # A branch takes back nothing merged into main meanwhile (a squash onto a main that moved: scripts/undone.sh).
+      - name: Undoes nothing on main
+        if: github.ref != 'refs/heads/main'
+        run: sh scripts/undone.sh "$(git merge-base HEAD origin/main)" HEAD
 
   # A branch: what main would deploy, built and bundled; nothing sent, no secrets.
   bundle:
