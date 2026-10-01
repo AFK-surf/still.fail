@@ -44,7 +44,7 @@ pub fn prepare(text: &str, paths: &mut Vec<String>, workspace: &Path) -> Result<
             bail!("local file link {destination} must use inline Markdown: [label](path); it will be attached automatically");
         }
         let source = &text[range.clone()];
-        let start = source.match_indices(destination.as_ref()).find_map(|(start, _)| {
+        let start = source.match_indices(destination.as_ref()).rev().find_map(|(start, _)| {
             let before = source[..start].trim_end().trim_end_matches('<').trim_end();
             before.ends_with("](").then_some(start)
         }).ok_or_else(|| anyhow!("write local file link {destination} without Markdown escapes (use <…> around paths with spaces)"))?;
@@ -91,6 +91,8 @@ mod tests {
         assert!(result.starts_with("[报告](<a%20report%281%29%2Etxt>) ![](<a%20report%281%29%2Etxt>) [line](<a%20report%281%29%2Etxt>)"), "{result}");
         assert!(result.contains("`[example](/tmp/missing)`\n```md\n[x](/tmp/missing)\n```"));
         assert!(result.ends_with("[web](https://example.com/a) [chat](/o/ws/st/chat) [cdn](//example.com/a)"));
+        let nested = format!("[![preview](<{path}>)](<{path}>)");
+        assert_eq!(prepare(&nested, &mut paths, dir.path()).unwrap(), "[![preview](<a%20report%281%29%2Etxt>)](<a%20report%281%29%2Etxt>)");
     }
 
     #[test]
