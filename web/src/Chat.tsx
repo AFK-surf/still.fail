@@ -841,7 +841,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
-  && a.options === b.options && a.archive === b.archive && sameMessage(a.message, b.message));
+  && a.options === b.options && a.archive === b.archive && a.focus === b.focus && sameMessage(a.message, b.message));
 
 /**
  * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the
