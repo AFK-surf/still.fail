@@ -1252,7 +1252,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
     LaunchedEffect(Unit) { open.animateTo(1f, tween(220, easing = Ease.Out)) }
     val wait = agent.wait
     val ink = chatInk()
-    val shown = steady(if (wait != null) ActivityNow(key = "wait", text = "等待中") else agent.live?.activity?.now ?: ActivityNow(key = "busy", text = "处理中"))
+    val shown = steady(if (wait != null) ActivityNow(key = "wait", text = wait.text ?: "等待中") else agent.live?.activity?.now ?: ActivityNow(key = "busy", text = "处理中"))
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")

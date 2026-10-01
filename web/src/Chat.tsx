@@ -1811,7 +1811,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  */
 function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
   const wait = agent.wait;
-  const now = useSteady(wait ? { key: "wait", text: "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
+  const now = useSteady(wait ? { key: "wait", text: wait.text ?? "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
   const row = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLButtonElement>(null);
   const tail = useRef<HTMLSpanElement>(null);

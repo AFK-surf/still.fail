@@ -55,7 +55,11 @@ pub fn waiting(s: &Value) -> Value {
     let since = turn.filter(|_| ending(s) == Some("waiting")).and_then(|t| t.get("endedAt")).and_then(Value::as_i64);
     match since {
         Some(since) if session_status(s) == "running" && s.get("process").and_then(Value::as_str) != Some("running") => {
-            json!({ "since": since, "seconds": turn.and_then(|t| t.get("waitSeconds")).cloned().unwrap_or(Value::Null) })
+            let what = turn.and_then(|t| t.get("waitFor")).and_then(Value::as_str).map(str::trim).filter(|w| !w.is_empty());
+            json!({
+                "since": since, "seconds": turn.and_then(|t| t.get("waitSeconds")).cloned().unwrap_or(Value::Null),
+                "text": what.map(|w| format!("在等：{w}")).unwrap_or_else(|| "等待中".to_string()),
+            })
         }
         _ => Value::Null,
     }
@@ -792,8 +796,9 @@ mod tests {
         assert_eq!(session_status(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed"}})), "running");
         assert_eq!(session_status(&json!({"lastTurn": {"outcome": "completed"}})), "unexpected");
         let waits = json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitSeconds": 600}});
-        assert_eq!(waiting(&waits), json!({"since": 5, "seconds": 600}));
-        assert_eq!(waiting(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5}})), json!({"since": 5, "seconds": null}));
+        assert_eq!(waiting(&waits), json!({"since": 5, "seconds": 600, "text": "等待中"}));
+        assert_eq!(waiting(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5}})), json!({"since": 5, "seconds": null, "text": "等待中"}));
+        assert_eq!(waiting(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitFor": "CI 跑完"}}))["text"], "在等：CI 跑完");
         // Waiting on a watch of its own: said so.
         let mut watching = json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitSeconds": 600}, "watch": {"names": ["盯 CI"], "since": 1, "at": 5}});
         session(&mut watching);

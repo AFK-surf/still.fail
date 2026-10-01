@@ -50,7 +50,9 @@ data class AgentProcess (
 @Serializable
 data class AgentWait (
 	val since: Long,
-	val seconds: Long? = null
+	val seconds: Long? = null,
+	/// What it waits for in words, as its activity line says it (在等：CI 跑完; 等待中 from a station that does not say).
+	val text: String? = null
 )
 
 /// A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):

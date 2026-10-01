@@ -43,6 +43,8 @@ export interface AgentProcess {
 export interface AgentWait {
 	since: number;
 	seconds?: number;
+	/** What it waits for in words, as its activity line says it (在等：CI 跑完; 等待中 from a station that does not say). */
+	text?: string;
 }
 
 /**

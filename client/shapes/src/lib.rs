@@ -2159,6 +2159,8 @@ pub struct AgentWait {
     pub since: i64,
     #[typeshare(serialized_as = "Option<I54>")]
     pub seconds: Option<i64>,
+    /// What it waits for in words, as its activity line says it (在等：CI 跑完; 等待中 from a station that does not say).
+    pub text: Option<String>,
 }
 
 /// A background job an agent started (a web service when it has a port): shown by its name; the port is how the
