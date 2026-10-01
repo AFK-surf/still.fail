@@ -21,6 +21,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -283,11 +287,16 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
     // Nothing left in it: archived with one tap from its bar (as its row's 归档).
     val session = archiveSession(of, view, agents)
     BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier, trailing = {
-        if (view.archivable == true && view.archived != true && session != null) {
+        val canArchive = view.archivable == true && view.archived != true && session != null
+        AnimatedVisibility(
+            visible = canArchive,
+            enter = fadeIn(tween(240)) + expandHorizontally(tween(240), expandFrom = Alignment.End),
+            exit = fadeOut(tween(180)) + shrinkHorizontally(tween(240), shrinkTowards = Alignment.End),
+        ) {
             val archiving = app.isDoing("chat.archive", "station" to station, "session" to session)
             Box(Modifier.semantics { contentDescription = "归档" }) {
                 if (archiving) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
-                else NavButton(Icons.Archive, { archiveChat(app, station, view, session) })
+                else NavButton(Icons.Archive, { if (canArchive && session != null) archiveChat(app, station, view, session) })
             }
         }
         if (jobs.value?.jobs?.isNotEmpty() == true) Box {
@@ -1038,7 +1047,12 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             // A decision it asks (its options): them under it, a line saying how it went once it has.
             if (decide) DecisionUnder(ctx, m)
             // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.
-            if (decide && ctx.archiveUnder == m.seq) ArchiveUnder(ctx)
+            // Keep the button alive until its exit finishes; the rest of the row closes the space with it.
+            if (decide) AnimatedVisibility(
+                visible = ctx.archiveUnder == m.seq,
+                enter = fadeIn(tween(240)) + expandVertically(tween(240), expandFrom = Alignment.Top),
+                exit = fadeOut(tween(180)) + shrinkVertically(tween(240), shrinkTowards = Alignment.Top),
+            ) { ArchiveUnder(ctx, enabled = ctx.archiveUnder == m.seq) }
         }
     }
 }
@@ -1062,14 +1076,14 @@ private fun archiveChat(app: fail.still.android.AppState, station: String, view:
  * chat (the core's `archivable`): drawn as a decision's recommended option (Decisions.kt), a spinner on it meanwhile.
  */
 @Composable
-private fun ArchiveUnder(ctx: Here) {
+private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
     val app = LocalApp.current
     val session = archiveSession(ctx.of, ctx.view, ctx.agents) ?: return
     val label = "归档这个 chat"
     val busy = app.isDoing("chat.archive", "station" to ctx.station, "session" to session)
     DecisionOptions(
         listOf(fail.still.android.data.DecisionOption(label, recommended = true)), Modifier.padding(top = 6.dp),
-        enabled = !ctx.view.offline, busy = if (busy) label else null,
+        enabled = enabled && !ctx.view.offline, busy = if (busy) label else null,
     ) { archiveChat(app, ctx.station, ctx.view, session) }
 }
 

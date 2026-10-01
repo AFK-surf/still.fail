@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -230,7 +231,7 @@ class ArchiveTest {
         Fixtures.agent(4, "不客气，这件做完了。").copy(ending = "all_done"),
     )
 
-    private fun chat(): Harness {
+    private fun chat(dark: Boolean = false): Harness {
         val h = Harness(rule)
         val of = ChatOf.Thread(Fixtures.THREAD)
         putChats(h, listOf(busy, done, alsoDone))
@@ -239,8 +240,27 @@ class ArchiveTest {
             JsonNull
         }
         h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, key = done.session))
-        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)), dark = dark)
         return h
+    }
+
+    @Test fun archiveExitLight() = archiveExit(false)
+    @Test fun archiveExitDark() = archiveExit(true)
+
+    private fun archiveExit(dark: Boolean) {
+        val h = chat(dark)
+        val of = ChatOf.Thread(Fixtures.THREAD)
+        val r = h.record(if (dark) "archive-exit-dark" else "archive-exit-light")
+        // The core's reply after sending: the same last post, but this chat has work again.
+        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = false, key = done.session))
+        h.deliver()
+        r.frames(5)
+        assertEquals("exit retains the real button while it moves", 1, rule.onAllNodesWithText("归档这个 chat").fetchSemanticsNodes().size)
+        rule.onNodeWithText("归档这个 chat").assertIsNotEnabled()
+        assertTrue("leaving button cannot archive", h.fake.calls.none { it.first == "chat.archive" })
+        r.frames(20)
+        r.end()
+        assertTrue("button removed after exit", rule.onAllNodesWithText("归档这个 chat").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun chatButtonArchives() {
