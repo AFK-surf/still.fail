@@ -162,6 +162,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // The station's update channel: { channel: "stable" | "beta" }. Back to stable from a beta, the stable release
         // is then offered to go back to (`downgrade`), older or not.
         "software.channel" => op("POST", Ok("/updates/channel".into()), Some(p.pick(&["channel"]))),
+        // The station updating itself when a newer release of its channel is out: { on }.
+        "software.auto" => op("POST", Ok("/updates/auto".into()), Some(json!({ "on": p.bool("on") }))),
         _ => return None,
     };
     Some(r)
@@ -233,6 +235,8 @@ mod tests {
         assert_eq!(req("invitation.accept", json!({ "account": "a", "token": "t" })).path, "/v1/invitations/accept");
         let r = req("software.channel", json!({ "station": "w/s", "channel": "beta" }));
         assert_eq!((r.target, r.method, r.path.as_str(), r.body), (Target::Station("w/s".into()), "POST", "/updates/channel", Some(json!({ "channel": "beta" }))));
+        let r = req("software.auto", json!({ "station": "w/s", "on": true }));
+        assert_eq!((r.method, r.path.as_str(), r.body), ("POST", "/updates/auto", Some(json!({ "on": true }))));
         let r = req("admin.setBeta", json!({ "account": "a", "user": "sub-1", "on": true }));
         assert_eq!((r.method, r.path.as_str(), r.body), ("POST", "/v1/admin/users/sub-1/beta", Some(json!({ "on": true }))));
         let r = req("admin.feedbackStatus", json!({ "account": "a", "id": "01J0000000000000000000000A", "status": "fixed" }));

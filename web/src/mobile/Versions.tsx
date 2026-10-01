@@ -2,7 +2,7 @@
 // the wide screen's versions (../Versions.tsx: useSoftware, describe), one to a row on a card, then the check. What the
 // wide screen says on hover is said under the name.
 import type { SoftwareVersion } from "../core/shapes.ts";
-import { describe, onBeta, useSoftware } from "../Versions.tsx";
+import { autoUpdating, describe, onBeta, useSoftware } from "../Versions.tsx";
 import { ListCard, ListRow, SectionHeader, Spinner } from "./parts.tsx";
 import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Versions.css.ts";
@@ -12,11 +12,12 @@ import * as css from "./Versions.css.ts";
  * `beta`: the 测试版 switch is offered (the core's `betaOffered`).
  */
 export function Versions({ station, updates, manager, beta = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean }) {
-  const { update, check, channel } = useSoftware(station);
+  const { update, check, channel, auto } = useSoftware(station);
   if (!updates?.length) return null;
   const checked = updates[0]?.checkedAt;
-  const failed = update.error ?? check.error ?? channel.error;
+  const failed = update.error ?? check.error ?? channel.error ?? auto.error;
   const on = onBeta(updates, channel);
+  const autoOn = autoUpdating(updates, auto);
   return (
     <>
       <SectionHeader title="版本" trailing={checked != null ? `上次检查 ${new Date(checked).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : undefined} start={24} />
@@ -30,6 +31,16 @@ export function Versions({ station, updates, manager, beta = false }: { station:
             </span>
             {channel.busy && <Spinner size={13} />}
             <span className={connectsCss.mSwitch} data-on={on || undefined} />
+          </ListRow>
+        )}
+        {manager && autoOn != null && (
+          <ListRow onClick={auto.busy ? undefined : () => void auto.run(!autoOn)}>
+            <span className={css.mVersionText}>
+              <span className={css.mVersionName}>自动更新</span>
+              <span className={css.mVersionNote}>有新版本时 station 自己更新，agent 不中断</span>
+            </span>
+            {auto.busy && <Spinner size={13} />}
+            <span className={connectsCss.mSwitch} data-on={autoOn || undefined} />
           </ListRow>
         )}
         <ListRow onClick={checked == null || check.busy ? undefined : () => void check.run()}>

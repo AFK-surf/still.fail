@@ -609,6 +609,14 @@ impl AdminApi {
                 updates.set_channel(channel).await.map_err(|e| http_error(400, e.to_string()))?;
                 return ok(serde_json::to_value(updates.get())?);
             }
+            // The station updating itself or not, as someone asked: { on }; its versions as they are after it.
+            ("POST", "/updates/auto") => {
+                let updates = self.updates_for(viewer)?;
+                let input = read_json(body).await?;
+                let on = input.get("on").and_then(Value::as_bool).ok_or_else(|| http_error(400, "on 必须是 true 或 false"))?;
+                updates.set_auto(on).await.map_err(|e| http_error(400, e.to_string()))?;
+                return ok(serde_json::to_value(updates.get())?);
+            }
             ("POST", "/updates") => {
                 let updates = self.updates_for(viewer)?;
                 let input = read_json(body).await?;

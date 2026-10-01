@@ -1756,6 +1756,27 @@ async fn the_update_channel_is_said_with_the_versions_and_set_by_an_admin() {
 }
 
 #[tokio::test]
+async fn updating_by_itself_is_said_with_the_versions_and_turned_on_by_an_admin() {
+    let s = setup_with(Setup { updates: Some(None), ..Default::default() }).await;
+    s.call("POST", "/updates/check", None).await;
+    let station = |updates: &Value| updates.as_array().unwrap().iter().find(|v| v["id"] == "station").cloned().unwrap();
+    assert_eq!(station(&s.get("/overview").await["updates"])["auto"], false, "off unless turned on");
+
+    let (status, _) = s.call_as("POST", "/updates/auto", Some(json!({ "on": true })), member("member")).await;
+    assert_eq!(status, 403);
+    let (status, _) = s.call_as("POST", "/updates/auto", Some(json!({ "on": "yes" })), member("admin")).await;
+    assert_eq!(status, 400);
+
+    let (status, updates) = s.call_as("POST", "/updates/auto", Some(json!({ "on": true })), member("admin")).await;
+    assert_eq!(status, 200, "{updates}");
+    assert_eq!(station(&updates)["auto"], true);
+    assert_eq!(s.settings.raw().auto_update, Some(true));
+    let (_, updates) = s.call_as("POST", "/updates/auto", Some(json!({ "on": false })), member("admin")).await;
+    assert_eq!(station(&updates)["auto"], false);
+    assert_eq!(station(&s.get("/overview").await["updates"])["auto"], false);
+}
+
+#[tokio::test]
 async fn a_station_with_nothing_to_update_has_no_channel_to_set() {
     let s = setup().await;
     let (status, _) = s.call("POST", "/updates/channel", Some(json!({ "channel": "beta" }))).await;

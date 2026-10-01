@@ -9,6 +9,8 @@
 //!   process group, not waited for): the installer hands the running station over to the new release, or drains and
 //!   restarts it, so this process is gone (or another binary) by the time it ends. Only a release installed by that
 //!   installer (<data>/app) is: the desktop app's station comes with the desktop app, a clone's with the clone.
+//!   With `autoUpdate: true` in config.json (the 自动更新 switch) the station does so by itself when a reading finds a
+//!   newer release of its channel (never going back from the beta, and a version it already tried, not again).
 //! - Claude Code and Codex: `--version`, and the latest their npm packages say. Updated the way each was installed
 //!   (the path of the command on the station's PATH says): `claude update`, npm, or Homebrew. Running agents go on with
 //!   what they started with; the next process starts the new one.
@@ -33,6 +35,8 @@ use crate::store::now_ms;
 
 /// How often what is out is read again (and the pages' "check" reads it at once).
 const EVERY: Duration = Duration::from_secs(6 * 3600);
+/// How often what is out is read while the station updates itself: a new release reaches it within ten minutes.
+const AUTO_EVERY: Duration = Duration::from_secs(10 * 60);
 /// How long an update of a runtime may take.
 const RUNTIME_LIMIT: Duration = Duration::from_secs(10 * 60);
 /// How long the station's installer is waited for: a drain alone may take 10 minutes (install.ts).
@@ -226,6 +230,8 @@ pub struct Updates {
     changes: watch::Sender<u64>,
     /// How many turns run now (the hub's), for what a drain waits on.
     running: OnceLock<Box<dyn Fn() -> usize + Send + Sync>>,
+    /// The version the station's last update in this process went for: updating by itself, not tried again.
+    tried: Mutex<Option<String>>,
 }
 
 /// What the station's update started from the pages leaves in <data>/run/update.started, for whichever process runs
@@ -246,7 +252,7 @@ impl Updates {
         let items = Default::default();
         // Read before an update can replace the release.
         let installed = release_channel(&app).unwrap_or_else(|| channel_of(&settings.raw(), &app));
-        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0, running: OnceLock::new() })
+        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0, running: OnceLock::new(), tried: Mutex::new(None) })
     }
 
     /// The channel the station is updated on now.
@@ -254,9 +260,34 @@ impl Updates {
         channel_of(&self.settings.raw(), &self.app)
     }
 
+    /// Whether the station updates itself (`autoUpdate` in its config; off unless someone turned it on).
+    pub fn auto(&self) -> bool {
+        self.settings.raw().auto_update.unwrap_or(false)
+    }
+
+    /// Turns updating by itself on or off (as someone asked, from a page): kept in its config; turned on, what is out
+    /// is read at once, and a newer release installed.
+    pub async fn set_auto(self: &Arc<Self>, on: bool) -> Result<()> {
+        if let Some(note) = &self.items.lock().unwrap()[Kind::Station as usize].note {
+            bail!("{}：{note}", Kind::Station.name());
+        }
+        if self.auto() != on {
+            self.settings.update(|raw| {
+                raw.auto_update = Some(on);
+                Ok(())
+            })?;
+            info!(on, "the station's updating by itself set");
+            self.changed();
+        }
+        if on {
+            self.check().await;
+        }
+        Ok(())
+    }
+
     /// Puts the station on `channel` (as someone asked, from a page): kept in its config, and what is out read again
     /// from that channel. Going back to the stable channel from a beta offers the stable release, older or not.
-    pub async fn set_channel(&self, channel: Channel) -> Result<()> {
+    pub async fn set_channel(self: &Arc<Self>, channel: Channel) -> Result<()> {
         if let Some(note) = &self.items.lock().unwrap()[Kind::Station as usize].note {
             bail!("{}：{note}", Kind::Station.name());
         }
@@ -283,17 +314,22 @@ impl Updates {
         let _ = self.running.set(Box::new(running));
     }
 
-    /// Reads them at once and every few hours after; an update of the station started before this process (by the
-    /// one it took over from, or the one before a restart) is followed to its end.
+    /// Reads them at once and every few hours after (every ten minutes while the station updates itself); an update
+    /// of the station started before this process (by the one it took over from, or the one before a restart) is
+    /// followed to its end.
     pub fn start(self: &Arc<Self>) {
         self.follow_started();
         let me = Arc::downgrade(self);
         tokio::spawn(async move {
+            let mut last: Option<tokio::time::Instant> = None;
             loop {
                 let Some(updates) = me.upgrade() else { return };
-                updates.check().await;
+                if last.is_none_or(|at| updates.auto() || at.elapsed() >= EVERY) {
+                    updates.check().await;
+                    last = Some(tokio::time::Instant::now());
+                }
                 drop(updates);
-                tokio::time::sleep(EVERY).await;
+                tokio::time::sleep(AUTO_EVERY).await;
             }
         });
     }
@@ -338,6 +374,7 @@ impl Updates {
                     downgrade,
                     // Only where it can be updated from here.
                     channel: (station && item.note.is_none() && item.version.is_some()).then(|| channel.id().to_string()),
+                    auto: (station && item.note.is_none() && item.version.is_some()).then(|| self.auto()),
                     updatable: item.how.is_some() || (kind == Kind::Station && item.note.is_none() && item.version.is_some()),
                     version: item.version,
                     latest: item.latest,
@@ -352,8 +389,9 @@ impl Updates {
             .collect()
     }
 
-    /// Reads every version and what is out, now (once at a time).
-    pub async fn check(&self) {
+    /// Reads every version and what is out, now (once at a time); a newer release of the station's channel is
+    /// installed when it updates itself.
+    pub async fn check(self: &Arc<Self>) {
         {
             let mut checked = self.checked.lock().unwrap();
             if checked.1 {
@@ -381,6 +419,28 @@ impl Updates {
         }
         *self.checked.lock().unwrap() = (Some(now_ms()), false);
         self.changed();
+        if let Some(to) = self.to_update_to() {
+            info!(to, "a newer release out: the station updates itself");
+            if let Err(e) = self.update_station() {
+                warn!(error = %e, "the station not updated by itself");
+            }
+        }
+    }
+
+    /// The version the station updates itself to now, when it does: it updates itself, can be updated from here, is
+    /// not updating, and its channel's latest is newer (not an older stable one back from the beta) and not one it
+    /// already went for.
+    fn to_update_to(&self) -> Option<String> {
+        if !self.auto() {
+            return None;
+        }
+        let item = self.items.lock().unwrap()[Kind::Station as usize].clone();
+        if item.note.is_some() || item.updating.is_some() || item.channel != Some(self.channel()) {
+            return None;
+        }
+        let latest = item.latest?;
+        let (newer, _) = offer(item.version.as_deref(), Some(&latest), self.channel(), self.installed);
+        (newer && self.tried.lock().unwrap().as_ref() != Some(&latest)).then_some(latest)
     }
 
     async fn read_station(&self, channel: Channel) -> Item {
@@ -510,6 +570,7 @@ impl Updates {
             bail!("没能开始更新");
         }
         info!(origin, channel = channel.id(), "updating the station");
+        *self.tried.lock().unwrap() = self.items.lock().unwrap()[Kind::Station as usize].latest.clone();
         let started = Started { at: now_ms(), from: station_version(&self.app) };
         if let Err(e) = std::fs::write(run_dir.join("update.started"), serde_json::to_vec(&started)?) {
             warn!(error = %e, "update.started not written; a handover or restart will not say how the update went");
@@ -851,6 +912,45 @@ pub(crate) mod tests {
         // Read again in a new process from a config that says beta: the feed it reads is the beta's.
         set_channel_in(&other.path().join("config.json"), other.path(), Channel::Beta).unwrap();
         assert_eq!(installed(other.path(), "1300", None, None).channel(), Channel::Beta);
+    }
+
+    #[tokio::test]
+    async fn turned_on_the_station_updates_itself_to_each_newer_release_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let updates = installed(dir.path(), "1300", None, None);
+        assert_eq!(station_with(&updates, "0.1.1310").auto, Some(false));
+        assert_eq!(updates.to_update_to(), None, "not unless turned on");
+        updates.settings.update(|raw| {
+            raw.auto_update = Some(true);
+            Ok(())
+        }).unwrap();
+        assert_eq!(station_with(&updates, "0.1.1310").auto, Some(true));
+        assert_eq!(updates.to_update_to().as_deref(), Some("0.1.1310"));
+        // Already the latest, or the latest is older: nothing.
+        station_with(&updates, "0.1.1300");
+        assert_eq!(updates.to_update_to(), None);
+        station_with(&updates, "0.1.1290");
+        assert_eq!(updates.to_update_to(), None);
+        // A version it went for (and failed to get) is not tried again; the next one is.
+        *updates.tried.lock().unwrap() = Some("0.1.1310".into());
+        station_with(&updates, "0.1.1310");
+        assert_eq!(updates.to_update_to(), None);
+        station_with(&updates, "0.1.1320");
+        assert_eq!(updates.to_update_to().as_deref(), Some("0.1.1320"));
+        // While an update goes on: nothing more.
+        updates.items.lock().unwrap()[Kind::Station as usize].updating = Some(now_ms());
+        assert_eq!(updates.to_update_to(), None);
+
+        // Switched back from the beta, the older stable release is offered, but not gone to by itself.
+        let other = tempfile::tempdir().unwrap();
+        let beta = installed(other.path(), "1300", Some("beta"), None);
+        beta.settings.update(|raw| {
+            raw.auto_update = Some(true);
+            raw.update_channel = Some("stable".into());
+            Ok(())
+        }).unwrap();
+        assert!(station_with(&beta, "0.1.1200").downgrade);
+        assert_eq!(beta.to_update_to(), None);
     }
 
     fn found(real: &str) -> Found {

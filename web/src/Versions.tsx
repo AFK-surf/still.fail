@@ -10,11 +10,12 @@ import * as css from "./Versions.css.ts";
  * `beta`: the 测试版 switch is offered (the core's `betaOffered`); `rows`: one to a line.
  */
 export function Versions({ station, updates, manager, beta = false, rows = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean; rows?: boolean }) {
-  const { update, check, channel } = useSoftware(station);
+  const { update, check, channel, auto } = useSoftware(station);
   if (!updates?.length) return null;
   const checked = updates[0]?.checkedAt;
   const on = onBeta(updates, channel);
-  const error = update.error ?? channel.error ?? (check.error && new Error(`没能检查更新：${check.error.message}`));
+  const autoOn = autoUpdating(updates, auto);
+  const error = update.error ?? channel.error ?? auto.error ?? (check.error && new Error(`没能检查更新：${check.error.message}`));
   return (
     <div className={`${css.versions}${rows ? ` ${css.rows}` : ""}`}>
       {updates.map((v) => <Item key={v.id} v={v} manager={manager} busy={update.busy && update.args?.[0] === v.id} onUpdate={() => void update.run(v.id)} />)}
@@ -23,6 +24,14 @@ export function Versions({ station, updates, manager, beta = false, rows = false
           测试版
           <Switch small checked={on} disabled={channel.busy} label="测试版" onChange={(next) => void channel.run(next ? "beta" : "stable")} />
         </label>
+      )}
+      {manager && autoOn != null && (
+        <Tip label="有新版本时 station 自己更新，agent 不中断">
+          <label className={css.channel}>
+            自动更新
+            <Switch small checked={autoOn} disabled={auto.busy} label="自动更新" onChange={(next) => void auto.run(next)} />
+          </label>
+        </Tip>
       )}
       {checked == null ? <span>正在检查版本…</span>
         : <Tip label={`上次检查：${new Date(checked).toLocaleString()}`}>
@@ -43,13 +52,24 @@ export function onBeta(updates: SoftwareVersion[], channel: ReturnType<typeof us
   return channel.busy && channel.args ? channel.args[0] === "beta" : now === "beta";
 }
 
+/**
+ * Whether the station updates itself, as its versions say (while it is being turned on or off, as it was asked); null
+ * when it cannot (a station older than it, or one not updated from here).
+ */
+export function autoUpdating(updates: SoftwareVersion[], auto: ReturnType<typeof useSoftware>["auto"]): boolean | null {
+  const now = updates.find((v) => v.id === "station")?.auto;
+  if (now == null) return null;
+  return auto.busy && auto.args ? auto.args[0] : now;
+}
+
 /** Updating a station's software and checking for newer versions, as both screens do (the phone's: ./mobile/Versions.tsx). */
 export function useSoftware(station: string) {
   const api = stationApi(useStationCall(station));
   const update = useAction((id: string) => api.updateSoftware<SoftwareVersion[]>(id));
   const check = useAction(() => api.checkSoftware<SoftwareVersion[]>());
   const channel = useAction((to: "stable" | "beta") => api.setSoftwareChannel<SoftwareVersion[]>(to));
-  return { update, check, channel };
+  const auto = useAction((on: boolean) => api.setSoftwareAuto<SoftwareVersion[]>(on));
+  return { update, check, channel, auto };
 }
 
 /**

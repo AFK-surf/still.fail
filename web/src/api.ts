@@ -337,6 +337,8 @@ export function stationApi(t: StationCall) {
     checkSoftware: <T,>() => op<T>("software.check"),
     /** Puts the station on the stable channel or the test channel's; the core reads its versions again. */
     setSoftwareChannel: <T,>(channel: "stable" | "beta") => op<T>("software.channel", { channel }),
+    /** Turns the station's updating by itself on or off; turned on, it reads what is out and updates at once. */
+    setSoftwareAuto: <T,>(on: boolean) => op<T>("software.auto", { on }),
   };
 }
 

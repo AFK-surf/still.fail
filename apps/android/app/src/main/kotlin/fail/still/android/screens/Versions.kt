@@ -51,8 +51,11 @@ fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean,
     var failed by remember { mutableStateOf<String?>(null) }
     // The channel asked for, while it is being set: the switch shows it at once.
     var switching by remember { mutableStateOf<String?>(null) }
+    // Updating by itself as asked, while it is being turned on or off.
+    var turning by remember { mutableStateOf<Boolean?>(null) }
     val checked = updates.first().checkedAt
     val channel = updates.firstOrNull { it.id == "station" }?.channel
+    val auto = updates.firstOrNull { it.id == "station" }?.auto
     SectionHeader("版本", checked?.let { "上次检查 ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))}" }, start = 24.dp)
     ListCard {
         updates.forEach { v ->
@@ -71,6 +74,19 @@ fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean,
                 Column(Modifier.weight(1f)) {
                     Text("测试版", fontSize = 15.sp, color = C.ink)
                     Text("新版本先到这里，可能不稳定", fontSize = 13.sp, color = C.muted)
+                }
+                Switch(on)
+            }
+        }
+        if (manager && auto != null) {
+            val on = turning ?: auto
+            ListRow(onClick = if (turning != null) null else ({
+                turning = !on; failed = null
+                scope.launch { try { api.setSoftwareAuto(!on) } catch (e: CoreException) { failed = e.message } finally { turning = null } }
+            })) {
+                Column(Modifier.weight(1f)) {
+                    Text("自动更新", fontSize = 15.sp, color = C.ink)
+                    Text("有新版本时 station 自己更新，agent 不中断", fontSize = 13.sp, color = C.muted)
                 }
                 Switch(on)
             }

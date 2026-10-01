@@ -70,6 +70,9 @@ pub struct RawConfig {
     /// Which releases the station is updated to (updates.rs): `stable` or `beta`; none: as its release was installed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_channel: Option<String>,
+    /// Whether the station updates itself when a newer release of its channel is out (updates.rs); none: it does not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_update: Option<bool>,
     #[serde(flatten)]
     pub rest: Map<String, Value>,
 }

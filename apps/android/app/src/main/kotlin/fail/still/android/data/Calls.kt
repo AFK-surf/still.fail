@@ -284,6 +284,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun checkSoftware() { op("software.check") }
     /** Puts the station on a channel (`stable` | `beta`); its versions are read again. */
     suspend fun setSoftwareChannel(channel: String) { op("software.channel") { put("channel", channel) } }
+    /** Turns the station's updating by itself on or off; turned on, it reads what is out and updates at once. */
+    suspend fun setSoftwareAuto(on: Boolean) { op("software.auto") { put("on", on) } }
     /** The agents' memory on the station: the global one and the skills (projects' memories among them), as they are. */
     suspend fun memory(): JsonElement = op("memory.get")
     /** Measures how much the station takes again (the `footprint` topic says when it is done). */

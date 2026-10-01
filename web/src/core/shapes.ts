@@ -1789,6 +1789,11 @@ export interface SoftwareVersion {
 	 * and from a station older than channels.
 	 */
 	channel?: string;
+	/**
+	 * The station's: whether it updates itself when a newer release of its channel is out (自动更新); none where it
+	 * cannot be updated from here, and from a station older than it.
+	 */
+	auto?: boolean;
 	/** The pages can update it (or install it, when it is not installed). */
 	updatable: boolean;
 	/** Why it cannot be updated from here (the desktop app's station, a runtime installed another way…). */
