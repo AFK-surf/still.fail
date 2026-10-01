@@ -93,6 +93,43 @@ class OverMotionTest {
         go.end()
     }
 
+    /**
+     * A chat come back to (tapped back from a page over it), then swiped away: it stays over the list it uncovers (the
+     * list was drawn over it, a page's layer being fixed by the way it came in).
+     */
+    @Test
+    fun swipedBackAfterBack() {
+        val h = Harness(rule)
+        h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(Fixtures.talk))
+        h.launch(listOf(Screen.Home, chat, Screen.Appearance))
+        val tapped = h.record("tapped-back")
+        tapped.frame { rule.runOnUiThread { h.app.pop() } }
+        tapped.frames(24)
+        tapped.end()
+        val d = rule.activity.onBackPressedDispatcher
+        val go = h.record("back-after-back")
+        go.frame { rule.runOnUiThread { d.dispatchOnBackStarted(back(20f)) } }
+        for (i in 1..20) go.frame { rule.runOnUiThread { d.dispatchOnBackProgressed(back(20f + 27f * i)) } }
+        go.frame { rule.runOnUiThread { d.onBackPressed() } }
+        go.frames(24)
+        go.end()
+    }
+
+    /** A page pushed over a chat and tapped back: side by side both ways, the status bar's paper moving with its page. */
+    @Test
+    fun tappedForthAndBack() {
+        val h = Harness(rule)
+        h.chatOpen()
+        val forth = h.record("tapped-forth")
+        forth.frame { rule.runOnUiThread { h.app.push(Screen.Appearance) } }
+        forth.frames(24)
+        forth.end()
+        val back = h.record("tapped-back-to-chat")
+        back.frame { rule.runOnUiThread { h.app.pop() } }
+        back.frames(24)
+        back.end()
+    }
+
     private fun Harness.sheet(draggable: Boolean, height: Float) {
         launch(listOf(Screen.Home))
         rule.runOnUiThread {

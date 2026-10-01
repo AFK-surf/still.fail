@@ -15,16 +15,9 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -509,8 +502,6 @@ fun StillFailApp(app: AppState) {
                 }
             }
         } }
-        // Pages scroll under the status bar; it keeps the paper behind its icons (the list and a chat have frosted bars
-        // there instead, which show what runs under them).
         val top = app.stack.lastOrNull()
         // A chat opened: its notification is read (its tag, as Notices.kt shows it).
         val context = LocalContext.current
@@ -519,7 +510,6 @@ fun StillFailApp(app: AppState) {
         // not shown then (client/core/src/attend.rs).
         val lookedAt = app.inFront && top is Screen.Chat
         LaunchedEffect(app.inFront, lookedAt) { app.core.focus(buildJsonObject { put("visible", app.inFront); put("focused", lookedAt) }) }
-        if (top !is Screen.Home && top !is Screen.Chat && top !is Screen.Annotate) Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
         // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.
         fail.still.android.screens.ViewerHost()
         SheetHost(app)
@@ -609,18 +599,17 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     transition.AnimatedContent(
         transitionSpec = {
             // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
+            // Layered by depth in the stack, the deeper page over: a page's zIndex is fixed when it comes in (AnimatedContent
+            // keeps the first spec's), so by the way it came it was wrong later (one come back to, then swiped away, went under).
+            val z = app.stack.indexOfLast { app.pageOf(it) == app.pageOf(targetState) }.coerceAtLeast(0).toFloat()
             if (targetState is Screen.Annotate || initialState is Screen.Annotate) (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished)
-                .apply { targetContentZIndex = if (targetState is Screen.Annotate) 1f else -1f }
-            else if (swiped) swipe(toLeft = initialState == Screen.Settings) else transition(initialState, targetState, app.forward)
+                .apply { targetContentZIndex = z }
+            else if (swiped) swipe(toLeft = initialState == Screen.Settings, z) else transition(initialState, targetState, app.forward, z)
         },
         // A new chat and the chat it becomes are one page (ChatHost.kt): it stays, rather than slide in again.
         contentKey = { app.pageOf(it) },
     ) { screen ->
         val pageScope = this
-        // The page swiped away casts a little shadow on the one it uncovers (web: -8px 0 24px rgba(0,0,0,.12)).
-        // Settings go back to the left, where they came from: the shadow is on their right then.
-        val lifted = swiped && screen == pages.currentState
-        val leftward = screen == Screen.Settings
         val page = keyOf(screen)
         val topics = followed.getOrPut(page) { fail.still.android.data.PageTopics() }
         DisposableEffect(page) {
@@ -630,7 +619,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         kept += app.pageOf(screen)
         saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(fail.still.android.data.LocalPageTopics provides topics) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
-            Box(Modifier.fillMaxSize().then(if (lifted) Modifier.drawBehind { swipeShadow(((1f - pages.fraction) / 0.15f).coerceIn(0f, 1f), leftward) } else Modifier).then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
+            Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
@@ -662,6 +651,10 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                         fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)
                     }
                 }
+                // The page scrolls under the status bar; it keeps the paper behind its icons, moving with its page (the
+                // list and a chat have frosted bars there instead, which show what runs under them).
+                if (screen !is Screen.Home && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.Annotate)
+                    Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
             }
         } }
     }
@@ -688,22 +681,14 @@ private suspend fun seekAlong(from: Float, to: Float, ms: Float, easing: Easing,
 
 /**
  * Swiped back: the page goes right with the finger (linear in the seek, so it is where the finger is) and the one under
- * it comes from 30% to the left, as web mobile's peek (translateX(-30% + dx·0.3)). Settings came from the left
- * (`toLeft`): they go back that way, the list coming from 30% to the right.
+ * it comes along beside it, edge to edge, as a tapped back moves them. Settings came from the left (`toLeft`): they go
+ * back that way, the list coming from the right.
  */
-private fun swipe(toLeft: Boolean): ContentTransform {
+private fun swipe(toLeft: Boolean, z: Float): ContentTransform {
     val linear = tween<IntOffset>(300, easing = LinearEasing)
     val way = if (toLeft) -1 else 1
-    return (slideInHorizontally(linear) { -way * (it * 0.3f).roundToInt() } togetherWith slideOutHorizontally(linear) { way * it })
-        .apply { targetContentZIndex = -1f }
-}
-
-/** `alpha`: fading over the last of the way, so none is left at the screen's edge once the page has gone. */
-private fun DrawScope.swipeShadow(alpha: Float, right: Boolean = false) {
-    val w = 24.dp.toPx()
-    val shade = Color.Black.copy(alpha = 0.12f * alpha)
-    if (right) drawRect(Brush.horizontalGradient(listOf(shade, Color.Transparent), startX = size.width, endX = size.width + w), topLeft = Offset(size.width, 0f), size = Size(w, size.height))
-    else drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shade), startX = -w, endX = 0f), topLeft = Offset(-w, 0f), size = Size(w, size.height))
+    return (slideInHorizontally(linear) { -way * it } togetherWith slideOutHorizontally(linear) { way * it })
+        .apply { targetContentZIndex = z }
 }
 
 /**
@@ -711,7 +696,7 @@ private fun DrawScope.swipeShadow(alpha: Float, right: Boolean = false) {
  * the old goes out whole to the left (and back the other way), nothing fading. Settings (from the gear at the top left)
  * come from the left instead; a new chat rises from the bottom.
  */
-private fun transition(from: Screen, to: Screen, forward: Boolean): ContentTransform {
+private fun transition(from: Screen, to: Screen, forward: Boolean, z: Float): ContentTransform {
     val time = 380
     val slide = tween<IntOffset>(300, easing = FastOutSlowInEasing)
     return when {
@@ -722,5 +707,5 @@ private fun transition(from: Screen, to: Screen, forward: Boolean): ContentTrans
         !forward && from == Screen.Settings -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
         forward -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
         else -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
-    }.apply { targetContentZIndex = if (forward) 1f else -1f }
+    }.apply { targetContentZIndex = z }
 }
