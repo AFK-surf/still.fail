@@ -167,6 +167,9 @@ internal class ChatMotion(private val reduced: Boolean) {
             else -> turn.pose.ms
         }
         clock.animateTo(1f, tween(ms, easing = LinearEasing))
+        // The next pose starts at its own beginning in the frame it takes over: drawn with this one's end (1) for a frame,
+        // the avatar would be where the next ends (at home, or at the next message) and blink back.
+        clock.snapTo(0f)
         when (turn.pose) {
             Pose.Fold -> current = Turn(turn.seq, turn.agent, Pose.Float)
             Pose.Float -> current = Turn(turn.seq, turn.agent, Pose.Spit)
