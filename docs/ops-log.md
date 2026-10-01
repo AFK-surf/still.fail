@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 归档时清理可重建的文件（archive-clean-rebuild）：chat 归档（手动或自动）后，station 结束空闲进程，再在后台删掉它工作区里可重建的目录（判断同 footprint::rebuildable）；agent 在跑、已恢复、和没归档的 session 共用目录、或不在 station 的 sessions 目录下时不动。只改 station，要发包；客户端不用动。占用页的数字等下次统计才变。上线后验：归档一个工作区里有 node_modules 的 chat，一两秒后那个 node_modules 没了，station 日志有 `rebuildable files of an archived session cleaned`。
 - 新对话怎么来就怎么走（android-new-chat-back）：新对话变成正式 chat 后，点返回不再往右横着出去，而是和升上来时一样往下沉；安卓侧滑返回新对话（或它变成的 chat）时跟着手指往下沉。手机 web 的 `mobile/app.tsx` 也改了点返回（页面记下自己是怎么进来的），侧滑没改。改了安卓 App.kt 和手机 web，web 跟部署走，安卓要发一版。上线后验：点新对话 → 发一条消息 → 点返回，往下沉；再来一次换成侧滑，同样往下沉。motion 测试 `OverMotionTest#newChatInAndOut`。
 - chat 里漏新回复（chat-stale-messages）：app 在后台时事件流静默断掉，回前台恰好被新流顶替，漏掉的不会补；点进 chat 又只从本地打开不问 station，所以列表看得到、chat 里没有。改成：顶替一个超过 30 秒没动静的旧流时，新流连上后重读一遍；chat 只靠本地打开到末尾时，后台再问一次 `entries?after=`。只改了 core，web 跟部署走，安卓、桌面要各发一版。上线后验：app 切后台一两分钟，期间让 agent 回一条，切回来点进去应该有；Axiom 里回前台有一次 `GET /threads`，打开 chat 有一次 `entries?after=`。
 - station 卡片流量按天算（net-total-by-day）：卡片上 ↑↓ 后面的「共 …」从「这次连接以来」改成「这台设备今天连这台 station 的总量」。只改了 core（mesh.rs 每分钟、以及连接断开或被换掉时把各连接的字节记进当天的账，存在设备存储 `net-day`，过了本地零点重新算）和 shapes 的注释，station、cloud、界面代码都没动。新旧混跑：旧 core 不给 `todayRxBytes`，照旧显示这次连接的量。web 跟部署走，安卓、桌面要各发一版。上线后验：开着卡片重连一次或换个中继，「共」的数字不会回到 0；重启 app 后还在。
