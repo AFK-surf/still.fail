@@ -741,7 +741,8 @@ private fun Flyer(motion: ChatMotion, atWork: List<AgentAtWork>) {
     DisposableEffect(Unit) { onDispose { motion.copied = null } }
     Box(
         Modifier.offset {
-            val f = motion.flight(density)
+            // Composed for another agent's turn than now flies (the turn moved on since): not shown until composed anew.
+            val f = if (motion.current?.agent == turn.agent) motion.flight(density) else null
             motion.copied = if (f != null) turn.agent else null
             val at = f?.at ?: Offset(-10_000f, 0f)
             IntOffset((at.x - ring).roundToInt(), (at.y - ring).roundToInt())
