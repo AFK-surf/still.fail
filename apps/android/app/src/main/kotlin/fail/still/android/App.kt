@@ -606,7 +606,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             if (targetState is Screen.Annotate || initialState is Screen.Annotate) (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished)
                 .apply { targetContentZIndex = z }
             else {
-                val rose = app.pageOf(initialState) == "new-chat"
+                // Sharing the host keeps the composer in place, but only an unsent new chat exits down.
+                val rose = initialState == Screen.NewChat
                 if (swiped) swipe(toLeft = initialState == Screen.Settings, z, rose) else transition(initialState, targetState, app.forward, z, rose)
             }
         },
@@ -686,7 +687,7 @@ private suspend fun seekAlong(from: Float, to: Float, ms: Float, easing: Easing,
 /**
  * Swiped back: the page goes right with the finger (linear in the seek, so it is where the finger is) and the one under
  * it comes along beside it, edge to edge, as a tapped back moves them. Settings came from the left (`toLeft`): they go
- * back that way, the list coming from the right. A new chat (`rose`, or the chat it became) rose from the bottom: it
+ * back that way, the list coming from the right. An unsent new chat (`rose`) rose from the bottom: it
  * sinks back down with the finger over the page under it, as a tapped back takes it.
  */
 private fun swipe(toLeft: Boolean, z: Float, rose: Boolean): ContentTransform {
@@ -707,7 +708,7 @@ private fun transition(from: Screen, to: Screen, forward: Boolean, z: Float, ros
     val slide = tween<IntOffset>(300, easing = FastOutSlowInEasing)
     return when {
         forward && to == Screen.NewChat -> slideInVertically(tween(time, easing = Ease)) { it } togetherWith fadeOut(tween(time), 0.99f)
-        // A new chat become its chat (`made`) is still the page that rose: it sinks back down.
+        // Only the new-chat screen sinks back down; a chat it made returns sideways.
         !forward && rose -> fadeIn(tween(1), 0.99f) togetherWith slideOutVertically(tween(time, easing = Ease)) { it }
         // Settings are to the left of the list (the gear is at the list's left): they come and go that way.
         forward && to == Screen.Settings -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
