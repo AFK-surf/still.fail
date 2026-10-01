@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -137,6 +138,10 @@ class Flight internal constructor(
      */
     private fun fly(): Float = (progress.value / FLY).coerceAtMost(1f)
     fun settle(): Float = if (carried) e() else Ease.Arrive.transform(((progress.value - SETTLE) / (1f - SETTLE)).coerceIn(0f, 1f))
+    /** How much of the bubble's ground shows (around the words, drawn by the host in an open chat): coming in from half way, all there as they come. */
+    fun ground(): Float = if (carried) e() else ((fly() - 0.5f) / 0.5f).coerceIn(0f, 1f)
+    /** The bubble's ground, as its row draws it. */
+    internal var groundColor = androidx.compose.ui.graphics.Color.Unspecified
     private var aim: Offset? = null
     private var aimed = -1f
     /** Where the words make for, `place` (where they go, as it is now) followed a little behind, once a frame. */
@@ -463,38 +468,47 @@ private fun FlightLayer(host: Host) {
         // Where the bubble's words are once in place.
         val home = overlay.localPositionOf(bubble, Offset.Zero) + flight.pad - Offset(0f, flight.shift() - drop) + off
         // In an open chat the words go as one block, as typed, its first letters (the first that showed) to theirs,
-        // seen through the field as it showed them (more than six lines: only those it showed). Come, that window
-        // opens out to the whole row as they settle into their bubble.
+        // only those the field showed (more than six lines: the rest come in as they settle), their bubble's ground
+        // coming in round them from half way; come, it opens out to the whole bubble as they settle into it.
         val lead = pieces?.let { ps -> ps.firstOrNull { it.shown } ?: ps.firstOrNull() }
-        val window = if (flight.carried || lead == null) null else {
-            val gone = home + lead.at - (flight.field + lead.from)
-            val d = Offset(gone.x * across, gone.y * up)
-            val r = overlay.localPositionOf(row, Offset.Zero) - Offset(0f, flight.shift() - drop) + off
-            val left = flight.field.x + d.x
-            val top = flight.field.y + d.y
-            androidx.compose.ui.geometry.Rect(
-                left + (r.x - left) * settle, top + (r.y - top) * settle,
-                left + flight.fieldWidth + (r.x + row.size.width - left - flight.fieldWidth) * settle,
-                top + flight.fieldHeight + (r.y + row.size.height - top - flight.fieldHeight) * settle,
-            )
+        val spots = if (pieces == null || lead == null) null else pieces.map { p ->
+            // From where the field had it to where the bubble has it.
+            val a = flight.field + p.from
+            val b = home + p.at
+            if (flight.carried) Offset(a.x + (b.x - a.x) * across, a.y + (b.y - a.y) * up) else {
+                val block = home + lead.at + (p.from - lead.from)
+                val m = Offset(a.x + (block.x - a.x) * across, a.y + (block.y - a.y) * up)
+                m + (b - m) * settle
+            }
         }
-        val view = window ?: androidx.compose.ui.geometry.Rect(-1e5f, -1e5f, 1e5f, 1e5f)
+        val ground = if (flight.carried || pieces == null || spots == null || lead == null) null else {
+            val shown = pieces.indices.filter { pieces[it].shown }.ifEmpty { pieces.indices.toList() }
+            fun topOf(i: Int) = spots[i].y + (pieces[i].clip.top - pieces[i].at.y) * s
+            fun footOf(i: Int) = spots[i].y + (pieces[i].clip.bottom - pieces[i].at.y) * s
+            val seen = shown.minOf(::topOf)
+            val top = seen + (pieces.indices.minOf(::topOf) - seen) * settle - flight.pad.y
+            val bottom = shown.maxOf(::footOf) + flight.pad.y
+            val left = home.x - flight.pad.x + (spots[pieces.indexOf(lead)].x - (home + lead.at).x)
+            androidx.compose.ui.geometry.Rect(left, top, left + bubble.size.width, bottom)
+        }
+        // What shows: the bubble (what the field did not show is not there yet), then the row as it is (its time).
+        val view = ground?.let { g ->
+            val r = overlay.localPositionOf(row, Offset.Zero) - Offset(0f, flight.shift() - drop) + off
+            androidx.compose.ui.geometry.Rect(-1e5f, g.top, 1e5f, g.bottom + (r.y + row.size.height - g.bottom).coerceAtLeast(0f) * settle)
+        } ?: androidx.compose.ui.geometry.Rect(-1e5f, -1e5f, 1e5f, 1e5f)
         clipRect(view.left, view.top, view.right, view.bottom) {
-            // The row (its words, when they fly apart, drawn by the pieces below and not in it).
+            // The row (its words, when they fly apart, drawn by the pieces below and not in it; and its ground, above).
             translate(at.x, at.y) {
                 scale(s, s, pivot = Offset.Zero) {
                     translate(-inRow.x, -inRow.y) { drawLayer(layer) }
                 }
             }
-            if (words != null && pieces != null && lead != null) for (p in pieces) {
-                // From where the field had it to where the bubble has it.
-                val a = flight.field + p.from
-                val b = home + p.at
-                val there = if (flight.carried) Offset(a.x + (b.x - a.x) * across, a.y + (b.y - a.y) * up) else {
-                    val block = home + lead.at + (p.from - lead.from)
-                    val m = Offset(a.x + (block.x - a.x) * across, a.y + (block.y - a.y) * up)
-                    m + (b - m) * settle
-                }
+            if (ground != null && flight.groundColor.isSpecified) {
+                val corner = 18.dp.toPx()
+                drawRoundRect(flight.groundColor, ground.topLeft, ground.size, androidx.compose.ui.geometry.CornerRadius(corner), alpha = flight.ground())
+            }
+            if (words != null && pieces != null && spots != null) for ((i, p) in pieces.withIndex()) {
+                val there = spots[i]
                 translate(there.x, there.y) {
                     scale(s, s, pivot = Offset.Zero) {
                         translate(-p.at.x, -p.at.y) {

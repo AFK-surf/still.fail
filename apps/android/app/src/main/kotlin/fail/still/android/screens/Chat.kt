@@ -1079,6 +1079,7 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
     val flight = LocalFlight.current
     val host = LocalFlightHost.current
     val density = LocalDensity.current
+    if (flight != null) flight.groundColor = ink.neutral
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         val words = fail.still.android.ui.withRefs(text)
         val (mark, laid) = passageMark(words.text)
@@ -1090,7 +1091,11 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
                         with(density) { flight.bubbleAt(it, host, androidx.compose.ui.geometry.Offset(14.dp.toPx(), 8.dp.toPx()), 23.sp.toPx(), 15.sp.toPx()) }
                     }
                 }
-                .clip(RoundedCornerShape(18.dp)).drawBehind { drawRect(ink.neutral, alpha = flight?.e() ?: 1f) }.background(press).padding(horizontal = 14.dp, vertical = 8.dp).then(mark)
+                .clip(RoundedCornerShape(18.dp)).drawBehind {
+                    // Flown in piece by piece, its ground is the host's (round the words on their way); else it comes in with them.
+                    val alpha = when { flight == null -> 1f; !flight.carried && host?.flight === flight && flight.pieces() != null -> 0f; else -> flight.e() }
+                    drawRect(ink.neutral, alpha = alpha)
+                }.background(press).padding(horizontal = 14.dp, vertical = 8.dp).then(mark)
                 // On their way, its words are drawn piece by piece over the composer (ChatHost.kt FlightLayer), not here.
                 .drawWithContent { if (flight == null || host?.flight !== flight || flight.pieces() == null) drawContent() },
         )
