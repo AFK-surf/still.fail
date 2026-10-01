@@ -421,7 +421,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
     val checking = app.isDoing("profile.check", "station" to station, "id" to p.id)
     val checkFailed = app.failedOf("profile.check", "station" to station, "id" to p.id)
     var filter by remember { mutableStateOf("") }
-    val all = p.available.sorted()
+    val all = (p.available ?: (p.check?.models.orEmpty() + p.models).distinct()).sorted()
     val shown = all.filter { m -> listOf(m, p.names[m] ?: m).any { it.contains(filter.trim(), ignoreCase = true) } }
     val save = { models: List<String> -> onSave(models.distinct().sorted()) }
     val suffix = if (filter.isBlank()) "" else "筛选结果"
