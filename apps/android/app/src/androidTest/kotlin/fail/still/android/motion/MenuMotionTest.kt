@@ -28,11 +28,11 @@ class MenuMotionTest {
         )
         val open = h.record("$theme-menu-open")
         open.frame { rule.runOnUiThread { h.app.menu = menu() } }
-        open.frames(20)
+        open.frames(40)
         open.end()
         val close = h.record("$theme-menu-close")
         close.frame { rule.runOnUiThread { h.app.menu = null } }
-        close.frames(20)
+        close.frames(40)
         close.end()
         val again = h.record("$theme-menu-reopen")
         again.frame { rule.runOnUiThread { h.app.menu = menu(true) } }
@@ -40,17 +40,17 @@ class MenuMotionTest {
         again.frame { rule.runOnUiThread { h.app.menu = null } }
         again.frames(4)
         again.frame { rule.runOnUiThread { h.app.menu = menu(true) } }
-        again.frames(20)
+        again.frames(40)
         again.end()
         rule.runOnUiThread { h.app.menu = null }
         h.settle()
         val sheet = h.record("$theme-sheet-open")
         sheet.frame { rule.runOnUiThread { openAttach(h.app, Triple({}, {}, {})) } }
-        sheet.frames(30)
+        sheet.frames(60)
         sheet.end()
         val down = h.record("$theme-sheet-close")
         down.frame { rule.runOnUiThread { h.app.sheet = null } }
-        down.frames(26)
+        down.frames(60)
         down.end()
     }
 }
