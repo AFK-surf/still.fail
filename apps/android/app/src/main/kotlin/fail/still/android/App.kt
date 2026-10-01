@@ -502,17 +502,19 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
             if (targetState is Screen.Annotate || initialState is Screen.Annotate) (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished)
                 .apply { targetContentZIndex = if (targetState is Screen.Annotate) 1f else -1f }
-            else if (swiped) swipe() else transition(initialState, targetState, app.forward)
+            else if (swiped) swipe(toLeft = initialState == Screen.Settings) else transition(initialState, targetState, app.forward)
         },
         // A new chat and the chat it becomes are one page (ChatHost.kt): it stays, rather than slide in again.
         contentKey = { app.pageOf(it) },
     ) { screen ->
         val pageScope = this
         // The page swiped away casts a little shadow on the one it uncovers (web: -8px 0 24px rgba(0,0,0,.12)).
+        // Settings go back to the left, where they came from: the shadow is on their right then.
         val lifted = swiped && screen == pages.currentState
+        val leftward = screen == Screen.Settings
         saved.SaveableStateProvider(app.pageOf(screen)) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
-            Box(Modifier.fillMaxSize().then(if (lifted) Modifier.drawBehind { swipeShadow(((1f - pages.fraction) / 0.15f).coerceIn(0f, 1f)) } else Modifier).then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
+            Box(Modifier.fillMaxSize().then(if (lifted) Modifier.drawBehind { swipeShadow(((1f - pages.fraction) / 0.15f).coerceIn(0f, 1f), leftward) } else Modifier).then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
@@ -562,18 +564,22 @@ private suspend fun seekAlong(from: Float, to: Float, ms: Float, easing: Easing,
 
 /**
  * Swiped back: the page goes right with the finger (linear in the seek, so it is where the finger is) and the one under
- * it comes from 30% to the left, as web mobile's peek (translateX(-30% + dx·0.3)).
+ * it comes from 30% to the left, as web mobile's peek (translateX(-30% + dx·0.3)). Settings came from the left
+ * (`toLeft`): they go back that way, the list coming from 30% to the right.
  */
-private fun swipe(): ContentTransform {
+private fun swipe(toLeft: Boolean): ContentTransform {
     val linear = tween<IntOffset>(300, easing = LinearEasing)
-    return (slideInHorizontally(linear) { -(it * 0.3f).roundToInt() } togetherWith slideOutHorizontally(linear) { it })
+    val way = if (toLeft) -1 else 1
+    return (slideInHorizontally(linear) { -way * (it * 0.3f).roundToInt() } togetherWith slideOutHorizontally(linear) { way * it })
         .apply { targetContentZIndex = -1f }
 }
 
 /** `alpha`: fading over the last of the way, so none is left at the screen's edge once the page has gone. */
-private fun DrawScope.swipeShadow(alpha: Float) {
+private fun DrawScope.swipeShadow(alpha: Float, right: Boolean = false) {
     val w = 24.dp.toPx()
-    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.12f * alpha)), startX = -w, endX = 0f), topLeft = Offset(-w, 0f), size = Size(w, size.height))
+    val shade = Color.Black.copy(alpha = 0.12f * alpha)
+    if (right) drawRect(Brush.horizontalGradient(listOf(shade, Color.Transparent), startX = size.width, endX = size.width + w), topLeft = Offset(size.width, 0f), size = Size(w, size.height))
+    else drawRect(Brush.horizontalGradient(listOf(Color.Transparent, shade), startX = -w, endX = 0f), topLeft = Offset(-w, 0f), size = Size(w, size.height))
 }
 
 /**
