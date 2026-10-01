@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -253,7 +253,7 @@ private fun Annotating(station: String, of: ChatOf, m: ChatMessage, author: Stri
     val tray = rememberLazyListState()
     LaunchedEffect(notes.size) { if (notes.isNotEmpty()) tray.animateScrollToItem(notes.size - 1) }
 
-    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { placed.page = it }.windowInsetsPadding(WindowInsets.ime)) {
+    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { placed.page = it }.windowInsetsPadding(WindowInsets.keyboard)) {
         val width = constraints.maxWidth.toFloat()
         Column(Modifier.fillMaxSize().hazeSource(haze).verticalScroll(scroll)) {
             Box(Modifier.fillMaxWidth()) {

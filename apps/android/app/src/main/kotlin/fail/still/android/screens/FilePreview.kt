@@ -31,7 +31,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -781,7 +781,7 @@ private fun ImageStage(station: String, key: String, file: Attachment, bytes: By
     if (failed) { Note { Text("这张图片没法在这里显示", fontSize = 15.sp, color = DarkMuted) }; return }
     val picture = full ?: thumb
     // Words written under where the keyboard comes up: the image goes up with them, above it.
-    val ime = WindowInsets.ime.getBottom(LocalDensity.current)
+    val ime = WindowInsets.keyboard.getBottom(LocalDensity.current)
     val gap = with(LocalDensity.current) { 24.dp.toPx() }
     val below = marks.writingBottom()?.let { it + gap - (zoom.box.height - ime) } ?: 0f
     val lift by animateFloatAsState(if (ime > 0 && below > 0) below else 0f, label = "lift")

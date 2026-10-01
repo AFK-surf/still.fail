@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -113,7 +113,7 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
     if (needsInviteCode(create.error)) asked = true
     val asking = asked && !create.done
     Column(
-        Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime)).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 40.dp),
+        Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.keyboard)).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Illustration(R.drawable.illus_sign_in, R.drawable.illus_sign_in_dark, 260.dp)

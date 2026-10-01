@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -372,7 +372,7 @@ fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     val chat = screen as? Screen.Chat
     remember(chat?.id, chat?.at) { host.goTo = chat?.at; Unit }
     CompositionLocalProvider(LocalSendTextWidth provides host.fieldWidth) {
-      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+      Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         if (chat != null) key(chat.id) { ChatScreen(chat.station, chat.of, host) }
         // A new chat's scene stays over its chat while it leaves.
         if (chat == null || host.leaving) key("new") { NewChatScreen(current, host, leaving = chat != null) }

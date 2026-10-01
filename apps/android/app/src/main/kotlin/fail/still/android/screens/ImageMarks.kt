@@ -22,7 +22,7 @@ import fail.still.android.ui.StillFailTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
@@ -874,7 +874,7 @@ fun MarksFoot(marks: ImageMarks, haze: dev.chrisbanes.haze.HazeState, glass: Mod
         val open = marks.openNote
         if (open != null) {
             androidx.compose.runtime.key(open.id) {
-                NoteBox(open, Modifier.windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 12.dp), onDone = { marks.open(null) }, onRemove = { marks.remove(open.id) })
+                NoteBox(open, Modifier.windowInsetsPadding(WindowInsets.keyboard.exclude(WindowInsets.navigationBars)).padding(horizontal = 12.dp), onDone = { marks.open(null) }, onRemove = { marks.remove(open.id) })
             }
             return@StillFailTheme
         }

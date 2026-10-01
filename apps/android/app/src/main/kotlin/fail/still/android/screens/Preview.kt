@@ -35,7 +35,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -143,7 +143,7 @@ fun PreviewScreen(station: String, service: String) {
     val session = job?.session
     val port = job?.port
     val up = port != null && job.open == true
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         NavBar("对话", app::pop, job?.name ?: "服务", sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when {
             error != null && job == null -> PreviewNote("找不到这个服务：$error")
@@ -164,7 +164,7 @@ fun PreviewFileScreen(station: String, session: String, path: String, name: Stri
     val scope = rememberCoroutineScope()
     val file = remember(path, name) { fail.still.android.data.Attachment(name = name, path = path, size = 0) }
     val loaded = fail.still.android.ui.rememberViz(station, session, file)
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         NavBar("对话", app::pop, name, sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when (val l = loaded) {
             fail.still.android.ui.Loaded.Failed -> PreviewNote("读不到「$name」。")

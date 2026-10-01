@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -78,7 +78,7 @@ fun columnWidth(width: Dp): Dp = minOf(680.dp, width - 144.dp)
 @Composable
 fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
     val app = LocalApp.current
-    val foot = Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+    val foot = Modifier.windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))
     when (top) {
         Screen.Home -> {
             val decisions = decisionsWaiting(current)

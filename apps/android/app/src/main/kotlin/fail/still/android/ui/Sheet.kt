@@ -4,7 +4,7 @@
 package fail.still.android.ui
 
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.ime
+import fail.still.android.ui.keyboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import dev.chrisbanes.haze.hazeEffect
@@ -194,7 +194,7 @@ fun SheetHost(app: AppState) {
                 // With a finger its top (the grabber and the head, 64dp) drags it, as web mobile's does.
                 .pointerInput(drag) { dragTop(drag) }
                 // A field of the sheet's own brings the keyboard up under the sheet, not over it.
-                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+                .windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars)),
         ) {
             CompositionLocalProvider(LocalSheetDrag provides drag) { current.content(this) }
         }

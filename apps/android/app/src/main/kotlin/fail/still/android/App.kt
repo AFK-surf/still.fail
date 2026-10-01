@@ -470,6 +470,11 @@ private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 
 @Composable
 fun StillFailApp(app: AppState) {
+    fail.still.android.ui.KeyboardInsets { AppContent(app) }
+}
+
+@Composable
+private fun AppContent(app: AppState) {
     val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
     val workspaces by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     // Links in what agents write go through here: still.fail's own open in the app (AppState.openLink), the rest as before.
