@@ -612,6 +612,9 @@ struct KeptPush {
     registration: Value,
     #[serde(default)]
     with: Vec<String>,
+    /// The language the accounts were given with it (their notifications are said in it); another: given again.
+    #[serde(default)]
+    lang: Option<String>,
 }
 
 /// A credential as kept, with the device it names: one for another device key (the page's, taken over) is no use.

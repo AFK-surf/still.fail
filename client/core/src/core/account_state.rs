@@ -355,6 +355,15 @@ impl Inner {
         };
         let accounts = self.accounts.list();
         kept.with.retain(|sub| accounts.iter().any(|a| &a.sub == sub));
+        // Notifications are said in the person's language: the cloud is told it with the registration, again when it changes.
+        let lang = stillfail_i18n::current().code();
+        if kept.lang.as_deref() != Some(lang) {
+            kept.with.clear();
+            kept.lang = Some(lang.to_string());
+        }
+        if let Value::Object(registration) = &mut kept.registration {
+            registration.insert("lang".into(), Value::from(lang));
+        }
         let mut failed = None;
         let missing: Vec<&AccountView> = accounts.iter().filter(|a| !kept.with.contains(&a.sub)).collect();
         for account in missing {
