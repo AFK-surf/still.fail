@@ -313,7 +313,7 @@ mod tests {
             let version = Rc::new(std::cell::Cell::new(1200));
             let served = version.clone();
             host.on_fetch(move |_| match served.get() {
-                0 => Err("offline".into()),
+                0 => Err(crate::host::HostError("offline".into())),
                 1 => json_response(503, json!({})),
                 2 => json_response(200, json!({"invalid": true})),
                 code => json_response(200, json!({"versionCode": code, "versionName": format!("0.1.{code}"),
