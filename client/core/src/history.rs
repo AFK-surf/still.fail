@@ -366,7 +366,7 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                     let w = ((b - a).max(0) / 1000) as u64;
                     seconds.map_or(w, |s| w.min(s))
                 });
-                let text = match (waited, seconds) {
+                let text = match (waited, *seconds) {
                     (Some(w), Some(s)) => t!("core-logic.history.waited_most", waited = span(w), most = span(s)),
                     (Some(w), None) => t!("core-logic.history.waited", waited = span(w)),
                     (None, Some(s)) => t!("core-logic.history.waiting_most", most = span(s)),

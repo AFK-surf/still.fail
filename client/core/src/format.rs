@@ -16,7 +16,12 @@ pub(crate) fn said(key: &'static str) -> &'static str {
     static KEPT: OnceLock<Mutex<HashMap<(Lang, &'static str), &'static str>>> = OnceLock::new();
     let lang = current();
     let mut kept = KEPT.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
-    *kept.entry((lang, key)).or_insert_with(|| &*Box::leak(t!(lang; key).into_boxed_str()))
+    if let Some(words) = kept.get(&(lang, key)).copied() {
+        return words;
+    }
+    let words: &'static str = Box::leak(t!(lang; key).into_boxed_str());
+    kept.insert((lang, key), words);
+    words
 }
 
 /// A month and day: 9月20日, Sep 20.
