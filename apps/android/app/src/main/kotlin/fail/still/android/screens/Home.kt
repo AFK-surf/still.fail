@@ -732,11 +732,11 @@ internal fun decisionsWaiting(current: WorkspaceEntry): Int {
 internal fun DecisionsCapsule(n: Int, ground: Modifier) {
     val app = LocalApp.current
     Row(
-        ground.height(56.dp).clickable { app.push(Screen.Decisions) }.padding(horizontal = 20.dp)
+        ground.height(56.dp).clickable { app.push(Screen.Decisions) }.padding(start = 10.dp, end = 20.dp)
             .semantics(mergeDescendants = true) { contentDescription = t("android-chat.home.decisions", "n" to n) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        IconIn(Icons.Zou, 28.dp, C.ink)
+        IconIn(Icons.Zou, 40.dp, C.ink)
         Text("$n", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = C.ink)
     }
 }
@@ -755,6 +755,6 @@ private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Mo
             Modifier.size(56.dp).clip(CircleShape).background(C.accent)
                 .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Ling, 32.dp, Color.White) }
+        ) { IconIn(Icons.Ling, 44.dp, Color.White) }
     }
 }

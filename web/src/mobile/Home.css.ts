@@ -45,7 +45,7 @@ export const mHomeToolbar = style({
 });
 /** 奏 N: a frosted capsule as tall as the new-chat one, left of it. */
 export const mDecisions = style({
-  display: "flex", alignItems: "center", gap: "6px", height: "56px", padding: "0 22px", marginRight: "10px",
+  display: "flex", alignItems: "center", gap: "6px", height: "56px", padding: "0 22px 0 10px", marginRight: "10px",
   borderRadius: "999px", color: "var(--m-ink)", cursor: "pointer", pointerEvents: "auto",
 });
 export const mHomeCapsule = style({
