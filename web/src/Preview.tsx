@@ -24,6 +24,7 @@ import { useMarks } from "./annotate/Marks.tsx";
 import { Tip } from "./ui.tsx";
 import { previewKey, useViewport } from "./viewport.ts";
 import { ViewportButton } from "./ViewportSize.tsx";
+import { PreviewLoad } from "./PreviewLoad.tsx";
 import { PreviewStage, useStage } from "./PreviewStage.tsx";
 import { useVizFile, useVizMessages, vizDocument } from "./Viz.tsx";
 
@@ -110,6 +111,7 @@ function FileFrame({ station, file, ...shown }: Shown & { file: FileSource }) {
 }
 
 interface Bar {
+  loading?: ReactNode;
   name: string;
   /** Where the service is now, as its frame says (null: not known). */
   at: string | null;
@@ -132,7 +134,7 @@ interface Bar {
 }
 
 /** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
-function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead, size, fixed = false }: Bar) {
+function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead, size, loading, fixed = false }: Bar) {
   const [typed, setTyped] = useState(at ?? "/");
   const [editing, setEditing] = useState(false);
   // Where it went is what the bar says, unless someone is typing there.
@@ -143,6 +145,7 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
       {back && <Tip label="后退"><button type="button" className={pagesCss.iconBtn} aria-label="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button></Tip>}
       {forward && <Tip label="前进"><button type="button" className={pagesCss.iconBtn} aria-label="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button></Tip>}
       <Tip label="刷新"><button type="button" className={pagesCss.iconBtn} aria-label="刷新" onClick={reload}><Refresh {...icon} /></button></Tip>
+      {loading}
       {instead ?? (
         <label className={css.previewAddress}>
           <Web size={14} strokeWidth={1.75} />
@@ -178,8 +181,8 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
  * apps/desktop/src/main.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
  * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
  */
-function Framed({ name, external, restarting, draftKey, viewKey, origin, src, nonce, frame, fixed = false }:
-  Omit<Shown, "station" | "port" | "service" | "file"> & { viewKey: string | undefined; origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null>; fixed?: boolean }) {
+function Framed({ name, external, restarting, draftKey, viewKey, origin, src, nonce, frame, fixed = false, loading }:
+  Omit<Shown, "station" | "port" | "service" | "file"> & { viewKey: string | undefined; origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null>; fixed?: boolean; loading?: ReactNode }) {
   const [at, setAt] = useState<string | null>(null);
   const [moves, setMoves] = useState({ back: false, forward: false });
   // A frame that can mark the page says so (an older one does not).
@@ -206,7 +209,7 @@ function Framed({ name, external, restarting, draftKey, viewKey, origin, src, no
   const reload = useCallback(() => nav("reload"), [nav]);
   return (
     <div className={css.preview}>
-      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} extra={marks.button} instead={marks.address} fixed={fixed}
+      <PreviewBar loading={loading} name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} extra={marks.button} instead={marks.address} fixed={fixed}
         size={viewKey && <ViewportButton viewKey={viewKey} viewport={viewport} zoom={stage.zoom} turn={stage.turn} compact={marks.address !== null}
           folded={stage.folded} unfold={() => stage.fold(false)} />} />
       <PreviewStage stage={stage} link={link} over={marks.over} after={<Restart name={name} restarting={restarting} reload={reload} />}>
@@ -227,7 +230,7 @@ function DesktopPreview({ station, port, file: _, ...shown }: Shown & { port: nu
     return () => { live = false; };
   }, [station, port]);
   const origin = host && `stillfail-preview://${host}`;
-  return <Framed {...shown} viewKey={shown.service && previewKey(station, shown.service)} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
+  return <Framed {...shown} loading={port ? <PreviewLoad station={station} port={port} /> : undefined} viewKey={shown.service && previewKey(station, shown.service)} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
 }
 
 /**
@@ -262,7 +265,7 @@ function WebPreview({ station, port, file: _, serve, frame: given, fixed = false
       for (const stop of bridges) stop();
     };
   }, [nonce, station, port, call]);
-  return <Framed {...shown} viewKey={shown.service && previewKey(station, shown.service)} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} fixed={fixed} />;
+  return <Framed {...shown} loading={port ? <PreviewLoad station={station} port={port} /> : undefined} viewKey={shown.service && previewKey(station, shown.service)} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} fixed={fixed} />;
 }
 
 /** A web service on a page of its own (its "open on its own"): the whole window with its bar, found by its job. */

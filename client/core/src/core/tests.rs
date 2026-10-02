@@ -720,6 +720,8 @@ fn a_streamed_preview_hands_its_answer_on_as_it_comes_until_cancelled_or_its_pag
         assert_eq!(asked.url, "https://stillfail.test/admin/api/preview/5180/events");
         let values = |host: &FakeHost| host.take_emitted().into_iter().map(|(_, m)| serde_json::to_value(m).unwrap()).collect::<Vec<_>>();
         assert_eq!(values(&host), vec![json!({ "id": 1, "value": { "head": { "status": 200, "headers": [["content-type", "text/event-stream"]] } } })]);
+        let load = Topic::PreviewLoad { station: "ws/st".into(), port: 5180 };
+        assert_eq!(core.inner.workspaces.of_station("ws/st").preview_load.value(&load)["percent"], 100);
         // Nothing is said to be waited on once its head came, however long its body goes on.
         core.inner.status.skip(3_000.0);
         assert_eq!(core.inner.status.value()["state"], Value::Null);
@@ -1930,5 +1932,32 @@ fn an_agent_provided_close_option_never_posts_a_chat_message() {
             .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap()).collect();
         assert_eq!(closed, vec![json!({"n":4,"option":"不需要部署"})]);
         assert!(!requests.iter().any(|r| r.method == "POST" && r.url.ends_with("/threads/7/messages")));
+    });
+}
+
+#[test]
+fn preview_load_topic_reports_pending_finished_and_cancelled_resources() {
+    run(async {
+        let (host, core) = station_core(0.0).await;
+        host.on_fetch_stream(|_| Ok(crate::host::StreamResponse {
+            status: 200, headers: vec![("content-type".into(), "image/png".into())],
+            body: futures::stream::pending().boxed_local(),
+        }));
+        let ui = core.connect();
+        core.receive(ui, ClientMessage::Subscribe { id: 90, subscribe: Topic::PreviewLoad { station: "ws/st".into(), port: 5180 } });
+        host.settle().await;
+        let values = |host: &FakeHost| host.take_emitted().into_iter().filter_map(|(_, m)| match m { CoreMessage::Value { id: 90, value } => Some(value), _ => None }).collect::<Vec<_>>();
+        assert_eq!(values(&host).last().unwrap()["total"], 0);
+        core.receive(ui, ClientMessage::Call { id: 1, call: "station.preview".into(), params: json!({ "station": "ws/st", "port": 5180, "method": "GET", "path": "/slow.png", "stream": true }) });
+        host.settle().await;
+        let loading = values(&host).pop().unwrap();
+        assert_eq!(loading["percent"], 0);
+        assert_eq!(loading["resources"][0]["status"], 200);
+        core.receive(ui, ClientMessage::Cancel { id: 1, cancel: true });
+        host.settle().await;
+        let cancelled = values(&host).pop().unwrap();
+        assert_eq!(cancelled["percent"], 100);
+        assert_eq!(cancelled["failed"], 1);
+        assert_eq!(cancelled["resources"][0]["error"], "已取消");
     });
 }

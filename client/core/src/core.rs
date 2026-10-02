@@ -377,6 +377,12 @@ impl Core {
                             self.inner.store.invalidate(&Topic::Doing);
                             at
                         });
+                        let resource = if let Call::StationPreview { station, port, method, path, headers, .. } = &call {
+                            let workspace = self.inner.workspaces.of_station(station);
+                            let key = workspace.preview_load.start(station, *port, method, path, headers, self.inner.host.now_ms());
+                            self.inner.store.invalidate(&key.0);
+                            Some((workspace, key))
+                        } else { None };
                         // Each call is a trace: what it asks of stations and still.fail cloud are its spans.
                         let tracer = &self.inner.tracer;
                         let mut span = tracer.root(name, Kind::Internal);
@@ -387,7 +393,20 @@ impl Core {
                         // How far a call has got, for a UI that asked to hear it: values under the call's id, before its answer.
                         let progress: Progress = {
                             let inner = self.inner.clone();
-                            Rc::new(move |value| inner.host.emit(client, CoreMessage::Value { id, value }))
+                            let resource = resource.clone();
+                            Rc::new(move |value: Value| {
+                                if let Some((workspace, key)) = &resource {
+                                    if let Some(status) = value["head"]["status"].as_u64() {
+                                        workspace.preview_load.head(key, status);
+                                        // Event streams stay open after they have successfully connected.
+                                        if value["head"]["headers"].as_array().is_some_and(|hs| hs.iter().any(|h| h[0].as_str().is_some_and(|k| k.eq_ignore_ascii_case("content-type")) && h[1].as_str().is_some_and(|v| v.starts_with("text/event-stream")))) {
+                                            workspace.preview_load.end(key, inner.host.now_ms(), None);
+                                        }
+                                        inner.store.invalidate(&key.0);
+                                    }
+                                }
+                                inner.host.emit(client, CoreMessage::Value { id, value });
+                            })
                         };
                         // Only a call that holds something open for its page can be stopped (and is, with the page):
                         // one that changes something (a message sent, a file uploaded) runs to its end whoever waits.
@@ -406,6 +425,13 @@ impl Core {
                                 }
                                 None => run.await,
                             };
+                            if let Some((workspace, key)) = &resource {
+                                if let Ok(value) = &result {
+                                    if let Some(status) = value["status"].as_u64() { workspace.preview_load.head(key, status); }
+                                }
+                                workspace.preview_load.end(key, inner.host.now_ms(), result.as_ref().err().map(|e| e.message.as_str()));
+                                inner.store.invalidate(&key.0);
+                            }
                             if let Err(error) = &result {
                                 span.fail();
                                 span.set("error.type", error.code.clone());

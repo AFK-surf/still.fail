@@ -33,6 +33,7 @@ pub struct Workspace {
     pub(crate) stations: RefCell<HashMap<String, StationState>>,
     /// What is waited on for its stations: their requests, and the relay and links opened for them (status.rs).
     pub status: Rc<Status>,
+    pub(crate) preview_load: crate::preview_load::Loads,
     /// How its stations' chat rows were when last looked at, and what was heard of them (notices.rs).
     pub(crate) heard: RefCell<Heard>,
     /// What the core keeps in sync of it, each held by a watch (sync.rs).
@@ -94,6 +95,7 @@ impl Workspaces {
             owner: RefCell::default(),
             stations: RefCell::default(),
             status: Status::new(self.host.clone()),
+            preview_load: crate::preview_load::Loads::default(),
             heard: RefCell::default(),
             synced: RefCell::default(),
         });

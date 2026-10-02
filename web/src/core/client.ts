@@ -81,6 +81,7 @@ export type Topic =
   // What people set going on this device and the core has not finished: each call that changes something, until it
   // answers (client/core/src/doing.rs; doing.ts).
   | { topic: "doing" }
+  | { topic: "previewLoad"; station: string; port: number }
   // What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen`
   // (client/core/src/changelog.rs).
   | { topic: "changelog" }

@@ -69,3 +69,19 @@ globalStyle(`[data-enter], ${hPhaseText}, ${composerQuote}, ${sidePanel}`, {
 });
 /** Here rather than with its class: it comes after .preview-restart > span:last-child, and wins over it. */
 globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fontSize: vars.textSm });
+
+export const loadRing = style({ color: vars.muted, flex: "none", selectors: { '&[data-failed]': { color: vars.red } } });
+export const loadDetails = style({
+  zIndex: 1000, width: "min(420px, calc(100vw - 24px))", padding: "14px", borderRadius: vars.rCard,
+  background: `color-mix(in srgb, ${vars.raised} 84%, transparent)`, backdropFilter: "blur(20px)", color: vars.text,
+  boxShadow: `0 2px 8px ${vars.shadow}`, fontSize: vars.textSm,
+});
+export const loadHeading = style({ fontWeight: "500", marginBottom: "4px" });
+export const loadHint = style({ color: vars.muted, fontSize: vars.textXs });
+export const loadList = style({ maxHeight: "min(320px, 55vh)", overflowY: "auto", marginTop: "10px" });
+export const loadRow = style({
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "4px 12px", padding: "5px 0", fontVariantNumeric: "tabular-nums", color: vars.muted,
+  selectors: { '&[data-failed]': { color: vars.red } },
+});
+export const loadPath = style({ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", textAlign: "left" });
+export const loadError = style({ gridColumn: "1 / -1", overflowWrap: "anywhere", fontSize: vars.textXs });

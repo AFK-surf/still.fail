@@ -322,7 +322,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
     val markable = session != null
     val leave = { state.marks.clear(); state.at2.clear(); state.editing = null; state.error = null; state.marking = false; js("__stillfailMarks&&(__stillfailMarks.clear(),__stillfailMarks.on(false))") }
     PreviewBar(
-        name, state.at, go = { path -> link.web?.loadUrl("https://$PREVIEW_HOST$path") }, reload = { link.web?.reload() },
+        name, state.at, loading = if (file == null) ({ PreviewLoad(station, port) }) else null, go = { path -> link.web?.loadUrl("https://$PREVIEW_HOST$path") }, reload = { link.web?.reload() },
         back = { link.web?.goBack() }, forward = { link.web?.goForward() }, canBack = state.canBack, canForward = state.canForward,
         size = if (folded) ({ SizeButton(viewport) { fold(false) } }) else null, fixed = file != null,
         extra = if (markable) ({
@@ -385,7 +385,7 @@ private fun ColumnScope.ServicePage(station: String, service: String, port: Int,
 @Composable
 private fun PreviewBar(
     name: String, at: String?, go: (String) -> Unit, reload: () -> Unit, back: () -> Unit, forward: () -> Unit, canBack: Boolean, canForward: Boolean,
-    size: (@Composable () -> Unit)?, extra: (@Composable () -> Unit)?, instead: (@Composable () -> Unit)?, fixed: Boolean = false,
+    loading: (@Composable () -> Unit)? = null, size: (@Composable () -> Unit)?, extra: (@Composable () -> Unit)?, instead: (@Composable () -> Unit)?, fixed: Boolean = false,
 ) {
     val focus = LocalFocusManager.current
     var typed by remember { mutableStateOf(at ?: "/") }
@@ -396,6 +396,7 @@ private fun PreviewBar(
         BarIcon(Icons.ArrowLeft, canBack, onClick = back)
         BarIcon(Icons.ArrowRight, canForward, onClick = forward)
         BarIcon(Icons.Refresh, true, onClick = reload)
+        loading?.invoke()
         if (instead != null) Box(Modifier.weight(1f).padding(horizontal = 4.dp)) { instead() }
         else Row(
             Modifier.weight(1f).padding(horizontal = 4.dp).height(30.dp).clip(RoundedCornerShape(15.dp))
