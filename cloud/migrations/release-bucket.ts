@@ -20,7 +20,7 @@ async function migrate(request: Request, env: Env): Promise<Response> {
       return Response.json({ objects: list.objects.map(({ key, etag, size }) => ({ key, etag, size })), cursor: list.truncated ? list.cursor : null });
     }
     if (request.method !== "POST" || url.pathname !== "/copy") return new Response("not found", { status: 404 });
-    const input = await request.json() as { key: string; etag: string; verifyOnly?: boolean; resume?: { sourceEtag: string; targetEtag: string; sha256: string } };
+    const input = await request.json() as { key: string; etag: string; verifyOnly?: boolean; reconcile?: boolean; resume?: { sourceEtag: string; targetEtag: string; sha256: string } };
     if (typeof input.key !== "string" || typeof input.etag !== "string") return new Response("invalid input", { status: 400 });
     const source = await env.SOURCE.get(input.key, { onlyIf: { etagMatches: input.etag } });
     if (!source || !("body" in source)) return Response.json({ error: "source_changed", etag: (await env.SOURCE.head(input.key))?.etag ?? null }, { status: 409 });
@@ -28,6 +28,12 @@ async function migrate(request: Request, env: Env): Promise<Response> {
     if (!input.verifyOnly && input.resume?.sourceEtag === source.etag && input.resume?.targetEtag === before?.etag && before?.size === source.size) {
       await source.body.cancel();
       return Response.json({ key: input.key, sourceEtag: source.etag, targetEtag: before.etag, size: source.size, sha256: input.resume.sha256 });
+    }
+    // After cutover, target writes/deletions win. Only replace the exact object
+    // verified before cutover, or insert a previously unseen key if still absent.
+    if (input.reconcile && (input.resume ? before?.etag !== input.resume.targetEtag : !!before)) {
+      await source.body.cancel();
+      return Response.json({ key: input.key, size: source.size, preservedTarget: true });
     }
     let sourceHash: string;
     if (input.verifyOnly) sourceHash = await digest(source.body);
