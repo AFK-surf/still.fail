@@ -105,7 +105,7 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
 fun NewChatDisc() {
     val app = LocalApp.current
     Box(
-        Modifier.size(56.dp).clip(CircleShape).background(C.accent)
+        Modifier.size(56.dp).shadow(1.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f)).clip(CircleShape).background(C.accent)
             .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-misc.wide.newChat") },
         contentAlignment = Alignment.Center,
     ) { IconIn(Icons.Ling, 44.dp, Color.White) }

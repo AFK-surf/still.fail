@@ -56,7 +56,7 @@ export const mFilter = style({});
 globalStyle(`${mHomeBar} button${mFilter}[data-on]`, { color: "var(--m-accent)" });
 export const mNewChat = style({
   display: "grid", placeItems: "center", flex: "none", width: "56px", height: "56px", padding: "0", border: "0",
-  borderRadius: "50%", background: "var(--m-accent)", color: "#fff !important", cursor: "pointer", boxShadow: "0 1px 3px rgb(0 0 0 / .08)",
+  borderRadius: "50%", background: "var(--m-accent)", color: "#fff !important", cursor: "pointer", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
 });
 export const mEmpty = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", padding: "20px 30px",
