@@ -9,7 +9,6 @@ import { useNavigate } from "react-router";
 import { Composer, type ComposerProps } from "./Chat.tsx";
 import { StationContext, type Station } from "./station.tsx";
 import { pageChanging, transitionTo } from "./ui.tsx";
-import * as sessionCss from "./styles/session.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as css from "./dock.css.ts";
 import { easeOut, morph, shapeOf, stop, type Shape } from "./morph.ts";
@@ -308,9 +307,10 @@ export function useCarryDraft(): (key: string) => void {
 
 /**
  * A link's click between a new chat and a chat (the sidebar's): the composer moves between their places as when a new
- * chat's first message is sent, and the rest crossfades. A chat's page is waited for (a little) until it shows its
- * messages: coming in as the composer moved, they took its frames, and showed at once. Plain clicks between chats, or
- * with a key held, are left to the link.
+ * chat's first message is sent, and the rest crossfades. A chat's page is waited for until its composer is in its place
+ * (what the motion lands on), not for its messages: they come from the station, at no time known, and the page is frozen
+ * while a view transition waits; they show when they are there. Plain clicks between chats, or with a key held, are
+ * left to the link.
  */
 export function useComposerMove(): (event: MouseEvent<HTMLAnchorElement>, to: string, next: "new" | "chat") => void {
   const navigate = useNavigate();
@@ -319,6 +319,6 @@ export function useComposerMove(): (event: MouseEvent<HTMLAnchorElement>, to: st
     const dock = document.querySelector<HTMLElement>(`.${css.composerDock}:not([hidden])`);
     if (!dock || dock.dataset.variant === next) return;
     event.preventDefault();
-    void transitionTo(() => navigate(to), next === "chat" ? () => document.querySelector(`.${sessionCss.chatList}`) !== null : undefined, 400);
+    void transitionTo(() => navigate(to), next === "chat" ? () => document.querySelector(`.${css.composerDock}[data-variant="chat"]:not([hidden])`) !== null : undefined, 400);
   };
 }

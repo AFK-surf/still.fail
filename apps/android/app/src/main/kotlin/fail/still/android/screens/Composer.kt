@@ -807,8 +807,12 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
         },
         onSend = {
             if (!draft.locked) {
-                // Its words stay where they were typed until its row is in the list, then go there.
-                host.sending(draft.text.trim(), carried = false)
+                // Its words stay where they were typed until its row is in the list, then go there. Only when that row is
+                // made here at once: not before the agent has a chat (the station makes it, at no time known), nor from a
+                // window short of the chat's end (its row is past the window until the station has the message). Then the
+                // row comes in as rows do.
+                val pendingKey = (of as? ChatOf.Session)?.key?.takeIf { thread == null && it.startsWith("new:") }
+                if ((thread != null || pendingKey != null) && view.newer != true) host.sending(draft.text.trim(), carried = false)
                 val taken = draft.take()
                 // Refused by the core before it reached the outbox (`invalid_params`: no such chat, a bad address): the words
                 // come back if nothing was written since, and why is said. A station's failure is in the outbox (未发送, 重试).

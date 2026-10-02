@@ -1296,7 +1296,9 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
     const layer = dock?.offsetParent;
     const list = document.querySelector<HTMLElement>(`.${css.chatMessages}`);
     list?.dispatchEvent(new Event("sent"));
-    if (!onSending && field && list && layer instanceof HTMLElement) sendingHere(field, draft.text, { layer, z: OVER_DOCK, list });
+    // Not before the agent has a chat: its row is only there once the station has made one (ensureChat), at no time
+    // known, so the words do not wait for it; the row comes in as rows do.
+    if (!onSending && (thread !== null || !ensureChat) && field && list && layer instanceof HTMLElement) sendingHere(field, draft.text, { layer, z: OVER_DOCK, list });
     const to = await sendDraft(draft, thread, ensureChat, onSending);
     if (to !== null) onSent?.(to);
   };

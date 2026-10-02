@@ -530,7 +530,8 @@ private fun FlightLayer(host: Host) {
     }
     LaunchedEffect(f) {
         if (f == null) return@LaunchedEffect
-        // The row never came (the message could not be sent): the composer is as it was.
+        // The row never came into sight: the composer is as it was. Not a wait for the station: a flight only starts for a
+        // row the core makes here at once (Composer.kt's onSend), and a refused send gives the words back by itself.
         delay(2000)
         if (!f.placed) host.notSent()
     }

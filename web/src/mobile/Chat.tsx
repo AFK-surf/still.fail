@@ -355,7 +355,9 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
     const host = into?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
     const field = host?.querySelector<HTMLElement>(`[data-made-composer] textarea:not([aria-hidden])`);
     into?.dispatchEvent(new Event("sent"));
-    if (into && host && field) sendingHere(field, draft.text, { layer: host, z: "7", list: into });
+    // Not before the agent has a chat (`to` null): its row is only there once the station has made one, at no time
+    // known, so the words do not wait for it; the row comes in as rows do.
+    if (to !== null && into && host && field) sendingHere(field, draft.text, { layer: host, z: "7", list: into });
     void sendDraft(draft, to, async () => ({ thread: (await stationApi(call).chatFor(here.key)).id }));
   };
   useLayoutEffect(() => use({

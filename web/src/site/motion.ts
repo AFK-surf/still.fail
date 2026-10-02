@@ -64,14 +64,32 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   // Each glyph on the dots (still.fail's, then youdid.wtf's above and below) and where it stands in the large layout.
   const large = [...overlay.querySelectorAll<HTMLElement>(`.${css.introChar}`)];
   const glyphs = [...title.querySelectorAll<HTMLElement>(`.${css.dotGlyph}`)].map((el, i) => {
-    const big = large[i]!, from = big.getBoundingClientRect(), box = el.getBoundingClientRect(), look = getComputedStyle(big);
+    const big = large[i]!, look = getComputedStyle(big);
     // Read now: a computed style is live, and it is about to be drawn large.
     const now = getComputedStyle(el), rest = { fontSize: now.fontSize, fontWeight: now.fontWeight, color: now.color };
-    const x = from.left + from.width / 2 - (box.left + box.width / 2), y = from.top + from.height / 2 - (box.top + box.height / 2);
     // Drawn large where the intro has it: its own box stays put, the glyph (centred in it) is moved and sized.
-    Object.assign(el.style, { fontSize: look.fontSize, fontWeight: look.fontWeight, color: look.color, textShadow: look.textShadow, translate: `${x}px ${y}px` });
-    return { el, line: big.closest<HTMLElement>(`.${css.introLine}`)!, x, y, rest };
+    Object.assign(el.style, { fontSize: look.fontSize, fontWeight: look.fontWeight, color: look.color, textShadow: look.textShadow });
+    return { el, big, line: big.closest<HTMLElement>(`.${css.introLine}`)!, x: 0, y: 0, rest };
   });
+  // How far each glyph's own box is from where the large layout has it, read again every frame: the title's font may
+  // arrive while this plays (it comes over the network, at no time known) and move both.
+  const measure = () => {
+    for (const g of glyphs) {
+      const from = g.big.getBoundingClientRect(), box = g.el.parentElement!.getBoundingClientRect();
+      g.x = from.left + from.width / 2 - (box.left + box.width / 2);
+      g.y = from.top + from.height / 2 - (box.top + box.height / 2);
+    }
+  };
+  // Until they fly, the glyphs are held where the large layout has them.
+  let holding = true, tracking = true;
+  const track = () => {
+    if (!tracking) return;
+    measure();
+    if (holding) for (const g of glyphs) g.el.style.translate = `${g.x}px ${g.y}px`;
+    requestAnimationFrame(track);
+  };
+  track();
+  running.push({ stop: () => { tracking = false; } });
 
   // 1. The Chinese slams in, a character at a time, each spun and blurred in from far too big and shaking the page as
   //    it lands; a beat between the two lines. The second line (the angrier one) keeps trembling, and its JB hits
@@ -99,18 +117,23 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   if (stopped()) return;
 
   // 2. The English grows out of each dot, and each character goes to its place on it, taking its size and colour.
+  // Its centre (the dot) and reach are read as it plays, for the same reason as the glyphs'.
   const reveal = [...title.querySelectorAll<HTMLElement>("[data-domain]")].flatMap((line) => {
-    const dot = line.querySelector<HTMLElement>(`.${css.dot}`)!.getBoundingClientRect();
+    const dotEl = line.querySelector<HTMLElement>(`.${css.dot}`)!;
     return [...line.querySelectorAll<HTMLElement>(`.${css.word}`)].map((el) => {
-      const box = el.getBoundingClientRect(), at = `${dot.left - box.left}px ${dot.top - box.top - box.height * 0.08}px`;
-      el.style.clipPath = `circle(0px at ${at})`;
+      const draw = (t: number) => {
+        const dot = dotEl.getBoundingClientRect(), box = el.getBoundingClientRect();
+        const far = Math.hypot(Math.max(Math.abs(dot.left - box.left), Math.abs(box.right - dot.left)), box.height);
+        el.style.clipPath = `circle(${far * t}px at ${dot.left - box.left}px ${dot.top - box.top - box.height * 0.08}px)`;
+      };
+      draw(0);
       el.style.opacity = "1";
-      const far = Math.hypot(Math.max(Math.abs(dot.left - box.left), Math.abs(box.right - dot.left)), box.height);
-      return play(animate(el, { clipPath: `circle(${far}px at ${at})` }, { duration: 1.1, ease: [0.5, 0, 0.2, 1], delay: 0.35 }))
+      return play(animate(0, 1, { duration: 1.1, ease: [0.5, 0, 0.2, 1], delay: 0.35, onUpdate: draw }))
         .then(() => { el.style.removeProperty("clip-path"); });
     });
   });
   // Driven by hand from one number, so that every property arrives together, exactly at its resting value.
+  holding = false;
   const fly = glyphs.map((g, i) => {
     const from = { size: parseFloat(g.el.style.fontSize), weight: parseFloat(g.el.style.fontWeight), color: g.el.style.color };
     const to = { size: parseFloat(g.rest.fontSize), weight: parseFloat(g.rest.fontWeight), color: g.rest.color };
@@ -124,13 +147,17 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
           // Mixed by the browser: a computed colour may be written any way (a color-mix() comes back as color(srgb …)).
           color: t < 1 ? `color-mix(in srgb, ${to.color} ${t * 100}%, ${from.color})` : to.color,
           textShadow: t < 1 && shadow && shadow !== "none" ? shadow.replace(/(?:rgba?|color)\([^)]*\)/, (c) => `color-mix(in srgb, ${c} ${(1 - t) * 100}%, transparent)`) : "none",
-          translate: `${at(g.x, 0)}px ${at(g.y, 0)}px`, transform: `rotate(${turn * t}deg)`,
+          translate: `${g.x * (1 - t)}px ${g.y * (1 - t)}px`, transform: `rotate(${turn * t}deg)`,
         });
       },
     }));
   });
   await Promise.all(fly);
+  tracking = false;
   if (stopped()) return;
+  // What waits under the title (its buttons, the demo's stage: site.css.ts) rises now that it has landed, however long
+  // the page took to get here.
+  document.documentElement.dataset.opened = "";
   // Where they rest they are drawn as the page draws them: what the motion held, let go of (it held just those values).
   for (const g of glyphs) {
     for (const p of ["font-size", "font-weight", "color", "text-shadow", "translate", "transform", "filter"]) g.el.style.removeProperty(p);
