@@ -585,7 +585,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 }
             }
             GroupLabel(t("android-chat.run.label.account"))
-            SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp) } }) {
+            SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp, it.mark) } }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(v.accountNote, fontSize = 12.sp, color = C.muted)
                 if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warn)
@@ -662,7 +662,7 @@ internal fun AccountList(accounts: List<RunnableProfile>, runtime: String, picke
         PickLine(t("android-chat.run.account.auto"), checked = picked == null, onClick = { onPick(null) })
         accounts.forEach { p ->
             PickLine(p.name, checked = picked == p.id, onClick = { onPick(p.id) },
-                leading = { ProviderMark(p.runtime ?: runtime, p.kind, 18.dp) }, trailing = { QuotaRings(p.quota) })
+                leading = { ProviderMark(p.runtime ?: runtime, p.kind, 18.dp, p.mark) }, trailing = { QuotaRings(p.quota) })
         }
         Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(16.dp))
     }

@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useOverview, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
-import type { MachineLogin } from "../core/shapes.ts";
+import type { MachineLogin, ProviderGroup } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, ChevronRight, More, Plus } from "../icons.tsx";
 import { CHOICES } from "../pages/Accounts.tsx";
@@ -13,7 +13,7 @@ import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
+import { Button, FailedMark, failedIn, Field, GroupLabel, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
 import { useAct } from "../toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -100,7 +100,7 @@ export function ProfileRow({ station, p }: { station: StationView; p: Profile })
     <ListRow onClick={() => app.push(app.at(`/s/${station.id}/settings/accounts/${encodeURIComponent(p.id)}`))}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
-        <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
+        <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)}{p.usesText ? ` · ${p.usesText}` : ""} · {p.modelsText}</span>
         {p.trouble ? <>
           <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}><b>{p.trouble.title}</b> · {p.trouble.detail}</span>
           <span className={`${listsCss.mRowNote} ${partsCss.mLink}`}>{t("web-mobile.profiles.seeFix")}</span>
@@ -124,7 +124,7 @@ export function quotaTrouble(quota: Quota | null | undefined): string | null {
 
 /** What a profile is, in a word: the machine's own login, or its kind of access. */
 export function accessLabel(p: Profile): string {
-  return p.machine ? t("web-mobile.profiles.machineLogin") : ACCESS[p.access.kind].label;
+  return p.machine ? t("web-mobile.profiles.machineLogin") : p.providerName ?? ACCESS[p.access.kind].label;
 }
 
 /** A profile of the station in context, by the page's :id. */
@@ -157,7 +157,7 @@ function ProfilePage({ p }: { p: Profile }) {
         trailing={<NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
-          <ProviderMark runtime={p.runtime} kind={p.access.kind} size={26} />
+          <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
           <span className={partsCss.mGrow}>
             <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
             <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked")}{p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : ""}</span>
@@ -195,9 +195,16 @@ function ProfilePage({ p }: { p: Profile }) {
             <ListCard>
               <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
                 hint: t("web-mobile.profiles.recheckHintFull"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : p.providerName ? `${p.providerName} key` : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
                 <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
               </ListRow>
+              {p.access.endpoint !== undefined && (
+                <ListRow onClick={() => ask(app, { title: t("common.provider.endpoint"), value: p.access.endpoint ?? "", placeholder: "https://", action: t("common.save"),
+                  run: (endpoint) => api.putProfile(p.id, { access: { kind: p.access.kind, endpoint: endpoint.trim() } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
+                  <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("common.provider.endpoint")}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.endpoint}</span></span>
+                  <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
+                </ListRow>
+              )}
             </ListCard>
           </>
         )}
@@ -581,6 +588,11 @@ export function NewProfileScreen() {
   const [choice, setChoice] = useState<Choice>(() => { const k = params.get("kind"); return k && k in CHOICES ? k as Choice : "claude-sub"; });
   const { kind, runtime } = CHOICES[choice];
   const [key, setKey] = useState("");
+  // A key on a listed provider: which one, and its address where it has none of its own.
+  const [providerId, setProviderId] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const groups = overview?.providerGroups ?? [];
+  const chosen = groups.flatMap((g) => g.providers).find((p) => p.id === providerId);
   const [login, setLogin] = useState<string | null>(null);
   const busy = useDoing(["login.new", "profile.add"], { station: station.address });
   const [error, setError] = useState<string | null>(null);
@@ -612,14 +624,35 @@ export function NewProfileScreen() {
             )}
             {overview && machineOffers(overview.machineLogins).length > 0 && <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.orNew")}</b>}
             <ListCard>
-              {(Object.keys(CHOICES) as Choice[]).map((c) => (
+              {(Object.keys(CHOICES) as Choice[]).filter((c) => c !== "api-provider" || groups.length > 0).map((c) => (
                 <PickRow key={c} label={CHOICES[c].title} sub={CHOICES[c].description} checked={choice === c} onClick={() => setChoice(c)}
                   leading={<ProviderMark runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={18} />} />
               ))}
             </ListCard>
-            {KEYED.has(kind) && (
+            {kind === "api-provider" && (
               <>
-                <b className={sheetsCss.mFormLabel}>{kind === "opencode-go" ? "OpenCode Go key" : "API key"}</b>
+                <b className={sheetsCss.mFormLabel}>{t("common.provider.pick")}</b>
+                <ListCard>
+                  <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <PickProvider groups={groups} value={providerId} onPick={setProviderId} /> })}>
+                    {chosen && <ProviderMark runtime="claude" kind="api-provider" mark={chosen.mark} size={18} />}
+                    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                      <span className={listsCss.mRowTitle}>{chosen?.name ?? t("common.provider.pickPlaceholder")}</span>
+                      <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{chosen ? t("common.provider.uses", { uses: chosen.usesText ?? "" }) : t("common.provider.usesHint")}</span>
+                    </span>
+                    <ChevronRight size={16} />
+                  </ListRow>
+                </ListCard>
+                {chosen?.endpointRequired && (
+                  <>
+                    <b className={sheetsCss.mFormLabel}>{t("common.provider.endpoint")}</b>
+                    <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} autoCapitalize="none" value={endpoint} placeholder={chosen.endpointExample ?? "https://"} onChange={(e) => setEndpoint(e.target.value.trim())} />
+                  </>
+                )}
+              </>
+            )}
+            {KEYED.has(kind) && (kind !== "api-provider" || chosen) && (
+              <>
+                <b className={sheetsCss.mFormLabel}>{kind === "opencode-go" ? "OpenCode Go key" : chosen?.keyOptional ? t("common.provider.keyOptional") : "API key"}</b>
                 <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={key} placeholder={t("web-mobile.profiles.keyPlaceholder")} onChange={(e) => setKey(e.target.value.trim())} />
               </>
             )}
@@ -627,8 +660,9 @@ export function NewProfileScreen() {
             {error && <p className={partsCss.mError}>{error}</p>}
             {kind === "subscription"
               ? <Button label={t("web-mobile.profiles.loginTo", { provider })} primary busy={busy} onClick={() => { setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
-              : <Button label={KEYED.has(kind) ? t("web-mobile.profiles.verifyAdd") : t("web-mobile.workspace.addOne")} primary busy={busy} enabled={!KEYED.has(kind) || !!key}
-                  onClick={() => { setError(null); api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }).then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), (e: Error) => setError(e.message)); }} />}
+              : <Button label={KEYED.has(kind) ? t("web-mobile.profiles.verifyAdd") : t("web-mobile.workspace.addOne")} primary busy={busy}
+                  enabled={kind === "api-provider" ? !!chosen && (!!key || !!chosen.keyOptional) && (!chosen.endpointRequired || !!endpoint) : !KEYED.has(kind) || !!key}
+                  onClick={() => { setError(null); api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}), ...(kind === "api-provider" ? { provider: providerId, ...(chosen?.endpointRequired ? { endpoint } : {}) } : {}) } }).then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), (e: Error) => setError(e.message)); }} />}
           </>
         )}
         <div style={{ height: 30 }} />
@@ -637,7 +671,28 @@ export function NewProfileScreen() {
   );
 }
 
-/** The machine's logins no profile is on yet. */
+/** The providers a key can be added for, by group, in a sheet: each with what it can do (the core's words). */
+function PickProvider({ groups, value, onPick }: { groups: ProviderGroup[]; value: string; onPick: (id: string) => void }) {
+  const app = useApp();
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("common.provider.title")} />
+      <div className={sheetsCss.mSheetScroll}>
+        {groups.map((g) => (
+          <div key={g.id}>
+            <div className={partsCss.mPadX18}><GroupLabel>{g.title}</GroupLabel></div>
+            {g.providers.map((p) => (
+              <PickRow key={p.id} label={p.name} sub={p.usesText} checked={p.id === value} onClick={() => { onPick(p.id); app.sheet(null); }}
+                leading={<ProviderMark runtime="claude" kind="api-provider" mark={p.mark} size={18} />} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** The machine's own logins a profile could use now (the core's `offered`). */
 function machineOffers(logins: MachineLogin[] | undefined): MachineLogin[] {
   return (logins ?? []).filter((l) => l.offered);

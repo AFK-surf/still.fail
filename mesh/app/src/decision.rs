@@ -21,6 +21,9 @@ pub struct DecisionConfig {
     pub model: String,
     #[serde(skip)]
     pub api_key: String,
+    /// OpenCode's gateways answer 400 MissingSessionID to a request without `x-opencode-session`: any uuid will do.
+    #[serde(skip)]
+    pub session_header: bool,
     #[serde(default)]
     pub mode: Mode,
     #[serde(default = "threshold")]
@@ -155,6 +158,7 @@ pub async fn decide(config: &DecisionConfig, question: &ChoiceQuestion, state: &
         .redirect(reqwest::redirect::Policy::none()).build()?;
     let mut req = client.post(&config.endpoint).json(&body);
     if !config.api_key.is_empty() { req = req.bearer_auth(&config.api_key); }
+    if config.session_header { let (name, value) = crate::profiles::opencode_session(); req = req.header(name, value); }
     // Do not reflect provider bodies/URLs: they may contain credentials or echoed conversation text.
     let mut response = req.send().await.map_err(|_| anyhow!("decision request failed or timed out"))?;
     if !response.status().is_success() { bail!("decision provider HTTP {}", response.status().as_u16()); }
@@ -171,7 +175,7 @@ pub async fn decide(config: &DecisionConfig, question: &ChoiceQuestion, state: &
 mod tests {
     use super::*;
     fn config(provider: Provider) -> DecisionConfig {
-        DecisionConfig { provider, endpoint:"http://127.0.0.1:1".into(), model:"test".into(), api_key:String::new(), mode:Mode::Enforce, threshold:0.85 }
+        DecisionConfig { provider, endpoint:"http://127.0.0.1:1".into(), model:"test".into(), api_key:String::new(), session_header:false, mode:Mode::Enforce, threshold:0.85 }
     }
     #[test]
     fn native_choices_are_strict_and_uncertainty_is_not_completion() {

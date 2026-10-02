@@ -157,6 +157,7 @@
   "station.preview.noAnswer": "localhost:{port} on this machine isn't answering",
   "station.preview.noAnswerSaying": "localhost:{port} on this machine isn't answering: {error}",
   "station.preview.socketRefused": "localhost:{port} didn't accept this WebSocket ({status})",
+  "station.profile.addressNeeded": "A usable endpoint address (starting with http or https) is required",
   "station.profile.cannotRun": "“{profile}” can't run {runtime}",
   "station.profile.chatgptSubscription": "ChatGPT subscription",
   "station.profile.checkError": "Check failed: {error}",
@@ -171,10 +172,12 @@
   "station.profile.modelOff": "“{profile}” doesn't have {model} turned on",
   "station.profile.modelsStale": "{detail}; can't refresh models now",
   "station.profile.modelsUnreadable": "Can't read {provider}'s models ({status})",
+  "station.profile.noModelList": "{provider} didn't refuse this key but doesn't list its models, so models need to be named by hand",
   "station.profile.notFound": "No such Profile",
   "station.profile.signedIn": "Signed in",
   "station.profile.signedOut": "Not signed in",
   "station.profile.subscriptionBySignIn": "Sign in to add subscriptions",
+  "station.profile.unknownProvider": "Unknown provider",
   "station.profile.works": {
     "one": "Works, 1 model",
     "other": "Works, {n} models"

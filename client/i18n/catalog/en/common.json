@@ -15,5 +15,14 @@
   "common.language": "Language",
   "common.language.system": "System",
   "common.language.zh": "中文",
-  "common.language.en": "English"
+  "common.language.en": "English",
+  "common.provider.title": "API provider",
+  "common.provider.lead": "Pick a provider and enter its API key",
+  "common.provider.pick": "Provider",
+  "common.provider.pickPlaceholder": "Choose a provider",
+  "common.provider.endpoint": "Endpoint",
+  "common.provider.endpointHint": "Your own address, e.g. {example}",
+  "common.provider.keyOptional": "API key (optional)",
+  "common.provider.uses": "Works for: {uses}",
+  "common.provider.usesHint": "Claude Code needs the provider's Anthropic endpoint and Codex its Responses endpoint; one with only chat completions serves automatic decisions"
 }

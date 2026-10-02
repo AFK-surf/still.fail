@@ -43,6 +43,8 @@
 - 归档压缩（archive-disk-cleanup）：只需发布并更新 station。归档先清理可重建产物，再将完整 workspace 写为会话目录内的 workspace.tar.zst，校验并落盘后移除原文件；执行历史（主会话和 Claude 子 agent 的 JSONL）在 station 自有存储中压为 .jsonl.zst 并移除原文件，个人目录中的外部历史不改。没有启动扫描或定时清理，只在归档时处理；归档时仍忙的会话在本轮结束后完成这次归档，后台任务/共享目录仍忙则保留文件；工作区压缩与新轮次串行、归档和恢复用文件锁。恢复/新消息先解压到原路径，再启动 agent；未提交修改、文件权限、符号链接保留，Git worktree 的注册在归档期间加锁防 prune。旧附件从压缩包直接读取，执行历史及用量统计兼容压缩记录。不改 API/数据库，新旧客户端兼容；旧 station 不认识压缩文件，回退 station 前须先用新版本恢复归档。上线验：归档后原 workspace 内容与 JSONL 释放、压缩文件存在；旧附件/历史仍能查看；恢复或直接发新消息后文件与上下文可继续；任务运行时不压缩、失败保留原文件。
 - 自动决策（decision-model）：设置中独立页面，按事项开关并选择模型；首项完成检查，默认关闭。模型从现有 Profile 自动识别，连接凭据复用，不另配账号。新增可选 automaticDecisions 配置/Overview，decision_checks 自动建表；station、core/web、Android 均需更新，旧客户端忽略字段，旧 station 显示升级提示。上线验：开关+模型保存后多端重开保持一致，指定模型误完成被拦截/正常完成放行，记录实时更新并能跳到会话；迁移说明 14 通知旧 agent。
 
+- API 服务商 Profile（api-providers）：新增 access kind `api-provider`（`provider`、`endpoint` 可选字段），按服务商目录里的协议决定跑 Claude Code（Anthropic 接口）、Codex（Responses 接口）或只做自动决策（Chat Completions）；决策探测对 OpenCode 网关带 `x-opencode-session`。station、core/web、Android 都要发。新旧混跑：station 对旧 core 把这类账号的 access.kind 写成 `env`（旧 core 读 overview 时不认识新 kind 会整页报错），新 core 凭 `provider` 认回；旧 station 不给 `apiProviders`，新客户端就不显示「API 服务商」入口。config.json 里已有的账号原样可读；加了 `api-provider` 账号后不要把 station 回退到旧版（旧版读不了这个 kind）。上线后验：加一个 DeepSeek key（只做自动决策）和一个 OpenRouter / OpenCode Zen key，Profile 行写明能跑的运行时，自动决策页出现对应模型；旧 Profile 和 OpenCode Go 照常。
+
 - 安卓完成状态对勾（android-done-check）：需发 Android 包；对话列表和连接页将「做完了」显示为对勾并保留完成原因。仅视图变化，无接口、数据迁移或部署顺序要求。上线后验：完成状态分别带说明、不带说明时均显示对勾，浅色和深色正常。
 - CI 暴露同毫秒轮次排序：turns 最新记录查询增加 rowid 次序，避免极快续跑完成后读到前一轮 rate_limit 再误续跑；不改表结构，旧数据直接可读。需更新 station；固定同毫秒的回归测试和完整 station 测试通过后发布。
 

@@ -15,5 +15,14 @@
   "common.language": "语言",
   "common.language.system": "跟随系统",
   "common.language.zh": "中文",
-  "common.language.en": "English"
+  "common.language.en": "English",
+  "common.provider.title": "API 服务商",
+  "common.provider.lead": "选一个服务商，填它的 API key",
+  "common.provider.pick": "服务商",
+  "common.provider.pickPlaceholder": "选择服务商",
+  "common.provider.endpoint": "接口地址",
+  "common.provider.endpointHint": "填你自己的地址，例如 {example}",
+  "common.provider.keyOptional": "API key（可不填）",
+  "common.provider.uses": "可用于：{uses}",
+  "common.provider.usesHint": "Claude Code 要服务商的 Anthropic 接口，Codex 要 Responses 接口；只有聊天补全接口的，用于自动决策"
 }

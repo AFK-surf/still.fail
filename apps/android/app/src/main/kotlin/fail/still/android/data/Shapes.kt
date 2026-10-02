@@ -14,9 +14,13 @@ typealias AccessKind = String
 
 @Serializable
 data class Access (
-	/// subscription | opencode-go | anthropic-api | env
+	/// subscription | opencode-go | anthropic-api | env | api-provider
 	val kind: AccessKind,
-	val key: String
+	val key: String,
+	/// The provider of an `api-provider` (providers.rs); an older core reads such a profile as `env` and drops this.
+	val provider: String? = null,
+	/// Its address, where the provider has none of its own (Azure, Cloudflare, custom).
+	val endpoint: String? = null
 )
 
 /// What an agent at work does now (activity.rs): `key` names the thing (a step, or where the turn stands), `text` says
@@ -72,6 +76,27 @@ data class AgentWait (
 	val seconds: Long? = null,
 	/// What it waits for in words, as its activity line says it (在等：CI 跑完; 等待中 from a station that does not say).
 	val text: String? = null
+)
+
+/// A provider a key can be added for (providers.rs).
+@Serializable
+data class ApiProvider (
+	val id: String,
+	val name: String,
+	/// maker | host | own
+	val group: String,
+	/// The mark of its maker; none: the generic one.
+	val mark: String? = null,
+	/// Its address is the person's own: asked for with the key.
+	val endpointRequired: Boolean? = null,
+	/// An example of such an address.
+	val endpointExample: String? = null,
+	/// Works without a key.
+	val keyOptional: Boolean? = null,
+	/// What a profile on it can do: `claude`, `codex`, `decision`.
+	val uses: List<String>? = null,
+	/// What the core says of it: what it can do, in words.
+	val usesText: String? = null
 )
 
 /// A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):
@@ -256,6 +281,8 @@ data class RunnableProfile (
 	val current: Boolean,
 	val spent: Spent? = null,
 	val kind: AccessKind? = null,
+	/// The mark of its provider's maker (a key on a listed provider); none: the kind's own.
+	val mark: String? = null,
 	val runtime: RuntimeKind? = null,
 	val quota: Quota? = null,
 	/// What is left of its allowance, in a few words (a core from before it says nothing).
@@ -739,7 +766,15 @@ data class Profile (
 	/// How many of the models it could run are enabled, in words.
 	val modelsText: String,
 	/// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
-	val available: List<String>? = null
+	val available: List<String>? = null,
+	/// What it can do: `claude`, `codex`, `decision` (the automatic decisions). The core works it out from where its
+	/// provider speaks and what its check found.
+	val uses: List<String>? = null,
+	/// What it can do, in words (Claude Code · Codex · 自动决策).
+	val usesText: String? = null,
+	/// The provider of a key from the list of API providers, and the mark of its maker (none: the generic one).
+	val providerName: String? = null,
+	val providerMark: String? = null
 )
 
 @Serializable
@@ -2198,6 +2233,14 @@ data class PendingLogin (
 	val error: String? = null
 )
 
+/// Providers of one group, as the picker lists them.
+@Serializable
+data class ProviderGroup (
+	val id: String,
+	val title: String,
+	val providers: List<ApiProvider>
+)
+
 /// A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
 /// runtime (`claude`, `codex`).
 @Serializable
@@ -2261,6 +2304,11 @@ data class Overview (
 	val logins: List<PendingLogin>,
 	/// This machine's own logins (none from a station older than them).
 	val machineLogins: List<MachineLogin>? = null,
+	/// The providers a key can be added for (none from a station older than them: they are then not offered), as the
+	/// station lists them.
+	val apiProviders: List<ApiProvider>? = null,
+	/// The same, grouped for the picker (what the core makes of them).
+	val providerGroups: List<ProviderGroup>? = null,
 	/// The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them).
 	val updates: List<SoftwareVersion>? = null,
 	/// Its agents' processes, in a line.

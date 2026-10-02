@@ -424,7 +424,7 @@ export function RunSettingsScreen() {
           </div>
         </>}
         <GroupLabel>{t("web-mobile.history.account")}</GroupLabel>
-        <SettingRow onClick={() => setList("account")} leading={(() => { const p = v.accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? s.runtime} kind={p.kind} size={18} /> : null; })()}>
+        <SettingRow onClick={() => setList("account")} leading={(() => { const p = v.accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? s.runtime} kind={p.kind} mark={p.mark} size={18} /> : null; })()}>
           <span className={historyCss.mSettingMain}>{v.accountText}</span>
           <small className={partsCss.mMuted}>{v.accountNote}</small>
           {v.accountWarn && <small className={css.mWarn}>{t("web-mobile.history.accountWarn")}</small>}
@@ -484,7 +484,7 @@ export function AccountList({ accounts, runtime, picked, onPick }: { accounts: R
       {/* An account its provider refuses says so (a red dot, 被停用) where its allowance would be. */}
       {accounts.map((p) => (
         <PickLine key={p.id} label={p.name} checked={picked === p.id} onClick={() => onPick(p.id)}
-          leading={<ProviderMark runtime={p.runtime ?? runtime} kind={p.kind} size={18} />}
+          leading={<ProviderMark runtime={p.runtime ?? runtime} kind={p.kind} mark={p.mark} size={18} />}
           trailing={p.quota?.state === "blocked" ? <Tip label={p.quota.detail}><span className={settingsCss.mRowStatus}><span className={settingsCss.mPresence} data-state="error" />{t("web-mobile.history.blocked")}</span></Tip> : <QuotaRings quota={p.quota} />} />
       ))}
     </div>

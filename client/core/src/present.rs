@@ -538,6 +538,7 @@ pub fn profile(p: &mut Value) {
     if !p.is_object() {
         return;
     }
+    access_kind(p);
     // An account its provider refuses (suspended, on hold) says so first, whatever its last check found.
     let blocked = p.get("quota").and_then(|q| q.get("state")).and_then(Value::as_str) == Some("blocked");
     let (text, tone) = if blocked { (t!("core-views.present.profile.blocked"), "red") } else { let (text, tone) = format::check_text(p.get("check").unwrap_or(&Value::Null)); (text.to_string(), tone) };
@@ -567,11 +568,83 @@ pub fn profile(p: &mut Value) {
     let names: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
         .chain(p.get("model").into_iter())
         .filter_map(Value::as_str).filter(|m| !m.is_empty()).map(|m| (m.to_string(), json!(stillfail_shapes::model::name(m)))).collect();
+    let (uses, provider) = uses(p);
+    p["uses"] = json!(uses);
+    // Said where it is not plain from the runtime marks: a key on a provider, or what the automatic decisions can use.
+    let plain = matches!(p["access"]["kind"].as_str(), Some("subscription" | "env")) && !uses.contains(&"decision");
+    p["usesText"] = json!(if plain { String::new() } else { uses_text(&uses) });
+    if let Some((name, mark)) = provider {
+        p["providerName"] = json!(name);
+        p["providerMark"] = mark.map(Value::from).unwrap_or(Value::Null);
+    }
     p["makers"] = Value::Object(makers);
     p["names"] = Value::Object(names);
     p["series"] = by_series;
     p["modelsText"] = json!(text);
     p["available"] = json!(available);
+}
+
+/// A station says `env` of a profile on an API provider (an older core would refuse the whole overview at a kind it does
+/// not know); with the provider beside it, it is `api-provider` here.
+fn access_kind(p: &mut Value) {
+    if p["access"]["kind"] == "env" && p["access"]["provider"].is_string() {
+        p["access"]["kind"] = json!("api-provider");
+    }
+}
+
+/// What a profile can do (`claude`, `codex`, `decision`) and, for a key on a listed provider, its name and mark. The
+/// runtimes are the station's (what it set the profile up for); the automatic decisions are where the provider has
+/// chat completions, or what its check verified.
+fn uses(p: &Value) -> (Vec<&'static str>, Option<(String, Option<String>)>) {
+    use stillfail_shapes::{AccessKind, providers};
+    let runs = |r: &str| p["runtimes"].as_array().is_some_and(|rs| rs.iter().any(|x| x == r));
+    let kind = p["access"]["kind"].as_str().and_then(|k| serde_json::from_value::<AccessKind>(json!(k)).ok());
+    let (source, at) = match kind {
+        Some(AccessKind::ApiProvider) => {
+            let source = p["access"]["provider"].as_str().and_then(providers::find);
+            (source, source.and_then(|s| providers::endpoints(s, p["access"]["endpoint"].as_str())))
+        }
+        Some(kind @ (AccessKind::OpencodeGo | AccessKind::AnthropicApi)) => {
+            let source = providers::of_kind(kind);
+            (source, source.and_then(|s| providers::endpoints(s, None)))
+        }
+        _ => (None, None),
+    };
+    let decision = at.as_ref().is_some_and(|at| at.chat.is_some()) || p["check"]["decision"]["state"] == "ready";
+    let uses = [(runs("claude"), "claude"), (runs("codex"), "codex"), (decision, "decision")].into_iter().filter(|(on, _)| *on).map(|(_, id)| id).collect();
+    let provider = source.filter(|_| kind == Some(AccessKind::ApiProvider)).map(|s| (s.name.to_string(), s.mark.map(String::from)));
+    (uses, provider)
+}
+
+fn uses_text(uses: &[&str]) -> String {
+    uses.iter().map(|u| match *u {
+        "claude" => t!("core-views.present.uses.claude"),
+        "codex" => t!("core-views.present.uses.codex"),
+        _ => t!("core-views.present.uses.decision"),
+    }).collect::<Vec<_>>().join(" · ")
+}
+
+/// The providers a key can be added for, by group, each with what it can do in words; none from a station older than them.
+fn provider_groups(value: &mut Value) {
+    let Some(list) = value.get_mut("apiProviders").and_then(Value::as_array_mut) else { return };
+    let mut groups: Vec<(String, Vec<Value>)> = Vec::new();
+    for p in list.iter_mut() {
+        let uses: Vec<&str> = p["uses"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        p["usesText"] = json!(uses_text(&uses));
+        let group = p["group"].as_str().unwrap_or("host").to_string();
+        match groups.iter_mut().find(|(g, _)| *g == group) {
+            Some((_, members)) => members.push(p.clone()),
+            None => groups.push((group, vec![p.clone()])),
+        }
+    }
+    let title = |id: &str| match id {
+        "maker" => t!("core-views.present.provider_group.maker"),
+        "own" => t!("core-views.present.provider_group.own"),
+        _ => t!("core-views.present.provider_group.host"),
+    };
+    let order = |id: &str| ["maker", "host", "own"].iter().position(|g| *g == id).unwrap_or(9);
+    groups.sort_by_key(|(id, _)| order(id));
+    value["providerGroups"] = Value::Array(groups.into_iter().map(|(id, providers)| json!({ "id": id, "title": title(&id), "providers": providers })).collect());
 }
 
 /// Use provider/check states, never guesses from an error string, to offer a safe next step.
@@ -594,7 +667,7 @@ fn profile_trouble(p: &Value) -> Value {
         match p["access"]["kind"].as_str() {
             Some("subscription") if p["machine"] != true && check["state"] == "login" =>
                 return issue(&title, why, t!("core-views.present.trouble.login_next"), "login", t!("core-views.present.trouble.login_label")),
-            Some("anthropic-api" | "opencode-go") =>
+            Some("anthropic-api" | "opencode-go" | "api-provider") =>
                 return issue(&title, why, t!("core-views.present.trouble.key_next"), "key", t!("core-views.present.trouble.key_label")),
             Some("env") =>
                 return issue(&title, why, t!("core-views.present.trouble.env_next"), "env", t!("core-views.present.trouble.env_label")),
@@ -822,6 +895,7 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
             if let Some(station) = value.get_mut("updates").and_then(Value::as_array_mut).into_iter().flatten().find(|u| u["id"] == "station") {
                 station["name"] = json!("Station");
             }
+            provider_groups(value);
             if let Some(profiles) = value.get_mut("profiles").and_then(Value::as_array_mut) {
                 profiles.iter_mut().for_each(profile);
                 // Both mobile clients open the settings count onto the same, actionable profiles first.
@@ -943,8 +1017,45 @@ mod tests {
     }
 
     #[test]
+    fn a_profile_says_what_it_can_do_from_where_its_provider_speaks() {
+        let text = |mut p: Value| { profile(&mut p); (p["access"]["kind"].as_str().unwrap_or("").to_string(), p["usesText"].as_str().unwrap_or("").to_string()) };
+        // A station says `env` of a key on a listed provider (an older core would refuse the overview otherwise).
+        assert_eq!(text(json!({"runtimes": [], "access": {"kind": "env", "provider": "deepseek"}})), ("api-provider".into(), "自动决策".into()));
+        assert_eq!(text(json!({"runtimes": ["claude"], "access": {"kind": "api-provider", "provider": "openrouter"}})), ("api-provider".into(), "Claude Code · 自动决策".into()));
+        assert_eq!(text(json!({"runtimes": ["codex"], "access": {"kind": "api-provider", "provider": "azure-openai", "endpoint": "https://x.openai.azure.com/openai/v1"}})).1, "Codex");
+        // The ones from before the list: OpenCode Go has chat completions, Anthropic's API has none.
+        assert_eq!(text(json!({"runtimes": ["claude", "codex"], "access": {"kind": "opencode-go"}})).1, "Claude Code · Codex · 自动决策");
+        assert_eq!(text(json!({"runtimes": ["claude"], "access": {"kind": "anthropic-api"}})).1, "Claude Code");
+        // A plain env profile is the runtime it was made for, and gains the decisions only when its probe verified them.
+        assert_eq!(text(json!({"runtimes": ["codex"], "access": {"kind": "env"}})), ("env".into(), "".into()), "its runtime mark says it");
+        assert_eq!(text(json!({"runtimes": ["codex"], "access": {"kind": "env"}, "check": {"decision": {"state": "ready"}}})).1, "Codex · 自动决策");
+        let mut p = json!({"runtimes": [], "access": {"kind": "env", "provider": "xiaomi"}, "check": {"state": "failed"}});
+        profile(&mut p);
+        assert_eq!((p["providerName"].as_str(), p["trouble"]["action"].as_str()), (Some("Xiaomi MiMo"), Some("key")));
+    }
+
+    #[test]
+    fn the_providers_are_grouped_for_the_picker_with_what_each_can_do() {
+        let mut o = json!({"apiProviders": [
+            {"id": "deepseek", "name": "DeepSeek", "group": "maker", "uses": ["decision"]},
+            {"id": "custom", "name": "Custom", "group": "own", "uses": ["claude", "codex", "decision"]},
+            {"id": "openrouter", "name": "OpenRouter", "group": "host", "uses": ["claude", "decision"]},
+            {"id": "openai", "name": "OpenAI", "group": "maker", "uses": ["codex"]},
+        ]});
+        provider_groups(&mut o);
+        let groups: Vec<(&str, Vec<&str>)> = o["providerGroups"].as_array().unwrap().iter()
+            .map(|g| (g["id"].as_str().unwrap(), g["providers"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect())).collect();
+        assert_eq!(groups, [("maker", vec!["deepseek", "openai"]), ("host", vec!["openrouter"]), ("own", vec!["custom"])]);
+        assert_eq!(o["providerGroups"][0]["providers"][0]["usesText"], "自动决策");
+        // A station from before them lists none: nothing is offered.
+        let mut old = json!({});
+        provider_groups(&mut old);
+        assert!(old.get("providerGroups").is_none());
+    }
+
+    #[test]
     fn profile_recovery_offers_only_the_editor_for_its_access_kind() {
-        for (kind, action) in [("anthropic-api", "key"), ("opencode-go", "key"), ("env", "env"), ("subscription", "check")] {
+        for (kind, action) in [("anthropic-api", "key"), ("opencode-go", "key"), ("api-provider", "key"), ("env", "env"), ("subscription", "check")] {
             let p = json!({"access": {"kind": kind}, "check": {"state": "failed", "detail": "timeout"}});
             let issue = profile_trouble(&p);
             assert_eq!(issue["action"], action);

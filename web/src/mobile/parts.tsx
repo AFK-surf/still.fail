@@ -3,7 +3,7 @@
 // or an sp a pixel here.
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
-import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
+import { Check, ChevronLeft, Plug, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
 import { QuotaBars } from "../components.tsx";
@@ -116,14 +116,16 @@ export function QuotaRings({ quota }: { quota?: Quota | undefined }) {
 }
 
 /** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
-export function ProviderMark({ runtime, kind, size = 16 }: { runtime: string; kind?: string | undefined; size?: number }) {
-  if (kind === "opencode-go") {
+export function ProviderMark({ runtime, kind, mark, size = 16 }: { runtime: string; kind?: string | undefined; mark?: string | null | undefined; size?: number }) {
+  if (kind === "opencode-go" || mark === "opencode") {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="m-provider">
         <rect x="6" y="4" width="12" height="16" fill="none" stroke="var(--m-ink)" strokeWidth="2.4" />
       </svg>
     );
   }
+  // A key on a listed provider: its maker's mark, or the generic plug where there is none.
+  if (kind === "api-provider") return mark ? <MakerIcon maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
   const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" };
   return <MakerIcon maker={maker} runtime={runtime} size={size} />;
 }

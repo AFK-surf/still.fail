@@ -7,6 +7,7 @@
 //! (client/core/src/present.rs, format.rs, views.rs, history.rs, activity.rs).
 
 pub mod model;
+pub mod providers;
 pub mod reasoning;
 
 use std::collections::HashMap;
@@ -35,6 +36,9 @@ pub enum AccessKind {
     OpencodeGo,
     AnthropicApi,
     Env,
+    /// A key for one of the providers in providers.rs (`Access.provider`). A station says `env` of it where an older
+    /// core would read the overview (the core takes it back by `provider`), so an older client stays whole.
+    ApiProvider,
 }
 
 /// How a connect's conversations become sessions.
@@ -745,12 +749,17 @@ pub struct EnvVar {
 }
 
 #[typeshare]
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Access {
-    /// subscription | opencode-go | anthropic-api | env
+    /// subscription | opencode-go | anthropic-api | env | api-provider
     pub kind: AccessKind,
     pub key: String,
+    /// The provider of an `api-provider` (providers.rs); an older core reads such a profile as `env` and drops this.
+    pub provider: Option<String>,
+    /// Its address, where the provider has none of its own (Azure, Cloudflare, custom).
+    pub endpoint: Option<String>,
 }
 
 #[typeshare]
@@ -900,6 +909,16 @@ pub struct Profile {
     /// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
     #[serde(default)]
     pub available: Vec<String>,
+    /// What it can do: `claude`, `codex`, `decision` (the automatic decisions). The core works it out from where its
+    /// provider speaks and what its check found.
+    #[serde(default)]
+    pub uses: Vec<String>,
+    /// What it can do, in words (Claude Code · Codex · 自动决策).
+    #[serde(default)]
+    pub uses_text: String,
+    /// The provider of a key from the list of API providers, and the mark of its maker (none: the generic one).
+    pub provider_name: Option<String>,
+    pub provider_mark: Option<String>,
 }
 
 #[typeshare]
@@ -1132,6 +1151,44 @@ pub struct SoftwareVersion {
     pub checked_at: Option<i64>,
 }
 
+/// A provider a key can be added for (providers.rs).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiProvider {
+    pub id: String,
+    pub name: String,
+    /// maker | host | own
+    pub group: String,
+    /// The mark of its maker; none: the generic one.
+    pub mark: Option<String>,
+    /// Its address is the person's own: asked for with the key.
+    #[serde(default)]
+    pub endpoint_required: bool,
+    /// An example of such an address.
+    pub endpoint_example: Option<String>,
+    /// Works without a key.
+    #[serde(default)]
+    pub key_optional: bool,
+    /// What a profile on it can do: `claude`, `codex`, `decision`.
+    #[serde(default)]
+    pub uses: Vec<String>,
+    /// What the core says of it: what it can do, in words.
+    #[serde(default)]
+    pub uses_text: String,
+}
+
+/// Providers of one group, as the picker lists them.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderGroup {
+    pub id: String,
+    pub title: String,
+    pub providers: Vec<ApiProvider>,
+}
+
 /// A station's overview, with what the clients show of its connects and profiles.
 #[typeshare]
 #[skip_serializing_none]
@@ -1154,6 +1211,13 @@ pub struct Overview {
     /// This machine's own logins (none from a station older than them).
     #[serde(default)]
     pub machine_logins: Vec<MachineLogin>,
+    /// The providers a key can be added for (none from a station older than them: they are then not offered), as the
+    /// station lists them.
+    #[serde(default)]
+    pub api_providers: Vec<ApiProvider>,
+    /// The same, grouped for the picker (what the core makes of them).
+    #[serde(default)]
+    pub provider_groups: Vec<ProviderGroup>,
     /// The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them).
     #[serde(default)]
     pub updates: Vec<SoftwareVersion>,
@@ -2321,6 +2385,8 @@ pub struct RunnableProfile {
     pub current: bool,
     pub spent: Option<Spent>,
     pub kind: Option<AccessKind>,
+    /// The mark of its provider's maker (a key on a listed provider); none: the kind's own.
+    pub mark: Option<String>,
     pub runtime: Option<RuntimeKind>,
     pub quota: Option<Quota>,
     /// What is left of its allowance, in a few words (a core from before it says nothing).

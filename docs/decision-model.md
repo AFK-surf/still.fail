@@ -4,9 +4,9 @@
 
 模型候选来自现有 Profile 的能力发现；不另填地址、key，不手工绑定 Profile。相同模型可由多个健康 Profile 提供，临时连接失败时自动换另一个支持该模型的 Profile，不擅自换成另一个模型。配置只保存 `automaticDecisions.completion.{enabled,model}`，凭据始终由 Profile 管理。
 
-station 启动、Profile 修改/检查以及自动决策页「刷新模型」都会识别能力。合成探针验证原生 Jev 概率或关闭 thinking 的单 token logprobs。名称与模型目录仅用于排序（Jev、Luna、小模型优先），不能作为可用证据；最多探测八个候选、25 秒。普通模型用 Chat Completions；DeepSeek 发送 thinking disabled，OpenAI 发送 reasoning_effort none。不把生成的“置信度”当 logits。
+station 启动、Profile 修改/检查以及自动决策页「刷新模型」都会识别能力。合成探针验证原生 Jev 概率或关闭 thinking 的单 token logprobs。名称仅用于排序，不能作为可用证据：原生 Jev 优先，然后是不思考的小模型（qwen 的 flash、deepseek 的 flash，再是其他 flash/mini/nano/lite），其余模型靠后，GLM 这类无法关闭 thinking 的最后；最多探测八个候选、25 秒。普通模型用 Chat Completions；DeepSeek 发送 thinking disabled，其余发送 reasoning_effort none。OpenCode / OpenCode Go 的网关对每个请求都要求 `x-opencode-session: <任意 uuid>`，缺了所有模型都回 400 MissingSessionID，探测和真实决策请求都会带上。在 OpenCode Go 网关实测：qwen3.8-flash、qwen3.8-max、qwen3.7-max、qwen3.7-plus 直接可用；deepseek-flash、deepseek-v4.1-flash、deepseek-v4-pro 要 thinking disabled 才有 logprobs；glm-5.x 关不掉 thinking；gpt-6-luna、grok 等在 Chat Completions 上回 ModelProtocolUnsupported，探测不通过即不会被选中。不把生成的“置信度”当 logits。
 
-连接来自 OpenCode Go Profile，或 Codex Profile 的既有环境变量、config.toml provider、API-key 登录。Jev 复用 Profile 的 TYPESAFE_API_KEY / JEV_API_KEY 与可选 TYPESAFE_BASE_URL；普通 API 复用既有 base_url/env_key 或 OPENAI_BASE_URL/OPENAI_API_KEY。不把订阅 OAuth token 当 API key；当前没有已验证的 Codex app-server logprobs 通路，自定义 headers 和其它厂商协议尚未适配。
+连接来自 API 服务商 Profile（OpenCode Go 与「API 服务商」里的任何一个：取该服务商目录里的 chat_completions 接口和 Profile 保存的 key；只有 Responses / Anthropic 接口的服务商，如 OpenAI、xAI、Azure OpenAI，没有可用的 Chat Completions 接口，不能做自动决策），或 Codex Profile 的既有环境变量、config.toml provider、API-key 登录。Jev 复用 Profile 的 TYPESAFE_API_KEY / JEV_API_KEY 与可选 TYPESAFE_BASE_URL；普通 API 复用既有 base_url/env_key 或 OPENAI_BASE_URL/OPENAI_API_KEY。不把订阅 OAuth token 当 API key；当前没有已验证的 Codex app-server logprobs 通路，自定义 headers 和其它厂商协议尚未适配。
 
 规则启用后，指定模型不可用、证据不足或判断尚未完成，都不会冒充完成；在发帖、上传附件和结束状态落库前返回工具错误。没有启用规则时保持既有行为。检查期间设置或会话改变会丢弃旧结果。每次结果进入 decision_checks，页面实时显示最近 30 次结果及对应会话链接；审计不存聊天正文或凭据。
 

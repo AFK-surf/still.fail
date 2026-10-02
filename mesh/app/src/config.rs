@@ -15,7 +15,7 @@ use stillfail_shapes::{AccessKind, ConnectMode, RuntimeKind};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::profiles::{access_env, access_kinds, keyed, runtimes_of};
+use crate::profiles::{access_env, access_kinds, needs_key, runtimes_for};
 
 pub const RUNTIMES: [RuntimeKind; 2] = [RuntimeKind::Claude, RuntimeKind::Codex];
 
@@ -188,6 +188,11 @@ pub struct RawProfileAccess {
     pub kind: AccessKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
+    /// Of `api-provider`: which provider (stillfail_shapes::providers) and, for one at the person's own address, where.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
 }
 
 /// A Slack app configuration token, a person's own (`by`), for one Slack workspace: the station makes and edits apps there.
@@ -265,6 +270,9 @@ pub struct Profile {
     pub access_kind: AccessKind,
     /// Set for keyed kinds.
     pub key: String,
+    /// Of an `api-provider`: its provider's id (stillfail_shapes::providers) and, where the address is the person's, it.
+    pub provider: Option<String>,
+    pub endpoint: Option<String>,
     /// The runtimes' config home: CLAUDE_CONFIG_DIR and CODEX_HOME (their files do not overlap).
     pub home: PathBuf,
     /// The environment for this profile's processes, by runtime: what the access kind needs there plus `custom_env`.
@@ -424,9 +432,20 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
             bail!("profile {}: home is required", p.id);
         }
         let kind = p.access.as_ref().map(|a| a.kind).unwrap_or(AccessKind::Env);
-        let runtimes = runtimes_of(kind, p.runtime);
+        let runtimes = runtimes_for(p.access.as_ref(), p.runtime);
         let kind_name = serde_json::to_value(kind)?.as_str().unwrap_or_default().to_string();
-        if runtimes.is_empty() {
+        let provider = p.access.as_ref().and_then(|a| a.provider.clone()).filter(|v| !v.is_empty());
+        let endpoint = p.access.as_ref().and_then(|a| a.endpoint.as_deref()).and_then(stillfail_shapes::providers::clean_endpoint);
+        if kind == AccessKind::ApiProvider {
+            // Which runtimes it runs follows from its provider; one that runs neither still serves the automatic
+            // decisions, so it has none and that is no mistake.
+            let Some(source) = provider.as_deref().and_then(stillfail_shapes::providers::find) else {
+                bail!("profile {}: api-provider needs a known provider", p.id);
+            };
+            if stillfail_shapes::providers::endpoints(source, endpoint.as_deref()).is_none() {
+                bail!("profile {}: {} needs an endpoint address", p.id, source.name);
+            }
+        } else if runtimes.is_empty() {
             bail!("profile {}: {kind_name} needs a runtime (claude or codex)", p.id);
         }
         if !runtimes.iter().all(|r| access_kinds(*r).contains(&kind)) {
@@ -434,14 +453,14 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
             bail!("profile {}: {} cannot use access {kind_name}", p.id, names.join("/"));
         }
         let key = p.access.as_ref().and_then(|a| a.key.as_deref()).unwrap_or("").trim().to_string();
-        if keyed(kind) && key.is_empty() {
+        if needs_key(kind, provider.as_deref()) && key.is_empty() {
             bail!("profile {}: access {kind_name} needs a key", p.id);
         }
         let custom_env = p.env.clone().unwrap_or_default();
         let envs = runtimes
             .iter()
             .map(|r| {
-                let mut env = access_env(*r, kind, &key, p.model.as_deref());
+                let mut env = access_env(*r, kind, &key, p.model.as_deref(), provider.as_deref(), endpoint.as_deref());
                 env.extend(custom_env.clone());
                 (runtime_name(*r), env)
             })
@@ -457,10 +476,13 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
         profiles.push(Profile {
             id: p.id.clone(),
             name: p.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(&p.id).to_string(),
-            runtime: runtimes[0],
+            // One that runs neither runtime (a provider of chat completions only) is Claude's in name.
+            runtime: runtimes.first().copied().unwrap_or(RuntimeKind::Claude),
             runtimes,
             access_kind: kind,
             key,
+            provider,
+            endpoint,
             home: under(data_dir, &p.home),
             envs,
             custom_env,

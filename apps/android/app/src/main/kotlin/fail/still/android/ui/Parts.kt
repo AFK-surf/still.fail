@@ -358,13 +358,18 @@ fun QuotaDials(quota: fail.still.android.data.Quota?, modifier: Modifier = Modif
 
 /** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
 @Composable
-fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp) {
-    if (kind == "opencode-go") {
+fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp, mark: String? = null) {
+    if (kind == "opencode-go" || mark == "opencode") {
         val ink = C.ink
         Canvas(Modifier.size(size)) {
             val u = this.size.width / 24f
             drawRect(ink, Offset(6 * u, 4 * u), Size(12 * u, 16 * u), style = Stroke(2.4f * u))
         }
+        return
+    }
+    // A key on a listed provider: its maker's mark, or the generic plug where there is none.
+    if (kind == "api-provider") {
+        if (mark != null && mark in MAKER_MARKS) MakerIcon(Maker(mark, mark), runtime, size) else IconIn(Icons.Plug, size, C.ink)
         return
     }
     MakerIcon(if (runtime == "claude" || kind == "anthropic-api") Maker("anthropic", "Anthropic") else Maker("openai", "OpenAI"), runtime, size)

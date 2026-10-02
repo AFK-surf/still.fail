@@ -6,14 +6,14 @@ import { shortcutOf, useKeymap, type Action } from "./keymap.ts";
 import { useBackClose } from "./backClose.ts";
 import { setPrefs, usePrefs } from "./prefs.ts";
 import type { Badge, Maker, Stamp } from "./api.ts";
-import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Info, More, Sliders } from "./icons.tsx";
+import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Info, More, Plug, Sliders } from "./icons.tsx";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
 } from "radix-ui";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router";
-import { forwardRef, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, Fragment, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./ui.css.ts";
@@ -192,10 +192,16 @@ const NONE = "__none__";
 /** A dropdown of choices. An option with value "" is allowed and stands for "not set". */
 export function Select({ value, onChange, options, id, placeholder, disabled, label }: {
   value: string; onChange(value: string): void; id?: string; placeholder?: string; disabled?: boolean | undefined; label?: string;
-  options: { value: string; label: ReactNode; hint?: ReactNode }[];
+  /** `group`: a heading over the run of options that share it. */
+  options: { value: string; label: ReactNode; hint?: ReactNode; group?: string }[];
 }) {
   // Radix reserves "" for "no selection", so an empty option travels under a stand-in value.
   const encode = (v: string) => (v === "" ? NONE : v);
+  const runs = options.reduce<{ group: string | undefined; items: typeof options }[]>((acc, o) => {
+    const last = acc[acc.length - 1];
+    if (last && last.group === o.group) last.items.push(o); else acc.push({ group: o.group, items: [o] });
+    return acc;
+  }, []);
   return (
     <RSelect.Root value={encode(value)} onValueChange={(v) => onChange(v === NONE ? "" : v)} disabled={disabled ?? false}>
       <RSelect.Trigger id={id} className={css.select} aria-label={label}>
@@ -205,13 +211,16 @@ export function Select({ value, onChange, options, id, placeholder, disabled, la
       <RSelect.Portal>
         <RSelect.Content className={`${controlsCss.popover} ${css.selectContent}`} position="popper" sideOffset={4} collisionPadding={8}>
           <RSelect.Viewport className={css.selectViewport}>
-            {options.map((o) => (
-              <RSelect.Item key={o.value} value={encode(o.value)} className={`${controlsCss.menuItem} ${css.selectItem}`}>
-                <RSelect.ItemText>{o.label}</RSelect.ItemText>
-                {o.hint && <span className={css.selectHint}>{o.hint}</span>}
-                <RSelect.ItemIndicator className={css.selectCheck}><Check {...ICON} size={14} /></RSelect.ItemIndicator>
-              </RSelect.Item>
-            ))}
+            {runs.map((run, i) => {
+              const items = run.items.map((o) => (
+                <RSelect.Item key={o.value} value={encode(o.value)} className={`${controlsCss.menuItem} ${css.selectItem}`}>
+                  <RSelect.ItemText>{o.label}</RSelect.ItemText>
+                  {o.hint && <span className={css.selectHint}>{o.hint}</span>}
+                  <RSelect.ItemIndicator className={css.selectCheck}><Check {...ICON} size={14} /></RSelect.ItemIndicator>
+                </RSelect.Item>
+              ));
+              return run.group ? <RSelect.Group key={i}><RSelect.Label className={controlsCss.menuLabel}>{run.group}</RSelect.Label>{items}</RSelect.Group> : <Fragment key={i}>{items}</Fragment>;
+            })}
           </RSelect.Viewport>
         </RSelect.Content>
       </RSelect.Portal>
@@ -575,9 +584,11 @@ function OpenCodeMark({ size = 16 }: { size?: number }) {
 }
 
 /** Whose service a profile runs on: Anthropic or OpenAI for a subscription or an API key, OpenCode for OpenCode Go. */
-export function ProviderLogo({ runtime, kind, size = 16 }: { runtime: "claude" | "codex"; kind: string; size?: number }) {
-  if (kind === "opencode-go") return <OpenCodeMark size={size} />;
+export function ProviderLogo({ runtime, kind, mark, size = 16 }: { runtime: "claude" | "codex"; kind: string; mark?: string | null | undefined; size?: number }) {
+  if (kind === "opencode-go" || mark === "opencode") return <OpenCodeMark size={size} />;
   if (kind === "env") return <Sliders size={size} strokeWidth={1.7} aria-hidden="true" />;
+  // A key on a listed provider: its maker's mark, or the generic plug where there is none.
+  if (kind === "api-provider") return mark ? <ModelLogo maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
   return <ModelLogo maker={runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" }} runtime={runtime} size={size} />;
 }
 

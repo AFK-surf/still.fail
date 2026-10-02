@@ -120,8 +120,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun newLoginCode(id: String, code: String) { ops.loginCode(id = id) { this.code = code } }
     suspend fun dropLogin(id: String) { ops.loginDrop(id = id) }
     /** A keyed (or variables) profile, made only once its key is checked; answers its id. */
-    suspend fun addProfile(runtime: String?, kind: String, key: String?): String = ops.profileAdd() { if (runtime != null) this.runtime = runtime
-        this.access = buildJsonObject { put("kind", kind); if (key != null) put("key", key) } }.jsonObject["id"]!!.jsonPrimitive.content
+    suspend fun addProfile(runtime: String?, kind: String, key: String?, provider: String? = null, endpoint: String? = null): String = ops.profileAdd() { if (runtime != null) this.runtime = runtime
+        this.access = buildJsonObject { put("kind", kind); if (key != null) put("key", key); if (provider != null) put("provider", provider); if (endpoint != null) put("endpoint", endpoint) } }.jsonObject["id"]!!.jsonPrimitive.content
     /** A profile on the machine's own login of `runtime` (one kept in a file); answers its id. */
     suspend fun useMachineLogin(runtime: String): String =
         ops.profileUseMachineLogin() { this.runtime = runtime }.jsonObject["id"]!!.jsonPrimitive.content

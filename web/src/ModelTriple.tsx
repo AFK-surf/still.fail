@@ -91,7 +91,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
               {!modelOnly && v.fastText && <span className={`${css2.triplePart} ${css2.tripleEffort}`}>{v.fastText}</span>}
               {!modelOnly && account && (
                 <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={account.level}>
-                  {account.profile && <ProviderLogo runtime={value.runtime} kind={account.profile.kind ?? "env"} size={14} />}
+                  {account.profile && <ProviderLogo runtime={value.runtime} kind={account.profile.kind ?? "env"} mark={account.profile.mark} size={14} />}
                   <span className={css2.tripleAccountName}>{account.text}</span>
                   {account.auto && <span className={css2.tripleAccountShort}>{t("web-main.model.auto")}</span>}
                   {account.profile && <span className={css2.tripleRings}><QuotaBars quota={account.profile.quota} compact small bare /></span>}

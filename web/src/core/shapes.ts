@@ -3,12 +3,16 @@
 */
 
 /** Whose account a profile runs on. */
-export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env";
+export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env" | "api-provider";
 
 export interface Access {
-	/** subscription | opencode-go | anthropic-api | env */
+	/** subscription | opencode-go | anthropic-api | env | api-provider */
 	kind: AccessKind;
 	key: string;
+	/** The provider of an `api-provider` (providers.rs); an older core reads such a profile as `env` and drops this. */
+	provider?: string;
+	/** Its address, where the provider has none of its own (Azure, Cloudflare, custom). */
+	endpoint?: string;
 }
 
 /**
@@ -65,6 +69,26 @@ export interface AgentWait {
 	seconds?: number;
 	/** What it waits for in words, as its activity line says it (在等：CI 跑完; 等待中 from a station that does not say). */
 	text?: string;
+}
+
+/** A provider a key can be added for (providers.rs). */
+export interface ApiProvider {
+	id: string;
+	name: string;
+	/** maker | host | own */
+	group: string;
+	/** The mark of its maker; none: the generic one. */
+	mark?: string;
+	/** Its address is the person's own: asked for with the key. */
+	endpointRequired?: boolean;
+	/** An example of such an address. */
+	endpointExample?: string;
+	/** Works without a key. */
+	keyOptional?: boolean;
+	/** What a profile on it can do: `claude`, `codex`, `decision`. */
+	uses?: string[];
+	/** What the core says of it: what it can do, in words. */
+	usesText?: string;
 }
 
 /**
@@ -242,6 +266,8 @@ export interface RunnableProfile {
 	current: boolean;
 	spent?: Spent;
 	kind?: AccessKind;
+	/** The mark of its provider's maker (a key on a listed provider); none: the kind's own. */
+	mark?: string;
 	runtime?: RuntimeKind;
 	quota?: Quota;
 	/** What is left of its allowance, in a few words (a core from before it says nothing). */
@@ -725,6 +751,16 @@ export interface Profile {
 	modelsText: string;
 	/** What can be enabled on it: what its provider lists, then whatever is enabled already, each once. */
 	available?: string[];
+	/**
+	 * What it can do: `claude`, `codex`, `decision` (the automatic decisions). The core works it out from where its
+	 * provider speaks and what its check found.
+	 */
+	uses?: string[];
+	/** What it can do, in words (Claude Code · Codex · 自动决策). */
+	usesText?: string;
+	/** The provider of a key from the list of API providers, and the mark of its maker (none: the generic one). */
+	providerName?: string;
+	providerMark?: string;
 }
 
 export interface TurnRecord {
@@ -2162,6 +2198,13 @@ export interface PendingLogin {
 	error?: string;
 }
 
+/** Providers of one group, as the picker lists them. */
+export interface ProviderGroup {
+	id: string;
+	title: string;
+	providers: ApiProvider[];
+}
+
 /**
  * A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
  * runtime (`claude`, `codex`).
@@ -2235,6 +2278,13 @@ export interface Overview {
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */
 	machineLogins?: MachineLogin[];
+	/**
+	 * The providers a key can be added for (none from a station older than them: they are then not offered), as the
+	 * station lists them.
+	 */
+	apiProviders?: ApiProvider[];
+	/** The same, grouped for the picker (what the core makes of them). */
+	providerGroups?: ProviderGroup[];
 	/** The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them). */
 	updates?: SoftwareVersion[];
 	/** Its agents' processes, in a line. */

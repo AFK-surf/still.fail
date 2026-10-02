@@ -14,9 +14,9 @@ val MODE_TEXT get() = mapOf(
 )
 
 /** How a profile reaches its model service, in a word (web/src/format.ts → ACCESS). */
-val ACCESS_LABEL get() = mapOf("subscription" to t("android-misc.access.subscription"), "opencode-go" to "OpenCode Go", "anthropic-api" to "Anthropic API", "env" to t("android-misc.access.env"))
+val ACCESS_LABEL get() = mapOf("subscription" to t("android-misc.access.subscription"), "opencode-go" to "OpenCode Go", "anthropic-api" to "Anthropic API", "api-provider" to t("common.provider.title"), "env" to t("android-misc.access.env"))
 /** The kinds that run on a key (web/src/format.ts → KEYED). */
-val KEYED = setOf("opencode-go", "anthropic-api")
+val KEYED = setOf("opencode-go", "anthropic-api", "api-provider")
 
 /** A kind of profile to add: how it reaches its service, the runtime it runs (null: any), in words (web/src/pages/Accounts.tsx → CHOICES). */
 class ProfileChoice(val kind: String, val runtime: String?, val title: String, val description: String)
@@ -25,6 +25,7 @@ val PROFILE_CHOICES get() = listOf(
     ProfileChoice("subscription", "codex", t("android-misc.choice.chatgpt"), t("android-misc.choice.chatgpt.text")),
     ProfileChoice("opencode-go", null, "OpenCode Go", t("android-misc.choice.opencode.text")),
     ProfileChoice("anthropic-api", null, "Anthropic API", t("android-misc.choice.anthropic.text")),
+    ProfileChoice("api-provider", null, t("common.provider.title"), t("common.provider.lead")),
     ProfileChoice("env", "claude", t("android-misc.choice.env", "runtime" to "Claude Code"), t("android-misc.choice.env.text")),
     ProfileChoice("env", "codex", t("android-misc.choice.env", "runtime" to "Codex"), t("android-misc.choice.env.text")),
 )

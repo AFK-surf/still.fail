@@ -317,7 +317,7 @@ private fun openRunPicker(app: AppState, station: String) {
                 CascadeOption(t("android-chat.new.auto"), v.autoNote, draft.profile == null) { set { put("profile", null as String?) }; accounts = false }
                 v.accounts.forEach { a ->
                     CascadeOption(a.name, a.quotaLine?.text, draft.profile == a.id, subColor = if (a.quotaLine?.level != null) C.warn else C.muted,
-                        leading = { ProviderMark(a.runtime ?: draft.runtime, a.kind, 16.dp) }) { set { put("profile", a.id) }; accounts = false }
+                        leading = { ProviderMark(a.runtime ?: draft.runtime, a.kind, 16.dp, a.mark) }) { set { put("profile", a.id) }; accounts = false }
                 }
             }
             return@SheetSpec

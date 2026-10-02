@@ -16,7 +16,7 @@ use crate::access::Viewer;
 use crate::lang::{spoken, t};
 use crate::config::{Owner, Profile, RawBind, RawConfig, RawConnect, RawPlace, RawProfile, RawProfileAccess, RawSlack, runtime_name};
 use crate::login::LoginState;
-use crate::profiles::{ProfileCheck, ProfileQuota, keyed, runtimes_of};
+use crate::profiles::{ProfileCheck, ProfileQuota, needs_key, runtimes_for, runtimes_of};
 
 fn random_hex(n: usize) -> String {
     let mut b = vec![0u8; n];
@@ -33,6 +33,8 @@ pub fn bare_profile(id: &str, runtime: RuntimeKind, kind: AccessKind, key: &str,
         runtimes: runtimes_of(kind, Some(runtime)),
         access_kind: kind,
         key: key.into(),
+        provider: None,
+        endpoint: None,
         home: home.to_path_buf(),
         envs: BTreeMap::new(),
         custom_env: BTreeMap::new(),
@@ -97,8 +99,7 @@ pub(super) fn account_email(runtime: RuntimeKind, home: &Path) -> Option<String>
 /// connects run.
 fn last_of_runtime(raw: &RawConfig, runtime: RuntimeKind, id: &str) -> Result<()> {
     let profiles = raw.profiles.as_deref().unwrap_or_default();
-    let kind = |p: &RawProfile| p.access.as_ref().map(|a| a.kind).unwrap_or(AccessKind::Env);
-    if profiles.iter().any(|p| p.id != id && runtimes_of(kind(p), p.runtime).contains(&runtime)) {
+    if profiles.iter().any(|p| p.id != id && runtimes_for(p.access.as_ref(), p.runtime).contains(&runtime)) {
         return Ok(());
     }
     let users: Vec<String> = raw
@@ -177,7 +178,7 @@ impl AdminApi {
             // The profile its sessions keep to (None: the pool's pick), one that runs its runtime and model.
             if let Some(profile) = &profile {
                 let p = raw.profiles.as_deref().unwrap_or_default().iter().find(|p| &p.id == profile);
-                let runs = p.is_some_and(|p| runtimes_of(p.access.as_ref().map(|a| a.kind).unwrap_or(AccessKind::Env), p.runtime).contains(&runtime));
+                let runs = p.is_some_and(|p| runtimes_for(p.access.as_ref(), p.runtime).contains(&runtime));
                 if !runs {
                     bail!(t!(spoken(); "station.profile.cannotRun", profile = profile, runtime = runtime_name(runtime)));
                 }
@@ -266,8 +267,14 @@ impl AdminApi {
             let access = get("access");
             let kind = access.and_then(|a| a.get("kind")).and_then(|k| serde_json::from_value::<AccessKind>(k.clone()).ok()).or(existing.as_ref().and_then(|p| p.access.as_ref().map(|a| a.kind)));
             let given_key = access.and_then(|a| a.get("key")).and_then(Value::as_str).map(str::trim).filter(|k| !k.is_empty()).map(String::from);
-            let keep_key = existing.as_ref().and_then(|p| p.access.as_ref()).filter(|a| Some(a.kind) == kind).and_then(|a| a.key.clone());
-            let key = given_key.or(keep_key);
+            let keep = existing.as_ref().and_then(|p| p.access.as_ref()).filter(|a| Some(a.kind) == kind);
+            let key = given_key.or(keep.and_then(|a| a.key.clone()));
+            // An API provider stays the one it was made for; its address can be changed.
+            let provider = keep.and_then(|a| a.provider.clone());
+            let endpoint = match access.and_then(|a| a.get("endpoint")).and_then(Value::as_str) {
+                Some(given) => Some(stillfail_shapes::providers::clean_endpoint(given).ok_or_else(|| http_error(400, t!(spoken(); "station.profile.addressNeeded")))?),
+                None => keep.and_then(|a| a.endpoint.clone()),
+            };
             let name = match get("name").and_then(Value::as_str) {
                 Some(n) => Some(n.trim().to_string()),
                 None => existing.as_ref().and_then(|p| p.name.clone()),
@@ -293,7 +300,7 @@ impl AdminApi {
                 id: id.into(),
                 name: name.filter(|n| !n.is_empty()),
                 runtime: get("runtime").and_then(|r| serde_json::from_value(r.clone()).ok()).or(existing.as_ref().and_then(|p| p.runtime)),
-                access: kind.map(|kind| RawProfileAccess { kind, key }),
+                access: kind.map(|kind| RawProfileAccess { kind, key, provider: provider.clone().filter(|_| kind == AccessKind::ApiProvider), endpoint: endpoint.clone().filter(|_| kind == AccessKind::ApiProvider) }),
                 home: get("home").and_then(Value::as_str).map(str::trim).filter(|h| !h.is_empty()).map(String::from).or(existing.as_ref().map(|p| p.home.clone())).unwrap_or_else(|| format!("homes/{id}")),
                 env: Some(env),
                 model,
@@ -312,9 +319,8 @@ impl AdminApi {
                 .filter(|on| !on),
             };
             if let Some(old) = &existing {
-                let kind_of = |p: &RawProfile| p.access.as_ref().map(|a| a.kind).unwrap_or(AccessKind::Env);
-                let kept = runtimes_of(kind_of(&next), next.runtime);
-                for r in runtimes_of(kind_of(old), old.runtime) {
+                let kept = runtimes_for(next.access.as_ref(), next.runtime);
+                for r in runtimes_for(old.access.as_ref(), old.runtime) {
                     if !kept.contains(&r) {
                         last_of_runtime(raw, r, id)?;
                     }
@@ -332,7 +338,7 @@ impl AdminApi {
     pub(super) fn delete_profile(&self, id: &str, viewer: &Viewer) -> Result<Value> {
         self.save(viewer, &format!("delete profile {id}"), |raw| {
             let profile = raw.profiles.as_deref().unwrap_or_default().iter().find(|p| p.id == id).cloned().ok_or_else(|| anyhow!("unknown profile {id}"))?;
-            for r in runtimes_of(profile.access.as_ref().map(|a| a.kind).unwrap_or(AccessKind::Env), profile.runtime) {
+            for r in runtimes_for(profile.access.as_ref(), profile.runtime) {
                 last_of_runtime(raw, r, id)?;
             }
             raw.profiles.get_or_insert_with(Vec::new).retain(|p| p.id != id);
@@ -478,7 +484,7 @@ impl AdminApi {
                 id: profile_id.clone(),
                 name: Some(name),
                 runtime: Some(runtime),
-                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None }),
+                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None, provider: None, endpoint: None }),
                 home: format!("homes/{profile_id}"),
                 env: Some(BTreeMap::new()),
                 model: None,
@@ -533,31 +539,60 @@ impl AdminApi {
         if kind == AccessKind::Subscription {
             return Err(http_error(400, t!(spoken(); "station.profile.subscriptionBySignIn")));
         }
+        // An API provider is the one named, at the address given where the provider has none of its own.
+        let provider = access.and_then(|a| a.get("provider")).and_then(Value::as_str).map(str::trim).filter(|p| !p.is_empty()).map(String::from);
+        let endpoint = access.and_then(|a| a.get("endpoint")).and_then(Value::as_str).map(str::trim).filter(|e| !e.is_empty()).map(String::from);
+        let source = if kind == AccessKind::ApiProvider {
+            // The two kinds that came before the list are added as they were (their own words and ids).
+            let source = provider.as_deref().and_then(stillfail_shapes::providers::find).filter(|s| s.legacy.is_none());
+            let source = source.ok_or_else(|| http_error(400, t!(spoken(); "station.profile.unknownProvider")))?;
+            if stillfail_shapes::providers::endpoints(source, endpoint.as_deref()).is_none() {
+                return Err(http_error(400, t!(spoken(); "station.profile.addressNeeded")));
+            }
+            Some(source)
+        } else {
+            None
+        };
+        let endpoint = endpoint.and_then(|e| stillfail_shapes::providers::clean_endpoint(&e)).filter(|_| source.is_some());
         // A key runs every runtime it can (runtimes_of); custom variables are for the runtime given.
-        let runtimes = runtimes_of(kind, runtime_of(input.get("runtime")));
-        if runtimes.is_empty() || !runtimes.iter().all(|r| crate::profiles::access_kinds(*r).contains(&kind)) {
+        let runtimes = match source {
+            Some(source) => stillfail_shapes::providers::uses(&stillfail_shapes::providers::endpoints(source, endpoint.as_deref()).unwrap_or_default()).runtimes(),
+            None => runtimes_of(kind, runtime_of(input.get("runtime"))),
+        };
+        if (runtimes.is_empty() && source.is_none()) || !runtimes.iter().all(|r| crate::profiles::access_kinds(*r).contains(&kind)) {
             return Err(http_error(400, format!("unknown access {}", serde_json::to_value(kind)?.as_str().unwrap_or(""))));
         }
-        let runtime = runtimes[0];
+        let runtime = runtimes.first().copied().unwrap_or(RuntimeKind::Claude);
         let key = access.and_then(|a| a.get("key")).and_then(Value::as_str).unwrap_or("").trim().to_string();
-        if keyed(kind) && key.is_empty() {
+        if needs_key(kind, source.map(|s| s.id)) && key.is_empty() {
             return Err(http_error(400, t!(spoken(); "station.profile.keyRequired")));
         }
         let config = self.config();
         let trial = config.data_dir.join("homes").join(format!("new-{}", random_hex(4)));
         std::fs::create_dir_all(&trial)?;
-        let check = (self.deps.check_profile)(CheckRequest { profile: bare_profile("new", runtime, kind, &key, &trial), home: trial.clone() }).await;
-        if check.state != "ok" && keyed(kind) {
+        let mut bare = bare_profile("new", runtime, kind, &key, &trial);
+        bare.provider = source.map(|s| s.id.to_string());
+        bare.endpoint = endpoint.clone();
+        bare.runtimes = runtimes;
+        let check = (self.deps.check_profile)(CheckRequest { profile: bare, home: trial.clone() }).await;
+        // A provider with no model list leaves its key unchecked (state unknown); a refused key is what stops it.
+        let refused = if source.is_some() { check.state == "failed" } else { check.state != "ok" && crate::profiles::keyed(kind) };
+        if refused {
             let _ = std::fs::remove_dir_all(&trial);
             return Err(http_error(400, t!(spoken(); "station.profile.checkFailed", detail = check.detail)));
         }
-        let label = match kind {
-            AccessKind::OpencodeGo => "OpenCode Go".to_string(),
-            AccessKind::AnthropicApi => "Anthropic API".to_string(),
+        let label = match (kind, source) {
+            (_, Some(source)) => source.name.to_string(),
+            (AccessKind::OpencodeGo, _) => "OpenCode Go".to_string(),
+            (AccessKind::AnthropicApi, _) => "Anthropic API".to_string(),
             _ => t!(spoken(); "station.profile.envName", runtime = if runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" }),
         };
         let taken = taken_ids(&config);
-        let base = if kind == AccessKind::Env { format!("{}-env", runtime_name(runtime)) } else { serde_json::to_value(kind)?.as_str().unwrap_or("profile").to_string() };
+        let base = match source {
+            Some(source) => source.id.to_string(),
+            None if kind == AccessKind::Env => format!("{}-env", runtime_name(runtime)),
+            None => serde_json::to_value(kind)?.as_str().unwrap_or("profile").to_string(),
+        };
         let id = unique(&base, &taken);
         std::fs::rename(&trial, config.data_dir.join("homes").join(&id))?;
         let overview = self.save(viewer, &format!("profile {id}"), |raw| {
@@ -565,7 +600,7 @@ impl AdminApi {
                 id: id.clone(),
                 name: Some(label),
                 runtime: (kind == AccessKind::Env).then_some(runtime),
-                access: Some(RawProfileAccess { kind, key: (!key.is_empty()).then(|| key.clone()) }),
+                access: Some(RawProfileAccess { kind, key: (!key.is_empty()).then(|| key.clone()), provider: source.map(|s| s.id.to_string()), endpoint: endpoint.clone() }),
                 home: format!("homes/{id}"),
                 env: Some(BTreeMap::new()),
                 model: None,
@@ -617,7 +652,7 @@ impl AdminApi {
                 id: id.clone(),
                 name: Some(name),
                 runtime: Some(runtime),
-                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None }),
+                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None, provider: None, endpoint: None }),
                 home: format!("homes/{id}"),
                 env: Some(BTreeMap::new()),
                 model: None,

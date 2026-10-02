@@ -38,7 +38,7 @@ export interface ConnectInput {
 export interface ProfileInput {
   name?: string;
   runtime?: RuntimeKind;
-  access?: { kind: AccessKind; key?: string };
+  access?: { kind: AccessKind; key?: string; endpoint?: string };
   home?: string;
   model?: string;
   /** Replaces the enabled models. */
@@ -307,7 +307,7 @@ export function stationApi(t: StationCall) {
     /** A profile on the machine's own login of `runtime` (one kept in a file). */
     useMachineLogin: (runtime: RuntimeKind) => ops.profileUseMachineLogin<{ id: string; overview: Overview }>({ runtime }),
     /** A keyed profile, made only once its key is checked. */
-    addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => ops.profileAdd<{ id: string; overview: Overview }>(input),
+    addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string; provider?: string; endpoint?: string } }) => ops.profileAdd<{ id: string; overview: Overview }>(input),
     putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
       ops.connectPutSlackApp<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>({ connect, input }),
     /** Makes a Slack app with the workspace's configuration token (still.fail's manifest, Socket Mode on), for a connect to come. */

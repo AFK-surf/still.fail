@@ -11,7 +11,7 @@ import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, SwitchRow, Time, Tip } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, SwitchRow, Time, Tip } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
@@ -34,6 +34,7 @@ export const CHOICES = {
   "chatgpt-sub": { kind: "subscription", runtime: "codex", get title() { return t("web-pages.profiles.choice.chatgptSub"); }, get description() { return t("web-pages.profiles.choice.chatgptSubLead"); } },
   "opencode-go": { kind: "opencode-go", runtime: null, title: "OpenCode Go", get description() { return t("web-pages.profiles.choice.opencodeGoLead"); } },
   "anthropic-api": { kind: "anthropic-api", runtime: null, title: "Anthropic API", get description() { return t("web-pages.profiles.choice.anthropicApiLead"); } },
+  "api-provider": { kind: "api-provider", runtime: null, get title() { return t("common.provider.title"); }, get description() { return t("common.provider.lead"); } },
   "env-claude": { kind: "env", runtime: "claude", get title() { return t("web-pages.profiles.choice.envClaude"); }, get description() { return t("web-pages.profiles.choice.envLead"); } },
   "env-codex": { kind: "env", runtime: "codex", get title() { return t("web-pages.profiles.choice.envCodex"); }, get description() { return t("web-pages.profiles.choice.envLead"); } },
 } as const satisfies Record<string, { kind: AccessKind; runtime: RuntimeKind | null; title: string; description: string }>;
@@ -92,21 +93,30 @@ export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { op
   const [choice, setChoice] = useState<Choice>(initial);
   const { kind, runtime } = CHOICES[choice];
   const [key, setKey] = useState("");
+  // A key on a listed provider: which one, and its address where it has none of its own.
+  const [providerId, setProviderId] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const groups = overview.value?.providerGroups ?? [];
+  const provider = groups.flatMap((g) => g.providers).find((p) => p.id === providerId);
   const [login, setLogin] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const pending = login ? overview.value?.logins.find((l) => l.id === login) : undefined;
-  const provider = runtime === "claude" ? "Claude" : "ChatGPT";
+  const signInWith = runtime === "claude" ? "Claude" : "ChatGPT";
   const close = () => {
     if (login && !pending?.created) void api.dropLogin(login).catch(() => {});
-    setLogin(null); setKey(""); setCode(""); setChoice("claude-sub");
+    setLogin(null); setKey(""); setCode(""); setChoice("claude-sub"); setProviderId(""); setEndpoint("");
     onClose();
   };
-  const go = (id: string, message: string) => { toast(message); setLogin(null); setKey(""); setCode(""); onClose(); navigate(link(`/settings/accounts/${id}`)); };
+  const go = (id: string, message: string) => { toast(message); setLogin(null); setKey(""); setCode(""); setProviderId(""); setEndpoint(""); onClose(); navigate(link(`/settings/accounts/${id}`)); };
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, t("web-pages.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
   const start = useAction(() => api.newLogin(runtime!), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
-  const add = useAction(() => api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }), ({ id }) => go(id, t("web-pages.profiles.verifiedAdded")));
+  const add = useAction(() => api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}), ...(kind === "api-provider" ? { provider: providerId, ...(provider?.endpointRequired ? { endpoint } : {}) } : {}) } }), ({ id }) => go(id, t("web-pages.profiles.verifiedAdded")));
+  // Ready to verify: a key where one is needed, and for a provider, which one and its address if it is the person's own.
+  const ready = kind === "api-provider"
+    ? !!provider && (!!key.trim() || !!provider.keyOptional) && (!provider.endpointRequired || !!endpoint.trim())
+    : !KEYED.has(kind) || !!key.trim();
   const job = pending?.job ?? null;
   const signing = login !== null;
   return (
@@ -114,24 +124,37 @@ export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { op
       footer={<>
         <Button variant="ghost" onClick={close}>{t("common.cancel")}</Button>
         {!signing && (kind === "subscription"
-          ? <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>{t("web-pages.profiles.signInTo", { provider })}</Button>
-          : <Button variant="primary" disabled={KEYED.has(kind) && !key.trim()} busy={add.busy} onClick={() => void add.run()}>{KEYED.has(kind) ? t("web-pages.profiles.verifyAdd") : t("web-pages.settings.members.addOne")}</Button>)}
+          ? <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>{t("web-pages.profiles.signInTo", { provider: signInWith })}</Button>
+          : <Button variant="primary" disabled={!ready} busy={add.busy} onClick={() => void add.run()}>{KEYED.has(kind) ? t("web-pages.profiles.verifyAdd") : t("web-pages.settings.members.addOne")}</Button>)}
       </>}>
       {signing ? (
         pending?.error || job?.state === "failed" || job?.state === "cancelled"
           ? <div className={pagesCss.card}><p className={controlsCss.fieldError}>{pending?.error ?? job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { void api.dropLogin(login!).catch(() => {}); setLogin(null); }}>{t("web-pages.profiles.restart")}</Button></div>
-          : <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
+          : <LoginSteps job={job} provider={signInWith} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
       ) : (
         <>
           <Field label={t("web-pages.profiles.account")}>
             <Choices label={t("web-pages.profiles.account")} value={choice} onChange={(v) => setChoice(v as Choice)}
-              options={(Object.keys(CHOICES) as Choice[]).map((c) => ({
+              options={(Object.keys(CHOICES) as Choice[]).filter((c) => c !== "api-provider" || groups.length > 0).map((c) => ({
                 value: c, title: CHOICES[c].title, description: CHOICES[c].description,
                 icon: <span className={pagesCss.mark} style={{ width: 28, height: 28 }}><ProviderLogo runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={16} /></span>,
               }))} />
           </Field>
-          {KEYED.has(kind) && (
-            <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="account-key" hint={t("web-pages.profiles.keyHint")}>
+          {kind === "api-provider" && (
+            <>
+              <Field label={t("common.provider.pick")} htmlFor="account-provider" hint={provider ? t("common.provider.uses", { uses: provider.usesText ?? "" }) : t("common.provider.usesHint")}>
+                <Select id="account-provider" value={providerId} onChange={setProviderId} placeholder={t("common.provider.pickPlaceholder")}
+                  options={groups.flatMap((g) => g.providers.map((p) => ({ value: p.id, label: p.name, group: g.title })))} />
+              </Field>
+              {provider?.endpointRequired && (
+                <Field label={t("common.provider.endpoint")} htmlFor="account-endpoint" hint={provider.endpointExample ? t("common.provider.endpointHint", { example: provider.endpointExample }) : undefined}>
+                  <input id="account-endpoint" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={endpoint} onChange={(e) => setEndpoint(e.target.value.trim())} placeholder={provider.endpointExample ?? "https://"} />
+                </Field>
+              )}
+            </>
+          )}
+          {KEYED.has(kind) && (kind !== "api-provider" || provider) && (
+            <Field label={kind === "opencode-go" ? "OpenCode Go key" : provider?.keyOptional ? t("common.provider.keyOptional") : "API key"} htmlFor="account-key" hint={t("web-pages.profiles.keyHint")}>
               <input id="account-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
             </Field>
           )}
@@ -186,7 +209,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
       <BackLink to={profilesPage(station)} label="Profile" />
       {/* Who the account is and whether it works now: its provider, name, runtimes, and its last check. */}
       <header className={pagesCss.identity}>
-        <span className={`${pagesCss.mark} ${waitingCss.runtimeMark}`} style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={26} /></span>
+        <span className={`${pagesCss.mark} ${waitingCss.runtimeMark}`} style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} mark={profile.providerMark} size={26} /></span>
         <div className={pagesCss.identityText}>
           {editingName ? (
             <input className={`${controlsCss.input} ${css.identityNameInput}`} value={name} autoFocus aria-label={t("web-pages.profiles.name")} onChange={(e) => setName(e.target.value)} onBlur={rename}
@@ -268,8 +291,13 @@ function MachineAccount({ profile }: { profile: Profile }) {
 function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile; signedIn: boolean; onSave(input: ProfileInput): void; busy: boolean }) {
   const [replacing, setReplacing] = useState(false);
   const [key, setKey] = useState("");
+  // Where a provider is at an address of the person's own, that too can be changed (a blank key keeps the stored one).
+  const [endpoint, setEndpoint] = useState(profile.access.endpoint ?? "");
   const keyed = KEYED.has(profile.access.kind);
   if (!keyed && profile.access.kind !== "subscription") return null;
+  const label = profile.access.kind === "opencode-go" ? "OpenCode Go key" : profile.providerName ? `${profile.providerName} key` : "API key";
+  const changed = !!key || (profile.access.endpoint !== undefined && endpoint.trim() !== profile.access.endpoint);
+  const stop = () => { setReplacing(false); setKey(""); setEndpoint(profile.access.endpoint ?? ""); };
   return (
     <Section title={t("web-pages.profiles.account")}>
       {keyed ? (
@@ -277,20 +305,28 @@ function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile;
           {!replacing ? (
             <div className={pagesCss.cardRow}>
               <div className={pagesCss.cardRowText}>
-                <strong>{profile.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</strong>
+                <strong>{label}</strong>
                 <span className={`${shellCss.muted} ${shellCss.mono}`}>{profile.access.key || t("web-pages.profiles.notSaved")}</span>
+                {profile.access.endpoint && <span className={`${shellCss.muted} ${shellCss.mono}`}>{profile.access.endpoint}</span>}
               </div>
               <Button busy={busy} onClick={() => setReplacing(true)}>{t("web-pages.profiles.replace")}</Button>
             </div>
           ) : (
-            <Field label={profile.access.kind === "opencode-go" ? t("web-pages.profiles.newOpencodeKey") : t("web-pages.profiles.newApiKey")} htmlFor="access-key" hint={t("web-pages.profiles.recheckHint")}>
-              <div className={additionsCss.inputRow}>
-                <input id="access-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" autoFocus value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder={t("web-pages.profiles.pasteKey")} />
-                <Button variant="ghost" onClick={() => { setReplacing(false); setKey(""); }}>{t("common.cancel")}</Button>
-                {/* Closes at once: the button it came from turns until the key is saved. */}
-                <Button variant="primary" disabled={!key} onClick={() => { onSave({ access: { kind: profile.access.kind, key } }); setKey(""); setReplacing(false); }}>{t("common.save")}</Button>
-              </div>
-            </Field>
+            <>
+              {profile.access.endpoint !== undefined && (
+                <Field label={t("common.provider.endpoint")} htmlFor="access-endpoint">
+                  <input id="access-endpoint" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={endpoint} onChange={(e) => setEndpoint(e.target.value.trim())} />
+                </Field>
+              )}
+              <Field label={profile.access.kind === "opencode-go" ? t("web-pages.profiles.newOpencodeKey") : t("web-pages.profiles.newApiKey")} htmlFor="access-key" hint={t("web-pages.profiles.recheckHint")}>
+                <div className={additionsCss.inputRow}>
+                  <input id="access-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" autoFocus value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder={t("web-pages.profiles.pasteKey")} />
+                  <Button variant="ghost" onClick={stop}>{t("common.cancel")}</Button>
+                  {/* Closes at once: the button it came from turns until the key is saved. */}
+                  <Button variant="primary" disabled={!changed} onClick={() => { onSave({ access: { kind: profile.access.kind, ...(key ? { key } : {}), ...(profile.access.endpoint !== undefined ? { endpoint: endpoint.trim() } : {}) } }); stop(); }}>{t("common.save")}</Button>
+                </div>
+              </Field>
+            </>
           )}
         </div>
       ) : signedIn && <SignIn profile={profile} needed={false} />}

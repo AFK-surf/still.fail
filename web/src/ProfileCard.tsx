@@ -26,9 +26,9 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
   const trouble = quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail : null;
   const body = (
     <Card
-      mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={18} />}
+      mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} mark={profile.providerMark} size={18} />}
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
-      sub={[profile.machine ? t("web-main.profile.machine") : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
+      sub={[profile.machine ? t("web-main.profile.machine") : profile.providerName ?? ACCESS[profile.access.kind].label, profile.usesText, profile.modelsText, uses]}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
       state={profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null}
       action={action ?? (to ? <ChevronRight {...ICON} className={css.profileCardChevron} /> : null)}

@@ -236,7 +236,7 @@ pub async fn check_quota(profile: &Profile, env: &Env, codex_rate_limits: CodexR
     let asked = async {
         match profile.access_kind {
             AccessKind::OpencodeGo => opencode(&profile.key).await,
-            AccessKind::AnthropicApi => Ok(quota("unsupported", vec![], Some(t!(spoken(); "station.quota.payAsYouGo")))),
+            AccessKind::AnthropicApi | AccessKind::ApiProvider => Ok(quota("unsupported", vec![], Some(t!(spoken(); "station.quota.payAsYouGo")))),
             AccessKind::Env => Ok(quota("unsupported", vec![], Some(t!(spoken(); "station.quota.envUnsupported")))),
             AccessKind::Subscription if profile.runtime == RuntimeKind::Claude => claude(profile, env).await,
             AccessKind::Subscription => {

@@ -45,7 +45,7 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 - `autoArchiveDays`：空闲且已结束的会话和对话多少天后自动归档，0 为不自动归档。
 - 账号的 `home` 相对数据目录。用订阅登录时，对这个目录登录一次：`CLAUDE_CONFIG_DIR=<home> claude`，或 `CODEX_HOME=<home> codex login`。
 - `env` 里的 `{route}` 会替换成每个会话的路由 ID（Codex 的 app-server 按账号共享，替换成账号 ID），用于 OpenCode Go 这类需要会话亲和头的服务。
-- 账号的 `access` 决定运行时怎么接模型：`subscription`（订阅登录）、`opencode-go`、`anthropic-api`（后两种要 `key`），或 `env`（只用 `env` 里手写的变量）。still.fail 据此生成环境变量；Codex 的服务商配置在启动 app-server 时用 `-c` 传入，不改 `config.toml`。
+- 账号的 `access` 决定运行时怎么接模型：`subscription`（订阅登录）、`opencode-go`、`anthropic-api`（后两种要 `key`）、`api-provider`（用 `provider` 指定服务商，如 `openai`、`deepseek`、`openrouter`、`azure-openai`、`custom`，再加 `key`；Azure OpenAI、Cloudflare、`custom` 还要 `endpoint`，`custom` 的 key 可省），或 `env`（只用 `env` 里手写的变量）。`api-provider` 按服务商目录里的协议决定能跑什么：有 Anthropic 接口的跑 Claude Code，有 Responses 接口的跑 Codex，有 Chat Completions 接口的可用于自动决策；只有 Chat Completions 的服务商不跑任何运行时，`runtimes` 为空。旧版 still.fail 读到 `api-provider` 的账号会显示成 `env`。still.fail 据此生成环境变量；Codex 的服务商配置在启动 app-server 时用 `-c` 传入，不改 `config.toml`。
 - `telemetry.errors` 打开后，这台 station 的错误（不带内容）上报到 still.fail 的 PostHog 项目，默认关闭，见 [telemetry.md](telemetry.md)。
 - 共享的记忆和 skills 在 `<数据目录>/agent/`（`MEMORY.md` 和 `skills/`），启动时链接进每个账号的配置目录。
 

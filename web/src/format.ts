@@ -14,7 +14,8 @@ export const ACCESS: Record<AccessKind, { label: string; description: string }> 
   "subscription": { get label() { return t("web-main.access.subscription.label"); }, get description() { return t("web-main.access.subscription.description"); } },
   "opencode-go": { label: "OpenCode Go", get description() { return t("web-main.access.opencodeGo.description"); } },
   "anthropic-api": { label: "Anthropic API", get description() { return t("web-main.access.anthropicApi.description"); } },
+  "api-provider": { get label() { return t("common.provider.title"); }, get description() { return t("common.provider.lead"); } },
   "env": { get label() { return t("web-main.access.env.label"); }, get description() { return t("web-main.access.env.description"); } },
 };
 
-export const KEYED = new Set<AccessKind>(["opencode-go", "anthropic-api"]);
+export const KEYED = new Set<AccessKind>(["opencode-go", "anthropic-api", "api-provider"]);

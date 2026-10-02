@@ -121,6 +121,28 @@ fn without_mentions(text: &str) -> String {
     out
 }
 
+/// The providers a key can be added for (not the two the list has from before: they have their own choices).
+fn api_providers() -> Vec<Value> {
+    use stillfail_shapes::providers::{self, SOURCES};
+    SOURCES.iter().filter(|s| s.legacy.is_none()).map(|s| {
+        // What it does at the address a person would give, for those that need one (an `/v1` address of a server of their own).
+        let sample = s.endpoint_required.then_some("https://example.com/v1");
+        let uses = providers::endpoints(s, sample).map(|at| providers::uses(&at)).unwrap_or_default();
+        let example = match s.id {
+            "cloudflare-workers-ai" => Some("https://api.cloudflare.com/client/v4/accounts/<account>/ai/v1"),
+            "cloudflare-ai-gateway" => Some("https://gateway.ai.cloudflare.com/v1/<account>/<gateway>"),
+            "azure-openai" => Some("https://<resource>.openai.azure.com/openai/v1"),
+            "custom" => Some("http://localhost:4000/v1"),
+            _ => None,
+        };
+        let uses: Vec<&str> = [uses.claude.then_some("claude"), uses.codex.then_some("codex"), uses.decision.then_some("decision")].into_iter().flatten().collect();
+        json!({
+            "id": s.id, "name": s.name, "group": s.group.id(), "mark": s.mark, "endpointRequired": s.endpoint_required,
+            "endpointExample": example, "keyOptional": s.key_optional, "uses": uses,
+        })
+    }).collect()
+}
+
 impl AdminApi {
     pub(super) fn overview(&self, viewer: &Viewer) -> Value {
         let config = self.config();
@@ -160,7 +182,9 @@ impl AdminApi {
                 json!({
                     "id": p.id, "name": p.name, "runtime": p.runtime, "runtimes": p.runtimes,
                     "email": if p.access_kind == stillfail_shapes::AccessKind::Subscription && !p.machine { super::edits::account_email(p.runtime, &p.home) } else { None },
-                    "access": { "kind": p.access_kind, "key": mask(&p.key) },
+                    // A provider's key says `env` where an older core reads it (it would refuse the whole overview at a
+                    // kind it does not know); the provider next to it is what tells the core it is not.
+                    "access": { "kind": if p.access_kind == AccessKind::ApiProvider { AccessKind::Env } else { p.access_kind }, "key": mask(&p.key), "provider": p.provider, "endpoint": p.endpoint },
                     "home": p.home, "homeExists": p.home.exists(), "model": p.model, "models": p.models,
                     "env": env,
                     // Connects whose sessions can run on it: of its runtime, and its models have theirs.
@@ -229,6 +253,7 @@ impl AdminApi {
             // The data disk's room, read as the overview is: what clients warn of when it runs low.
             "disk": disk_room(&config.data_dir),
             "logins": logins,
+            "apiProviders": api_providers(),
             "machineLogins": self.deps.machine_logins.as_ref().map(|m| m.get()).unwrap_or_default(),
             "updates": self.deps.updates.as_ref().map(|u| u.get()).unwrap_or_default(),
             "slackApps": slack_apps,

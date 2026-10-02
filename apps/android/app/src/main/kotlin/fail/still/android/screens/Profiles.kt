@@ -58,6 +58,7 @@ import fail.still.android.data.LoginJob
 import fail.still.android.data.MachineLogin
 import fail.still.android.data.Overview
 import fail.still.android.data.PROFILE_CHOICES
+import fail.still.android.data.ProviderGroup
 import fail.still.android.data.Profile
 import fail.still.android.data.Quota
 import fail.still.android.data.StationView
@@ -171,7 +172,7 @@ internal fun ProfileRow(station: String, p: Profile) {
                 PresenceDot(toneDot(p.checkTone))
                 Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(listOf(p.checkText, if (p.machine == true) t("android-settings.profile.machine") else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
+            Text(listOfNotNull(p.checkText, if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.usesText?.ifEmpty { null }, p.modelsText).joinToString(" · "),
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (p.trouble != null) {
                 Text("${p.trouble.title} · ${p.trouble.detail}", fontSize = 13.sp, color = C.muted)
@@ -204,12 +205,12 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
     val users = p.usedBy.mapNotNull { u -> s.overview?.connects?.firstOrNull { it.id == u } }
     val kind = p.access.kind
     Column(Modifier.fillMaxSize()) {
-        NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) t("android-settings.profile.machine") else ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
+        NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
             trailing = { NavButton(Icons.More, { openProfileMenu(app, address, p) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             Card {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ProviderMark(p.runtime, kind, 26.dp)
+                    ProviderMark(p.runtime, kind, 26.dp, p.providerMark)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TonePill(p.checkText, p.checkTone)
@@ -284,7 +285,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     Text(t("android-settings.profile.machineNote", "runtime" to runtime), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
                 }
             } else if (kind in KEYED) {
-                val name = if (kind == "opencode-go") "OpenCode Go key" else "API key"
+                val name = if (kind == "opencode-go") "OpenCode Go key" else p.providerName?.let { "$it key" } ?: "API key"
                 SectionHeader(t("android-settings.run.account"), start = 24.dp)
                 ListCard {
                     ListRow(onClick = {
@@ -299,6 +300,20 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         // A key saved (the sheet that asked gone): a spinner until the station has it.
                         DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
                         Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
+                    }
+                    // Where a provider is at an address of the person's own, that can be changed too.
+                    p.access.endpoint?.let { endpoint ->
+                        ListRow(onClick = {
+                            ask(app, t("common.provider.endpoint"), endpoint, "https://", t("common.save")) { value ->
+                                api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("endpoint", value.trim()) } }); app.toast = t("android-settings.profile.savedChecking")
+                            }
+                        }) {
+                            Column(Modifier.weight(1f)) {
+                                Text(t("common.provider.endpoint"), fontSize = 15.sp, color = C.ink)
+                                Text(endpoint, fontSize = 13.sp, color = C.muted, fontFamily = FontFamily.Monospace)
+                            }
+                            Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
+                        }
                     }
                 }
             }
@@ -657,9 +672,15 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     val api = app.api(address)
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val s = stations.value?.firstOrNull { it.station == address }
+    // A key on a listed provider is offered where the station lists them (one from before them does not).
+    val groups = s?.overview?.providerGroups.orEmpty()
+    val choices = PROFILE_CHOICES.filter { it.kind != "api-provider" || groups.isNotEmpty() }
     var choice by remember { mutableIntStateOf(0) }
-    val picked = PROFILE_CHOICES[choice]
+    val picked = choices[choice.coerceIn(choices.indices)]
     var key by remember { mutableStateOf("") }
+    var providerId by remember { mutableStateOf("") }
+    var endpoint by remember { mutableStateOf("") }
+    val chosen = groups.flatMap { it.providers }.firstOrNull { it.id == providerId }
     var login by remember { mutableStateOf<String?>(null) }
     val busy = app.isDoing(setOf("login.new", "profile.add"), "station" to address)
     var error by remember { mutableStateOf<String?>(null) }
@@ -687,14 +708,31 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 } else LoginSteps(job, provider) { code -> api.newLoginCode(l, code) }
             } else {
                 // The machine's own logins not used yet: a profile on one needs no sign-in.
-                s?.overview?.let { o -> MachineLoginOffers(address, o, inset = 0.dp) { rt -> choice = PROFILE_CHOICES.indexOfFirst { it.kind == "subscription" && it.runtime == rt }.coerceAtLeast(0) } }
+                s?.overview?.let { o -> MachineLoginOffers(address, o, inset = 0.dp) { rt -> choice = choices.indexOfFirst { it.kind == "subscription" && it.runtime == rt }.coerceAtLeast(0) } }
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
-                    PROFILE_CHOICES.forEachIndexed { i, c ->
+                    choices.forEachIndexed { i, c ->
                         PickRow(c.title, c.description, checked = choice == i, leading = { ProviderMark(c.runtime ?: "claude", c.kind, 18.dp) }) { choice = i }
                     }
                 }
-                if (picked.kind in KEYED) {
-                    Text(if (picked.kind == "opencode-go") "OpenCode Go key" else "API key", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                if (picked.kind == "api-provider") {
+                    Text(t("common.provider.pick"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                        ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { PickProvider(groups, providerId) { providerId = it } } }) {
+                            chosen?.let { ProviderMark("claude", "api-provider", 18.dp, it.mark) }
+                            Column(Modifier.weight(1f)) {
+                                Text(chosen?.name ?: t("common.provider.pickPlaceholder"), fontSize = 15.sp, color = if (chosen == null) C.muted else C.ink)
+                                Text(chosen?.let { t("common.provider.uses", "uses" to it.usesText.orEmpty()) } ?: t("common.provider.usesHint"), fontSize = 12.sp, color = C.muted)
+                            }
+                            IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                        }
+                    }
+                    if (chosen?.endpointRequired == true) {
+                        Text(t("common.provider.endpoint"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                        Field(endpoint, { endpoint = it.trim() }, chosen.endpointExample ?: "https://", mono = true)
+                    }
+                }
+                if (picked.kind in KEYED && (picked.kind != "api-provider" || chosen != null)) {
+                    Text(if (picked.kind == "opencode-go") "OpenCode Go key" else if (chosen?.keyOptional == true) t("common.provider.keyOptional") else "API key", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                     SecretField(key, { key = it }, t("android-settings.profile.keyPlaceholder"))
                 }
                 if (picked.kind == "subscription") Text(t("android-settings.profile.subscriptionNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
@@ -702,10 +740,26 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 val run = { work: suspend () -> Unit -> error = null; scope.launch { try { work() } catch (e: CoreException) { error = e.message } }; Unit }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     if (picked.kind == "subscription") Button(t("android-settings.login.signInTo", "provider" to provider), primary = true, busy = busy) { run { login = api.newLogin(picked.runtime!!) } }
-                    else Button(if (picked.kind in KEYED) t("android-settings.profile.verifyAdd") else t("android-settings.add.one"), primary = true, busy = busy, enabled = picked.kind !in KEYED || key.isNotEmpty()) {
-                        run { go(api.addProfile(picked.runtime, picked.kind, key.takeIf { picked.kind in KEYED }), t("android-settings.profile.verifiedAdded")) }
+                    else Button(if (picked.kind in KEYED) t("android-settings.profile.verifyAdd") else t("android-settings.add.one"), primary = true, busy = busy, enabled = if (picked.kind == "api-provider") chosen != null && (key.isNotEmpty() || chosen.keyOptional == true) && (chosen.endpointRequired != true || endpoint.isNotEmpty()) else picked.kind !in KEYED || key.isNotEmpty()) {
+                        run { go(api.addProfile(picked.runtime, picked.kind, key.takeIf { picked.kind in KEYED }, providerId.takeIf { picked.kind == "api-provider" }, endpoint.takeIf { picked.kind == "api-provider" && chosen?.endpointRequired == true }), t("android-settings.profile.verifiedAdded")) }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** The providers a key can be added for, by group, in a sheet: each with what it can do (the core's words). */
+@Composable
+private fun ColumnScope.PickProvider(groups: List<ProviderGroup>, value: String, onPick: (String) -> Unit) {
+    val app = LocalApp.current
+    SheetGrab()
+    SheetHead(t("common.provider.title"))
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        groups.forEach { g ->
+            Text(g.title, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp))
+            g.providers.forEach { p ->
+                PickRow(p.name, p.usesText?.ifEmpty { null }, checked = p.id == value, leading = { ProviderMark("claude", "api-provider", 18.dp, p.mark) }) { onPick(p.id); app.sheet = null }
             }
         }
     }

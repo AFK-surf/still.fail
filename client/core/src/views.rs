@@ -1580,10 +1580,14 @@ impl Views {
         crate::present::profile(&mut profile);
         let runnable = runnable_on(overview.as_ref(), &session, self.host.now_ms());
         let account = runnable.as_array().and_then(|r| r.iter().find(|p| p.get("current") == Some(&Value::Bool(true))).cloned())
-            .or_else(|| profile.is_object().then(|| json!({
-                "id": profile["id"], "name": profile["name"], "current": true, "kind": profile["access"]["kind"],
-                "runtime": profile["runtime"], "quota": profile.get("quota").cloned().unwrap_or(Value::Null),
-            })))
+            .or_else(|| profile.is_object().then(|| {
+                let mut account = json!({
+                    "id": profile["id"], "name": profile["name"], "current": true, "kind": profile["access"]["kind"],
+                    "runtime": profile["runtime"], "quota": profile.get("quota").cloned().unwrap_or(Value::Null),
+                });
+                if profile["providerMark"].is_string() { account["mark"] = profile["providerMark"].clone(); }
+                account
+            }))
             .unwrap_or(Value::Null);
         Some(json!({
             // Where it stands, and its mark: decided here for every client (present.rs).
@@ -1917,7 +1921,7 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
         .map(|p| {
             let id = p.get("id").and_then(Value::as_str).unwrap_or("");
             let spent = spent_until(p);
-            json!({
+            let mut line = json!({
                 "id": id, "name": p.get("name").cloned().unwrap_or(json!(id)), "current": Some(id) == current,
                 "spent": spent.map(|until| spent_view(until, now)),
                 "efforts": profile_efforts(p, runtime, model),
@@ -1926,7 +1930,12 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
                 "runtime": p.get("runtime").cloned().unwrap_or(Value::Null),
                 "quota": p.get("quota").cloned().unwrap_or(Value::Null),
                 "quotaLine": crate::choose::quota_line(p.get("quota")),
-            })
+            });
+            // The mark of its provider's maker, for a key on a listed provider.
+            if let Some(mark) = p.get("providerMark").filter(|m| m.is_string()) {
+                line["mark"] = mark.clone();
+            }
+            line
         })
         .collect())
 }

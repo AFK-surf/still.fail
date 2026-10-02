@@ -795,6 +795,46 @@ async fn editing_a_profiles_access_keeps_a_blank_key_but_never_carries_it_to_ano
 }
 
 #[tokio::test]
+async fn a_key_on_a_listed_provider_makes_a_profile_that_runs_what_its_endpoints_speak() {
+    let t = setup().await;
+    let added = |t: &Rig, id: &str| t.config().profiles.iter().find(|p| p.id == id).cloned().unwrap();
+    // Chat completions only: no runtime, but a profile all the same (it serves the automatic decisions).
+    let (status, body) = t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "groq", "key": "gsk-123456" } }))).await;
+    assert_eq!(status, 200, "{body}");
+    let groq = added(&t, "groq");
+    assert_eq!((groq.access_kind, groq.provider.as_deref(), groq.runtimes.clone()), (stillfail_shapes::AccessKind::ApiProvider, Some("groq"), vec![]));
+    assert_eq!(groq.name, "Groq");
+    // Anthropic and Responses endpoints: both runtimes, set up from where the provider speaks.
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "opencode", "key": "oc-key-1" } }))).await.0, 200);
+    let zen = added(&t, "opencode");
+    assert_eq!(zen.runtimes, vec![RuntimeKind::Claude, RuntimeKind::Codex]);
+    assert_eq!(zen.env(RuntimeKind::Claude)["ANTHROPIC_BASE_URL"], "https://opencode.ai/zen");
+    assert_eq!(zen.env(RuntimeKind::Claude)["ANTHROPIC_CUSTOM_HEADERS"], "x-opencode-session: {route}");
+    assert_eq!(zen.env(RuntimeKind::Codex)["EMBER_API_KEY"], "oc-key-1");
+    // A second key on the same provider is a profile of its own.
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "groq", "key": "gsk-other" } }))).await.0, 200);
+    assert_eq!(t.config().profiles.iter().filter(|p| p.provider.as_deref() == Some("groq")).count(), 2);
+    // The address is the person's where the provider has none; a key is optional only for a server of one's own.
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "azure-openai", "key": "k" } }))).await.0, 400);
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "custom", "endpoint": "http://127.0.0.1:4000/v1" } }))).await.0, 200);
+    let custom = added(&t, "custom");
+    assert_eq!((custom.key.as_str(), custom.endpoint.as_deref(), custom.runtimes.len()), ("", Some("http://127.0.0.1:4000/v1"), 2));
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "groq" } }))).await.0, 400, "a key is needed");
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "nope", "key": "k" } }))).await.0, 400);
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "anthropic", "key": "k" } }))).await.0, 400, "Anthropic is its own kind");
+    // What an older core is shown: `env`, with the provider beside it; the list of providers leaves out the two kinds from before.
+    let body = t.get("/overview").await;
+    let view = body["profiles"].as_array().unwrap().iter().find(|p| p["id"] == "groq").unwrap().clone();
+    assert_eq!((view["access"]["kind"].as_str(), view["access"]["provider"].as_str(), view["access"]["key"].as_str().map(|k| k.contains("123456"))), (Some("env"), Some("groq"), Some(false)));
+    let listed: Vec<&str> = body["apiProviders"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect();
+    assert!(listed.contains(&"deepseek") && listed.contains(&"opencode") && !listed.contains(&"anthropic") && !listed.contains(&"opencode-go"));
+    // Its address can be changed, its key kept; it can be deleted although it runs no runtime.
+    assert_eq!(t.call("PUT", "/profiles/custom", Some(json!({ "access": { "kind": "api-provider", "endpoint": "http://127.0.0.1:5000/v1" } }))).await.0, 200);
+    assert_eq!(added(&t, "custom").endpoint.as_deref(), Some("http://127.0.0.1:5000/v1"));
+    assert_eq!(t.call("DELETE", "/profiles/groq", None).await.0, 200);
+}
+
+#[tokio::test]
 async fn session_detail_is_the_session_its_threads_and_turns_its_transcript_comes_live_from_any_entry_on() {
     let t = setup().await;
     t.hub.accept("ds", message("<@UBOT> hi")).await.unwrap();
