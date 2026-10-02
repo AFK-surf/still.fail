@@ -163,17 +163,32 @@ async fn cloud_error(response: reqwest::Response) -> anyhow::Error {
     anyhow!("still.fail cloud answered {status}: {body}")
 }
 
+/// Prefer the new proof. Retry the old spelling only when a pre-rename cloud
+/// explicitly rejects the signature, before it can redeem the enrollment token.
+async fn enroll_response(key: &SecretKey, origin: &str, token: &str, station: &str) -> Result<reqwest::Response> {
+    let client = http();
+    for prefix in ["stillfail", "ember"] {
+        let message = format!("{prefix}-station-enroll-v1:{origin}:{token}:{station}");
+        let signature = hex::encode(key.sign(message.as_bytes()).to_bytes());
+        let response = client.post(format!("{origin}/v1/stations/enroll"))
+            .json(&json!({ "token": token, "station": station, "signature": signature, "version": version() }))
+            .send().await?;
+        if prefix != "stillfail" || response.status() != reqwest::StatusCode::UNAUTHORIZED {
+            return Ok(response);
+        }
+        let status = response.status();
+        let body = response.text().await?;
+        if serde_json::from_str::<Value>(&body).ok().and_then(|v| v["error"].as_str().map(str::to_owned)).as_deref() != Some("invalid_signature") {
+            bail!("still.fail cloud answered {status}: {body}");
+        }
+    }
+    unreachable!("the compatibility request returns its response")
+}
+
 async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
     let key = load_key(data)?;
     let station = hex::encode(key.public().as_bytes());
-    // The signed words keep the old name: the cloud checks them as they are (so do clouds from before the rename).
-    let message = format!("ember-station-enroll-v1:{origin}:{token}:{station}");
-    let signature = hex::encode(key.sign(message.as_bytes()).to_bytes());
-    let response = http()
-        .post(format!("{origin}/v1/stations/enroll"))
-        .json(&json!({ "token": token, "station": station, "signature": signature, "version": version() }))
-        .send()
-        .await?;
+    let response = enroll_response(&key, origin, token, &station).await?;
     if !response.status().is_success() {
         return Err(cloud_error(response).await);
     }
@@ -1461,6 +1476,46 @@ fn transport() -> QuicTransportConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn enrollment_prefers_canonical_signatures_and_only_retries_signature_rejection() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        for (legacy, rejection, expected, success) in [(false, None, 1, true), (true, None, 2, true), (false, Some("invalid_token"), 1, false)] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let origin = format!("http://{}", listener.local_addr().unwrap());
+            let key = SecretKey::from([9u8; 32]);
+            let station = hex::encode(key.public().as_bytes());
+            let canonical = hex::encode(key.sign(format!("stillfail-station-enroll-v1:{origin}:token:{station}").as_bytes()).to_bytes());
+            let former = hex::encode(key.sign(format!("ember-station-enroll-v1:{origin}:token:{station}").as_bytes()).to_bytes());
+            let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let count = seen.clone();
+            let server = tokio::spawn(async move {
+                for index in 0..expected {
+                    let (mut socket, _) = listener.accept().await.unwrap();
+                    let mut head = Vec::new();
+                    while !head.ends_with(b"\r\n\r\n") { head.push(socket.read_u8().await.unwrap()); }
+                    let head = String::from_utf8(head).unwrap().to_lowercase();
+                    let length: usize = head.lines().find_map(|line| line.strip_prefix("content-length:")).unwrap().trim().parse().unwrap();
+                    let mut body = vec![0; length];
+                    socket.read_exact(&mut body).await.unwrap();
+                    let body: Value = serde_json::from_slice(&body).unwrap();
+                    assert_eq!(body["signature"], if index == 0 { canonical.clone() } else { former.clone() });
+                    assert_eq!(body["token"], "token");
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let error = rejection.or(if legacy && index == 0 { Some("invalid_signature") } else { None });
+                    let (status, body) = match error {
+                        Some(error) => ("401 Unauthorized", json!({ "error": error }).to_string()),
+                        None => ("200 OK", "{}".into()),
+                    };
+                    socket.write_all(format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+                }
+            });
+            let result = tokio::time::timeout(Duration::from_secs(5), enroll_response(&key, &origin, "token", &station)).await.unwrap();
+            assert_eq!(result.is_ok_and(|response| response.status().is_success()), success);
+            server.await.unwrap();
+            assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), expected);
+        }
+    }
 
     #[test]
     fn presence_proofs_work_for_new_and_pre_rename_clouds() {
