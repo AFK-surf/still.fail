@@ -356,12 +356,14 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                 })
             }
             // Waiting is drawn as a line with an hourglass, not as a rule across, saying how long it waited: from its
-            // mark until the next word came in (what brought it back), at most its limit; still waiting, the clients
-            // count on from `since`.
+            // mark until the next word came in (what brought it back) or it called a tool again (brought back by what
+            // the transcript does not show as a word, such as a background task's notice), at most its limit; still
+            // waiting, the clients count on from `since`.
             Item::Mark(kind, seconds) if kind == "waiting" => {
                 let at = |i: usize| timeline[i].get("at").and_then(Value::as_str).and_then(epoch_ms).map(|ms| ms as i64);
                 let since = at(*first);
-                let until = since.and_then(|_| (*first + 1..timeline.len()).find(|&j| s(&timeline[j], "kind") == "user" && !flag(&timeline[j], "subagent")).and_then(at));
+                let back = |j: usize| matches!(s(&timeline[j], "kind").as_str(), "user" | "tool_call") && !flag(&timeline[j], "subagent");
+                let until = since.and_then(|_| (*first + 1..timeline.len()).find(|&j| back(j)).and_then(at));
                 let waited = since.zip(until).map(|(a, b)| {
                     let w = ((b - a).max(0) / 1000) as u64;
                     seconds.map_or(w, |s| w.min(s))
@@ -618,6 +620,13 @@ mod tests {
         // Still waiting: the clients count on from since.
         let now = waits("{\"kind\":\"waiting\",\"seconds\":600}", None);
         assert_eq!((now["text"].as_str(), now["wait"]["until"].is_null()), (Some("等待中，最长 10m"), true));
+        // Back at work without a word in the transcript (a background task's notice): it stopped waiting at its next call.
+        let live = json!({"loaded": true, "timeline": [
+            {"kind": "tool_call", "tool": "mcp__ember__chat_state", "text": "{\"kind\":\"waiting\",\"seconds\":600}", "callId": "w", "at": "2026-09-27T00:00:00.000Z"},
+            {"kind": "tool_result", "callId": "w", "ok": true, "text": "ok", "at": "2026-09-27T00:00:01.000Z"},
+            {"kind": "tool_call", "tool": "Bash", "text": "{\"command\":\"ls\"}", "callId": "b", "at": "2026-09-27T00:03:00.000Z"},
+        ]});
+        assert_eq!(present(&live, &cx(&threads, &members, &slack))["items"][0]["body"]["content"]["text"], "等待了 3m / 10m");
         assert_eq!(h["live"], json!([{"id": "s", "text": "正在思考…"}]));
         assert_eq!(h["phase"]["text"], "正在启动 Codex");
         assert_eq!(h["usage"][4]["value"], "50%");
