@@ -59,7 +59,7 @@ export const underSide = style({
   },
 });
 
-/** One decision: its chat's title and messages scrolling, its options pinned at the foot. Covers what is under it. */
+/** One decision: its chat's title, messages and options scrolling, the composer floating at the foot. Covers what is under it. */
 export const card = style({
   position: "absolute", inset: "0", zIndex: "1", display: "flex", flexDirection: "column", background: ground,
   touchAction: "pan-y",
@@ -72,8 +72,9 @@ export const scroll = style({
   flex: "1", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain", display: "flex", flexDirection: "column",
   // Its own scrolling is up and down only; across is the swipe's (touch-action stops at the nearest scroller).
   touchAction: "pan-y",
-  padding: "24px 32px 12px",
-  "@media": { "(max-width: 700px)": { padding: "16px 16px 8px" } },
+  // Its end clear of the foot floating over it (DecisionFoot: its height).
+  padding: "24px 32px calc(12px + var(--foot-height, 0px))",
+  "@media": { "(max-width: 700px)": { padding: "16px 16px calc(8px + var(--foot-height, 0px))" } },
 });
 /** The column, the chat's width: at the foot of the scroller while it is short, so the post sits over its options. */
 export const column = style({
@@ -93,8 +94,9 @@ export const count = style({
   fontVariantNumeric: "tabular-nums",
 });
 
+/** The composer (and the phone's hint) over the messages' foot, nothing of its own behind it: they run on under it. */
 export const foot = style({
-  flex: "none", padding: "8px 32px 16px",
+  position: "absolute", left: "0", right: "0", bottom: "0", padding: "8px 32px 16px", pointerEvents: "none",
   "@media": { "(max-width: 700px)": { padding: "8px 16px calc(12px + var(--m-foot, 0px))" } },
 });
 /** Keep one expanded line ready: focus changes the capsule, never the messages or answer buttons above it. */
@@ -106,7 +108,8 @@ export const reply = style({
 // The footer already supplies the page gutters. Do not inset the chat composer a second time.
 globalStyle(`${reply} > ${composerWrap}`, { paddingLeft: "0", paddingRight: "0" });
 export const footColumn = style({ maxWidth: "760px", margin: "0 auto" });
-globalStyle(`${footColumn} ${options}`, { marginTop: "0" });
+// Only what is drawn takes the pointer: the room kept over the composer passes it to the messages under it.
+globalStyle(`${footColumn} > :not(${reply}), ${reply} > *`, { pointerEvents: "auto" });
 /** ← 待定　不再提醒 →: what a swipe does (the phone), or the two as words to press (the wide screen). */
 export const hint = style({
   display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", height: "20px", marginTop: "10px",

@@ -1,7 +1,8 @@
 // Decisions an agent left to people (a block post with options, client/core/src/decisions.rs), as both screens draw
 // them. In a chat: the post is a message like any other, its options right under it, one per line, the recommended one
 // last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
-// what came just before it drawn as the chat draws them, its options pinned at the foot; 待定 puts it at the back of the
+// what came just before it drawn as the chat draws them, its options under the post and the chat's composer floating
+// over them at the foot; 待定 puts it at the back of the
 // queue on this device, 不再提醒 stops asking this viewer. The phone swipes for those two (left, right); the wide
 // screen lists them all and shows the one picked (DecisionDesk.tsx), with those two as buttons.
 //
@@ -294,14 +295,15 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
                 <span className={css.count}>1 / {items.length}</span>
               </div>
               <DecisionMessages d={d} inline={inline} />
+              <DecisionPicks d={d} onAnswered={() => answered(d)} onOpen={() => onOpen(path)} />
             </div>
           </div>
-          <div className={css.foot}>
+          <DecisionFoot>
             <div className={css.footColumn}>
-              <DecisionAnswer d={d} mobile onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} onOpen={() => onOpen(path)} />
+              <DecisionAnswer d={d} mobile onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} />
               <div className={css.hint} aria-hidden="true"><span>← {t("web-main.decisions.defer")}</span><span>{t("web-main.decisions.dismiss")} →</span></div>
             </div>
-          </div>
+          </DecisionFoot>
         </div>
       </StationContext.Provider>
     );
@@ -331,22 +333,46 @@ export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boole
 }
 
 /**
- * How a decision is answered, by its card: its options and a reply to write (options), the reply alone (text), or a way
- * to its chat (a type this page does not know). `onAnswered` once an option is picked or the reply sent; `onReplying`
- * while the reply is on its way.
+ * Under the post, as in its chat: its options (options), or a way to its chat (a type this page does not know).
+ * `onAnswered` once one is picked.
  */
-export function DecisionAnswer({ d, mobile, onAnswered, onReplying, onOpen }: {
-  d: DecisionItem; mobile: boolean; onAnswered: () => void; onReplying: (sending: boolean) => void; onOpen: () => void;
+export function DecisionPicks({ d, onAnswered, onOpen }: { d: DecisionItem; onAnswered: () => void; onOpen: () => void }) {
+  const type = cardType(d.card, d.options);
+  if (type === "options") return <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={onAnswered} />;
+  if (type === "text") return null;
+  return <button type="button" className={css.elsewhere} onClick={onOpen}>{t("web-main.decisions.elsewhere")}</button>;
+}
+
+/**
+ * The reply to write, at the page's foot (options and text cards): the chat's composer. `onAnswered` once it is sent;
+ * `onReplying` while it is on its way.
+ */
+export function DecisionAnswer({ d, mobile, onAnswered, onReplying }: {
+  d: DecisionItem; mobile: boolean; onAnswered: () => void; onReplying: (sending: boolean) => void;
 }) {
   const type = cardType(d.card, d.options);
-  const reply = (placeholder?: string) => <DecisionReply key={keyOf(d)} session={d.session} mobile={mobile} station={d.station} thread={d.thread} seq={d.seq}
-    placeholder={placeholder} onSent={onAnswered} onSending={onReplying} />;
-  if (type === "options") return <>
-    <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={onAnswered} />
-    {reply()}
-  </>;
-  if (type === "text") return reply(d.card?.placeholder);
-  return <button type="button" className={css.elsewhere} onClick={onOpen}>{t("web-main.decisions.elsewhere")}</button>;
+  if (type !== "options" && type !== "text") return null;
+  return <DecisionReply key={keyOf(d)} session={d.session} mobile={mobile} station={d.station} thread={d.thread} seq={d.seq}
+    placeholder={type === "text" ? d.card?.placeholder : undefined} onSent={onAnswered} onSending={onReplying} />;
+}
+
+/**
+ * The page's foot, floating over the decision's messages as the chat's composer does over its own: they scroll on
+ * under it, kept clear of it at their end by its height (`--foot-height` on the card).
+ */
+export function DecisionFoot({ children }: { children: ReactNode }) {
+  const foot = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = foot.current;
+    const card = el?.parentElement;
+    if (!el || !card) return;
+    const put = () => card.style.setProperty("--foot-height", `${el.offsetHeight}px`);
+    put();
+    const seen = new ResizeObserver(put);
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, []);
+  return <div ref={foot} className={css.foot}>{children}</div>;
 }
 
 /**

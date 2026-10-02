@@ -13,6 +13,7 @@
 package fail.still.android.screens
 
 import fail.still.android.ui.t
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.animation.AnimatedVisibility
 import fail.still.android.ui.AgentStateMark
 import fail.still.android.data.ChatState
@@ -527,7 +528,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
 
 /**
  * A decision as the page shows it: its chat's title (to the chat), the messages before it and the post as the chat
- * draws them (scrolled to the post), its options at its foot.
+ * draws them (scrolled to the post), its options under the post, the chat's composer floating over them at the foot.
  */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.Face(
@@ -561,43 +562,49 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
         val y = postAt ?: return@LaunchedEffect
         scroll.scrollTo((y - with(density) { 48.dp.toPx() }).toInt().coerceAtLeast(0))
     }
-    Column(
-        Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        messages.forEach { m ->
-            Box(if (m === item.message) Modifier.onGloballyPositioned { if (postAt == null) postAt = it.positionInParent().y } else Modifier) {
-                SaidAlone(ctx, m)
+    val card = item.card
+    val type = card?.type ?: "options"
+    // The composer floats over the messages, as in the chat: they scroll on under it, their end kept clear of it.
+    val host = remember(item.key) { Host() }
+    var footHeight by remember(item.key) { mutableIntStateOf(0) }
+    Box(Modifier.weight(1f).fillMaxWidth()) {
+        Column(
+            Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg).verticalScroll(scroll)
+                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp + with(density) { footHeight.toDp() }),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            messages.forEach { m ->
+                Box(if (m === item.message) Modifier.onGloballyPositioned { if (postAt == null) postAt = it.positionInParent().y } else Modifier) {
+                    SaidAlone(ctx, m)
+                }
+            }
+            // Under the post, as in its chat: its options, or (a card this app does not know) the way to answer it there.
+            when (type) {
+                "options" -> DecisionOptions(card?.options ?: item.options, onPick = onPick)
+                "text" -> {}
+                else -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)
+                    Box(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink)
+                            .clickable { app.push(Screen.Chat(item.station, of, at = item.seq)) }.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(t("android-misc.decisions.goReply"), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }
+                }
             }
         }
-    }
-    Spacer(Modifier.height(4.dp))
-    val card = item.card
-    when (card?.type ?: "options") {
-        "options" -> {
-            DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 14.dp), onPick = onPick)
-            Spacer(Modifier.height(8.dp))
-            DecisionComposer(item, null, onField, onReply)
-        }
-        "text" -> DecisionComposer(item, card?.placeholder, onField, onReply)
-        // A card this app does not know: answered in its chat, at the post.
-        else -> Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)
-            Box(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink)
-                    .clickable { app.push(Screen.Chat(item.station, of, at = item.seq)) }.padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center,
-            ) { Text(t("android-misc.decisions.goReply"), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }
+        if (type == "options" || type == "text") {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { footHeight = it.height }) {
+                DecisionComposer(item, host, if (type == "text") card?.placeholder else null, onField, onReply)
+            }
         }
     }
 }
 
 /** Uses the chat's entire composer: attachments, references, draft extras, capsule and resizing. */
 @Composable
-private fun DecisionComposer(item: DecisionItem, placeholder: String?, onField: (LayoutCoordinates) -> Unit, onReply: () -> Unit) {
+private fun DecisionComposer(item: DecisionItem, host: Host, placeholder: String?, onField: (LayoutCoordinates) -> Unit, onReply: () -> Unit) {
     val app = LocalApp.current
     val draft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
-    val host = remember(item.key) { Host() }
     val launchers = AttachLaunchers { picked -> app.upload(draft, item.station, picked, app.scope) }
     host.spec = ComposerSpec(
         station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: t("android-misc.decisions.placeholder"),
@@ -609,5 +616,5 @@ private fun DecisionComposer(item: DecisionItem, placeholder: String?, onField: 
         val extra = if (draft.composerExpanded) 0 else 4.dp.roundToPx() + 36.dp.roundToPx()
         val height = constraints.constrainHeight(composer.height + extra)
         layout(composer.width, height) { composer.place(0, height - composer.height) }
-    }, overContent = false)
+    })
 }

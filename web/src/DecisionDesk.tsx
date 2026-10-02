@@ -1,6 +1,6 @@
 // 奏 on the wide screen: one of the sidebar's lists (beside 全部, 我参与的 and 监控中, sliding to it as they do), every
 // decision waiting for the viewer, those set aside (待定) last; the one picked fills the 奏 page as the phone's card
-// does, its options and the chat's composer at its foot. The sidebar stays on 奏 while another page is open (a new
+// does, its options under its post and the chat's composer floating at its foot. The sidebar stays on 奏 while another page is open (a new
 // chat). ⌥↑ ⌥↓ go up and down the list (the chats' keys); 待定 and 不再提醒 are in the bar.
 //
 // How it moves: opened from 奏 in the sidebar's foot, the list comes out of that row (each row drawn where it rests,
@@ -11,7 +11,7 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type Reac
 import { useLocation, useNavigate } from "react-router";
 import { animate } from "motion";
 import type { DecisionItem } from "./core/shapes.ts";
-import { DecisionAnswer, DecisionMessages, flyOff, keyOf, useDecisionQueue } from "./Decisions.tsx";
+import { DecisionAnswer, DecisionFoot, DecisionMessages, DecisionPicks, flyOff, keyOf, useDecisionQueue } from "./Decisions.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { StationContext, stationBase } from "./station.tsx";
 import { useShortcut } from "./keymap.ts";
@@ -190,13 +190,14 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
               <div className={deckCss.scroll}>
                 <div className={deckCss.column}>
                   <DecisionMessages d={d} inline={false} />
+                  <DecisionPicks d={d} onAnswered={() => answered(d)} onOpen={() => onOpen(path)} />
                 </div>
               </div>
-              <div className={deckCss.foot}>
+              <DecisionFoot>
                 <div className={deckCss.footColumn}>
-                  <DecisionAnswer d={d} mobile={false} onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} onOpen={() => onOpen(path)} />
+                  <DecisionAnswer d={d} mobile={false} onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} />
                 </div>
-              </div>
+              </DecisionFoot>
             </div>
           </StationContext.Provider>
         ) : view.value && !view.value.loading ? <DecisionsIdle view={view.value} onOpen={onOpen} />
