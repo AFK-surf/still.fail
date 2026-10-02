@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::rc::{Rc, Weak};
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::entries::merge;
 use crate::error::{CoreError, Result};
@@ -270,7 +271,7 @@ impl Views {
         };
         let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
         let title = outbox.first().and_then(|m| m.get("text")).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty())
-            .and_then(|t| t.lines().map(str::trim).find(|l| !l.is_empty())).unwrap_or("新对话").to_string();
+            .and_then(|t| t.lines().map(str::trim).find(|l| !l.is_empty())).map(str::to_string).unwrap_or_else(|| t!("core-views.new_chat"));
         Some(Ok(json!({
             "me": self.me(scope),
             "thread": null,
@@ -334,7 +335,7 @@ impl Views {
                 None => (key.clone(), Value::Null),
             };
             let mut row = json!({
-                "id": id, "session": id, "thread": thread, "title": title.unwrap_or_else(|| "新对话".to_string()), "agents": [], "last": null,
+                "id": id, "session": id, "thread": thread, "title": title.unwrap_or_else(|| t!("core-views.new_chat")), "agents": [], "last": null,
                 "unread": false, "mine": true, "lastActiveAt": chat.created_at.round() as i64, "connect": null, "origin": null,
                 // As its station's row will say it: the list keeps it the same row from asked to made to listed.
                 "clientKey": key,
@@ -479,14 +480,14 @@ impl Views {
             Topic::Connects { scope, mine } => self.connects(scope, *mine),
             Topic::Chat { station, thread: Some(thread), .. } => self.chat(station, *thread),
             Topic::Chat { station, thread: None, session: Some(key) } if key.starts_with(PENDING_PREFIX) => {
-                self.pending_chat(station, key).or_else(|| Some(Err(CoreError::new("http_404", "没有这个对话").with_status(404))))
+                self.pending_chat(station, key).or_else(|| Some(Err(CoreError::new("http_404", t!("core-views.error.no_chat")).with_status(404))))
             }
             // An item's page by its agent: its chat once it has one (made here or elsewhere), else the agent alone.
             Topic::Chat { station, thread: None, session: Some(key) } => match self.bound_thread(station, key) {
                 Some(thread) => self.chat(station, thread),
                 None => self.unchatted(station, key),
             },
-            Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
+            Topic::Chat { .. } => Some(Err(CoreError::invalid(t!("core-views.error.chat_needs_thread")))),
             Topic::History { station, key } => self.history(station, key),
             Topic::Archive { scope } => self.archive(scope),
             Topic::Usage { scope, days } => self.usage(scope, days.unwrap_or(7)),
@@ -772,11 +773,11 @@ impl Views {
                     // Its station offline: the row says so itself (greyed, marked), not the list above it; its link
                     // coming back (or failing and retried), the same, marked with a turning ring.
                     if !s.online {
-                        row["offline"] = json!(format!("{} 离线", s.name));
+                        row["offline"] = json!(t!("core-views.station.offline", name = s.name));
                     } else {
                         match self.link(&s.address)["state"].as_str().unwrap_or("connecting") {
-                            "error" => row["reconnecting"] = json!(format!("连不上 {}，正在重试", s.name)),
-                            "reconnecting" => row["reconnecting"] = json!(format!("正在重连 {}…", s.name)),
+                            "error" => row["reconnecting"] = json!(t!("core-views.station.retrying", name = s.name)),
+                            "reconnecting" => row["reconnecting"] = json!(t!("core-views.station.reconnecting_now", name = s.name)),
                             _ => {}
                         }
                     }
@@ -797,13 +798,13 @@ impl Views {
                         let o = row.get("origin").cloned().unwrap_or(Value::Null);
                         let text = |k: &str| o.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
                         let place = text("channelName").map(|n| format!("#{n}"))
-                            .or_else(|| text("channel").filter(|c| c.starts_with('D')).map(|_| "私信".to_string()));
+                            .or_else(|| text("channel").filter(|c| c.starts_with('D')).map(|_| t!("core-views.direct_message")));
                         row["originText"] = json!(["Slack".to_string()].into_iter().chain(text("teamName")).chain(place).collect::<Vec<_>>().join(" · "));
                     }
                     // Its line: what was said last, without mentions (a file alone says so).
                     if let Some(last) = row.get_mut("last").filter(|l| l.is_object()) {
                         let text = crate::format::clean_text(last.get("text").and_then(Value::as_str).unwrap_or(""));
-                        last["preview"] = json!(if text.is_empty() { "（文件）".to_string() } else { text });
+                        last["preview"] = json!(if text.is_empty() { t!("core-views.file") } else { text });
                     }
                     // Who is in it, for its pictures: who started it first, then everyone who wrote in it, each once.
                     crate::present::row_people(&mut row, &me, &slack_users, &members);
@@ -812,7 +813,7 @@ impl Views {
                         // What its picture says when pointed at: who, and an agent's state.
                         let name = row["last"]["by"]["name"].as_str().unwrap_or("").to_string();
                         row["last"]["by"]["label"] = json!(match row["last"]["by"]["state"].as_str() {
-                            Some(state) => format!("{name}（{}）", crate::present::badge_text(state)),
+                            Some(state) => t!("core-views.by_label", name = name, state = crate::present::badge_text(state)),
                             None => name,
                         });
                         let model = row["last"]["by"]["model"].as_str().map(str::to_string);
@@ -858,9 +859,9 @@ impl Views {
             // What is wrong with it, if anything: offline, failing, or its link coming back (with what was read of it
             // there to show; a station first connecting is only loading).
             let wrong = match state {
-                "offline" => Some(("offline", format!("{} 离线", s.name))),
-                "error" => Some(("error", format!("连不上 {}", s.name))),
-                "connecting" if matches!(read, Some(Ok(_))) => Some(("reconnecting", format!("正在重连 {}", s.name))),
+                "offline" => Some(("offline", t!("core-views.station.offline", name = s.name))),
+                "error" => Some(("error", t!("core-views.station.unreachable", name = s.name))),
+                "connecting" if matches!(read, Some(Ok(_))) => Some(("reconnecting", t!("core-views.station.reconnecting", name = s.name))),
                 _ => None,
             };
             if let Some(w) = wrong {
@@ -876,7 +877,7 @@ impl Views {
             [(state, text)] => json!({ "text": text, "state": state, "retry": false }),
             all => {
                 let worst = ["error", "offline", "reconnecting"].into_iter().find(|w| all.iter().any(|(s, _)| s == w)).unwrap_or("offline");
-                json!({ "text": format!("{} 台 station 异常", all.len()), "state": worst, "retry": false })
+                json!({ "text": t!("core-views.station.troubles", n = all.len()), "state": worst, "retry": false })
             }
         };
         // The glyph, and what the list says with no rows (looks.rs).
@@ -919,7 +920,7 @@ impl Views {
         }
         let (now, offset) = (self.host.now_ms(), self.host.utc_offset_min(self.host.now_ms()));
         let top = (!pinned.is_empty()).then(|| {
-            json!({ "daysAgo": -1, "at": pinned.first().map(at).unwrap_or(0.0), "label": "已固定", "pinned": true, "items": pinned })
+            json!({ "daysAgo": -1, "at": pinned.first().map(at).unwrap_or(0.0), "label": t!("core-views.pinned"), "pinned": true, "items": pinned })
         });
         top.into_iter()
             .chain(days.into_iter().map(|(d, t, items)| json!({ "daysAgo": today - d, "at": t, "label": crate::format::day_label(t, now, offset), "items": items })))
@@ -947,15 +948,15 @@ impl Views {
             let c = self.clock();
             let summary = if !s.online {
                 match s.last_seen.as_f64() {
-                    Some(seen) => format!("离线 · {}", crate::format::relative_time(seen * 1000.0, c.now, c.offset_min)),
-                    None => "离线".to_string(),
+                    Some(seen) => t!("core-views.station.offline_since", ago = crate::format::relative_time(seen * 1000.0, c.now, c.offset_min)),
+                    None => t!("core-views.station.offline_short"),
                 }
             } else if let Some(h) = &host {
                 let running = overview.as_ref().and_then(|o| o.get("counts")).and_then(|c| c.get("running")).and_then(Value::as_u64).unwrap_or(0);
                 let what = h.get("cpuModel").and_then(Value::as_str).filter(|m| !m.is_empty()).or_else(|| h.get("os").and_then(Value::as_str)).unwrap_or("");
-                format!("{what} · {}", if running > 0 { format!("{running} 个 agent 在跑") } else { "空闲".to_string() })
+                format!("{what} · {}", if running > 0 { t!("core-views.station.running", n = running) } else { t!("core-views.station.idle") })
             } else {
-                "正在连接…".to_string()
+                t!("core-views.station.connecting")
             };
             json!({
                 "station": s.address, "id": s.id, "name": s.name, "summary": summary,
@@ -1029,7 +1030,7 @@ impl Views {
         let thread = match self.store.value(&Topic::Threads { station: station.to_string() }) {
             Some(Ok(threads)) => match threads.as_array().into_iter().flatten().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)) {
                 Some(thread) => thread.clone(),
-                None => return Some(Err(CoreError::new("http_404", "没有这个对话").with_status(404))),
+                None => return Some(Err(CoreError::new("http_404", t!("core-views.error.no_chat")).with_status(404))),
             },
             Some(Err(error)) => return Some(Err(error)),
             // Not read yet: the thread as it was kept with its entries.
@@ -1124,7 +1125,7 @@ impl Views {
         let str_of = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
         let slack = str_of(&thread, "surface") != "ember";
         let channel = str_of(&thread, "channel");
-        let place = slack.then(|| if channel.starts_with('D') { "私信".to_string() } else {
+        let place = slack.then(|| if channel.starts_with('D') { t!("core-views.direct_message") } else {
             format!("#{}", thread.get("channelName").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(&channel))
         });
         let workspace_url = agents.iter().filter_map(|a| a.get("connect")).filter(|c| str_of(c, "kind") == "slack")
@@ -1223,7 +1224,7 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
             let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
             let name = crate::present::member_name(members, &author).map(str::to_string).or(said_name)
                 // "local": written on a station's own page, in chats from before it went.
-                .unwrap_or_else(|| if author == "local" { "本机".into() } else { author.clone() });
+                .unwrap_or_else(|| if author == "local" { t!("core-views.local_author") } else { author.clone() });
             json!({ "name": name, "picture": member.and_then(|x| x.get("picture")).filter(|p| p.as_str().is_some_and(|p| !p.is_empty())) })
         }
     };
@@ -1460,7 +1461,7 @@ impl Views {
             // Not read yet, or gone.
             None => {
                 let detail = self.store.value(&Topic::Session { station: station.to_string(), key: key.to_string() })?;
-                return Some(Err(detail.err().unwrap_or_else(|| CoreError::new("http_404", "没有这个 agent").with_status(404))));
+                return Some(Err(detail.err().unwrap_or_else(|| CoreError::new("http_404", t!("core-views.error.no_agent")).with_status(404))));
             }
         };
         // Its title is the station's: the page waits for its items.
@@ -1474,7 +1475,7 @@ impl Views {
                 Err(error) => return Some(Err(error)),
             }
         }
-        let title = row.and_then(|r| r.get("title").cloned()).unwrap_or_else(|| json!("（还没有消息）"));
+        let title = row.and_then(|r| r.get("title").cloned()).unwrap_or_else(|| json!(t!("core-views.no_messages")));
         let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
         Some(Ok(json!({
             "me": self.me(scope),
@@ -1522,9 +1523,9 @@ pub fn chat_title(thread: &Value) -> String {
         return format!("#{channel}");
     }
     if thread.get("surface").and_then(Value::as_str) != Some("ember") && text("channel").is_some_and(|c| c.starts_with('D')) {
-        return "私信".to_string();
+        return t!("core-views.direct_message");
     }
-    "（还没有消息）".to_string()
+    t!("core-views.no_messages")
 }
 
 /// Text without Slack's `<@U123>` mentions.
@@ -1596,15 +1597,14 @@ fn connect_sessions(item: &mut Value, connect: &Value, connects: &[Value], sessi
         let mut c = shown(s);
         let others: Vec<String> = s.get("boundTo").and_then(Value::as_array).into_iter().flatten()
             .filter_map(Value::as_str).filter(|c| *c != id).map(name_of).collect();
-        let mut description = format!(
-            "{} · {} · {} 轮 · {}",
-            if str_of(s, "scope") == "all" { "单会话" } else { "来自一个 thread" },
+        let mut description = [
+            if str_of(s, "scope") == "all" { t!("core-views.connect.single") } else { t!("core-views.connect.from_thread") },
             name_of(&str_of(s, "connect")),
-            s.get("turns").and_then(Value::as_u64).unwrap_or(0),
+            t!("core-views.connect.turns", n = s.get("turns").and_then(Value::as_u64).unwrap_or(0)),
             crate::format::relative_time(at(s), clock.now, clock.offset_min),
-        );
+        ].join(" · ");
         if !others.is_empty() {
-            description.push_str(&format!(" · 也被 {} 使用", others.join("、")));
+            description.push_str(&format!(" · {}", t!("core-views.connect.also_used", names = others.join(&t!("core-views.list_separator")))));
         }
         c["description"] = json!(description);
         c["current"] = json!(Some(str_of(s, "key").as_str()) == current);
@@ -1647,7 +1647,7 @@ fn attention(overview: Option<&Value>, session: &Value, now: f64) -> Value {
         let check = p.get("check");
         if let Some(state @ ("login" | "failed")) = check.and_then(|c| c.get("state")).and_then(Value::as_str) {
             let name = p.get("name").and_then(Value::as_str).unwrap_or("");
-            let text = if state == "login" { format!("「{name}」要重新登录") } else { format!("「{name}」的 key 被拒绝") };
+            let text = if state == "login" { t!("core-views.attention.login", name = name) } else { t!("core-views.attention.key_refused", name = name) };
             out.push(json!({ "kind": "account", "text": text }));
         }
         if p.get("quota").and_then(|q| q.get("state")).and_then(Value::as_str) == Some("ok") {
@@ -1658,7 +1658,7 @@ fn attention(overview: Option<&Value>, session: &Value, now: f64) -> Value {
                     let left = left.max(0.0).round() as i64;
                     let until = w.get("resetsAt").and_then(Value::as_i64);
                     out.push(json!({
-                        "kind": "quota", "text": format!("{label}剩余 {left}%"),
+                        "kind": "quota", "text": t!("core-views.attention.quota_left", label = label, left = left),
                         "more": until.map(|at| crate::format::refills_in(at as f64, now)),
                         "quota": { "left": left, "mark": crate::format::window_mark(label).0, "level": if left <= 10 { "red" } else { "amber" }, "until": until },
                     }));
@@ -1669,7 +1669,7 @@ fn attention(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     if let Some(disk) = overview.and_then(|o| o.get("disk")).filter(|d| d.is_object()) {
         let (free, total) = (disk.get("freeBytes").and_then(Value::as_f64).unwrap_or(0.0), disk.get("totalBytes").and_then(Value::as_f64).unwrap_or(0.0));
         if total > 0.0 && (free / total * 100.0 <= LOW_DISK || free <= LOW_DISK_BYTES) {
-            out.push(json!({ "kind": "disk", "text": format!("磁盘剩 {}", crate::format::gb(free)) }));
+            out.push(json!({ "kind": "disk", "text": t!("core-views.attention.disk", size = crate::format::gb(free)) }));
         }
     }
     Value::Array(out)
@@ -1800,10 +1800,10 @@ pub fn models(overview: Option<&Value>, now: f64) -> Value {
 /// Used up until a time (or for no one knows how long): `{ until, text, back }` (额度用完 · 3 小时后恢复; 3 小时后恢复).
 fn spent_view(until: f64, now: f64) -> Value {
     let until = until.is_finite().then_some(until);
-    let back = until.map(|at| format!("{}恢复", crate::format::time_until(at, now)));
+    let back = until.map(|at| t!("core-views.spent.back", when = crate::format::time_until(at, now)));
     let text = match &back {
-        Some(back) => format!("额度用完 · {back}"),
-        None => "额度用完".to_string(),
+        Some(back) => t!("core-views.spent.until", back = back),
+        None => t!("core-views.spent.text"),
     };
     json!({ "until": until, "text": text, "back": back })
 }

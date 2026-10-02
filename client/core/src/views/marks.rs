@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use serde_json::{Map, Value, json};
+use stillfail_i18n::{Lang, t};
 
 use super::Views;
 use crate::error::Result;
@@ -119,7 +120,7 @@ impl Views {
         let mut value = json!({ "workspaces": all });
         if let Some(tone) = others.tone() {
             value["others"] = json!(tone);
-            value["othersLabel"] = json!(format!("其他 workspace：{}", others.label()));
+            value["othersLabel"] = json!(t!("core-views.marks.others", label = others.label()));
         }
         Some(Ok(value))
     }
@@ -141,15 +142,19 @@ impl Counts {
 
     /// 2 个需要处理 · 1 个在等你 · 3 个有新消息
     fn label(&self) -> String {
+        self.label_in(stillfail_i18n::current())
+    }
+
+    fn label_in(&self, lang: Lang) -> String {
         let mut parts = Vec::new();
         if self.alert > 0 {
-            parts.push(format!("{} 个需要处理", self.alert));
+            parts.push(t!(lang; "core-views.marks.alert", n = self.alert));
         }
         if self.wait > 0 {
-            parts.push(format!("{} 个在等你", self.wait));
+            parts.push(t!(lang; "core-views.marks.wait", n = self.wait));
         }
         if self.unread > 0 {
-            parts.push(format!("{} 个有新消息", self.unread));
+            parts.push(t!(lang; "core-views.marks.unread", n = self.unread));
         }
         parts.join(" · ")
     }
@@ -200,5 +205,13 @@ mod tests {
         assert_eq!(counts(2, 0, 3).label(), "2 个需要处理 · 3 个有新消息");
         assert_eq!(counts(0, 1, 1).label(), "1 个在等你 · 1 个有新消息");
         assert_eq!(counts(0, 0, 1).label(), "1 个有新消息");
+    }
+
+    #[test]
+    fn marks_are_said_in_english_too() {
+        let counts = |alert, wait, unread| Counts { alert, wait, unread };
+        assert_eq!(counts(2, 1, 1).label_in(Lang::En), "2 need attention · 1 waiting for you · 1 with new messages");
+        assert_eq!(counts(1, 0, 3).label_in(Lang::En), "1 needs attention · 3 with new messages");
+        assert_eq!(counts(0, 0, 1).label_in(Lang::Zh), "1 个有新消息");
     }
 }

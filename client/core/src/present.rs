@@ -4,6 +4,7 @@
 //! work them out.
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::format;
 use crate::protocol::Topic;
@@ -59,7 +60,7 @@ pub fn waiting(s: &Value) -> Value {
             let what = turn.and_then(|t| t.get("waitFor")).and_then(Value::as_str).map(str::trim).filter(|w| !w.is_empty());
             json!({
                 "since": since, "seconds": turn.and_then(|t| t.get("waitSeconds")).cloned().unwrap_or(Value::Null),
-                "text": what.map(|w| format!("在等：{w}")).unwrap_or_else(|| "等待中".to_string()),
+                "text": what.map(|w| t!("core-views.present.waiting_for", what = w)).unwrap_or_else(|| t!("core-views.present.waiting")),
             })
         }
         _ => Value::Null,
@@ -76,10 +77,11 @@ pub fn row_watch(agents: &[Value]) -> Option<Value> {
     if names.is_empty() {
         return None;
     }
-    let named = names.iter().map(|n| format!("「{n}」")).collect::<Vec<_>>().join("、");
+    let separator = t!("core-views.list_separator");
+    let named = names.iter().map(|n| t!("core-views.quoted", text = n)).collect::<Vec<_>>().join(&separator);
     Some(json!({
-        "text": format!("监控中：{}", names.join("、")),
-        "ask": format!("{named}还在监控。归档后它照常运行，有新消息时对话会回到列表。"),
+        "text": t!("core-views.present.watching_names", names = names.join(&separator)),
+        "ask": t!("core-views.present.watch_ask", names = named),
     }))
 }
 
@@ -180,8 +182,9 @@ pub fn row_state_line(row: &Value) -> Option<(String, Option<u64>)> {
     }
     // What one of them says the chat ends with (做完了：已合并所有代码), else 做完了.
     settled(row).then(|| {
-        let done = agents.iter().find(|a| a.get("statusText").and_then(Value::as_str).is_some_and(|t| t.starts_with("做完了：")));
-        let text = done.and_then(text_of).unwrap_or_else(|| "做完了".to_string());
+        // One that said what it leaves the chat with (`session`: its words beside 做完了).
+        let done = agents.iter().find(|a| a.get("lastTurn").and_then(|t| t.get("need")).and_then(Value::as_str).is_some_and(|n| !n.trim().is_empty()));
+        let text = done.and_then(text_of).unwrap_or_else(|| t!("core-views.present.done"));
         let about = done.and_then(|a| state_about(a, thread)).or_else(|| agents.iter().find_map(|a| state_about(a, thread)));
         (text, about)
     })
@@ -264,10 +267,10 @@ pub fn person(p: &mut Value, me: &Value, members: &[Value]) {
     let key = email.clone().unwrap_or_else(|| id.clone());
     let member = members.iter().find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&key)));
     let member_name = member.and_then(|m| m.get("name")).and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
-    let name = if id == "local" { "本机管理页".to_string() } else { member_name.or_else(|| str_of("name")).or(email.clone()).unwrap_or(id.clone()) };
+    let name = if id == "local" { t!("core-views.present.local_page") } else { member_name.or_else(|| str_of("name")).or(email.clone()).unwrap_or(id.clone()) };
     let mine = is_viewer(me, &id, &[]) || email.as_deref().is_some_and(|e| is_viewer(me, e, &[]));
     let picture = member.and_then(|m| m.get("picture")).and_then(Value::as_str).filter(|p| !p.is_empty());
-    p["shown"] = json!({ "name": name, "display": if mine { "你".to_string() } else { name.clone() }, "picture": picture, "mine": mine });
+    p["shown"] = json!({ "name": name, "display": if mine { t!("core-views.present.you") } else { name.clone() }, "picture": picture, "mine": mine });
 }
 
 /// A row's people as the clients show them (`person`): who started it first, then everyone who wrote in it, each once;
@@ -282,7 +285,7 @@ pub fn row_people(row: &mut Value, me: &Value, slack_users: &[String], members: 
         person(&mut p, me, members);
         if p.get("id").and_then(Value::as_str).is_some_and(|id| is_viewer(me, id, slack_users)) {
             p["shown"]["mine"] = json!(true);
-            p["shown"]["display"] = json!("你");
+            p["shown"]["display"] = json!(t!("core-views.present.you"));
         }
         p
     };
@@ -300,7 +303,7 @@ pub fn row_people(row: &mut Value, me: &Value, slack_users: &[String], members: 
     let display = |p: &Value| p["shown"]["display"].as_str().unwrap_or("").to_string();
     let starter = creator.as_ref().and_then(|c| people.iter().position(|p| p.get("id").is_some() && p.get("id") == c.get("id")));
     let rest: Vec<String> = people.iter().enumerate().filter(|(i, _)| Some(*i) != starter).map(|(_, p)| display(p)).collect();
-    let text: Vec<String> = starter.map(|i| format!("{} 发起", display(&people[i]))).into_iter().chain((!rest.is_empty()).then(|| rest.join("、"))).collect();
+    let text: Vec<String> = starter.map(|i| t!("core-views.present.started_by", name = display(&people[i]))).into_iter().chain((!rest.is_empty()).then(|| rest.join(&t!("core-views.list_separator")))).collect();
     row["peopleText"] = json!(text.join(" · "));
     if let Some(creator) = creator {
         row["creator"] = creator;
@@ -332,7 +335,7 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
         _ => {
             let mine = is_viewer(me, author, slack_users);
             let member = members.iter().find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(author)));
-            let name = if mine { "你".to_string() } else {
+            let name = if mine { t!("core-views.present.you") } else {
                 member.and_then(|m| m.get("name")).and_then(Value::as_str).filter(|n| !n.is_empty()).or(said_name).unwrap_or(author).to_string()
             };
             json!({
@@ -416,14 +419,14 @@ pub fn times(value: &mut Value, c: Clock) {
             }
             if map.contains_key("windows") && map.contains_key("state") {
                 if let Some(credits) = map.get("credits").filter(|v| v.is_object()) {
-                    let text = if credits["unlimited"] == true { "不限额".to_string() }
-                        else if let Some(balance) = credits["balance"].as_str() { format!("{balance} 积分") }
-                        else if credits["hasCredits"] == false { "0 积分".to_string() }
-                        else { "有可用积分 · 未提供余额".to_string() };
+                    let text = if credits["unlimited"] == true { t!("core-views.present.credits.unlimited") }
+                        else if let Some(balance) = credits["balance"].as_str() { t!("core-views.present.credits.balance", balance = balance) }
+                        else if credits["hasCredits"] == false { t!("core-views.present.credits.none") }
+                        else { t!("core-views.present.credits.unknown") };
                     map.insert("creditsText".into(), json!(text));
                 }
                 if let Some(count) = map.get("resetCount").and_then(Value::as_u64) {
-                    map.insert("resetText".into(), json!(format!("剩余 {count} 次")));
+                    map.insert("resetText".into(), json!(t!("core-views.present.resets_left", n = count)));
                 }
             }
             if !stamps.is_empty() {
@@ -448,14 +451,14 @@ pub fn session(s: &mut Value) {
     match status {
         // What it needs, in its words (要你帮忙：要 Stripe 的测试 key).
         "block" => if let Some(need) = said("need") {
-            text = format!("要你帮忙：{need}");
+            text = t!("core-views.present.need_help", need = need);
         },
         // What it leaves the chat with (做完了：已合并所有代码).
         "final" => if let Some(done) = said("need") {
-            text = format!("做完了：{done}");
+            text = t!("core-views.present.done_with", done = done);
         },
         // Why, in words (出问题：额度用完).
-        "failed" => text = format!("出问题：{}", format::failure_text(&said("detail").unwrap_or_default())),
+        "failed" => text = t!("core-views.present.failed", why = format::failure_text(&said("detail").unwrap_or_default())),
         _ => {}
     }
     if !waiting(s).is_null() {
@@ -463,9 +466,9 @@ pub fn session(s: &mut Value) {
         // Otherwise on what it said it waits for (an older station says nothing of it).
         let what = s.get("lastTurn").and_then(|t| t.get("waitFor")).and_then(Value::as_str).map(str::trim).filter(|w| !w.is_empty());
         text = match (s.get("watch").is_some_and(Value::is_object), what) {
-            (true, _) => "监控中".to_string(),
-            (false, Some(what)) => format!("在等：{what}"),
-            (false, None) => "等待中".to_string(),
+            (true, _) => t!("core-views.present.watching"),
+            (false, Some(what)) => t!("core-views.present.waiting_for", what = what),
+            (false, None) => t!("core-views.present.waiting"),
         };
     }
     let fields = s.clone();
@@ -474,7 +477,7 @@ pub fn session(s: &mut Value) {
     let model = str_of("model");
     let title = str_of("title").filter(|t| !t.is_empty())
         .or_else(|| str_of("firstText").map(|t| format::clean_text(&t)).filter(|t| !t.is_empty()))
-        .unwrap_or_else(|| "（还没有消息）".into());
+        .unwrap_or_else(|| t!("core-views.no_messages"));
     let badge = mark_of(s);
     s["statusText"] = json!(text);
     s["tone"] = json!(tone);
@@ -492,11 +495,11 @@ pub fn session(s: &mut Value) {
 }
 
 /// A mark in words: what it says when pointed at.
-pub fn badge_text(badge: &str) -> &'static str {
+pub fn badge_text(badge: &str) -> String {
     match badge {
-        "block" => "agent 停下来等人处理",
-        "run" => "工作中",
-        _ => "失败了，需要处理",
+        "block" => t!("core-views.present.badge.block"),
+        "run" => t!("core-views.present.badge.run"),
+        _ => t!("core-views.present.badge.failed"),
     }
 }
 
@@ -536,7 +539,7 @@ pub fn profile(p: &mut Value) {
     }
     // An account its provider refuses (suspended, on hold) says so first, whatever its last check found.
     let blocked = p.get("quota").and_then(|q| q.get("state")).and_then(Value::as_str) == Some("blocked");
-    let (text, tone) = if blocked { ("被停用", "red") } else { format::check_text(p.get("check").unwrap_or(&Value::Null)) };
+    let (text, tone) = if blocked { (t!("core-views.present.profile.blocked"), "red") } else { let (text, tone) = format::check_text(p.get("check").unwrap_or(&Value::Null)); (text.to_string(), tone) };
     p["checkText"] = json!(text);
     p["checkTone"] = json!(tone);
     p["trouble"] = profile_trouble(p);
@@ -551,7 +554,7 @@ pub fn profile(p: &mut Value) {
     let mut all: Vec<&str> = found.iter().filter_map(Value::as_str).chain(enabled.iter().copied()).collect();
     all.sort_unstable();
     all.dedup();
-    let text = if all.is_empty() { "还没有列出模型".to_string() } else { format!("已启用 {} / {} 个模型", enabled.len(), all.len()) };
+    let text = if all.is_empty() { t!("core-views.present.profile.no_models") } else { t!("core-views.present.profile.models", enabled = enabled.len(), n = all.len()) };
     let by_series = series(&all);
     // What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
     let mut available: Vec<String> = Vec::new();
@@ -575,31 +578,31 @@ fn profile_trouble(p: &Value) -> Value {
     let check = &p["check"];
     let quota = &p["quota"];
     let detail = |v: &Value, fallback: &str| v["detail"].as_str().filter(|s| !s.trim().is_empty()).unwrap_or(fallback).to_string();
-    let issue = |title: &str, detail: String, next: &str, action: &str, label: &str|
+    let issue = |title: &str, detail: String, next: String, action: &str, label: String|
         json!({ "title": title, "detail": detail, "next": next, "action": action, "label": label });
     if quota["state"] == "blocked" {
-        return issue("账号被停用", detail(quota, "服务商拒绝了这个账号"),
-            "到服务商的账号页面查看停用原因，按提示恢复账号；处理后重新查询额度", "quota", "重新查询额度");
+        return issue(&t!("core-views.present.trouble.blocked"), detail(quota, &t!("core-views.present.trouble.blocked_detail")),
+            t!("core-views.present.trouble.blocked_next"), "quota", t!("core-views.present.trouble.quota_again"));
     }
     if check["state"] == "login" || check["state"] == "failed" {
-        let title = if check["state"] == "login" { "需要登录" } else { "账号检查失败" };
-        let why = detail(check, title);
+        let title = if check["state"] == "login" { t!("core-views.present.trouble.login") } else { t!("core-views.present.trouble.check_failed") };
+        let why = detail(check, &title);
         if p["machine"] == true && check["state"] == "login" {
-            return issue(title, why, "在这台 Profile 所属的 station 上运行下面的登录命令，完成后重新检查", "command", "登录后重新检查");
+            return issue(&title, why, t!("core-views.present.trouble.command_next"), "command", t!("core-views.present.trouble.command_label"));
         }
         match p["access"]["kind"].as_str() {
             Some("subscription") if p["machine"] != true && check["state"] == "login" =>
-                return issue(title, why, "重新登录这个账号，按下方步骤完成浏览器授权", "login", "重新登录"),
+                return issue(&title, why, t!("core-views.present.trouble.login_next"), "login", t!("core-views.present.trouble.login_label")),
             Some("anthropic-api" | "opencode-go") =>
-                return issue(title, why, "核对服务商的 key 是否有效、余额和权限是否足够；可以更换 key，保存后会自动检查", "key", "更换 key"),
+                return issue(&title, why, t!("core-views.present.trouble.key_next"), "key", t!("core-views.present.trouble.key_label")),
             Some("env") =>
-                return issue(title, why, "检查模型服务地址、凭据和网络，修改环境变量后重新检查", "env", "编辑环境变量"),
-            _ => return issue(title, why, "先重新检查；如果仍然失败，按上面的原因检查账号或 station 的网络", "check", "重新检查"),
+                return issue(&title, why, t!("core-views.present.trouble.env_next"), "env", t!("core-views.present.trouble.env_label")),
+            _ => return issue(&title, why, t!("core-views.present.trouble.check_next"), "check", t!("core-views.present.trouble.check_label")),
         }
     }
     if quota["state"] == "unavailable" {
-        return issue("额度查询失败", detail(quota, "暂时查不到额度"),
-            "查不到额度不代表账号不能用。先重新查询；仍失败时按返回原因检查登录或网络", "quota", "重新查询额度");
+        return issue(&t!("core-views.present.trouble.unavailable"), detail(quota, &t!("core-views.present.trouble.unavailable_detail")),
+            t!("core-views.present.trouble.unavailable_next"), "quota", t!("core-views.present.trouble.quota_again"));
     }
     Value::Null
 }
@@ -611,7 +614,7 @@ pub fn series(models: &[&str]) -> Value {
     sorted.sort_by_cached_key(|m| stillfail_shapes::model::order(m));
     let mut out: Vec<(String, Vec<&str>)> = Vec::new();
     for m in sorted {
-        let family = stillfail_shapes::model::family(m).unwrap_or_else(|| "其他".into());
+        let family = stillfail_shapes::model::family(m).unwrap_or_else(|| t!("core-views.present.models_other"));
         match out.iter_mut().find(|(f, _)| *f == family) {
             Some((_, list)) => list.push(m),
             None => out.push((family, vec![m])),
@@ -632,14 +635,15 @@ pub fn host(h: &mut Value) {
     let (mem_used, mem_total) = (n(&["memory", "usedBytes"]), n(&["memory", "totalBytes"]));
     let (disk_free, disk_total) = (n(&["disk", "freeBytes"]), n(&["disk", "totalBytes"]));
     let os = src.get("os").and_then(Value::as_str).unwrap_or("").to_string();
-    let summary = format!("{cpus} 核 · {}", format::gb(mem_total));
+    let cores = t!("core-views.present.host.cores", n = cpus);
+    let summary = format!("{cores} · {}", format::gb(mem_total));
     h["summary"] = json!(summary);
-    h["line"] = json!(format!("{os} · {summary} · 已运行 {} 天", (uptime / 86_400.0).floor()));
+    h["line"] = json!(format!("{os} · {summary} · {}", t!("core-views.present.host.up_days", n = (uptime / 86_400.0).floor())));
     // Its card: what it is, how loaded (each meter coloured by how full), and what still.fail itself takes.
     let days = (uptime / 86_400.0).floor();
     let hours = ((uptime % 86_400.0) / 3600.0).floor();
     let arch = src.get("arch").and_then(Value::as_str).unwrap_or("").to_string();
-    let meter = |label: &str, short: &str, percent: f64, value: String, note: Option<String>| {
+    let meter = |label: String, short: String, percent: f64, value: String, note: Option<String>| {
         let p = percent.clamp(0.0, 100.0).round() as i64;
         json!({ "label": label, "short": short, "percent": p, "level": if p >= 90 { "red" } else if p >= 75 { "amber" } else { "ok" }, "value": value, "note": note })
     };
@@ -649,22 +653,22 @@ pub fn host(h: &mut Value) {
     let model = src.get("cpuModel").and_then(Value::as_str).filter(|m| !m.is_empty());
     let cpu = match src.get("cpuBusy").and_then(Value::as_f64) {
         Some(busy) => {
-            let note = [Some(format!("负载 {:.1}", load * cpus)), model.map(str::to_string)].into_iter().flatten().collect::<Vec<_>>().join(" · ");
-            meter("CPU", "CPU", busy * 100.0, format!("{}%", (busy * 100.0).round()), Some(note))
+            let note = [Some(t!("core-views.present.host.load", load = format!("{:.1}", load * cpus))), model.map(str::to_string)].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+            meter("CPU".into(), "CPU".into(), busy * 100.0, format!("{}%", (busy * 100.0).round()), Some(note))
         }
-        None => meter("CPU 负载", "CPU", load * 100.0, format!("{}%", (load * 100.0).round()), model.map(str::to_string)),
+        None => meter(t!("core-views.present.host.cpu_load"), "CPU".into(), load * 100.0, format!("{}%", (load * 100.0).round()), model.map(str::to_string)),
     };
     h["facts"] = json!([
-        src.get("hostname").and_then(Value::as_str).unwrap_or(""), os, format!("{arch} · {cpus} 核"),
-        format!("已运行 {}", if days > 0.0 { format!("{days} 天 {hours} 小时") } else { format!("{hours} 小时") }),
+        src.get("hostname").and_then(Value::as_str).unwrap_or(""), os, format!("{arch} · {cores}"),
+        if days > 0.0 { t!("core-views.present.host.up_days_hours", days = days, hours = hours) } else { t!("core-views.present.host.up_hours", hours = hours) },
     ]);
     h["meters"] = json!([
         cpu,
-        meter("内存", "内存", if mem_total > 0.0 { mem_used / mem_total * 100.0 } else { 0.0 }, format!("{} / {}", format::gb1(mem_used), format::gb1(mem_total)),
+        meter(t!("core-views.present.host.memory"), t!("core-views.present.host.memory_short"), if mem_total > 0.0 { mem_used / mem_total * 100.0 } else { 0.0 }, format!("{} / {}", format::gb1(mem_used), format::gb1(mem_total)),
             (swap > 0.0).then(|| format!("swap {}", format::gb1(swap)))),
-        meter("磁盘", "磁盘", if disk_total > 0.0 { (disk_total - disk_free) / disk_total * 100.0 } else { 0.0 }, format!("剩 {} / {}", format::gb1(disk_free), format::gb1(disk_total)), None),
+        meter(t!("core-views.present.host.disk"), t!("core-views.present.host.disk_short"), if disk_total > 0.0 { (disk_total - disk_free) / disk_total * 100.0 } else { 0.0 }, t!("core-views.present.host.disk_value", free = format::gb1(disk_free), total = format::gb1(disk_total)), None),
     ]);
-    let remaining = |bytes: f64| format!("剩余 {:.1} G", bytes.max(0.0) / 1024f64.powi(3));
+    let remaining = |bytes: f64| t!("core-views.present.host.remaining", size = format!("{:.1}", bytes.max(0.0) / 1024f64.powi(3)));
     h["meters"][1]["remaining"] = json!(remaining(mem_total - mem_used));
     h["meters"][2]["remaining"] = json!(remaining(disk_free));
     h["emberText"] = json!(format!("{} {} MB", crate::brand::name(), (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
@@ -678,15 +682,15 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
         return None;
     }
     let path = match raw.get("path").and_then(Value::as_str) {
-        Some("direct") => "直连".to_string(),
+        Some("direct") => t!("core-views.present.net.direct"),
         Some("relay") => match raw.get("relay").and_then(Value::as_str).filter(|h| !h.is_empty()) {
             Some(host) => match relay_name(host) {
-                Some(name) => format!("{name}中继"),
-                None => format!("中继 {host}"),
+                Some(name) => t!("core-views.present.net.relay_named", name = name),
+                None => t!("core-views.present.net.relay_host", host = host),
             },
-            None => "中继".to_string(),
+            None => t!("core-views.present.net.relay"),
         },
-        _ => "正在选路".to_string(),
+        _ => t!("core-views.present.net.choosing"),
     };
     let samples: Vec<&Value> = raw.get("samples").and_then(Value::as_array).map(|a| a.iter().collect()).unwrap_or_default();
     let figure = |ms: f64| {
@@ -720,12 +724,12 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
     // Over enough packets to say, and enough of them lost to matter.
     let loss = (sent >= 20.0 && lost / sent >= 0.01).then(|| {
         let pct = lost / sent * 100.0;
-        json!({ "text": format!("丢包 {pct:.1}%"), "level": if pct >= 10.0 { "red" } else { "amber" } })
+        json!({ "text": t!("core-views.present.net.loss", percent = format!("{pct:.1}")), "level": if pct >= 10.0 { "red" } else { "amber" } })
     });
     Some(json!({
         "path": path, "rtt": rtt, "rttHistory": history,
         "down": rate("rxBps"), "up": rate("txBps"),
-        "total": format!("{} ↓ {} · ↑ {}", if daily { "今天共" } else { "本次共" }, format::bytes(rx), format::bytes(tx)),
+        "total": if daily { t!("core-views.present.net.total_today", down = format::bytes(rx), up = format::bytes(tx)) } else { t!("core-views.present.net.total_session", down = format::bytes(rx), up = format::bytes(tx)) },
         "downTotal": format::bytes(rx),
         "upTotal": format::bytes(tx),
         "loss": loss,
@@ -800,9 +804,9 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
             if let Some(processes) = value.get("processes").and_then(Value::as_array).cloned() {
                 let mb: f64 = processes.iter().filter_map(|p| p.get("rssMb").and_then(Value::as_f64)).sum();
                 value["processesText"] = json!(if processes.is_empty() {
-                    "没有运行中的 agent 进程".to_string()
+                    t!("core-views.present.processes.none")
                 } else {
-                    format!("{} 个 agent 进程 {}", processes.len(), if mb >= 1024.0 { format!("{:.1} GB", mb / 1024.0) } else { format!("{mb} MB") })
+                    t!("core-views.present.processes.running", n = processes.len(), size = if mb >= 1024.0 { format!("{:.1} GB", mb / 1024.0) } else { format!("{mb} MB") })
                 });
             }
             if let Some(usage) = value.get_mut("footprint").filter(|u| u.is_object()) {

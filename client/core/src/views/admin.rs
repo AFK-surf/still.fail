@@ -7,6 +7,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use super::Views;
 use crate::error::{CoreError, Result};
@@ -45,22 +46,22 @@ fn items<'a>(v: &'a Value, key: &str) -> &'a [Value] {
     v.get(key).and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[])
 }
 
-fn role_label(role: &str) -> &'static str {
+fn role_label(role: &str) -> String {
     match role {
-        "owner" => "Owner",
-        "admin" => "管理员",
-        _ => "成员",
+        "owner" => t!("core-views.admin.role.owner"),
+        "admin" => t!("core-views.admin.role.admin"),
+        _ => t!("core-views.admin.role.member"),
     }
 }
 
-fn admission_label(admission: &str) -> &'static str {
+fn admission_label(admission: &str) -> String {
     match admission {
-        "admin" => "still.fail 管理员",
-        "code" => "用邀请码加入",
-        "granted" => "管理员开通",
-        "invitation" => "被邀请加入",
-        "early" => "邀请码之前加入",
-        _ => "还没进来",
+        "admin" => t!("core-views.admin.admission.admin"),
+        "code" => t!("core-views.admin.admission.code"),
+        "granted" => t!("core-views.admin.admission.granted"),
+        "invitation" => t!("core-views.admin.admission.invitation"),
+        "early" => t!("core-views.admin.admission.early"),
+        _ => t!("core-views.admin.not_in"),
     }
 }
 
@@ -99,44 +100,54 @@ fn found(text: &str, words: &[String]) -> bool {
     words.iter().all(|w| text.contains(w.as_str()))
 }
 
-fn code_state(c: &Value, now: f64) -> (&'static str, &'static str, &'static str) {
+fn code_state(c: &Value, now: f64) -> (&'static str, &'static str) {
     if num(c, "used_at").is_some() || c.get("used_by").is_some_and(Value::is_object) {
-        ("used", "已使用", "neutral")
+        ("used", "neutral")
     } else if num(c, "revoked_at").is_some() {
-        ("revoked", "已撤回", "red")
+        ("revoked", "red")
     } else if num(c, "expires_at").is_some_and(|at| at <= now) {
-        ("expired", "已过期", "amber")
+        ("expired", "amber")
     } else {
-        ("open", "可用", "green")
+        ("open", "green")
+    }
+}
+
+/// An invite code's state (`code_state`) in words.
+fn code_label(state: &str) -> String {
+    match state {
+        "used" => t!("core-views.admin.code.used"),
+        "revoked" => t!("core-views.admin.code.revoked"),
+        "expired" => t!("core-views.admin.code.expired"),
+        _ => t!("core-views.admin.code.open"),
     }
 }
 
 /// Where a bug report stands: its label and tone.
-fn feedback_status(status: &str) -> (&'static str, &'static str) {
+fn feedback_status(status: &str) -> (String, &'static str) {
     match status {
-        "triaged" => ("处理中", "blue"),
-        "fixed" => ("已修好", "green"),
-        "wontfix" => ("不修", "neutral"),
-        _ => ("新反馈", "amber"),
+        "triaged" => (t!("core-views.admin.feedback.triaged"), "blue"),
+        "fixed" => (t!("core-views.admin.feedback.fixed"), "green"),
+        "wontfix" => (t!("core-views.admin.feedback.wontfix"), "neutral"),
+        _ => (t!("core-views.admin.feedback.new"), "amber"),
     }
 }
 
 /// The statuses a bug report can be set to, in order.
 const FEEDBACK_STATUSES: [&str; 4] = ["new", "triaged", "fixed", "wontfix"];
 
-fn channel_label(channel: &str) -> &'static str {
-    if channel == "beta" { "测试版" } else { "正式版" }
+fn channel_label(channel: &str) -> String {
+    if channel == "beta" { t!("core-views.admin.channel.beta") } else { t!("core-views.admin.channel.stable") }
 }
 
-fn area_label(area: &str) -> &'static str {
+fn area_label(area: &str) -> String {
     match area {
-        "station" => "Station",
-        "web" => "Web",
-        "android" => "Android",
-        "desktop" => "桌面端",
-        "slack" => "Slack",
-        "cloud" => "still.fail cloud",
-        _ => "不确定",
+        "station" => "Station".into(),
+        "web" => "Web".into(),
+        "android" => "Android".into(),
+        "desktop" => t!("core-views.admin.area.desktop"),
+        "slack" => "Slack".into(),
+        "cloud" => "still.fail cloud".into(),
+        _ => t!("core-views.admin.area.unsure"),
     }
 }
 
@@ -154,49 +165,49 @@ fn account_title(a: &Value) -> &str {
 
 /// One kind of list: its filters (id, label, whether a row is in it), its sorts, and how a row is found and shown.
 struct Kind {
-    filters: Vec<(&'static str, &'static str, Box<dyn Fn(&Value) -> bool>)>,
-    sorts: Vec<(&'static str, &'static str)>,
+    filters: Vec<(&'static str, String, Box<dyn Fn(&Value) -> bool>)>,
+    sorts: Vec<(&'static str, String)>,
 }
 
 fn user_kind(now: f64) -> Kind {
     let seen = |u: &Value| num(u, "last_seen");
     Kind {
         filters: vec![
-            ("all", "全部", Box::new(|_| true)),
-            ("active", "7 天内来过", Box::new(move |u| seen(u).is_some_and(|at| now - at < 7.0 * DAY))),
-            ("new", "7 天内新来", Box::new(move |u| num(u, "created_at").is_some_and(|at| now - at < 7.0 * DAY))),
-            ("stuck", "还没进来", Box::new(|u| u.get("admission").is_none_or(Value::is_null))),
-            ("dormant", "30 天没来", Box::new(move |u| seen(u).is_none_or(|at| now - at > 30.0 * DAY))),
-            ("creators", "能建 workspace", Box::new(|u| u.get("may_create").and_then(Value::as_bool) == Some(true))),
-            ("beta", "测试版", Box::new(|u| u.get("beta").and_then(Value::as_bool) == Some(true))),
-            ("blocked", "已封禁", Box::new(|u| u.get("blocked").and_then(Value::as_bool) == Some(true))),
+            ("all", t!("core-views.admin.filter.all"), Box::new(|_| true)),
+            ("active", t!("core-views.admin.filter.active"), Box::new(move |u| seen(u).is_some_and(|at| now - at < 7.0 * DAY))),
+            ("new", t!("core-views.admin.filter.new_users"), Box::new(move |u| num(u, "created_at").is_some_and(|at| now - at < 7.0 * DAY))),
+            ("stuck", t!("core-views.admin.not_in"), Box::new(|u| u.get("admission").is_none_or(Value::is_null))),
+            ("dormant", t!("core-views.admin.filter.dormant"), Box::new(move |u| seen(u).is_none_or(|at| now - at > 30.0 * DAY))),
+            ("creators", t!("core-views.admin.filter.creators"), Box::new(|u| u.get("may_create").and_then(Value::as_bool) == Some(true))),
+            ("beta", channel_label("beta"), Box::new(|u| u.get("beta").and_then(Value::as_bool) == Some(true))),
+            ("blocked", t!("core-views.admin.blocked"), Box::new(|u| u.get("blocked").and_then(Value::as_bool) == Some(true))),
         ],
-        sorts: vec![("seen", "最近来访"), ("created", "首次登录"), ("workspaces", "workspace 数"), ("name", "名字")],
+        sorts: vec![("seen", t!("core-views.admin.sort.seen")), ("created", t!("core-views.admin.sort.first_sign_in")), ("workspaces", t!("core-views.admin.sort.workspaces")), ("name", t!("core-views.admin.sort.name"))],
     }
 }
 
 fn workspace_kind(now: f64, newest: Option<String>) -> Kind {
     Kind {
         filters: vec![
-            ("all", "全部", Box::new(|_| true)),
-            ("bare", "没有 station", Box::new(|w| items(w, "stations").is_empty())),
-            ("stale", "station 7 天没连", Box::new(move |w| !items(w, "stations").is_empty() && latest_station(w).is_none_or(|at| now - at > 7.0 * DAY))),
-            ("outdated", "有旧版 station", Box::new(move |w| {
+            ("all", t!("core-views.admin.filter.all"), Box::new(|_| true)),
+            ("bare", t!("core-views.admin.no_station"), Box::new(|w| items(w, "stations").is_empty())),
+            ("stale", t!("core-views.admin.filter.stale"), Box::new(move |w| !items(w, "stations").is_empty() && latest_station(w).is_none_or(|at| now - at > 7.0 * DAY))),
+            ("outdated", t!("core-views.admin.filter.outdated"), Box::new(move |w| {
                 let Some(newest) = &newest else { return false };
                 items(w, "stations").iter().any(|s| s.get("version").and_then(Value::as_str).is_some_and(|v| version_key(v) < version_key(newest)))
             })),
-            ("invited", "有待接受的邀请", Box::new(|w| !items(w, "invitations").is_empty())),
-            ("full", "人满了", Box::new(|w| w.get("seats").and_then(Value::as_u64).is_some_and(|n| items(w, "members").len() as u64 >= n))),
+            ("invited", t!("core-views.admin.filter.invited"), Box::new(|w| !items(w, "invitations").is_empty())),
+            ("full", t!("core-views.admin.filter.full"), Box::new(|w| w.get("seats").and_then(Value::as_u64).is_some_and(|n| items(w, "members").len() as u64 >= n))),
         ],
-        sorts: vec![("active", "station 最近连"), ("created", "创建时间"), ("members", "人数"), ("name", "名字")],
+        sorts: vec![("active", t!("core-views.admin.sort.station_seen")), ("created", t!("core-views.admin.sort.created")), ("members", t!("core-views.admin.sort.members")), ("name", t!("core-views.admin.sort.name"))],
     }
 }
 
 fn code_kind(now: f64) -> Kind {
     let is = move |state: &'static str| -> Box<dyn Fn(&Value) -> bool> { Box::new(move |c| code_state(c, now).0 == state) };
     Kind {
-        filters: vec![("all", "全部", Box::new(|_| true)), ("open", "可用", is("open")), ("used", "已使用", is("used")), ("expired", "已过期", is("expired")), ("revoked", "已撤回", is("revoked"))],
-        sorts: vec![("created", "生成时间")],
+        filters: vec![("all", t!("core-views.admin.filter.all"), Box::new(|_| true)), ("open", code_label("open"), is("open")), ("used", code_label("used"), is("used")), ("expired", code_label("expired"), is("expired")), ("revoked", code_label("revoked"), is("revoked"))],
+        sorts: vec![("created", t!("core-views.admin.sort.generated"))],
     }
 }
 
@@ -204,15 +215,15 @@ fn feedback_kind() -> Kind {
     let is = |status: &'static str| -> Box<dyn Fn(&Value) -> bool> { Box::new(move |f| str_of(f, "status") == status || (status == "new" && f.get("status").is_none_or(Value::is_null))) };
     Kind {
         filters: vec![
-            ("all", "全部", Box::new(|_| true)),
-            ("new", "新反馈", is("new")),
-            ("triaged", "处理中", is("triaged")),
-            ("fixed", "已修好", is("fixed")),
-            ("wontfix", "不修", is("wontfix")),
-            ("beta", "测试版", Box::new(|f| str_of(f, "channel") == "beta")),
-            ("stable", "正式版", Box::new(|f| str_of(f, "channel") != "beta")),
+            ("all", t!("core-views.admin.filter.all"), Box::new(|_| true)),
+            ("new", feedback_status("new").0, is("new")),
+            ("triaged", feedback_status("triaged").0, is("triaged")),
+            ("fixed", feedback_status("fixed").0, is("fixed")),
+            ("wontfix", feedback_status("wontfix").0, is("wontfix")),
+            ("beta", channel_label("beta"), Box::new(|f| str_of(f, "channel") == "beta")),
+            ("stable", channel_label("stable"), Box::new(|f| str_of(f, "channel") != "beta")),
         ],
-        sorts: vec![("created", "提交时间")],
+        sorts: vec![("created", t!("core-views.admin.sort.submitted"))],
     }
 }
 
@@ -270,20 +281,20 @@ fn row(list: &str, v: &Value, now: f64) -> Value {
         "users" => {
             let mut marks = Vec::new();
             if v.get("blocked").and_then(Value::as_bool) == Some(true) {
-                marks.push(mark("已封禁", "red"));
+                marks.push(mark(&t!("core-views.admin.blocked"), "red"));
             }
             match v.get("admission").and_then(Value::as_str) {
-                None => marks.push(mark("还没进来", "amber")),
-                Some("admin") => marks.push(mark("管理员", "accent")),
+                None => marks.push(mark(&t!("core-views.admin.not_in"), "amber")),
+                Some("admin") => marks.push(mark(&role_label("admin"), "accent")),
                 _ => {}
             }
             if v.get("beta").and_then(Value::as_bool) == Some(true) {
-                marks.push(mark("测试版", "accent"));
+                marks.push(mark(&channel_label("beta"), "accent"));
             }
             let workspaces: Vec<&str> = items(v, "workspaces").iter().map(|w| str_of(w, "name")).collect();
             let mut line = str_of(v, "email").to_string();
             if !workspaces.is_empty() {
-                line = format!("{line} · {}", workspaces.join("、"));
+                line = format!("{line} · {}", workspaces.join(&t!("core-views.list_separator")));
             }
             let name = str_of(v, "name");
             json!({
@@ -301,16 +312,16 @@ fn row(list: &str, v: &Value, now: f64) -> Value {
             let creator = v.get("created_by").filter(|c| c.is_object()).map(|c| {
                 let n = str_of(c, "name");
                 (if n.is_empty() { str_of(c, "email") } else { n }).to_string()
-            }).unwrap_or_else(|| "已不在的人".into());
+            }).unwrap_or_else(|| t!("core-views.admin.someone_gone"));
             let mut marks = Vec::new();
             if stations.is_empty() {
-                marks.push(mark("没有 station", "amber"));
+                marks.push(mark(&t!("core-views.admin.no_station"), "amber"));
             }
             let latest = latest_station(v);
             json!({
                 "id": str_of(v, "id"),
                 "title": str_of(v, "name"),
-                "line": format!("{creator} 创建 · {} 人 · {} 台 station", items(v, "members").len(), stations.len()),
+                "line": [t!("core-views.admin.created_by", name = creator), t!("core-views.admin.people", n = items(v, "members").len()), t!("core-views.admin.stations", n = stations.len())].join(" · "),
                 "marks": marks,
                 // When a station of it last came to still.fail cloud, and how that stands.
                 "last_seen": latest,
@@ -320,11 +331,11 @@ fn row(list: &str, v: &Value, now: f64) -> Value {
         }
         "feedback" => {
             let (label, tone) = feedback_status(str_of(v, "status"));
-            let mut marks = vec![mark(label, tone)];
+            let mut marks = vec![mark(&label, tone)];
             if str_of(v, "channel") == "beta" {
-                marks.push(mark("测试版", "accent"));
+                marks.push(mark(&channel_label("beta"), "accent"));
             }
-            let mut line = vec![area_label(str_of(v, "area")).to_string()];
+            let mut line = vec![area_label(str_of(v, "area"))];
             line.extend(named(v, "workspace").map(|w| str_of(w, "name").to_string()).filter(|n| !n.is_empty()));
             line.extend(named(v, "station").map(|s| str_of(s, "name").to_string()).filter(|n| !n.is_empty()));
             match str_of(v, "reporter") {
@@ -342,15 +353,18 @@ fn row(list: &str, v: &Value, now: f64) -> Value {
             })
         }
         _ => {
-            let (state, label, tone) = code_state(v, now);
+            let (state, tone) = code_state(v, now);
             let user = v.get("used_by").filter(|u| u.is_object());
             let line = match (state, user) {
                 ("used", Some(u)) => {
                     let n = str_of(u, "name");
-                    let workspace = v.get("workspace").filter(|w| w.is_object()).map(|w| format!("「{}」", str_of(w, "name"))).unwrap_or_else(|| " workspace（已删除）".into());
-                    format!("{} 用它建了{workspace}", if n.is_empty() { str_of(u, "email") } else { n })
+                    let name = if n.is_empty() { str_of(u, "email") } else { n };
+                    match v.get("workspace").filter(|w| w.is_object()) {
+                        Some(w) => t!("core-views.admin.code.made", name = name, workspace = str_of(w, "name")),
+                        None => t!("core-views.admin.code.made_deleted", name = name),
+                    }
                 }
-                ("used", None) => "已不在的人用过".into(),
+                ("used", None) => t!("core-views.admin.code.used_by_gone"),
                 _ => str_of(v, "note").to_string(),
             };
             json!({
@@ -359,7 +373,7 @@ fn row(list: &str, v: &Value, now: f64) -> Value {
                 "note": str_of(v, "note"),
                 "line": line,
                 "state": state,
-                "marks": [mark(label, tone)],
+                "marks": [mark(&code_label(state), tone)],
                 "url": v.get("url").cloned().unwrap_or(Value::Null),
                 "user": user.map(|u| str_of(u, "sub")),
                 "created_at": v.get("created_at").cloned().unwrap_or(Value::Null),
@@ -391,7 +405,7 @@ pub fn list(list: &str, value: &Value, query: &str, filter: Option<&str>, sort: 
         "workspaces" => workspace_kind(now, newest_version(&all)),
         "invite-codes" => code_kind(now),
         "feedback" => feedback_kind(),
-        _ => return Err(CoreError::invalid("没有这个列表")),
+        _ => return Err(CoreError::invalid(t!("core-views.admin.error.no_list"))),
     };
     let words: Vec<String> = query.to_lowercase().split_whitespace().map(str::to_string).collect();
     let matched: Vec<&Value> = all.iter().filter(|v| words.is_empty() || found(&haystack(list, v), &words)).collect();
@@ -414,7 +428,7 @@ pub fn list(list: &str, value: &Value, query: &str, filter: Option<&str>, sort: 
 
 /// A user's page: who they are, how they got in and what they may do, their workspaces, the code they used.
 pub fn user(id: &str, users: &Value, workspaces: &Value, codes: Option<&Value>, now: f64) -> Result<Value> {
-    let u = rows_of("users", users).into_iter().find(|u| str_of(u, "sub") == id).ok_or_else(|| CoreError::new("http_404", "没有这个用户").with_status(404))?;
+    let u = rows_of("users", users).into_iter().find(|u| str_of(u, "sub") == id).ok_or_else(|| CoreError::new("http_404", t!("core-views.admin.error.no_user")).with_status(404))?;
     let all = rows_of("workspaces", workspaces);
     let by_id: HashMap<&str, &Value> = all.iter().map(|w| (str_of(w, "id"), w)).collect();
     let theirs: Vec<Value> = items(&u, "workspaces").iter().map(|m| {
@@ -425,7 +439,7 @@ pub fn user(id: &str, users: &Value, workspaces: &Value, codes: Option<&Value>, 
             "id": str_of(m, "id"),
             "name": str_of(m, "name"),
             "role": role_label(str_of(m, "role")),
-            "line": format!("{} · {people} 人 · {stations} 台 station", role_label(str_of(m, "role"))),
+            "line": [role_label(str_of(m, "role")), t!("core-views.admin.people", n = people), t!("core-views.admin.stations", n = stations)].join(" · "),
         })
     }).collect();
     let admission = u.get("admission").and_then(Value::as_str);
@@ -447,13 +461,13 @@ pub fn user(id: &str, users: &Value, workspaces: &Value, codes: Option<&Value>, 
         // Whether they may create workspaces, and whether that can be taken back here (null: a cloud from before).
         "mayCreate": may_create,
         "mayCreateHint": if admission == Some("admin") {
-            "管理员不受限制"
+            t!("core-views.admin.may_create.admin")
         } else if creator {
-            "自己建过 workspace，一直可以再建（最多 5 个）"
+            t!("core-views.admin.may_create.creator")
         } else if may_create == Some(true) {
-            "可以新建 workspace，最多 5 个"
+            t!("core-views.admin.may_create.yes")
         } else {
-            "只能被邀请加入别人的 workspace"
+            t!("core-views.admin.may_create.no")
         },
         "mayCreateFixed": admission == Some("admin") || creator,
         "beta": u.get("beta").and_then(Value::as_bool),
@@ -468,7 +482,7 @@ pub fn user(id: &str, users: &Value, workspaces: &Value, codes: Option<&Value>, 
 pub fn workspace(id: &str, workspaces: &Value, users: Option<&Value>, now: f64) -> Result<Value> {
     let all = rows_of("workspaces", workspaces);
     let newest = newest_version(&all);
-    let w = all.iter().find(|w| str_of(w, "id") == id).ok_or_else(|| CoreError::new("http_404", "没有这个 workspace").with_status(404))?;
+    let w = all.iter().find(|w| str_of(w, "id") == id).ok_or_else(|| CoreError::new("http_404", t!("core-views.admin.error.no_workspace")).with_status(404))?;
     // A cloud from before gives members no last visit: the users list has it.
     let seen: HashMap<String, Value> = users.map(|u| rows_of("users", u)).unwrap_or_default().into_iter()
         .map(|u| (str_of(&u, "sub").to_string(), u.get("last_seen").cloned().unwrap_or(Value::Null))).collect();
@@ -497,8 +511,8 @@ pub fn workspace(id: &str, workspaces: &Value, users: Option<&Value>, now: f64) 
     }).collect();
     let invitations: Vec<Value> = items(w, "invitations").iter().map(|i| json!({
         "id": str_of(i, "id"),
-        "email": i.get("email").and_then(Value::as_str).unwrap_or("任何拿到链接的人"),
-        "line": format!("{}{}", role_label(str_of(i, "role")), match str_of(i, "inviter") { "" => String::new(), by => format!(" · {by} 邀请") }),
+        "email": i.get("email").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| t!("core-views.admin.invitation.anyone")),
+        "line": format!("{}{}", role_label(str_of(i, "role")), match str_of(i, "inviter") { "" => String::new(), by => format!(" · {}", t!("core-views.admin.invitation.by", name = by)) }),
         "expires_at": i.get("expires_at").cloned().unwrap_or(Value::Null),
     })).collect();
     let creator = w.get("created_by").filter(|c| c.is_object());
@@ -530,7 +544,7 @@ fn context_text(v: &Value) -> String {
 /// A bug report's page: all of it, where it came from, where it stands, and the whole of it as plain text (`text`) to
 /// hand to an agent.
 pub fn feedback(id: &str, value: &Value) -> Result<Value> {
-    let f = rows_of("feedback", value).into_iter().find(|f| str_of(f, "id") == id).ok_or_else(|| CoreError::new("http_404", "没有这个反馈").with_status(404))?;
+    let f = rows_of("feedback", value).into_iter().find(|f| str_of(f, "id") == id).ok_or_else(|| CoreError::new("http_404", t!("core-views.admin.error.no_feedback")).with_status(404))?;
     let status = match str_of(&f, "status") {
         "" => "new",
         s => s,
@@ -557,26 +571,26 @@ pub fn feedback(id: &str, value: &Value) -> Result<Value> {
     let fixed_in = f.get("fixed_in").and_then(Value::as_i64);
     let told = f.get("told_at").is_some_and(|t| !t.is_null());
     let state = match fixed_in {
-        Some(n) if status == "fixed" => format!("{} · 0.1.{n}{}", feedback_status(status).0, if told { " · 已告诉反馈人" } else { "" }),
-        _ => feedback_status(status).0.to_string(),
+        Some(n) if status == "fixed" => format!("{} · 0.1.{n}{}", feedback_status(status).0, if told { format!(" · {}", t!("core-views.admin.feedback.told")) } else { String::new() }),
+        _ => feedback_status(status).0,
     };
-    fact("状态", Some(state.clone()));
-    fact("渠道", Some(format!("{} ({})", channel_label(str_of(&f, "channel")), str_of(&f, "channel"))));
-    fact("范围", Some(area_label(str_of(&f, "area")).to_string()));
+    fact(&t!("core-views.admin.feedback.fact.status"), Some(state.clone()));
+    fact(&t!("core-views.admin.feedback.fact.channel"), Some(format!("{} ({})", channel_label(str_of(&f, "channel")), str_of(&f, "channel"))));
+    fact(&t!("core-views.admin.feedback.fact.area"), Some(area_label(str_of(&f, "area"))));
     fact("Workspace", place(workspace));
     fact("Station", place(station));
-    fact("反馈人", Some(str_of(&f, "reporter").to_string()));
-    fact("账号", account.map(|a| match (str_of(a, "name"), str_of(a, "email")) { ("", e) => e.to_string(), (n, e) => format!("{n} <{e}>") }));
+    fact(&t!("core-views.admin.feedback.fact.reporter"), Some(str_of(&f, "reporter").to_string()));
+    fact(&t!("core-views.admin.feedback.fact.account"), account.map(|a| match (str_of(a, "name"), str_of(a, "email")) { ("", e) => e.to_string(), (n, e) => format!("{n} <{e}>") }));
     fact("ID", Some(id.to_string()));
-    text.push_str(&format!("\n## 内容\n\n{}\n", str_of(&f, "body").trim_end()));
+    text.push_str(&format!("\n## {}\n\n{}\n", t!("core-views.admin.feedback.body"), str_of(&f, "body").trim_end()));
     if !context.is_empty() {
-        text.push_str("\n## 上下文\n\n");
+        text.push_str(&format!("\n## {}\n\n", t!("core-views.admin.feedback.context")));
         for (k, v) in &context {
             text.push_str(&format!("{k}: {v}\n"));
         }
     }
     if let Some(logs) = logs {
-        text.push_str(&format!("\n## 日志\n\n```\n{}\n```\n", logs.trim_end()));
+        text.push_str(&format!("\n## {}\n\n```\n{}\n```\n", t!("core-views.admin.feedback.logs"), logs.trim_end()));
     }
     Ok(json!({
         "id": id,
@@ -619,7 +633,7 @@ pub fn overview(users: &Value, workspaces: &Value, codes: &Value, feedback: Opti
         let end = now - ago as f64 * 7.0 * DAY;
         let start = end - 7.0 * DAY;
         let n = users.iter().filter(|u| num(u, "created_at").is_some_and(|at| at > start && at <= end)).count();
-        let label = if ago == 0 { "本周".to_string() } else { crate::format::day_label(start * 1000.0, now * 1000.0, offset_min) };
+        let label = if ago == 0 { t!("core-views.admin.overview.this_week") } else { crate::format::day_label(start * 1000.0, now * 1000.0, offset_min) };
         json!({ "count": n, "label": label })
     }).collect();
     let stuck = count(&users, &|u| u.get("admission").is_none_or(Value::is_null));
@@ -633,21 +647,21 @@ pub fn overview(users: &Value, workspaces: &Value, codes: &Value, feedback: Opti
     };
     let reports = feedback.map(|f| rows_of("feedback", f)).unwrap_or_default();
     let fresh = count(&reports, &|f| matches!(f.get("status").and_then(Value::as_str), Some("new") | None));
-    want(fresh, format!("{fresh} 个新反馈"), "还没看过的 bug 报告", "amber", "feedback", "new");
-    want(stuck, format!("{stuck} 人登录了但还没进来"), "开通资格，或者看看卡在哪", "amber", "users", "stuck");
-    want(bare, format!("{bare} 个 workspace 还没有 station"), "建了但没装起来", "amber", "workspaces", "bare");
-    want(stale, format!("{stale} 台 station 7 天没连 still.fail cloud"), "可能关机或卸载了", "neutral", "workspaces", "stale");
-    want(outdated, format!("{outdated} 台 station 不是最新版"), newest.as_deref().map(|n| format!("最新是 {n}")).as_deref().unwrap_or(""), "neutral", "workspaces", "outdated");
-    want(expiring, format!("{expiring} 个邀请码 3 天内过期"), "还没人用", "neutral", "invite-codes", "open");
+    want(fresh, t!("core-views.admin.todo.fresh", n = fresh), &t!("core-views.admin.todo.fresh_hint"), "amber", "feedback", "new");
+    want(stuck, t!("core-views.admin.todo.stuck", n = stuck), &t!("core-views.admin.todo.stuck_hint"), "amber", "users", "stuck");
+    want(bare, t!("core-views.admin.todo.bare", n = bare), &t!("core-views.admin.todo.bare_hint"), "amber", "workspaces", "bare");
+    want(stale, t!("core-views.admin.todo.stale", n = stale), &t!("core-views.admin.todo.stale_hint"), "neutral", "workspaces", "stale");
+    want(outdated, t!("core-views.admin.todo.outdated", n = outdated), &newest.as_deref().map(|n| t!("core-views.admin.todo.outdated_hint", version = n)).unwrap_or_default(), "neutral", "workspaces", "outdated");
+    want(expiring, t!("core-views.admin.todo.expiring", n = expiring), &t!("core-views.admin.todo.expiring_hint"), "neutral", "invite-codes", "open");
     let pct = if users.is_empty() { 0 } else { active * 100 / users.len() };
     let used_ws = count(&workspaces, &|w| latest_station(w).is_some_and(|at| now - at < 7.0 * DAY));
     let today = stations.iter().filter(|s| num(s, "last_seen").is_some_and(|at| now - at < DAY)).count();
     json!({
         "stats": [
-            { "label": "用户", "value": users.len(), "note": format!("7 天新增 {}", count(&users, &|u| within(u, "created_at", 7.0))), "list": "users", "filter": "all" },
-            { "label": "7 天活跃", "value": active, "note": format!("占 {pct}%"), "list": "users", "filter": "active" },
-            { "label": "Workspace", "value": workspaces.len(), "note": format!("{used_ws} 个这周有 station 连过"), "list": "workspaces", "filter": "all" },
-            { "label": "Station", "value": stations.len(), "note": format!("{today} 台今天连过"), "list": "workspaces", "filter": "all" },
+            { "label": t!("core-views.admin.stat.users"), "value": users.len(), "note": t!("core-views.admin.stat.users_note", n = count(&users, &|u| within(u, "created_at", 7.0))), "list": "users", "filter": "all" },
+            { "label": t!("core-views.admin.stat.active"), "value": active, "note": t!("core-views.admin.stat.active_note", percent = pct), "list": "users", "filter": "active" },
+            { "label": "Workspace", "value": workspaces.len(), "note": t!("core-views.admin.stat.workspaces_note", n = used_ws), "list": "workspaces", "filter": "all" },
+            { "label": "Station", "value": stations.len(), "note": t!("core-views.admin.stat.stations_note", n = today), "list": "workspaces", "filter": "all" },
         ],
         "weeks": weeks,
         "todo": todo,

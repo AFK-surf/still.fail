@@ -5,6 +5,7 @@
 use std::cell::RefCell;
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use super::Views;
 use crate::error::Result;
@@ -46,7 +47,7 @@ impl Views {
 
     pub(super) fn archive(&self, scope: &str) -> Option<Result<Value>> {
         let stations = match self.stations(scope) {
-            None => return Some(Ok(json!({ "days": [], "errors": [], "loading": true, "note": "正在读取 station…" }))),
+            None => return Some(Ok(json!({ "days": [], "errors": [], "loading": true, "note": t!("core-views.archive.reading_stations") }))),
             Some(Err(error)) => return Some(Err(error)),
             Some(Ok(stations)) => stations,
         };
@@ -59,7 +60,7 @@ impl Views {
             match self.store.value(&Topic::ArchivedRows { station: s.address.clone() }) {
                 None => loading = true,
                 Some(Err(error)) => {
-                    let text = match &place { Some(name) => format!("{name}：{}", error.message), None => error.message };
+                    let text = match &place { Some(name) => t!("core-views.named_error", name = name, error = error.message), None => error.message };
                     errors.push(json!({ "station": s.address, "text": text }));
                 }
                 // A station from before the archive answers the chats it shows: none says `archived`, so none is.
@@ -71,7 +72,7 @@ impl Views {
                         "station": s.address, "session": text(chat.get("session")), "thread": chat.get("thread").cloned().unwrap_or(Value::Null),
                         "title": text(chat.get("title")), "last": text(chat.get("last").and_then(|l| l.get("text"))),
                         "at": at, "clock": crate::format::clock(at, self.host.utc_offset_min(at)),
-                        "how": if mark.get("by").and_then(Value::as_str) == Some("auto") { "空闲后自动归档" } else { "手动归档" },
+                        "how": if mark.get("by").and_then(Value::as_str) == Some("auto") { t!("core-views.archive.auto") } else { t!("core-views.archive.manual") },
                         // Archived alone, its agents are still at work elsewhere: nothing of theirs is deleted from here.
                         "deletable": mark.get("alone").and_then(Value::as_bool) != Some(true),
                         "place": place,
@@ -92,11 +93,11 @@ impl Views {
             }
         }
         let note = if online.is_empty() {
-            Some("没有在线的 station。")
+            Some(t!("core-views.archive.none_online"))
         } else if days.is_empty() && loading {
-            Some("正在读取…")
+            Some(t!("core-views.archive.reading"))
         } else if days.is_empty() && errors.is_empty() {
-            Some("没有归档的对话。")
+            Some(t!("core-views.archive.empty"))
         } else {
             None
         };
@@ -109,5 +110,7 @@ impl Views {
 fn day_label(at: f64, now: f64, offset: i32) -> String {
     let label = crate::format::day_label(at, now, offset);
     let year = crate::format::local(at, offset).0;
-    if label.contains('月') && year != crate::format::local(now, offset).0 { format!("{year}年{label}") } else { label }
+    // A date (not 今天, 昨天 or a weekday: a week or more ago).
+    let dated = crate::format::local_day(now, offset) - crate::format::local_day(at, offset) >= 7;
+    if dated && year != crate::format::local(now, offset).0 { t!("core-views.archive.day_with_year", year = year, day = label) } else { label }
 }

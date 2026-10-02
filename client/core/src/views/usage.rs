@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use serde_json::{Value, json};
+use stillfail_i18n::{Lang, t};
 
 use super::Views;
 use crate::error::{CoreError, Result};
@@ -96,16 +97,23 @@ fn grouped(n: i64) -> String {
 
 /// A count as people read it here: 9,850 · 2.9 万 · 1715 万 · 49.1 亿.
 pub fn count(n: f64) -> String {
+    count_in(stillfail_i18n::current(), n)
+}
+
+/// A count as people read it in `lang`: 9,850 · 2.9 万 · 1715 万 · 49.1 亿; in English 9,850 · 29.4K · 17.1M · 4.9B.
+fn count_in(lang: Lang, n: f64) -> String {
     let cut = |v: f64, unit: &str| {
         let s = if v >= 100.0 { format!("{v:.0}") } else { format!("{v:.1}") };
-        format!("{} {unit}", s.strip_suffix(".0").unwrap_or(&s))
+        let s = s.strip_suffix(".0").unwrap_or(&s);
+        if lang == Lang::En { format!("{s}{unit}") } else { format!("{s} {unit}") }
     };
-    if n >= 1e8 {
-        cut(n / 1e8, "亿")
-    } else if n >= 1e4 {
-        cut(n / 1e4, "万")
-    } else {
-        grouped(n.round() as i64)
+    match lang {
+        Lang::En if n >= 1e9 => cut(n / 1e9, "B"),
+        Lang::En if n >= 1e6 => cut(n / 1e6, "M"),
+        Lang::En if n >= 1e4 => cut(n / 1e3, "K"),
+        Lang::Zh if n >= 1e8 => cut(n / 1e8, "亿"),
+        Lang::Zh if n >= 1e4 => cut(n / 1e4, "万"),
+        _ => grouped(n.round() as i64),
     }
 }
 
@@ -146,7 +154,7 @@ impl Sum {
 
     fn cost_text(&self) -> String {
         if self.unpriced > 0.0 && self.unpriced >= self.calls {
-            "未计价".into()
+            t!("core-views.usage.unpriced")
         } else if self.unpriced > 0.0 {
             format!("≥{}", money(self.cost))
         } else {
@@ -185,7 +193,7 @@ fn items_shown(mut items: Vec<Item>, total: &Sum) -> Vec<Value> {
                 "share": share,
                 "shareText": percent(share, 1.0),
                 "calls": i.sum.calls,
-                "detail": format!("{} 次调用 · {} token", count(i.sum.calls), count(i.sum.tokens())),
+                "detail": t!("core-views.usage.detail", n = count(i.sum.calls), tokens = count(i.sum.tokens())),
             });
             if let (Some(v), Some(extra)) = (v.as_object_mut(), i.extra.as_object()) {
                 v.extend(extra.clone());
@@ -199,14 +207,14 @@ fn items_shown(mut items: Vec<Item>, total: &Sum) -> Vec<Value> {
 fn price_tables(sources: &[Source], first: &str, last: &str) -> Vec<Value> {
     sources.iter().map(|s| {
         let table = s.value.as_ref().and_then(|v| v.as_ref().ok()).and_then(|v| v.get("prices"));
-        let note = if !s.online { "station 离线，无法读取价目" } else if table.is_none() {
-            "station 尚未提供价目表，请更新 station 后查看"
-        } else { table.and_then(|t| t.get("note")).and_then(Value::as_str).unwrap_or("美元 / 100 万 token") };
+        let note = if !s.online { t!("core-views.usage.prices.offline") } else if table.is_none() {
+            t!("core-views.usage.prices.missing")
+        } else { table.and_then(|t| t.get("note")).and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| t!("core-views.usage.prices.unit")) };
         let used: std::collections::BTreeSet<String> = s.value.as_ref().and_then(|v| v.as_ref().ok())
             .and_then(|v| v.get("rows")).and_then(Value::as_array).into_iter().flatten()
             .filter(|r| r.get("day").and_then(Value::as_str).is_some_and(|d| d >= first && d <= last)
                 && r.get("calls").and_then(Value::as_f64).unwrap_or(0.0) > 0.0)
-            .map(|r| r.get("model").and_then(Value::as_str).map(stillfail_shapes::model::key).unwrap_or_else(|| "未知模型".into())).collect();
+            .map(|r| r.get("model").and_then(Value::as_str).map(stillfail_shapes::model::key).unwrap_or_else(|| t!("core-views.usage.unknown_model"))).collect();
         let prices = table.and_then(|t| t.get("rows")).and_then(Value::as_array);
         let matched: Vec<_> = used.iter().map(|model| {
             let rate = prices.into_iter().flatten().find(|p| p.get("model").and_then(Value::as_str).is_some_and(|key|
@@ -214,12 +222,12 @@ fn price_tables(sources: &[Source], first: &str, last: &str) -> Vec<Value> {
             (model, rate)
         }).collect();
         // Every row has the same columns; cache-write columns appear only when a counted model uses them.
-        let columns: Vec<_> = [("input", "输入"), ("cacheRead", "缓存读取"), ("cacheWrite", "缓存写入 / 5 分钟"), ("cacheWriteLong", "缓存写入 / 1 小时"), ("output", "输出")]
+        let columns: Vec<_> = [("input", t!("core-views.usage.prices.input")), ("cacheRead", t!("core-views.usage.prices.cache_read")), ("cacheWrite", t!("core-views.usage.prices.cache_write")), ("cacheWriteLong", t!("core-views.usage.prices.cache_write_long")), ("output", t!("core-views.usage.prices.output"))]
             .into_iter().filter(|(key, _)| !key.starts_with("cacheWrite") || matched.iter().any(|(_, p)| p.and_then(|p| p.get(*key)).and_then(Value::as_f64).is_some())).collect();
         let rows: Vec<Value> = if s.online { matched.iter().map(|(model, r)| {
             let rates: Vec<Value> = columns.iter().map(|(key, label)| json!({"label": label,
                 "value": r.and_then(|r| r.get(*key)).and_then(Value::as_f64).map(|n| format!("${n}")).unwrap_or_else(|| "—".into())})).collect();
-            json!({"model": if r.is_some() { (*model).clone() } else { format!("{model}（未计价）") }, "rates": rates})
+            json!({"model": if r.is_some() { (*model).clone() } else { t!("core-views.usage.prices.model_unpriced", model = model) }, "rates": rates})
         }).collect() } else { vec![] };
         json!({"station": s.name, "note": note, "rows": rows})
     }).collect()
@@ -238,7 +246,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
     let (mut people, mut chats, mut profiles, mut models): (HashMap<String, Item>, HashMap<String, Item>, HashMap<String, Item>, HashMap<String, Item>) = Default::default();
     for s in sources {
         if !s.online {
-            notes.push(format!("{} 离线，它的用量没算进来", s.name));
+            notes.push(t!("core-views.usage.note.offline", name = s.name));
             continue;
         }
         let value = match &s.value {
@@ -247,11 +255,11 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
                 continue;
             }
             Some(Err(e)) if e.status == Some(404) => {
-                notes.push(format!("{} 的 station 还没更新到记用量的版本", s.name));
+                notes.push(t!("core-views.usage.note.outdated", name = s.name));
                 continue;
             }
             Some(Err(e)) => {
-                notes.push(format!("{}：{}", s.name, e.message));
+                notes.push(t!("core-views.named_error", name = s.name, error = e.message));
                 continue;
             }
             Some(Ok(value)) => value,
@@ -274,7 +282,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
             // Who it was for: one person however they wrote (Slack or the page), by their email.
             let reference = text("person");
             let known_person = reference.as_ref().and_then(|r| station_people.get(r)).filter(|p| p.is_object());
-            let mut person = known_person.cloned().unwrap_or_else(|| json!({ "id": reference.clone().unwrap_or_default(), "name": "说不清是谁", "email": null }));
+            let mut person = known_person.cloned().unwrap_or_else(|| json!({ "id": reference.clone().unwrap_or_default(), "name": t!("core-views.usage.unknown_person"), "email": null }));
             crate::present::person(&mut person, me, members);
             let person_key = person.get("email").and_then(Value::as_str).or_else(|| person.get("id").and_then(Value::as_str)).unwrap_or("").to_ascii_lowercase();
             let name = person["shown"]["display"].as_str().unwrap_or("").to_string();
@@ -292,10 +300,10 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
                 .entry(chat_key.clone())
                 .or_insert_with(|| {
                     let known = thread.and_then(|t| threads.get(t.to_string()));
-                    let title = known.and_then(|t| t.get("title")).and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| "已删除的对话".into());
+                    let title = known.and_then(|t| t.get("title")).and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| t!("core-views.usage.deleted_chat"));
                     let archived = known.and_then(|t| t.get("archived")).and_then(Value::as_bool) == Some(true);
                     let slack = known.and_then(|t| t.get("surface")).and_then(Value::as_str).is_some_and(|s| s != "ember");
-                    let sub: Vec<String> = place.iter().cloned().chain(slack.then(|| "Slack".to_string())).chain(archived.then(|| "已归档".to_string())).collect();
+                    let sub: Vec<String> = place.iter().cloned().chain(slack.then(|| "Slack".to_string())).chain(archived.then(|| t!("core-views.usage.archived"))).collect();
                     // Its page: a still.fail chat by its thread; a Slack thread by its agent's own chat.
                     let page = match (known, slack) {
                         (Some(_), false) => json!({ "station": s.address, "thread": thread }),
@@ -315,7 +323,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
                 .entry(profile_key.clone())
                 .or_insert_with(|| {
                     let name = station_profiles.get(&profile).and_then(|p| p.get("name")).and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
-                    let title = name.unwrap_or_else(|| if profile.is_empty() { "说不清是哪个账号".into() } else { format!("{profile}（已删除）") });
+                    let title = name.unwrap_or_else(|| if profile.is_empty() { t!("core-views.usage.unknown_account") } else { t!("core-views.usage.deleted_account", profile = profile) });
                     Item { key: profile_key.clone(), title, sub: place.clone(), extra: json!({}), sum: Sum::default() }
                 })
                 .sum
@@ -325,9 +333,9 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
             models
                 .entry(stillfail_shapes::model::key(&model))
                 .or_insert_with(|| {
-                    let title = if model.is_empty() { "说不清是哪个模型".into() } else { stillfail_shapes::model::name(&model) };
+                    let title = if model.is_empty() { t!("core-views.usage.unknown_which_model") } else { stillfail_shapes::model::name(&model) };
                     let priced = row.get("cost").is_some_and(|c| !c.is_null());
-                    Item { key: stillfail_shapes::model::key(&model), title, sub: (!priced).then(|| "没有价目，不计费用".to_string()), extra: json!({}), sum: Sum::default() }
+                    Item { key: stillfail_shapes::model::key(&model), title, sub: (!priced).then(|| t!("core-views.usage.no_price")), extra: json!({}), sum: Sum::default() }
                 })
                 .sum
                 .add(row);
@@ -341,7 +349,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
     let rest = ranked.len() > top.len();
     let mut series: Vec<Value> = top.iter().map(|(key, name)| json!({ "key": key, "name": name })).collect();
     if rest {
-        series.push(json!({ "key": "", "name": "其他" }));
+        series.push(json!({ "key": "", "name": t!("core-views.usage.others") }));
     }
     let today = local_day(now, offset);
     let daily: Vec<Value> = by_day
@@ -351,33 +359,35 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
             if rest {
                 parts.push(split.iter().filter(|(k, _)| !top.iter().any(|(t, _)| t == *k)).map(|(_, v)| v).sum());
             }
-            json!({ "day": day, "label": day_label(day), "today": *day == today, "cost": sum.cost, "costText": sum.cost_text(), "calls": sum.calls, "callsText": format!("{} 次调用", count(sum.calls)), "partsText": parts.iter().map(|p| money(*p)).collect::<Vec<_>>(), "parts": parts })
+            json!({ "day": day, "label": day_label(day), "today": *day == today, "cost": sum.cost, "costText": sum.cost_text(), "calls": sum.calls, "callsText": t!("core-views.usage.calls", n = count(sum.calls)), "partsText": parts.iter().map(|p| money(*p)).collect::<Vec<_>>(), "parts": parts })
         })
         .collect();
     let max = by_day.values().map(|(s, _)| s.cost).fold(0.0, f64::max);
 
     let input = total.input + total.cache_read + total.cache_write;
     let tiles = json!([
-        { "label": "折合费用", "value": total.cost_text(), "sub": "按 API 标准单价估算" },
-        { "label": "模型调用", "value": format!("{} 次", count(total.calls)), "sub": format!("日均 {} 次", count(total.calls / days as f64)) },
-        { "label": "输入 token", "value": count(input), "sub": format!("缓存命中 {}", percent(total.cache_read, input)) },
-        { "label": "输出 token", "value": count(total.output), "sub": format!("平均每次 {}", count(if total.calls > 0.0 { total.output / total.calls } else { 0.0 })) },
+        { "label": t!("core-views.usage.tile.cost"), "value": total.cost_text(), "sub": t!("core-views.usage.tile.cost_sub") },
+        { "label": t!("core-views.usage.tile.calls"), "value": t!("core-views.usage.tile.calls_value", n = count(total.calls)), "sub": t!("core-views.usage.tile.calls_sub", n = count(total.calls / days as f64)) },
+        { "label": t!("core-views.usage.tile.input"), "value": count(input), "sub": t!("core-views.usage.tile.input_sub", percent = percent(total.cache_read, input)) },
+        { "label": t!("core-views.usage.tile.output"), "value": count(total.output), "sub": t!("core-views.usage.tile.output_sub", n = count(if total.calls > 0.0 { total.output / total.calls } else { 0.0 })) },
     ]);
     let lists = json!([
-        { "key": "people", "title": "按人", "items": items_shown(people.into_values().collect(), &total) },
-        { "key": "chats", "title": "按对话", "items": items_shown(chats.into_values().collect(), &total) },
-        { "key": "profiles", "title": "按账号", "items": items_shown(profiles.into_values().collect(), &total) },
-        { "key": "models", "title": "按模型", "items": items_shown(models.into_values().collect(), &total) },
+        { "key": "people", "title": t!("core-views.usage.by.people"), "items": items_shown(people.into_values().collect(), &total) },
+        { "key": "chats", "title": t!("core-views.usage.by.chats"), "items": items_shown(chats.into_values().collect(), &total) },
+        { "key": "profiles", "title": t!("core-views.usage.by.profiles"), "items": items_shown(profiles.into_values().collect(), &total) },
+        { "key": "models", "title": t!("core-views.usage.by.models"), "items": items_shown(models.into_values().collect(), &total) },
     ]);
     if reading {
-        notes.insert(0, "正在读取以前的记录，数字还会变".into());
+        notes.insert(0, t!("core-views.usage.note.reading"));
     }
     if let Some(at) = since.filter(|at| local_day(*at as i64, offset) > first) {
         let day = local_day(at as i64, offset);
-        notes.push(format!("{} 日起才有记录", day_label(&day).replace('/', " 月 ")));
+        let label = day_label(&day);
+        let (month, day) = label.split_once('/').unwrap_or_default();
+        notes.push(t!("core-views.usage.note.since", month = month, day = day));
     }
     if total.unpriced > 0.0 {
-        notes.push(format!("{} 次调用的模型没有价目，没算进费用", count(total.unpriced)));
+        notes.push(t!("core-views.usage.note.unpriced", n = count(total.unpriced)));
     }
     json!({
         "days": days,
@@ -390,7 +400,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
         "max": max,
         "lists": lists,
         "notes": notes,
-        "basis": "订阅账号不按 token 收费；费用按 API 标准单价估算，不含长上下文和服务等级等加价",
+        "basis": t!("core-views.usage.basis"),
     })
 }
 
@@ -540,5 +550,9 @@ mod tests {
     fn numbers_read_as_people_say_them() {
         assert_eq!((money(1911.16), money(191.4), money(12.346), money(0.004), money(0.0)), ("$1,911".into(), "$191".into(), "$12.35".into(), "<$0.01".into(), "$0".into()));
         assert_eq!((count(9850.0), count(29_443.0), count(17_146_455.0), count(4_914_110_860.0)), ("9,850".into(), "2.9 万".into(), "1715 万".into(), "49.1 亿".into()));
+        // In English (by the language given: the current one is the whole process's, and tests run side by side).
+        let en = |n: f64| count_in(Lang::En, n);
+        assert_eq!((en(9850.0), en(29_443.0), en(17_146_455.0), en(4_914_110_860.0)), ("9,850".into(), "29.4K".into(), "17.1M".into(), "4.9B".into()));
+        assert_eq!((t!(Lang::En; "core-views.usage.calls", n = en(1.0)), t!(Lang::En; "core-views.usage.calls", n = en(29_443.0))), ("1 call".into(), "29.4K calls".into()));
     }
 }
