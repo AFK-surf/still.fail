@@ -22,6 +22,7 @@
 - 服务显示名称迁移：API `/healthz`、relay `/ping` 和新 cloud traces 使用 stillfail-cloud / stillfail-relay。API 由 CI 发布；relay 仍需单独部署（连接会重连）。历史 traces 查询同时匹配旧新名称，JWT issuer 兼容不变。
 
 - 历史消息模型：station 仅给新消息保存模型/effort 快照，不记录 runtime，不恢复或回填旧消息。需要更新 station 和客户端 core（web/桌面/安卓）；先发 station 再发客户端。没有快照的消息沿用当前会话模型的原显示逻辑；旧客户端连新 station 仍保持旧显示。上线验证：用模型 A 发消息，切到 B 再发，重开聊天/归档恢复后第一条仍显示 A。
+- station 空闲更新与聊天提示（station-update-feedback）：需发布 station、web 和 Android/桌面的 client core。station 自动更新改成有事件连接或运行轮次时暂缓，最后一次使用后至少静默 5 分钟；后台仍连接的客户端也保守地算使用中。手动更新保持可用。软件版本增加可选 idleOnly，ChatView 增加可选 stationUpdate，旧端忽略、新端对旧 station 不承诺空闲更新。部署后验：有客户端或 Slack 轮次时不自动更新；断开客户端且轮次结束超过 5 分钟后自动更新；聊天页可见新版本/更新进度，交接断线时待发消息不显示成已送达，重新连接后提示随最新 overview 清除。
 
 - 共享调试（android-adb-share）：station 和 Android 都要发，web/桌面不用动。手机在 station 页「共享调试」把自己的无线调试 adb 借给这台 station 的 agent：core 在已有 mesh 链路上开共享流，station 在 127.0.0.1:37000–37999 起端口并 `adb connect`，每条 TCP 连接是 station 在该链路上反向开的 stream（docs/adb-share.md）。新旧混跑：旧 station 对共享流回 404，app 停止并提示先更新 station；旧 app 不发共享流，新 station 就不会开隧道。station 机器要有 adb（依次找 PATH、ANDROID_HOME、~/Library/Android/sdk、Homebrew），没有时页面显示「station 上没有 adb」。老会话靠迁移说明 12 知道 adb_devices。上线后验：手机连 WLAN、开无线调试，在 station 页点开始共享，station 上 `adb devices` 出现 127.0.0.1:37xxx；第一次在通知里填配对码；agent 调 adb_devices 能看到这台手机。
 
