@@ -112,9 +112,9 @@ export const replyRoom = style({
 });
 // The footer already supplies the page gutters. Do not inset the chat composer a second time.
 globalStyle(`${reply} > ${composerWrap}`, { paddingLeft: "0", paddingRight: "0" });
-// Right under the options (the column's gap apart), not a composer's own margin further.
-globalStyle(`${reply} > *`, { paddingTop: "0" });
 export const footColumn = style({ maxWidth: "760px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "8px" });
+// Right under the options (the column's gap apart), not a composer's own margin further.
+globalStyle(`${footColumn} ${reply} > *`, { paddingTop: "0" });
 globalStyle(`${footColumn} ${options}`, { marginTop: "0" });
 // Only what is drawn takes the pointer: the room kept over the composer passes it to the messages under it.
 globalStyle(`${footColumn} > :not(${reply}), ${reply} > *`, { pointerEvents: "auto" });

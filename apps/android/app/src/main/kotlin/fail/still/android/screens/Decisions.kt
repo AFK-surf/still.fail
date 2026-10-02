@@ -599,7 +599,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
         }
         if (type == "options" || type == "text") {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { footHeight = it.height }) {
-                if (type == "options") DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 14.dp), glass = host.haze, onPick = onPick)
+                if (type == "options") DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 10.dp), glass = host.haze, onPick = onPick)
                 DecisionComposer(item, host, if (type == "text") card?.placeholder else null, room, onField, onReply)
             }
         }
