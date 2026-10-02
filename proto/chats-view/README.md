@@ -22,3 +22,15 @@ and as bytecode from `hermesc -O` (as React Native ships it: the same numbers).
 
 Equal outputs, field by field, between the Rust core and the TypeScript port on every engine, for the 342 real rows,
 2000 rows and 2000 varied rows (cards, waits, failures, watches, Slack origins, several agents, …).
+
+Peak memory (MB, RSS; 5 runs of the list), the same day. Mac by `time -l`; Android emulator by VmHWM (`peak.sh`).
+QuickJS runs inside the client shell (with its iroh endpoint), so its baseline includes that.
+
+| rows | Rust core | TS on Node | TS on QuickJS | TS on Hermes (bytecode) |
+|---|---|---|---|---|
+| Mac, none (baseline) | 6.0 | 45.1 | 14.5 | 9.5 |
+| Mac, 342 | 25.1 | 70.7 | 21.9 | 24.1 |
+| Mac, 2000 | 107.5 | 145.7 | 70.5 | 63.1 |
+| Android emulator, none | — | | 14.2–14.6 | 6.0–8.4 |
+| Android emulator, 342 | 25.3–25.4 | | 21.3–21.4 | 21.7–22.4 |
+| Android emulator, 2000 | 113.5 | | 51.1–51.6 | 41.3–41.5 |
