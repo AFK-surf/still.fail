@@ -14,6 +14,15 @@ impl Inner {
     pub(super) async fn execute(&self, call: Call, progress: Progress, at: (ClientId, RequestId)) -> Result<Value> {
         let at_call = at;
         match call {
+            Call::DecisionForm { topic, action, patch } => {
+                if matches!(action.as_str(), "open" | "edit" | "drop") { return self.decision_form.change(&topic,at.0,&action,&patch); }
+                let Topic::DecisionForm { station, .. } = &topic else { unreachable!() };
+                let input=self.decision_form.begin(&topic,at.0)?;
+                let op=crate::ops::request("automaticDecisions.save",&json!({"station":station,"input":input})).unwrap()?;
+                let answer=self.stations.perform(&StationAddr::parse(station)?,&op).await;
+                self.decision_form.finish(&topic,at.0,&answer);
+                answer
+            }
             Call::ConnectFlow { topic, action, patch } => {
                 let Topic::ConnectFlow { station, form } = &topic else { unreachable!() };
                 let token_topic = crate::connect_flow::tokens(station, form);

@@ -154,6 +154,48 @@ export interface Attention {
 	quota?: QuotaAttention;
 }
 
+export interface AutomaticDecisionCheck {
+	id: number;
+	session: string;
+	title: string;
+	at: number;
+	label: string;
+	accepted: boolean;
+	model: string;
+	profile?: string;
+	elapsedMs: number;
+	error?: string;
+}
+
+export interface AutomaticDecisionDraft {
+	enabled: boolean;
+	model: string;
+	dirty: boolean;
+	pending: boolean;
+}
+
+export interface AutomaticDecisionModel {
+	id: string;
+	name: string;
+	profiles: string[];
+}
+
+export interface AutomaticDecisionRule {
+	enabled: boolean;
+	model?: string;
+}
+
+export interface AutomaticDecisionSettings {
+	completion?: AutomaticDecisionRule;
+}
+
+export interface AutomaticDecisionView {
+	canEdit: boolean;
+	settings: AutomaticDecisionSettings;
+	models: AutomaticDecisionModel[];
+	recent: AutomaticDecisionCheck[];
+}
+
 export interface Bind {
 	runtime: RuntimeKind;
 	model?: string;
@@ -2155,6 +2197,7 @@ export interface SoftwareVersion {
 
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
+	automaticDecisions?: AutomaticDecisionView;
 	viewer: Viewer;
 	connects: Connect[];
 	profiles: Profile[];

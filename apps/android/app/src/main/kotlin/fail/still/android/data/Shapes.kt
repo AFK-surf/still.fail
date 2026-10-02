@@ -162,6 +162,54 @@ data class Attention (
 )
 
 @Serializable
+data class AutomaticDecisionCheck (
+	val id: Long,
+	val session: String,
+	val title: String,
+	val at: Long,
+	val label: String,
+	val accepted: Boolean,
+	val model: String,
+	val profile: String? = null,
+	val elapsedMs: Long,
+	val error: String? = null
+)
+
+@Serializable
+data class AutomaticDecisionDraft (
+	val enabled: Boolean,
+	val model: String,
+	val dirty: Boolean,
+	val pending: Boolean
+)
+
+@Serializable
+data class AutomaticDecisionModel (
+	val id: String,
+	val name: String,
+	val profiles: List<String>
+)
+
+@Serializable
+data class AutomaticDecisionRule (
+	val enabled: Boolean,
+	val model: String? = null
+)
+
+@Serializable
+data class AutomaticDecisionSettings (
+	val completion: AutomaticDecisionRule? = null
+)
+
+@Serializable
+data class AutomaticDecisionView (
+	val canEdit: Boolean,
+	val settings: AutomaticDecisionSettings,
+	val models: List<AutomaticDecisionModel>,
+	val recent: List<AutomaticDecisionCheck>
+)
+
+@Serializable
 data class Bind (
 	val runtime: RuntimeKind,
 	val model: String? = null,
@@ -2176,6 +2224,7 @@ data class SoftwareVersion (
 /// A station's overview, with what the clients show of its connects and profiles.
 @Serializable
 data class Overview (
+	val automaticDecisions: AutomaticDecisionView? = null,
 	val viewer: Viewer,
 	val connects: List<Connect>,
 	val profiles: List<Profile>,

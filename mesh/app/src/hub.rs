@@ -1282,7 +1282,7 @@ impl Hub {
         *self.health.lock().unwrap() = health;
     }
 
-    fn health_of(&self, id: &str) -> ProfileHealth {
+    pub(crate) fn health_of(&self, id: &str) -> ProfileHealth {
         let health = self.health.lock().unwrap().clone();
         let mut health = health(id);
         let mut spent = self.spent.lock().unwrap();
@@ -1644,18 +1644,24 @@ impl Hub {
     /// Review before any post, attachment or ending mutation, including legacy `final`.
     async fn review_completion(&self, key: &str, args: &Map<String, Value>) -> Result<()> {
         use crate::decision::{Mode, completion_question, decide};
+        let rule = self.config().automatic_decisions.completion.clone();
+        if !rule.enabled { return Ok(()); }
         let profiles = self.config().profiles.clone();
         let mut candidates = Vec::new();
         for profile in &profiles {
             let health = self.health_of(&profile.id);
             if !usable(&health) { continue; }
             if let Some(config) = health.check.as_ref().and_then(|c| c.decision.as_ref())
-                .and_then(|c| crate::decision::profiles::resolved(profile, c)) {
+                .and_then(|c| crate::decision::profiles::resolved_model(profile, c, rule.model.as_deref())) {
                 candidates.push((profile.id.clone(), config));
             }
         }
-        // Profiles without a verified probability interface retain the existing completion behavior.
-        if candidates.is_empty() { return Ok(()); }
+        if candidates.is_empty() {
+            self.store.record_decision(key, &json!({"purpose":"completion","version":1,"mode":"enforce",
+                "model":rule.model.as_deref().unwrap_or(""),"accepted":false,"elapsedMs":0,
+                "error":"配置的模型在现有 Profile 中暂不可用"}))?;
+            bail!("The configured completion decision model is unavailable on existing profiles. No completion was recorded; retry when its profile is available.");
+        }
         let mut selected = 0;
         let config = candidates[0].1.clone();
         let started = std::time::Instant::now();
@@ -1687,6 +1693,7 @@ impl Hub {
                 if answer.is_ok() { break; }
             }
             let result = answer?;
+            if self.config().automatic_decisions.completion != rule { bail!("completion review settings changed; retry using the current settings"); }
             for (id, version) in &versions {
                 if self.store.last_entry(*id)? != *version { bail!("conversation changed during completion review; read the new messages and try again"); }
             }

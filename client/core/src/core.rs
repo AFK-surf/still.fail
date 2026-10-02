@@ -145,6 +145,7 @@ struct Inner {
     /// What people set going here, until it is done (doing.rs).
     doing: crate::doing::Doing,
     connect_flow: crate::connect_flow::Flows,
+    decision_form: crate::decision_form::Forms,
     slack_tokens: crate::slack_tokens::Tokens,
     /// This phone's adb, while it is lent to a station's agents (adb.rs).
     adb: Rc<crate::adb::Adb>,
@@ -270,6 +271,7 @@ impl Core {
             Inner {
                 adb: crate::adb::Adb::new(host.clone(), store.clone(), mesh_source(me.clone()), credentials(me.clone())),
                 connect_flow: crate::connect_flow::Flows::new(store.clone(), choose.clone()),
+                decision_form: crate::decision_form::Forms::new(store.clone()),
                 sync,
                 views,
                 choose,
@@ -343,6 +345,7 @@ impl Core {
     /// A UI went away (tab closed, port gone): its subscriptions end.
     pub fn disconnect(&self, client: ClientId) {
         self.inner.connect_flow.disconnect(client);
+        self.inner.decision_form.disconnect(client);
         for topic in self.inner.slack_tokens.disconnect(client) { self.inner.store.invalidate(&topic); }
         self.inner.store.drop_client(client);
         self.inner.attend.gone(client);

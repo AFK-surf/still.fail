@@ -207,6 +207,7 @@ impl AdminApi {
             .map(|(id, p)| json!({ "id": id, "runtime": p.runtime, "job": self.deps.logins.get(id), "created": p.created, "error": p.error }))
             .collect();
         json!({
+            "automaticDecisions": self.automatic_decisions_view(viewer),
             "viewer": viewer,
             "mesh": self.deps.mesh.as_ref().map(|m| m.status()),
             "connects": connects,

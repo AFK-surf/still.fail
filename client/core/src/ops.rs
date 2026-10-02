@@ -159,6 +159,10 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         ),
         // @params runtime?:string id?:string
         "machineSessions.continue" => op("POST", Ok("/machine-sessions".into()), Some(p.pick(&["runtime", "id"])), Effect::None),
+        // @params input:json
+        "automaticDecisions.save" => op("PUT", Ok("/automatic-decisions".into()), Some(p.value("input").unwrap_or(json!({}))), Effect::Overview),
+        // @params
+        "automaticDecisions.refresh" => op("POST", Ok("/automatic-decisions/refresh".into()), Some(json!({})), Effect::Overview),
         // ── connects ──
         // @params input?:json id?:string
         "connect.create" => op("POST", Ok("/connects".into()), p.value("input").map(Some).unwrap_or(None), Effect::Connect(p.word("id"))),

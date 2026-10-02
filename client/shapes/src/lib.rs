@@ -1133,6 +1133,7 @@ pub struct SoftwareVersion {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Overview {
+    pub automatic_decisions: Option<AutomaticDecisionView>,
     pub viewer: Viewer,
     pub connects: Vec<Connect>,
     pub profiles: Vec<Profile>,
@@ -3319,4 +3320,48 @@ pub struct ConnectFlowView {
     pub chosen: Option<SlackTeam>,
     pub made: Option<MadeSlackApp>,
     pub pick: Option<PickView>,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomaticDecisionView {
+    pub can_edit: bool,
+    pub settings: AutomaticDecisionSettings,
+    pub models: Vec<AutomaticDecisionModel>,
+    pub recent: Vec<AutomaticDecisionCheck>,
+}
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomaticDecisionSettings { pub completion: Option<AutomaticDecisionRule> }
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomaticDecisionRule { pub enabled: bool, pub model: Option<String> }
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomaticDecisionModel { pub id: String, pub name: String, pub profiles: Vec<String> }
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomaticDecisionDraft { pub enabled: bool, pub model: String, pub dirty: bool, pub pending: bool }
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomaticDecisionCheck {
+    #[typeshare(serialized_as = "I54")]
+    pub id: i64,
+    pub session: String,
+    pub title: String,
+    #[typeshare(serialized_as = "I54")]
+    pub at: i64,
+    pub label: String,
+    pub accepted: bool,
+    pub model: String,
+    pub profile: Option<String>,
+    #[typeshare(serialized_as = "I54")]
+    pub elapsed_ms: i64,
+    pub error: Option<String>,
 }

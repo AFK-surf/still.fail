@@ -173,7 +173,6 @@ internal fun ProfileRow(station: String, p: Profile) {
             }
             Text(listOf(p.checkText, if (p.machine == true) t("android-settings.profile.machine") else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            p.check?.decision?.let { Text(it.detail, fontSize = 13.sp, color = C.muted) }
             if (p.trouble != null) {
                 Text("${p.trouble.title} · ${p.trouble.detail}", fontSize = 13.sp, color = C.muted)
                 Text(t("android-settings.profile.seeFix"), fontSize = 13.sp, color = C.accent)
@@ -222,7 +221,6 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: t("android-settings.profile.notChecked")) + (p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) } ?: ""),
                             fontSize = 13.sp, color = C.muted,
                         )
-                        p.check?.decision?.let { Text(it.detail, fontSize = 13.sp, color = C.muted) }
                     }
                 }
             }

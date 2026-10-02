@@ -42,6 +42,21 @@ impl DecisionConfig {
     }
 }
 
+/// User-controlled purposes; credentials and model availability remain owned by Profiles.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AutomaticDecisions {
+    #[serde(default)]
+    pub completion: DecisionRule,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DecisionRule {
+    #[serde(default)]
+    pub enabled: bool,
+    pub model: Option<String>,
+}
+
 pub struct ChoiceQuestion {
     pub instructions: String,
     pub criteria: BTreeMap<String, String>,

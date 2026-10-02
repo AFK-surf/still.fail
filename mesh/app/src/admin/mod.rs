@@ -5,6 +5,7 @@
 //! there (see docs/station-storage.md).
 
 mod edits;
+mod decision;
 mod events;
 mod files;
 pub mod notify;
@@ -943,6 +944,8 @@ impl AdminApi {
             (Some("connects"), Some(id), Some("slack-app"), "GET") => return ok(self.slack_app(id, viewer).await?),
             (Some("connects"), Some(id), Some("slack-app"), "PUT") => return ok(me.put_slack_app(id, &read_json(body).await?, viewer).await?),
             (Some("connects"), Some(id), Some("slack-app"), "POST") => return ok(self.create_slack_app(id, &read_json(body).await?, viewer).await?),
+            (Some("automatic-decisions"), None, None, "PUT") => return ok(self.put_automatic_decisions(&read_json(body).await?, viewer)?),
+            (Some("automatic-decisions"), Some("refresh"), None, "POST") => return ok(me.refresh_decision_models(viewer).await?),
             (Some("profiles"), Some(id), None, "PUT") => {
                 let overview = self.put_profile(id, &read_json(body).await?, viewer)?;
                 // Its new state is reported once known.

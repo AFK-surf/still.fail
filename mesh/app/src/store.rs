@@ -608,6 +608,7 @@ pub enum StoreChange {
     Dismissed(String),
     /// The recorded runtime processes changed.
     Processes,
+    DecisionChecks,
     /// A background job started, started again, ended or said something (its session changes as well).
     Job(String),
     /// A job that was over was taken off its session's record (cleared from the pages).
@@ -1727,11 +1728,24 @@ impl Store {
         })
     }
 
+    pub fn recent_decisions(&self) -> Result<Vec<Value>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT id, session, created_at, result FROM decision_checks ORDER BY id DESC LIMIT 30")?;
+            let rows = stmt.query_map([], |r| {
+                let raw: String = r.get(3)?;
+                Ok(serde_json::json!({"id":r.get::<_,i64>(0)?,"session":r.get::<_,String>(1)?,
+                    "at":r.get::<_,i64>(2)?,"detail":serde_json::from_str::<Value>(&raw).unwrap_or(Value::Null)}))
+            })?.collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(rows)
+        })
+    }
+
     /// Audit metadata only: no conversation text or API credentials.
     pub fn record_decision(&self, session: &str, result: &Value) -> Result<()> {
-        self.with(|i, _| {
+        self.with(|i, changes| {
             i.db.execute("INSERT INTO decision_checks(session, created_at, result) VALUES (?, ?, ?)",
                 params![session, now_ms(), result.to_string()])?;
+            changes.push(StoreChange::DecisionChecks);
             Ok(())
         })
     }

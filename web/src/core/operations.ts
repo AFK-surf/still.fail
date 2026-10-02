@@ -19,6 +19,8 @@ export interface OperationParams {
   "machineSessions.list": {  };
   "machineSessions.read": { runtime: string; id: string; limit?: number | null | undefined };
   "machineSessions.continue": { runtime?: string | null | undefined; id?: string | null | undefined };
+  "automaticDecisions.save": { input: unknown };
+  "automaticDecisions.refresh": {  };
   "connect.create": { input?: unknown; id?: string | null | undefined };
   "connect.put": { id: string; input?: unknown };
   "connect.delete": { id: string };
@@ -112,6 +114,8 @@ export function bindStationOperations(call: Call) {
     machineSessionsList: <T = unknown>(params: OperationParams["machineSessions.list"] = {}) => call("machineSessions.list", params) as Promise<T>,
     machineSessionsRead: <T = unknown>(params: OperationParams["machineSessions.read"]) => call("machineSessions.read", params) as Promise<T>,
     machineSessionsContinue: <T = unknown>(params: OperationParams["machineSessions.continue"] = {}) => call("machineSessions.continue", params) as Promise<T>,
+    automaticDecisionsSave: <T = unknown>(params: OperationParams["automaticDecisions.save"]) => call("automaticDecisions.save", params) as Promise<T>,
+    automaticDecisionsRefresh: <T = unknown>(params: OperationParams["automaticDecisions.refresh"] = {}) => call("automaticDecisions.refresh", params) as Promise<T>,
     connectCreate: <T = unknown>(params: OperationParams["connect.create"] = {}) => call("connect.create", params) as Promise<T>,
     connectPut: <T = unknown>(params: OperationParams["connect.put"]) => call("connect.put", params) as Promise<T>,
     connectDelete: <T = unknown>(params: OperationParams["connect.delete"]) => call("connect.delete", params) as Promise<T>,

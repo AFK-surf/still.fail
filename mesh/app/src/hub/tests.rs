@@ -2510,6 +2510,7 @@ async fn completion_review_allows_answers_and_does_not_turn_outages_into_done() 
 fn install_decision_profile(r: &Rig, endpoint: &str) {
     use crate::decision::{Provider, profiles::{Capability, fingerprint}};
     r.edit(|config| {
+        config.automatic_decisions.completion = crate::decision::DecisionRule { enabled:true, model:Some("test-jev".into()) };
         let profile = &mut config.profiles[0];
         profile.envs.entry("codex").or_default().extend([
             ("TYPESAFE_API_KEY".into(), "profile-test-key".into()),
@@ -2517,10 +2518,25 @@ fn install_decision_profile(r: &Rig, endpoint: &str) {
         ]);
     });
     let profile = r.config.lock().unwrap().profiles[0].clone();
-    let capability = Capability { state:"ready".into(), detail:"test".into(), model:Some("test-jev".into()), provider:Some(Provider::Jev), fingerprint:fingerprint(&profile) };
+    let capability = Capability { state:"ready".into(), detail:"test".into(), model:Some("test-jev".into()), provider:Some(Provider::Jev), fingerprint:fingerprint(&profile),models:vec!["test-jev".into()] };
     r.hub.set_profile_health(Arc::new(move |id| crate::pool::ProfileHealth {
         check: (id == profile.id).then(|| crate::profiles::ProfileCheck {
             decision:Some(capability.clone()), model_efforts:None,state:"ok".into(),detail:String::new(),models:None,checked_at:0,
         }), ..Default::default()
     }));
+}
+
+#[tokio::test]
+async fn completion_review_obeys_rule_switch_and_selected_model() {
+    let r=setup();let m=say("<@UBOT> explain retention");r.accept(&m).await;settle().await;
+    let key=format!("cl:C1:{}",m.thread_ts);let to=format!("C1/{}",m.thread_ts);
+    let (endpoint,server)=completion_provider(true).await; install_decision_profile(&r,&endpoint);
+    r.edit(|c|c.automatic_decisions.completion.model=Some("not-the-verified-model".into()));
+    let args=json!({"to":to,"text":"Here is the answer","kind":"all_done","done":"The factual question was answered"});
+    let before=r.chat.texts().len();
+    assert!(r.call(&key,"chat_post",args.clone()).await.unwrap_err().to_string().contains("unavailable"));
+    assert_eq!(r.chat.texts().len(),before);
+    r.edit(|c|c.automatic_decisions.completion.enabled=false);
+    r.call(&key,"chat_post",args).await.unwrap();
+    assert_eq!(r.chat.texts().len(),before+1);server.abort();
 }

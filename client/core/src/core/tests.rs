@@ -2138,3 +2138,27 @@ fn lends_the_phone_s_adb_through_its_calls_and_topic() {
         assert_eq!(values[&1], json!({ "sharing": false, "phase": "off", "tunnels": 0 }));
     });
 }
+
+#[test]
+fn automatic_decision_drafts_require_a_model_and_preserve_failed_saves() {
+    run(async {
+        let (host,core)=choosing_core().await;
+        let ui=core.connect();let other=core.connect();
+        let params=json!({"station":"ws/st","form":"automatic-test"});
+        let topic=Topic::DecisionForm{station:"ws/st".into(),form:"automatic-test".into()};
+        call(&host,&core,ui,1,"automaticDecisions.form.open",params.clone()).await.unwrap();
+        let forms=&core.inner.decision_form;
+        stillfail_shapes::conform::<stillfail_shapes::AutomaticDecisionDraft>(forms.value(&topic).unwrap()).unwrap();
+        assert!(forms.change(&topic,other,"edit",&json!({"enabled":true})).is_err());
+        forms.change(&topic,ui,"edit",&json!({"enabled":true})).unwrap();
+        assert!(forms.begin(&topic,ui).is_err());
+        forms.change(&topic,ui,"edit",&json!({"model":"gpt-6-luna"})).unwrap();
+        assert_eq!(forms.begin(&topic,ui).unwrap(),json!({"completion":{"enabled":true,"model":"gpt-6-luna"}}));
+        assert!(forms.change(&topic,ui,"edit",&json!({"enabled":false})).is_err());
+        forms.finish(&topic,ui,&Err(CoreError::invalid("save failed")));
+        assert_eq!(forms.value(&topic).unwrap()["dirty"],true);
+        forms.begin(&topic,ui).unwrap();forms.finish(&topic,ui,&Ok(json!({})));
+        assert_eq!(forms.value(&topic).unwrap()["dirty"],false);
+        forms.change(&topic,ui,"drop",&json!({})).unwrap();assert!(forms.value(&topic).unwrap().is_null());
+    });
+}

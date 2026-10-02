@@ -142,6 +142,7 @@ sealed interface Screen {
     data class Connects(val station: String? = null) : Screen { override val id = "connects" + (station?.let { "/$it" } ?: "") }
     /** Every station's profiles, or (from a station's page) that station's only. */
     data class Profiles(val station: String? = null) : Screen { override val id = "profiles" + (station?.let { "/$it" } ?: "") }
+    data object AutomaticDecisions : Screen { override val id = "automatic-decisions" }
     data object Memories : Screen { override val id = "memories" }
     /** What the agents spent (screens/Usage.kt). */
     data object Usage : Screen { override val id = "usage" }
@@ -680,6 +681,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Changelog -> fail.still.android.screens.ChangelogScreen()
                     is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)
+                    Screen.AutomaticDecisions -> fail.still.android.screens.AutomaticDecisionsScreen(current)
                     Screen.Memories -> fail.still.android.screens.MemoriesScreen(current)
                     Screen.Usage -> fail.still.android.screens.UsageScreen(current)
                     is Screen.UsagePrices -> fail.still.android.screens.UsagePricesScreen(current, screen.days)
