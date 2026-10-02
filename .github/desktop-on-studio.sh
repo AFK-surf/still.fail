@@ -7,7 +7,7 @@
 set -eu
 sha=${1:?usage: desktop-on-studio.sh <commit>}
 export PATH="$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
-repo=~/WebstormProjects/ember
+repo="$HOME/WebstormProjects/still.fail"
 wt=~/ember-wt/ci-desktop
 # A deploy fetching at the same moment holds the ref's lock: tried again.
 for try in 1 2 3; do git -C $repo fetch -q github && break; sleep 10; done
