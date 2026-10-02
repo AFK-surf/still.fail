@@ -52,9 +52,8 @@ pub struct AppOptions {
     pub handoff: Option<HandedApp>,
 }
 
-/// The station's store in the data directory: named as before the rename, so a release from before it still opens
-/// it (through the link ~/.ember).
-pub const DB_FILE: &str = "ember.db";
+/// The station store; former::database moves older installs before this is opened.
+pub const DB_FILE: &str = "stillfail.db";
 
 /// This station's place in still.fail cloud, as <data>/mesh/cloud.json says (written by `stillfail station enroll`, kept
 /// up to date by the cloud, marked `removed_at` by stillfail-station when the cloud says it was removed); looked at every
@@ -161,7 +160,8 @@ impl App {
     pub async fn start(options: AppOptions) -> Result<Arc<App>> {
         let settings = Settings::open(&options.config, &options.data)?;
         let config = settings.config();
-        let store = Arc::new(Store::open(&options.data.join(DB_FILE).to_string_lossy(), None)?);
+        let database = crate::former::database(&options.data)?;
+        let store = Arc::new(Store::open(&database.to_string_lossy(), None)?);
         // Bug reports to the still.fail team (feedback.rs): not from the test channel's stations, the team's own. As the
         // station started: a switch of channel comes with a new release, so a restart.
         let feedback = crate::updates::channel_of(&settings.raw(), &crate::updates::app_of(&options.ui)) == crate::updates::Channel::Stable;

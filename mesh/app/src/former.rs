@@ -143,9 +143,92 @@ pub fn link_claude_projects(data: &Path, old: &Path) {
     }
 }
 
+/// Move the SQLite store only while the station owns run/station.lock and before opening its store. SQLite itself
+/// checkpoints the WAL and produces a consistent backup; raw copies of a live WAL database are never used.
+pub fn database(data: &Path) -> anyhow::Result<PathBuf> {
+    use anyhow::{Context, bail};
+    use rusqlite::Connection;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let old = data.join("ember.db");
+    let new = data.join("stillfail.db");
+    if new.exists() {
+        if old.exists() && std::fs::canonicalize(&old)? != std::fs::canonicalize(&new)? {
+            bail!("both ember.db and stillfail.db exist; refusing to choose between independent databases");
+        }
+        if old.symlink_metadata().is_err() { symlink("stillfail.db", &old)?; }
+        return Ok(new);
+    }
+    if !old.exists() {
+        std::fs::create_dir_all(data)?;
+        if old.symlink_metadata().is_err() { symlink("stillfail.db", &old)?; }
+        return Ok(new);
+    }
+    // No other SQLite reader/writer may still be using the former pathname during the move.
+    let db = Connection::open(&old)?;
+    db.busy_timeout(std::time::Duration::from_secs(5))?;
+    db.execute_batch("PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;")?;
+    let busy: i64 = db.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |r| r.get(0))?;
+    if busy != 0 { bail!("the former database is still in use; retry the migration after it closes"); }
+    let backups = data.join("backups");
+    std::fs::create_dir_all(&backups)?;
+    std::fs::set_permissions(&backups, std::fs::Permissions::from_mode(0o700))?;
+    let backup = backups.join("ember-before-rename.db");
+    if !backup.exists() {
+        let mut random = [0u8; 8];
+        getrandom::fill(&mut random).map_err(|error| anyhow::anyhow!("{error}"))?;
+        let pending = backups.join(format!("rename-{}.pending", hex::encode(random)));
+        let file = std::fs::OpenOptions::new().create_new(true).write(true).open(&pending)?;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        drop(file);
+        let copied = db.execute("VACUUM INTO ?", [pending.to_string_lossy().as_ref()]);
+        if let Err(error) = copied { let _ = std::fs::remove_file(&pending); return Err(error.into()); }
+        let check = Connection::open(&pending)?;
+        let integrity: String = check.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+        if integrity != "ok" { bail!("database backup did not pass integrity_check: {integrity}"); }
+        drop(check);
+        std::fs::File::open(&pending)?.sync_all()?;
+        std::fs::rename(&pending, &backup)?;
+    }
+    db.close().map_err(|(_, error)| error).context("close old database before moving it")?;
+    std::fs::rename(&old, &new)?;
+    // Old maintenance scripts and rollback binaries resolve to the same database, never to a stale copy.
+    symlink("stillfail.db", &old)?;
+    std::fs::File::open(data)?.sync_all()?;
+    info!(backup = %backup.display(), "moved station database to stillfail.db");
+    Ok(new)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn database_move_preserves_wal_data_and_old_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("ember.db");
+        let db = rusqlite::Connection::open(&old).unwrap();
+        db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE sample(value TEXT); INSERT INTO sample VALUES ('history');").unwrap();
+        drop(db);
+        let new = database(dir.path()).unwrap();
+        assert_eq!(new.file_name().unwrap(), "stillfail.db");
+        assert_eq!(database(dir.path()).unwrap(), new);
+        let old_handle = rusqlite::Connection::open(&old).unwrap();
+        old_handle.execute("INSERT INTO sample VALUES ('after migration')", []).unwrap();
+        let current = rusqlite::Connection::open(&new).unwrap();
+        assert_eq!(current.query_row("SELECT COUNT(*) FROM sample", [], |r| r.get::<_, i64>(0)).unwrap(), 2);
+        let backup = rusqlite::Connection::open(dir.path().join("backups/ember-before-rename.db")).unwrap();
+        assert_eq!(backup.query_row("SELECT COUNT(*) FROM sample", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+    }
+
+    #[test]
+    fn independent_databases_are_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("ember.db"), b"old").unwrap();
+        std::fs::write(dir.path().join("stillfail.db"), b"new").unwrap();
+        assert!(database(dir.path()).is_err());
+        assert_eq!(std::fs::read(dir.path().join("ember.db")).unwrap(), b"old");
+        assert_eq!(std::fs::read(dir.path().join("stillfail.db")).unwrap(), b"new");
+    }
 
     #[test]
     fn variables_are_read_under_the_new_name_else_the_old() {
