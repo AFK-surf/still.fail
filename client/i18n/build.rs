@@ -2,6 +2,8 @@
 use std::{env, fs, path::Path};
 
 fn main() {
+    // The catalog goes into the build as text: a cached build must not keep words from before they changed.
+    println!("cargo:rerun-if-changed=build.rs");
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("catalog");
     println!("cargo:rerun-if-changed={}", root.display());
     let mut entries = Vec::new();
