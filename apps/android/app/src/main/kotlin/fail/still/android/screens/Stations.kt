@@ -219,7 +219,7 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(arrow, fontSize = 13.sp, color = C.muted)
                     Text(rate, Modifier.padding(start = 5.dp).width(68.dp), style = figure, color = C.ink, maxLines = 1)
-                    total?.let { Text(t("android-settings.stations.total", "total" to it), Modifier.width(60.dp), style = figure.copy(fontWeight = FontWeight.Normal), color = C.muted, maxLines = 1) }
+                    total?.let { Text(t("android-settings.stations.total", "total" to it), Modifier.widthIn(min = 60.dp), style = figure.copy(fontWeight = FontWeight.Normal), color = C.muted, maxLines = 1) }
                 }
             }
         }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -221,7 +222,7 @@ fun ConnectScreen(station: String, id: String) {
             SectionHeader(t("android-settings.connect.run"), start = 24.dp)
             ListCard {
                 ListRow(onClick = { app.push(Screen.ConnectRun(station, connect.id)) }) {
-                    Text(t("android-settings.connect.model"), fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    Text(t("android-settings.connect.model"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
                     Text(
                         listOf(connect.bind.model?.let { connect.modelName ?: it } ?: t("android-settings.connect.pickModel"), connect.bind.effort?.ifEmpty { null } ?: t("android-settings.connect.defaultEffort"), if (connect.bind.profile != null) t("android-settings.connect.fixedAccount") else t("android-settings.connect.autoAccount")).joinToString(" · "),
                         fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
@@ -229,7 +230,7 @@ fun ConnectScreen(station: String, id: String) {
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
                 ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { ModeSheet(station, item) } }) {
-                    Text(t("android-settings.connect.sessions"), fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    Text(t("android-settings.connect.sessions"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
                     Column(Modifier.weight(1f)) {
                         Text(MODE_LABEL[connect.mode] ?: connect.mode, fontSize = 15.sp, color = C.ink)
                         Text((MODE_TEXT[connect.mode] ?: "") + if (connect.mode == "single-session") (if (connect.requireMention) t("android-settings.connect.mentionOnly") else t("android-settings.connect.everyMessage")) else "", fontSize = 13.sp, color = C.muted)
@@ -237,7 +238,7 @@ fun ConnectScreen(station: String, id: String) {
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
                 if (connect.mode == "single-session") ListRow(onClick = { app.sheet = SheetSpec(0.7f, draggable = true) { SessionSheet(station, item) } }) {
-                    Text(t("android-settings.connect.current"), fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    Text(t("android-settings.connect.current"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
                     Text(item.bound?.titleText ?: t("android-settings.connect.noSession"), fontSize = 15.sp, color = if (item.bound != null) C.ink else C.muted, modifier = Modifier.weight(1f))
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
