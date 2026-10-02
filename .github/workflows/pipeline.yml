@@ -13,10 +13,12 @@ on:
   push:
     branches: ["**"]
   workflow_dispatch:
-# Only the newest commit of a branch matters: a push stops the run before it (main's tag keeps what that one missed).
+# A branch: only its newest commit matters, a push stops the run before it. main: a run going on finishes (stopped
+# halfway, with a merge every few minutes, nothing went out for an hour on 2026-10-02); pushes meanwhile wait as one
+# run of the newest, which the tag deployed/beta makes carry what the ones skipped brought.
 concurrency:
   group: pipeline-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions:
   contents: read
 jobs:
