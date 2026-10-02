@@ -71,12 +71,24 @@ def main():
             child = subprocess.Popen(['pnpm', 'exec', 'wrangler', 'dev', '--remote', '--config', str(config), '--ip', '127.0.0.1', '--port', str(port)], cwd=deploy.ROOT, stdout=log, stderr=log, start_new_session=True)
             try:
                 def call(path, body=None):
-                    data = None if body is None else json.dumps(body).encode()
-                    req = urllib.request.Request(f'http://127.0.0.1:{port}{path}', data=data, headers={'authorization': f'Bearer {token}', 'content-type': 'application/json', 'user-agent': 'stillfail-resource-migration'})
-                    try:
-                        with urllib.request.urlopen(req, timeout=600) as response: return json.load(response)
-                    except urllib.error.HTTPError as error:
-                        raise RuntimeError(f"migration proxy HTTP {error.code}: {error.read(2000).decode(errors='replace')}") from None
+                    for retry in range(5):
+                        data = None if body is None else json.dumps(body).encode()
+                        req = urllib.request.Request(f'http://127.0.0.1:{port}{path}', data=data, headers={'authorization': f'Bearer {token}', 'content-type': 'application/json', 'user-agent': 'stillfail-resource-migration'})
+                        try:
+                            with urllib.request.urlopen(req, timeout=600) as response: return json.load(response)
+                        except urllib.error.HTTPError as error:
+                            detail = error.read(2000).decode(errors='replace')
+                            try: info = json.loads(detail)
+                            except ValueError: info = {}
+                            if error.code == 409 and info.get('error') == 'source_changed' and info.get('etag') and body:
+                                body = {**body, 'etag': info['etag']}
+                            elif error.code < 500:
+                                raise RuntimeError(f'migration proxy HTTP {error.code}: {detail}') from None
+                            if retry == 4: raise RuntimeError(f'migration proxy HTTP {error.code}: {detail}') from None
+                            time.sleep(retry + 1)
+                        except (OSError, ValueError):
+                            if retry == 4: raise
+                            time.sleep(retry + 1)
                 for attempt in range(90):
                     if child.poll() is not None: raise RuntimeError('Wrangler migration proxy exited; no cutover performed')
                     try:
@@ -85,10 +97,15 @@ def main():
                     except (OSError, ValueError): time.sleep(1)
                 else: raise RuntimeError('Wrangler migration proxy did not become ready')
                 report = {'source': 'ember-releases', 'target': 'stillfail-releases', 'mode': 'copy' if args.copy else 'verify' if args.verify_only else 'inventory', 'complete': False, 'objects': []}
+                previous = {}
+                if args.copy and args.report.exists():
+                    saved = json.loads(args.report.read_text())
+                    if saved.get('source') == report['source'] and saved.get('target') == report['target']:
+                        previous = {o['key']: o for o in saved['objects'] if all(k in o for k in ('sourceEtag', 'targetEtag', 'sha256'))}
                 while True:
                     for obj in page['objects']:
                         if args.copy or args.verify_only:
-                            obj = call('/copy', {'key': obj['key'], 'etag': obj['etag'], 'verifyOnly': args.verify_only})
+                            obj = call('/copy', {'key': obj['key'], 'etag': obj['etag'], 'verifyOnly': args.verify_only, 'resume': previous.get(obj['key'])})
                         report['objects'].append(obj)
                         deploy.write_private(args.report, report)
                         if len(report['objects']) % 25 == 0: print('verified objects:', len(report['objects']), flush=True)

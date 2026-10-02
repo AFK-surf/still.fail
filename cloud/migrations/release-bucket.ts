@@ -20,11 +20,15 @@ async function migrate(request: Request, env: Env): Promise<Response> {
       return Response.json({ objects: list.objects.map(({ key, etag, size }) => ({ key, etag, size })), cursor: list.truncated ? list.cursor : null });
     }
     if (request.method !== "POST" || url.pathname !== "/copy") return new Response("not found", { status: 404 });
-    const input = await request.json() as { key: string; etag: string; verifyOnly?: boolean };
+    const input = await request.json() as { key: string; etag: string; verifyOnly?: boolean; resume?: { sourceEtag: string; targetEtag: string; sha256: string } };
     if (typeof input.key !== "string" || typeof input.etag !== "string") return new Response("invalid input", { status: 400 });
     const source = await env.SOURCE.get(input.key, { onlyIf: { etagMatches: input.etag } });
-    if (!source || !("body" in source)) return new Response("source changed; list again", { status: 409 });
+    if (!source || !("body" in source)) return Response.json({ error: "source_changed", etag: (await env.SOURCE.head(input.key))?.etag ?? null }, { status: 409 });
     const before = await env.TARGET.head(input.key);
+    if (!input.verifyOnly && input.resume?.sourceEtag === source.etag && input.resume?.targetEtag === before?.etag && before?.size === source.size) {
+      await source.body.cancel();
+      return Response.json({ key: input.key, sourceEtag: source.etag, targetEtag: before.etag, size: source.size, sha256: input.resume.sha256 });
+    }
     let sourceHash: string;
     if (input.verifyOnly) sourceHash = await digest(source.body);
     else {
@@ -46,6 +50,6 @@ async function migrate(request: Request, env: Env): Promise<Response> {
       return new Response("copy verification failed", { status: 409 });
     }
     const latest = await env.SOURCE.head(input.key);
-    if (latest?.etag !== input.etag) return new Response("source changed during copy; list again", { status: 409 });
+    if (latest?.etag !== input.etag) return Response.json({ error: "source_changed", etag: latest?.etag ?? null }, { status: 409 });
     return Response.json({ key: input.key, sourceEtag: input.etag, targetEtag: target.etag, size: source.size, sha256: sourceHash });
 }
