@@ -20,6 +20,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (12, "New tool adb_devices: Android phones people shared with this station from the still.fail app, each reachable with `adb -s 127.0.0.1:<port>`; it also gives the link that opens this station's 共享调试 in a person's app, to ask for one."),
     (13, "Job tool instructions now use `stillfail-job notify`. The old `ember-job` command remains an alias for jobs and transcripts created before the rename."),
     (14, "A card without card.assignee now goes to the chat starter’s 奏 list, and need_human without a card goes there too, with its about message as the question: keep that message self-contained."),
+    (15, "station_task: all tasks of a session now share one directory on the target station, removed when the chat is archived or deleted (or after 14 days unused). Keep checkouts and build output there instead of opening directories elsewhere on that machine."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

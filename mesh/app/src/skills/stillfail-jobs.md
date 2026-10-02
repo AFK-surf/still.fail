@@ -54,8 +54,11 @@ Use `station_list` to discover workspace stations, then `station_list {station}`
 The target administrator controls permission; never enable `remoteTasks.allow` yourself to bypass it.
 
 Prepare `station_task` with a stable `key`, upload inputs with `station_file`, then start the same key. Commands
-run as the target OS user in a task directory, not a sandbox. Pin inputs and versions: for Git, upload a bundle or
-archive and check out the intended revision.
+run as the target OS user, not a sandbox. All tasks of this session share one directory on the target (the working
+directory of each task), so a later task can build in what an earlier one cloned. Keep checkouts, worktrees and build
+output inside it rather than elsewhere on that machine (or over ssh): it is removed with anything still running when
+this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and
+versions: clone or fetch the intended revision there, or upload a bundle.
 
 `station_task` lists, inspects, tails or stops your remote tasks. Completion and notices survive reconnects and
 station restarts; no local polling job is needed. End `waiting`, naming the task. Download artifacts with
