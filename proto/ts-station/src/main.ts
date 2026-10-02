@@ -49,7 +49,7 @@ console.error(`ts-station: ${endpoint.id()} on ${endpoint.sockets().join(", ")}`
 // ---- the wire: one JSON line, then bytes (mesh/station/src/main.rs `read_line`, `write_line`) ----
 
 class Reader {
-  carry = Buffer.alloc(0);
+  carry: Buffer = Buffer.alloc(0);
   stream: Stream;
   constructor(stream: Stream) {
     this.stream = stream;
