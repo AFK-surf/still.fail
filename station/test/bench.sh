@@ -6,6 +6,7 @@ work=$1 rust=$2 secs=${3:-30} conc=${4:-8}
 here=$(cd "$(dirname "$0")/.." && pwd)
 load=$here/tools/load/target/release/station-load
 node=${NODE:-node}
+NODE_ARGS=${NODE_ARGS:-}
 id=$(cat "$work/station-id")
 threads=$(sqlite3 "$work/ts/stillfail.db" "select id from threads order by id desc limit 8" | tr '\n' ' ')
 paths="/admin/api/chats /admin/api/chats?archived=1"
@@ -29,5 +30,6 @@ measure() { # measure <name> <data dir name> <command…>
   echo "{\"station\":\"$name\",\"idleMB\":$((idle/1024)),\"peakMB\":$((peak/1024)),\"afterMB\":$((after/1024)),\"load\":$(cat "$work/load-$name.json")}"
 }
 measure rust rust "$rust" run --app "$(dirname "$(dirname "$(dirname "$(dirname "$rust")")")")" --port 4799 --data "$work/rust"
-STILLFAIL_NO_DISCOVERY= measure ts ts "$node" "$here/src/main.ts" run --app "$here" --port 4798 --data "$work/ts"
+# ENTRY=dist/main.js measures the bundle (STILLFAIL_MESH_NATIVE then says where the addon is).
+measure ts ts "$node" $NODE_ARGS "$here/${ENTRY:-src/main.ts}" run --app "$here" --port 4798 --data "$work/ts"
 stop
