@@ -8,27 +8,24 @@
 
 use crate::{AccessKind, RuntimeKind};
 
-/// How the picker groups them: Cue's groups, in its order.
+/// How the picker groups them: who makes the models (labs, in the order they are listed), the gateways that resell
+/// many makers', those that host other makers' models on their cloud, and what runs by hand or on one's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Group {
     Labs,
-    China,
     Gateways,
-    Cloud,
-    Inference,
+    Hosted,
     Local,
 }
 
-pub const GROUPS: [Group; 6] = [Group::Labs, Group::China, Group::Gateways, Group::Cloud, Group::Inference, Group::Local];
+pub const GROUPS: [Group; 4] = [Group::Labs, Group::Gateways, Group::Hosted, Group::Local];
 
 impl Group {
     pub fn id(self) -> &'static str {
         match self {
             Group::Labs => "labs",
-            Group::China => "china",
             Group::Gateways => "gateways",
-            Group::Cloud => "cloud",
-            Group::Inference => "inference",
+            Group::Hosted => "hosted",
             Group::Local => "local",
         }
     }
@@ -102,17 +99,17 @@ pub static SOURCES: &[Source] = &[
     Source { responses: Some("https://api.x.ai/v1"), ..source("xai", "xAI", Group::Labs, Some("xai")) },
     Source { chat: Some("https://api.mistral.ai/v1"), ..source("mistral", "Mistral", Group::Labs, Some("mistral")) },
     // China.
-    Source { chat: Some("https://api.deepseek.com"), ..source("deepseek", "DeepSeek", Group::China, Some("deepseek")) },
-    Source { chat: Some("https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"), ..source("qwen", "Qwen", Group::China, Some("qwen")) },
-    Source { chat: Some("https://api.moonshot.ai/v1"), ..source("moonshotai", "Kimi", Group::China, Some("kimi")) },
-    Source { chat: Some("https://api.z.ai/api/coding/paas/v4"), ..source("zai", "Z.ai", Group::China, Some("zhipu")) },
-    Source { anthropic: Some("https://api.minimax.io/anthropic"), ..source("minimax", "MiniMax", Group::China, Some("minimax")) },
-    Source { chat: Some("https://api.xiaomimimo.com/v1"), ..source("xiaomi", "Xiaomi MiMo", Group::China, Some("xiaomi")) },
-    Source { chat: Some("https://api.ant-ling.com/v1"), ..source("ant-ling", "Ant Ling", Group::China, Some("ant-ling")) },
-    Source { chat: Some("https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"), ..source("qwen-cn", "Qwen (China)", Group::China, Some("qwen")) },
-    Source { chat: Some("https://api.moonshot.cn/v1"), ..source("moonshotai-cn", "Kimi (China)", Group::China, Some("kimi")) },
-    Source { chat: Some("https://open.bigmodel.cn/api/coding/paas/v4"), ..source("zai-coding-cn", "Z.ai Coding (China)", Group::China, Some("zhipu")) },
-    Source { anthropic: Some("https://api.minimaxi.com/anthropic"), ..source("minimax-cn", "MiniMax (China)", Group::China, Some("minimax")) },
+    Source { chat: Some("https://api.deepseek.com"), ..source("deepseek", "DeepSeek", Group::Labs, Some("deepseek")) },
+    Source { chat: Some("https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"), ..source("qwen", "Qwen", Group::Labs, Some("qwen")) },
+    Source { chat: Some("https://api.moonshot.ai/v1"), ..source("moonshotai", "Kimi", Group::Labs, Some("kimi")) },
+    Source { chat: Some("https://api.z.ai/api/coding/paas/v4"), ..source("zai", "Z.ai", Group::Labs, Some("zhipu")) },
+    Source { anthropic: Some("https://api.minimax.io/anthropic"), ..source("minimax", "MiniMax", Group::Labs, Some("minimax")) },
+    Source { chat: Some("https://api.xiaomimimo.com/v1"), ..source("xiaomi", "Xiaomi MiMo", Group::Labs, Some("xiaomi")) },
+    Source { chat: Some("https://api.ant-ling.com/v1"), ..source("ant-ling", "Ant Ling", Group::Labs, Some("ant-ling")) },
+    Source { chat: Some("https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"), ..source("qwen-cn", "Qwen (China)", Group::Labs, Some("qwen")) },
+    Source { chat: Some("https://api.moonshot.cn/v1"), ..source("moonshotai-cn", "Kimi (China)", Group::Labs, Some("kimi")) },
+    Source { chat: Some("https://open.bigmodel.cn/api/coding/paas/v4"), ..source("zai-coding-cn", "Z.ai Coding (China)", Group::Labs, Some("zhipu")) },
+    Source { anthropic: Some("https://api.minimaxi.com/anthropic"), ..source("minimax-cn", "MiniMax (China)", Group::Labs, Some("minimax")) },
     // Gateways.
     Source { anthropic: Some("https://openrouter.ai/api"), chat: Some("https://openrouter.ai/api/v1"), ..source("openrouter", "OpenRouter", Group::Gateways, Some("openrouter")) },
     Source { anthropic: Some("https://ai-gateway.vercel.sh"), ..source("vercel-ai-gateway", "Vercel AI Gateway", Group::Gateways, Some("vercel")) },
@@ -126,16 +123,16 @@ pub static SOURCES: &[Source] = &[
     },
     Source { endpoint_required: true, protocols: ALL, auth: ClaudeAuth::Both, ..source("cloudflare-ai-gateway", "Cloudflare AI Gateway", Group::Gateways, Some("cloudflare")) },
     // Cloud.
-    Source { endpoint_required: true, protocols: &[Protocol::Responses], ..source("azure-openai", "Azure OpenAI", Group::Cloud, Some("azure")) },
+    Source { endpoint_required: true, protocols: &[Protocol::Responses], ..source("azure-openai", "Azure OpenAI", Group::Hosted, Some("azure")) },
     // Inference.
-    Source { chat: Some("https://api.groq.com/openai/v1"), ..source("groq", "Groq", Group::Inference, Some("groq")) },
-    Source { chat: Some("https://api.together.ai/v1"), ..source("together", "Together AI", Group::Inference, Some("together")) },
-    Source { anthropic: Some("https://api.fireworks.ai/inference"), chat: Some("https://api.fireworks.ai/inference/v1"), ..source("fireworks", "Fireworks", Group::Inference, Some("fireworks")) },
-    Source { chat: Some("https://api.cerebras.ai/v1"), ..source("cerebras", "Cerebras", Group::Inference, Some("cerebras")) },
-    Source { chat: Some("https://router.huggingface.co/v1"), ..source("huggingface", "Hugging Face", Group::Inference, Some("huggingface")) },
-    Source { chat: Some("https://integrate.api.nvidia.com/v1"), ..source("nvidia", "NVIDIA", Group::Inference, Some("nvidia")) },
-    Source { chat: Some("https://inference.baseten.co/v1"), ..source("baseten", "Baseten", Group::Inference, Some("baseten")) },
-    Source { endpoint_required: true, protocols: &[Protocol::Chat], ..source("cloudflare-workers-ai", "Cloudflare Workers AI", Group::Inference, Some("cloudflare")) },
+    Source { chat: Some("https://api.groq.com/openai/v1"), ..source("groq", "Groq", Group::Hosted, Some("groq")) },
+    Source { chat: Some("https://api.together.ai/v1"), ..source("together", "Together AI", Group::Hosted, Some("together")) },
+    Source { anthropic: Some("https://api.fireworks.ai/inference"), chat: Some("https://api.fireworks.ai/inference/v1"), ..source("fireworks", "Fireworks", Group::Hosted, Some("fireworks")) },
+    Source { chat: Some("https://api.cerebras.ai/v1"), ..source("cerebras", "Cerebras", Group::Hosted, Some("cerebras")) },
+    Source { chat: Some("https://router.huggingface.co/v1"), ..source("huggingface", "Hugging Face", Group::Hosted, Some("huggingface")) },
+    Source { chat: Some("https://integrate.api.nvidia.com/v1"), ..source("nvidia", "NVIDIA", Group::Hosted, Some("nvidia")) },
+    Source { chat: Some("https://inference.baseten.co/v1"), ..source("baseten", "Baseten", Group::Hosted, Some("baseten")) },
+    Source { endpoint_required: true, protocols: &[Protocol::Chat], ..source("cloudflare-workers-ai", "Cloudflare Workers AI", Group::Hosted, Some("cloudflare")) },
     // Local: at the reader's own address, which the station must be able to reach.
     Source { endpoint_required: true, protocols: &[Protocol::Chat], key_optional: true, ..source("ollama", "Ollama", Group::Local, None) },
     Source { endpoint_required: true, protocols: ALL, key_optional: true, auth: ClaudeAuth::Both, ..source("custom", "Custom", Group::Local, None) },

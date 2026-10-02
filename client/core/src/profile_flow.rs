@@ -360,11 +360,10 @@ mod tests {
             serde_json::from_value::<stillfail_shapes::ProfileFlowView>(view.clone()).unwrap();
             let ids: Vec<(String, Vec<String>)> = view["groups"].as_array().unwrap().iter()
                 .map(|g| (g["id"].as_str().unwrap().into(), g["providers"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap().into()).collect())).collect();
-            assert_eq!(ids[0], ("labs".to_string(), vec!["openai".to_string(), "anthropic".to_string()]));
-            assert_eq!(ids[1], ("china".to_string(), vec!["deepseek".to_string()]));
-            assert_eq!(ids[2], ("gateways".to_string(), vec!["opencode-go".to_string()]));
-            assert_eq!(ids[3].0, "inference");
-            assert_eq!(ids[4], ("local".to_string(), vec!["custom".to_string(), "env-claude".to_string(), "env-codex".to_string()]));
+            assert_eq!(ids[0], ("labs".to_string(), vec!["openai".to_string(), "anthropic".to_string(), "deepseek".to_string()]));
+            assert_eq!(ids[1], ("gateways".to_string(), vec!["opencode-go".to_string()]));
+            assert_eq!(ids[2], ("hosted".to_string(), vec!["groq".to_string()]));
+            assert_eq!(ids[3], ("local".to_string(), vec!["custom".to_string(), "env-claude".to_string(), "env-codex".to_string()]));
             assert_eq!(view["step"], "pick");
             // A station from before the list: OpenAI is its plan alone, Anthropic and OpenCode Go as ever.
             store.set(&Topic::Overview { station: "ws/st".into() }, Ok(json!({})));
@@ -417,8 +416,8 @@ mod tests {
             flows.change(&topic, 1, "open", &json!({})).unwrap();
             store.set(&Topic::Overview { station: "ws/st".into() }, Ok(json!({ "apiProviders": [{"id": "qwen"}, {"id": "qwen-cn"}, {"id": "moonshotai"}, {"id": "moonshotai-cn"}, {"id": "deepseek"}] })));
             let view = flows.value(&topic).unwrap();
-            let china: Vec<&str> = view["groups"].as_array().unwrap().iter().find(|g| g["id"] == "china").unwrap()["providers"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect();
-            assert_eq!(china, ["deepseek", "qwen", "moonshotai"], "the China sources are not tiles of their own");
+            let china: Vec<&str> = view["groups"].as_array().unwrap().iter().find(|g| g["id"] == "labs").unwrap()["providers"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect();
+            assert_eq!(china, ["openai", "anthropic", "deepseek", "qwen", "moonshotai"], "the China sources are not tiles of their own");
             flows.change(&topic, 1, "edit", &json!({ "provider": "qwen" })).unwrap();
             let view = flows.value(&topic).unwrap();
             serde_json::from_value::<stillfail_shapes::ProfileFlowView>(view.clone()).unwrap();
