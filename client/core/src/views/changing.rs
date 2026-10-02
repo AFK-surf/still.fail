@@ -1,7 +1,7 @@
 //! Chats being changed from here (`chat.rename`, `chat.pin`, `chat.keep`, `chat.archive` back out): shown changed at
-//! once, in the chat lists and the chat's page, while its station is asked; as the station has it once it answers
-//! (its rows are read again before the answer, station.rs `after_write`), so as it was if it could not. Nothing a
-//! person does waits on the network to show.
+//! once, in the chat lists and the chat's page, while its station is asked. Refused, as it was at once. Done, it stays
+//! so until the station's rows have changed since the answer (they may come after it): never back to the old value for
+//! a moment and over again. Nothing a person does waits on the network to show.
 
 use std::cell::{Cell, RefCell};
 
@@ -20,6 +20,8 @@ struct Change {
     row: Map<String, Value>,
     /// Out of the archive (or into it): what its page says meanwhile.
     archived: Option<bool>,
+    /// Done: its station's rows as they were when it answered; once they are not, they have it.
+    done: Option<Option<Value>>,
 }
 
 #[derive(Default)]
@@ -33,19 +35,33 @@ impl Views {
     pub fn changing(&self, station: &str, thread: Option<u64>, session: &str, row: Map<String, Value>, archived: Option<bool>) -> u64 {
         let id = self.changing.next.get() + 1;
         self.changing.next.set(id);
-        self.changing.list.borrow_mut().push(Change { id, station: station.to_string(), thread, session: session.to_string(), row, archived });
+        self.changing.list.borrow_mut().push(Change { id, station: station.to_string(), thread, session: session.to_string(), row, archived, done: None });
         self.changing_shown(station);
         id
     }
 
-    /// Answered, either way: the station's rows say how it is.
-    pub fn changed(&self, id: u64) {
+    /// Answered: refused (`ok` false), as it was at once; done, shown so until its station's rows change.
+    pub fn changed(&self, id: u64, ok: bool) {
         let station = {
             let mut list = self.changing.list.borrow_mut();
             let Some(i) = list.iter().position(|c| c.id == id) else { return };
+            if ok {
+                let station = list[i].station.clone();
+                list[i].done = Some(self.ok(Topic::ChatRows { station: station.clone() }));
+                return;
+            }
             list.remove(i).station
         };
         self.changing_shown(&station);
+    }
+
+    /// Lets go of what is done that its station's rows have had since (they changed after its answer).
+    pub(super) fn settle_changes(&self, station: &str) {
+        if !self.changing.list.borrow().iter().any(|c| c.station == station && c.done.is_some()) {
+            return;
+        }
+        let rows = self.ok(Topic::ChatRows { station: station.to_string() });
+        self.changing.list.borrow_mut().retain(|c| c.station != station || c.done.as_ref().is_none_or(|then| *then == rows));
     }
 
     fn matches(c: &Change, station: &str, thread: Option<u64>, session: Option<&str>) -> bool {

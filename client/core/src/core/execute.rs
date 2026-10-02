@@ -229,7 +229,7 @@ impl Inner {
                 if archived {
                     self.views.archiving(&station, thread, &session, false);
                 }
-                self.views.changed(change);
+                self.views.changed(change, result.is_ok());
                 result
             }
             Call::ChatChange { op, thread, session, title, pinned, keep } => {
@@ -250,7 +250,7 @@ impl Inner {
                 }
                 let change = self.views.changing(&station, thread, &session, row, None);
                 let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
-                self.views.changed(change);
+                self.views.changed(change, result.is_ok());
                 result
             }
             Call::ChatSend { station, thread, text, attachments, quotes, client } => {
@@ -314,7 +314,7 @@ impl Inner {
                     row.insert("decision".into(), Value::Null);
                     let change = self.views.changing(&station, Some(thread), "", row, None);
                     let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
-                    self.views.changed(change);
+                    self.views.changed(change, result.is_ok());
                     return result;
                 }
                 let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };

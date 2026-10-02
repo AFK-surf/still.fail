@@ -85,9 +85,10 @@ impl Views {
                 for s in stations {
                     let rows = self.ok(Topic::ChatRows { station: s.address.clone() }).and_then(|r| r.as_array().cloned()).unwrap_or_default();
                     for row in rows.iter().filter(|r| !self.being_archived(&s.address, r)) {
-                        // Answered from here, on its way: it waits no more (views.rs `answering`).
-                        let answered = row.get("thread").and_then(Value::as_u64).is_some_and(|t| self.answering(&s.address, t));
-                        let waits = !answered && crate::decisions::for_viewer(row, &self.me(&id)).is_some();
+                        // Answered from here: it waits no more (views.rs `answered`).
+                        let waits = crate::decisions::for_viewer(row, &self.me(&id)).is_some_and(|d| {
+                            !row.get("thread").and_then(Value::as_u64).is_some_and(|t| self.answered(&s.address, t, d["seq"].as_u64().unwrap_or(0)))
+                        });
                         decisions += u64::from(waits);
                         match (row_tone(row), waits) {
                             (Some("alert"), _) => counts.alert += 1,

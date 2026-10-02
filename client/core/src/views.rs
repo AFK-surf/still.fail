@@ -55,6 +55,8 @@ pub struct Views {
     update_notices_open: RefCell<HashSet<String>>,
     /// Recent outbox-to-message identities, kept across emissions (the UI may skip the acknowledgement frame).
     delivered: RefCell<VecDeque<((String, u64, u64), String)>>,
+    /// Messages sent from here that their station has taken: station, thread, seq (decisions answered: `answered`).
+    sent_in: RefCell<VecDeque<(String, u64, u64)>>,
     /// Chats asked for here (`chat.create`) by the key the core gave them, until the station has made them and ever
     /// after (a page that opened one keeps its key).
     pending: RefCell<HashMap<String, Pending>>,
@@ -141,6 +143,7 @@ impl Views {
             sent: Cell::new(0),
             update_notices_open: RefCell::default(),
             delivered: RefCell::default(),
+            sent_in: RefCell::default(),
             pending: RefCell::default(),
             firsts: RefCell::default(),
             archiving: Default::default(),
@@ -498,6 +501,13 @@ impl Views {
     /// emission). Nobody looking at the chat: it goes now, but for a chat asked for here, whose page is on its way to
     /// it (else that page opens with neither the message nor its entry, and says the chat is empty).
     pub fn outbox_sent(&self, station: &str, thread: u64, id: &str, seq: u64) {
+        {
+            let mut sent = self.sent_in.borrow_mut();
+            sent.push_back((station.to_string(), thread, seq));
+            if sent.len() > 256 {
+                sent.pop_front();
+            }
+        }
         let made_here = self.pending.borrow().values().any(|c| c.station == station && c.made.as_ref().is_some_and(|(_, t)| *t == thread));
         if !made_here && self.chat_views(station, thread).is_empty() {
             return self.outbox_remove(station, thread, id);
@@ -526,17 +536,19 @@ impl Views {
         for view in self.chat_views(station, thread) {
             self.store.invalidate(&view);
         }
-        // A card answered from here waits no more (`answering`).
+        // A card answered from here waits no more (`answered`).
         let views: Vec<Topic> = self.views.borrow().keys().filter(|v| matches!(v, Topic::Decisions { .. } | Topic::WorkspaceMarks { .. })).cloned().collect();
         for view in views {
             self.store.invalidate(&view);
         }
     }
 
-    /// Whether something sent from here is on its way into a chat (not failed): the card it waits on is answered by it
-    /// (the first a person writes after a card answers it), shown so at once, not once its station has it.
-    pub(super) fn answering(&self, station: &str, thread: u64) -> bool {
+    /// Whether the card at `seq` in a chat is answered from here: something sent is on its way into it (not failed), or
+    /// went in after the card (the first a person writes after a card answers it). Shown so at once and on, not back
+    /// for a moment between the station taking the message and its rows saying so.
+    pub(super) fn answered(&self, station: &str, thread: u64, seq: u64) -> bool {
         self.outbox.borrow().get(&(station.to_string(), thread)).is_some_and(|list| list.iter().any(|m| m["state"] != "failed"))
+            || self.sent_in.borrow().iter().any(|(s, t, n)| s == station && *t == thread && *n > seq)
     }
 
     /// The live pages showing a chat: by its thread, or by its agent once the chat is the agent's.
@@ -912,6 +924,7 @@ impl Views {
                 let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
                     .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
                     .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
+                self.settle_changes(&s.address);
                 let mut listed = list.as_array().cloned().unwrap_or_default();
                 let asked = self.pending_rows(&s.address, &mut listed);
                 for row in asked.iter().chain(listed.iter()) {
@@ -1292,13 +1305,14 @@ impl Views {
             });
         let slack_url = workspace_url.filter(|_| slack).map(|url| format!("{url}archives/{channel}/p{}", str_of(&thread, "threadTs").replace('.', "")));
         // Its item in the sidebar, as the station has it for the viewer (as kept, until read).
+        self.settle_changes(station);
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok);
         let row = rows.as_ref().and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id)).cloned())
             .map(|mut row| { self.as_changing(station, &mut row); row });
         // Where each card in it stands: the one its row names waits (the rows read, a chat with no row waits on none);
         // the rows not read, as its messages say.
-        let answering = self.answering(station, id);
-        let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).filter(|_| !answering).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(&d))));
+        let open = |d: &Value| !self.answered(station, id, d["seq"].as_u64().unwrap_or(0));
+        let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).filter(open).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(&d))));
         crate::decisions::in_messages(&mut messages, pending);
         let focus_last = page.get("end").and_then(Value::as_bool) != Some(false)
             && outbox.is_empty() && messages.last().is_some_and(crate::present::focus_message);
@@ -1344,7 +1358,7 @@ impl Views {
                 view["watch"] = watch;
             }
             // The card it waits on, as its row has it (decisions.rs); none once answered from here.
-            if let Some(card) = row.as_ref().and_then(crate::decisions::of_row).filter(|_| !answering) {
+            if let Some(card) = row.as_ref().and_then(crate::decisions::of_row).filter(open) {
                 view["decision"] = crate::decisions::shown(&card);
             }
             // Nothing left in it: one tap archives it (chat.archive).
@@ -1448,6 +1462,7 @@ impl Views {
         let mut answered: Vec<Value> = Vec::new();
         let mut working: Vec<Value> = Vec::new();
         for s in &stations {
+            self.settle_changes(&s.address);
             let rows = match self.store.value(&Topic::ChatRows { station: s.address.clone() }) {
                 Some(Ok(rows)) => rows,
                 Some(Err(_)) => continue,
@@ -1490,7 +1505,7 @@ impl Views {
                 let Some(d) = crate::decisions::for_viewer(row, &me) else { continue };
                 let (Some(thread), Some(seq)) = (row.get("thread").and_then(Value::as_u64), d.get("seq").and_then(Value::as_u64)) else { continue };
                 // Answered from here, on its way: no longer waiting for the viewer.
-                if self.answering(&s.address, thread) {
+                if self.answered(&s.address, thread, seq) {
                     continue;
                 }
                 let agents: Vec<Value> = row.get("agents").and_then(Value::as_array).into_iter().flatten().map(|a| {
@@ -1673,6 +1688,7 @@ impl Views {
             }
         };
         // Its title is the station's: the page waits for its items.
+        self.settle_changes(station);
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() })?.ok();
         let row = rows.as_ref().and_then(Value::as_array).and_then(|rows| rows.iter().find(|r| r.get("id").and_then(Value::as_str) == Some(key)))
             .map(|row| { let mut row = row.clone(); self.as_changing(station, &mut row); row });
@@ -3234,12 +3250,19 @@ mod tests {
             t.read(&mut list, 1).await;
             assert_eq!(item(&list, "7")["title"], "新名字");
             assert_eq!(item(&list, "8")["pinned"], true);
-            // Answered (here: refused, the station's rows unchanged): as its station has it.
-            views.changed(renaming);
-            views.changed(pinning);
+            // Refused: as its station has it, at once.
+            views.changed(pinning, false);
+            // Done: still so while the station's rows have not changed since (they may come after the answer)…
+            views.changed(renaming, true);
             t.read(&mut list, 1).await;
-            assert_eq!(item(&list, "7")["title"], "7 的标题");
+            assert_eq!(item(&list, "7")["title"], "新名字");
             assert_ne!(item(&list, "8")["pinned"], true);
+            // …and as they say once they have.
+            let mut renamed = row("7", now - 1000.0);
+            renamed["title"] = json!("站上的名字");
+            t.set(rows("ws/st"), json!([renamed, row("8", now - 2000.0)]));
+            t.read(&mut list, 1).await;
+            assert_eq!(item(&list, "7")["title"], "站上的名字");
         });
     }
 
