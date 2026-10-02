@@ -55,7 +55,7 @@ export function Versions({ station, updates, manager, beta = false }: { station:
 }
 
 function Row({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boolean; busy: boolean; onUpdate(): void }) {
-  const { shown, verb, tip, updating, beta } = describe(v);
+  const { shown, failed, tip, updating, beta } = describe(v);
   const note = [v.state === "idle" ? v.done : null, tip, v.state === "failed" ? v.message : null].filter(Boolean).join(t("web-mobile.versions.noteSeparator"));
   const action = (label: string) => manager && v.updatable && (
     busy ? <Spinner size={13} /> : <button type="button" className={css.mVersionAction} onClick={onUpdate}>{label}</button>
@@ -67,7 +67,7 @@ function Row({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: bool
         {note && <span className={css.mVersionNote} data-failed={v.state === "failed" || undefined}>{note}</span>}
       </span>
       {v.state === "updating" ? <span className={css.mVersionState}>{v.percent != null ? <DownloadChip percent={v.percent} /> : <Spinner size={12} />}{updating}</span>
-        : v.state === "failed" ? <span className={css.mVersionState}><span className={css.mVersionNote} data-failed style={{ fontWeight: 500 }}>{t("web-mobile.versions.failed", { verb })}</span>{action(t("common.retry"))}</span>
+        : v.state === "failed" ? <span className={css.mVersionState}><span className={css.mVersionNote} data-failed style={{ fontWeight: 500 }}>{failed}</span>{action(t("common.retry"))}</span>
         : !v.installed ? <span className={css.mVersionState}>{action(t("web-mobile.versions.install"))}</span>
         : v.newer && v.latest ? <span className={css.mVersionState}>→ {v.latest}{action(t("web-mobile.versions.update"))}</span>
         : v.downgrade && v.latest ? <span className={css.mVersionState}>→ {v.latest}{action(t("web-mobile.versions.downgrade"))}</span>

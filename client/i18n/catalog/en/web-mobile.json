@@ -529,7 +529,6 @@
   "web-mobile.versions.checking": "Checking…",
   "web-mobile.versions.checkingFirst": "Checking versions…",
   "web-mobile.versions.downgrade": "Back to stable",
-  "web-mobile.versions.failed": "{verb} failed",
   "web-mobile.versions.install": "Install",
   "web-mobile.versions.noteSeparator": "; ",
   "web-mobile.versions.title": "Versions",

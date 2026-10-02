@@ -511,7 +511,6 @@
   "web-mobile.versions.checking": "正在检查…",
   "web-mobile.versions.checkingFirst": "正在检查版本…",
   "web-mobile.versions.downgrade": "回到正式版",
-  "web-mobile.versions.failed": "{verb}失败",
   "web-mobile.versions.install": "安装",
   "web-mobile.versions.noteSeparator": "；",
   "web-mobile.versions.title": "版本",
