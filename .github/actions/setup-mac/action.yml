@@ -1,9 +1,11 @@
-# What every job on mini1's runners starts with (after its checkout): the toolchains on PATH, and Cargo targets kept
-# between runs, outside the checkout (which is cleaned), shared by the runners (Cargo's lock has them build one at a
-# time). A target is kept for one set of dependencies, profiles and vendored crates (STILLFAIL_CI_KEY, from the
-# Cargo.toml and Cargo.lock files and vendor/): builds of branches and commits that differ there in one target left
-# several builds of a crate side by side (iroh_relay three times, as a dylib too), and rustc took the wrong one (E0308,
-# 2026-10-02). Targets not used for three days are removed. The check sets its own, a part each.
+# What every job on mini1's runners starts with (after its checkout): the toolchains on PATH, and Rust built in a
+# Cargo target of the job's own (under RUNNER_TEMP, emptied before each job), through sccache, whose cache of compiled
+# crates (~/stillfail-ci/sccache) is what is kept between jobs.
+# No target is kept and shared: the runners check out to paths of their own, so a vendored crate (vendor/iroh, a lib
+# and a cdylib, its .dylib named without a hash) is another build from each, and builds of other branches and features
+# piled up beside one another; rustc took the wrong one (E0308, "multiple different versions of crate iroh_relay",
+# 2026-10-02 and 03), with kache as the wrapper and without it, in one target for all and in one per set of
+# dependencies. sccache keys each crate's build by all that goes into it, and builds the rest anew.
 name: setup
 description: Toolchains and caches on mini1's runners
 runs:
@@ -16,17 +18,13 @@ runs:
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
         echo "JAVA_HOME=/opt/homebrew/opt/openjdk@17" >> "$GITHUB_ENV"
-        key=$( { git ls-files -s '*Cargo.toml' '*Cargo.lock' vendor; cat rust-toolchain* 2>/dev/null || true; } | shasum | cut -c1-10)
-        echo "STILLFAIL_CI_KEY=$key" >> "$GITHUB_ENV"
-        mkdir -p "$HOME/stillfail-ci"
-        find "$HOME/stillfail-ci" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} + 2>/dev/null || true
-        for dir in "target-$key" "linux-$key"; do mkdir -p "$HOME/stillfail-ci/$dir" && touch "$HOME/stillfail-ci/$dir"; done
-        echo "CARGO_TARGET_DIR=$HOME/stillfail-ci/target-$key" >> "$GITHUB_ENV"
-        echo "LINUX_TARGET_DIR=$HOME/stillfail-ci/linux-$key" >> "$GITHUB_ENV"
-        # Not through kache, the rustc wrapper mini1's ~/.cargo/config.toml names for everyone: it handed CI another
-        # build's rlib (two "iroh_relay 1.2.0" in one graph, E0308; a catalog crate with words from before), and the
-        # targets above already keep what was built. An empty wrapper is none.
-        echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-        echo "CARGO_BUILD_RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+        echo "CARGO_TARGET_DIR=$RUNNER_TEMP/target" >> "$GITHUB_ENV"
+        echo "LINUX_TARGET_DIR=$RUNNER_TEMP/linux" >> "$GITHUB_ENV"
+        echo "RUSTC_WRAPPER=/opt/homebrew/bin/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_DIR=$HOME/stillfail-ci/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=25G" >> "$GITHUB_ENV"
+        echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+        # The targets kept before (target-*, check-*, linux-*): no job reads them now.
+        find "$HOME/stillfail-ci" -mindepth 1 -maxdepth 1 -type d \( -name 'target*' -o -name 'check-*' -o -name 'linux*' \) -mmin +240 -exec rm -rf {} + 2>/dev/null || true
         # Rust's tests a few at a time: three runners share the machine, and the core's timing tests fail under load.
         echo "RUST_TEST_THREADS=4" >> "$GITHUB_ENV"
