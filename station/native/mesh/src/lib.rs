@@ -133,7 +133,8 @@ impl Endpoint {
     /// iroh's own public relays: added while none of still.fail's answers, removed once one does (`keep_relays`).
     #[napi]
     pub async fn public_relays(&self, on: bool) {
-        for config in iroh::defaults::prod::default_relay_map().relays() {
+        let public: Vec<Arc<iroh::RelayConfig>> = iroh::defaults::prod::default_relay_map().relays();
+        for config in public {
             if on {
                 self.inner.insert_relay(config.url.clone(), config.clone()).await;
             } else {
