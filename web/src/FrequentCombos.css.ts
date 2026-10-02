@@ -10,4 +10,5 @@ export const combo = style({
   selectors: { '&[aria-pressed="true"]': { background: vars.selected, color: vars.text }, '&:hover': { color: vars.text } },
 });
 // Match the mobile root's button reset without changing the shared component's structure.
-globalStyle(`${frequent} button${combo}`, { fontSize: "13px", lineHeight: "18px" });
+globalStyle(`${frequent} button${combo}`, { fontSize: "13px", lineHeight: "18px", color: vars.muted });
+globalStyle(`${frequent} button${combo}[aria-pressed="true"]`, { color: vars.text });

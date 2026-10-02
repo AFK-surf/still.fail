@@ -169,7 +169,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         combos.forEach { combo ->
                             Text(combo.label, fontSize = 13.sp, lineHeight = 18.sp, color = if (combo.selected) C.ink else C.muted,
-                                modifier = Modifier.semantics { selected = combo.selected }.clip(RoundedCornerShape(8.dp))
+                                modifier = Modifier.semantics { selected = combo.selected }.clip(RoundedCornerShape(18.dp))
                                     .background(C.ink.copy(alpha = if (combo.selected) 0.10f else 0.04f))
                                     .clickable(enabled = !leaving) { app.pickNew(workspace) {
                                         put("model", combo.model); put("runtime", combo.runtime); put("effort", combo.effort)
