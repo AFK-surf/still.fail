@@ -319,14 +319,14 @@ fun Modifier.flying(host: Host, f: Flight?): Modifier = if (f == null) this else
 @Composable
 internal fun Modifier.sendReflow(host: Host, id: String): Modifier {
     val coords = remember(id) { arrayOfNulls<LayoutCoordinates>(1) }
-    return onPlaced {
-        coords[0] = it
-        host.overlayY(it)?.let { y -> host.rowPositions[id] = y }
-    }.graphicsLayer {
+    return onPlaced { coords[0] = it }.drawWithContent {
         val f = host.flight
         val from = f?.beforePositions?.get(id)
         val to = host.overlayY(coords[0])
-        translationY = if (f != null && !f.carried && from != null && to != null) (from - to) * (1f - f.up()) else 0f
+        val shift = if (f != null && !f.carried && from != null && to != null) (from - to) * (1f - f.up()) else 0f
+        if (to != null) host.rowPositions[id] = to + shift
+        // A draw transform cannot feed back into the layout coordinates used to calculate it.
+        translate(top = shift) { this@drawWithContent.drawContent() }
     }
 }
 
