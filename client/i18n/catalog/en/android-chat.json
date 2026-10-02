@@ -25,7 +25,7 @@
   "android-chat.chat.archiveThis": "Archive this chat",
   "android-chat.chat.delete.verb": "delete",
   "android-chat.chat.empty": "Send a message; agents in this chat reply here.",
-  "android-chat.chat.keep": "Stop archive reminders",
+  "android-chat.chat.keep": "Stop reminders",
   "android-chat.chat.keep.verb": "stop archive reminders",
   "android-chat.chat.kept": "Kept; no more archive reminders",
   "android-chat.chat.latest": "Latest",
