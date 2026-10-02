@@ -67,7 +67,7 @@ export class Readers {
   }
 
   /// The answer, as JSON text.
-  read(op: Ask["op"], args: any, lang: Ask["lang"]): Promise<string> {
+  read(op: string, args: unknown, lang: Ask["lang"]): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     const free = this.slots.find((s) => s.busy === 0);
     const slot = free ?? (this.slots.length < this.size ? this.start() : this.slots.reduce((a, b) => (b.busy < a.busy ? b : a)));

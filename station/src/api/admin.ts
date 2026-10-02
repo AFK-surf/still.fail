@@ -1,35 +1,35 @@
-// The admin API (mesh/app/src/admin/mod.rs `route`): a table of routes, each a method, a path pattern and what
-// answers it. Reads go to the readers (off the main thread); what is not here yet answers 404 as an unknown route does.
+// The admin API (mesh/app/src/admin/mod.rs `route`): a table of routes, each a method, a path pattern and what answers
+// it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
+// is not here answers 404 as an unknown route does.
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
-import { type Answer, type Request, error, json, param } from "./request.ts";
+import { type Answer, type Request, error, json } from "./request.ts";
+import { routes as chats } from "./routes/chats.ts";
 
-type Handler = (r: Request, args: string[]) => Promise<Answer>;
-type Route = { method: string; pattern: RegExp; handle: Handler };
+export type Handler = (r: Request, args: string[]) => Promise<Answer>;
+export type Route = { method: string; pattern: RegExp; handle: Handler };
+/// What a route has to answer with.
+export type Tools = {
+  /// A read in a reader thread (src/read/ops.ts), answered as JSON; its error as `{error}` with its status.
+  read(r: Request, op: string, args: unknown): Promise<Answer>;
+};
 
 export class Admin {
-  private routes: Route[] = [];
+  private routes: Route[];
   private readers: Readers;
 
   constructor(readers: Readers) {
     this.readers = readers;
-    const read = (op: "chats" | "entries", args: (r: Request, a: string[]) => any): Handler => async (r, a) => {
-      try {
-        return json(200, await this.readers.read(op, args(r, a), r.lang));
-      } catch (e) {
-        return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
-      }
+    const tools: Tools = {
+      read: async (r, op, args) => {
+        try {
+          return json(200, await this.readers.read(op, args, r.lang));
+        } catch (e) {
+          return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
+        }
+      },
     };
-    this.add("GET", /^\/chats$/, read("chats", (r) => ({ viewer: r.viewer, archived: param(r, "archived") === "1" })));
-    this.add("GET", /^\/threads\/([^/]+)\/entries$/, async (r, [id]) => {
-      // A thread id is an i64 in the Rust route; one that is no number is no thread.
-      if (!/^[+-]?\d+$/.test(id)) return error(404, `unknown thread ${id}`);
-      return read("entries", () => ({ viewer: r.viewer, thread: Number(id), params: r.query }))(r, [id]);
-    });
-  }
-
-  private add(method: string, pattern: RegExp, handle: Handler) {
-    this.routes.push({ method, pattern, handle });
+    this.routes = [...chats(tools)];
   }
 
   async handle(r: Request): Promise<Answer> {
