@@ -44,7 +44,7 @@ class Updates(context: Context, private val origin: String, private val core: St
     private suspend fun ask(now: Boolean): AppRelease? =
         core.call("app.update", buildJsonObject { put("platform", "android"); put("versionCode", BuildConfig.VERSION_CODE.toLong()); put("now", now) })
             .takeIf { it !is JsonNull }?.let { StillFailJson.decodeFromJsonElement(AppRelease.serializer(), it) }
-            ?.also { available = it }
+            .also { available = it }
 
     /** Whether a check the person asked for is under way. */
     var checking by mutableStateOf(false); private set
@@ -67,8 +67,7 @@ class Updates(context: Context, private val origin: String, private val core: St
      * without it the system's page for it opens instead, and they tap 更新 again once it is given. A failure is said.
      */
     suspend fun install(): String? {
-        val release = available ?: return null
-        if (progress != null) return null
+        if (checking || progress != null) return null
         if (!context.packageManager.canRequestPackageInstalls()) {
             context.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -76,6 +75,8 @@ class Updates(context: Context, private val origin: String, private val core: St
             return "允许 ${BuildConfig.APP_NAME} 安装应用后，再点一次更新"
         }
         return try {
+            progress = "正在检查最新版本"
+            val release = ask(true) ?: return "已是最新"
             progress = "下载中"
             val apk = download(release)
             progress = "正在安装"

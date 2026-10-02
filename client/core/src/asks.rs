@@ -106,10 +106,17 @@ impl Asks {
         self.releases.borrow_mut().entry(feed.clone()).or_insert((time, None)).0 = time;
         let url = format!("{}/releases/{feed}/latest.json", self.host.cloud_origin());
         let request = HttpRequest { method: "GET".into(), url, headers: vec![("cache-control".into(), "no-cache".into())], body: None };
-        // Not reached, or nothing there: none newer, as far as is known (what was found before stays).
-        let Ok(response) = self.host.fetch(request).await else { return Ok(newer(&self.releases.borrow()[&feed].1)) };
+        // Background checks may keep the last result; an explicit check must not silently use a stale build.
+        let response = match self.host.fetch(request).await {
+            Ok(response) => response,
+            Err(e) if now => return Err(CoreError::new("app_update", format!("无法获取最新版本：{e}"))),
+            Err(_) => return Ok(newer(&self.releases.borrow()[&feed].1)),
+        };
         let release = serde_json::from_slice::<Value>(&response.body).ok().filter(|_| response.status == 200)
             .and_then(|r| stillfail_shapes::conform::<stillfail_shapes::AppRelease>(r).ok());
+        if now && release.is_none() {
+            return Err(CoreError::new("app_update", "无法获取最新版本，请重试"));
+        }
         if release.is_some() {
             self.releases.borrow_mut().insert(feed.clone(), (time, release.clone()));
         }
@@ -295,6 +302,36 @@ mod tests {
             assert!(asks.picture("https://p.test/gone.png").await.is_err());
             assert_eq!(host.requests.borrow().iter().filter(|r| r.url.ends_with("gone.png")).count(), 2);
             assert!(asks.picture("file:///etc/passwd").await.is_err());
+        });
+    }
+
+    #[test]
+    fn an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cached_one() {
+        use crate::testing::{FakeHost, json_response, run};
+        run(async {
+            let host = FakeHost::new();
+            let version = Rc::new(std::cell::Cell::new(1200));
+            let served = version.clone();
+            host.on_fetch(move |_| match served.get() {
+                0 => Err("offline".into()),
+                1 => json_response(503, json!({})),
+                2 => json_response(200, json!({"invalid": true})),
+                code => json_response(200, json!({"versionCode": code, "versionName": format!("0.1.{code}"),
+                    "file": format!("android/stillfail-{code}.apk"), "sha256": "ab", "size": 9})),
+            });
+            let asks = Asks::new(host.clone());
+            assert_eq!(asks.update("android", 1100, false, false).await.unwrap()["versionCode"], 1200);
+            version.set(1300);
+            assert_eq!(asks.update("android", 1100, false, false).await.unwrap()["versionCode"], 1200);
+            let latest = asks.update("android", 1100, true, false).await.unwrap();
+            assert_eq!(latest["versionCode"], 1300);
+            assert_eq!(latest["file"], "android/stillfail-1300.apk");
+            for failure in [0, 1, 2] {
+                version.set(failure);
+                assert!(asks.update("android", 1100, true, false).await.is_err());
+            }
+            version.set(1100);
+            assert_eq!(asks.update("android", 1100, true, false).await.unwrap(), Value::Null);
         });
     }
 
