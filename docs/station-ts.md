@@ -26,6 +26,13 @@ launchd / 桌面 app
 - **runner** 取代现在的「交接时复制 fd、带上半行字节、新进程 adopt」那一整套（process.rs 的 hand_off/adopt、Handed* 结构、两次 settle）。agent 进程本来就挂在 runner 下面，station 怎么重启、崩溃都不影响正在跑的轮次；新 station 起来后按 `run/runners/<pgid>.sock` 重新接上，从 runner 的缓冲里接着读。这比现在更稳：现在 station 崩溃（不是交接）时 agent 进程会被清掉，只能靠续写提示从转录接着做。
 - **原生部分只有三个**（启动器、runner、iroh 插件），按自己的版本号预编译发布，平时开发不碰；改了才在 CI 编。
 
+## 写法：Effect（2026-10-03 定）
+
+- 异步和编排一律用 Effect 4（`effect` 包）：服务是 `Context.Service`，各部分是 `Layer`，在组合根（`station/src/main.ts`）拼起来；长任务是 fiber，挂在所属部分的 scope 里（`Effect.forkScoped`、`FiberSet`），部分停了它们一起停，资源用 `acquireRelease` 保证释放；退避和定时用 `Schedule`；推送用 `PubSub`/`Stream`；计时相关的规则用 `TestClock` 测。
+- 纯计算（读视图的拼装、格式化、协议解析）保持普通函数，不进 Effect；热路径同理。
+- 回调式的 API（ws、子进程、原生插件的事件）用 `Effect.callback` 包一层，取消时要能清理。
+- 不用全局状态；需要什么，在服务里声明依赖。
+
 ## 模块划分（Node 进程内）
 
 一个组合根（`main.ts`）把下面这些用参数传进去，不再有全局注册表（现在的 OnceLock：feedback、adb、notify outbox、errors、lang）。

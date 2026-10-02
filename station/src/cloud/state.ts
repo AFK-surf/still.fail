@@ -53,6 +53,7 @@ export class Cloud {
   peersCurrent = false;
   private listeners = new Set<(s: CloudState | null) => void>();
   private writing = false;
+  private watcher: { close(): void } | undefined;
   readonly data: string;
 
   constructor(data: string) {
@@ -60,12 +61,17 @@ export class Cloud {
     this.state = readState(data);
     // `enroll` from another process, or an older tool editing the file.
     try {
-      watch(meshDir(data), { persistent: false }, (_, name) => {
+      this.watcher = watch(meshDir(data), { persistent: false }, (_, name) => {
         if (name === "cloud.json" && !this.writing) this.reload();
       });
     } catch {
       // No mesh directory yet: `enroll` makes it, and the station is started anew after.
     }
+  }
+
+  close() {
+    this.watcher?.close();
+    this.listeners.clear();
   }
 
   reload() {
