@@ -11,8 +11,8 @@ id=$(cat "$work/station-id")
 stop() { pkill -f "data $work/" 2>/dev/null; sleep 2; }
 udp_port() { lsof -nP -iUDP -a -p "$1" | awk 'NR>1 && $9 ~ /^\*:/ {sub("\\*:","",$9); print $9}' | grep -v 5353 | head -1; }
 stop
-(cd "$work" && nohup "$rust" run --app "$(dirname "$(dirname "$(dirname "$(dirname "$rust")")")")" --port 4799 --data "$work/rust" > rust.log 2>&1 &)
-(cd "$work" && STILLFAIL_NO_DISCOVERY=1 nohup "$node" "$here/src/main.ts" run --app "$here" --port 4798 --data "$work/ts" > ts.log 2>&1 &)
+(cd "$work" && nohup "$rust" run --app "$(dirname "$(dirname "$(dirname "$(dirname "$rust")")")")" --data "$work/rust" > rust.log 2>&1 &)
+(cd "$work" && STILLFAIL_NO_DISCOVERY=1 nohup "$node" "$here/src/main.ts" run --app "$here" --data "$work/ts" > ts.log 2>&1 &)
 sleep 12
 rpid=$(pgrep -f "data $work/rust" | head -1)
 tpid=$(pgrep -f "data $work/ts" | head -1)
