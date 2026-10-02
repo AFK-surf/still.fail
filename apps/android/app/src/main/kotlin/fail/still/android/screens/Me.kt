@@ -38,6 +38,7 @@ import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
 import kotlinx.coroutines.launch
@@ -50,8 +51,8 @@ fun MeScreen(current: WorkspaceEntry) {
     val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
     val me = current.account
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop)
-        LargeTitle("", "账号")
+        TopBack(t("android-settings.title"), app::pop)
+        LargeTitle("", t("android-settings.me.title"))
         Card {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Avatar(me.email, me.name.ifEmpty { me.email }, 46.dp, picture = me.picture)
@@ -63,21 +64,21 @@ fun MeScreen(current: WorkspaceEntry) {
         }
         val list = accounts.value.orEmpty()
         // Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added.
-        SectionHeader("这台设备上的账号", start = 24.dp)
+        SectionHeader(t("android-settings.me.accounts"), start = 24.dp)
         ListCard {
             list.forEach { a ->
                 ListRow {
                     Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     // Signing out under way: a spinner in its place, not asked twice.
                     if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(14.dp)
-                    else Text(if (list.size > 1) "退出" else "退出登录", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                    else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
                         scope.launch {
                             try {
                                 Auth.signOut(app.core, a.sub)
                                 app.home()
-                                if (list.size > 1) app.toast = "已退出 ${a.email}"
+                                if (list.size > 1) app.toast = t("android-settings.me.signedOut", "email" to a.email)
                             } catch (e: CoreException) {
-                                app.toast = "没能退出：${errorText(e)}"
+                                app.toast = t("android-settings.me.signOutFailed", "error" to errorText(e))
                             }
                         }
                     })
@@ -85,11 +86,11 @@ fun MeScreen(current: WorkspaceEntry) {
             }
             val opening = app.isDoing("auth.begin")
             ListRow(onClick = if (opening) null else ({ scope.launch { signIn(app, context) } })) {
-                Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                Text(t("android-settings.me.addAccount"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
                 if (opening) Spinner(14.dp)
             }
         }
-        SectionHeader("登录的地方", start = 24.dp)
+        SectionHeader(t("android-settings.me.devices"), start = 24.dp)
         Devices(current)
         Spacer(Modifier.height(30.dp))
     }

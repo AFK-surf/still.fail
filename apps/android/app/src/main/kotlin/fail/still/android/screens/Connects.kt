@@ -91,6 +91,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
 import kotlinx.coroutines.launch
@@ -142,7 +143,7 @@ private fun rememberConnect(station: String, id: String): Pair<ConnectItem?, Str
     val app = LocalApp.current
     val connects by rememberTopic<ConnectsView>(app.core, Topics.connects(station.substringBefore('/'), false))
     val item = connects.value?.items?.firstOrNull { it.station == station && it.connect.id == id }
-    val note = if (item != null) null else connects.error?.message ?: if (connects.value == null || connects.value!!.loading) "正在读取连接…" else "没有这个连接。"
+    val note = if (item != null) null else connects.error?.message ?: if (connects.value == null || connects.value!!.loading) t("android-settings.connects.reading") else t("android-settings.connects.none")
     return item to note
 }
 
@@ -163,24 +164,24 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
     val online = stations.orEmpty().filter { it.online }
     val view = connects.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack(one?.name ?: "设置", app::pop, trailing = if (online.isNotEmpty()) ({
+        TopBack(one?.name ?: t("android-settings.title"), app::pop, trailing = if (online.isNotEmpty()) ({
             NavButton(Icons.Plus, {
                 if (online.size == 1) openNewConnect(app, online[0].station)
-                else openPickStation(app, "添加连接", online) { openNewConnect(app, it.station) }
+                else openPickStation(app, t("android-settings.flow.title"), online) { openNewConnect(app, it.station) }
             }, 20.dp)
         }) else null)
-        LargeTitle(one?.let { "${it.name} 上的" } ?: "", "连接")
-        PageNote("连接是人找到 ${BuildConfig.APP_NAME} 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。")
-        Seg(listOf("全部", "我建的"), if (mine) 1 else 0, { mine = it == 1 }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
-        if (stations == null || view == null) Text(connects.error?.message ?: "正在读取连接…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        LargeTitle(one?.let { t("android-settings.connects.on", "name" to it.name) } ?: "", t("android-settings.connects.title"))
+        PageNote(t("android-settings.connects.note", "app" to BuildConfig.APP_NAME))
+        Seg(listOf(t("android-settings.connects.all"), t("android-settings.connects.mine")), if (mine) 1 else 0, { mine = it == 1 }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
+        if (stations == null || view == null) Text(connects.error?.message ?: t("android-settings.connects.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else stations.forEach { s ->
             val here = view.items.filter { it.station == s.station }
             val waiting = s.overview?.slackApps.orEmpty()
             if (s.online && here.isEmpty() && waiting.isEmpty() && mine && one == null) return@forEach
-            if (one == null) SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
+            if (one == null) SectionHeader(if (s.online) s.name else t("android-settings.connects.offline", "name" to s.name), start = 24.dp)
             ListCard {
-                if (!s.online && here.isEmpty()) ListRow { Text("station 离线，读不到它的连接", fontSize = 15.sp, color = C.muted) }
-                else if (here.isEmpty() && waiting.isEmpty()) ListRow { Text(if (s.overview != null) "这台机器上还没有连接" else "正在读取…", fontSize = 15.sp, color = C.muted) }
+                if (!s.online && here.isEmpty()) ListRow { Text(t("android-settings.connects.stationOffline"), fontSize = 15.sp, color = C.muted) }
+                else if (here.isEmpty() && waiting.isEmpty()) ListRow { Text(if (s.overview != null) t("android-settings.connects.empty") else t("android-settings.reading"), fontSize = 15.sp, color = C.muted) }
                 here.forEach { ConnectRow(it.station, it.connect) }
                 // The Slack apps made here that no connect has taken yet: to be finished any time.
                 waiting.forEach { a -> WaitingApp(app, s.station, a, s.online) }
@@ -194,7 +195,7 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
 fun ConnectScreen(station: String, id: String) {
     val app = LocalApp.current
     val (item, note) = rememberConnect(station, id)
-    if (item == null) return Column(Modifier.fillMaxSize()) { NavBar("连接", app::pop, "连接"); Loading(note ?: "") }
+    if (item == null) return Column(Modifier.fillMaxSize()) { NavBar(t("android-settings.connects.title"), app::pop, t("android-settings.connects.title")); Loading(note ?: "") }
     val connect = item.connect
     val c = connect.connection
     Column(Modifier.fillMaxSize()) {
@@ -207,56 +208,56 @@ fun ConnectScreen(station: String, id: String) {
                     ConnectAvatar(connect, 44.dp)
                     Column(Modifier.weight(1f)) {
                         Text(connect.team ?: "Slack", fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(item.stationName + (connect.createdBy?.let { " · 所属 ${it.shown?.display ?: it.name}" } ?: ""), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(item.stationName + (connect.createdBy?.let { t("android-settings.connect.owner", "name" to (it.shown?.display ?: it.name)) } ?: ""), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
             if (c.state == "no_tokens" || c.state == "error" || (c.state == "reconnecting" && c.lastError != null)) Callout {
                 if (c.state == "no_tokens") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("这个连接还没接上 Slack。", fontSize = 13.sp, color = C.ink)
-                    Text("填 token", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { openTokens(app, station, connect) })
-                } else Text(if (c.state == "error") c.error ?: "" else "正在重连：${c.lastError}", fontSize = 13.sp, color = C.ink)
+                    Text(t("android-settings.connect.noTokens"), fontSize = 13.sp, color = C.ink)
+                    Text(t("android-settings.connect.fillTokens"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { openTokens(app, station, connect) })
+                } else Text(if (c.state == "error") c.error ?: "" else t("android-settings.connect.reconnecting", "error" to c.lastError), fontSize = 13.sp, color = C.ink)
             }
-            SectionHeader("怎么跑", start = 24.dp)
+            SectionHeader(t("android-settings.connect.run"), start = 24.dp)
             ListCard {
                 ListRow(onClick = { app.push(Screen.ConnectRun(station, connect.id)) }) {
-                    Text("模型", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    Text(t("android-settings.connect.model"), fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
                     Text(
-                        "${connect.bind.model?.let { connect.modelName ?: it } ?: "选模型"} · ${connect.bind.effort?.ifEmpty { null } ?: "默认深度"} · ${if (connect.bind.profile != null) "固定账号" else "自动分配"}",
+                        listOf(connect.bind.model?.let { connect.modelName ?: it } ?: t("android-settings.connect.pickModel"), connect.bind.effort?.ifEmpty { null } ?: t("android-settings.connect.defaultEffort"), if (connect.bind.profile != null) t("android-settings.connect.fixedAccount") else t("android-settings.connect.autoAccount")).joinToString(" · "),
                         fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                     )
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
                 ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { ModeSheet(station, item) } }) {
-                    Text("会话", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    Text(t("android-settings.connect.sessions"), fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
                     Column(Modifier.weight(1f)) {
                         Text(MODE_LABEL[connect.mode] ?: connect.mode, fontSize = 15.sp, color = C.ink)
-                        Text((MODE_TEXT[connect.mode] ?: "") + if (connect.mode == "single-session") (if (connect.requireMention) "只在被 @ 时唤醒。" else "它能看到的每条消息都会送进会话。") else "", fontSize = 13.sp, color = C.muted)
+                        Text((MODE_TEXT[connect.mode] ?: "") + if (connect.mode == "single-session") (if (connect.requireMention) t("android-settings.connect.mentionOnly") else t("android-settings.connect.everyMessage")) else "", fontSize = 13.sp, color = C.muted)
                     }
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
                 if (connect.mode == "single-session") ListRow(onClick = { app.sheet = SheetSpec(0.7f, draggable = true) { SessionSheet(station, item) } }) {
-                    Text("当前", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
-                    Text(item.bound?.titleText ?: "还没有会话；下一条消息会开始一个新的。", fontSize = 15.sp, color = if (item.bound != null) C.ink else C.muted, modifier = Modifier.weight(1f))
+                    Text(t("android-settings.connect.current"), fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    Text(item.bound?.titleText ?: t("android-settings.connect.noSession"), fontSize = 15.sp, color = if (item.bound != null) C.ink else C.muted, modifier = Modifier.weight(1f))
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
             }
-            Text("跑在 ${connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            Text(t("android-settings.connect.runtime", "runtime" to connect.runtimeText), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
             // Its Slack app, changed now and then: name, picture, colour, permissions (the desktop's SlackAppSection).
             SectionHeader("Slack app", start = 24.dp)
             ListCard {
                 ListRow(onClick = { app.push(Screen.SlackApp(station, connect.id)) }) {
                     SlackMark(16.dp)
                     Column(Modifier.weight(1f)) {
-                        Text("名字、头像和权限", fontSize = 15.sp, color = C.ink)
-                        Text("改好后直接写进 Slack 里的这个 app", fontSize = 13.sp, color = C.muted)
+                        Text(t("android-settings.slack.sub"), fontSize = 15.sp, color = C.ink)
+                        Text(t("android-settings.connect.slackAppNote"), fontSize = 13.sp, color = C.muted)
                     }
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
             }
-            SectionHeader("最近的会话", start = 24.dp)
+            SectionHeader(t("android-settings.connect.recent"), start = 24.dp)
             ListCard {
-                if (item.sessions.isEmpty()) ListRow { Text("还没有会话。在 Slack 里 @${connect.name} 就会开始。", fontSize = 15.sp, color = C.muted) }
+                if (item.sessions.isEmpty()) ListRow { Text(t("android-settings.connect.noSessions", "name" to connect.name), fontSize = 15.sp, color = C.muted) }
                 item.sessions.forEach { s ->
                     ListRow(onClick = { app.push(Screen.Chat(station, fail.still.android.data.ChatOf.Session(s.key))) }) {
                         Text(s.titleText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -292,16 +293,16 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
         SheetGrab()
         SheetHead(connect.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("重新连接", enabled = !switching, busy = reconnecting, failed = reconnectFailed) { act("已重新连接") { api.reconnect(connect.id) } }
-            PickRow("更换 token") { openTokens(app, station, connect) }
-            connect.connection.workspace?.url?.let { url -> PickRow("打开 Slack") { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-            if (connect.enabled) PickRow("停用", "Slack 连接会断开", enabled = !reconnecting, busy = switching, failed = switchFailed) { act("已停用，Slack 连接已断开") { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
-            else PickRow("启用", enabled = !reconnecting, busy = switching, failed = switchFailed) { act("已启用") { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
-            PickRow("更改所属用户", connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
-            PickRow("删除连接", color = C.red) {
-                confirm(app, "删除「${connect.name}」？",
-                    "Slack 连接会断开" + (if (connect.sessions > 0) "；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息" else "") + "。Slack 里的 app 需要你自己去删除。",
-                    "删除连接", danger = true) { api.deleteConnect(connect.id); app.toast = "已删除连接"; app.pop() }
+            PickRow(t("android-settings.connect.reconnect"), enabled = !switching, busy = reconnecting, failed = reconnectFailed) { act(t("android-settings.connect.reconnected")) { api.reconnect(connect.id) } }
+            PickRow(t("android-settings.connect.changeTokens")) { openTokens(app, station, connect) }
+            connect.connection.workspace?.url?.let { url -> PickRow(t("android-settings.connect.openSlack")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
+            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t("android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
+            else PickRow(t("android-settings.connect.enable"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.enabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
+            PickRow(t("android-settings.connect.changeOwner"), connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
+            PickRow(t("android-settings.connect.delete"), color = C.red) {
+                confirm(app, t("android-settings.connect.deleteTitle", "name" to connect.name),
+                    if (connect.sessions > 0) t("android-settings.connect.deleteTextSessions", "n" to connect.sessions) else t("android-settings.connect.deleteText"),
+                    t("android-settings.connect.delete"), danger = true) { api.deleteConnect(connect.id); app.toast = t("android-settings.connect.deleted"); app.pop() }
             }
         }
     }
@@ -314,19 +315,19 @@ private fun ColumnScope.OwnerSheet(station: String, connect: Connect) {
     val scope = rememberCoroutineScope()
     val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(station.substringBefore('/')))
     SheetGrab()
-    SheetHead("更改所属用户")
+    SheetHead(t("android-settings.connect.changeOwner"))
     // The one picked, until the station has it: a spinner on its row, none picked meanwhile.
     var picking by remember { mutableStateOf<String?>(null) }
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        Text("连接属于谁，决定它出现在谁的「我添加的」里。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+        Text(t("android-settings.connect.ownerNote"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         ws.value?.members.orEmpty().forEach { m ->
             PickRow(m.name.ifEmpty { m.email }, m.email, checked = m.email.equals(connect.createdBy?.id, ignoreCase = true), enabled = picking == null, busy = picking == m.email) {
                 picking = m.email
                 scope.launch {
                     try {
                         app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("owner") { put("id", m.email); put("name", m.name.ifEmpty { m.email }) } })
-                        app.toast = "已更改所属用户"; app.sheet = null
-                    } catch (e: CoreException) { app.toast = "没能更改所属用户：${errorText(e)}" } finally { picking = null }
+                        app.toast = t("android-settings.connect.ownerChanged"); app.sheet = null
+                    } catch (e: CoreException) { app.toast = t("android-settings.connect.ownerFailed", "error" to errorText(e)) } finally { picking = null }
                 }
             }
         }
@@ -337,17 +338,17 @@ private fun ColumnScope.OwnerSheet(station: String, connect: Connect) {
 private fun consequences(connect: Connect, mode: String, requireMention: Boolean, running: Long): List<String> {
     val out = mutableListOf<String>()
     if (connect.mode == "multi-session" && mode == "single-session") {
-        out += "之后它收到的消息都进同一个会话；已有的每个 thread 的会话不再收到新消息，包括这些 thread 里的回复。记录会保留。"
-        out += if (connect.session != null) "会接着使用之前绑定的单会话。" else "下一条消息会开始一个新的单会话；也可以在切换后选一个已有会话。"
-        if (!requireMention) out += "不需要 @：它能看到的所有频道和私信里的每条消息都会送给 agent，消耗会明显增加。"
+        out += t("android-settings.mode.toSingle")
+        out += if (connect.session != null) t("android-settings.mode.keepSession") else t("android-settings.mode.newSession")
+        if (!requireMention) out += t("android-settings.mode.noMention")
     } else if (connect.mode == "single-session" && mode == "multi-session") {
-        out += "当前绑定的会话不再收到新消息。之后每个 thread 被 @ 时各开一个新会话。"
-        out += "在单会话里进行过的 thread，要继续就需要重新 @，会开一个新会话，不带之前的上下文。"
-        out += "以后切回单会话，会接着用原来的那个会话。"
+        out += t("android-settings.mode.toMulti")
+        out += t("android-settings.mode.oldThreads")
+        out += t("android-settings.mode.back")
     } else if (requireMention != connect.requireMention) {
-        out += if (requireMention) "之后只有被 @ 的 thread 会进会话；已经进来的 thread 里的回复仍然会送到。" else "不需要 @：它能看到的所有频道和私信里的每条消息都会送给 agent，消耗会明显增加。"
+        out += if (requireMention) t("android-settings.mode.mention") else t("android-settings.mode.noMention")
     }
-    if (running > 0) out += "现在有 $running 个会话正在运行，它们会跑完当前这一轮。"
+    if (running > 0) out += t("android-settings.mode.running", "n" to running)
     return out
 }
 
@@ -370,8 +371,8 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(Modifier.weight(1f)) {
-                Text("只在被 @ 时唤醒", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text(if (requireMention) "被 @ 的 thread 之后的回复不用再 @。" else "频道里它能看到的每条消息都会送进会话。", fontSize = 13.sp, color = C.muted)
+                Text(t("android-settings.mode.mentionTitle"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text(if (requireMention) t("android-settings.mode.mentionOn") else t("android-settings.mode.mentionOff"), fontSize = 13.sp, color = C.muted)
             }
             Switch(requireMention)
         }
@@ -397,18 +398,18 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
     val changed = mode != connect.mode || (mode == "single-session" && mention != connect.requireMention)
     val effects = if (changed) consequences(connect, mode, mention, item.running) else emptyList()
     SheetGrab()
-    SheetHead("会话方式")
+    SheetHead(t("android-settings.mode.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ModeChoices(mode, mention) { m, r -> mode = m; mention = r }
         if (effects.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("更改之后", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+            Text(t("android-settings.mode.after"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             effects.forEach { Text("· $it", fontSize = 13.sp, color = C.ink) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Button("取消", primary = false) { app.sheet = null }
-            Button(if (mode == connect.mode) "确认更改" else "改为${if (mode == "single-session") "单会话" else "多会话"}", primary = true, busy = busy, enabled = changed) {
+            Button(t("common.cancel"), primary = false) { app.sheet = null }
+            Button(if (mode == connect.mode) t("android-settings.mode.confirm") else if (mode == "single-session") t("android-settings.mode.toSingleButton") else t("android-settings.mode.toMultiButton"), primary = true, busy = busy, enabled = changed) {
                 scope.launch {
-                    try { app.api(station).putConnect(connect.id, buildJsonObject { put("mode", mode); put("requireMention", mention) }); app.toast = "已更改会话方式"; app.sheet = null }
+                    try { app.api(station).putConnect(connect.id, buildJsonObject { put("mode", mode); put("requireMention", mention) }); app.toast = t("android-settings.mode.changed"); app.sheet = null }
                     catch (e: CoreException) { app.toast = e.message }
                 }
             }
@@ -426,17 +427,17 @@ private fun ColumnScope.SessionSheet(station: String, item: ConnectItem) {
     var title by remember { mutableStateOf("") }
     val busy = app.isDoing("connect.bindSession", "station" to station, "connect" to connect.id)
     SheetGrab()
-    SheetHead("选择会话")
+    SheetHead(t("android-settings.session.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("之后「${connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp))
-        PickRow("新建会话", "从空白上下文开始", checked = choice == "new") { choice = "new" }
-        if (choice == "new") Box(Modifier.padding(horizontal = 20.dp)) { Field(title, { title = it }, "给它起个名字（可选），例如：值班") }
+        Text(t("android-settings.session.note", "name" to connect.name), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp))
+        PickRow(t("android-settings.session.new"), t("android-settings.session.newNote"), checked = choice == "new") { choice = "new" }
+        if (choice == "new") Box(Modifier.padding(horizontal = 20.dp)) { Field(title, { title = it }, t("android-settings.session.namePlaceholder")) }
         item.candidates.forEach { s -> PickRow(s.titleText, s.agentText, checked = choice == s.key) { choice = s.key } }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Button("取消", primary = false) { app.sheet = null }
-            Button(if (choice == "new") "新建并使用" else "使用这个会话", primary = true, busy = busy, enabled = choice != connect.session) {
+            Button(t("common.cancel"), primary = false) { app.sheet = null }
+            Button(if (choice == "new") t("android-settings.session.createUse") else t("android-settings.session.use"), primary = true, busy = busy, enabled = choice != connect.session) {
                 scope.launch {
-                    try { app.api(station).bindSession(connect.id, if (choice == "new") null else choice, title); app.toast = if (choice == "new") "已新建会话" else "已换成这个会话"; app.sheet = null }
+                    try { app.api(station).bindSession(connect.id, if (choice == "new") null else choice, title); app.toast = if (choice == "new") t("android-settings.session.created") else t("android-settings.session.switched"); app.sheet = null }
                     catch (e: CoreException) { app.toast = e.message }
                 }
             }
@@ -466,11 +467,11 @@ private class Tokens(private val owner: AppState, private val station: String, v
     suspend fun call(action: String, input: JsonObject? = null) = owner.core.call("slack.tokens.$action", buildJsonObject {
         address.forEach { (key, value) -> put(key, value) }; input?.let { put("input", it) }
     })
-    private fun edit(input: JsonObject) { owner.act("修改 token") { call("edit", input) } }
+    private fun edit(input: JsonObject) { owner.act(t("android-settings.tokens.edit")) { call("edit", input) } }
     fun reset() { edit(buildJsonObject { put("clear", true) }) }
     fun then(go: suspend () -> Unit) {
         if (checking) return
-        owner.act("校验 token") { if (call("verify").jsonPrimitive.booleanOrNull == true) go() }
+        owner.act(t("android-settings.tokens.verify")) { if (call("verify").jsonPrimitive.booleanOrNull == true) go() }
     }
 }
 
@@ -484,7 +485,7 @@ private fun rememberTokens(app: AppState, station: String, connect: String? = nu
         catch (e: CoreException) { app.toast = e.message }
     }
     DisposableEffect(tokens) {
-        onDispose { app.act("关闭 token 草稿") { tokens.call("drop") } }
+        onDispose { app.act(t("android-settings.tokens.drop")) { tokens.call("drop") } }
     }
     return tokens
 }
@@ -497,13 +498,13 @@ private fun openTokens(app: AppState, station: String, connect: Connect) {
         SheetGrab()
         SheetHead("Slack token")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("只换其中一个也可以，另一个留空会沿用已保存的。", fontSize = 12.sp, color = C.muted)
+            Text(t("android-settings.tokens.note"), fontSize = 12.sp, color = C.muted)
             TokenFields(tokens, masked = connect.slack.appToken to connect.slack.botToken)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button("取消", primary = false) { app.sheet = null }
-                Button("保存并连接", primary = true, busy = busy || tokens.checking, enabled = tokens.ready) {
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
+                Button(t("android-settings.tokens.save"), primary = true, busy = busy || tokens.checking, enabled = tokens.ready) {
                     tokens.then {
-                        try { app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("slack") { put("appToken", tokens.app); put("botToken", tokens.bot) } }); app.toast = "已保存 token，正在连接"; app.sheet = null }
+                        try { app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("slack") { put("appToken", tokens.app); put("botToken", tokens.bot) } }); app.toast = t("android-settings.tokens.saved"); app.sheet = null }
                         catch (e: CoreException) { app.toast = e.message }
                     }
                 }
@@ -531,12 +532,12 @@ internal fun SecretField(value: String, onChange: (String) -> Unit, placeholder:
 private fun TokenFields(tokens: Tokens, masked: Pair<String, String>? = null, install: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("App-Level Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        SecretField(tokens.app, { tokens.app = it }, masked?.first?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xapp-…")
+        SecretField(tokens.app, { tokens.app = it }, masked?.first?.ifEmpty { null }?.let { t("android-settings.tokens.kept", "token" to it) } ?: "xapp-…")
         if (install == null) {
             Text("Bot Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            SecretField(tokens.bot, { tokens.bot = it }, masked?.second?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xoxb-…")
+            SecretField(tokens.bot, { tokens.bot = it }, masked?.second?.ifEmpty { null }?.let { t("android-settings.tokens.kept", "token" to it) } ?: "xoxb-…")
         }
-        tokens.verified?.let { Text("连接到「${it.team}」，bot 是 @${it.botName}", fontSize = 12.sp, color = C.green) }
+        tokens.verified?.let { Text(t("android-settings.tokens.verified", "team" to it.team, "bot" to it.botName), fontSize = 12.sp, color = C.green) }
         tokens.errors.forEach { Text(it, fontSize = 13.sp, color = C.red) }
     }
 }
@@ -552,13 +553,13 @@ fun ConnectRunScreen(station: String, id: String) {
     val pickOf = "connect:$id"
     val picking by rememberTopic<PickView>(app.core, Topics.pick(station, pickOf))
     val v = picking.value
-    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> app.act("选择模型") { app.api(station).pickSet(pickOf, fill) }; Unit }
+    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> app.act(t("android-settings.flow.choose")) { app.api(station).pickSet(pickOf, fill) }; Unit }
     LaunchedEffect(station, id) { pick { put("open", true) } }
     var list by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
     Column(Modifier.fillMaxSize()) {
-        NavBar(if (list != null) "换模型" else "返回", { if (list != null) list = null else app.pop() }, when (list) { "model" -> "选模型"; "account" -> "选账号"; else -> "换模型" })
-        if (item == null || v == null) return Loading(note ?: "正在读取…")
+        NavBar(if (list != null) t("android-settings.run.title") else t("common.back"), { if (list != null) list = null else app.pop() }, when (list) { "model" -> t("android-settings.connect.pickModel"); "account" -> t("android-settings.run.pickAccount"); else -> t("android-settings.run.title") })
+        if (item == null || v == null) return Loading(note ?: t("android-settings.reading"))
         val connect = item.connect
         val runtime = connect.bind.runtime
         val models = v.options
@@ -572,17 +573,17 @@ fun ConnectRunScreen(station: String, id: String) {
         if (list == "model") return ModelList(models, runtime, model) { m -> pick { put("model", m) }; list = null }
         if (list == "account") return AccountList(accounts, runtime, profile) { p -> pick { put("profile", p) }; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-            if (models.isEmpty()) Text("${connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。", fontSize = 13.sp, color = C.warn, modifier = Modifier.padding(top = 8.dp))
-            GroupLabel("模型")
+            if (models.isEmpty()) Text(t("android-settings.run.noModels", "runtime" to connect.runtimeText), fontSize = 13.sp, color = C.warn, modifier = Modifier.padding(top = 8.dp))
+            GroupLabel(t("android-settings.connect.model"))
             SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, runtime, 18.dp) }) { Text(v.modelText, fontSize = 15.sp, color = C.ink) }
-            GroupLabel("思考深度")
+            GroupLabel(t("android-settings.run.effort"))
             EffortChips(listOf<String?>(null) + efforts, effort) { e -> pick { put("effort", e) } }
-            GroupLabel("账号")
+            GroupLabel(t("android-settings.run.account"))
             SettingRow(onClick = { list = "account" }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink)
                 Text(v.accountNote, fontSize = 12.sp, color = C.muted)
             }
-            Text("新开的会话会用新的设置；进行中的会话继续用开始时的。", fontSize = 12.sp, color = C.subtle, modifier = Modifier.padding(vertical = 12.dp))
+            Text(t("android-settings.run.note"), fontSize = 12.sp, color = C.subtle, modifier = Modifier.padding(vertical = 12.dp))
         }
         Box(
             Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
@@ -592,8 +593,8 @@ fun ConnectRunScreen(station: String, id: String) {
                     scope.launch {
                         try {
                             app.api(station).pickSave(pickOf)
-                            app.toast = "已保存，新会话会用新的设置"; app.pop()
-                        } catch (e: CoreException) { app.toast = "没能保存：${errorText(e)}" }
+                            app.toast = t("android-settings.run.saved"); app.pop()
+                        } catch (e: CoreException) { app.toast = t("android-settings.run.saveFailed", "error" to errorText(e)) }
                     }
                 }.padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
@@ -624,7 +625,7 @@ fun NewConnectScreen(station: String) {
     val flow = rememberConnectFlow(app, station, resume)
     val tokens = rememberTokens(app, station, install = flow.view?.made?.state, form = flow.form)
     val view = flow.view
-    if (view == null) { NavBar("取消", { app.pop() }, "添加连接"); return }
+    if (view == null) { NavBar(t("common.cancel"), { app.pop() }, t("android-settings.flow.title")); return }
     val step = view.step
     val teams = view.teams
     val chosen = view.chosen
@@ -644,96 +645,96 @@ fun NewConnectScreen(station: String) {
     androidx.activity.compose.BackHandler(enabled = step != "team") { back() }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     Column(Modifier.fillMaxSize()) {
-        NavBar(if (view.back == "close") "取消" else "上一步", back, "添加连接", sub = { Text("${view.title} · ${view.number} / ${view.total}", fontSize = 11.sp, color = C.muted) })
+        NavBar(if (view.back == "close") t("common.cancel") else t("android-settings.flow.previous"), back, t("android-settings.flow.title"), sub = { Text("${view.title} · ${view.number} / ${view.total}", fontSize = 11.sp, color = C.muted) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // A connect runs a profile's model: with none on this station, that comes first.
             val noProfile = view.noProfile
             if (step == "team" && noProfile) Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 fail.still.android.ui.Illustration(fail.still.android.R.drawable.illus_no_profile, fail.still.android.R.drawable.illus_no_profile_dark, 240.dp)
-                Text("先添加一个 Profile", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text("连接要用 Profile 来跑模型。先添加一个，再来加连接。", fontSize = 14.sp, color = C.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                Button("去添加 Profile", primary = true) { app.replace(Screen.NewProfile(station)) }
+                Text(t("android-settings.flow.noProfile"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text(t("android-settings.flow.noProfileNote"), fontSize = 14.sp, color = C.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Button(t("android-settings.flow.addProfile"), primary = true) { app.replace(Screen.NewProfile(station)) }
             }
             else when (step) {
                 "team" -> if (teams.isEmpty()) {
-                    Text("有了 Slack 的配置 token，${BuildConfig.APP_NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("添加配置 token", primary = true) { flow.go("token") } }
-                    Text("不用配置 token，自己在 Slack 建 app", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
+                    Text(t("android-settings.flow.tokenNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.slack.addToken"), primary = true) { flow.go("token") } }
+                    Text(t("android-settings.flow.manualInSlack"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
                 } else {
-                    Text("用哪个 Slack 工作区的配置 token 建 app。", fontSize = 14.sp, color = C.muted)
+                    Text(t("android-settings.flow.whichTeam"), fontSize = 14.sp, color = C.muted)
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
                         teams.forEach { t -> PickRow(t.name, t.owner?.let { o -> o.user + (o.teamDomain?.let { " · $it.slack.com" } ?: "") }, checked = chosen?.teamId == t.teamId) { flow.edit { put("team", t.teamId) } } }
                     }
-                    Text("＋ 添加工作区的配置 token", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("token") })
-                    chosen?.let { t ->
-                        Text("移除「${t.name}」的配置 token", fontSize = 14.sp, color = C.muted, modifier = Modifier.clickable {
-                            confirm(app, "移除「${t.name}」的配置 token？", "${BuildConfig.APP_NAME} 不再用它在这个 Slack 工作区建和改 app；已经建好的 app 和连接不受影响，之后可以再加上。", "移除", danger = true) {
-                                api.removeConfigToken(t.teamId); flow.edit { put("team", null as String?) }; app.toast = "已移除配置 token"
+                    Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("token") })
+                    chosen?.let { team ->
+                        Text(t("android-settings.flow.removeToken", "name" to team.name), fontSize = 14.sp, color = C.muted, modifier = Modifier.clickable {
+                            confirm(app, t("android-settings.flow.removeTokenTitle", "name" to team.name), t("android-settings.flow.removeTokenText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true) {
+                                api.removeConfigToken(team.teamId); flow.edit { put("team", null as String?) }; app.toast = t("android-settings.flow.tokenRemoved")
                             }
                         })
                     }
-                    Text("不用配置 token，自己建 app", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("下一步", primary = true, enabled = chosen != null) { flow.go("app") } }
+                    Text(t("android-settings.flow.manual"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.flow.next"), primary = true, enabled = chosen != null) { flow.go("app") } }
                 }
                 "token" -> ConfigTokenSteps(station, flow) {}
                 "app" -> {
-                    FormLabel("名字")
+                    FormLabel(t("android-settings.slack.name"))
                     Field(draft.name, { draft.name = it }, BuildConfig.APP_NAME)
-                    FormLabel("描述")
+                    FormLabel(t("android-settings.flow.description"))
                     Field(draft.description, { draft.description = it }, "Coding agent in your threads")
                     AppLook(draft, icon, { i, e -> icon = i; flow.edit { put("icon", i?.data); put("iconError", e) } }, fresh = true)
                     iconError?.let { Text(it, fontSize = 13.sp, color = C.red) }
-                    Text("权限用默认的（全部打开）；建好以后可以在连接的「Slack app」里改。", fontSize = 13.sp, color = C.muted)
+                    Text(t("android-settings.flow.permsNote"), fontSize = 13.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("创建 app", primary = true, busy = busy, enabled = view.canMake) {
+                        Button(t("android-settings.flow.make"), primary = true, busy = busy, enabled = view.canMake) {
                             flow.act("make")
                         }
                     }
                 }
-                "install" -> if (made == null) Text("正在读取 app…", fontSize = 13.sp, color = C.muted) else {
+                "install" -> if (made == null) Text(t("android-settings.flow.readingApp"), fontSize = 13.sp, color = C.muted) else {
                     val m = made
                     val install = m.install
-                    iconError?.let { Text("图标没传上：$it", fontSize = 13.sp, color = C.red) }
+                    iconError?.let { Text(t("android-settings.flow.iconFailed", "error" to it), fontSize = 13.sp, color = C.red) }
                     Steps(listOf(
-                        (if (install != null) (if (m.installed) "已装进「${m.installedTeam ?: m.team ?: "工作区"}」。" else "app 已经建好。安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。")
-                        else "app 已经建好。安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。") to (if (m.installed) null else ({ open(install ?: m.links.install) })),
-                        "在 Socket Mode 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。" to { open(m.links.appToken) },
-                        (if (install != null) "把 App-Level Token 填在下面。" else "把两个 token 填在下面。") to null,
+                        (if (install != null) (if (m.installed) t("android-settings.flow.installed", "team" to (m.installedTeam ?: m.team ?: t("android-settings.flow.team"))) else t("android-settings.flow.installOauth"))
+                        else t("android-settings.flow.installManual")) to (if (m.installed) null else ({ open(install ?: m.links.install) })),
+                        t("android-settings.flow.appToken") to { open(m.links.appToken) },
+                        (if (install != null) t("android-settings.flow.pasteAppToken") else t("android-settings.flow.pasteTokens")) to null,
                     ))
-                    if (install == null) Text("OAuth 页", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(m.links.oauth) })
+                    if (install == null) Text(t("android-settings.flow.oauthPage"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(m.links.oauth) })
                     TokenFields(tokens, install = m.state)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("下一步", primary = true, busy = busy, enabled = tokens.ready) { flow.act("verify") }
+                        Button(t("android-settings.flow.next"), primary = true, busy = busy, enabled = tokens.ready) { flow.act("verify") }
                     }
                 }
                 "manual" -> {
                     Steps(listOf(
-                        "用 ${BuildConfig.APP_NAME} 的配置在 Slack 新建一个 app。" to { app.act("打开 Slack") { open(api.createAppUrl(BuildConfig.APP_NAME)) } },
-                        "在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。" to null,
-                        "在 Install App 页安装到工作区，复制 Bot User OAuth Token。" to null,
-                        "把两个 token 填在下面。" to null,
+                        t("android-settings.flow.manual1", "app" to BuildConfig.APP_NAME) to { app.act(t("android-settings.flow.openSlack")) { open(api.createAppUrl(BuildConfig.APP_NAME)) } },
+                        t("android-settings.flow.manual2") to null,
+                        t("android-settings.flow.manual3") to null,
+                        t("android-settings.flow.pasteTokens") to null,
                     ))
                     TokenFields(tokens)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("下一步", primary = true, busy = busy, enabled = tokens.ready) { flow.act("verify") }
+                        Button(t("android-settings.flow.next"), primary = true, busy = busy, enabled = tokens.ready) { flow.act("verify") }
                     }
                 }
                 else -> {
-                    GroupLabel("模型")
-                    if (models.isEmpty()) Text("这台 station 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。", fontSize = 13.sp, color = C.warn)
+                    GroupLabel(t("android-settings.connect.model"))
+                    if (models.isEmpty()) Text(t("android-settings.flow.noModels"), fontSize = 13.sp, color = C.warn)
                     else Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
                         models.forEach { m -> PickRow(m.name, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { flow.choose { put("model", m.model) } } }
                     }
                     if (entry != null && entry.runtimes.size > 1) {
-                        GroupLabel("运行时（创建后不能换）")
+                        GroupLabel(t("android-settings.flow.runtime"))
                         Seg(entry.runtimes.map { RUNTIME_LABEL[it] ?: it }, entry.runtimes.indexOf(rt).coerceAtLeast(0), { flow.choose { put("runtime", entry.runtimes[it]) } }, Modifier.fillMaxWidth(), height = 36.dp, fill = true)
                     }
-                    GroupLabel("会话方式")
+                    GroupLabel(t("android-settings.mode.title"))
                     ModeChoices(mode, mention) { m, r -> flow.edit { put("mode", m); put("requireMention", r) } }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button("添加并连接", primary = true, busy = busy, enabled = entry != null) {
+                        Button(t("android-settings.flow.create"), primary = true, busy = busy, enabled = entry != null) {
                             flow.act("create") { result ->
-                                app.toast = "已添加连接，正在连接 Slack"
+                                app.toast = t("android-settings.flow.created")
                                 app.replace(Screen.Connect(station, result["id"]!!.jsonPrimitive.content))
                             }
                         }
@@ -757,15 +758,15 @@ fun openNewConnect(app: AppState, station: String, resume: String? = null) {
  */
 @Composable
 internal fun WaitingApp(app: AppState, station: String, a: MadeSlackApp, online: Boolean) {
-    val where = if (a.installed) "已装进「${a.installedTeam ?: a.team ?: "工作区"}」，还差 App-Level Token" else if (a.install != null) "还没安装到工作区" else "还差 token"
+    val where = if (a.installed) t("android-settings.waiting.installed", "team" to (a.installedTeam ?: a.team ?: t("android-settings.flow.team"))) else if (a.install != null) t("android-settings.waiting.notInstalled") else t("android-settings.waiting.noTokens")
     ListRow(onClick = if (online) ({ openWaitingMenu(app, station, a) }) else null) {
         Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { SlackMark(16.dp) }
         Column(Modifier.weight(1f)) {
             Text(a.name + (a.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(where, fontSize = 13.sp, color = C.muted, maxLines = 2)
         }
-        if (online) Text("继续", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openNewConnect(app, station, a.appId) })
-        else Text("station 离线", fontSize = 12.sp, color = C.muted)
+        if (online) Text(t("android-settings.waiting.continue"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openNewConnect(app, station, a.appId) })
+        else Text(t("android-settings.waiting.offline"), fontSize = 12.sp, color = C.muted)
     }
 }
 
@@ -775,10 +776,10 @@ private fun openWaitingMenu(app: AppState, station: String, a: MadeSlackApp) {
         SheetGrab()
         SheetHead(a.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("继续连接") { openNewConnect(app, station, a.appId) }
-            PickRow("从这里移除", color = C.red) {
-                confirm(app, "移除「${a.name}」？", "只从 ${BuildConfig.APP_NAME} 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。", "移除", danger = true) {
-                    app.api(station).dropSlackApp(a.appId); app.toast = "已移除"
+            PickRow(t("android-settings.waiting.continueRow")) { openNewConnect(app, station, a.appId) }
+            PickRow(t("android-settings.waiting.remove"), color = C.red) {
+                confirm(app, t("android-settings.station.removeTitle", "name" to a.name), t("android-settings.waiting.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true) {
+                    app.api(station).dropSlackApp(a.appId); app.toast = t("android-settings.members.removed")
                 }
             }
         }
@@ -794,7 +795,7 @@ internal fun Steps(steps: List<Pair<String, (() -> Unit)?>>) {
                 Text("${i + 1}.", fontSize = 14.sp, color = C.muted)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(text, fontSize = 14.sp, color = C.ink)
-                    if (open != null) Text("打开", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open() })
+                    if (open != null) Text(t("android-settings.open"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open() })
                 }
             }
         }

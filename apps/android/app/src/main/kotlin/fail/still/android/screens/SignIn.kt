@@ -44,6 +44,7 @@ import fail.still.android.R
 import fail.still.android.data.Auth
 import fail.still.android.ui.C
 import fail.still.android.ui.Illustration
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
@@ -55,7 +56,7 @@ suspend fun signIn(app: AppState, context: Context) {
         val url = Auth.begin(app.core)
         CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, url.toUri())
     } catch (e: CoreException) {
-        app.toast = "没能开始登录：${e.message}"
+        app.toast = t("android-settings.signIn.beginFailed", "error" to e.message)
     }
 }
 
@@ -66,7 +67,7 @@ private suspend fun devSignIn(app: AppState, user: String) {
     try {
         app.core.call("dev.signIn", buildJsonObject { put("user", user) })
     } catch (e: CoreException) {
-        app.toast = "没能登录：${e.message}"
+        app.toast = t("android-settings.signIn.failed", "error" to e.message)
     }
 }
 
@@ -84,8 +85,8 @@ fun SignInScreen() {
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
         Illustration(R.drawable.illus_sign_in, R.drawable.illus_sign_in_dark, 300.dp)
-        Text("让 agent 一直在干活", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.5).sp, modifier = Modifier.padding(top = 10.dp))
-        Text("登录后，你所在 workspace 的所有 station 和会话都会出现在这里。", color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
+        Text(t("android-settings.signIn.title"), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.5).sp, modifier = Modifier.padding(top = 10.dp))
+        Text(t("android-settings.signIn.note"), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))
         Row(
             Modifier.fillMaxWidth().height(50.dp).clip(CircleShape).background(C.ink)
@@ -93,12 +94,12 @@ fun SignInScreen() {
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
             GoogleDot()
-            Text(if (busy) "正在打开…" else "用 Google 登录", color = C.bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (busy) t("android-settings.signIn.opening") else t("android-settings.signIn.google"), color = C.bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
-        Text("多个账号可以都登录，随时切换 workspace。", color = C.muted, fontSize = 12.sp)
+        Text(t("android-settings.signIn.many"), color = C.muted, fontSize = 12.sp)
         if (BuildConfig.DEBUG && DEV_CLOUD.matches(app.cloudOrigin)) {
             Row {
-                for (user in listOf("alice", "bob")) Text(if (dev == user) "正在登录…" else "用开发账号登录（$user）", color = C.accent, fontSize = 14.sp,
+                for (user in listOf("alice", "bob")) Text(if (dev == user) t("android-settings.signIn.signingIn") else t("android-settings.signIn.dev", "user" to user), color = C.accent, fontSize = 14.sp,
                     modifier = Modifier.clickable(enabled = dev == null) { dev = user; scope.launch { try { devSignIn(app, user) } finally { dev = null } } }.padding(8.dp))
             }
         }

@@ -74,6 +74,7 @@ import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 
@@ -92,7 +93,7 @@ fun confirm(app: AppState, title: String, text: String, action: String, danger: 
             Text(text, fontSize = 14.sp, color = C.muted)
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button("取消", primary = false) { app.sheet = null }
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, danger = danger) {
 
                     operation.run { run(); app.sheet = null }
@@ -117,7 +118,7 @@ fun ask(app: AppState, title: String, value: String, placeholder: String, action
             hint?.let { Text(it, fontSize = 12.sp, color = C.muted) }
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button("取消", primary = false) { app.sheet = null }
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, enabled = text.isNotBlank() && text.trim() != value) {
 
                     operation.run { run(text.trim()); app.sheet = null }
@@ -140,7 +141,7 @@ fun CommandBox(text: String) {
         Box(
             Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(C.chip).clickable {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", text))
-                app.toast = "已复制"
+                app.toast = t("common.copied")
             },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Copy, 16.dp) }
@@ -162,20 +163,20 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
     val me = current.account
     val cloud = Cloud(app.core, me.sub)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop, trailing = if (view?.manager == true) ({
+        TopBack(t("android-settings.title"), app::pop, trailing = if (view?.manager == true) ({
             NavButton(Icons.UserPlus, { app.sheet = SheetSpec(0.8f, draggable = true) { AddSheet(current, view, cloud) } }, 20.dp)
         }) else null)
-        if (view == null) return Loading(topic.error?.message ?: "正在读取 workspace…")
+        if (view == null) return Loading(topic.error?.message ?: t("android-settings.workspace.reading"))
         val waiting = if (view.manager) view.added.size + view.invitations.size else 0
         // Its name is the title, renamed by a tap on it (by its owner and admins).
-        Box(if (view.manager) Modifier.clickable { ask(app, "Workspace 名字", view.name, "例如：产品团队", "保存") { cloud.renameWorkspace(view.id, it); app.toast = "已改名" } } else Modifier) {
+        Box(if (view.manager) Modifier.clickable { ask(app, t("android-settings.workspace.name"), view.name, t("android-settings.workspace.namePlaceholder"), t("common.save")) { cloud.renameWorkspace(view.id, it); app.toast = t("android-settings.renamed") } } else Modifier) {
             LargeTitle("", view.name)
         }
-        Text("你是${ROLE_LABEL[view.role] ?: view.role} · ${view.members.size} 人 · ${view.stations.size} 台 station" + if (view.manager) " · 点名字改名" else "",
+        Text(t(if (view.manager) "android-settings.workspace.aboutRename" else "android-settings.workspace.about", "role" to (ROLE_LABEL[view.role] ?: view.role), "people" to t("android-settings.members.count", "n" to view.members.size), "stations" to t("android-settings.workspace.stations", "n" to view.stations.size)),
             fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp))
         // Its people in one list: those in it, then those added who have not signed in yet, then the invitations out;
         // which is which on each row's second line.
-        SectionHeader("成员", "${view.members.size} 人" + if (waiting > 0) " · $waiting 人待加入" else "", start = 24.dp)
+        SectionHeader(t("android-settings.members.title"), if (waiting > 0) t("android-settings.members.waiting", "n" to view.members.size, "waiting" to waiting) else t("android-settings.members.count", "n" to view.members.size), start = 24.dp)
         ListCard {
             view.members.forEach { m -> MemberRow(view, m, me.sub, cloud) }
             if (view.manager) view.added.forEach { a ->
@@ -183,11 +184,11 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                     Avatar(a.email, a.email, 28.dp)
                     Column(Modifier.weight(1f)) {
                         Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1)
-                        Text("${ROLE_LABEL[a.role] ?: a.role} · 还没登录过，第一次登录时自动加入", fontSize = 13.sp, color = C.muted)
+                        Text(t("android-settings.members.added", "role" to (ROLE_LABEL[a.role] ?: a.role)), fontSize = 13.sp, color = C.muted)
                     }
                     val on = arrayOf<Pair<String, Any?>>("workspace" to view.id, "email" to a.email)
-                    RowAction("移除", C.accent, app.isDoing("workspace.removeAdded", *on), app.failedOf("workspace.removeAdded", *on)) {
-                        app.act("移除", "已移除") { cloud.removeAdded(view.id, a.email) }
+                    RowAction(t("android-settings.members.remove"), C.accent, app.isDoing("workspace.removeAdded", *on), app.failedOf("workspace.removeAdded", *on)) {
+                        app.act(t("android-settings.members.removeWhat"), t("android-settings.members.removed")) { cloud.removeAdded(view.id, a.email) }
                     }
                 }
             }
@@ -195,12 +196,12 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
                 ListRow {
                     Avatar(i.email ?: i.id, i.email ?: "?", 28.dp)
                     Column(Modifier.weight(1f)) {
-                        Text(i.email ?: "任何拿到链接的人", fontSize = 15.sp, color = C.ink)
-                        Text("${ROLE_LABEL[i.role] ?: i.role} · 邀请 · ${i.time?.get("expires_at")?.until ?: ""}过期", fontSize = 13.sp, color = C.muted)
+                        Text(i.email ?: t("android-settings.members.anyone"), fontSize = 15.sp, color = C.ink)
+                        Text(t("android-settings.members.invitation", "role" to (ROLE_LABEL[i.role] ?: i.role), "until" to (i.time?.get("expires_at")?.until ?: "")), fontSize = 13.sp, color = C.muted)
                     }
                     val on = arrayOf<Pair<String, Any?>>("workspace" to view.id, "invitation" to i.id)
-                    RowAction("撤回", C.accent, app.isDoing("workspace.revokeInvitation", *on), app.failedOf("workspace.revokeInvitation", *on)) {
-                        app.act("撤回邀请", "已撤回邀请") { cloud.revokeInvitation(view.id, i.id) }
+                    RowAction(t("android-settings.members.revoke"), C.accent, app.isDoing("workspace.revokeInvitation", *on), app.failedOf("workspace.revokeInvitation", *on)) {
+                        app.act(t("android-settings.members.revokeWhat"), t("android-settings.members.revoked")) { cloud.revokeInvitation(view.id, i.id) }
                     }
                 }
             }
@@ -208,15 +209,15 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
         Spacer(Modifier.height(18.dp))
         ListCard {
             ListRow(onClick = {
-                confirm(app, "退出「${view.name}」？", "退出后你就不能再访问里面的 station，需要重新被邀请才能回来。", "退出", danger = true) {
-                    cloud.removeMember(view.id, me.sub); app.toast = "已退出 workspace"; app.home()
+                confirm(app, t("android-settings.workspace.leaveTitle", "name" to view.name), t("android-settings.workspace.leaveText"), t("android-settings.workspace.leave"), danger = true) {
+                    cloud.removeMember(view.id, me.sub); app.toast = t("android-settings.workspace.left"); app.home()
                 }
-            }) { Text("退出这个 workspace", fontSize = 15.sp, color = C.red) }
+            }) { Text(t("android-settings.workspace.leaveRow"), fontSize = 15.sp, color = C.red) }
             if (view.role == "owner") ListRow(onClick = {
-                confirm(app, "删除「${view.name}」？", "所有成员都会失去访问权限，${view.stations.size} 台 station 会断开和 ${BuildConfig.APP_NAME} cloud 的连接（station 本机上的数据不受影响）。", "删除 workspace", danger = true) {
-                    cloud.deleteWorkspace(view.id); app.toast = "已删除 workspace"; app.home()
+                confirm(app, t("android-settings.workspace.deleteTitle", "name" to view.name), t("android-settings.workspace.deleteText", "n" to view.stations.size, "app" to BuildConfig.APP_NAME), t("android-settings.workspace.delete"), danger = true) {
+                    cloud.deleteWorkspace(view.id); app.toast = t("android-settings.workspace.deleted"); app.home()
                 }
-            }) { Text("删除 workspace", fontSize = 15.sp, color = C.red) }
+            }) { Text(t("android-settings.workspace.delete"), fontSize = 15.sp, color = C.red) }
         }
         Spacer(Modifier.height(30.dp))
     }
@@ -232,7 +233,7 @@ private fun MemberRow(view: WorkspaceView, m: Member, me: String, cloud: Cloud) 
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(m.name.ifEmpty { m.email }, fontSize = 15.sp, color = C.ink, maxLines = 1)
-                if (m.sub == me) You("你")
+                if (m.sub == me) You(t("android-settings.members.you"))
             }
             Text(m.email, fontSize = 13.sp, color = C.muted, maxLines = 1)
         }
@@ -269,12 +270,12 @@ private fun ColumnScope.MemberSheet(view: WorkspaceView, m: Member, cloud: Cloud
         if (view.role == "owner") listOf("owner", "admin", "member").forEach { r ->
             val failed = app.failedOf("workspace.setRole", "workspace" to view.id, "member" to m.sub, "role" to r)
             PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = m.role == r, enabled = !setting(null), busy = setting(r), failed = failed) {
-                scope.launch { try { cloud.setRole(view.id, m.sub, r); app.toast = "已更改角色"; app.sheet = null } catch (e: CoreException) { app.toast = "没能更改角色：${errorText(e)}" } }
+                scope.launch { try { cloud.setRole(view.id, m.sub, r); app.toast = t("android-settings.members.roleSet"); app.sheet = null } catch (e: CoreException) { app.toast = t("android-settings.members.roleFailed", "error" to errorText(e)) } }
             }
         }
-        PickRow("移出 workspace", color = C.red) {
-            confirm(app, "把 ${m.email} 移出「${view.name}」？", "对方不能再访问这个 workspace 里的 station，之后可以重新邀请。", "移出", danger = true) {
-                cloud.removeMember(view.id, m.sub); app.toast = "已移除成员"
+        PickRow(t("android-settings.members.moveOutRow"), color = C.red) {
+            confirm(app, t("android-settings.members.moveOutTitle", "email" to m.email, "name" to view.name), t("android-settings.members.moveOutText"), t("android-settings.members.moveOut"), danger = true) {
+                cloud.removeMember(view.id, m.sub); app.toast = t("android-settings.members.movedOut")
             }
         }
     }
@@ -328,55 +329,55 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
         Unit
     }
     SheetGrab()
-    SheetHead("添加成员")
+    SheetHead(t("android-settings.add.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val result = done
         if (result != null) {
             Text(result, fontSize = 14.sp, color = C.ink)
-            Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.End) { Button("完成", primary = true) { app.sheet = null } }
+            Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { app.sheet = null } }
             return@Column
         }
-        Text("直接加进「${view.name}」，不用对方接受：登录过 ${BuildConfig.APP_NAME} 的人马上加入，其他人第一次用这个邮箱登录时自动加入。", fontSize = 14.sp, color = C.muted)
-        Text("邮箱", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Field(text, { text = it }, "name@example.com，可以粘贴多个", lines = 3)
+        Text(t("android-settings.add.note", "name" to view.name, "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
+        Text(t("android-settings.add.emails"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Field(text, { text = it }, t("android-settings.add.emailsPlaceholder"), lines = 3)
         val list = people
         if (online.isNotEmpty()) {
-            if (list == null) Row { Button("从 Slack 里选人", primary = false, busy = reading) { fromSlack() } }
+            if (list == null) Row { Button(t("android-settings.add.fromSlack"), primary = false, busy = reading) { fromSlack() } }
             else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Slack 里 ${list.size} 人，选中 ${picked.count { it !in inside }} 人", fontSize = 13.sp, color = C.muted, modifier = Modifier.weight(1f))
-                    Text("全选", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = list.map { it.email }.filter { it !in inside }.toSet() })
-                    Text("全不选", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = emptySet() })
+                    Text(t("android-settings.add.picked", "n" to list.size, "picked" to picked.count { it !in inside }), fontSize = 13.sp, color = C.muted, modifier = Modifier.weight(1f))
+                    Text(t("android-settings.all"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = list.map { it.email }.filter { it !in inside }.toSet() })
+                    Text(t("android-settings.none"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = emptySet() })
                 }
                 Column {
                     list.forEach { p ->
                         val there = p.email in inside
-                        PickRow(p.name.ifEmpty { p.email }, listOfNotNull(p.email, if (there) "已在" else if (p.guest) "访客" else null).joinToString(" · "),
+                        PickRow(p.name.ifEmpty { p.email }, listOfNotNull(p.email, if (there) t("android-settings.add.in") else if (p.guest) t("android-settings.add.guest") else null).joinToString(" · "),
                             checked = there || p.email in picked, enabled = !there, leading = { Avatar(p.email, p.name.ifEmpty { p.email }, 28.dp, picture = p.image) }) {
                             picked = if (p.email in picked) picked - p.email else picked + p.email
                         }
                     }
                 }
-                if (problems.isNotEmpty()) Text(problems.joinToString("；"), fontSize = 13.sp, color = C.red)
+                if (problems.isNotEmpty()) Text(problems.joinToString(t("android-settings.add.problemSep")), fontSize = 13.sp, color = C.red)
             }
         }
-        Text("角色", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Text(t("android-settings.add.role"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Column {
             roles.forEach { r -> PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = role == r) { role = r } }
         }
         error?.let { Text(it, fontSize = 13.sp, color = C.red) }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Button("取消", primary = false) { app.sheet = null }
-            Button(if (emails.size > 1) "添加 ${emails.size} 人" else "添加", primary = true, busy = busy, enabled = emails.isNotEmpty()) {
+            Button(t("common.cancel"), primary = false) { app.sheet = null }
+            Button(if (emails.size > 1) t("android-settings.add.many", "n" to emails.size) else t("android-settings.add.one"), primary = true, busy = busy, enabled = emails.isNotEmpty()) {
                 error = null
                 scope.launch {
                     try {
                         val r = cloud.addMembers(view.id, role, emails)
-                        done = listOf(
-                            if (r.joined.isNotEmpty()) "${r.joined.size} 人已经加入" else "",
-                            if (r.added.isNotEmpty()) "${r.added.size} 人第一次登录 ${BuildConfig.APP_NAME} 时自动加入" else "",
-                            if (r.already.isNotEmpty()) "${r.already.size} 人本来就在" else "",
-                        ).filter { it.isNotEmpty() }.joinToString("，") + "。"
+                        done = t("android-settings.add.done", "list" to listOf(
+                            if (r.joined.isNotEmpty()) t("android-settings.add.joined", "n" to r.joined.size) else "",
+                            if (r.added.isNotEmpty()) t("android-settings.add.added", "n" to r.added.size, "app" to BuildConfig.APP_NAME) else "",
+                            if (r.already.isNotEmpty()) t("android-settings.add.already", "n" to r.already.size) else "",
+                        ).filter { it.isNotEmpty() }.joinToString(t("android-settings.add.sep")))
                     } catch (e: CoreException) { error = errorText(e) }
                 }
             }
@@ -391,24 +392,24 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
 fun Devices(current: WorkspaceEntry) {
     val app = LocalApp.current
     val topic by rememberTopic<List<LoginSession>>(app.core, Topics.loginSessions(current.account.sub))
-    val list = topic.value ?: return Text(topic.error?.let { "读不到登录记录：${it.message}" } ?: "正在读取…", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    val list = topic.value ?: return Text(topic.error?.let { t("android-settings.devices.failed", "error" to it.message) } ?: t("android-settings.reading"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
     val cloud = Cloud(app.core, current.account.sub)
     ListCard {
         list.forEach { s ->
             ListRow {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(s.name.ifEmpty { "未命名设备" }, fontSize = 15.sp, color = C.ink, maxLines = 1)
-                        if (s.current) You("这里")
+                        Text(s.name.ifEmpty { t("android-settings.devices.unnamed") }, fontSize = 15.sp, color = C.ink, maxLines = 1)
+                        if (s.current) You(t("android-settings.devices.here"))
                     }
-                    Text("${s.time?.get("created_at")?.ago ?: ""}登录 · ${s.time?.get("expires_at")?.until ?: ""}过期", fontSize = 13.sp, color = C.muted)
+                    Text(t("android-settings.devices.times", "ago" to (s.time?.get("created_at")?.ago ?: ""), "until" to (s.time?.get("expires_at")?.until ?: "")), fontSize = 13.sp, color = C.muted)
                 }
                 if (!s.current) {
                     if (app.isDoing("loginSession.revoke", "id" to s.id)) Spinner(14.dp)
                     else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         DoingMark(false, app.failedOf("loginSession.revoke", "id" to s.id))
-                        Text("退出", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
-                            app.act("让那台设备退出", "已让那台设备退出") { cloud.revokeLoginSession(s.id) }
+                        Text(t("android-settings.devices.signOut"), fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                            app.act(t("android-settings.devices.signOutWhat"), t("android-settings.devices.signedOut")) { cloud.revokeLoginSession(s.id) }
                         })
                     }
                 }
@@ -431,9 +432,9 @@ fun isManager(current: WorkspaceEntry): Boolean {
 fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
         SheetGrab()
-        SheetHead("添加 station")
+        SheetHead(t("android-settings.station.add"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("station 是一台运行 ${BuildConfig.APP_NAME} 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ${BuildConfig.APP_NAME} 并加入。", fontSize = 14.sp, color = C.muted)
+            Text(t("android-settings.station.addNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
             AddStationSteps(current, known, onCancel = { app.sheet = null }) { app.sheet = null }
         }
     }
@@ -445,7 +446,7 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>) 
  * `label`: what the name's line is called.
  */
 @Composable
-private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label: String = "名字", placeholder: String = "比如机器名：studio、mac-mini", onCancel: (() -> Unit)? = null, onJoined: () -> Unit) {
+private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label: String = t("android-settings.station.name"), placeholder: String = t("android-settings.station.namePlaceholder"), onCancel: (() -> Unit)? = null, onJoined: () -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
@@ -462,24 +463,24 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
                 Field(name, { name = it }, placeholder)
                 error?.let { Text(it, fontSize = 13.sp, color = C.red) }
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    if (onCancel != null) Button("取消", primary = false) { onCancel() }
-                    Button("生成命令", primary = true, busy = busy, enabled = name.isNotBlank()) {
+                    if (onCancel != null) Button(t("common.cancel"), primary = false) { onCancel() }
+                    Button(t("android-settings.station.make"), primary = true, busy = busy, enabled = name.isNotBlank()) {
                         error = null
                         scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = errorText(e) } }
                     }
                 }
             }
             joined != null -> {
-                Text("「${joined.name}」已加入，现在可以打开它了。", fontSize = 14.sp, color = C.ink)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("完成", primary = true) { onJoined() } }
+                Text(t("android-settings.station.joined", "name" to joined.name), fontSize = 14.sp, color = C.ink)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onJoined() } }
             }
             else -> {
-                Text("在那台机器的终端里执行：", fontSize = 14.sp, color = C.ink)
+                Text(t("android-settings.station.run"), fontSize = 14.sp, color = C.ink)
                 CommandBox(enrollment.install)
-                Text("macOS（Apple 芯片）和 Linux 都行；装过 ${BuildConfig.APP_NAME} 的机器也用这条命令。它会装好 ${BuildConfig.APP_NAME}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。", fontSize = 13.sp, color = C.muted)
+                Text(t("android-settings.station.runNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Spinner(10.dp)
-                    Text("等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效", fontSize = 13.sp, color = C.muted)
+                    Text(t("android-settings.station.waiting"), fontSize = 13.sp, color = C.muted)
                 }
             }
         }
@@ -499,16 +500,16 @@ fun FirstStation(current: WorkspaceEntry) {
     val view = topic.value
     Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Illustration(R.drawable.illus_no_station, R.drawable.illus_no_station_dark, 240.dp)
-        Text("添加第一台 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center)
-        Text("agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+        Text(t("android-settings.station.first"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center)
+        Text(t("android-settings.station.firstNote"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
         Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when {
                 view == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Spinner(13.dp); Text(topic.error?.message ?: "正在读取 workspace…", fontSize = 14.sp, color = C.muted)
+                    Spinner(13.dp); Text(topic.error?.message ?: t("android-settings.workspace.reading"), fontSize = 14.sp, color = C.muted)
                 }
-                !view.manager -> Text("这个 workspace 还没有 station，等管理员添加。", fontSize = 13.sp, lineHeight = 19.5.sp, color = C.ink,
+                !view.manager -> Text(t("android-settings.station.wait"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.ink,
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp))
-                else -> AddStationSteps(current, emptyList(), label = "给这台机器起个名字", placeholder = "比如 studio、mac-mini") {}
+                else -> AddStationSteps(current, emptyList(), label = t("android-settings.station.firstName"), placeholder = t("android-settings.station.firstPlaceholder")) {}
             }
         }
     }
@@ -521,10 +522,10 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
         SheetGrab()
         SheetHead(s.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("改名") { ask(app, "station 的名字", s.name, "比如机器名：studio", "保存") { cloud.renameStation(current.workspace.id, s.id, it); app.toast = "已改名" } }
-            PickRow("从 workspace 移除", color = C.red) {
-                confirm(app, "移除「${s.name}」？", "它会断开与 ${BuildConfig.APP_NAME} cloud 的连接，成员不能再从这里访问它。那台机器上的 ${BuildConfig.APP_NAME} 和数据不受影响，之后可以重新添加。", "移除 station", danger = true) {
-                    cloud.removeStation(current.workspace.id, s.id); app.toast = "已移除 station"; app.pop()
+            PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.station.renameTitle"), s.name, t("android-settings.station.renamePlaceholder"), t("common.save")) { cloud.renameStation(current.workspace.id, s.id, it); app.toast = t("android-settings.renamed") } }
+            PickRow(t("android-settings.station.removeRow"), color = C.red) {
+                confirm(app, t("android-settings.station.removeTitle", "name" to s.name), t("android-settings.station.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.station.remove"), danger = true) {
+                    cloud.removeStation(current.workspace.id, s.id); app.toast = t("android-settings.station.removed"); app.pop()
                 }
             }
         }

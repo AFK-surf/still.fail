@@ -23,7 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +44,7 @@ import fail.still.android.data.StationView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.WorkspaceView
+import fail.still.android.data.errorText
 import fail.still.android.data.rememberTopic
 import fail.still.android.rememberNotificationAsk
 import fail.still.android.ui.Avatar
@@ -53,9 +57,16 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Seg
+import fail.still.android.ui.t
+import fail.still.core.CoreException
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
-private val THEMES = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
+private fun themes() = listOf("system" to t("android-settings.theme.system"), "light" to t("android-settings.theme.light"), "dark" to t("android-settings.theme.dark"))
+
+/** The languages to choose: null follows the phone (the core's `language`, client/core/src/prefs.rs). */
+private fun languages() = listOf(null to t("common.language.system"), "zh" to t("common.language.zh"), "en" to t("common.language.en"))
 
 /** A row that opens a page: its name, how things stand (`bad` in red; `dot`, a red dot before it), a chevron. */
 @Composable
@@ -92,8 +103,8 @@ fun SettingsScreen(current: WorkspaceEntry) {
     val profiles = stations.orEmpty().flatMap { it.overview?.profiles.orEmpty() }
     val short = profiles.count { it.trouble != null }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("会话", app::pop)
-        LargeTitle("", "设置")
+        TopBack(t("android-settings.home.back"), app::pop)
+        LargeTitle("", t("android-settings.title"))
         Card(onClick = { app.push(Screen.Me) }) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Avatar(me.email, me.name.ifEmpty { me.email }, 46.dp, picture = me.picture)
@@ -104,21 +115,21 @@ fun SettingsScreen(current: WorkspaceEntry) {
                 IconIn(Icons.ChevronRight, 14.dp, C.subtle)
             }
         }
-        SectionHeader(view?.let { "${it.name} · 你是${ROLE_LABEL[it.role] ?: it.role}" } ?: current.workspace.name, start = 24.dp)
+        SectionHeader(view?.let { t("android-settings.home.workspace", "name" to it.name, "role" to (ROLE_LABEL[it.role] ?: it.role)) } ?: current.workspace.name, start = 24.dp)
         ListCard {
-            GoRow("Workspace", view?.let { "${it.members.size} 人" + if (it.manager && waiting > 0) " · $waiting 人待加入" else "" }) { app.push(Screen.Workspace) }
-            GoRow("Station", stations?.let { "$online/${it.size} 在线" }, dot = troubled) { app.push(Screen.Stations) }
-            GoRow("连接", connects?.let { if (failing > 0) "$failing 个出错" else "${it.items.size} 个" }, bad = failing > 0) { app.push(Screen.Connects()) }
-            GoRow("Profile", stations?.let { if (short > 0) "$short 个需查看" else "${profiles.size} 个" }, bad = short > 0) { app.push(Screen.Profiles()) }
-            GoRow("记忆") { app.push(Screen.Memories) }
-            GoRow("用量") { app.push(Screen.Usage) }
+            GoRow("Workspace", view?.let { if (it.manager && waiting > 0) t("android-settings.members.waiting", "n" to it.members.size, "waiting" to waiting) else t("android-settings.members.count", "n" to it.members.size) }) { app.push(Screen.Workspace) }
+            GoRow("Station", stations?.let { t("android-settings.home.online", "online" to online, "total" to it.size) }, dot = troubled) { app.push(Screen.Stations) }
+            GoRow(t("android-settings.connects.title"), connects?.let { if (failing > 0) t("android-settings.home.failing", "n" to failing) else t("android-settings.count", "n" to it.items.size) }, bad = failing > 0) { app.push(Screen.Connects()) }
+            GoRow("Profile", stations?.let { if (short > 0) t("android-settings.home.short", "n" to short) else t("android-settings.count", "n" to profiles.size) }, bad = short > 0) { app.push(Screen.Profiles()) }
+            GoRow(t("android-settings.memory")) { app.push(Screen.Memories) }
+            GoRow(t("android-settings.home.usage")) { app.push(Screen.Usage) }
         }
-        SectionHeader("这台设备", start = 24.dp)
+        SectionHeader(t("android-settings.home.device"), start = 24.dp)
         ListCard {
-            GoRow("外观", THEMES.firstOrNull { it.first == app.theme }?.second) { app.push(Screen.Appearance) }
+            GoRow(t("android-settings.appearance.title"), themes().firstOrNull { it.first == app.theme }?.second) { app.push(Screen.Appearance) }
             Notify()
             Version()
-            GoRow("更新日志") { app.push(Screen.Changelog) }
+            GoRow(t("android-settings.changelog.title")) { app.push(Screen.Changelog) }
         }
         Spacer(Modifier.height(30.dp))
     }
@@ -138,8 +149,8 @@ private fun Notify() {
         app.scope.launch { Push.sync(context.applicationContext, app.core, app.useNotify(on)) }
     })) {
         Column(Modifier.weight(1f)) {
-            Text("通知", fontSize = 15.sp, color = C.ink)
-            Text(if (app.notify) "做完、要处理、出错、有人说话时提醒你" else "不会收到通知。", fontSize = 13.sp, color = C.muted)
+            Text(t("android-settings.notify.title"), fontSize = 15.sp, color = C.ink)
+            Text(if (app.notify) t("android-settings.notify.on") else t("android-settings.notify.off"), fontSize = 13.sp, color = C.muted)
         }
         if (pending) Spinner(14.dp)
         Switch(app.notify)
@@ -161,20 +172,45 @@ private fun Version() {
     ListRow(onClick = if (busy) null else ({ scope.launch { (if (newer == null) updates.checkNow() else updates.install())?.let { app.toast = it } } })) {
         // The beta app goes by its own name (app/build.gradle.kts).
         Text("${BuildConfig.APP_NAME} ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-        Text(updates.progress ?: (if (updates.checking) "正在检查…" else null) ?: newer?.let { "更新到 ${it.versionName}" } ?: "检查更新", fontSize = 15.sp, color = if (newer != null && !busy) C.accent else C.muted)
+        Text(updates.progress ?: (if (updates.checking) t("android-settings.version.checking") else null) ?: newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: t("android-settings.version.check"), fontSize = 15.sp, color = if (newer != null && !busy) C.accent else C.muted)
     }
 }
 
-/** How this device shows still.fail: its theme. */
+/** How this device shows still.fail: its theme, and the language it speaks. */
 @Composable
 fun AppearanceScreen() {
     val app = LocalApp.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop)
-        LargeTitle("", "外观")
-        SectionHeader("主题", start = 24.dp)
-        Seg(THEMES.map { it.second }, THEMES.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(THEMES[it].first) },
+        TopBack(t("android-settings.title"), app::pop)
+        LargeTitle("", t("android-settings.appearance.title"))
+        SectionHeader(t("android-settings.appearance.theme"), start = 24.dp)
+        val themes = themes()
+        Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+        Language()
         Spacer(Modifier.height(30.dp))
     }
+}
+
+/**
+ * The language things are said in: the phone's (the default), Chinese or English, as the core keeps it (prefs
+ * `language`); the core's `lang` then changes the app's words (ui/I18n.kt).
+ */
+@Composable
+private fun Language() {
+    val app = LocalApp.current
+    // Chosen and not in the core's prefs yet: shown meanwhile; refused, back as it was, and said.
+    var chosen by remember(app.kept.language) { mutableStateOf(app.kept.language) }
+    val languages = languages()
+    SectionHeader(t("common.language"), start = 24.dp)
+    Seg(languages.map { it.second }, languages.indexOfFirst { it.first == chosen }.coerceAtLeast(0), { i ->
+        val value = languages[i].first
+        if (value != chosen) {
+            chosen = value
+            app.scope.launch {
+                try { app.core.call("prefs.set", buildJsonObject { put("language", value) }) }
+                catch (e: CoreException) { chosen = app.kept.language; app.toast = t("android-settings.language.failed", "error" to errorText(e)) }
+            }
+        }
+    }, Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
 }

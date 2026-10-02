@@ -74,6 +74,7 @@ import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -105,33 +106,19 @@ internal class SlackAppSettings(
 internal class SlackAppView(val state: String, val appId: String? = null, val links: SlackAppLinksView? = null, val settings: SlackAppSettings? = null, val error: String? = null)
 
 /** Permission groups in plain words (web/src/pages/SlackApp.tsx → GROUPS; the station's SLACK_GROUPS), in their order. */
-internal val SLACK_GROUP_WORDS = listOf(
-    "base" to ("读取和回复消息" to "被 @ 时收到消息，读取所在频道、私信和群聊的消息并回复。必须开启。"),
-    "public" to ("在没加入的公开频道发言" to "不用先邀请，也能在公开频道回复。"),
-    "dm" to ("主动发私信" to "给人或多人开启私信对话。"),
-    "customize" to ("用别的名字和头像发消息" to "每条消息可以换显示名和头像。"),
-    "files" to ("读写文件" to "读取消息里的附件，上传截图、日志等文件。"),
-    "reactions" to ("表情回应、置顶和书签" to "用表情标记进度，置顶消息，管理频道书签。"),
-    "channels" to ("创建和管理频道" to "建频道、邀请成员，知道有人加入或新建频道。"),
-    "people" to ("查看成员资料" to "读取邮箱、个人资料、用户组、工作区信息和自定义表情。"),
-    "extras" to ("链接预览、提醒和状态" to "展开链接、设置提醒、读取勿扰和通话状态。"),
-    "canvases" to ("读写 canvas" to "新建、编辑和读取 canvas 文档，比如把方案、报告写成频道里的 canvas。"),
-    "lists" to ("读写列表" to "新建、编辑和读取 Slack 列表（Lists），比如维护任务清单。"),
-    "topics" to ("改频道话题和邀请成员" to "设置频道和私信的话题、用途，把人邀请进频道。"),
-    "usergroups" to ("管理用户组和发起通话" to "建用户组、改成员，发起和更新 Slack 通话。"),
-    "search" to ("搜索消息、文件和成员" to "在公开频道里搜消息和文件、按名字找人，回答问题时自己找上下文。"),
-    "connect" to ("Slack Connect 跨组织频道" to "查看、发出和接受和别的公司共享频道的邀请。"),
-    "more" to ("状态、元数据和斜杠命令" to "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。"),
-)
+internal val SLACK_GROUP_WORDS: List<Pair<String, Pair<String, String>>>
+    get() = listOf("base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras", "canvases", "lists", "topics", "usergroups", "search", "connect", "more")
+        .map { it to (t("android-settings.slack.group.$it") to t("android-settings.slack.group.$it.note")) }
 
 /** The groups in sections, as the form shows them (web/src/pages/SlackApp.tsx → SECTIONS). */
-internal val SLACK_SECTIONS = listOf(
-    "消息" to listOf("base", "public", "dm", "customize", "reactions"),
-    "频道和群" to listOf("channels", "topics", "connect"),
-    "文件和文档" to listOf("files", "canvases", "lists"),
-    "成员和搜索" to listOf("people", "usergroups", "search"),
-    "其他" to listOf("extras", "more"),
-)
+internal val SLACK_SECTIONS
+    get() = listOf(
+        t("android-settings.slack.section.messages") to listOf("base", "public", "dm", "customize", "reactions"),
+        t("android-settings.slack.section.channels") to listOf("channels", "topics", "connect"),
+        t("android-settings.slack.section.files") to listOf("files", "canvases", "lists"),
+        t("android-settings.slack.section.people") to listOf("people", "usergroups", "search"),
+        t("android-settings.slack.section.other") to listOf("extras", "more"),
+    )
 
 /** A Slack app's settings being edited: what its form shows, and what it started as. */
 internal class AppDraft(start: SlackAppSettings, private val onEdit: (JsonObject) -> Unit = {}) {
@@ -186,13 +173,13 @@ private suspend fun buddies(core: fail.still.core.StillFailCore): List<AppAvatar
 } catch (_: CoreException) { emptyList() }
 
 /** The model makers' marks, each on its own colour. */
-private val MAKER_AVATARS = listOf(
+private val MAKER_AVATARS get() = listOf(
     AppAvatar("anthropic", "Anthropic", "#D97757", R.drawable.maker_anthropic, mono = true),
     AppAvatar("openai", "OpenAI", "#0D0D0D", R.drawable.maker_openai, mono = true),
     AppAvatar("gemini", "Gemini", "#FFFFFF", R.drawable.maker_gemini),
     AppAvatar("deepseek", "DeepSeek", "#FFFFFF", R.drawable.maker_deepseek),
     AppAvatar("qwen", "Qwen", "#FFFFFF", R.drawable.maker_qwen),
-    AppAvatar("zhipu", "智谱", "#FFFFFF", R.drawable.maker_zhipu),
+    AppAvatar("zhipu", t("android-settings.slack.zhipu"), "#FFFFFF", R.drawable.maker_zhipu),
     AppAvatar("kimi", "Kimi", "#0D0D0D", R.drawable.maker_kimi, mono = true),
     AppAvatar("minimax", "MiniMax", "#FFFFFF", R.drawable.maker_minimax),
     AppAvatar("xai", "xAI", "#0D0D0D", R.drawable.maker_xai, mono = true),
@@ -292,7 +279,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
     val recommended = picked?.bg ?: uploadBg
     val draw = { a: AppAvatar?, bg: String ->
         if (a != null) scope.launch {
-            try { val b = renderAvatar(context, a, bg); onIcon(IconPick(b.asImageBitmap(), dataUrl(b)), null) } catch (_: Exception) { onIcon(null, "画不出这个头像") }
+            try { val b = renderAvatar(context, a, bg); onIcon(IconPick(b.asImageBitmap(), dataUrl(b)), null) } catch (_: Exception) { onIcon(null, t("android-settings.slack.drawFailed")) }
         }
     }
     val pick = { a: AppAvatar ->
@@ -311,7 +298,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
     val upload = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
             val b = try { toIcon(context, uri) } catch (_: Exception) { null }
-            if (b == null) onIcon(null, "读不了这张图片")
+            if (b == null) onIcon(null, t("android-settings.slack.imageFailed"))
             else {
                 val bg = edgeColour(b)
                 picked = null; uploadBg = bg
@@ -322,27 +309,27 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
     }
     val openPicker = { upload.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        FormLabel("头像")
+        FormLabel(t("android-settings.slack.icon"))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(Color(parseColor(draft.color, C.chip.toArgbInt()))).clickable { openPicker() }, contentAlignment = Alignment.Center) {
-                if (icon != null) Image(icon.bitmap, "头像", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                if (icon != null) Image(icon.bitmap, t("android-settings.slack.icon"), Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconIn(Icons.ImageUpload, 20.dp, C.muted)
-                    Text(if (fresh) "上传" else "保持现在的", fontSize = 11.sp, color = C.muted)
+                    Text(if (fresh) t("android-settings.slack.upload") else t("android-settings.slack.keep"), fontSize = 11.sp, color = C.muted)
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("在下面挑一个，或者上传一张图片。", fontSize = 13.sp, color = C.muted)
-                Text("上传图片", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openPicker() })
+                Text(t("android-settings.slack.iconNote"), fontSize = 13.sp, color = C.muted)
+                Text(t("android-settings.slack.uploadImage"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openPicker() })
             }
         }
         AvatarGrid(buddyList + MAKER_AVATARS, picked?.id) { pick(it) }
-        FormLabel("底色")
+        FormLabel(t("android-settings.slack.background"))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(parseColor(draft.color))))
             Field(draft.color, { colour(it.trim().uppercase(), true) }, "#RRGGBB", mono = true, modifier = Modifier.weight(1f))
             if (recommended != null && colourSet && !recommended.equals(draft.color, ignoreCase = true)) {
-                Text("用推荐色", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { colour(recommended, false) })
+                Text(t("android-settings.slack.recommended"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { colour(recommended, false) })
             }
         }
     }
@@ -405,9 +392,9 @@ fun SlackAppScreen(station: String, connect: String) {
     val approve = remember(station, connect) { mutableStateOf(false) }
     val iconError = remember(station, connect) { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
-        NavBar(if (adding) "Slack app" else "连接", { if (adding) adding = false else app.pop() }, if (adding) "添加配置 token" else "Slack app", sub = { Text("名字、头像和权限", fontSize = 11.sp, color = C.muted) })
+        NavBar(if (adding) "Slack app" else t("android-settings.connects.title"), { if (adding) adding = false else app.pop() }, if (adding) t("android-settings.slack.addToken") else "Slack app", sub = { Text(t("android-settings.slack.sub"), fontSize = 11.sp, color = C.muted) })
         androidx.activity.compose.BackHandler(enabled = adding) { adding = false }
-        if (view == null) return Loading(topic.error?.message ?: "正在读取 Slack 上的配置…")
+        if (view == null) return Loading(topic.error?.message ?: t("android-settings.slack.reading"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (adding) {
                 ConfigTokenSteps(station) { adding = false }
@@ -415,14 +402,14 @@ fun SlackAppScreen(station: String, connect: String) {
             }
             val settings = view.settings
             when {
-                view.state == "no_app" -> Text(view.error?.let { "找不到这个连接的 Slack app（$it）。换上有效的 token 后再来。" } ?: "连上 Slack 之后，就可以在这里修改它的 app。", fontSize = 14.sp, color = C.muted)
+                view.state == "no_app" -> Text(view.error?.let { t("android-settings.slack.noApp", "error" to it) } ?: t("android-settings.slack.notConnected"), fontSize = 14.sp, color = C.muted)
                 view.state == "no_config_token" -> {
-                    Text("要在这里改 app，需要你在这个 Slack 工作区的 App 配置 token。它只归你用，这台 station 上的其他人看不到。", fontSize = 14.sp, color = C.muted)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("添加配置 token", primary = true) { adding = true } }
+                    Text(t("android-settings.slack.needToken"), fontSize = 14.sp, color = C.muted)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.slack.addToken"), primary = true) { adding = true } }
                 }
                 view.state == "error" || settings == null -> {
-                    Text("读不到 app 配置：${view.error ?: ""}", fontSize = 14.sp, color = C.red)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("换一个配置 token", primary = false) { adding = true } }
+                    Text(t("android-settings.slack.readFailed", "error" to (view.error ?: "")), fontSize = 14.sp, color = C.red)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.slack.changeToken"), primary = false) { adding = true } }
                 }
                 // Keyed by what Slack has: a change there (or a write from here) starts the form again from it.
                 else -> androidx.compose.runtime.key(StillFailJson.encodeToString(SlackAppSettings.serializer(), settings)) {
@@ -430,7 +417,7 @@ fun SlackAppScreen(station: String, connect: String) {
                 }
             }
             view.links?.settings?.takeIf { it.isNotEmpty() }?.let { url ->
-                Text("在 Slack 打开这个 app", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(url) }.padding(vertical = 4.dp))
+                Text(t("android-settings.slack.open"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(url) }.padding(vertical = 4.dp))
             }
         }
     }
@@ -455,22 +442,22 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconIn(Icons.ShieldCheck, 16.dp, C.blue)
-            Text("权限变了，Slack 需要你同意一次才会生效。", fontSize = 13.sp, color = C.ink, modifier = Modifier.weight(1f))
+            Text(t("android-settings.slack.approveNote"), fontSize = 13.sp, color = C.ink, modifier = Modifier.weight(1f))
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("去 Slack 同意", primary = true) { approve = false; open(links.install) } }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.slack.approve"), primary = true) { approve = false; open(links.install) } }
     }
-    FormLabel("名字")
-    Field(draft.name, { draft.name = it }, "名字")
-    FormLabel("简介")
-    Field(draft.description, { draft.description = it.take(140) }, "简介，显示在 app 资料卡上")
+    FormLabel(t("android-settings.slack.name"))
+    Field(draft.name, { draft.name = it }, t("android-settings.slack.name"))
+    FormLabel(t("android-settings.slack.description"))
+    Field(draft.description, { draft.description = it.take(140) }, t("android-settings.slack.descriptionPlaceholder"))
     AppLook(draft, icon, { i, e -> icon = i; iconError = e }, fresh = false)
     iconError?.let { Text(it, fontSize = 13.sp, color = C.red) }
     // Permissions, folded: changed now and then.
     val on = draft.groups.count { it.value }
     Row(Modifier.fillMaxWidth().clickable { perms = !perms }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         IconIn(if (perms) Icons.ChevronDown else Icons.ChevronRight, 14.dp, C.muted)
-        Text("权限 · 开了 $on / ${SLACK_GROUP_WORDS.size} 项", fontSize = 14.sp, color = C.muted, modifier = Modifier.weight(1f))
-        if (on < SLACK_GROUP_WORDS.size) Text("全部打开", fontSize = 14.sp, color = C.accent,
+        Text(t("android-settings.slack.perms", "on" to on, "n" to SLACK_GROUP_WORDS.size), fontSize = 14.sp, color = C.muted, modifier = Modifier.weight(1f))
+        if (on < SLACK_GROUP_WORDS.size) Text(t("android-settings.slack.allOn"), fontSize = 14.sp, color = C.accent,
             modifier = Modifier.clickable { draft.groups = SLACK_GROUP_WORDS.associate { (g, _) -> g to true } })
     }
     val words = SLACK_GROUP_WORDS.toMap()
@@ -479,7 +466,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
         val all = groups.all { draft.groups[it] == true }
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, fontSize = 13.sp, color = C.muted)
-            Text(if (all) "全不选" else "全选", fontSize = 13.sp, color = C.accent,
+            Text(if (all) t("android-settings.none") else t("android-settings.all"), fontSize = 13.sp, color = C.accent,
                 modifier = Modifier.clickable { draft.groups = draft.groups + groups.associateWith { it == "base" || !all } })
         }
         groups.forEach { g ->
@@ -500,11 +487,11 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     }
     error?.let { Text(it, fontSize = 13.sp, color = C.red) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-        if (dirty) Button("还原", primary = false) {
+        if (dirty) Button(t("android-settings.slack.revert"), primary = false) {
             draft.name = settings.name; draft.description = settings.description; draft.color = settings.backgroundColor
             draft.groups = SLACK_GROUP_WORDS.associate { (g, _) -> g to (settings.groups[g] ?: false) }; icon = null
         }
-        Button("应用到 Slack", primary = true, busy = busy, enabled = dirty) {
+        Button(t("android-settings.slack.apply"), primary = true, busy = busy, enabled = dirty) {
             error = null
             val body = buildJsonObject { changes.forEach { (k, v) -> put(k, v) }; icon?.let { put("icon", it.data) } }
             scope.launch {
@@ -516,7 +503,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
                     approve = updated
                     // Changed permissions are approved in Slack: its page opens at once (the notice stays, to go back to it).
                     if (updated && links != null) open(links.install)
-                    app.toast = if (updated) "已更新，在 Slack 同意新权限后生效" else "已更新 Slack app"
+                    app.toast = if (updated) t("android-settings.slack.updatedApprove") else t("android-settings.slack.updated")
                 } catch (e: CoreException) { error = e.message }
             }
         }
@@ -536,20 +523,20 @@ internal fun ConfigTokenSteps(station: String, flow: ConnectFlow? = null, onSave
     val busy = flow?.busy ?: app.isDoing("slack.addConfigToken", "station" to station)
     var error by remember { mutableStateOf<String?>(null) }
     Steps(listOf(
-        "打开 api.slack.com/apps，用要放 bot 的那个 Slack 工作区的账号登录。" to { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://api.slack.com/apps"))) },
-        "拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。" to null,
-        "把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。${BuildConfig.APP_NAME} 会自己续期，以后不用再管。" to null,
+        t("android-settings.slack.step1") to { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://api.slack.com/apps"))) },
+        t("android-settings.slack.step2") to null,
+        t("android-settings.slack.step3", "app" to BuildConfig.APP_NAME) to null,
     ))
     SecretField(config, { config = it; flow?.edit { put("config", it) } }, "xoxe-1-…")
     if (flow != null) flow.view?.configError?.let { Text(it, fontSize = 13.sp, color = C.red) }
-    else if (config.startsWith("xoxe.xoxp-")) Text("这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
-    else if (config.isNotEmpty() && !config.startsWith("xoxe-")) Text("Refresh Token 以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
+    else if (config.startsWith("xoxe.xoxp-")) Text(t("android-settings.slack.accessToken"), fontSize = 13.sp, color = C.red)
+    else if (config.isNotEmpty() && !config.startsWith("xoxe-")) Text(t("android-settings.slack.refreshToken"), fontSize = 13.sp, color = C.red)
     error?.let { Text(it, fontSize = 13.sp, color = C.red) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Button("加上", primary = true, busy = busy, enabled = flow?.view?.configReady ?: (config.startsWith("xoxe-1-") && config.length > 20)) {
+        Button(t("android-settings.slack.add"), primary = true, busy = busy, enabled = flow?.view?.configReady ?: (config.startsWith("xoxe-1-") && config.length > 20)) {
             if (flow != null) { flow.act("config"); return@Button }; error = null
             scope.launch {
-                try { val team = app.api(station).addConfigToken(config); config = ""; app.toast = "已加上配置 token"; onSaved(team) }
+                try { val team = app.api(station).addConfigToken(config); config = ""; app.toast = t("android-settings.slack.added"); onSaved(team) }
                 catch (e: CoreException) { error = e.message }
             }
         }

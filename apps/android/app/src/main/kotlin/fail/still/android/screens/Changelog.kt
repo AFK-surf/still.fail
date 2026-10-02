@@ -53,6 +53,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
@@ -71,15 +72,15 @@ fun ChangelogScreen() {
     val news = view?.news != null
     LaunchedEffect(news) { if (news) seen(app) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop)
-        LargeTitle(view?.build?.let { "这个 app 是 0.1.$it" } ?: "", "更新日志")
+        TopBack(t("android-settings.title"), app::pop)
+        LargeTitle(view?.build?.let { t("android-settings.changelog.build", "build" to it) } ?: "", t("android-settings.changelog.title"))
         when {
             view == null || view.loading == true -> Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Spinner(13.dp)
-                Text("正在读取…", fontSize = 14.sp, color = C.muted)
+                Text(t("android-settings.reading"), fontSize = 14.sp, color = C.muted)
             }
             view.error != null -> Text(view.error, fontSize = 14.sp, color = C.red, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            view.days.isEmpty() -> Text("还没有更新记录", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            view.days.isEmpty() -> Text(t("android-settings.changelog.empty"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             else -> view.days.forEach { day ->
                 SectionHeader(day.label, start = 24.dp)
                 ListCard { day.entries.forEach { Change(it) } }
@@ -118,12 +119,12 @@ fun ChangelogNews() {
         Column(Modifier.fillMaxWidth().clickable { app.push(Screen.Changelog) }.padding(start = 16.dp, end = 44.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(Modifier.padding(bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 IconIn(Icons.Sparks, 16.dp, C.ink)
-                Text("已更新" + (news.build?.let { "到 $it" } ?: ""), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text(news.build?.let { t("android-settings.changelog.updatedTo", "build" to it) } ?: t("android-settings.changelog.updated"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             }
             lines.take(3).forEach { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            if (lines.size > 3) Text("还有 ${lines.size - 3} 项", fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
+            if (lines.size > 3) Text(t("android-settings.changelog.more", "n" to lines.size - 3), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
         }
-        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).clickable { gone = news; app.scope.launch { seen(app) } }.semantics { contentDescription = "知道了" }, contentAlignment = Alignment.Center) {
+        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).clickable { gone = news; app.scope.launch { seen(app) } }.semantics { contentDescription = t("android-settings.changelog.dismiss") }, contentAlignment = Alignment.Center) {
             IconIn(Icons.Close, 16.dp, C.muted)
         }
     }

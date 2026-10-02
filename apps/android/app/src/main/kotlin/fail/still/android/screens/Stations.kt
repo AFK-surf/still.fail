@@ -71,6 +71,7 @@ import fail.still.android.ui.NavButton
 import fail.still.android.ui.MeterChips
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SlackMark
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 
@@ -105,12 +106,12 @@ fun StationsScreen(current: WorkspaceEntry) {
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(ws.id))
     val list = stations.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop, trailing = if (list != null && list.isNotEmpty() && isManager(current)) ({ NavButton(Icons.Plus, { openAddStation(app, current, list.map { it.id }) }, 20.dp) }) else null)
+        TopBack(t("android-settings.title"), app::pop, trailing = if (list != null && list.isNotEmpty() && isManager(current)) ({ NavButton(Icons.Plus, { openAddStation(app, current, list.map { it.id }) }, 20.dp) }) else null)
         // No station yet: adding the first one is the page.
         if (list != null && list.isEmpty()) { FirstStation(current); return@Column }
-        LargeTitle(if (list != null) "${ws.name} · ${list.count { it.online }}/${list.size} 在线" else ws.name, "Station")
+        LargeTitle(if (list != null) t("android-settings.stations.online", "name" to ws.name, "online" to list.count { it.online }, "total" to list.size) else ws.name, "Station")
         if (list == null) {
-            Text(stations.error?.message ?: "正在读取 station…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+            Text(stations.error?.message ?: t("android-settings.stations.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
         } else {
             list.forEach { s ->
                 Card(onClick = { app.push(Screen.Station(s.station)) }) {
@@ -129,7 +130,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                     } else if (!s.online) {
                         Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                            Text("这台机器很久没联系 ${BuildConfig.APP_NAME} 了", fontSize = 13.sp, color = C.muted)
+                            Text(t("android-settings.stations.silent", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
                         }
                     }
                 }
@@ -150,7 +151,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
             { Text(st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
-        if (s == null) return Loading(stations.error?.message ?: "正在读取…")
+        if (s == null) return Loading(stations.error?.message ?: t("android-settings.reading"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             val host = s.host
             if (s.online && host != null) {
@@ -164,7 +165,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 Card {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                        Text("离线：在这台机器上打开 ${BuildConfig.APP_NAME} 就会重新连上", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
+                        Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
                         RetryPill(Modifier.padding(top = 6.dp))
                     }
                 }
@@ -172,7 +173,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             val overview = s.overview
             if (overview != null) {
                 // What runs on it is in settings' lists, every station's together; here, how much of it there is.
-                SectionHeader("在这台上", start = 24.dp)
+                SectionHeader(t("android-settings.stations.onIt"), start = 24.dp)
                 ListCard {
                     GoRow("连接", "${overview.connects.size} 个") { app.push(Screen.Connects(address)) }
                     GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles(address)) }
@@ -208,7 +209,7 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
             }
             net.rtt?.let { rtt ->
                 Row {
-                    Text("当前延时 ", Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1)
+                    Text(t("android-settings.stations.rtt"), Modifier.alignByBaseline(), fontSize = 13.sp, color = C.muted, maxLines = 1)
                     Text(rtt.text, Modifier.alignByBaseline(), style = figure, color = tone(rtt), maxLines = 1)
                 }
             }
@@ -218,7 +219,7 @@ internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(arrow, fontSize = 13.sp, color = C.muted)
                     Text(rate, Modifier.padding(start = 5.dp).width(68.dp), style = figure, color = C.ink, maxLines = 1)
-                    total?.let { Text("共 $it", Modifier.width(60.dp), style = figure.copy(fontWeight = FontWeight.Normal), color = C.muted, maxLines = 1) }
+                    total?.let { Text(t("android-settings.stations.total", "total" to it), Modifier.width(60.dp), style = figure.copy(fontWeight = FontWeight.Normal), color = C.muted, maxLines = 1) }
                 }
             }
         }

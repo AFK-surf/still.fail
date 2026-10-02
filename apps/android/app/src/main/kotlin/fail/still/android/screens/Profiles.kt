@@ -83,6 +83,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
+import fail.still.android.ui.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
@@ -120,21 +121,21 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
     val one = if (only != null) stations?.firstOrNull() else null
     val online = stations.orEmpty().filter { it.online }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack(one?.name ?: "设置", app::pop, trailing = if (online.isNotEmpty()) ({
+        TopBack(one?.name ?: t("android-settings.title"), app::pop, trailing = if (online.isNotEmpty()) ({
             NavButton(Icons.Plus, {
                 if (online.size == 1) app.push(Screen.NewProfile(online[0].station))
-                else openPickStation(app, "添加 Profile", online) { app.push(Screen.NewProfile(it.station)) }
+                else openPickStation(app, t("android-settings.profile.add"), online) { app.push(Screen.NewProfile(it.station)) }
             }, 20.dp)
         }) else null)
-        LargeTitle(one?.let { "${it.name} 上的" } ?: "", "Profile")
-        PageNote("agent 跑模型用的账号。需查看的账号排在各 station 前面，点进去查看原因和处理办法。")
-        if (stations == null) Text(topic.error?.message ?: "正在读取 station…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        LargeTitle(one?.let { t("android-settings.connects.on", "name" to it.name) } ?: "", "Profile")
+        PageNote(t("android-settings.profiles.note"))
+        if (stations == null) Text(topic.error?.message ?: t("android-settings.stations.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else stations.forEach { s ->
-            if (one == null) SectionHeader(if (s.online) s.name else "${s.name} · 离线", start = 24.dp)
+            if (one == null) SectionHeader(if (s.online) s.name else t("android-settings.connects.offline", "name" to s.name), start = 24.dp)
             val overview = s.overview
             ListCard {
-                if (overview == null) ListRow { Text(if (s.online) "正在读取…" else "station 离线，读不到它的 Profile", fontSize = 15.sp, color = C.muted) }
-                else if (overview.profiles.isEmpty()) ListRow { Text("这台机器还没有 Profile", fontSize = 15.sp, color = C.muted) }
+                if (overview == null) ListRow { Text(if (s.online) t("android-settings.reading") else t("android-settings.profiles.stationOffline"), fontSize = 15.sp, color = C.muted) }
+                else if (overview.profiles.isEmpty()) ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
                 else overview.profiles.forEach { ProfileRow(s.station, it) }
             }
             // The machine's own logins not used yet, each offered as a profile.
@@ -150,7 +151,7 @@ fun openPickStation(app: AppState, title: String, stations: List<StationView>, g
         SheetGrab()
         SheetHead(title)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            Text("加在哪台 station 上", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+            Text(t("android-settings.pickStation"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
             stations.forEach { s -> PickRow(s.name) { app.sheet = null; go(s) } }
         }
     }
@@ -170,11 +171,11 @@ internal fun ProfileRow(station: String, p: Profile) {
                 PresenceDot(toneDot(p.checkTone))
                 Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(listOf(p.checkText, if (p.machine == true) "本机登录" else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
+            Text(listOf(p.checkText, if (p.machine == true) t("android-settings.profile.machine") else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (p.trouble != null) {
                 Text("${p.trouble.title} · ${p.trouble.detail}", fontSize = 13.sp, color = C.muted)
-                Text("查看处理办法", fontSize = 13.sp, color = C.accent)
+                Text(t("android-settings.profile.seeFix"), fontSize = 13.sp, color = C.accent)
             } else trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
         val calls = setOf("profile.check", "profile.quota")
@@ -192,18 +193,18 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
     val p = s?.overview?.profiles?.firstOrNull { it.id == id }
     if (s == null || p == null) return Column(Modifier.fillMaxSize()) {
         NavBar(s?.name ?: "Station", app::pop, "Profile")
-        Loading(stations.error?.message ?: if (s?.overview != null) "没有这个 Profile。" else "正在读取…")
+        Loading(stations.error?.message ?: if (s?.overview != null) t("android-settings.profile.none") else t("android-settings.reading"))
     }
     val api = app.api(address)
     val setModels = { models: List<String> ->
-        app.act("保存模型") { api.setModels(p.id, models) }
+        app.act(t("android-settings.profile.saveModels")) { api.setModels(p.id, models) }
     }
     // The switch flipped and not answered yet: shown flipped, with a spinner.
     var flipping by remember { mutableStateOf<Boolean?>(null) }
     val users = p.usedBy.mapNotNull { u -> s.overview?.connects?.firstOrNull { it.id == u } }
     val kind = p.access.kind
     Column(Modifier.fillMaxSize()) {
-        NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) "本机登录" else ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
+        NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) t("android-settings.profile.machine") else ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
             trailing = { NavButton(Icons.More, { openProfileMenu(app, address, p) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             Card {
@@ -213,11 +214,11 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TonePill(p.checkText, p.checkTone)
                             // Its check or allowance refresh (asked from its menu, gone) failed a moment ago: a red mark, a tap says why.
-                            if (app.isDoing("profile.check", "station" to address, "id" to p.id)) { Spinner(12.dp); Text("正在检查…", fontSize = 12.sp, color = C.muted) }
+                            if (app.isDoing("profile.check", "station" to address, "id" to p.id)) { Spinner(12.dp); Text(t("android-settings.version.checking"), fontSize = 12.sp, color = C.muted) }
                             else DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id), 12.dp)
                         }
                         Text(
-                            (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: "还没检查过") + (p.check?.time?.get("checkedAt")?.let { " · ${it.ago}检查" } ?: ""),
+                            (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: t("android-settings.profile.notChecked")) + (p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) } ?: ""),
                             fontSize = 13.sp, color = C.muted,
                         )
                     }
@@ -228,12 +229,12 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             if (p.trouble?.action != "quota") QuotaSection(address, p)
             if (p.fast != null) {
                 val busy = app.isDoing("profile.put", "station" to address, "id" to p.id)
-                SectionHeader("运行", start = 24.dp)
+                SectionHeader(t("android-settings.profile.run"), start = 24.dp)
                 ListCard {
-                    ListRow(onClick = if (busy) null else ({ app.act("保存 Fast", if (p.fast) "已关闭默认 Fast" else "已打开默认 Fast") { api.putProfile(p.id, buildJsonObject { put("fast", !p.fast) }) } })) {
+                    ListRow(onClick = if (busy) null else ({ app.act(t("android-settings.profile.saveFast"), if (p.fast) t("android-settings.profile.fastOff") else t("android-settings.profile.fastOn")) { api.putProfile(p.id, buildJsonObject { put("fast", !p.fast) }) } })) {
                         Column(Modifier.weight(1f)) {
-                            Text("默认 Fast", fontSize = 15.sp, color = C.ink)
-                            Text("跟随订阅的会话使用此设置；Fast 消耗更多额度或积分", fontSize = 13.sp, color = C.muted)
+                            Text(t("android-settings.profile.fast"), fontSize = 15.sp, color = C.ink)
+                            Text(t("android-settings.profile.fastNote"), fontSize = 13.sp, color = C.muted)
                         }
                         DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id), 14.dp)
                         Switch(p.fast)
@@ -244,63 +245,63 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             // A station older than the setting says nothing of it.
             val background = flipping ?: p.backgroundOnMessage
             if ("claude" in p.runtimes && background != null) {
-                SectionHeader("运行", start = 24.dp)
+                SectionHeader(t("android-settings.profile.run"), start = 24.dp)
                 ListCard {
                     ListRow(onClick = if (flipping != null) null else ({
                         flipping = !background
                         app.scope.launch {
-                            try { api.putProfile(p.id, buildJsonObject { put("backgroundOnMessage", !background) }); app.toast = if (background) "已关闭" else "已打开" }
-                            catch (e: CoreException) { app.toast = "没能保存：${errorText(e)}" }
+                            try { api.putProfile(p.id, buildJsonObject { put("backgroundOnMessage", !background) }); app.toast = if (background) t("android-settings.profile.turnedOff") else t("android-settings.profile.turnedOn") }
+                            catch (e: CoreException) { app.toast = t("android-settings.run.saveFailed", "error" to errorText(e)) }
                             finally { flipping = null }
                         }
                     })) {
                         Column(Modifier.weight(1f)) {
-                            Text("新消息到来时，把正在执行的命令转到后台", fontSize = 15.sp, color = C.ink)
-                            Text(if (background) "命令和 subagent 转到后台继续跑，agent 马上读到消息。" else "新消息要等正在执行的命令或 subagent 结束后才会读到。", fontSize = 13.sp, color = C.muted)
+                            Text(t("android-settings.profile.background"), fontSize = 15.sp, color = C.ink)
+                            Text(if (background) t("android-settings.profile.backgroundOn") else t("android-settings.profile.backgroundOff"), fontSize = 13.sp, color = C.muted)
                         }
                         if (flipping != null) Spinner(14.dp)
                         Switch(background)
                     }
                 }
             }
-            SectionHeader("使用它的连接", start = 24.dp)
+            SectionHeader(t("android-settings.profile.users"), start = 24.dp)
             ListCard {
-                if (users.isEmpty()) ListRow { Text("还没有连接使用这个 Profile。", fontSize = 15.sp, color = C.muted) }
+                if (users.isEmpty()) ListRow { Text(t("android-settings.profile.noUsers"), fontSize = 15.sp, color = C.muted) }
                 users.forEach { c ->
                     ListRow(onClick = { app.push(Screen.Connect(address, c.id)) }) {
                         SlackMark(15.dp)
                         Text(c.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(c.modelName ?: p.model?.let { p.names[it] ?: it } ?: "默认模型", fontSize = 13.sp, color = C.muted)
+                        Text(c.modelName ?: p.model?.let { p.names[it] ?: it } ?: t("android-settings.profile.defaultModel"), fontSize = 13.sp, color = C.muted)
                     }
                 }
             }
             if (p.machine == true) {
                 // On the machine's own login: whose it is is changed on that machine, not here.
                 val runtime = MACHINE_RUNTIME[p.runtime] ?: p.runtime
-                SectionHeader("账号", start = 24.dp)
+                SectionHeader(t("android-settings.run.account"), start = 24.dp)
                 Card {
-                    Text("${s.name} 上 $runtime 的登录", fontSize = 15.sp, color = C.ink)
-                    Text("要换号、重新登录或登出，在这台机器的 $runtime 里做，这个 Profile 跟着它变；不想用了就停用（右上角菜单）。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+                    Text(t("android-settings.profile.machineLogin", "station" to s.name, "runtime" to runtime), fontSize = 15.sp, color = C.ink)
+                    Text(t("android-settings.profile.machineNote", "runtime" to runtime), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
                 }
             } else if (kind in KEYED) {
                 val name = if (kind == "opencode-go") "OpenCode Go key" else "API key"
-                SectionHeader("账号", start = 24.dp)
+                SectionHeader(t("android-settings.run.account"), start = 24.dp)
                 ListCard {
                     ListRow(onClick = {
-                        ask(app, if (kind == "opencode-go") "新的 OpenCode Go key" else "新的 API key", "", "粘贴 key", "保存", secret = true, hint = "保存后会重新检查。") { key ->
-                            api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("key", key) } }); app.toast = "已保存，正在检查"
+                        ask(app, if (kind == "opencode-go") t("android-settings.profile.newGoKey") else t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHint")) { key ->
+                            api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("key", key) } }); app.toast = t("android-settings.profile.savedChecking")
                         }
                     }) {
                         Column(Modifier.weight(1f)) {
                             Text(name, fontSize = 15.sp, color = C.ink)
-                            Text(p.access.key.ifEmpty { "没有保存" }, fontSize = 13.sp, color = C.muted, fontFamily = FontFamily.Monospace)
+                            Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = FontFamily.Monospace)
                         }
-                        Text("更换", fontSize = 14.sp, color = C.accent)
+                        Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
                     }
                 }
             }
             if (kind == "env") {
-                SectionHeader("环境变量", start = 24.dp)
+                SectionHeader(t("android-settings.env.title"), start = 24.dp)
                 ListCard {
                     p.env.forEach { e ->
                         ListRow {
@@ -310,7 +311,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             }
                         }
                     }
-                    ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) } }) { Text("编辑变量", fontSize = 15.sp, color = C.accent) }
+                    ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) } }) { Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent) }
                 }
             }
             Spacer(Modifier.height(30.dp))
@@ -332,20 +333,20 @@ private fun ProfileRecovery(station: StationView, p: Profile) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(issue.detail, fontSize = 13.sp, color = C.ink)
             Text(issue.next, fontSize = 13.sp, color = C.muted)
-            if (!station.online) Text("${station.name} 已离线，恢复连接后才能操作", fontSize = 13.sp, color = C.muted)
+            if (!station.online) Text(t("android-settings.profile.offline", "name" to station.name), fontSize = 13.sp, color = C.muted)
             if (issue.action == "command") CommandBox(p.loginCommand)
             if (issue.action != "login") Button(issue.label, primary = false, enabled = station.online, busy = checking || refreshing) {
                 when (issue.action) {
-                    "key" -> ask(app, "新的 key", "", "粘贴 key", "保存", secret = true, hint = "保存后会重新检查") { key ->
+                    "key" -> ask(app, t("android-settings.profile.newKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHintShort")) { key ->
                         api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", p.access.kind); put("key", key) } })
                     }
                     "env" -> app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) }
-                    "quota" -> app.act("查询额度", "已更新额度") { api.refreshQuota(p.id) }
-                    else -> app.act("检查账号", "已检查") { api.checkProfile(p.id) }
+                    "quota" -> app.act(t("android-settings.quota.checkWhat"), t("android-settings.quota.updated")) { api.refreshQuota(p.id) }
+                    else -> app.act(t("android-settings.profile.checkWhat"), t("android-settings.profile.checked")) { api.checkProfile(p.id) }
                 }
             }
-            if (issue.action in setOf("key", "env")) Button("重新检查", primary = false, enabled = station.online, busy = checking) {
-                app.act("检查账号", "已检查") { api.checkProfile(p.id) }
+            if (issue.action in setOf("key", "env")) Button(t("android-settings.profile.recheck"), primary = false, enabled = station.online, busy = checking) {
+                app.act(t("android-settings.profile.checkWhat"), t("android-settings.profile.checked")) { api.checkProfile(p.id) }
             }
             DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id))
         }
@@ -362,16 +363,16 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
         SheetGrab()
         SheetHead(p.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            if (p.machine != true) PickRow("改名") { ask(app, "Profile 的名字", p.name, "名字", "保存") { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = "已改名" } }
-            PickRow("重新检查", busy = checking, failed = app.failedOf("profile.check", "station" to station, "id" to p.id)) { run("检查", "已检查") { api.checkProfile(p.id) } }
+            if (p.machine != true) PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.profile.nameTitle"), p.name, t("android-settings.station.name"), t("common.save")) { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = t("android-settings.renamed") } }
+            PickRow(t("android-settings.profile.recheck"), busy = checking, failed = app.failedOf("profile.check", "station" to station, "id" to p.id)) { run(t("android-settings.profile.checkShort"), t("android-settings.profile.checked")) { api.checkProfile(p.id) } }
             // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
             val machine = p.machine == true
-            PickRow((if (machine) "停用" else "删除 Profile") + if (p.usedBy.isNotEmpty()) "（还有连接在用）" else "", color = C.red, enabled = p.usedBy.isEmpty()) {
-                if (machine) confirm(app, "停用「${p.name}」？", "${BuildConfig.APP_NAME} 不再用这台机器上 ${MACHINE_RUNTIME[p.runtime] ?: p.runtime} 的登录；这台机器上的登录不受影响，之后可以再用。", "停用", danger = true) {
-                    api.deleteProfile(p.id); app.toast = "已停用"; app.pop()
+            PickRow((if (machine) t("android-settings.connect.disable") else t("android-settings.profile.delete")).let { if (p.usedBy.isNotEmpty()) t("android-settings.profile.inUse", "action" to it) else it }, color = C.red, enabled = p.usedBy.isEmpty()) {
+                if (machine) confirm(app, t("android-settings.profile.disableTitle", "name" to p.name), t("android-settings.profile.disableText", "app" to BuildConfig.APP_NAME, "runtime" to (MACHINE_RUNTIME[p.runtime] ?: p.runtime)), t("android-settings.connect.disable"), danger = true) {
+                    api.deleteProfile(p.id); app.toast = t("android-settings.profile.disabled"); app.pop()
                 }
-                else confirm(app, "删除「${p.name}」？", "只从 ${BuildConfig.APP_NAME} 的配置里移除；配置目录和里面的登录状态不会删除。", "删除 Profile", danger = true) {
-                    api.deleteProfile(p.id); app.toast = "已删除 Profile"; app.pop()
+                else confirm(app, t("android-settings.connect.deleteTitle", "name" to p.name), t("android-settings.profile.deleteText", "app" to BuildConfig.APP_NAME), t("android-settings.profile.delete"), danger = true) {
+                    api.deleteProfile(p.id); app.toast = t("android-settings.profile.deleted"); app.pop()
                 }
             }
         }
@@ -386,15 +387,15 @@ private fun QuotaSection(station: String, p: Profile) {
     val failed = app.failedOf("profile.quota", "station" to station, "id" to p.id)
     val windows = p.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     val trouble = quotaTrouble(p.quota)
-    val checked = if (refreshing) "正在刷新…" else p.quota?.time?.get("checkedAt")?.let { "${it.ago}查询" }
+    val checked = if (refreshing) t("android-settings.refreshing") else p.quota?.time?.get("checkedAt")?.let { t("android-settings.quota.checkedAt", "ago" to it.ago) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("额度", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Text(t("android-settings.quota.title"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Spacer(Modifier.weight(1f))
         Row(Modifier.clickable(enabled = !refreshing) {
-            app.act("查询额度", "已更新额度") { app.api(station).refreshQuota(p.id) }
+            app.act(t("android-settings.quota.checkWhat"), t("android-settings.quota.updated")) { app.api(station).refreshQuota(p.id) }
         }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DoingMark(refreshing, failed, 12.dp)
-            Text(if (refreshing) "正在查询…" else "查询额度", fontSize = 14.sp, color = if (refreshing) C.muted else C.accent)
+            Text(if (refreshing) t("android-settings.quota.checking") else t("android-settings.quota.check"), fontSize = 14.sp, color = if (refreshing) C.muted else C.accent)
         }
     }
     if (checked != null && !refreshing) Text(checked, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, bottom = 8.dp))
@@ -405,7 +406,7 @@ private fun QuotaSection(station: String, p: Profile) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         PresenceDot(if (blocked) "error" else "offline")
-                        Text(if (blocked) "被停用" else "查不到额度", fontSize = 15.sp, color = C.ink)
+                        Text(if (blocked) t("android-settings.quota.blocked") else t("android-settings.quota.unavailable"), fontSize = 15.sp, color = C.ink)
                     }
                     Text(trouble, fontSize = 13.sp, color = C.muted)
                 }
@@ -414,27 +415,27 @@ private fun QuotaSection(station: String, p: Profile) {
         return
     }
     if (windows.isEmpty() && p.quota?.creditsText == null && p.quota?.resetCount == null) {
-        Text(p.quota?.detail?.ifBlank { null } ?: "还没有额度信息", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp))
+        Text(p.quota?.detail?.ifBlank { null } ?: t("android-settings.quota.none"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp))
         return
     }
     val resetting = app.isDoing("profile.resetQuota", "station" to station, "id" to p.id)
     ListCard {
         if (windows.isNotEmpty()) QuotaDials(p.quota, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 14.dp))
         p.quota?.creditsText?.let { text -> ListRow {
-            Text("积分余额", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+            Text(t("android-settings.quota.credits"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
             Text(text, fontSize = 13.sp, color = C.muted)
         } }
         p.quota?.resetCount?.let { count -> ListRow(onClick = if (count <= 0 || resetting) null else ({
-            confirm(app, "重置额度？", "将使用「${p.name}」的 1 次额度重置，${p.quota.resetText}", "使用一次重置") {
-                app.api(station).resetQuota(p.id); app.toast = "已重置额度"
+            confirm(app, t("android-settings.quota.resetTitle"), t("android-settings.quota.resetText", "name" to p.name, "text" to p.quota.resetText), t("android-settings.quota.resetUse")) {
+                app.api(station).resetQuota(p.id); app.toast = t("android-settings.quota.resetDone")
             }
         })) {
             Column(Modifier.weight(1f)) {
-                Text("额度重置", fontSize = 15.sp, color = C.ink)
+                Text(t("android-settings.quota.resets"), fontSize = 15.sp, color = C.ink)
                 Text(p.quota.resetText ?: "", fontSize = 13.sp, color = C.muted)
             }
             DoingMark(resetting, app.failedOf("profile.resetQuota", "station" to station, "id" to p.id), 14.dp)
-            Text("重置额度", fontSize = 14.sp, color = if (count > 0) C.accent else C.muted)
+            Text(t("android-settings.quota.reset"), fontSize = 14.sp, color = if (count > 0) C.accent else C.muted)
         } }
     }
 }
@@ -457,25 +458,25 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
     val all = (p.available ?: (p.check?.models.orEmpty() + p.models).distinct()).sorted()
     val shown = all.filter { m -> listOf(m, p.names[m] ?: m).any { it.contains(filter.trim(), ignoreCase = true) } }
     val save = { models: List<String> -> onSave(models.distinct().sorted()) }
-    val suffix = if (filter.isBlank()) "" else "筛选结果"
-    SectionHeader("模型 · 启用 ${models.size} / ${all.size}${if (saving) " · 正在保存…" else ""}", start = 24.dp)
+    val filtered = filter.isNotBlank()
+    SectionHeader(t(if (saving) "android-settings.models.headerSaving" else "android-settings.models.header", "on" to models.size, "n" to all.size), start = 24.dp)
     Text(
-        if (all.isEmpty()) "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" else "只有勾选的模型能在新对话和连接里选。",
+        if (all.isEmpty()) t("android-settings.models.empty") else t("android-settings.models.note"),
         fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
     )
     Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.clickable(enabled = !checking) { app.act("刷新模型", "检查完成") { app.api(station).checkProfile(p.id) } },
+        Row(Modifier.clickable(enabled = !checking) { app.act(t("android-settings.models.refreshWhat"), t("android-settings.models.refreshed")) { app.api(station).checkProfile(p.id) } },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DoingMark(checking, checkFailed, 12.dp)
-            Text(if (checking) "正在刷新…" else "刷新模型", fontSize = 14.sp, color = if (checking) C.muted else C.accent)
+            Text(if (checking) t("android-settings.refreshing") else t("android-settings.models.refresh"), fontSize = 14.sp, color = if (checking) C.muted else C.accent)
         }
         Spacer(Modifier.weight(1f))
         if (all.isNotEmpty()) {
-            Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models + shown) })
-            Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models - shown.toSet()) })
+            Text(if (filtered) t("android-settings.models.allFiltered") else t("android-settings.all"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models + shown) })
+            Text(if (filtered) t("android-settings.models.noneFiltered") else t("android-settings.none"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models - shown.toSet()) })
         }
     }
-    if (all.size > 10) Field(filter, { filter = it }, "筛选模型", modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp))
+    if (all.size > 10) Field(filter, { filter = it }, t("android-settings.models.filter"), modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp))
     // Plain rows on the page, no card behind them; by series, newest first (the core's).
     p.series.forEach { series ->
         val list = series.models.filter { it in shown }
@@ -510,24 +511,24 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
     var manual by remember { mutableStateOf(false) }
     var previous by remember { mutableStateOf(job?.state) }
     LaunchedEffect(job?.state) {
-        if (job?.state == "done" && previous != null && previous != "done") app.toast = "登录成功"
+        if (job?.state == "done" && previous != null && previous != "done") app.toast = t("android-settings.login.done")
         previous = job?.state
     }
-    SectionHeader(if (active) "正在登录 $provider" else if (needed) "还没登录 $provider 账号" else "$provider 订阅", start = 24.dp)
+    SectionHeader(if (active) t("android-settings.login.active", "provider" to provider) else if (needed) t("android-settings.login.needed", "provider" to provider) else t("android-settings.login.subscription", "provider" to provider), start = 24.dp)
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (active) {
                 LoginSteps(job, provider) { code -> api.loginCode(p.id, code) }
-                Button("取消登录", primary = false, busy = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)) { app.act("取消登录") { api.cancelLogin(p.id) } }
+                Button(t("android-settings.login.cancel"), primary = false, busy = app.isDoing("profile.cancelLogin", "station" to station, "id" to p.id)) { app.act(t("android-settings.login.cancelWhat")) { api.cancelLogin(p.id) } }
             } else {
                 Text(
-                    when (job?.state) { "failed" -> "上次登录没成功：${job.error}"; "done" -> "已登录。换账号的话重新登录一次。"; else -> "登录在运行 ${BuildConfig.APP_NAME} 的机器上完成，你只需要在浏览器里授权。" },
+                    when (job?.state) { "failed" -> t("android-settings.login.failed", "error" to job.error); "done" -> t("android-settings.login.signedIn"); else -> t("android-settings.login.note", "app" to BuildConfig.APP_NAME) },
                     fontSize = 13.sp, color = C.muted,
                 )
-                Button(if (job?.state == "done" || !needed) "重新登录" else "登录", primary = needed, busy = busy) {
-                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = "没能开始登录：${errorText(e)}" } }
+                Button(if (job?.state == "done" || !needed) t("android-settings.login.again") else t("android-settings.login.signIn"), primary = needed, busy = busy) {
+                    scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = t("android-settings.signIn.beginFailed", "error" to errorText(e)) } }
                 }
-                Text("也可以在那台机器上手动登录", fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
+                Text(t("android-settings.login.manual"), fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
                 if (manual) CommandBox(p.loginCommand)
             }
         }
@@ -553,28 +554,28 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Spinner(12.dp); Text(text, fontSize = 13.sp, color = C.muted) }
     }
     when {
-        job == null || job.state == "starting" -> waiting("正在生成 $provider 的登录链接…")
-        job.state == "verifying" -> waiting("正在完成登录…")
-        job.state == "done" -> waiting("已登录，正在添加…")
+        job == null || job.state == "starting" -> waiting(t("android-settings.login.making", "provider" to provider))
+        job.state == "verifying" -> waiting(t("android-settings.login.finishing"))
+        job.state == "done" -> waiting(t("android-settings.login.adding"))
         job.state == "needs_approval" && job.url != null && job.userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(job.userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = FontFamily.Monospace, color = C.ink,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 8.dp))
-            Button(if (copied) "已复制，重新打开登录页" else "复制代码并打开登录页", primary = true) {
+            Button(if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", job.userCode))
                 copied = true; open(job.url)
             }
-            Text("在打开的 OpenAI 页面用要给 ${BuildConfig.APP_NAME} 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。", fontSize = 13.sp, color = C.muted)
+            Text(t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
         }
         job.state == "needs_code" && job.url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row {
                 Text("1. ", fontSize = 13.sp, color = C.ink)
-                Text("打开授权页面", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { open(job.url) })
-                Text("，用要给 ${BuildConfig.APP_NAME} 使用的 Claude 账号登录并同意。", fontSize = 13.sp, color = C.ink)
+                Text(t("android-settings.login.openPage"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { open(job.url) })
+                Text(t("android-settings.login.openPageRest", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.ink)
             }
-            Text("2. 同意后页面上会显示一段授权码，复制过来：", fontSize = 13.sp, color = C.ink)
-            Field(code, { code = it }, "粘贴授权码", mono = true)
+            Text(t("android-settings.login.step2"), fontSize = 13.sp, color = C.ink)
+            Field(code, { code = it }, t("android-settings.login.pasteCode"), mono = true)
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-            Button("完成登录", primary = true, busy = busy, enabled = code.isNotBlank()) {
+            Button(t("android-settings.login.finish"), primary = true, busy = busy, enabled = code.isNotBlank()) {
 
                 operation.run { send(code.trim()); code = "" }
             }
@@ -612,26 +613,26 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
         }
     }
     SheetGrab()
-    SheetHead("环境变量")
+    SheetHead(t("android-settings.env.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("运行时启动时带上这些变量，用来接到你的模型服务。值里的 {route} 会换成会话的路由 ID。", fontSize = 12.sp, color = C.muted)
+        Text(t("android-settings.env.note"), fontSize = 12.sp, color = C.muted)
         rows.forEach { r ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Field(r.key, { r.key = it }, "NAME", mono = true, modifier = Modifier.weight(1f))
-                    Text("删除", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { rows = rows.filter { it.row != r.row } })
+                    Text(t("common.delete"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { rows = rows.filter { it.row != r.row } })
                 }
-                val placeholder = if (r.masked != null) "已保存 ${r.masked}，留空不变" else "值"
+                val placeholder = if (r.masked != null) t("android-settings.tokens.kept", "token" to r.masked) else t("android-settings.env.value")
                 if (r.masked != null || Regex("KEY|TOKEN|SECRET|PASSWORD|AUTH", RegexOption.IGNORE_CASE).containsMatchIn(r.key)) SecretField(r.value, { r.value = it }, placeholder)
                 else Field(r.value, { r.value = it }, placeholder, mono = true)
             }
         }
-        Text("＋ 添加变量", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { rows = rows + EnvRow(next++, "", "", null, null) })
+        Text(t("android-settings.env.add"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { rows = rows + EnvRow(next++, "", "", null, null) })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Button("取消", primary = false) { app.sheet = null }
-            Button("保存", primary = true, busy = busy) {
+            Button(t("common.cancel"), primary = false) { app.sheet = null }
+            Button(t("common.save"), primary = true, busy = busy) {
                     scope.launch {
-                    try { app.api(station).putProfile(p.id, buildJsonObject { put("env", patch()) }); app.toast = "已保存"; app.sheet = null }
+                    try { app.api(station).putProfile(p.id, buildJsonObject { put("env", patch()) }); app.toast = t("android-settings.saved"); app.sheet = null }
                     catch (e: CoreException) { app.toast = e.message }
                 }
             }
@@ -659,7 +660,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     val pending = login?.let { l -> s?.overview?.logins?.firstOrNull { it.id == l } }
     val go = { id: String, message: String -> app.toast = message; app.replace(Screen.Profile(address, id)) }
     // The sign-in made its profile: on to it.
-    LaunchedEffect(pending?.created) { pending?.created?.let { go(it, "已登录，添加了 Profile") } }
+    LaunchedEffect(pending?.created) { pending?.created?.let { go(it, t("android-settings.profile.addedLogin")) } }
     // Leaving before a sign-in made its profile leaves nothing behind.
     val leave = {
         val l = login
@@ -670,13 +671,13 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     val provider = if (picked.runtime == "claude") "Claude" else "ChatGPT"
     val job = pending?.job
     Column(Modifier.fillMaxSize()) {
-        NavBar("取消", leave, "添加 Profile", sub = { Text(s?.name ?: "", fontSize = 11.sp, color = C.muted) })
+        NavBar(t("common.cancel"), leave, t("android-settings.profile.add"), sub = { Text(s?.name ?: "", fontSize = 11.sp, color = C.muted) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val l = login
             if (l != null) {
                 if (job?.state == "failed" || job?.state == "cancelled") {
-                    Text(job.error ?: "登录没有完成。", fontSize = 13.sp, color = C.red)
-                    Button("重新开始", primary = false) { app.act("重新开始") { api.dropLogin(l) }; login = null }
+                    Text(job.error ?: t("android-settings.login.unfinished"), fontSize = 13.sp, color = C.red)
+                    Button(t("android-settings.login.restart"), primary = false) { app.act(t("android-settings.login.restartWhat")) { api.dropLogin(l) }; login = null }
                 } else LoginSteps(job, provider) { code -> api.newLoginCode(l, code) }
             } else {
                 // The machine's own logins not used yet: a profile on one needs no sign-in.
@@ -688,15 +689,15 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 }
                 if (picked.kind in KEYED) {
                     Text(if (picked.kind == "opencode-go") "OpenCode Go key" else "API key", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    SecretField(key, { key = it }, "先验证能用，再添加")
+                    SecretField(key, { key = it }, t("android-settings.profile.keyPlaceholder"))
                 }
-                if (picked.kind == "subscription") Text("登录在运行 ${BuildConfig.APP_NAME} 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。", fontSize = 13.sp, color = C.muted)
+                if (picked.kind == "subscription") Text(t("android-settings.profile.subscriptionNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
                 error?.let { Text(it, fontSize = 13.sp, color = C.red) }
                 val run = { work: suspend () -> Unit -> error = null; scope.launch { try { work() } catch (e: CoreException) { error = e.message } }; Unit }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    if (picked.kind == "subscription") Button("登录 $provider", primary = true, busy = busy) { run { login = api.newLogin(picked.runtime!!) } }
-                    else Button(if (picked.kind in KEYED) "验证并添加" else "添加", primary = true, busy = busy, enabled = picked.kind !in KEYED || key.isNotEmpty()) {
-                        run { go(api.addProfile(picked.runtime, picked.kind, key.takeIf { picked.kind in KEYED }), "已验证并添加 Profile") }
+                    if (picked.kind == "subscription") Button(t("android-settings.login.signInTo", "provider" to provider), primary = true, busy = busy) { run { login = api.newLogin(picked.runtime!!) } }
+                    else Button(if (picked.kind in KEYED) t("android-settings.profile.verifyAdd") else t("android-settings.add.one"), primary = true, busy = busy, enabled = picked.kind !in KEYED || key.isNotEmpty()) {
+                        run { go(api.addProfile(picked.runtime, picked.kind, key.takeIf { picked.kind in KEYED }), t("android-settings.profile.verifiedAdded")) }
                     }
                 }
             }
@@ -717,14 +718,14 @@ fun MachineLoginOffers(station: String, overview: Overview, inset: androidx.comp
     val scope = rememberCoroutineScope()
     val offers = overview.machineLogins.orEmpty().filter { it.offered == true }
     if (offers.isEmpty()) return
-    Text("这台机器上已经登录了", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = inset + 12.dp, end = inset + 12.dp, top = 8.dp, bottom = 4.dp))
+    Text(t("android-settings.machine.title"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = inset + 12.dp, end = inset + 12.dp, top = 8.dp, bottom = 4.dp))
     Column(Modifier.padding(horizontal = inset).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
         offers.forEach { l -> MachineLoginRow(l, app.isDoing("profile.useMachineLogin", "station" to station, "runtime" to l.runtime)) {
             if (l.usable == true) {
                 scope.launch {
                     try {
                         val id = app.api(station).useMachineLogin(l.runtime)
-                        app.toast = "已添加 Profile，用的是这台机器的登录"
+                        app.toast = t("android-settings.machine.added")
                         if (onLogin != null) app.replace(Screen.Profile(station, id)) else app.push(Screen.Profile(station, id))
                     } catch (e: CoreException) { app.toast = e.message }
                 }
@@ -747,8 +748,8 @@ private fun MachineLoginRow(l: MachineLogin, busy: Boolean, onUse: () -> Unit) {
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 StateDot(if (blocked) C.red else C.green, 6.dp)
-                Text(if (blocked) "被停用" else "本机已登录", fontSize = 12.sp, color = if (blocked) C.red else C.muted)
-                Text("· ${l.email ?: "已登录"}", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (blocked) t("android-settings.quota.blocked") else t("android-settings.machine.signedIn"), fontSize = 12.sp, color = if (blocked) C.red else C.muted)
+                Text("· ${l.email ?: t("android-settings.machine.someone")}", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             quotaTrouble(l.quota)?.let { Text(it, fontSize = 12.sp, color = if (blocked) C.red else C.muted) }
         }
@@ -756,7 +757,7 @@ private fun MachineLoginRow(l: MachineLogin, busy: Boolean, onUse: () -> Unit) {
         // A refused account is said so, with nothing to do with it here.
         if (!blocked) {
             if (busy) Spinner(14.dp)
-            else Text(if (l.usable == true) "用这个账号" else "登录", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(onClick = onUse))
+            else Text(if (l.usable == true) t("android-settings.machine.use") else t("android-settings.login.signIn"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(onClick = onUse))
         }
     }
 }

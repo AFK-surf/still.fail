@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import fail.still.android.AppState
 import fail.still.android.data.ConnectFlowView
 import fail.still.android.data.rememberTopic
+import fail.still.android.ui.t
 import kotlinx.serialization.json.*
 
 /** UI adapter only: the core owns the steps, draft, model choices and writes. */
@@ -15,12 +16,12 @@ internal class ConnectFlow(private val app: AppState, val station: String, val f
     suspend fun call(action: String, input: JsonObject = buildJsonObject {}) = app.core.call("connect.flow.$action", buildJsonObject {
         put("station", station); put("form", form); put("input", input)
     })
-    fun edit(fill: JsonObjectBuilder.() -> Unit) { app.act("修改连接草稿") { call("edit", buildJsonObject(fill)) } }
-    fun go(to: String, close: () -> Unit = {}) { app.act("切换步骤") { if (call("go", buildJsonObject { put("to", to) }).jsonObject["close"]?.jsonPrimitive?.booleanOrNull == true) close() } }
+    fun edit(fill: JsonObjectBuilder.() -> Unit) { app.act(t("android-settings.flow.edit")) { call("edit", buildJsonObject(fill)) } }
+    fun go(to: String, close: () -> Unit = {}) { app.act(t("android-settings.flow.go")) { if (call("go", buildJsonObject { put("to", to) }).jsonObject["close"]?.jsonPrimitive?.booleanOrNull == true) close() } }
     fun act(action: String, done: (JsonObject) -> Unit = {}) {
-        if (!busy) app.act("${view?.title ?: "添加连接"}") { done(call(action).jsonObject) }
+        if (!busy) app.act(view?.title ?: t("android-settings.flow.add")) { done(call(action).jsonObject) }
     }
-    fun choose(fill: JsonObjectBuilder.() -> Unit) { app.act("选择模型") {
+    fun choose(fill: JsonObjectBuilder.() -> Unit) { app.act(t("android-settings.flow.choose")) {
         app.api(station).pickSet("connect-new:$form", fill); app.api(station).pickSave("connect-new:$form")
     } }
 }
@@ -30,7 +31,7 @@ internal fun rememberConnectFlow(app: AppState, station: String, resume: String?
     val flow = remember(app.core, station) { ConnectFlow(app, station, java.util.UUID.randomUUID().toString()) }
     val topic by rememberTopic<ConnectFlowView>(app.core, buildJsonObject { put("topic", "connectFlow"); put("station", station); put("form", flow.form) })
     flow.view = topic.value
-    LaunchedEffect(flow, resume) { app.act("打开连接草稿") { flow.call("open", buildJsonObject { put("mobile", true); put("resume", resume) }) } }
-    DisposableEffect(flow) { onDispose { app.act("关闭连接草稿") { flow.call("drop") } } }
+    LaunchedEffect(flow, resume) { app.act(t("android-settings.flow.open")) { flow.call("open", buildJsonObject { put("mobile", true); put("resume", resume) }) } }
+    DisposableEffect(flow) { onDispose { app.act(t("android-settings.flow.drop")) { flow.call("drop") } } }
     return flow
 }
