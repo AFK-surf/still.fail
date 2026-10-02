@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn a_homes_keychain_item_is_named_as_claude_code_names_it() {
-        // As found in a station's keychain, left there by a profile's sessions (Claude Code 2.1.284).
-        assert_eq!(keychain_item(Path::new("/Users/admin/.ember/homes/cuesurf2-proton-me")), "Claude Code-credentials-bba6043c");
+        // Named as found in a station's keychain, left there by a profile's sessions (Claude Code 2.1.284).
+        assert_eq!(keychain_item(Path::new("/Users/me/.ember/homes/alice-example-com")), "Claude Code-credentials-00966fb9");
     }
 }

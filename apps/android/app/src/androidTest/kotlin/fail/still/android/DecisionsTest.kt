@@ -491,14 +491,14 @@ class DecisionsTest {
         h.deliver()
         assertEquals("one answer", 1, h.acted().size)
         h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(
-            chatTalk.map { if (it.seq == 5L) it.copy(decision = MessageDecision(resolved = true, text = "左子健 选了「两处一起改」")) else it },
+            chatTalk.map { if (it.seq == 5L) it.copy(decision = MessageDecision(resolved = true, text = "王一 选了「两处一起改」")) else it },
             title = "侧栏和设置的几处间距",
         ))
         h.deliver()
         rec.frames(60)
         rec.end()
         rule.onNodeWithText(both.label, substring = false).assertDoesNotExist()
-        rule.onNodeWithText("左子健 选了「两处一起改」").assertExists()
+        rule.onNodeWithText("王一 选了「两处一起改」").assertExists()
     }
 
     @Test fun answerMotionLight() { answerMotion(false) }

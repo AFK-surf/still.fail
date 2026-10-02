@@ -34,7 +34,7 @@ station 原来是 Node/TypeScript，由它启动 ember-mesh。迁移逐块进行
 7. Slack 迁到 Rust：Socket Mode 客户端、消息收发、App 的创建和安装（Rust 没有官方 SDK，自己写）。
 8. 去掉 Node：安装包里不再带 Node。
 
-每一步的要求：迁过去的部分行为不变（按现有 TypeScript 测试的场景在 Rust 里写测试）；迁完一块就删掉 Node 里对应的代码，不留两份；在 studio 上完整跑通、部署后才开始下一步。
+每一步的要求：迁过去的部分行为不变（按现有 TypeScript 测试的场景在 Rust 里写测试）；迁完一块就删掉 Node 里对应的代码，不留两份；在测试 station 上完整跑通、部署后才开始下一步。
 
 和 Node 版的兼容：
 

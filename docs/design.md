@@ -73,8 +73,8 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 | `job_start` / `job_list` / `job_log` / `job_stop` | 后台任务和 web 服务 |
 
 - 每个会话有自己的 token，MCP 服务按 token 识别会话。agent 无法冒充其他会话。
-- Claude：启动时用 `--mcp-config` 传入 MCP 服务，header 为 `Authorization: Bearer ${EMBER_MCP_TOKEN}`；token 作为该会话进程的环境变量注入。
-- Codex：MCP 服务不写进账号配置，而是在 `thread/start` / `thread/resume` 的 `config` 里按 thread 传 `mcp_servers.ember.url` 和 `mcp_servers.ember.http_headers`，因为同一个 app-server 进程承载多个会话。
+- Claude：启动时用 `--mcp-config` 传入 MCP 服务，header 为 `Authorization: Bearer ${STILLFAIL_MCP_TOKEN}`；token 作为该会话进程的环境变量注入。
+- Codex：MCP 服务不写进账号配置，而是在 `thread/start` / `thread/resume` 的 `config` 里按 thread 传 `mcp_servers.stillfail.url` 和 `mcp_servers.stillfail.http_headers`，因为同一个 app-server 进程承载多个会话。
 
 ## 7. 结束状态约定
 
@@ -132,7 +132,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 
 ## 12. 存储
 
-- SQLite，一个库（`ember.db`）：sessions、threads、thread_sessions、entries、deliveries、reads、turns、processes、jobs、job_notices、bindings、profile_status、identities。表结构和变更通知见 [station-storage.md](station-storage.md)。
+- SQLite，一个库（`stillfail.db`，旧版的 `ember.db` 启动时自动迁移）：sessions、threads、thread_sessions、entries、deliveries、reads、turns、processes、jobs、job_notices、bindings、profile_status、identities。表结构和变更通知见 [station-storage.md](station-storage.md)。
 - 运行时会话记录按 runtime 放在 `<数据目录>/transcripts/<runtime>`，每个 profile 目录里的 `projects/`（Claude）/ `sessions/`（Codex）链接到那里。
 
 ## 13. 可观测性

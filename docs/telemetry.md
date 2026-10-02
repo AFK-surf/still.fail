@@ -1,6 +1,6 @@
 # 遥测：PostHog
 
-still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、错误追踪和会话回放。这是我们对自己用户的第一方分析：用 still.fail 的就是团队自己，所以没有同意弹窗。链路追踪另走 Axiom，不在这里。
+still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、错误追踪和会话回放。这是 still.fail 托管服务的第一方分析；自己构建时不配置 key 就不会上报（见下文）。链路追踪另走 Axiom，不在这里。
 
 **什么都不带内容**：聊天文字、引用、文件名、提示词、agent 的输出、对话标题，一样都不发。发出去的只有动作、计数、耗时和错误（带调用栈）。
 
@@ -37,7 +37,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ## key 从哪来
 
-项目 key 是 PostHog 的公开 key（`phc_…`），本来就会出现在网页里，但和别的部署输入一样不进仓库：放在 studio 的 `~/stillfail-deploy/posthog.json`，内容 `{ "host": "https://us.i.posthog.com", "key": "phc_…" }`。
+项目 key 是 PostHog 的公开 key（`phc_…`），本来就会出现在网页里，但和别的部署输入一样不进仓库：放在部署目录（`STILLFAIL_DEPLOY_DIR`，默认 `~/stillfail-deploy`）的 `posthog.json`，内容 `{ "host": "https://us.i.posthog.com", "key": "phc_…" }`。
 
 构建时由环境变量 `STILLFAIL_POSTHOG`（改名前是 `EMBER_POSTHOG`，也认）指向这个文件，`web/vite.config.ts`（网页）和 `scripts/posthog-key.ts`（station）读它：
 

@@ -76,6 +76,7 @@ jobs:
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop relay=$relay"
 
   mac-runner:
+    if: github.repository == 'AFK-surf/still.fail'
     runs-on: [self-hosted, mini1]
     timeout-minutes: 5
     steps:

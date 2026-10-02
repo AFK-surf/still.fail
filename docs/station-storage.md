@@ -23,7 +23,7 @@ Two rules shape this:
 - **Message**: something said in a thread, by a person, an agent (a session),
   or still.fail itself (a notice).
 
-## Tables (ember.db, schema v12)
+## Tables (stillfail.db, schema v12)
 
 ```sql
 -- One agent. What it runs on and where; people and messages live in threads.

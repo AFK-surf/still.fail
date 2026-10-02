@@ -14,7 +14,7 @@
 ## 卡住了怎么办
 
 - **`ember update` 半天没动静、消息送不到**：多半是没能交接、退回了排空（`~/.ember/ember.log` 里有 `draining: no new turns`）。排空期间不开新轮次，新消息排队；最多等 10 分钟轮次结束，没人重启的话再过 5 分钟才自己恢复。处理：先结束卡住的 `ember update`（`ps` 找 `/bin/sh …/ember update` 和它的子进程），再给 station 发 `kill -USR2 <pid>`（pid 取 `run/station.json` 里的；`pgrep -f 'ember-station run'` 还会匹配到 agent 在工作区里起的测试 station，别用）。同一版本交接给自己，排空状态就没了。
-- **部署时 `fetch failed`**：studio 出外网经过局域网的 Surge 旁路由（192.168.20.11），偶尔断。`ember-deploy` 的 cloud 部署遇到它会自己重试三次；拉 GitHub 断了就重跑部署。重复部署 Worker 没有副作用。
+- **部署时 `fetch failed`**：studio 出外网经过局域网的旁路由，偶尔断。`ember-deploy` 的 cloud 部署遇到它会自己重试三次；拉 GitHub 断了就重跑部署。重复部署 Worker 没有副作用。
 - **完整检查不过**：`/tmp/ember-check.log`。什么都没部署出去，线上还是上一版。
 
 ## 待部署
@@ -235,7 +235,7 @@
 
 - bft、claude-mac（macvm）：`stillfail update` 原地交接到 0.1.1209，pid 不变。claude-mac 是从这台机器上的会话里起的，更新放在后台等轮次结束后再跑。
 - studio：原来是 `~/bin/stillfail-restart-station.sh` 从 `~/WebstormProjects/ember` 起的开发版（0.1.0）。先发 USR1 等轮次结束，停掉它，再跑 install.sh 装成正式版（LaunchAgent，0.1.1209），数据还是 `~/.stillfail`，之前的 ember.db 备份在 `ember.db.pre-official`。`~/bin/ember-deploy` 改成不重启 station、不重建 station 页面，改为发布包传完后执行 `stillfail update`（旧脚本备份在 `~/bin/ember-deploy.bak-1001`）。
-- mini（mini1，zuozijian的Mac mini）：原来是很旧的开发版桌面 app（`~/ember-dev/Electron.app`，带着 node 的 station）用 `--with-parent` 起的。退出这个 app 之后跑 install.sh，数据从 `~/.ember` 搬到 `~/.stillfail`（旧位置留了链接），ember.db 备份在 `~/ember.db.pre-official-1001`。别再打开 `~/ember-dev` 的那个 app，它会自己再起一个 station。
+- mini（mini1，一台 Mac mini）：原来是很旧的开发版桌面 app（`~/ember-dev/Electron.app`，带着 node 的 station）用 `--with-parent` 起的。退出这个 app 之后跑 install.sh，数据从 `~/.ember` 搬到 `~/.stillfail`（旧位置留了链接），ember.db 备份在 `~/ember.db.pre-official-1001`。别再打开 `~/ember-dev` 的那个 app，它会自己再起一个 station。
 - 四台都已经 online at still.fail cloud。更新后应该都会选北京 relay，station 卡片上的网络行能看到。
 
 ### 02:20 部署 76afc23（station 卡片的网络行）
@@ -254,7 +254,7 @@
 ### 00:38 部署 86b8edb（多 relay，北京 relay 上线）
 
 - 部署：e407171 → 86b8edb。包括 5d3898a（登录失败的提示链到对应 profile 页，`entries` 表原地加了 `profile` 一列）和 86b8edb（多 relay）。完整检查 9 项通过；这次发了 relay、api、web、admin 四个 Worker，studio 的 station 重新构建并重启，station 发布包在后台上传。
-- 验证：`https://app.still.fail/ping` 已经带 `access-control-allow-origin: *`。studio station 的 `mesh/cloud.json` 里 `relay_urls` 是 `[app.still.fail, 39.105.157.122]`。重启后约 1 分钟，北京 relay 上多了一条来自 studio 出口 IP（120.207.93.144，山西移动）的连接，说明 studio 的 station 已经把北京当成 home relay。
+- 验证：`https://app.still.fail/ping` 已经带 `access-control-allow-origin: *`。studio station 的 `mesh/cloud.json` 里 `relay_urls` 是 `[app.still.fail, 39.105.157.122]`。重启后约 1 分钟，北京 relay 上多了一条来自 studio 出口 IP 的连接，说明 studio 的 station 已经把北京当成 home relay。
 - 别的 station 要各自 `stillfail update` 以后才会切过去。下面是这次改动部署时要注意的，原文保留：
 
   - 多 relay（multi-relay）：cloud 多发一个 `relay_urls`（still.fail 自己的在前，`RELAY_URLS` 里的在后；wrangler.jsonc 里写的是北京那台 `https://39.105.157.122`），`relay_url` 照旧只给第一个；relay Worker 的 `/ping` 加了 `access-control-allow-origin: *`，浏览器靠它测延迟选 relay。所以 relay 和 api 两个 Worker 都要部署。新 station 把所有 relay 放进 map，就近选一个作为 home（国内的会选北京）；cloud 以后增删 relay，station 运行中就会跟着改。新 core 拨 station 时所有 relay 都走一遍。
@@ -289,7 +289,6 @@
 - 前两次被完整检查拦下：`login::tests::a_subscription_sign_in_relays_the_link_the_code_and_the_result` 等 NeedsCode 超过 10 秒。当时 studio 负载 35～47（几个编译、Android 构建，trustd 占满一核），假登录命令启动很慢；单独跑 2～4 秒就过。b24e8b2 把等待上限放宽到 30 秒。
 - 线上验（curl）：ember.3720.org 的 `/`、`/w/…/chats/…?service=…`、`/assets/…` 都是 302 到 app.still.fail 同路径；`/sw.js`、`/healthz`、`/ping`、`/install.sh`、`/.well-known/assetlinks.json` 是 200，`/v1/me` 是 401（照旧由 API 回答）。旧域名的 API 和 relay 不跳，已装的 station 和旧 app 照旧能连。
 - 官网 `python3 cloud/deploy.py site`：链接和安装命令改成 app.still.fail。
-- 另外（不在仓库里）：manus.rip 的跳转 Worker（studio `~/ember-deploy/redirect-manus-rip`）改成跳到 still.fail。
 - 草稿进 core：web 部分已上线，没在浏览器里实际验；安卓部分留在「待部署」。
 
 ### 21:13 部署 d00630c（relay 预算不再逐帧转发）

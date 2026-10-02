@@ -14,11 +14,11 @@ const modelStack = (models, badge) => models.length < 2 ? modelLogo(models[0], b
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 
 // ── data ─────────────────────────────────────────────────────────
-const people = { me: { name: "左子健", short: "左", color: "#5B7BB2" }, bob: { name: "Bob", short: "B", color: "#2F8F5B" }, lin: { name: "林", short: "林", color: "#B9471F" } };
+const people = { me: { name: "王一", short: "王", color: "#5B7BB2" }, bob: { name: "Bob", short: "B", color: "#2F8F5B" }, lin: { name: "林", short: "林", color: "#B9471F" } };
 const peopleStack = (ids, size = 18) => `<span class="pstack">${ids.map((id) => `<span class="pav" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .5)}px;background:${people[id].color}">${people[id].short}</span>`).join("")}</span>`;
 const workspaces = [
-  { id: "3720", name: "3720", account: "zuozijian@gmail.com", stations: 3 },
-  { id: "acme", name: "产品团队", account: "zuozijian@gmail.com", stations: 1 },
+  { id: "3720", name: "3720", account: "wangyi@example.com", stations: 3 },
+  { id: "acme", name: "产品团队", account: "wangyi@example.com", stations: 1 },
   { id: "dev", name: "Dev 测试", account: "alice@example.test", stations: 2 },
 ];
 let ws = workspaces[0];
@@ -50,7 +50,7 @@ const sessions = [
       { agent: true, model: "deepseek-flash", block: true, html: "<p>要我把告警规则改成 UTC 并重启 notifier 吗？重启会让推送中断大约 1 分钟。</p>" },
     ],
     history: [
-      ["recv", "收到来自 左 的消息", "帮我看一下 staging 为什么今天早上发不出通知…"],
+      ["recv", "收到来自 王 的消息", "帮我看一下 staging 为什么今天早上发不出通知…"],
       ["group", "读取 backroom 日志 · 共 4 项"],
       ["group", "对比告警规则和日志时区 · 共 3 项"],
       ["post", "发出回复", "找到原因了：通知服务的日志时间戳是 UTC…"],
@@ -151,7 +151,7 @@ render.home = (el) => {
   const rest = shown.filter((s) => !["block", "running"].includes(s.state));
   // The head stays put (you, the workspace, the stations); search scrolls away with the chats.
   el.innerHTML = `<header class="home-head">
-    <div class="home-top"><button class="avatar sm me-btn" title="我">左</button><button class="ws-switch"><b>${esc(ws.name)}</b></button><button class="nav-btn st-btn" title="Station"><span class="tab-ico ico-server"></span></button></div>
+    <div class="home-top"><button class="avatar sm me-btn" title="我">王</button><button class="ws-switch"><b>${esc(ws.name)}</b></button><button class="nav-btn st-btn" title="Station"><span class="tab-ico ico-server"></span></button></div>
 </header>
     <div class="scroll">
     <div class="search"><i class="i i-search"></i>搜索会话</div>
@@ -307,7 +307,7 @@ render.station = (el, id) => {
 render.me = (el) => {
   el.innerHTML = `<div class="scroll"><div class="navbar" style="min-height:0;padding-bottom:0"><button class="nav-back">会话</button></div>
     <div class="large-title"><div class="ws-switch"><small>设置</small><b style="font-size:32px">我</b></div></div>
-    <div class="card me-card"><span class="avatar">左</span><div><b>左子健</b><div style="font-size:13px;color:var(--muted)">zuozijian@gmail.com · Google</div></div></div>
+    <div class="card me-card"><span class="avatar">王</span><div><b>王一</b><div style="font-size:13px;color:var(--muted)">wangyi@example.com · Google</div></div></div>
     <div class="section-h" style="padding-left:24px"><b>推送</b><span>手机主要用来被叫醒</span></div>
     <div class="list-card">
       <div class="li">agent 进入 block<div class="toggle on"></div></div>

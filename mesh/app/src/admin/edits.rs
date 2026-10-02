@@ -692,7 +692,7 @@ mod tests {
 
     #[test]
     fn ids_are_made_from_names() {
-        assert_eq!(slug("Zijian.Zuo@Cue.surf", 40), "zijian-zuo-cue-surf");
+        assert_eq!(slug("Ada.Lovelace@Example.org", 40), "ada-lovelace-example-org");
         assert_eq!(slug("--", 40), "");
         let taken = HashSet::from(["a".to_string(), "a-2".to_string()]);
         assert_eq!(unique("a", &taken), "a-3");

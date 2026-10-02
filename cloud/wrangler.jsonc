@@ -57,6 +57,8 @@
     // What they are called on a station's card (经中继北京).
     "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港" },
     "GOOGLE_CLIENT_ID": "",
+    // The operator console's one Google account (src/admin.ts); replace it when deploying your own.
+    "ADMIN_EMAIL": "zuozijian1994@gmail.com",
   },
   // The stations' releases (scripts/release.sh puts them, install.sh gets them from /releases/).
   "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "stillfail-releases" }],

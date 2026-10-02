@@ -1,15 +1,13 @@
-// The operator's console: one Google account, fixed here, signs in to still.fail
+// The operator's console: one Google account, the deployment's ADMIN_EMAIL (wrangler.jsonc), signs in to still.fail
 // like anyone and may then list every user and workspace and hand out the
 // invite codes that let new people create a workspace. Everyone else gets 404
 // on these paths, so the console does not show that it exists. (The scripts'
 // /v1/admin/accounts and /v1/admin/relay routes use ADMIN_TOKEN instead; see index.ts.)
 import type { Env } from "./env";
 
-export const ADMIN_EMAIL = "zuozijian1994@gmail.com";
-
-/** Whether this verified email is the admin's. */
+/** Whether this verified email is the admin's; without ADMIN_EMAIL, nobody is. */
 export function isAdmin(env: Env, email: string): boolean {
-  return email.toLowerCase() === (env.ADMIN_EMAIL || ADMIN_EMAIL).toLowerCase();
+  return !!env.ADMIN_EMAIL && email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
 }
 
 export const CODE_TTL_DAYS = 14;

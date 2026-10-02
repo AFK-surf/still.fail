@@ -2,8 +2,8 @@
 
 验证设计里依赖、但尚未实测的假设。每项留下脚本和结论，结论写明日期与运行时版本。
 
-运行环境：studio（macOS，64GB），claude 2.1.282，codex-cli 0.155.1，模型 OpenCode Go `deepseek-flash`。
-凭证放在 `~/.config/ember-spike/opencode-go.env`（600，不进仓库）；两家运行时都用 `~/.config/ember-spike/` 下的隔离配置目录，不碰用户自己的 `~/.claude`、`~/.codex`。
+运行环境：一台 macOS 机器（64GB），claude 2.1.282，codex-cli 0.155.1，模型 OpenCode Go `deepseek-flash`。
+凭证放在仓库外的私有 env 文件里；两家运行时都用单独的隔离配置目录，不碰用户自己的 `~/.claude`、`~/.codex`。
 
 | # | 问题 | 脚本 | 结论（2026-09-26） |
 |---|---|---|---|
