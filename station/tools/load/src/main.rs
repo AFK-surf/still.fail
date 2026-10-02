@@ -87,8 +87,10 @@ fn dev_credential(url: &str, device: &str) -> Result<String> {
     write!(tcp, "GET {path}?device={device} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")?;
     let mut answer = String::new();
     tcp.read_to_string(&mut answer)?;
+    // The JSON whole, whatever framing it came in (chunked or not).
     let body = answer.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
-    let value: Value = serde_json::from_str(body.trim()).with_context(|| format!("credential answer: {body}"))?;
+    let json = body.find('{').zip(body.rfind('}')).map(|(a, b)| &body[a..=b]).unwrap_or(body);
+    let value: Value = serde_json::from_str(json).with_context(|| format!("credential answer: {body}"))?;
     value["credential"].as_str().map(str::to_string).with_context(|| format!("no credential in {value}"))
 }
 
