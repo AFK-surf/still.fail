@@ -318,7 +318,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         busy = true
         scope.launch {
             if (!still) {
-                if (dir == 0) down.animateTo(height.toFloat(), tween(260, easing = Ease.Standard))
+                if (dir == 0) down.animateTo(height.toFloat(), tween(320, easing = Ease.Standard))
                 else drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
             }
             // The next card is already laid out underneath the departing one.
@@ -431,10 +431,13 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
             Column(
                 Modifier.fillMaxSize().graphicsLayer {
                     val a = arrive.value
-                    val s = lerp(0.94f, 1f, a)
+                    val progress = (down.value / height).coerceIn(0f, 1f)
+                    val gathered = (progress / 0.4f).coerceIn(0f, 1f)
+                    val s = lerp(0.94f, 1f, a) * lerp(1f, 0.88f, gathered)
                     scaleX = s; scaleY = s
                     translationX = drag.value
                     translationY = down.value
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                     rotationZ = drag.value / width * 4f
                     alpha = a
                 }.background(C.bg),

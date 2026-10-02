@@ -201,7 +201,13 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
       const w = place.offsetWidth;
       const end = to === "down" ? `translateY(${place.offsetHeight}px)` : `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
       setLeaving((n) => n + 1);
-      void ghost.animate([{ transform: start }, { transform: end }], { duration: 260, easing: "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
+      const frames = to === "down" ? [
+        { transform: "translateY(0px) scale(1)", offset: 0 },
+        { transform: `translateY(${place.offsetHeight * 0.4}px) scale(.88)`, offset: 0.4 },
+        { transform: `${end} scale(.88)`, offset: 1 },
+      ] : [{ transform: start }, { transform: end }];
+      if (to === "down") ghost.style.transformOrigin = "50% 100%";
+      void ghost.animate(frames, { duration: to === "down" ? 320 : 260, easing: "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
         .finished.then(() => { ghost.remove(); setLeaving((n) => n - 1); }, () => { ghost.remove(); setLeaving((n) => n - 1); });
     }
     if (el) { el.style.transform = ""; delete el.dataset.dragging; }
