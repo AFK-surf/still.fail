@@ -46,3 +46,14 @@ The 0.85 threshold is an initial policy setting, **not** calibrated on still.fai
 - [OpenAI GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)
 
 No independent Luna typed-decision endpoint was verified; Luna uses the Chat Completions adapter above.
+
+## Repeatable provider smoke evaluation
+
+Run the same ten synthetic cases against each provider on studio. These include factual answers, advice without extra scope, unresolved merge approval, running checks, requested deployment/verification, missing evidence, an injected completion claim and an already resolved approval. They are smoke cases, not a production accuracy benchmark.
+
+```sh
+cd mesh
+cargo run -p stillfail-app --example decision_eval -- /path/to/decision-config.json app/tests/fixtures/completion-decisions.jsonl
+```
+
+The config file contains the `decision` object alone (not the station config). Set its named key environment variable before running. Output contains each predicted distribution, latency and a summary of label accuracy/errors/false completion. No real conversations are sent by this command. Missing results or false completion cause a nonzero exit; a zero exit is not proof of calibration or overall production readiness.
