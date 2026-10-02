@@ -697,14 +697,11 @@ impl Hub {
             let _ = std::fs::remove_file(&copy);
             return Ok(());
         }
-        let actor = self.actors.lock().unwrap().get(key).cloned();
-        if let (Some(hub), Ok(runtime)) = (self.me.upgrade(), tokio::runtime::Handle::try_current()) {
-            let key = key.to_string();
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let actor = self.actor(&row)?;
             runtime.spawn(async move {
-                if let Some(actor) = actor {
-                    actor.evict().await;
-                }
-                let _ = tokio::task::spawn_blocking(move || hub.clean_rebuildable(&key)).await;
+                actor.evict().await;
+                actor.clean_archive().await;
             });
         }
         let config = self.config();
@@ -721,22 +718,32 @@ impl Hub {
 
     /// Removes what a build or an install makes again (node_modules, a Cargo target, …; footprint::rebuildable) from an
     /// archived session's own directory: it may come back, and is built again then. Left as it is while the session is
-    /// back in the lists or at work, and while another session in the lists has the same directory. Answers the bytes
-    /// freed; the footprint page sees it at its next scan.
-    pub fn clean_rebuildable(&self, key: &str) -> u64 {
+    /// back in the lists or at work, or a session/job still uses its directory. Returns removed allocated file bytes
+    /// (shared filesystem blocks mean this is not necessarily the disk's net free-space increase).
+    fn clean_rebuildable(&self, key: &str) -> u64 {
         let Ok(Some(row)) = self.store.get_session(key) else { return 0 };
         let Some(dir) = crate::footprint::room_of(&self.config().data_dir, &row.workspace) else { return 0 };
         if row.archived_at.is_none() || row.running || self.process_state(key) == "running" {
             return 0;
         }
-        let shared = self.store.list_sessions().unwrap_or_default().into_iter().any(|s| {
+        let Ok(sessions) = self.store.list_sessions() else { return 0 };
+        let shared = sessions.into_iter().any(|s| {
             s.key != key && s.archived_at.is_none() && crate::footprint::room_of(&self.config().data_dir, &s.workspace).as_ref() == Some(&dir)
         });
-        if shared {
+        if shared || self.archive_has_jobs(key, &dir) {
             return 0;
         }
         let mut freed = 0;
         for (path, bytes) in crate::footprint::measure_room(&dir).rebuild {
+            // Restoring a chat updates the store before its next message reaches the actor queue.
+            if !self.store.get_session(key).ok().flatten().is_some_and(|s| s.archived_at.is_some() && !s.running)
+                || self.archive_has_jobs(key, &dir)
+            {
+                break;
+            }
+            if !crate::footprint::safe_to_remove(&path) {
+                continue;
+            }
             match std::fs::remove_dir_all(&path) {
                 Ok(()) => freed += bytes,
                 Err(e) => warn!(path = %path.display(), error = %e, "not removed"),
@@ -746,6 +753,28 @@ impl Hub {
             info!(session = key, freed, "rebuildable files of an archived session cleaned");
         }
         freed
+    }
+
+    fn archive_has_jobs(&self, key: &str, dir: &Path) -> bool {
+        let Ok(jobs) = self.store.list_jobs(None) else { return true };
+        jobs.into_iter().any(|job| {
+            let active = job.state == "running" || (job.port.is_some() && job.state == "exited");
+            active && (job.session_key == key || Path::new(&job.cwd).canonicalize().is_ok_and(|cwd| cwd.starts_with(dir)))
+        })
+    }
+
+    /// Backfill old archives, and retry sessions skipped while busy. Called at startup and hourly, independently of
+    /// whether automatic archiving is enabled. Each actor holds its queue until its cleanup finishes.
+    pub async fn clean_archives(&self) -> Result<()> {
+        for row in self.store.list_sessions()? {
+            if row.archived_at.is_none() || row.running {
+                continue;
+            }
+            let actor = self.actor(&row)?;
+            actor.evict().await;
+            actor.clean_archive().await;
+        }
+        Ok(())
     }
 
     /// Archives a chat on the pages, or shows it again: a session's own chat goes with its session; a chat of its own
@@ -1929,6 +1958,10 @@ impl SessionDeps for Hub {
     }
     fn idle(&self, key: &str) {
         self.idle_now(key);
+    }
+    fn clean_archive(&self, key: &str) -> Result<()> {
+        self.clean_rebuildable(key);
+        Ok(())
     }
     fn held(&self) -> bool {
         !self.holds.lock().unwrap().is_empty()

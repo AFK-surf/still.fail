@@ -90,6 +90,10 @@ pub trait SessionDeps: Send + Sync {
     fn live(&self) -> Option<Arc<LiveHub>>;
     /// The runtime process has gone idle (see the hub's eviction deadlines).
     fn idle(&self, key: &str);
+    /// Reclaim generated files of an archived session, while its actor queue is held.
+    fn clean_archive(&self, _key: &str) -> Result<()> {
+        Ok(())
+    }
     /// Turns are held (the station is about to restart or hand over to its next binary): none starts, and messages
     /// stay pending, until it is released.
     fn held(&self) -> bool {
@@ -551,6 +555,22 @@ impl SessionActor {
             info!(session = a.key, "evicting idle session process");
             agent.dispose().await;
             a.deps()?.store().notify(&a.key);
+            Ok(())
+        })
+    }
+
+    /// Serialize cleanup with messages and warming, so a resumed turn cannot start halfway through deletion.
+    pub fn clean_archive(&self) -> impl Future<Output = ()> + Send + 'static {
+        self.enqueue(|a| async move {
+            {
+                let st = a.st();
+                if st.agent.is_some() || st.turn.is_some() || st.waiting.is_some() || !st.notices.is_empty() {
+                    return Ok(());
+                }
+            }
+            let deps = a.deps()?;
+            let key = a.key.clone();
+            tokio::task::spawn_blocking(move || deps.clean_archive(&key)).await??;
             Ok(())
         })
     }

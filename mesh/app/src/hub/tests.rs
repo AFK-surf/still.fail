@@ -1361,6 +1361,46 @@ async fn archiving_a_session_cleans_what_can_be_made_again_from_its_directory() 
 }
 
 #[tokio::test]
+async fn archived_cleanup_backfills_and_retries_after_background_jobs_end() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    r.call(&key, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    let workspace = PathBuf::from(r.session(&key).workspace);
+    std::fs::create_dir_all(workspace.join("app/node_modules")).unwrap();
+    std::fs::write(workspace.join("app/node_modules/dependency.js"), vec![1u8; 50_000]).unwrap();
+    std::fs::write(workspace.join("unfinished.rs"), b"uncommitted work").unwrap();
+    // Simulate an archive made by an older station, without invoking the new archive hook.
+    r.store.set_archived(&key, true, MANUAL).unwrap();
+    let job = crate::store::JobRow {
+        id: "archive_job".into(), session_key: "another-session".into(), name: "preview".into(), command: "serve".into(),
+        cwd: workspace.join("app").to_string_lossy().into(), port: Some(9123), token: "archive_job_token".into(),
+        state: "running".into(), pgid: None, exit_code: None, started_at: now_ms(), ended_at: None,
+        restarts: 0, log: "/dev/null".into(), watch: false,
+    };
+    r.store.insert_job(&job).unwrap();
+    r.hub.clean_archives().await.unwrap();
+    assert!(workspace.join("app/node_modules").exists(), "another session's service uses this directory");
+    r.store.job_ended(&job.id, "exited", Some(1)).unwrap();
+    r.hub.clean_archives().await.unwrap();
+    assert!(workspace.join("app/node_modules").exists(), "a service waiting to restart still needs its files");
+    r.store.job_ended(&job.id, "stopped", None).unwrap();
+    r.hub.clean_archives().await.unwrap();
+    assert!(!workspace.join("app/node_modules").exists(), "old archive cleaned after the job stops");
+    assert_eq!(std::fs::read(workspace.join("unfinished.rs")).unwrap(), b"uncommitted work");
+    r.hub.clean_archives().await.unwrap();
+    assert!(workspace.join("unfinished.rs").exists(), "safe to retry");
+    std::fs::create_dir_all(workspace.join("app/node_modules")).unwrap();
+    r.hub.archive(&key, false).unwrap();
+    r.hub.clean_archives().await.unwrap();
+    assert!(workspace.join("app/node_modules").exists(), "restored sessions are left alone");
+}
+
+#[tokio::test]
 async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unread_and_bound_ones_stay() {
     let r = setup();
     let day = 86_400_000;

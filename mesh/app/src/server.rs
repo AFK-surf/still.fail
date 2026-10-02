@@ -427,6 +427,9 @@ impl App {
                 if let Err(error) = archiving.auto_archive(crate::store::now_ms()) {
                     warn!(error = %error, "auto-archiving failed");
                 }
+                if let Err(error) = archiving.clean_archives().await {
+                    warn!(error = %error, "cleaning old archives failed");
+                }
             }
         });
         // The bug reports its agents sent that are fixed and out (feedback.rs): each session told, a few minutes after the
