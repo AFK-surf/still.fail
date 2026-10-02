@@ -165,3 +165,58 @@ test("a call in a recorded trace is a span of still.fail cloud's, without ids", 
     await h.close();
   }
 });
+
+test("a traced refresh's span says what became of the session, and the answer carries no notes", async () => {
+  const axiom = fakeAxiom();
+  const h = await harness({ axiom: axiom.answer });
+  try {
+    const alice = await h.login("alice");
+    let n = 0;
+    const refresh = async (token: string) => {
+      const trace = (++n).toString(16).padStart(32, "a");
+      const response = await h.fetch("/v1/auth/refresh", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json", traceparent: `00-${trace}-00f067aa0ba902b7-01` },
+        body: JSON.stringify({ request_id: `01J00000000000000000000${String(n).padStart(3, "0")}` }),
+      });
+      assert.equal(response.headers.get("x-stillfail-span"), null);
+      const body = (await response.json()) as any;
+      let span: any;
+      for (let i = 0; i < 200 && !span; i++) {
+        span = axiom.got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0]).find((s: any) => s.traceId === trace);
+        if (!span) await new Promise((r) => setTimeout(r, 10));
+      }
+      assert.ok(span, "a span for the refresh");
+      const notes = Object.fromEntries(span.attributes.map((a: any) => [a.key, a.value.stringValue ?? Number(a.value.intValue)]));
+      return { status: response.status, body, notes };
+    };
+    const first = await refresh(alice.refresh_token);
+    assert.equal(first.status, 200);
+    assert.equal(first.notes["stillfail.auth.outcome"], "rotated");
+    assert.equal(first.notes["stillfail.account"], alice.subject);
+    assert.equal(first.notes["stillfail.session"], alice.session_id);
+    assert.deepEqual([first.notes["stillfail.auth.presented_generation"], first.notes["stillfail.auth.generation"]], [0, 1]);
+
+    const again = await refresh(alice.refresh_token);
+    assert.equal(again.notes["stillfail.auth.outcome"], "retried");
+    assert.equal(typeof again.notes["stillfail.auth.rotated_ago"], "number");
+
+    const second = await refresh(first.body.refresh_token);
+    assert.equal(second.notes["stillfail.auth.outcome"], "rotated");
+    // The first credential again, past the one retry the session keeps: reuse, and the session is gone.
+    const reused = await refresh(alice.refresh_token);
+    assert.equal(reused.status, 401);
+    assert.deepEqual([reused.notes["stillfail.auth.outcome"], reused.notes["stillfail.auth.presented_generation"], reused.notes["stillfail.auth.generation"]], ["reused", 0, 2]);
+    const gone = await refresh(second.body.refresh_token);
+    assert.equal(gone.status, 401);
+    assert.equal(gone.notes["stillfail.auth.outcome"], "no_session");
+    assert.equal(gone.notes["stillfail.auth.gone"], "reused");
+
+    const forged = await refresh(`${alice.refresh_token.split(".").slice(0, 2).join(".")}.forged`);
+    assert.equal(forged.status, 401);
+    assert.equal(forged.notes["stillfail.auth.outcome"], "invalid_token");
+    assert.equal(forged.notes["stillfail.account"], alice.subject);
+  } finally {
+    await h.close();
+  }
+});

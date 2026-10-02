@@ -9,7 +9,7 @@
 //! {access_token, refresh_token, subject, email, name?, expires_at}.
 //! Sign-in starts at GET /v1/auth/google/start?state&code_challenge&code_challenge_method=S256&redirect_uri&name.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
@@ -23,6 +23,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest, HttpResponse};
+use crate::trace::{Kind, Tracer};
 
 /// Storage key of the accounts list (JSON array of [`StoredAccount`]).
 pub const STORAGE_KEY: &str = "accounts";
@@ -99,6 +100,11 @@ pub struct Accounts {
     list: RefCell<Vec<StoredAccount>>,
     listeners: RefCell<Vec<Rc<dyn Fn()>>>,
     refreshing: RefCell<HashMap<String, Refresh>>,
+    /// Where refreshes are traced (docs/telemetry.md, signing out); none until the core sets it.
+    tracer: RefCell<Option<Rc<Tracer>>>,
+    /// Since when (monotonic ms) a refresh has had no answer: still.fail cloud may have rotated the credential all the
+    /// same, and the next refresh says how long ago that was.
+    unanswered: Cell<Option<f64>>,
 }
 
 impl Accounts {
@@ -114,7 +120,14 @@ impl Accounts {
             list: RefCell::new(list),
             listeners: RefCell::default(),
             refreshing: RefCell::default(),
+            tracer: RefCell::default(),
+            unanswered: Cell::default(),
         })
+    }
+
+    /// Traces every refresh from now on.
+    pub fn set_tracer(&self, tracer: Rc<Tracer>) {
+        *self.tracer.borrow_mut() = Some(tracer);
     }
 
     pub fn list(&self) -> Vec<AccountView> {
@@ -171,7 +184,7 @@ impl Accounts {
         };
         let expired = || CoreError::new("login_expired", t!("core-logic.accounts.login.expired"));
         let body = json!({ "code": param("code"), "code_verifier": pending.verifier, "redirect_uri": pending.redirect_uri });
-        let response = self.post("/v1/auth/token", None, body).await.map_err(|_| expired())?;
+        let response = self.post("/v1/auth/token", None, body, None).await.map_err(|_| expired())?;
         if !ok(&response) {
             return Err(expired().with_status(response.status));
         }
@@ -226,7 +239,7 @@ impl Accounts {
 
     pub async fn sign_out(&self, sub: &str) -> Result<()> {
         if let Some(account) = self.get(sub) {
-            let _ = self.post("/v1/auth/logout", Some(&account.refresh), json!({ "all": false })).await;
+            let _ = self.post("/v1/auth/logout", Some(&account.refresh), json!({ "all": false }), None).await;
         }
         self.forget(sub).await
     }
@@ -296,7 +309,38 @@ impl Accounts {
         }
         let account = self.get(sub).ok_or_else(|| CoreError::signed_out(t!("core-logic.accounts.signed_out")))?;
         let body = json!({ "request_id": ulid(self.host.as_ref()) });
-        let response = self.post("/v1/auth/refresh", Some(&account.refresh), body).await?;
+        // Every refresh is a trace of its own, recorded whatever the sampling: still.fail cloud's span of it says what
+        // became of the session (rotated, refused as reused, gone), which is how a device's signing out is explained.
+        let tracer = self.tracer.borrow().clone();
+        let mut span = tracer.map(|t| t.always("auth.refresh", Kind::Client));
+        if let (Some(span), Some(at)) = (&mut span, self.unanswered.get()) {
+            span.set("stillfail.auth.unanswered_ago_ms", (self.host.monotonic_ms() - at) as u64);
+        }
+        let traceparent = span.as_ref().map(|s| s.context().traceparent());
+        // Unanswered until it is (given up on, or dropped by a wake, it stays so).
+        self.unanswered.set(Some(self.host.monotonic_ms()));
+        let response = self.post("/v1/auth/refresh", Some(&account.refresh), body, traceparent).await;
+        let response = match response {
+            Ok(response) => response,
+            Err(error) => {
+                if let Some(mut span) = span {
+                    span.set("error.type", error.code.clone());
+                    span.fail();
+                    span.end();
+                }
+                return Err(error);
+            }
+        };
+        self.unanswered.set(None);
+        if let Some(mut span) = span {
+            span.set("http.response.status_code", response.status);
+            if !ok(&response) {
+                let code = serde_json::from_slice::<Value>(&response.body).ok().and_then(|v| v.get("error")?.as_str().map(String::from));
+                span.set("error.type", code.unwrap_or_else(|| format!("http_{}", response.status)));
+                span.fail();
+            }
+            span.end();
+        }
         if response.status == 401 {
             let _ = self.forget(sub).await;
             return Err(CoreError::signed_out(t!("core-logic.accounts.session_expired", email = account.email)).with_status(401));
@@ -327,8 +371,11 @@ impl Accounts {
         me.pointer("/user/picture")?.as_str().filter(|p| !p.is_empty()).map(String::from)
     }
 
-    async fn post(&self, path: &str, bearer: Option<&str>, body: Value) -> Result<HttpResponse> {
+    async fn post(&self, path: &str, bearer: Option<&str>, body: Value, traceparent: Option<String>) -> Result<HttpResponse> {
         let mut headers = vec![("content-type".to_string(), "application/json".to_string())];
+        if let Some(traceparent) = traceparent {
+            headers.push(("traceparent".into(), traceparent));
+        }
         if let Some(token) = bearer {
             headers.push(("authorization".into(), format!("Bearer {token}")));
         }
@@ -746,6 +793,46 @@ mod tests {
             let stored: Vec<StoredAccount> = serde_json::from_slice(&host.stored(STORAGE_KEY).unwrap()).unwrap();
             assert_eq!(stored.len(), 1);
             assert_eq!(accounts.access_token("s").await.unwrap_err().message, "这个账号已退出");
+        });
+    }
+
+    #[test]
+    fn refreshes_are_traced_with_why_they_failed() {
+        run(async {
+            let host = FakeHost::new();
+            let calls = Rc::new(Cell::new(0));
+            let counter = calls.clone();
+            let parents: Rc<RefCell<Vec<String>>> = Rc::default();
+            let seen = parents.clone();
+            host.on_fetch(move |req| {
+                seen.borrow_mut().push(header(&req, "traceparent").unwrap_or_default().to_string());
+                counter.set(counter.get() + 1);
+                // No answer first (still.fail cloud may have rotated all the same), then refused as reuse.
+                if counter.get() == 1 { Err(HostError("offline".into())) } else { json_response(401, json!({ "error": "refresh_reused" })) }
+            });
+            let accounts = with_stored(&host, &[account("s", 0.0)]).await;
+            let tracer = Tracer::new(host.clone(), 0.0);
+            let bodies: Rc<RefCell<Vec<Value>>> = Rc::default();
+            let sink = bodies.clone();
+            tracer.set_export(Rc::new(move |body: Vec<u8>| {
+                sink.borrow_mut().push(serde_json::from_slice(&body).unwrap());
+                async {}.boxed_local()
+            }));
+            accounts.set_tracer(tracer.clone());
+            assert!(accounts.access_token("s").await.is_err());
+            assert_eq!(accounts.access_token("s").await.unwrap_err().code, "signed_out");
+            tracer.flush();
+            // Recorded though the tracer samples nothing, and said so to the cloud.
+            assert_eq!(parents.borrow().len(), 2);
+            assert!(parents.borrow().iter().all(|p| p.starts_with("00-") && p.ends_with("-01")));
+            let spans: Vec<Value> = bodies.borrow().iter().flat_map(|b| b["resourceSpans"][0]["scopeSpans"][0]["spans"].as_array().cloned().unwrap()).collect();
+            assert_eq!(spans.len(), 2);
+            let attribute = |span: &Value, key: &str| span["attributes"].as_array().unwrap().iter().find(|a| a["key"] == key).map(|a| a["value"].clone());
+            assert!(spans.iter().all(|s| s["name"] == "auth.refresh" && s["status"]["code"] == 2));
+            assert!(attribute(&spans[0], "error.type").is_some());
+            assert!(attribute(&spans[0], "stillfail.auth.unanswered_ago_ms").is_none());
+            assert_eq!(attribute(&spans[1], "error.type").unwrap()["stringValue"], "refresh_reused");
+            assert!(attribute(&spans[1], "stillfail.auth.unanswered_ago_ms").is_some());
         });
     }
 

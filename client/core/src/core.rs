@@ -192,6 +192,7 @@ impl Core {
         crate::brand::set_test_channel(host.test_channel());
         let tracer = Tracer::new(host.clone(), sample);
         let accounts = Accounts::load(host.clone()).await;
+        accounts.set_tracer(tracer.clone());
         let status = Status::new(host.clone());
         let cloud = Cloud::new(host.clone(), accounts.clone(), tracer.clone(), status.clone());
         // What was last known is there before any UI asks.

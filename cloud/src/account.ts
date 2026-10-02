@@ -1,9 +1,13 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
+import { noted, type SpanNotes } from "./tracing";
 import { ACCESS_TTL_SEC, REFRESH_RETRY_SEC, SESSION_IDLE_SEC, SESSION_TTL_SEC, bearerToken, denied, digest, limited, nowSeconds, randomSecret, readJson, reply, seal, signToken, unseal, validId, verifyToken, type Claims, type Identity, type Tokens } from "./auth";
 
 const LIMITS = { sessions: 16, requestsPerMinute: 120 };
 type Retry = { hash: string; request: string; until: number; response: string };
+/** Why a session ended, kept a while (the last 32) for the span of a refresh that finds it gone. */
+type Ended = { id: string; at: number; why: "reused" | "logout" | "logout_all" | "removed" | "blocked" };
+const ENDED_KEPT = 32;
 type Session = {
   id: string;
   name: string;
@@ -13,8 +17,10 @@ type Session = {
   generation: number;
   refreshHash: string;
   retry?: Retry;
+  /** When it last rotated (absent before it first did, and in sessions from before it was kept). */
+  rotated?: number;
 };
-type AccountData = Identity & { blocked: boolean; sessions: Session[] };
+type AccountData = Identity & { blocked: boolean; sessions: Session[]; ended?: Ended[] };
 /** One Google account's sessions. What it may reach is the Directory's business. */
 export class Account extends DurableObject<Env> {
   private data(): AccountData | undefined {
@@ -101,23 +107,29 @@ export class Account extends DurableObject<Env> {
     const claims = await verifyToken(this.env, token, "refresh");
     if (!claims || !validId(requestId)) return denied();
     const hash = await digest(token);
+    // Its span says whose session it was and what became of the refresh (docs/telemetry.md, signing out).
+    const notes: SpanNotes = { "stillfail.account": claims.sub, "stillfail.session": claims.sid, "stillfail.auth.presented_generation": claims.gen ?? -1 };
+    const outcome = (response: Response, what: string, more: SpanNotes = {}) => noted(response, { ...notes, "stillfail.auth.outcome": what, ...more });
     return this.ctx.blockConcurrencyWhile(async () => {
       const data = this.data();
       const session = this.session(data, claims);
-      if (!session || !data) return denied();
-      if (!this.charge()) return limited();
+      if (!session || !data) return outcome(denied(), "no_session", this.gone(data, claims));
+      if (!this.charge()) return outcome(limited(), "limited");
+      const now = nowSeconds();
+      const rotated: SpanNotes = session.rotated === undefined ? {} : { "stillfail.auth.rotated_ago": now - session.rotated };
       // The credential just rotated, back within the retry window: an interrupted rotation, or another client of the
       // same device (a second tab's core, say) racing this one. Both get the same new credentials; not reuse.
-      if (session.retry?.hash === hash && session.retry.until > nowSeconds()) {
-        return reply(await unseal(this.env, session.retry.response));
+      if (session.retry?.hash === hash && session.retry.until > now) {
+        return outcome(reply(await unseal(this.env, session.retry.response)), "retried", rotated);
       }
       if (session.refreshHash !== hash || session.generation !== claims.gen) {
         // A validly signed older refresh credential outside the exact retry is
         // evidence of reuse. Revoke the family, including its access credentials.
-        await this.revoke(data, session.id);
-        return reply({ error: "refresh_reused" }, 401);
+        await this.revoke(data, session.id, "reused");
+        return outcome(reply({ error: "refresh_reused" }, 401), "reused", { "stillfail.auth.generation": session.generation, ...rotated });
       }
       session.generation++;
+      session.rotated = now;
       session.idle = Math.min(session.expires, nowSeconds() + SESSION_IDLE_SEC);
       const tokens = await this.mint(data, session);
       session.retry = {
@@ -129,12 +141,28 @@ export class Account extends DurableObject<Env> {
       session.refreshHash = await digest(tokens.refresh_token);
       this.save(data);
       await this.schedule(data);
-      return reply(tokens);
+      return outcome(reply(tokens), "rotated", { "stillfail.auth.generation": session.generation, ...rotated });
     });
   }
 
+  /** Why a refresh found no live session, for its span. */
+  private gone(data: AccountData | undefined, claims: Claims): SpanNotes {
+    if (!data) return { "stillfail.auth.gone": "no_account" };
+    if (data.blocked) return { "stillfail.auth.gone": "blocked" };
+    const now = nowSeconds();
+    const ended = [...(data.ended ?? [])].reverse().find((e) => e.id === claims.sid);
+    if (ended) return { "stillfail.auth.gone": ended.why, "stillfail.auth.ended_ago": now - ended.at };
+    const session = data.sessions.find((s) => s.id === claims.sid);
+    if (session) return { "stillfail.auth.gone": session.expires <= now ? "expired" : "idle" };
+    // Pruned once it expired or idled out, or ended before endings were kept.
+    return { "stillfail.auth.gone": "unknown" };
+  }
+
   /** Ends one session, or all of them; the stations of the account's workspaces stop taking their credentials too. */
-  private async revoke(data: AccountData, id?: string) {
+  private async revoke(data: AccountData, id: string | undefined, why: Ended["why"]) {
+    const now = nowSeconds();
+    const ending = id ? data.sessions.filter((s) => s.id === id) : data.sessions;
+    data.ended = [...(data.ended ?? []), ...ending.map((s) => ({ id: s.id, at: now, why }))].slice(-ENDED_KEPT);
     data.sessions = id ? data.sessions.filter((s) => s.id !== id) : [];
     this.save(data);
     await this.env.DIRECTORY.getByName("primary").revokeSessions(data.sub, id ? [id] : null);
@@ -150,7 +178,7 @@ export class Account extends DurableObject<Env> {
     if (!data || data.sub !== claims.sub) return denied();
     const session = this.session(data, claims);
     if (all && (!session || session.refreshHash !== hash)) return denied();
-    await this.revoke(data, all ? undefined : claims.sid);
+    await this.revoke(data, all ? undefined : claims.sid, all ? "logout_all" : "logout");
     await this.schedule(data);
     return reply({ revoked: true, scope: all ? "account" : "session" });
   }
@@ -159,7 +187,7 @@ export class Account extends DurableObject<Env> {
     const data = this.data();
     if (!data) return reply({ error: "account_not_found" }, 404);
     data.blocked = blocked;
-    if (blocked) await this.revoke(data);
+    if (blocked) await this.revoke(data, undefined, "blocked");
     else this.save(data);
     await this.schedule(data);
     return reply({ blocked: data.blocked });
@@ -220,7 +248,7 @@ export class Account extends DurableObject<Env> {
       });
     const target = /^\/v1\/auth\/sessions\/([0-7][0-9A-HJKMNP-TV-Z]{25})$/.exec(path)?.[1];
     if (target && request.method === "DELETE") {
-      await this.revoke(data!, target);
+      await this.revoke(data!, target, "removed");
       await this.schedule(data!);
       return reply({ revoked: true });
     }

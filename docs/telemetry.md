@@ -176,3 +176,35 @@ One trace in order:
 The attributes above are under `attributes` (Axiom puts those OpenTelemetry
 does not define under `attributes.custom`, e.g.
 `['attributes.custom']['ember.path']`).
+
+### Signing out
+
+A device that keeps being signed out is explained by its refreshes. Every
+refresh of an account's credentials is a trace of its own (`auth.refresh`,
+recorded whatever the sampling), and still.fail cloud's span of it
+(`POST /v1/auth/refresh`) says what became of the session:
+
+| attribute (`attributes.custom`) | |
+|---|---|
+| `stillfail.account`, `stillfail.session` | whose session (the Google `sub`, the session id) |
+| `stillfail.auth.outcome` | `rotated`, `retried` (the same credential again within the 120 s retry window), `reused` (an older credential outside it: the session is revoked and the device signed out), `no_session`, `invalid_token`, `limited` |
+| `stillfail.auth.presented_generation`, `stillfail.auth.generation` | the credential's generation, and the session's |
+| `stillfail.auth.rotated_ago` | seconds since the session last rotated (sessions rotated since this was kept) |
+| `stillfail.auth.gone` | for `no_session`: `reused`, `logout`, `logout_all`, `removed` (from another device's session list), `blocked`, `expired`, `idle`, `no_account`, `unknown` (pruned, or ended before endings were kept); `stillfail.auth.ended_ago` seconds since |
+
+The core's own span adds `error.type` (the cloud's code, or the network error)
+and `stillfail.auth.unanswered_ago_ms`: how long ago a refresh got no answer,
+after which the cloud may have rotated the credential all the same. A device
+signed out by its refresh cannot send its own span any more (nobody is signed
+in to send it until it signs in again); the cloud's is always there.
+
+```kusto
+['ember']
+| where _time > ago(7d) and name == "POST /v1/auth/refresh"
+| extend outcome = tostring(['attributes.custom']['stillfail.auth.outcome'])
+| where outcome != "rotated"
+| project _time, account = ['attributes.custom']['stillfail.account'], outcome,
+    gone = ['attributes.custom']['stillfail.auth.gone'],
+    rotated_ago = ['attributes.custom']['stillfail.auth.rotated_ago'], trace_id
+| order by _time desc
+```

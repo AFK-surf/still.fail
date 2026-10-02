@@ -27,6 +27,54 @@ export function parseTraceparent(header: string | null): TraceParent | null {
   return { trace: match[2]!, span: match[3]!, sampled: (parseInt(match[4]!, 16) & 1) === 1 };
 }
 
+/**
+ * What a handler adds to the span still.fail cloud records of its call (why a refresh was refused, say): it rides on
+ * the answer in this header, which the Worker takes off before the answer leaves (index.ts).
+ */
+export const NOTES_HEADER = "x-stillfail-span";
+export type SpanNotes = Record<string, string | number>;
+
+/** The answer with `notes` for its span. */
+export function noted(response: Response, notes: SpanNotes): Response {
+  response.headers.set(NOTES_HEADER, JSON.stringify(notes));
+  return response;
+}
+
+/** The answer without its notes, and the notes (none if it has none or they do not read). */
+export function takeNotes(response: Response): { response: Response; notes: SpanNotes } {
+  const raw = response.headers.get(NOTES_HEADER);
+  if (raw === null) return { response, notes: {} };
+  const headers = new Headers(response.headers);
+  headers.delete(NOTES_HEADER);
+  const stripped = new Response(response.body, { status: response.status, statusText: response.statusText, headers, webSocket: response.webSocket });
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return { response: stripped, notes: {} };
+    const notes = Object.fromEntries(Object.entries(value).filter((e): e is [string, string | number] => typeof e[1] === "string" || typeof e[1] === "number"));
+    return { response: stripped, notes };
+  } catch {
+    return { response: stripped, notes: {} };
+  }
+}
+
+/**
+ * Whose a refresh credential that did not verify says it is (its payload read without checking the signature): for
+ * the span only, never to act on.
+ */
+export function unverifiedNotes(token: string | null): SpanNotes {
+  try {
+    const payload = JSON.parse(atob(token!.split(".")[1]!.replaceAll("-", "+").replaceAll("_", "/"))) as Record<string, unknown>;
+    const notes: SpanNotes = {};
+    if (typeof payload.sub === "string") notes["stillfail.account"] = payload.sub.slice(0, 128);
+    if (typeof payload.sid === "string") notes["stillfail.session"] = payload.sid.slice(0, 32);
+    if (Number.isSafeInteger(payload.gen)) notes["stillfail.auth.presented_generation"] = payload.gen as number;
+    if (Number.isSafeInteger(payload.exp)) notes["stillfail.auth.expired_ago"] = Math.floor(Date.now() / 1000) - (payload.exp as number);
+    return notes;
+  } catch {
+    return {};
+  }
+}
+
 /** Collections whose next path segment is an id, whatever it looks like (as the client core has it). */
 const COLLECTIONS = new Set(["sessions", "threads", "connects", "profiles", "logins", "workspaces", "stations", "members", "enrollments", "accounts"]);
 
@@ -112,7 +160,7 @@ export async function receiveTraces(request: Request, env: Env, account: string 
 }
 
 /** The span of a /v1/* call made in a recorded trace, sent to Axiom (dropped if that fails). */
-export async function recordCall(env: Env, parent: TraceParent, request: Request, response: Response, startMs: number, endMs: number): Promise<void> {
+export async function recordCall(env: Env, parent: TraceParent, request: Request, response: Response, startMs: number, endMs: number, notes: SpanNotes = {}): Promise<void> {
   if (!env.AXIOM_TOKEN) return;
   const path = route(new URL(request.url).pathname);
   const nanos = (ms: number) => (BigInt(Math.round(ms)) * 1_000_000n).toString();
@@ -131,6 +179,7 @@ export async function recordCall(env: Env, parent: TraceParent, request: Request
       attribute("url.path", path),
       attribute("http.response.status_code", response.status),
       ...(Number.isFinite(size) ? [attribute("http.response.body.size", size)] : []),
+      ...Object.entries(notes).map(([key, value]) => attribute(key, value)),
     ],
     status: { code: response.status >= 500 ? 2 : 1 },
   };

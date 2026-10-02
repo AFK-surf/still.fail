@@ -12,7 +12,7 @@ import { devicePage, googleStart, consumeLoginRate } from "./login";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
 import { adminApi, api, blockAccount, socketToken } from "./api";
-import { parseTraceparent, recordCall } from "./tracing";
+import { noted, parseTraceparent, recordCall, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
@@ -50,10 +50,10 @@ export default {
   // A /v1/* call in a recorded trace (a client core's) is a span of it, sent once the answer is out.
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const parent = new URL(request.url).pathname.startsWith("/v1/") && request.headers.get("upgrade") === null ? parseTraceparent(request.headers.get("traceparent")) : null;
-    if (!parent?.sampled) return handle(request, env);
     const started = Date.now();
-    const response = await handle(request, env);
-    ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now()));
+    // What the handler noted for the span never goes out with the answer.
+    const { response, notes } = takeNotes(await handle(request, env));
+    if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
 } satisfies ExportedHandler<Env>;
@@ -147,7 +147,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     try {
       const token = bearerToken(request);
       const claims = token ? await verifyToken(env, token, "refresh") : null;
-      if (!claims || !token) return denied();
+      if (!claims || !token) return path.endsWith("/refresh") ? noted(denied(), { "stillfail.auth.outcome": "invalid_token", ...unverifiedNotes(token) }) : denied();
       const body = await readJson(request);
       const account = env.ACCOUNTS.getByName(claims.sub);
       if (path.endsWith("/refresh")) {
