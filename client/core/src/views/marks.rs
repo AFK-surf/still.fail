@@ -210,8 +210,8 @@ mod tests {
     #[test]
     fn marks_are_said_in_english_too() {
         let counts = |alert, wait, unread| Counts { alert, wait, unread };
-        assert_eq!(counts(2, 1, 1).label_in(Lang::En), "2 need attention · 1 waiting for you · 1 with new messages");
-        assert_eq!(counts(1, 0, 3).label_in(Lang::En), "1 needs attention · 3 with new messages");
+        assert_eq!(counts(2, 1, 1).label_in(Lang::En), "2 need attention · 1 waiting for you · 1 unread");
+        assert_eq!(counts(1, 0, 3).label_in(Lang::En), "1 needs attention · 3 unread");
         assert_eq!(counts(0, 0, 1).label_in(Lang::Zh), "1 个有新消息");
     }
 }

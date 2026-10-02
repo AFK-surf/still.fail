@@ -474,12 +474,12 @@ mod tests {
         assert_eq!(duration_in(en, 185_000.0), "3m 5s");
         assert_eq!(relative_time_in(en, now - 10_000.0, now, 480), "just now");
         assert_eq!(relative_time_in(en, now - MINUTE, now, 480), "1 min ago");
-        assert_eq!(relative_time_in(en, now - 3.0 * 60.0 * MINUTE, now, 480), "3 hours ago");
+        assert_eq!(relative_time_in(en, now - 3.0 * 60.0 * MINUTE, now, 480), "3 hr ago");
         assert_eq!(relative_time_in(en, now - 30.0 * 60.0 * MINUTE, now, 480), "yesterday 02:00");
         assert_eq!(relative_time_in(en, now - 20.0 * DAY, now, 480), "Sep 7, 08:00");
         assert_eq!(day_label_in(en, now - 3.0 * DAY, now, 480), "Thursday");
         assert_eq!(day_label_in(en, now - 20.0 * DAY, now, 480), "Sep 7");
-        assert_eq!(time_until_in(en, now + 3.0 * 60.0 * MINUTE, now), "in 3 hours");
+        assert_eq!(time_until_in(en, now + 3.0 * 60.0 * MINUTE, now), "in 3 hr");
         assert_eq!(refills_in_lang(en, now + 185.0 * MINUTE, now), "Refills in 3 hr 5 min");
         assert_eq!(refills_in_lang(en, now + 25.0 * 60.0 * MINUTE, now), "Refills in 1 day 1 hr");
     }

@@ -1080,7 +1080,7 @@ fn the_language_is_as_chosen_else_as_the_device_is() {
         assert_eq!(values[&1]["lang"], "en");
         // The core's own words stay Chinese in tests (they run side by side).
         assert_eq!(stillfail_i18n::current(), stillfail_i18n::Lang::Zh);
-        assert_eq!(stillfail_i18n::t!(stillfail_i18n::Lang::En; "core-misc.params.missing", field = "x"), "Invalid parameters: missing x");
+        assert_eq!(stillfail_i18n::t!(stillfail_i18n::Lang::En; "core-misc.params.missing", field = "x"), "Invalid params: missing x");
     });
 }
 
