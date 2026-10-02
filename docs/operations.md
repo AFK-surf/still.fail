@@ -72,7 +72,7 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 
 ## CI
 
-`.github/workflows/pipeline.yml` 使用 AFK-surf 的 CI 资源：计划/API/changelog/标签在 ubuntu-24.04，完整检查、网页构建和 Android 发布在 Blacksmith Linux；station 与桌面打包签名在组织自有 `[self-hosted, tartelet]` Mac。工具链由 `.github/actions/setup` 安装并缓存，不依赖 mini1 预装环境。只有 Studio 自更新经 mini1 执行；构建签名不再 SSH 到 Studio。桌面必须使用原签名身份，可通过 production 的 MACOS_SIGNING_CERTIFICATE_B64 / MACOS_SIGNING_CERTIFICATE_PASSWORD 注入一次性钥匙串，结束后删除；身份缺失则拒绝发包。
+`.github/workflows/pipeline.yml` 使用 AFK-surf 的 CI 资源：计划/API/changelog/标签在 ubuntu-24.04，完整检查、网页构建和 Android 发布在 Blacksmith Linux；station 与桌面打包签名在现有 `[self-hosted, mini1]` Mac。Linux 工具链由 `.github/actions/setup` 安装并缓存；Mac 使用 `.github/actions/setup-mac` 接入 mini1 既有工具链。只有 Studio 自更新经 mini1 执行；构建签名不再 SSH 到 Studio。桌面必须使用原签名身份，可通过 production 的 MACOS_SIGNING_CERTIFICATE_B64 / MACOS_SIGNING_CERTIFICATE_PASSWORD 注入一次性钥匙串，结束后删除；身份缺失则拒绝发包。
 
 - **分支**：每次 push 跑完整检查（`scripts/check.sh full <merge-base>..HEAD`），并把改到的部分构建、打包一遍（`deploy.py --dry-run`，不部署、不读密钥）。结果当合并的证据，不卡合并。
 - **main**：检查上次部署（tag `deployed/beta`）以来改到的部分，过了就按顺序部署改到的：先 api（stillfail-cloud，正式环境，只有一份），再 web-beta（app.youdid.wtf）、admin、preview、site-beta（youdid.wtf），以及测试通道的 station 发布包（`.github/release.sh station`：三个平台，传完让 studio 的 station `stillfail update`，经 mini1 到 studio 的 ssh）、桌面测试版（`.github/release-desktop.py`：在组织 Mac runner 上直接构建，用原签名身份签名、验证后上传）和安卓测试版（`.github/release.sh android`，用 secret `ANDROID_DEBUG_KEYSTORE_B64` 里 studio 的那把 key 签，不能换）。哪一步不过，后面的都不发；全部发完才把 `deployed/beta` 挪到这个提交，所以被取消或失败的那次，改动会算进下一次。relay 改了只在 Actions 里给个警告，不自动部署（会断所有连接）。

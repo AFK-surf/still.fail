@@ -1,0 +1,17 @@
+# What every job on mini1's runners starts with: the toolchains on PATH, and a Cargo target of this runner's own, kept
+# between runs (outside the checkout, which is cleaned; one per runner, as runners build side by side).
+name: setup
+description: Toolchains and caches on mini1's runners
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        # rustup's (wasm32, aarch64-linux-android, wasm-bindgen) ahead of Homebrew's rust; node 24 and pnpm in ~/.local/bin.
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+        echo "JAVA_HOME=/opt/homebrew/opt/openjdk@17" >> "$GITHUB_ENV"
+        echo "CARGO_TARGET_DIR=$HOME/stillfail-ci/target-$RUNNER_NAME" >> "$GITHUB_ENV"
+        # Rust's tests a few at a time: three runners share the machine, and the core's timing tests fail under load.
+        echo "RUST_TEST_THREADS=4" >> "$GITHUB_ENV"

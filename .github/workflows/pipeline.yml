@@ -73,7 +73,7 @@ jobs:
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop relay=$relay"
 
   mac-runner:
-    runs-on: [self-hosted, tartelet]
+    runs-on: [self-hosted, mini1]
     timeout-minutes: 5
     steps:
       - name: Check organization Mac capabilities
@@ -168,16 +168,13 @@ jobs:
   station:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: [self-hosted, tartelet]
+    runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the release's number is the commits in the history
-      - uses: ./.github/actions/setup
-        with:
-          native: 'true'
-          cross: 'true'
+      - uses: ./.github/actions/setup-mac
       - name: Release the station (darwin-arm64, linux-x64, linux-arm64)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -217,15 +214,13 @@ jobs:
   desktop:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: [self-hosted, tartelet]
+    runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-        with:
-          native: 'true'
+      - uses: ./.github/actions/setup-mac
       - name: Build and sign the beta desktop app on the organization Mac
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
