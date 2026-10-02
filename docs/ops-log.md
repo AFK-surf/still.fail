@@ -20,6 +20,7 @@
 ## 待部署
 
 - 恢复页面的历史消息（fix/resume-message-performance）：发布 web（含新 wasm core）；桌面/Android 更新各自 core 后也会把后台和补缺口消息视为历史，180ms 整批淡入在共用 web 聊天组件（桌面 web/手机 web）。无需更新 station/cloud，无协议或持久化格式变化，新旧版本可混用。上线检查：离开后积累旧消息再返回，旧消息同时淡入，不排队飞出；随后实时新消息仍有原动画，阅读位置不跳。
+- 云资源迁移：API 已用 migrate-workers.py 将 5 个 Durable Object 命名空间转到 stillfail-cloud，并核对原 ID 不变；切路由用 cutover-worker.py，保存私有报告用于回退。新模板以 stillfail-v1 创建全新安装的命名空间；已迁移的部署跳过同名迁移。原 ember-cloud 不再用旧配置重新部署，旧路由/绑定在切换前仍转发到同一数据。发布桶另行复制校验，未完成前保持 ember-releases 绑定。
 
 - 选项须是完整回答（merge-confirm-single-option）：发布并更新 station；无需客户端、cloud 或数据迁移。指令要求每个选项点了就是完整回答，要用户自己说的（改什么、名字、数值、换方案）不做成选项；可以只有一个选项（如确认合并只给「合并」）。旧会话通过迁移说明 10 获知。上线后看 agent 请求合并时卡片只有「合并」。
 - 旧名称迁移第一阶段：新 access JWT issuer 和成员凭证 issuer/type 改用 stillfail，云端继续验证已有 ember issuer；部署前确认在用 station 已支持双 issuer/type（此次之前的版本已有支持）。新启动的 agent MCP namespace 为 stillfail，交接中的老进程仍用 ember；历史 transcript 两种都识别，迁移提示第 11 条告知老会话。官网主题新写 stillfail.site.theme，迁移旧选择。IndexedDB 旧库读取出错时终止新库创建并重试，防止空库盖过迁移机会。部署后验证新登录、老 access token、老成员凭证、新/交接会话各一次。

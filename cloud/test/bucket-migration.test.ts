@@ -16,7 +16,11 @@ test("bucket migration verifies bytes and metadata, detects source changes, and 
     assert.equal((await listed.json() as any).objects.length, 1);
     const copy = await call({ key: object.key, etag: object.etag });
     assert.equal(copy.status, 200, await copy.clone().text());
-    assert.equal((await copy.json() as any).sha256.length, 64);
+    const proof = await copy.json() as any;
+    assert.equal(proof.sha256.length, 64);
+    assert.equal((await call({ key: object.key, etag: object.etag, resume: proof })).status, 200);
+    await target.put(object.key, 'interrupted or changed target');
+    assert.equal((await call({ key: object.key, etag: object.etag, resume: proof })).status, 200, 'changed target must be copied and verified again');
     assert.deepEqual(new Uint8Array(await (await target.get(object.key))!.arrayBuffer()), new Uint8Array([0, 255, 3]));
     assert.equal((await target.head(object.key))!.customMetadata!.owner, "test");
     assert.equal((await source.head(object.key))!.etag, object.etag);
