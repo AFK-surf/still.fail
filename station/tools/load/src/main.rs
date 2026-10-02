@@ -35,6 +35,40 @@ async fn main() -> Result<()> {
             println!("{}", String::from_utf8_lossy(&body));
             Ok(())
         }
+        // An event stream followed for `seconds`, printed as it comes; meanwhile each `METHOD path body` write asked
+        // on the same connection, a second apart.
+        ["follow", data, id, addrs, seconds, path, writes @ ..] => {
+            let conn = connect(Path::new(data), id, addrs).await?;
+            let (mut send, mut recv) = conn.open_bi().await?;
+            send.write_all(format!("{}\n", json!({ "method": "GET", "path": path, "headers": {} })).as_bytes()).await?;
+            send.finish()?;
+            let writer = {
+                let conn = conn.clone();
+                let writes: Vec<String> = writes.iter().map(|w| w.to_string()).collect();
+                tokio::spawn(async move {
+                    for w in writes {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        let mut parts = w.splitn(3, ' ');
+                        let (method, path, body) = (parts.next().unwrap_or("GET"), parts.next().unwrap_or("/"), parts.next().unwrap_or(""));
+                        let Ok((mut s, mut r)) = conn.open_bi().await else { return };
+                        let _ = s.write_all(format!("{}\n{body}", json!({ "method": method, "path": path, "headers": {} })).as_bytes()).await;
+                        let _ = s.finish();
+                        let all = r.read_to_end(1 << 20).await.unwrap_or_default();
+                        eprintln!("-> {method} {path}: {}", String::from_utf8_lossy(&all).replace('\n', " "));
+                    }
+                })
+            };
+            let until = Instant::now() + Duration::from_secs(seconds.parse()?);
+            let mut buf = vec![0u8; 64 * 1024];
+            while let Ok(read) = tokio::time::timeout_at(until.into(), recv.read(&mut buf)).await {
+                match read? {
+                    Some(n) => print!("{}", String::from_utf8_lossy(&buf[..n])),
+                    None => break,
+                }
+            }
+            writer.abort();
+            Ok(())
+        }
         ["load", data, id, addrs, seconds, concurrency, paths @ ..] if !paths.is_empty() => {
             let conn = connect(Path::new(data), id, addrs).await?;
             load(conn, Duration::from_secs(seconds.parse()?), concurrency.parse()?, paths.iter().map(|p| p.to_string()).collect()).await
