@@ -152,7 +152,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           <a className={css.navLink} href={APP}>网页版</a>
           <a className={css.navLink} href={MAC}>Mac</a>
           <a className={css.navLink} href={ANDROID}>Android</a>
-          <a className={css.navLink} href="https://github.com/zzj3720/ember">GitHub</a>
+          <a className={css.navLink} href="https://github.com/AFK-surf/still.fail">GitHub</a>
         </div>
       </footer>
     </div>

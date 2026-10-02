@@ -1,0 +1,35 @@
+# Untrusted PR code runs only on disposable GitHub-hosted machines, never mini1/studio.
+name: contributions
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: contributions-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  cloud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pnpm
+        run: npm install --global pnpm@10.33.0
+      - name: Install cloud dependencies
+        working-directory: cloud
+        run: pnpm install --frozen-lockfile
+      - name: Generate Worker types
+        working-directory: cloud
+        run: pnpm run types
+      - name: Check cloud types
+        working-directory: cloud
+        run: pnpm run check
+      - name: Test cloud
+        working-directory: cloud
+        run: pnpm test

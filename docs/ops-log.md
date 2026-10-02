@@ -4,7 +4,7 @@
 
 ## 现在怎么上线
 
-- **合并**：GitHub `zzj3720/ember` 的 main 是唯一的 main。commit / push 时 git hook 跑快速检查（`scripts/check.sh`，几秒）。分支一推上去，CI 就跑完整检查和打包（dry-run），结果当合并的证据。
+- **合并**：GitHub `AFK-surf/still.fail` 的 main 是唯一的 main。commit / push 时 git hook 跑快速检查（`scripts/check.sh`，几秒）。分支一推上去，CI 就跑完整检查和打包（dry-run），结果当合并的证据。
 - **部署（CI，自动）**：push 到 main 后，`.github/workflows/pipeline.yml` 在 mini1 的 runner 上检查上次部署（tag `deployed/beta`）以来的改动，过了就依次部署改到的 api、web-beta（app.youdid.wtf）、admin、preview、site-beta。合并就等于上线这些部分，所以合之前要想清楚新旧混跑。哪一步失败，后面都不发，tag 不动；修好再合一个提交，会连同上次没发出去的一起发。详见 docs/operations.md「CI」。
 - **部署（studio，手动）**：CI 不做的 relay、station 发布包和 studio 的 station 更新，还是在 studio 上跑 `~/bin/ember-job deploy "~/bin/ember-deploy"`（不直接 ssh 跑，ssh 会断）。它从 GitHub 拉 main，对上次跑它以来的改动跑完整检查，过了才部署 relay（如果改了），并在后台上传 station 发布包（`/tmp/ember-release.log`），传完 studio 的 station 自己 `stillfail update`（`/tmp/ember-station-update.log`，原地交接）。studio 跑的是正式安装的 station（LaunchAgent `fail.still.station`，`~/.stillfail/app`）；`mesh/target` 里的 stillfail-station 只给测试 station 用。上次跑到哪：studio `~/.stillfail/deployed-commit`。
 - **部署前 review**：合并前（不是部署前）把数据格式、新旧混跑的兼容、station 的启动和更新流程、删除数据或碰外部服务和密钥的改动过一遍，有风险先说。

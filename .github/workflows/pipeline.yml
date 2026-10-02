@@ -18,9 +18,12 @@ concurrency:
   group: pipeline-${{ github.ref }}
   cancel-in-progress: true
 permissions:
-  contents: write # the tag deployed/beta
+  contents: read
 jobs:
   plan:
+    # Trusted repository pushes only. Never add pull_request or pull_request_target here:
+    # these persistent runners have access to maintainer infrastructure.
+    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, mini1]
     outputs:
       range: ${{ steps.plan.outputs.range }}
@@ -184,6 +187,7 @@ jobs:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
+    environment: production
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -216,6 +220,8 @@ jobs:
     needs: [plan, check, api, static, station, android, desktop]
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
     runs-on: [self-hosted, mini1]
+    permissions:
+      contents: write # only this job updates the tag deployed/beta
     steps:
       - uses: actions/checkout@v5
       - run: |
