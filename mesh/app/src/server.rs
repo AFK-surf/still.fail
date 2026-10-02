@@ -598,7 +598,7 @@ async fn follow_binding(app: std::sync::Weak<App>) {
 }
 
 /// Said at a start outside a workspace, loudly when it has connects that would have connected: they stay off until the
-/// station joins one (docs/ops-log.md: stations never enrolled stop taking Slack's messages with this release).
+/// station joins one (stations never enrolled stop taking Slack's messages from this release on).
 fn unbound_warning(status: &MeshStatus, config: &Config) {
     let connects = config.connects.iter().filter(|c| c.enabled).count();
     let state = if status.state == "removed" { "removed from its workspace" } else { "in no workspace" };

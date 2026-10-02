@@ -6,7 +6,7 @@
 
 station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/.stillfail`（`STILLFAIL_DATA` 可改，兼容 `EMBER_DATA`）；旧版 `~/.ember` 在首次启动时迁移。开发测试使用独立数据目录，不使用已有真实会话的 station。
 
-更新支持原地交接；不支持交接时，安装器会先排空再重启。运行细节见 `mesh/app/src/handoff.rs`。部署与历史维护记录见 [ops-log.md](ops-log.md)。
+更新支持原地交接；不支持交接时，安装器会先排空再重启。运行细节见 `mesh/app/src/handoff.rs`。
 
 ## 管理界面
 
