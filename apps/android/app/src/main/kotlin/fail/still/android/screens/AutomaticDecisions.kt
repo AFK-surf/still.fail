@@ -1,0 +1,107 @@
+package fail.still.android.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import fail.still.android.LocalApp
+import fail.still.android.Screen
+import fail.still.android.data.*
+import fail.still.android.ui.*
+import kotlinx.serialization.json.*
+
+@Composable
+fun AutomaticDecisionsScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack("设置", app::pop)
+        LargeTitle("", "自动决策")
+        PageNote("选择需要自动判断的事项，并为每项指定模型")
+        topic.value?.forEach { station -> key(station.station) {
+            SectionHeader(station.name, start = 24.dp)
+            val view = station.overview?.automaticDecisions
+            when {
+                !station.online -> PageNote("station 上线后可配置和查看记录")
+                station.overview == null -> PageNote("正在连接…")
+                view == null -> PageNote("更新这台 station 后可使用自动决策")
+                !view.canEdit -> PageNote("只有 workspace 管理员可以配置自动决策和查看记录")
+                else -> AutomaticDecisionPanel(station.station, view)
+            }
+        } } ?: PageNote(topic.error?.message ?: "正在读取…")
+        Spacer(Modifier.height(30.dp))
+    }
+}
+
+@Composable
+private fun AutomaticDecisionPanel(station: String, view: AutomaticDecisionView) {
+    val app = LocalApp.current
+    val form = remember(station) { java.util.UUID.randomUUID().toString() }
+    val topic by rememberTopic<AutomaticDecisionDraft>(app.core, buildJsonObject { put("topic", "decisionForm"); put("station", station); put("form", form) })
+    fun act(action: String, input: JsonObject = buildJsonObject {}) {
+        app.act("自动决策配置", if (action == "save") "已保存自动决策" else null) {
+            app.core.call("automaticDecisions.form.$action", buildJsonObject { put("station", station); put("form", form); put("input", input) })
+        }
+    }
+    fun edit(key: String, value: JsonElement) = act("edit", buildJsonObject { put(key, value) })
+    LaunchedEffect(station, form) { act("open") }
+    DisposableEffect(station, form) { onDispose { act("drop") } }
+    val d = topic.value
+    if (d == null) { PageNote(topic.error?.message ?: "正在读取配置…"); return }
+    val saving = app.isDoing("automaticDecisions.form.save", "station" to station, "form" to form)
+    val refreshing = app.isDoing("automaticDecisions.refresh", "station" to station)
+    val busy = d.pending || saving
+    val model = view.models.find { it.id == d.model }
+    ListCard {
+        ListRow(onClick = if (busy) null else ({ edit("enabled", JsonPrimitive(!d.enabled)) })) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("完成检查", color = C.ink, fontSize = 15.sp)
+                Text("agent 宣告完成时，检查是否还有未完成的工作或需要关注的信息", fontSize = 13.sp, color = C.muted)
+            }
+            Switch(d.enabled)
+        }
+        ListRow(onClick = if (busy) null else ({
+            app.sheet = SheetSpec(0.5f) {
+                SheetGrab(); SheetHead("决策模型")
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    if (view.models.isEmpty()) PageNote("现有 Profile 暂无可用决策模型")
+                    view.models.forEach { m -> PickRow(m.name, "复用 ${m.profiles.joinToString("、")}", checked = m.id == d.model) { app.sheet = null; edit("model", JsonPrimitive(m.id)) } }
+                }
+            }
+        })) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("决策模型", fontSize = 13.sp, color = C.muted)
+                Text(model?.name ?: if (d.model.isEmpty()) "选择决策模型" else "${d.model} · 暂不可用", fontSize = 15.sp, color = C.ink)
+            }
+            IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+        }
+    }
+    Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(model?.let { "复用 ${it.profiles.joinToString("、")}" } ?: "模型自动从现有 Profile 识别", fontSize = 12.sp, color = C.muted)
+        Text(if (d.enabled) "发现仍需处理的事项时，阻止误结束并让 agent 继续处理" else "未启用 · 由 agent 自己判断是否完成", fontSize = 13.sp, color = C.muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button("保存", primary = true, busy = saving, enabled = !busy && d.dirty) { act("save") }
+            Button("刷新模型", primary = false, busy = refreshing, enabled = !refreshing) {
+                app.act("刷新决策模型", "已刷新模型") { app.core.call("automaticDecisions.refresh", buildJsonObject { put("station", station) }) }
+            }
+            DoingMark(false, app.failedOf("automaticDecisions.form.save", "station" to station, "form" to form))
+        }
+        Text(if (d.dirty) "有未保存的修改" else "配置已保存", fontSize = 12.sp, color = C.muted)
+        Text("最近决策", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = C.ink, modifier = Modifier.padding(top = 16.dp))
+        if (view.recent.isEmpty()) Text("还没有记录 · 启用后，每次完成检查会显示在这里", fontSize = 13.sp, color = C.muted)
+    }
+    view.recent.forEach { row -> ListRow(onClick = { app.push(Screen.Chat(station, ChatOf.Session(row.session))) }) {
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(row.title, fontSize = 14.sp, color = C.ink)
+            Text(row.label, fontSize = 13.sp, color = if (row.accepted) C.muted else C.red)
+            Text("完成检查 · ${row.model} · ${if(row.accepted) "已放行" else "未结束"} · ${row.elapsedMs} ms", fontSize = 12.sp, color = C.muted)
+            row.error?.let { Text(it, fontSize = 12.sp, color = C.red) }
+        }
+    } }
+}

@@ -52,6 +52,8 @@ pub struct RawConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_nudges: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub automatic_decisions: Option<crate::decision::AutomaticDecisions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub warm_minutes: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_warm_claude: Option<u32>,
@@ -371,6 +373,7 @@ pub struct Config {
     pub profiles: Vec<Profile>,
     /// How many times a turn that ended without final/block is nudged before giving up.
     pub max_nudges: u32,
+    pub automatic_decisions: crate::decision::AutomaticDecisions,
     /// Idle claude processes kept alive at most this long before they may be evicted.
     pub warm_ms: u64,
     /// Idle claude processes beyond this count are evicted, oldest first, once past warm_ms.
@@ -533,6 +536,7 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
         },
         connects,
         profiles,
+        automatic_decisions: raw.automatic_decisions.clone().unwrap_or_default(),
         max_nudges: raw.max_nudges.unwrap_or(2),
         warm_ms: (raw.warm_minutes.unwrap_or(30.0) * 60_000.0) as u64,
         max_warm_claude: raw.max_warm_claude.unwrap_or(4),

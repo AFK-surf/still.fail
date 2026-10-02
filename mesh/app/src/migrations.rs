@@ -23,6 +23,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (15, "station_task: all tasks of a session now share one directory on the target station, removed when the chat is archived or deleted (or after 14 days unused). Keep checkouts and build output there instead of opening directories elsewhere on that machine."),
     (16, "When configured, station reviews all_done (including legacy final) before posting or recording it. A rejected completion returns evidence to reconcile; continue authorized work or ask only a real outstanding question. Review uncertainty is not a request for invented approval."),
 (16, "When an existing profile has a verified decision model, station automatically reviews all_done (including legacy final) before posting or recording it. A rejected completion returns evidence to reconcile; continue authorized work or ask only a real outstanding question. Review uncertainty is not a request for invented approval."),
+(16, "When completion checking is enabled in Automatic Decisions, station reviews all_done with the configured model (including legacy final) before posting or recording it. A rejected completion returns evidence to reconcile; continue authorized work or ask only a real outstanding question. Review uncertainty is not a request for invented approval."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

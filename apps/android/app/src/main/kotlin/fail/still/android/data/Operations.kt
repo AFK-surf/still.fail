@@ -153,6 +153,15 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = MachineSessionsContinueFields().apply(fill).fields
         return call("machineSessions.continue", JsonObject(values))
     }
+    suspend fun automaticDecisionsSave(input: JsonElement): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["input"] = input
+        return call("automaticDecisions.save", JsonObject(values))
+    }
+    suspend fun automaticDecisionsRefresh(): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        return call("automaticDecisions.refresh", JsonObject(values))
+    }
     class ConnectCreateFields : OperationFields() {
         var input: JsonElement? by field<JsonElement>("input") { it }
         var id: String? by field<String>("id") { JsonPrimitive(it) }

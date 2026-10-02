@@ -411,7 +411,7 @@ impl Events {
             StoreChange::Pins(viewer) => self.rows_changed(Some(&viewer)),
             // What the viewer dismissed: their rows say it.
             StoreChange::Dismissed(viewer) => self.rows_changed(Some(&viewer)),
-            StoreChange::Processes => self.overview_changed(),
+            StoreChange::DecisionChecks | StoreChange::Processes => self.overview_changed(),
             // A job as `GET /jobs/:id` answers it, so a client holding it (a chat's jobs, the open ones) puts it in
             // place without reading anything again.
             StoreChange::Job(id) => {

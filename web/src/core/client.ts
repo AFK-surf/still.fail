@@ -13,6 +13,7 @@ import { t } from "../i18n.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
 export type Topic =
+  | { topic: "decisionForm"; station: string; form: string }
   | { topic: "connectFlow"; station: string; form: string }
   | { topic: "slackTokens"; station: string; form: string }
   | { topic: "accounts" }

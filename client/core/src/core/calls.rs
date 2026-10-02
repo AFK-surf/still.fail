@@ -4,6 +4,7 @@ use super::*;
 #[derive(Debug, PartialEq)]
 pub(crate) enum Call {
     ConnectFlow { topic: Topic, action: String, patch: Value },
+    DecisionForm { topic: Topic, action: String, patch: Value },
     SlackTokens { topic: Topic, action: String, patch: Value },
     /// A client could not do something with what the core gave it (a view it cannot read, say): recorded as an error
     /// span, so it is seen with the rest of the trace, the same one at most once a minute.
@@ -125,6 +126,7 @@ impl Call {
             Call::Ask(_) => None,
             Call::Adb(crate::adb::Call::Share(offer)) => Some(&offer.station),
             Call::Adb(_) => None,
+            Call::DecisionForm { topic, .. } => match topic { Topic::DecisionForm { station, .. } => Some(station), _ => None },
             Call::ConnectFlow { topic, .. } => match topic { Topic::ConnectFlow { station, .. } => Some(station), _ => None },
             Call::SlackTokens { topic, .. } => match topic { Topic::SlackTokens { station, .. } => Some(station), _ => None },
         }
@@ -132,6 +134,12 @@ impl Call {
 }
 
 pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
+    if let Some(action @ ("open" | "edit" | "save" | "drop")) = name.strip_prefix("automaticDecisions.form.") {
+        let form: stillfail_shapes::SlackTokenForm = serde_json::from_value(params.clone()).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
+        StationAddr::parse(&form.station)?;
+        if form.form.is_empty() { return Err(CoreError::invalid("缺少 form")); }
+        return Ok(Call::DecisionForm { topic: Topic::DecisionForm { station: form.station, form: form.form }, action: action.into(), patch: params.get("input").cloned().unwrap_or(json!({})) });
+    }
     if let Some(action @ ("open" | "edit" | "go" | "config" | "make" | "verify" | "create" | "drop")) = name.strip_prefix("connect.flow.") {
         let form: stillfail_shapes::SlackTokenForm = serde_json::from_value(params.clone()).map_err(|e| CoreError::invalid(t!("core-misc.params.invalid", error = e)))?;
         StationAddr::parse(&form.station)?;

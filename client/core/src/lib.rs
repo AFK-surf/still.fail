@@ -54,3 +54,5 @@ pub use error::CoreError;
 pub use stillfail_i18n as i18n;
 pub use host::Host;
 pub use protocol::{ClientId, ClientMessage, CoreMessage, Topic};
+
+pub mod decision_form;

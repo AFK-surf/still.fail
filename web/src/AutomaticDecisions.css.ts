@@ -1,0 +1,17 @@
+import { style } from "@vanilla-extract/css";
+import { vars } from "./styles/tokens.css.ts";
+export const stations = style({display:"grid",gap:40});
+export const stationName = style({fontSize:vars.textMd,fontWeight:600,margin:"0 0 24px"});
+export const rule = style({maxWidth:720});
+export const note = style({color:vars.muted,fontSize:vars.textSm,lineHeight:1.6});
+export const model = style({maxWidth:440,marginTop:22});
+export const source = style({display:"flex",gap:14,alignItems:"center",justifyContent:"space-between",marginTop:10,color:vars.muted,fontSize:vars.textXs,flexWrap:"wrap"});
+export const actions = style({display:"flex",alignItems:"center",gap:14,marginTop:22});
+export const history = style({marginTop:44});
+export const sectionName = style({fontSize:vars.textMd,fontWeight:600,margin:"0 0 12px"});
+export const records = style({listStyle:"none",padding:0,margin:0});
+export const record = style({padding:"14px 0"});
+export const recordHead = style({display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontSize:vars.textSm});
+export const result = style({color:vars.muted,selectors:{'&[data-bad]':{color:vars.red}}});
+export const recordMeta = style({display:"flex",justifyContent:"space-between",gap:12,marginTop:7,fontSize:vars.textXs,color:vars.muted});
+export const error = style({color:vars.red,fontSize:vars.textXs,overflowWrap:"anywhere"});

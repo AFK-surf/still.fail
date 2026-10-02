@@ -2100,3 +2100,33 @@ async fn archived_attachments_remain_readable_without_expanding_the_workspace() 
     assert_eq!(t.call("DELETE", &format!("/sessions/{}/archive", enc(&key)), None).await.0, 200);
     assert_eq!(std::fs::read(workspace.join("uploads/evidence.txt")).unwrap(), b"original evidence");
 }
+
+#[tokio::test]
+async fn automatic_decisions_configure_purpose_and_model_without_separate_credentials() {
+    use crate::decision::{Provider, profiles::{Capability, fingerprint}};
+    let t=setup().await;
+    assert_eq!(t.get("/overview").await["automaticDecisions"]["settings"]["completion"]["enabled"],false);
+    let input=json!({"completion":{"enabled":true,"model":"gpt-6-luna"}});
+    assert_eq!(t.call_as("PUT","/automatic-decisions",Some(input.clone()),member("member")).await.0,403);
+    assert_eq!(t.call("PUT","/automatic-decisions",Some(input.clone())).await.0,400);
+    t.settings.update(|raw| {
+        let profile=raw.profiles.as_mut().unwrap().iter_mut().find(|p|p.id=="cx").unwrap();
+        profile.env=Some(BTreeMap::from([("OPENAI_API_KEY".into(),"private-existing-key".into())]));
+        Ok(())
+    }).unwrap();
+    let profile=t.config().profiles.iter().find(|p|p.id=="cx").unwrap().clone();
+    let capability=Capability {state:"ready".into(),detail:"verified".into(),model:Some("gpt-6-luna".into()),
+        models:vec!["gpt-6-luna".into(),"gpt-6-sol".into()],provider:Some(Provider::ChatLogprobs),fingerprint:fingerprint(&profile)};
+    let check=ProfileCheck {decision:Some(capability),model_efforts:None,state:"ok".into(),detail:String::new(),models:None,checked_at:0};
+    t.api.checks.lock().unwrap().insert("cx".into(),check);
+    let (status,view)=t.call("PUT","/automatic-decisions",Some(input.clone())).await;
+    assert_eq!(status,200,"{view}");
+    assert_eq!(view["automaticDecisions"]["models"].as_array().unwrap().len(),2);
+    stillfail_shapes::conform::<stillfail_shapes::AutomaticDecisionView>(view["automaticDecisions"].clone()).unwrap();
+    assert!(!view["automaticDecisions"].to_string().contains("private-existing-key"));
+    assert_eq!(t.saved()["automaticDecisions"],input);
+    assert_eq!(t.call("PUT","/automatic-decisions",Some(json!({"completion":{"enabled":true,"model":"invented"}}))).await.0,400);
+    assert_eq!(t.call("PUT","/automatic-decisions",Some(json!({"completion":{"enabled":false,"model":"gpt-6-luna"},"apiKey":"not-accepted"}))).await.0,400);
+    assert_eq!(t.call("PUT","/automatic-decisions",Some(json!({"completion":{"enabled":false,"model":"gpt-6-luna"}}))).await.0,200);
+    assert!(!t.config().automatic_decisions.completion.enabled);
+}

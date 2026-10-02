@@ -15,6 +15,8 @@ pub struct Capability {
     pub model: Option<String>,
     pub provider: Option<Provider>,
     pub fingerprint: String,
+    #[serde(default)]
+    pub models: Vec<String>,
 }
 
 // Hash stays station-side (the admin view strips it). Never persist credentials in a probe result.
@@ -62,10 +64,15 @@ fn transport(connection: &Connection, model: String) -> DecisionConfig {
 }
 
 pub fn resolved(profile: &Profile, capability: &Capability) -> Option<DecisionConfig> {
+    resolved_model(profile, capability, capability.model.as_deref())
+}
+pub fn resolved_model(profile: &Profile, capability: &Capability, chosen: Option<&str>) -> Option<DecisionConfig> {
     if capability.state != "ready" || capability.fingerprint != fingerprint(profile) { return None; }
     let connection = connection(profile)?;
     if Some(connection.provider) != capability.provider { return None; }
-    Some(transport(&connection, capability.model.clone()?))
+    let model = chosen?;
+    if !capability.models.iter().any(|m| m == model) && capability.model.as_deref() != Some(model) { return None; }
+    Some(transport(&connection, model.into()))
 }
 
 /// Stable preference: native decisions, then small models. Every chosen model must pass a probe;
@@ -78,7 +85,7 @@ fn priority(model: &str) -> (u8, &str) {
 
 pub async fn discover(profile: &Profile, check: &ProfileCheck) -> Capability {
     let mut capability = Capability { state: "unsupported".into(), detail: "当前登录未提供决策概率接口".into(),
-        model: None, provider: None, fingerprint: fingerprint(profile) };
+        model: None, provider: None, models:vec![], fingerprint: fingerprint(profile) };
     if matches!(check.state.as_str(), "login" | "failed") {
         capability.state = "unavailable".into(); capability.detail = "账号恢复后自动检查决策能力".into(); return capability;
     }
@@ -106,21 +113,21 @@ pub async fn discover(profile: &Profile, check: &ProfileCheck) -> Capability {
     }
     models.sort_by(|a,b| priority(a).cmp(&priority(b))); models.dedup();
     // Bound discovery work; no conversation data, tools or coding agent is involved.
+    let mut verified = Vec::new();
     let probe = async {
         for model in models.into_iter().take(8) {
             let config = transport(&connection, model);
             if let Ok(result) = decide(&config, &completion_question(), &json!({"user":"What is 2 + 2?", "proposedPost":"4", "done":"Answered the arithmetic question"})).await {
-                if result.accepts_completion(config.threshold) { return Some(config); }
+                if result.accepts_completion(config.threshold) { verified.push(config.model); }
             }
         }
-        None
     };
-    match tokio::time::timeout(std::time::Duration::from_secs(25), probe).await {
-        Ok(Some(config)) => {
-            capability.state = "ready".into(); capability.detail = format!("自动决策 · {}", config.model);
-            capability.model = Some(config.model); capability.provider = Some(config.provider);
-        }
-        _ => { capability.state = "unavailable".into(); capability.detail = "尚未验证可用的决策模型".into(); }
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(25), probe).await;
+    if let Some(model) = verified.first() {
+        capability.state = "ready".into(); capability.detail = format!("已识别 {} 个决策模型", verified.len());
+        capability.model = Some(model.clone()); capability.provider = Some(connection.provider); capability.models = verified;
+    } else {
+        capability.state = "unavailable".into(); capability.detail = "尚未验证可用的决策模型".into();
     }
     capability
 }
