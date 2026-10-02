@@ -562,8 +562,8 @@ fn an_existing_client_view_gains_model_identity_even_after_a_partial_upgrade() {
 fn canonical_and_legacy_system_authors_are_read_as_the_same_kind() {
     for name in ["ember", "stillfail"] {
         assert_eq!(AuthorKind::parse(name), AuthorKind::StillFail);
-        assert_eq!(serde_json::from_value::<AuthorKind>(json!(name)).unwrap(), AuthorKind::StillFail);
+        assert_eq!(serde_json::from_value::<AuthorKind>(serde_json::json!(name)).unwrap(), AuthorKind::StillFail);
     }
     // Writes keep the legacy wire spelling until client capability negotiation is in place.
-    assert_eq!(serde_json::to_value(AuthorKind::StillFail).unwrap(), json!("ember"));
+    assert_eq!(serde_json::to_value(AuthorKind::StillFail).unwrap(), serde_json::json!("ember"));
 }
