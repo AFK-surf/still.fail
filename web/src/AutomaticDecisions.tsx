@@ -79,6 +79,7 @@ function AutomaticDecisionPanel({ station, name, view }: { station: string; name
         <span className={pages.listRowTitle}>{name}</span>
         <span className={css.note}>{d.enabled ? t("web-pages.automaticDecisions.enabledWith", {model: chosen?.name ?? t("web-pages.automaticDecisions.noModels")}) : t("web-pages.automaticDecisions.disabled")}</span>
       </span>
+      <span className={css.controls}>
       {d.pick ? <ModelTriple modelOnly pick={{view:d.pick, saving:busy,
         set: patch => edit(patch.open ? {pickOpen:true} : {pickModel:patch.model}),
         save: async () => {await edit({pickConfirm:true});return {saved:true};},
@@ -86,6 +87,7 @@ function AutomaticDecisionPanel({ station, name, view }: { station: string; name
         : <span className={css.note}>{chosen?.name ?? t("web-pages.automaticDecisions.noModels")}</span>}
       <Switch id={`decision-${station}`} label={t("web-pages.automaticDecisions.enableOn",{station:name})} checked={d.enabled} disabled={busy} onChange={enabled => edit({enabled})} />
       {d.dirty && <Button variant="primary" busy={saving} disabled={busy} onClick={save}>{t("web-pages.automaticDecisions.save")}</Button>}
+      </span>
     </div>
     {saveFailed && <p className={css.error} role="alert">{saveFailed}</p>}
   </li>;

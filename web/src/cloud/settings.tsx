@@ -650,7 +650,7 @@ export function AutomaticDecisionCompletionSettings({entry}:{entry:WorkspaceEntr
   const base=`/w/${entry.id}/settings/automatic-decisions`;
   const refresh=()=>Promise.all((stations??[]).filter(s=>s.online).map(s=>act(call("automaticDecisions.refresh",{station:s.station}),t("web-pages.automaticDecisions.refreshAction"),t("web-pages.automaticDecisions.refreshed"))));
   return <Page title={t("web-pages.automaticDecisions.completion")} lead={t("web-pages.automaticDecisions.completionNote")} back={base} backLabel={t("web-pages.automaticDecisions.title")}
-    actions={<><Button variant="ghost" icon={Refresh} onClick={refresh}>{t("web-pages.automaticDecisions.refresh")}</Button><Button variant="ghost" icon={Read} onClick={()=>navigate(`${base}/completion/logs`)}>{t("web-pages.automaticDecisions.logs")}</Button></>}>
+    actions={<div style={{display:"flex",gap:4}}><Button variant="ghost" icon={Refresh} onClick={refresh}>{t("web-pages.automaticDecisions.refresh")}</Button><Button variant="ghost" icon={Read} onClick={()=>navigate(`${base}/completion/logs`)}>{t("web-pages.automaticDecisions.logs")}</Button></div>}>
     <AutomaticDecisionCompletion workspace={entry.id} />
   </Page>;
 }

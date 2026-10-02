@@ -12,3 +12,4 @@ export const error = style({ color: vars.red, fontSize: vars.textXs, overflowWra
 export const bad = style({ color: vars.red });
 export const tools = style({ display: "flex", alignItems: "center", gap: 8 });
 globalStyle(`${recordHead} > ${listRowTitle}`, { flex: "1", minWidth: 0 });
+export const controls = style({ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, flex: "none" });
