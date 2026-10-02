@@ -12,6 +12,7 @@ import { routes as marks } from "./routes/marks.ts";
 import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
 import { Host } from "./host.ts";
+import { previewTarget, proxyPreview } from "../jobs/preview.ts";
 
 export type Handler = (r: Request, args: string[]) => Promise<Answer>;
 export type Route = { method: string; pattern: RegExp; handle: Handler };
@@ -60,6 +61,16 @@ export class Admin {
   async handle(r: Request): Promise<Answer> {
     // Who asks is remembered by name, as the cloud's names (`deps.names`): what chats show of people who wrote.
     if (r.viewer.name !== "") this.readers.names.set(r.viewer.email, r.viewer.name);
+    // A web service on this machine, through its preview's path: any method, its answer as it comes.
+    const preview = previewTarget(r.path);
+    if (preview !== null) {
+      const [port, target] = preview;
+      const headers = Object.entries(r.headers).map(([k, v]): [string, string] => [k.toLowerCase(), v]);
+      const answer = await proxyPreview(r.method, headers, r.body.length > 0 ? r.body : null, port, target + (r.search ?? ""), r.lang);
+      const joined: Record<string, string> = {};
+      for (const [name, value] of answer.headers) joined[name] = name in joined ? `${joined[name]}, ${value}` : value;
+      return { status: answer.status, headers: joined, body: answer.body };
+    }
     for (const route of this.routes) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
       if (found) {
