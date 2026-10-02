@@ -826,6 +826,23 @@ mod task_tests {
         r.handle("ws", peer, args).await
     }
     #[tokio::test]
+    async fn any_workspace_station_may_send_a_session_a_message_trusted_for_tasks_or_not() {
+        let (_dir, r) = rig();
+        assert!(call(&r, "peer-c", "session.message", json!({})).await.is_err(), "not taken before the hub is there");
+        let got: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+        let seen = got.clone();
+        r.set_inbox(Arc::new(move |peer, request| {
+            seen.lock().unwrap().push((peer, request));
+            Box::pin(async { Ok(json!({"thread":"EMBER/1.1"})) })
+        }));
+        let answer = call(&r, "peer-c", "session.message", json!({"to":"k","text":"hi"})).await.unwrap();
+        assert_eq!(answer["thread"], "EMBER/1.1");
+        let (peer, request) = got.lock().unwrap().pop().unwrap();
+        assert_eq!((peer.as_str(), request["to"].as_str(), request["text"].as_str()), ("peer-c", Some("k"), Some("hi")));
+        assert_eq!(call(&r, "peer-c", "describe", json!({})).await.unwrap()["messages"], true);
+        assert!(call(&r, "peer-c", "task.list", json!({})).await.is_err(), "tasks still need remoteTasks.allow");
+    }
+    #[tokio::test]
     async fn tasks_are_owned_idempotent_and_return_files() {
         let (_dir, r) = rig();
         let spec = json!({"spec":{"command":"cat input > output; echo ran >> count","name":"copy"}});
