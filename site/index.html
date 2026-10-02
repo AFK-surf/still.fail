@@ -24,13 +24,13 @@
      rest). An iPad says it is a Mac, and has a touch screen. A preview can ask for one with ?platform=. -->
 <script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Mobi/i.test(u)?"":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
 <!-- Script will move the first screen (web/src/site/motion.ts): what it brings in waits unseen for it (and is shown
-     as it rests if the script fails to load, below). -->
-<script>if(!matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.dataset.motion=""</script>
+     as it rests if the script fails to load). -->
+<script>if(!matchMedia("(prefers-reduced-motion: reduce)").matches){document.documentElement.dataset.motion="";addEventListener("error",function(e){var s=e.target;if(s&&s.tagName==="SCRIPT"&&s.type==="module")delete document.documentElement.dataset.motion},true)}</script>
 <meta name="color-scheme" content="light dark">
 </head>
 <body>
 <!-- The page, built to HTML here by web/site-prerender.mjs (pnpm build:site); the browser takes it over (web/src/site/main.tsx). -->
 <div id="site"><!--site--></div>
-<script type="module" src="./main.ts" onerror="delete document.documentElement.dataset.motion"></script>
+<script type="module" src="./main.ts"></script>
 </body>
 </html>
