@@ -395,7 +395,7 @@ impl Adb {
 }
 
 fn head() -> RequestHead {
-    RequestHead { method: "POST".into(), path: "/admin/api/adb".into(), headers: Vec::new() }
+    RequestHead { method: "POST".into(), path: "/admin/api/adb".into(), headers: vec![(crate::station::LANG_HEADER.into(), stillfail_i18n::current().code().into())] }
 }
 
 fn station_id(address: &str) -> String {
