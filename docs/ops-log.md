@@ -20,6 +20,7 @@
 ## 待部署
 
 - 新对话常用搭配（new-chat-combos）：发布 web（含 wasm core）和 Android，桌面随 web 更新；无需更新 station。沿用本地 choice 表，按设备和 workspace 记录更新后创建的新对话组合，最多显示 4 个，仅保留当前 station 可运行的模型/深度。NewChatView.frequent 可选，新旧页面/core 混跑兼容。上线后分别用两组模型/深度开新对话，再返回新对话页，确认常用项、点选同步和重启后保留；切 workspace 不串记录。
+- 安卓下载最新更新（fix-latest-update-download）：需发布 Android（含新版 core）；点击更新先强制检查当前渠道的最新版本，检查失败不回退到缓存版本。沿用 app.update 的 now 参数，无 station/cloud 接口或数据迁移，无部署顺序要求；旧安卓仍保留原行为。上线后验：旧更新提示出现后再发布新版，点更新应下载新发布的版本；断网时提示失败，恢复网络后可重试。
 
 - 答复卡片按需使用（optional-answer-cards）：更新 station 即可，无客户端或数据格式变化。明确聊天输入框一直可用，取消每问必附卡和建议后必追问，选项仅用于真实且有用的选择；迁移说明 8 通知旧会话。上线后在新旧会话检查普通问答不硬造选项、开放问题可直接打字、真实决策仍用 need_human。
 
