@@ -26,6 +26,18 @@ paths="/admin/api/chats /admin/api/chats?archived=1 /admin/api/threads/99999/ent
 for t in $threads 1 50 100; do
   paths="$paths /admin/api/threads/$t/entries /admin/api/threads/$t/entries?limit=5 /admin/api/threads/$t/entries?after=3 /admin/api/threads/$t/entries?before=10&limit=3 /admin/api/threads/$t/entries?from=2&to=4 /admin/api/threads/$t/entries?from=2"
 done
+# More from test/paths/*.txt: a path a line, `$THREAD`, `$SESSION` and `$JOB` filled in with ones of the data.
+session=$(sqlite3 "$work/ts/stillfail.db" "select key from sessions order by last_active_at desc limit 1")
+job=$(sqlite3 "$work/ts/stillfail.db" "select id from jobs order by started_at desc limit 1")
+thread=$(sqlite3 "$work/ts/stillfail.db" "select id from threads order by id desc limit 1")
+for f in "$here"/test/paths/*.txt; do
+  [ -f "$f" ] || continue
+  while IFS= read -r line; do
+    case "$line" in ''|'#'*) continue;; esac
+    line=$(printf '%s' "$line" | sed "s#\$THREAD#$thread#g; s#\$SESSION#$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1], safe=''))" "$session")#g; s#\$JOB#$job#g")
+    paths="$paths $line"
+  done < "$f"
+done
 n=0; same=0
 for p in $paths; do
   ask rust "$rport" "$p" "$work/r.json"; ask ts "$tport" "$p" "$work/t.json"; n=$((n+1))
