@@ -32,8 +32,11 @@ export function openedAt(el: HTMLElement): void {
   openedFrom = { top: el.getBoundingClientRect().top, at: performance.now() };
 }
 
-/** The question a decision asks: its post's first line (its line without 奏 · , or Decision · in English). */
-const question = (d: DecisionItem) => d.text.replace(/^(?:奏|Decision) · /, "") || d.title;
+/**
+ * The question a decision asks, uncut (the row clamps it to two lines): what its agent said it needs, else its post's
+ * first line; from a core before `question`, its line without 奏 · (Decision · in English).
+ */
+const question = (d: DecisionItem) => d.question || d.text.replace(/^(?:奏|Decision) · /, "") || d.title;
 
 export function DecisionDesk({ workspace, back, onOpen, footer }: { workspace: string; back: string; onOpen: (path: string) => void; footer?: ReactNode }) {
   const queue = useDecisionQueue(workspace);
@@ -111,7 +114,7 @@ export function DecisionDesk({ workspace, back, onOpen, footer }: { workspace: s
         <SidebarActions newChat={`${back}/new`} archive={`${back}/archive`} workspace={back} decisions />
         <div ref={list} className={nav.navScroll} role="list">
           {items.map((x, i) => (
-            <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem">
+            <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem" className={css.item}>
               {i === firstAside && <div className={css.group}>{t("web-main.decisions.defer")}</div>}
               <button type="button" className={css.row} aria-current={x === d || undefined} data-aside={queue.isAside(x) || undefined}
                 onMouseDown={(e) => e.preventDefault()} onClick={() => pick(x)}>

@@ -6,9 +6,12 @@ export const emptyList = style({ padding: "20px 10px", fontSize: vars.textXs, li
 /** 待定: the ones set aside, under the rest. */
 export const group = style({ padding: "14px 10px 4px", fontSize: vars.textXs, lineHeight: "18px", color: vars.subtle });
 
+/** The rows apart as the chats' are (Sidebar.css.ts navSessionWrap). */
+export const item = style({ selectors: { "& + &": { marginTop: 2 } } });
+
 /** One decision in the list: its question, then its chat, station and when; picked, it is the one shown. */
 export const row = style({
-  display: "grid", gap: 2, width: "100%", padding: "8px 10px", border: 0, borderRadius: vars.rNav,
+  display: "grid", gap: 4, width: "100%", padding: "8px 10px", border: 0, borderRadius: vars.rNav,
   cornerShape: vars.cornerShape, background: "none", color: vars.text, fontFamily: "inherit", textAlign: "left",
   cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {

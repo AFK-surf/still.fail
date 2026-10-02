@@ -604,6 +604,9 @@ pub struct DecisionItem {
     pub deferred: Option<bool>,
     /// 奏 · <the post's first line>
     pub text: String,
+    /// What it asks, uncut: the need its agent ended need_human with, else the post's first line. A core before it says
+    /// none.
+    pub question: Option<String>,
 }
 
 /// A thread: a Slack thread or a chat on still.fail's page.

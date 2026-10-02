@@ -1496,6 +1496,7 @@ impl Views {
                     "seq": seq, "message": message, "before": before, "options": options, "card": card,
                     "deferred": deferred.map(|_| true),
                     "text": crate::decisions::line(d["message"].get("text").and_then(Value::as_str).unwrap_or("")),
+                    "question": crate::decisions::asks(row, seq, d["message"].get("text").and_then(Value::as_str).unwrap_or("")),
                 });
                 items.push((item, asked, deferred));
             }

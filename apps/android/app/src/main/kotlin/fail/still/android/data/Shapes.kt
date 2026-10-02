@@ -1498,7 +1498,10 @@ data class DecisionItem (
 	/// Set aside (待定) on this device: last in the list, still pending.
 	val deferred: Boolean? = null,
 	/// 奏 · <the post's first line>
-	val text: String
+	val text: String,
+	/// What it asks, uncut: the need its agent ended need_human with, else the post's first line. A core before it says
+	/// none.
+	val question: String? = null
 )
 
 /// A chat of the viewer's where an agent is at work or waiting: where it is, and what it is doing (`line`: 在做 · …,

@@ -1512,6 +1512,11 @@ export interface DecisionItem {
 	deferred?: boolean;
 	/** 奏 · <the post's first line> */
 	text: string;
+	/**
+	 * What it asks, uncut: the need its agent ended need_human with, else the post's first line. A core before it says
+	 * none.
+	 */
+	question?: string;
 }
 
 /**

@@ -137,11 +137,31 @@ pub fn line(text: &str) -> String {
 
 /// A card's post's first line, as its line shows it.
 fn first_line(text: &str) -> String {
-    let first = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
-    let clean = crate::format::clean_text(first).replace("**", "").replace("__", "").replace('`', "");
-    let clean = clean.trim_start_matches(['#', '>', '-', '*', ' ']).trim();
+    let clean = whole_first_line(text);
     let cut: String = clean.chars().take(LINE_CHARS).collect();
     if clean.chars().count() > LINE_CHARS { format!("{}…", cut.trim_end()) } else { cut }
+}
+
+/// A post's first line, without mentions or markup, uncut.
+fn whole_first_line(text: &str) -> String {
+    let first = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+    let clean = crate::format::clean_text(first).replace("**", "").replace("__", "").replace('`', "");
+    clean.trim_start_matches(['#', '>', '-', '*', ' ']).trim().to_string()
+}
+
+/// What a card (or a need) asks, for 奏's list, uncut (the list clamps it to its width): the need its agent ended
+/// need_human with, in its words (选统计口径), when that turn is about this post or about none; else the post's first
+/// line.
+pub fn asks(row: &Value, seq: u64, text: &str) -> String {
+    let thread = row.get("thread").and_then(Value::as_u64);
+    let need = row.get("agents").and_then(Value::as_array).into_iter().flatten()
+        .filter(|a| crate::present::shown_status(a) == "block")
+        .filter(|a| crate::present::state_about(a, thread).is_none_or(|about| about == seq))
+        .find_map(|a| a.get("lastTurn")?.get("need")?.as_str().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string));
+    need.unwrap_or_else(|| {
+        let first = whole_first_line(text);
+        if first.is_empty() { line(text) } else { first }
+    })
 }
 
 /// What a card asks, for a list: its post's first line, as its line has it, without 奏 · .
@@ -499,6 +519,21 @@ mod tests {
             stillfail_shapes::conform::<stillfail_shapes::DecisionOption>(o.clone()).unwrap();
         }
         assert!(options_shown(&Value::Null).is_empty());
+    }
+
+    #[test]
+    fn the_list_asks_with_the_agents_need_else_the_whole_first_line() {
+        let long = format!("**{}**\n细节", "字".repeat(50));
+        let agent = |need: &str, about: Option<u64>| json!({ "lastTurn": {
+            "declared": "block", "ending": "need_help", "outcome": "completed", "need": need,
+            "about": about.map(|seq| json!({ "thread": 3, "seq": seq })),
+        }});
+        let row = |agents: Vec<Value>| json!({ "thread": 3, "agents": agents });
+        assert_eq!(asks(&row(vec![agent("选统计口径", Some(7))]), 7, &long), "选统计口径");
+        assert_eq!(asks(&row(vec![agent("选统计口径", None)]), 7, &long), "选统计口径");
+        assert_eq!(asks(&row(vec![agent("选统计口径", Some(5))]), 7, &long), "字".repeat(50), "a need about another post");
+        assert_eq!(asks(&row(vec![agent("  ", Some(7))]), 7, &long), "字".repeat(50));
+        assert_eq!(asks(&row(vec![]), 7, ""), "奏");
     }
 
     #[test]
