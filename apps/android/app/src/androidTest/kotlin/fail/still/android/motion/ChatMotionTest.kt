@@ -79,7 +79,12 @@ class ChatMotionTest {
 
     /** A short history cannot scroll its last message down to the viewport's foot. */
     @Test
-    fun sentInAShortChat() {
+    fun sentInAShortChat() = sentInAShortChat(false)
+
+    @Test
+    fun sentInAShortChatDark() = sentInAShortChat(true)
+
+    private fun sentInAShortChat(dark: Boolean) {
         val h = Harness(rule)
         val history = listOf(Fixtures.mine(1, "上一条消息", said = true))
         val text = "这条消息应该直接落在上一条下面"
@@ -88,13 +93,14 @@ class ChatMotionTest {
             if (name == "chat.send") h.fake.put(topic, Fixtures.chat(history, listOf(Fixtures.outgoing("out-1", text))))
             JsonNull
         }
-        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))), dark = dark)
         h.type(text)
         h.keyboard()
-        val r = h.record("sent-short-chat")
+        val r = h.record(if (dark) "sent-short-chat-dark" else "sent-short-chat")
         r.frame { h.send() }
         r.frames(55)
-        r.end()
+        val jump = r.end()
+        assertTrue("message snapped into place (changed fraction $jump)", jump < 0.025f)
     }
 
     /** A message in the outbox that the station takes (its seq), then shows as the chat's: the row stays the same one. */

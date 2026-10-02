@@ -68,6 +68,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -111,6 +112,9 @@ class Flight internal constructor(
     internal val scroll: Float = ((typed?.size?.height ?: 0) - fieldHeight).coerceAtLeast(0).toFloat()
     /** Its row is laid out in the list (not only composed ahead, out of sight): they go from then on. */
     internal var placed by mutableStateOf(false)
+    /** The real list has completed its final layout; only transforms animate after this. */
+    internal var ready by mutableStateOf(false)
+    internal var beforePositions: Map<String, Float> = emptyMap()
     /** The row the words went into (its key in the list), once it is there. */
     var key by mutableStateOf<String?>(null)
         internal set
@@ -144,38 +148,8 @@ class Flight internal constructor(
     fun ground(): Float = if (carried) e() else ((progress.value - SETTLE) / (FLY - SETTLE)).coerceIn(0f, 1f)
     /** The bubble's ground, as its row draws it. */
     internal var groundColor = androidx.compose.ui.graphics.Color.Unspecified
-    private var aim: Offset? = null
-    private var aimed = -1f
-    /** Where the words make for, `place` (where they go, as it is now) followed a little behind, once a frame. */
-    internal fun follow(place: Offset): Offset {
-        val was = aim
-        val t = progress.value
-        if (t != aimed) { aimed = t; aim = if (was == null) place else was + (place - was) * 0.35f }
-        return aim ?: place
-    }
-
     /** Where the list is drawn now, off its place. */
     fun shift(): Float = if (carried) (rise ?: 0f) * (1f - e()) else 0f
-
-    /**
-     * In an open chat, how much of its row the list does not make room for yet: what the field did not show (the lines
-     * above those it did), until they settle; then it comes in, pushing what is above up.
-     */
-    fun reserve(): Float = hidden() * (1f - settle())
-
-    /** How tall in the bubble what the field did not show is (the lines above those it did). */
-    internal fun hidden(): Float {
-        if (carried) return 0f
-        val ps = pieces() ?: return 0f
-        val lead = ps.firstOrNull { it.shown } ?: return 0f
-        return lead.clip.top - ps.first().clip.top
-    }
-
-    /**
-     * The final row bottom in overlay coordinates while the list follows. An absolute destination stays independent
-     * of requestScrollToItem, which takes effect in a later layout. Null when not following.
-     */
-    internal var finalBottom: Float? = null
 
     /**
      * The words cut into the pieces that fly on their own: runs that are on one line both in the field and in the
@@ -231,12 +205,11 @@ class Host {
     var spec by mutableStateOf<ComposerSpec?>(null)
     /** The composer's room at the foot, with its margins (what the page above keeps clear of), in px. */
     var composerHeight by mutableIntStateOf(0)
-    /** The composer's room as the chat's list was last given it (composed with it: a frame behind its own changes). */
-    internal var listRoom = 0
-    /** The composer's room, for the chat's list. */
-    fun roomForList(): Int = composerHeight.also { listRoom = it }
-    /** The composer's room once it has come to what it holds (not held tall, nor on its way). */
-    internal fun naturalRoom(): Int = morph?.let { composerHeight - (it.height() - contentHeight) } ?: composerHeight
+    /** Measured from the composer's final content, independent of its visual height animation. */
+    internal var naturalHeight by mutableIntStateOf(0)
+    fun roomForList(): Int = if (flight?.carried == false && naturalHeight > 0) naturalHeight else composerHeight
+    internal val rowPositions = mutableMapOf<String, Float>()
+    internal var prepareFlight: (suspend (Flight) -> Unit)? = null
     internal var field: LayoutCoordinates? = null
     internal var fieldText: TextLayoutResult? = null
     internal var fieldWidth by mutableIntStateOf(0)
@@ -284,6 +257,7 @@ class Host {
             text, from, with(d) { SendTextStyle.fontSize.toPx() }, at, field.size.width, field.size.height, overlay.localPositionOf(capsule, Offset.Zero).y,
             carried, before, typed, typed?.layoutInput?.text?.text?.indexOf(text) ?: -1,
         )
+        flight?.beforePositions = rowPositions.toMap()
         hintAway = true
     }
 
@@ -303,13 +277,6 @@ class Host {
         internal set
     internal var contentHeight = 0
     internal var morph: Morph? = null
-
-    /**
-     * How much lower the list will be once the composer has come down to its content (held, or on its way down): the
-     * words go where their row will be, not where the composer, still tall, has it for now. The list's room is the
-     * composer's as it was given it (it follows the composer a frame behind).
-     */
-    internal fun drop(): Float = morph?.let { (listRoom - composerHeight + it.height() - contentHeight).coerceAtLeast(0).toFloat() } ?: 0f
 
     /** The rows the list shows now (by key): what was there before a message is sent is not where it goes. */
     var rows: Set<String> = emptySet()
@@ -341,19 +308,27 @@ val LocalFlightHost = staticCompositionLocalOf<Host?> { null }
 
 /** A row the words fly into: drawn by the host over the composer, from where they were to here, instead of in the list. */
 fun Modifier.flying(host: Host, f: Flight?): Modifier = if (f == null) this else this
-    // Its top (what the field did not show) not given room in the list yet: the row stands as tall as the rest, its
-    // foot where it will be, what is above it lower by that much until the words settle.
-    .layout { m, c ->
-        val p = m.measure(c)
-        val r = if (host.flight === f) f.reserve().roundToInt().coerceIn(0, p.height) else 0
-        layout(p.width, p.height - r) { p.place(0, -r) }
-    }
     .onGloballyPositioned { f.row = it; f.placed = true }
     .drawWithContent {
         // Landed: here again, in the frame the host stops drawing it (not the next, once the list has let it go).
         val layer = host.layer
         if (host.flight === f && layer != null) layer.record { this@drawWithContent.drawContent() } else drawContent()
     }
+
+/** Existing rows also use FLIP: lay out once at their destination, undo that displacement in drawing. */
+@Composable
+internal fun Modifier.sendReflow(host: Host, id: String): Modifier {
+    val coords = remember(id) { arrayOfNulls<LayoutCoordinates>(1) }
+    return onPlaced {
+        coords[0] = it
+        host.overlayY(it)?.let { y -> host.rowPositions[id] = y }
+    }.graphicsLayer {
+        val f = host.flight
+        val from = f?.beforePositions?.get(id)
+        val to = host.overlayY(coords[0])
+        translationY = if (f != null && !f.carried && from != null && to != null) (from - to) * (1f - f.up()) else 0f
+    }
+}
 
 /** The bubble of a row flown into: where its letters start (`pad`: its padding; `line`, `size`: its line height and letters' size, px). */
 internal fun Flight.bubbleAt(coords: LayoutCoordinates, host: Host, pad: Offset, line: Float, size: Float) {
@@ -396,6 +371,8 @@ internal const val SCENE_LEAVE_MS = 140
 internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean = true) {
     val spec = host.spec ?: return
     val draft = spec.draft
+    val density = LocalDensity.current
+    val composerChrome = with(density) { (ComposerInset * 2 + 18.dp).roundToPx() }
     val morph = rememberMorph()
     host.morph = morph
     // Back once the words are out of the composer, eased (going is at once).
@@ -415,6 +392,7 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
                     .layout { m, c ->
                         val p = m.measure(c)
                         host.contentHeight = p.height
+                        host.naturalHeight = p.height + composerChrome
                         val h = maxOf(p.height, host.hold ?: 0)
                         layout(p.width, h) { p.place(0, h - p.height) }
                     },
@@ -448,7 +426,7 @@ private fun FlightLayer(host: Host) {
         val bubble = flight.bubble?.takeIf { it.isAttached }
         val overlay = host.overlay?.takeIf { it.isAttached }
         val layer = host.layer
-        if (row == null || bubble == null || overlay == null || layer == null) {
+        if ((!flight.carried && !flight.ready) || row == null || bubble == null || overlay == null || layer == null) {
             // Until their row is drawn in the list, the words stay as they were typed, as the field showed them
             // (scrolled to its last lines when there were more than it holds); they go in the frame it is.
             val typed = flight.typed ?: return@drawWithContent
@@ -459,16 +437,9 @@ private fun FlightLayer(host: Host) {
         val across = flight.across()
         val up = flight.up()
         val settle = flight.settle()
-        // Where its letters are now (the list carrying them, a new chat's), and where they would be in place (the
-        // composer down: in an open chat it still holds the list up as they go).
+        // The destination is the real bubble's laid-out position. No predicted foot, scroll delta or follower.
         val now = overlay.localPositionOf(bubble, Offset.Zero) + flight.inBubble
-        val drop = if (flight.carried) 0f else flight.finalBottom?.let {
-            it - row.size.height - overlay.localPositionOf(row, Offset.Zero).y
-        } ?: host.drop()
-        val place = now - Offset(0f, flight.shift() - drop)
-        // Followed, not jumped to: the list going to its end and the composer coming down move it by fits and starts.
-        val to = if (flight.carried) place else flight.follow(place) + (place - flight.follow(place)) * settle
-        val off = to - place
+        val to = now - Offset(0f, flight.shift())
         val at = Offset(flight.from.x + (to.x - flight.from.x) * across, flight.from.y + (to.y - flight.from.y) * up)
         val k = flight.fromSize / flight.toSize
         // At the size typed until they settle (a new chat's: on the way).
@@ -477,7 +448,7 @@ private fun FlightLayer(host: Host) {
         val words = flight.words
         val pieces = flight.pieces()
         // Where the bubble's words are once in place.
-        val home = overlay.localPositionOf(bubble, Offset.Zero) + flight.pad - Offset(0f, flight.shift() - drop) + off
+        val home = overlay.localPositionOf(bubble, Offset.Zero) + flight.pad - Offset(0f, flight.shift())
         // In an open chat the words go as one block, as typed, its first letters (the first that showed) to theirs,
         // only those the field showed (more than six lines: the rest come in as they settle), their bubble's ground
         // coming in round them from half way; come, it opens out to the whole bubble as they settle into it.
@@ -504,7 +475,7 @@ private fun FlightLayer(host: Host) {
         }
         // What shows: the bubble (what the field did not show is not there yet), then the row as it is (its time).
         val view = ground?.let { g ->
-            val r = overlay.localPositionOf(row, Offset.Zero) - Offset(0f, flight.shift() - drop) + off
+            val r = overlay.localPositionOf(row, Offset.Zero) - Offset(0f, flight.shift())
             androidx.compose.ui.geometry.Rect(-1e5f, g.top, 1e5f, g.bottom + (r.y + row.size.height - g.bottom).coerceAtLeast(0f) * settle)
         } ?: androidx.compose.ui.geometry.Rect(-1e5f, -1e5f, 1e5f, 1e5f)
         clipRect(view.left, view.top, view.right, view.bottom) {
@@ -559,6 +530,7 @@ private fun FlightLayer(host: Host) {
         if (f == null || bound == null) return@LaunchedEffect
         // Not while its row is only composed ahead, out of sight: once the list shows it.
         snapshotFlow { f.placed }.first { it }
+        if (!f.carried) { host.prepareFlight?.invoke(f); f.ready = true }
         // A new chat's: once its choices have faded (web: 90 ms after what leaves has begun to).
         // The composer comes down once they are half way.
         if (!f.carried) launch { snapshotFlow { f.progress.value }.first { it >= SETTLE }; if (host.flight === f) host.hold = null }

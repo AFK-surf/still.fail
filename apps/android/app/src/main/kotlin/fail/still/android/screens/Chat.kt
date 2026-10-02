@@ -166,6 +166,7 @@ import fail.still.android.ui.floating
 import fail.still.android.ui.glass
 import fail.still.android.ui.rememberFollow
 import fail.still.core.CoreException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
@@ -675,40 +676,28 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         list.requestScrollToItem(lastRow, 1_000_000)
         follow.on = true
     }
-    // Words sent flying in an open chat (ChatHost.kt), while the list follows: it is put in place in each frame, not
-    // followed, so that what is above only goes up, smoothly. As the row comes in nothing moves (its top where the list
-    // ended); as the words go up, it makes room for what of it they show, at the composer's own foot (not the composer
-    // held tall, nor on its way down); as they settle, the rest of it (what the field did not show) comes in above,
-    // its foot where it is.
+    // Complete the normal list layout before starting FLIP. The real row supplies the destination, including
+    // the list's own scroll clamping in a short chat; scrolling is never an animation clock.
     var box by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     val flying = host.flight
-    val room by rememberUpdatedState(with(LocalDensity.current) { (bottom + 10.dp).roundToPx() })
-    LaunchedEffect(flying) {
-        if (flying == null || flying.carried) return@LaunchedEffect
-        var from: Int? = null
-        try {
-            while (host.flight === flying) {
-                withFrameNanos { }
-                val key = flying.key
-                val item = key?.let { k -> list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == k } }
-                val full = flying.row?.takeIf { it.isAttached }?.size?.height
-                val index = key?.let(follow.indexOf)?.takeIf { it >= 0 }
-                // Not following: nothing is put in place (the words go where the row is). Following, the list is not
-                // glided after the row as it comes in either: it is put in place from the first frame it is laid out.
-                if (!follow.on || short) { follow.paused = false; flying.finalBottom = null; continue }
+    val bottomExtra = with(density) { 10.dp.roundToPx() }
+    val followMargin = with(density) { 12.dp.roundToPx() }
+    SideEffect {
+        host.prepareFlight = { f ->
+            snapshotFlow { list.layoutInfo.afterContentPadding == host.roomForList() + bottomExtra }.first { it }
+            if (!short && host.flight === f) {
                 follow.paused = true
-                if (!flying.placed || item == null || full == null || index == null) { flying.finalBottom = null; continue }
-                val top = from ?: item.offset.also { from = it }
-                // Where its foot will be: above the composer's own room (and what else the list keeps clear of).
-                val foot = list.layoutInfo.viewportEndOffset - (room - host.listRoom + host.naturalRoom())
-                val cut = flying.reserve().roundToInt()
-                val at = (top + (foot - (full - cut) - top) * flying.up()).roundToInt()
-                list.requestScrollToItem(index, -at)
-                // Resolve the destination in the overlay, not as a delta from the requested scroll offset.
-                // That offset has not been laid out yet; mixing it with current coordinates makes the words recoil.
-                flying.finalBottom = host.overlayY(box)?.plus(list.layoutInfo.beforeContentPadding + foot)
+                val index = f.key?.let(follow.indexOf)?.takeIf { it >= 0 }
+                if (index != null) {
+                    follow.anchor = f.key
+                    // Same destination as normal follow: the new message's top, clamped by the actual list end.
+                    list.scrollToItem(index, -followMargin)
+                }
             }
-        } finally { follow.paused = false }
+        }
+    }
+    LaunchedEffect(flying) {
+        if (flying == null) follow.paused = false
     }
     // A message sent from up the list takes the reader to its end at once, following again (web Chat.tsx useToEnd). Told
     // by the composer as it sends, not by the outbox growing: on a quick link the station has the message before the
@@ -721,7 +710,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         val sent = sends > sentCount[0]
         sentCount[0] = sends
         // Words sent flying in, while it follows: it is put in place by them (below), not glided after their row.
-        if (sent && host.flight?.carried == false && follow.on && !short) follow.paused = true
+        if (sent && host.flight?.carried == false && !short) follow.paused = true
         if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }
         if (sent && !short && follow.placed && !follow.on) { atLatest(); return@SideEffect }
         if (was == null || was == headKey || !follow.placed || reveal.revealing) return@SideEffect
@@ -816,7 +805,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 val glides = row is Entry.Working && !motion.away(row.agent.key)
                 val faded = view.focusLast == true && !list.canScrollForward && row is Entry.Said && row.m.seq != messages.lastOrNull()?.seq
                 val messageOpacity by animateFloatAsState(if (faded) 0.4f else 1f, if (focusMotion || dragging) tween(180, easing = Ease.Out) else snap(), label = "message-focus")
-                Box(Modifier.graphicsLayer { alpha = messageOpacity }.animateItem(fadeInSpec = null, placementSpec = if (glides) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
+                Box(Modifier.sendReflow(host, row.id).graphicsLayer { alpha = messageOpacity }.animateItem(fadeInSpec = null, placementSpec = if (glides && flight == null) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.
