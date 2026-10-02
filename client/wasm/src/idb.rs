@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use stillfail_core::host::HostError;
+use stillfail_core::i18n::t;
 use futures::FutureExt;
 use futures::future::{LocalBoxFuture, Shared};
 use js_sys::{Promise, Reflect, Uint8Array};
@@ -123,7 +124,7 @@ async fn open() -> Result<IdbDatabase, HostError> {
     let factory: IdbFactory = Reflect::get(&js_sys::global(), &JsValue::from_str("indexedDB"))
         .ok()
         .filter(|f| !f.is_undefined() && !f.is_null())
-        .ok_or_else(|| HostError("这个浏览器没有 IndexedDB".into()))?
+        .ok_or_else(|| HostError(t!("core-misc.host.idb.missing")))?
         .unchecked_into();
     // The first open under the new name fills it with what the former one has (read first: the upgrade that makes
     // the stores puts the rows in the same transaction, so no other tab sees it made and empty).
@@ -131,7 +132,7 @@ async fn open() -> Result<IdbDatabase, HostError> {
         Some(db) => db,
         None => {
             let rows = former_rows(&factory).await?;
-            open_at(&factory, DATABASE, Some(VERSION), rows, true).await?.ok_or_else(|| HostError("IndexedDB 打不开".into()))?
+            open_at(&factory, DATABASE, Some(VERSION), rows, true).await?.ok_or_else(|| HostError(t!("core-misc.host.idb.unopened")))?
         }
     };
     // Another tab upgrading the schema later must not be blocked by us.
@@ -228,7 +229,7 @@ async fn done(request: &IdbRequest) -> Result<JsValue, HostError> {
         Ok(_) => request.result().map_err(js_error),
         Err(_) => Err(match request.error() {
             Ok(Some(error)) => HostError(error.message()),
-            _ => HostError("IndexedDB 请求失败".into()),
+            _ => HostError(t!("core-misc.host.idb.failed")),
         }),
     }
 }
@@ -245,7 +246,7 @@ async fn committed(tx: &IdbTransaction) -> Result<(), HostError> {
         Ok(_) => Ok(()),
         Err(_) => Err(match tx.error() {
             Some(error) => HostError(error.message()),
-            None => HostError("IndexedDB 写入没有完成".into()),
+            None => HostError(t!("core-misc.host.idb.unwritten")),
         }),
     }
 }

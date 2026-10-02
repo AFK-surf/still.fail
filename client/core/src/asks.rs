@@ -9,6 +9,7 @@ use std::rc::Rc;
 use futures::FutureExt;
 use futures::future::{LocalBoxFuture, Shared};
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::accounts::Accounts;
 use crate::error::{CoreError, Result};
@@ -31,11 +32,11 @@ pub enum Ask {
 /// The ask `name` names, with its params; `None` when it is none of these.
 pub fn parse(name: &str, params: &Value) -> Option<Result<Ask>> {
     let text = |field: &str| params.get(field).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string)
-        .ok_or_else(|| CoreError::invalid(format!("参数不对：缺少 {field}")));
+        .ok_or_else(|| CoreError::invalid(t!("core-misc.params.missing", field = field)));
     Some(match name {
         "link.parse" => text("url").map(|url| Ask::LinkParse { url }),
         "app.update" => text("platform").and_then(|platform| {
-            let version = params.get("versionCode").and_then(Value::as_i64).ok_or_else(|| CoreError::invalid("参数不对：缺少 versionCode"))?;
+            let version = params.get("versionCode").and_then(Value::as_i64).ok_or_else(|| CoreError::invalid(t!("core-misc.params.missing", field = "versionCode")))?;
             Ok(Ask::AppUpdate { platform, version, now: params.get("now").and_then(Value::as_bool).unwrap_or(false) })
         }),
         "picture" => text("url").map(|url| Ask::Picture { url }),
@@ -78,13 +79,13 @@ impl Asks {
             Ask::DevSignIn { user } => {
                 let origin = self.host.cloud_origin();
                 if !dev_cloud(&origin) {
-                    return Err(CoreError::invalid("只有开发云能这样登录"));
+                    return Err(CoreError::invalid(t!("core-misc.ask.dev_only")));
                 }
                 let url = format!("{origin}/__dev/account?user={}", crate::accounts::encode_component(&user));
                 let response = self.host.fetch(HttpRequest { method: "GET".into(), url, headers: Vec::new(), body: None }).await
-                    .map_err(|e| CoreError::new("dev_cloud", format!("开发云没有回应：{e}")))?;
+                    .map_err(|e| CoreError::new("dev_cloud", t!("core-misc.ask.dev_cloud", error = e)))?;
                 let account: Value = serde_json::from_slice(&response.body).ok().filter(|_| response.status == 200)
-                    .ok_or_else(|| CoreError::new("dev_cloud", format!("开发云没有回应：{}", response.status)))?;
+                    .ok_or_else(|| CoreError::new("dev_cloud", t!("core-misc.ask.dev_cloud", error = response.status)))?;
                 accounts.migrate(json!([account])).await?;
                 Ok(Value::Null)
             }
@@ -109,13 +110,13 @@ impl Asks {
         // Background checks may keep the last result; an explicit check must not silently use a stale build.
         let response = match self.host.fetch(request).await {
             Ok(response) => response,
-            Err(e) if now => return Err(CoreError::new("app_update", format!("无法获取最新版本：{e}"))),
+            Err(e) if now => return Err(CoreError::new("app_update", t!("core-misc.ask.update_failed", error = e))),
             Err(_) => return Ok(newer(&self.releases.borrow()[&feed].1)),
         };
         let release = serde_json::from_slice::<Value>(&response.body).ok().filter(|_| response.status == 200)
             .and_then(|r| stillfail_shapes::conform::<stillfail_shapes::AppRelease>(r).ok());
         if now && release.is_none() {
-            return Err(CoreError::new("app_update", "无法获取最新版本，请重试"));
+            return Err(CoreError::new("app_update", t!("core-misc.ask.update_retry")));
         }
         if release.is_some() {
             self.releases.borrow_mut().insert(feed.clone(), (time, release.clone()));
@@ -125,7 +126,7 @@ impl Asks {
 
     async fn picture(&self, url: &str) -> Result<(String, Vec<u8>)> {
         if !(url.starts_with("https://") || url.starts_with("http://")) {
-            return Err(CoreError::invalid("图片地址不对"));
+            return Err(CoreError::invalid(t!("core-misc.ask.bad_picture_url")));
         }
         let found = self.pictures.borrow().get(url).cloned();
         let picture = match found {
@@ -134,9 +135,9 @@ impl Asks {
                 let (host, address) = (self.host.clone(), url.to_string());
                 let p: Picture = async move {
                     let response = host.fetch(HttpRequest { method: "GET".into(), url: address, headers: Vec::new(), body: None }).await
-                        .map_err(|e| CoreError::new("picture", format!("读不到图片：{e}")))?;
+                        .map_err(|e| CoreError::new("picture", t!("core-misc.ask.picture_failed", error = e)))?;
                     if response.status != 200 {
-                        return Err(CoreError::new("picture", format!("读不到图片：{}", response.status)));
+                        return Err(CoreError::new("picture", t!("core-misc.ask.picture_failed", error = response.status)));
                     }
                     Ok((response.header("content-type").unwrap_or("").to_string(), response.body))
                 }.boxed_local().shared();

@@ -1015,7 +1015,7 @@ fn the_device_says_what_it_is_once_and_the_core_decides_what_follows() {
         host.settle().await;
         let mut values = HashMap::new();
         apply(&host, &mut values);
-        assert_eq!(values[&1]["device"], json!({ "app": "web", "phone": true, "handoff": false }));
+        assert_eq!(values[&1]["device"], json!({ "app": "web", "phone": true, "handoff": false, "locale": null }));
         // A message goes with the app it is sent from, unless the UI says.
         core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({ "station": "ws/st", "thread": 7, "text": "hi" }) });
         host.settle().await;
@@ -1037,7 +1037,50 @@ fn the_device_says_what_it_is_once_and_the_core_decides_what_follows() {
         host.settle().await;
         let mut values = HashMap::new();
         apply(&host, &mut values);
-        assert_eq!(values[&7]["device"], json!({ "app": "web", "phone": false, "handoff": true }));
+        assert_eq!(values[&7]["device"], json!({ "app": "web", "phone": false, "handoff": true, "locale": null }));
+    });
+}
+
+#[test]
+fn the_language_is_as_chosen_else_as_the_device_is() {
+    run(async {
+        let (host, core) = station_core(0.0).await;
+        let ui = core.connect();
+        core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Prefs });
+        host.settle().await;
+        let mut values = HashMap::new();
+        apply(&host, &mut values);
+        // Nothing told yet: none (the clients go by their device themselves).
+        assert_eq!(values[&1]["lang"], Value::Null);
+        // An English device, nothing chosen: English, and it signs in by an English name.
+        let mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+        core.receive(ui, ClientMessage::Call { id: 2, call: "client.device".into(), params: json!({ "app": "web", "userAgent": mac, "locale": "en-US" }) });
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["lang"], "en");
+        assert_eq!(crate::prefs::device_name(&core.inner.data).as_deref(), Some("still.fail Web · Chrome · macOS"));
+        // Chosen: as chosen; no longer chosen: as the device is.
+        let set = |id, params: Value| core.receive(ui, ClientMessage::Call { id, call: "prefs.set".into(), params });
+        set(3, json!({ "language": "zh" }));
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["lang"], "zh");
+        set(4, json!({ "language": null }));
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["lang"], "en");
+        set(5, json!({ "language": "fr" }));
+        host.settle().await;
+        assert!(host.take_emitted().iter().any(|(_, m)| matches!(m, CoreMessage::Error { id: 5, .. })));
+        // A Chinese device, English chosen.
+        core.receive(ui, ClientMessage::Call { id: 6, call: "client.device".into(), params: json!({ "app": "web", "userAgent": mac, "locale": "zh-CN" }) });
+        set(7, json!({ "language": "en" }));
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["lang"], "en");
+        // The core's own words stay Chinese in tests (they run side by side).
+        assert_eq!(stillfail_i18n::current(), stillfail_i18n::Lang::Zh);
+        assert_eq!(stillfail_i18n::t!(stillfail_i18n::Lang::En; "core-misc.params.missing", field = "x"), "Invalid parameters: missing x");
     });
 }
 

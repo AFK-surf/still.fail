@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use stillfail_core::host::{Host, HostError, HttpRequest, HttpResponse, SOCKET_PING, SOCKET_PING_MS, SocketFrames, StreamResponse};
 use stillfail_core::{ClientId, CoreError, CoreMessage};
+use stillfail_core::i18n::t;
 use futures::channel::{mpsc, oneshot};
 use futures::future::LocalBoxFuture;
 use futures::stream::{self, StreamExt};
@@ -297,7 +298,7 @@ impl Host for WebHost {
                 let id = match &message {
                     CoreMessage::Ok { id, .. } | CoreMessage::Error { id, .. } | CoreMessage::Value { id, .. } | CoreMessage::Delta { id, .. } => *id,
                 };
-                let error = CoreMessage::Error { id, error: CoreError::new("host", format!("无法传给页面：{error}")) };
+                let error = CoreMessage::Error { id, error: CoreError::new("host", t!("core-misc.host.unsendable_page", error = error)) };
                 match error.serialize(&serializer) {
                     Ok(value) => value,
                     Err(_) => return,

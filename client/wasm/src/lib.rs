@@ -9,6 +9,7 @@ mod idb;
 use std::rc::Rc;
 
 use stillfail_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host};
+use stillfail_core::i18n::t;
 use js_sys::{Function, Reflect};
 use wasm_bindgen::prelude::*;
 
@@ -51,7 +52,7 @@ impl StillFailCore {
                 // Answer only what can be answered: without an id nobody is waiting.
                 let id = Reflect::get(&message, &JsValue::from_str("id")).ok().and_then(|id| id.as_f64());
                 if let Some(id) = id.filter(|id| *id >= 0.0 && id.fract() == 0.0) {
-                    let error = CoreError::new("bad_message", format!("无法识别的消息：{error}"));
+                    let error = CoreError::new("bad_message", t!("core-misc.host.bad_message", error = error));
                     self.host.emit(client, CoreMessage::Error { id: id as u64, error });
                 }
             }

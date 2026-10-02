@@ -60,7 +60,7 @@ impl Doing {
             let stage = if e.failed.is_some() { "failed" } else if rechecking(&e.params) { "rechecking" } else { "running" };
             let mut item = json!({ "call": e.call, "params": e.params, "since": e.since as i64, "stage": stage });
             if stage == "rechecking" {
-                item["note"] = json!("station 没有回应，等它回来确认做没做成");
+                item["note"] = json!(stillfail_i18n::t!("core-misc.doing.rechecking"));
             }
             if let Some(why) = &e.failed {
                 item["error"] = json!(why);

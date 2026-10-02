@@ -50,5 +50,7 @@ pub mod workspace;
 
 pub use crate::core::{Core, PreparedMessage};
 pub use error::CoreError;
+/// The words people read, in their language (`t!`), for the hosts to say theirs too.
+pub use stillfail_i18n as i18n;
 pub use host::Host;
 pub use protocol::{ClientId, ClientMessage, CoreMessage, Topic};

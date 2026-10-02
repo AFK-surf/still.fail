@@ -27,6 +27,7 @@ use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::error::{CoreError, Result};
 use crate::host::Host;
@@ -144,7 +145,7 @@ pub enum Call {
 /// The calls of this module, by name; `None`: not one of them.
 pub fn parse(name: &str, params: &Value) -> Option<Result<Call>> {
     let params = if params.is_null() { json!({}) } else { params.clone() };
-    let bad = |e: serde_json::Error| CoreError::invalid(format!("参数不对：{e}"));
+    let bad = |e: serde_json::Error| CoreError::invalid(t!("core-misc.params.invalid", error = e));
     Some(match name {
         "client.focus" => serde_json::from_value::<FocusCall>(params).map(Call::Focus).map_err(bad),
         "notify.set" => {

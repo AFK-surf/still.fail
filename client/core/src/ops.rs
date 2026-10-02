@@ -4,6 +4,7 @@
 //! topic that shows it is current when the call answers. See docs/client-core.md, Calls.
 
 use serde_json::{Map, Value, json};
+use stillfail_i18n::t;
 
 use crate::error::{CoreError, Result};
 use crate::station::encode;
@@ -53,7 +54,7 @@ struct P<'a>(&'a Value);
 
 impl P<'_> {
     fn str(&self, name: &str) -> Result<String> {
-        self.0.get(name).and_then(Value::as_str).map(str::to_string).ok_or_else(|| CoreError::invalid(format!("参数不对：缺少 {name}")))
+        self.0.get(name).and_then(Value::as_str).map(str::to_string).ok_or_else(|| CoreError::invalid(t!("core-misc.params.missing", field = name)))
     }
     fn word(&self, name: &str) -> Option<String> {
         self.0.get(name).and_then(Value::as_str).map(str::to_string)
@@ -62,13 +63,13 @@ impl P<'_> {
         self.str(name).map(|s| encode(&s))
     }
     fn u64(&self, name: &str) -> Result<u64> {
-        self.0.get(name).and_then(Value::as_u64).ok_or_else(|| CoreError::invalid(format!("参数不对：缺少 {name}")))
+        self.0.get(name).and_then(Value::as_u64).ok_or_else(|| CoreError::invalid(t!("core-misc.params.missing", field = name)))
     }
     fn bool(&self, name: &str) -> bool {
         self.0.get(name).and_then(Value::as_bool).unwrap_or(false)
     }
     fn value(&self, name: &str) -> Result<Value> {
-        self.0.get(name).cloned().ok_or_else(|| CoreError::invalid(format!("参数不对：缺少 {name}")))
+        self.0.get(name).cloned().ok_or_else(|| CoreError::invalid(t!("core-misc.params.missing", field = name)))
     }
     /// Those of `names` that are given (null included), as a body.
     fn pick(&self, names: &[&str]) -> Value {

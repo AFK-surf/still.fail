@@ -6,6 +6,7 @@
 //! is (`client.device`: its host says so once at start) and what follows from that: phone or computer, the name it signs in as, the app a message is sent from.
 
 use serde_json::{Map, Value, json};
+use stillfail_i18n::t;
 
 use crate::data::Data;
 use crate::error::{CoreError, Result};
@@ -31,11 +32,11 @@ fn kept(data: &Data) -> Map<String, Value> {
 /// Puts `patch` into what is kept: a field given replaces it and null removes it; a map's entries are each put so (an
 /// entry null removes it). `fill`: only what is not kept yet (a device's values from before, moved in once).
 pub fn set(data: &Data, patch: Value, fill: bool, now: f64) -> Result<()> {
-    let Value::Object(patch) = patch else { return Err(CoreError::invalid("参数不对：要是一个对象")) };
+    let Value::Object(patch) = patch else { return Err(CoreError::invalid(t!("core-misc.params.not_object"))) };
     let mut prefs = kept(data);
     for (field, value) in patch {
         if !FIELDS.contains(&field.as_str()) {
-            return Err(CoreError::invalid(format!("参数不对：没有 {field} 这一项")));
+            return Err(CoreError::invalid(t!("core-misc.params.unknown_field", field = field)));
         }
         match value {
             Value::Object(entries) if MAPS.contains(&field.as_str()) => {
@@ -85,11 +86,11 @@ pub fn set(data: &Data, patch: Value, fill: bool, now: f64) -> Result<()> {
         }
     }
     if prefs.get("language").is_some_and(|l| !matches!(l.as_str(), Some("zh" | "en"))) {
-        return Err(CoreError::invalid("参数不对：language 要是 zh 或 en"));
+        return Err(CoreError::invalid(t!("core-misc.params.language")));
     }
     with_lang(&mut prefs);
     let prefs = Value::Object(prefs);
-    stillfail_shapes::conform::<stillfail_shapes::PrefsView>(prefs.clone()).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
+    stillfail_shapes::conform::<stillfail_shapes::PrefsView>(prefs.clone()).map_err(|e| CoreError::invalid(t!("core-misc.params.invalid", error = e)))?;
     data.set(&Topic::Prefs, prefs);
     Ok(())
 }
@@ -155,43 +156,53 @@ pub fn device(data: &Data, facts: &Value) -> Result<()> {
     let said = |k: &str| facts.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
     let app = said("app");
     if !matches!(app.as_str(), "web" | "desktop" | "android") {
-        return Err(CoreError::invalid("参数不对：app 要是 web、desktop 或 android"));
+        return Err(CoreError::invalid(t!("core-misc.params.app")));
     }
     let (build, agent, model) = (said("build"), said("userAgent"), said("model"));
     let has = |words: &[&str]| words.iter().any(|w| agent.to_lowercase().contains(&w.to_lowercase()));
     let phone = app == "android" || (app == "web" && has(&["Android", "iPhone", "iPad"]));
     let os = if has(&["iPhone", "iPad"]) { "iOS" } else if agent.contains("Mac OS X") { "macOS" } else if agent.contains("Windows") { "Windows" } else if agent.contains("Android") { "Android" } else if agent.contains("Linux") { "Linux" } else { "" };
-    let browser = if agent.contains("Edg/") { "Edge" } else if agent.contains("Chrome/") { "Chrome" } else if agent.contains("Firefox/") { "Firefox" } else if agent.contains("Safari/") { "Safari" } else { "浏览器" };
+    let browser = if agent.contains("Edg/") { "Edge" } else if agent.contains("Chrome/") { "Chrome" } else if agent.contains("Firefox/") { "Firefox" } else if agent.contains("Safari/") { "Safari" } else { "" };
     let with = |s: &str| if s.is_empty() { String::new() } else { format!(" · {s}") };
-    let name = match app.as_str() {
-        "android" => format!("{} Android{}", crate::brand::name(), with(&model)),
-        "desktop" => format!("{} 桌面版{}", crate::brand::name(), with(os)),
-        _ => format!("{} 网页版 · {browser}{}", crate::brand::name(), with(os)),
-    };
     let build = if build.is_empty() { String::new() } else { format!(" {build}") };
     let from = match app.as_str() {
         "web" => format!("web{build} ({})", if phone { "phone" } else { "pc" }),
         _ => format!("{app}{build}"),
     };
     let mut prefs = kept(data);
-    let mut told = json!({ "app": app, "phone": phone, "handoff": app == "web" && !phone, "name": name, "sentFrom": from });
+    let mut told = json!({ "app": app, "phone": phone, "handoff": app == "web" && !phone, "sentFrom": from });
     let locale = said("locale");
     if !locale.is_empty() {
         told["locale"] = json!(locale);
     }
     prefs.insert("device".into(), told);
-    with_lang(&mut prefs);
+    // Named in the language said from now on (the device's, unless one is chosen).
+    let lang = with_lang(&mut prefs);
+    let brand = crate::brand::name();
+    let name = match app.as_str() {
+        "android" => t!(lang; "core-misc.device.android", brand = brand, more = with(&model)),
+        "desktop" => t!(lang; "core-misc.device.desktop", brand = brand, more = with(os)),
+        _ => {
+            let browser = if browser.is_empty() { t!(lang; "core-misc.device.browser") } else { browser.to_string() };
+            t!(lang; "core-misc.device.web", brand = brand, browser = browser, more = with(os))
+        }
+    };
+    prefs["device"]["name"] = json!(name);
     data.set(&Topic::Prefs, Value::Object(prefs));
     Ok(())
 }
 
 /// The language things are said in (`lang`): as chosen, else as the device is; the core says its own words in it from now on.
-fn with_lang(prefs: &mut Map<String, Value>) {
+/// (Not in tests: they run side by side in one process, and expect the words in Chinese.)
+fn with_lang(prefs: &mut Map<String, Value>) -> stillfail_i18n::Lang {
     let chosen = prefs.get("language").and_then(Value::as_str);
     let device = prefs.get("device").and_then(|d| d.get("locale")).and_then(Value::as_str);
     let lang = stillfail_i18n::Lang::from_locale(chosen.or(device).unwrap_or(""));
     prefs.insert("lang".into(), json!(lang.code()));
-    stillfail_i18n::set_current(lang);
+    if !cfg!(test) {
+        stillfail_i18n::set_current(lang);
+    }
+    lang
 }
 
 /// The core says its words in the language kept (at start, before anything is said).

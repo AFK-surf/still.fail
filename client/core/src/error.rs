@@ -1,6 +1,6 @@
 //! The one error type calls and topics report. `code` is stable and
 //! machine-readable (still.fail cloud's error codes pass through as they are);
-//! `message` is for people, in Chinese like the rest of the UI.
+//! `message` is for people, in their language (`stillfail_i18n::current`, as their prefs say) when it is made.
 
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +36,14 @@ impl CoreError {
 
 impl From<crate::host::HostError> for CoreError {
     fn from(error: crate::host::HostError) -> Self {
-        Self::new("host", error.0)
+        // What wake.rs gives up with is matched as it is (core.rs, station/events.rs); said in the person's language here.
+        let message = match error.0.as_str() {
+            crate::wake::DROPPED => stillfail_i18n::t!("core-misc.wake.dropped"),
+            crate::wake::GONE => stillfail_i18n::t!("core-misc.wake.gone"),
+            crate::wake::NETWORK => stillfail_i18n::t!("core-misc.wake.network"),
+            _ => error.0,
+        };
+        Self::new("host", message)
     }
 }
 

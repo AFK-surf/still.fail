@@ -7,7 +7,7 @@ impl Inner {
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok).unwrap_or(Value::Null);
         let row = rows.as_array().into_iter().flatten().find(|r| r.get("thread").and_then(Value::as_u64) == Some(thread));
         row.and_then(crate::decisions::of_row).filter(|d| d.get("seq").and_then(Value::as_u64) == Some(seq))
-            .ok_or_else(|| CoreError::invalid("这件事已经有人回复了"))
+            .ok_or_else(|| CoreError::invalid(t!("core-misc.call.already_answered")))
     }
 
     /// Runs a call; `at` is the client and id it came with.
@@ -38,9 +38,9 @@ impl Inner {
                             Err(e) => Err(e),
                         };
                         let current = if let Some(revision) = revision { let ok = self.slack_tokens.finish(&token_topic, revision, &answer); self.store.invalidate(&token_topic); ok } else {true};
-                        let transition = if current {answer.clone()} else {Err(CoreError::invalid("token 已改变，请重新校验"))};
+                        let transition = if current {answer.clone()} else {Err(CoreError::invalid(t!("core-misc.connect.token_changed")))};
                         let alive = self.connect_flow.finish(&topic, generation, &action, &transition);
-                        if !alive { return Err(CoreError::invalid("连接草稿已关闭")); }
+                        if !alive { return Err(CoreError::invalid(t!("core-misc.connect.closed"))); }
                         return answer;
                     }
                 }
@@ -117,7 +117,7 @@ impl Inner {
                 let data: Value = serde_json::from_slice(&response.body).unwrap_or_else(|_| json!({}));
                 match data.get("vapid").and_then(Value::as_str) {
                     Some(key) if response.status == 200 => Ok(json!({ "vapid": key })),
-                    _ => Err(CoreError::new("push_unavailable", format!("{} cloud 还不能推送", crate::brand::name()))),
+                    _ => Err(CoreError::new("push_unavailable", t!("core-misc.call.push_unavailable", brand = crate::brand::name()))),
                 }
             }
             Call::PushRegister { registration } => {
@@ -151,10 +151,10 @@ impl Inner {
             Call::ProfileModels { op, id, models } => {
                 let station = match &op.target {
                     crate::ops::Target::Station(station) => station.clone(),
-                    _ => return Err(CoreError::invalid("缺少 station")),
+                    _ => return Err(CoreError::invalid(t!("core-misc.params.missing_station"))),
                 };
                 if !self.data.begin_models(&station, &id, models) {
-                    return Err(CoreError::invalid("模型正在保存"));
+                    return Err(CoreError::invalid(t!("core-misc.call.models_saving")));
                 }
                 let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
                 // after_write has already installed the confirmed overview. Clear in core, not in a UI
@@ -200,7 +200,7 @@ impl Inner {
             Call::ChatArchive { op, thread, session, archived } => {
                 let station = match &op.target {
                     crate::ops::Target::Station(station) => station.clone(),
-                    crate::ops::Target::Cloud(_) => return Err(CoreError::invalid("参数不对：要有 station")),
+                    crate::ops::Target::Cloud(_) => return Err(CoreError::invalid(t!("core-misc.params.station"))),
                 };
                 if archived {
                     self.views.archiving(&station, thread, &session, true);
@@ -232,19 +232,19 @@ impl Inner {
                     // It waits for the chat; one that could not be made is tried again with it.
                     Some(None) => {
                         let failed = self.views.pending_failed_now(&session);
-                        let id = self.views.pending_queue(&session, message).ok_or_else(|| CoreError::invalid("没有这个对话"))?;
+                        let id = self.views.pending_queue(&session, message).ok_or_else(|| CoreError::invalid(t!("core-misc.call.no_chat")))?;
                         if failed {
                             self.make_chat(&session);
                         }
                         Ok(json!({ "id": id }))
                     }
-                    None => Err(CoreError::invalid("没有这个对话")),
+                    None => Err(CoreError::invalid(t!("core-misc.call.no_chat"))),
                 }
             }
             Call::DecisionAnswer { station, thread, seq, option } => {
                 // As its chat's row has it: still pending, an options card, and the option one it offers.
                 let card = self.pending_card(&station, thread, seq)?;
-                let (text, quotes) = crate::decisions::answer(&card, &option).ok_or_else(|| CoreError::invalid("没有这个选项"))?;
+                let (text, quotes) = crate::decisions::answer(&card, &option).ok_or_else(|| CoreError::invalid(t!("core-misc.call.no_option")))?;
                 crate::prefs::undefer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq));
                 if crate::decisions::closes(&card, &option) {
                     let op = crate::ops::request("decision.close", &json!({"station": station, "thread": thread, "seq": seq, "option": option}))
@@ -258,7 +258,7 @@ impl Inner {
                 // As its chat's row has it: still pending, and a supported card.
                 let card = self.pending_card(&station, thread, seq)?;
                 let extras = attachments.as_array().is_some_and(|a| !a.is_empty()) || added.as_array().is_some_and(|a| !a.is_empty());
-                let (text, mut quotes) = crate::decisions::reply(&card, &text, extras).ok_or_else(|| CoreError::invalid("请在 chat 里回复这张卡片"))?;
+                let (text, mut quotes) = crate::decisions::reply(&card, &text, extras).ok_or_else(|| CoreError::invalid(t!("core-misc.call.reply_in_chat")))?;
                 if let (Some(quotes), Some(added)) = (quotes.as_array_mut(), added.as_array()) {
                     quotes.extend(added.iter().cloned());
                 }
@@ -277,7 +277,7 @@ impl Inner {
                     self.make_chat(&session);
                     Ok(Value::Null)
                 }
-                None => Err(CoreError::invalid("没有这个对话")),
+                None => Err(CoreError::invalid(t!("core-misc.call.no_chat"))),
             },
             Call::ChatDiscardIn { station, session, id } => {
                 match self.views.pending_thread(&station, &session) {
@@ -285,12 +285,12 @@ impl Inner {
                     Some(None) => {
                         self.views.pending_discard(&session, &id);
                     }
-                    None => return Err(CoreError::invalid("没有这个对话")),
+                    None => return Err(CoreError::invalid(t!("core-misc.call.no_chat"))),
                 }
                 Ok(Value::Null)
             }
             Call::ChatRetry { station, thread, id } => {
-                let entry = self.views.outbox_get(&station, thread, &id).ok_or_else(|| CoreError::invalid("没有这条待发的消息"))?;
+                let entry = self.views.outbox_get(&station, thread, &id).ok_or_else(|| CoreError::invalid(t!("core-misc.call.no_outbox")))?;
                 self.views.outbox_state(&station, thread, &id, None);
                 self.deliver(&station, thread, &id, crate::views::sent_as(&entry)).await
             }
@@ -438,7 +438,7 @@ impl Inner {
             Call::PreviewSocket { station, port, path, headers, socket: name } => {
                 // Named before it opens: what the page sends meanwhile (a close right away) waits, and goes once it is open.
                 let (tx, mut from_page) = futures::channel::mpsc::unbounded();
-                let _open = Registered::new(self.preview_sockets.clone(), (at.0, name), tx).ok_or_else(|| CoreError::invalid("这个名字的 WebSocket 已经开着"))?;
+                let _open = Registered::new(self.preview_sockets.clone(), (at.0, name), tx).ok_or_else(|| CoreError::invalid(t!("core-misc.call.socket_open")))?;
                 let station = StationAddr::parse(&station)?;
                 let opening = self.stations.preview_socket(&station, port, &path, headers);
                 let mut held = Vec::new();
@@ -486,7 +486,7 @@ impl Inner {
                 let sent = self.preview_sockets.borrow().get(&(at.0, socket)).map(|tx| tx.unbounded_send(frame).is_ok());
                 match sent {
                     Some(true) => Ok(Value::Null),
-                    _ => Err(CoreError::new("not_found", "这个 WebSocket 已经关了")),
+                    _ => Err(CoreError::new("not_found", t!("core-misc.call.socket_closed"))),
                 }
             }
             Call::Ask(ask) => self.asks.run(ask, &self.accounts).await,
@@ -515,7 +515,7 @@ impl Inner {
             let made = made.and_then(|answer| {
                 let session = answer.get("key").and_then(Value::as_str).map(str::to_string);
                 let thread = answer.get("thread").and_then(|t| t.get("id")).and_then(Value::as_u64);
-                session.zip(thread).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有新会话"))
+                session.zip(thread).ok_or_else(|| CoreError::new("bad_response", t!("core-misc.call.no_new_session")))
             });
             match made {
                 Ok((session, thread)) => {

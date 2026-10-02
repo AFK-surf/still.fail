@@ -79,7 +79,7 @@ impl Inner {
                 return Ok(relays);
             }
         }
-        let mut last = CoreError::signed_out("还没有登录的账号");
+        let mut last = CoreError::signed_out(t!("core-misc.account.none"));
         for (_, me) in self.load_me().await {
             match me {
                 Ok(me) => {
@@ -102,7 +102,7 @@ impl Inner {
             return Ok(sub);
         }
         self.load_me().await;
-        known(self).ok_or_else(|| CoreError::new("not_found", "已登录的账号都进不了这个工作区").with_status(404))
+        known(self).ok_or_else(|| CoreError::new("not_found", t!("core-misc.account.no_access")).with_status(404))
     }
     /// Every account's `/v1/me`, noting who reaches which workspace and the relay url on the way.
     /// One at a time: whoever asks while it is under way waits for that one.
@@ -129,9 +129,9 @@ impl Inner {
         let mes = self.mes.borrow();
         accounts.into_iter().map(|a| {
             let me = match mes.get(&a.sub).cloned() {
-                Some(Ok(())) => self.data.record("me", &a.sub).ok_or_else(|| CoreError::signed_out("这个账号已退出")),
+                Some(Ok(())) => self.data.record("me", &a.sub).ok_or_else(|| CoreError::signed_out(t!("core-misc.account.signed_out"))),
                 Some(Err(error)) => Err(error),
-                None => Err(CoreError::signed_out("这个账号已退出")),
+                None => Err(CoreError::signed_out(t!("core-misc.account.signed_out"))),
             };
             (a, me)
         }).collect()
@@ -266,7 +266,7 @@ impl Inner {
                 // A beta app, and an account still.fail cloud has not let into the beta: said as such, for the UI to
                 // show with a way to sign the account out (it reaches nothing here).
                 if error.code == crate::cloud::NOT_BETA {
-                    entry["blocked"] = json!(crate::cloud::NOT_BETA_TEXT);
+                    entry["blocked"] = json!(crate::cloud::not_beta_text());
                 }
             }
             entry
@@ -328,7 +328,7 @@ impl Inner {
             Topic::LoginSessions { account } => self.cloud.request(account, "GET", "/v1/auth/sessions", None).await.map(|v| v.get("sessions").cloned().unwrap_or(json!([]))),
             Topic::Admin { account, list } => match list.as_str() {
                 "users" | "workspaces" | "invite-codes" | "feedback" => self.cloud.request(account, "GET", &format!("/v1/admin/{list}"), None).await,
-                _ => Err(CoreError::invalid("没有这个列表")),
+                _ => Err(CoreError::invalid(t!("core-misc.account.no_list"))),
             },
             _ => return,
         };

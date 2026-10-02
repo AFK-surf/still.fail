@@ -12,6 +12,7 @@ use std::sync::mpsc;
 
 use stillfail_core::host::{DbOp, DbRange, Host, HostError, HttpRequest, HttpResponse, SOCKET_PING, SOCKET_PING_MS, SocketFrames, StreamResponse};
 use stillfail_core::{ClientId, CoreError, CoreMessage};
+use stillfail_core::i18n::t;
 use futures::future::LocalBoxFuture;
 use futures::stream;
 use futures::{FutureExt, StreamExt};
@@ -62,7 +63,7 @@ fn output(name: &str, listener: Arc<dyn CoreListener>, commands: UnboundedSender
             let sent = std::panic::catch_unwind(AssertUnwindSafe(|| {
                 let json = serde_json::to_string(&message).unwrap_or_else(|error| {
                     let id = message_id(&message);
-                    serde_json::to_string(&CoreMessage::Error { id, error: CoreError::new("host", format!("无法传给界面：{error}")) }).expect("an error serializes")
+                    serde_json::to_string(&CoreMessage::Error { id, error: CoreError::new("host", t!("core-misc.host.unsendable_ui", error = error)) }).expect("an error serializes")
                 });
                 listener.on_message(client, json);
             }));
@@ -113,7 +114,7 @@ fn websocket(tls: Arc<rustls::ClientConfig>, url: String, protocols: Vec<String>
     Box::pin(async move {
         let mut request = url.as_str().into_client_request().map_err(ws_error)?;
         if !protocols.is_empty() {
-            let value = protocols.join(", ").parse().map_err(|_| HostError("websocket 子协议不对".into()))?;
+            let value = protocols.join(", ").parse().map_err(|_| HostError(t!("core-misc.host.bad_subprotocol")))?;
             request.headers_mut().insert("sec-websocket-protocol", value);
         }
         let (socket, _) = tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(Connector::Rustls(tls))).await.map_err(ws_error)?;
@@ -245,7 +246,7 @@ impl Host for NativeHost {
         self.storage.run(move || match std::fs::read(&path) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(io_error("读取", error)),
+            Err(error) => Err(io_error("core-misc.host.storage.read", error)),
         })
     }
 
@@ -254,9 +255,9 @@ impl Host for NativeHost {
         self.storage.run(move || {
             // Written aside and renamed over: a crash leaves the old value or the new one, never half.
             let partial = path.with_extension("partial");
-            std::fs::write(&partial, &value).map_err(|e| io_error("写入", e))?;
-            std::fs::File::open(&partial).and_then(|f| f.sync_all()).map_err(|e| io_error("写入", e))?;
-            std::fs::rename(&partial, &path).map_err(|e| io_error("写入", e))
+            std::fs::write(&partial, &value).map_err(|e| io_error("core-misc.host.storage.write", e))?;
+            std::fs::File::open(&partial).and_then(|f| f.sync_all()).map_err(|e| io_error("core-misc.host.storage.write", e))?;
+            std::fs::rename(&partial, &path).map_err(|e| io_error("core-misc.host.storage.write", e))
         })
     }
 
@@ -273,7 +274,7 @@ impl Host for NativeHost {
     fn storage_delete(&self, key: &str) -> LocalBoxFuture<'static, Result<(), HostError>> {
         let path = self.storage.path(key);
         self.storage.run(move || match std::fs::remove_file(&path) {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(io_error("删除", error)),
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(io_error("core-misc.host.storage.delete", error)),
             _ => Ok(()),
         })
     }
@@ -336,11 +337,11 @@ pub fn utc_offset_min(at_ms: f64) -> i32 {
 
 pub fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
     let text = panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned());
-    format!("核心崩溃：{}", text.unwrap_or_else(|| "未知原因".into()))
+    t!("core-misc.host.crashed", reason = text.unwrap_or_else(|| t!("core-misc.host.unknown_reason")))
 }
 
-fn io_error(what: &str, error: std::io::Error) -> HostError {
-    HostError(format!("{what}本地存储失败：{error}"))
+fn io_error(key: &str, error: std::io::Error) -> HostError {
+    HostError(t!(key, error = error))
 }
 
 type Job = Box<dyn FnOnce() + Send>;
@@ -378,7 +379,7 @@ fn open_db(handle: &mut DbHandle) -> Result<&mut rusqlite::Connection, HostError
 
 /// A table's records with keys in `[from, to)`, in key order.
 fn read_records(db: &std::sync::Mutex<DbHandle>, range: DbRange) -> Result<Vec<(String, Vec<u8>)>, HostError> {
-    let mut guard = db.lock().map_err(|_| HostError("数据库不可用".into()))?;
+    let mut guard = db.lock().map_err(|_| HostError(t!("core-misc.host.db_unavailable")))?;
     let conn = open_db(&mut guard)?;
     let mut query = conn.prepare_cached("SELECT key, value FROM records WHERE tbl = ?1 AND key >= ?2 AND key < ?3 ORDER BY key").map_err(db_error)?;
     let rows = query
@@ -389,7 +390,7 @@ fn read_records(db: &std::sync::Mutex<DbHandle>, range: DbRange) -> Result<Vec<(
 
 /// A batch of changes, all or none.
 fn write_records(db: &std::sync::Mutex<DbHandle>, ops: Vec<DbOp>) -> Result<(), HostError> {
-    let mut guard = db.lock().map_err(|_| HostError("数据库不可用".into()))?;
+    let mut guard = db.lock().map_err(|_| HostError(t!("core-misc.host.db_unavailable")))?;
     let conn = open_db(&mut guard)?;
     let tx = conn.transaction().map_err(db_error)?;
     for op in ops {
@@ -406,7 +407,7 @@ fn write_records(db: &std::sync::Mutex<DbHandle>, ops: Vec<DbOp>) -> Result<(), 
 }
 
 fn db_error(error: rusqlite::Error) -> HostError {
-    HostError(format!("数据库出错：{error}"))
+    HostError(t!("core-misc.host.db_error", error = error))
 }
 
 impl Storage {
@@ -442,8 +443,8 @@ impl Storage {
             let _ = done.send(job());
         }));
         Box::pin(async move {
-            sent.map_err(|_| HostError("本地存储已关闭".into()))?;
-            result.await.map_err(|_| HostError("本地存储已关闭".into()))?
+            sent.map_err(|_| HostError(t!("core-misc.host.storage_closed")))?;
+            result.await.map_err(|_| HostError(t!("core-misc.host.storage_closed")))?
         })
     }
 }

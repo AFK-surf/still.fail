@@ -3,6 +3,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 use crate::error::{CoreError, Result};
 use crate::protocol::{ClientId, Topic};
 
@@ -23,12 +24,12 @@ impl Tokens {
     pub fn edit(&self, topic: &Topic, owner: ClientId, patch: &Value) -> Result<Value> {
         let mut drafts = self.0.borrow_mut();
         let draft = drafts.entry(topic.clone()).or_insert_with(|| Draft { owner, input: json!({"appToken": "", "botToken": "", "connect": null, "install": null}), ..Draft::default() });
-        if draft.owner != owner { return Err(CoreError::invalid("不是这个页面的 token 草稿")); }
+        if draft.owner != owner { return Err(CoreError::invalid(t!("core-misc.token.not_yours"))); }
         let old = draft.input.clone();
         let mut next = old.clone();
         for field in ["appToken", "botToken", "connect", "install"] {
             if let Some(value) = patch.get(field) {
-                if !value.is_null() && !value.is_string() { return Err(CoreError::invalid("token 参数应为文字")); }
+                if !value.is_null() && !value.is_string() { return Err(CoreError::invalid(t!("core-misc.token.not_text"))); }
                 next[field] = value.clone();
             }
         }
@@ -49,14 +50,14 @@ impl Tokens {
 
     pub fn input(&self, topic: &Topic, owner: ClientId) -> Result<(Value, bool)> {
         let drafts = self.0.borrow();
-        let d = drafts.get(topic).filter(|d| d.owner == owner).ok_or_else(|| CoreError::invalid("token 草稿已经关闭"))?;
+        let d = drafts.get(topic).filter(|d| d.owner == owner).ok_or_else(|| CoreError::invalid(t!("core-misc.token.closed")))?;
         Ok((d.input.clone(), !d.verified.is_null()))
     }
 
     pub fn begin(&self, topic: &Topic, owner: ClientId) -> Result<(u64, Value, bool)> {
         let mut drafts = self.0.borrow_mut();
-        let draft = drafts.get_mut(topic).filter(|d| d.owner == owner).ok_or_else(|| CoreError::invalid("token 草稿已经关闭"))?;
-        if draft.checking { return Err(CoreError::invalid("正在校验 token")); }
+        let draft = drafts.get_mut(topic).filter(|d| d.owner == owner).ok_or_else(|| CoreError::invalid(t!("core-misc.token.closed")))?;
+        if draft.checking { return Err(CoreError::invalid(t!("core-misc.token.checking"))); }
         let verified = !draft.verified.is_null();
         draft.checking = !verified;
         Ok((draft.revision, draft.input.clone(), verified))

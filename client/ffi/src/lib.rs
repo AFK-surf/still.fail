@@ -19,6 +19,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use stillfail_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host, PreparedMessage};
+use stillfail_core::i18n::t;
 use serde_json::{Value, json};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
@@ -65,7 +66,7 @@ fn decode_input(input: Input) -> Option<Command> {
             Ok(message) => Some(Command::Receive(client, Core::prepare(message))),
             Err(error) => {
                 let id = serde_json::from_str::<Value>(&json).ok()?.get("id")?.as_u64()?;
-                let error = CoreError::new("bad_message", format!("无法识别的消息：{error}"));
+                let error = CoreError::new("bad_message", t!("core-misc.host.bad_message", error = error));
                 Some(Command::Invalid(client, CoreMessage::Error { id, error }))
             }
         },
@@ -91,7 +92,7 @@ pub fn start(data_dir: String, cloud_origin: String, listener: Box<dyn CoreListe
 #[uniffi::export]
 pub fn start_as(data_dir: String, cloud_origin: String, beta: bool, listener: Box<dyn CoreListener>) -> Result<Arc<StillFailCoreFfi>, StartError> {
     let data_dir = PathBuf::from(data_dir);
-    std::fs::create_dir_all(&data_dir).map_err(|e| StartError::Io(format!("无法创建数据目录 {}：{e}", data_dir.display())))?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| StartError::Io(t!("core-misc.host.no_data_dir", dir = data_dir.display(), error = e)))?;
     let (commands, queue) = mpsc::unbounded_channel();
     let (input, inputs) = std::sync::mpsc::channel();
     let decoded = commands.clone();
@@ -105,13 +106,13 @@ pub fn start_as(data_dir: String, cloud_origin: String, beta: bool, listener: Bo
                 if decoded.send(command).is_err() { break; }
             }
         }
-    }).map_err(|e| StartError::Io(format!("无法启动消息解析线程：{e}")))?;
+    }).map_err(|e| StartError::Io(t!("core-misc.host.no_input_thread", error = e)))?;
     let listener: Arc<dyn CoreListener> = Arc::from(listener);
     let host_commands = commands.clone();
     std::thread::Builder::new()
         .name("stillfail-core".into())
         .spawn(move || run(data_dir, cloud_origin.trim_end_matches('/').to_string(), beta, listener, host_commands, queue))
-        .map_err(|e| StartError::Io(format!("无法启动核心线程：{e}")))?;
+        .map_err(|e| StartError::Io(t!("core-misc.host.no_core_thread", error = e)))?;
     Ok(Arc::new(StillFailCoreFfi { commands: input, next_client: Mutex::new(1) }))
 }
 

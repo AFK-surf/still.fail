@@ -32,6 +32,7 @@ use futures::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::accounts::{AccountView, Accounts};
 use crate::attend::{Attend, Due};
@@ -423,7 +424,7 @@ impl Core {
                             let run = inner.execute(call, progress, (client, id));
                             let result = match registration {
                                 Some(registration) => {
-                                    let result = Abortable::new(run, registration).await.unwrap_or_else(|_| Err(CoreError::new("cancelled", "已取消")));
+                                    let result = Abortable::new(run, registration).await.unwrap_or_else(|_| Err(CoreError::new("cancelled", t!("core-misc.call.cancelled"))));
                                     inner.calls.borrow_mut().remove(&(client, id));
                                     result
                                 }
@@ -622,7 +623,7 @@ struct KeptCredential {
 }
 
 fn gone() -> CoreError {
-    CoreError::new("closed", "核心已关闭")
+    CoreError::new("closed", t!("core-misc.core.closed"))
 }
 
 /// The relays a `/v1/me` names: `relay_urls`, still.fail's own first, or `relay_url` alone from a cloud from before
@@ -646,7 +647,7 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
     let mut wait = SOCKET_RETRY_MS;
     loop {
         let Some(this) = core.upgrade() else { return };
-        let waiting = this.status.begin(Place::Cloud, "连接", true);
+        let waiting = this.status.begin(Place::Cloud, t!("core-misc.status.connect"), true);
         let opened = this.open_socket(&sub).await;
         drop(waiting);
         // Why it is down, if it is: said until it is open again (status.rs).
@@ -736,7 +737,7 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
                     wait = SOCKET_RETRY_MS;
                 }
                 this.socket_state(&sub, SocketState::Retrying);
-                down = if idle { "连接没有回应".into() } else { "连接断开了".into() };
+                down = if idle { t!("core-misc.socket.silent") } else { t!("core-misc.socket.dropped") };
                 // Taken for gone as the UI came back, or silent: opened again at once.
                 if woke || idle {
                     continue;

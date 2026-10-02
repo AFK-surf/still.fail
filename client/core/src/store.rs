@@ -431,7 +431,7 @@ impl Store {
                     return Ok(v);
                 }
                 // A value its shape does not allow is the core's bug: it goes out as an error saying where.
-                crate::present::conform(topic, v).map_err(|at| CoreError::new("shape", format!("{topic:?} 不合约定：{at}")))
+                crate::present::conform(topic, v).map_err(|at| CoreError::new("shape", stillfail_i18n::t!("core-misc.shape", topic = format!("{topic:?}"), at = at)))
             });
             let out = match (&entry.sent, &value) {
                 (Some(Ok(old)), Ok(new)) => {

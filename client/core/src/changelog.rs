@@ -9,6 +9,7 @@ use std::rc::{Rc, Weak};
 
 use futures::FutureExt;
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::data::Data;
 use crate::host::{Host, HttpRequest};
@@ -42,14 +43,13 @@ fn parts_of(app: &str) -> &'static [&'static str] {
     }
 }
 
-fn part_name(part: &str) -> &str {
+fn part_name(part: &str) -> String {
     match part {
-        "station" => "station",
-        "web" => "网页版",
-        "android" => "安卓 app",
-        "desktop" => "桌面 app",
-        "cloud" => "云端",
-        other => other,
+        "station" => "station".to_string(),
+        "web" => t!("core-misc.changelog.part.web"),
+        "android" => t!("core-misc.changelog.part.android"),
+        "desktop" => t!("core-misc.changelog.part.desktop"),
+        other => other.to_string(),
     }
 }
 
@@ -137,7 +137,7 @@ impl Changelog {
             return json!({
                 "app": app, "build": build, "days": [],
                 "loading": !self.failed.get(),
-                "error": self.failed.get().then_some("读不到更新日志，稍后再试"),
+                "error": self.failed.get().then(|| t!("core-misc.changelog.unreadable")),
             });
         };
         let released = feed.get("released").cloned().unwrap_or(Value::Null);
@@ -176,20 +176,21 @@ fn item(entry: &Value, app: &str, build: Option<i64>, released: &Value) -> Optio
     let mine: Vec<&str> = parts.iter().copied().filter(|p| ours.contains(p)).collect();
     let out = |part: &str| part == "cloud" || released.get(part).and_then(Value::as_i64).is_some_and(|r| r >= version);
     let name = format!("0.1.{version}");
-    let names: Vec<&str> = parts.iter().map(|p| part_name(p)).collect();
-    let place = if parts.is_empty() || parts == ["cloud"] { String::new() } else { format!("{} {name}", names.iter().filter(|n| **n != "云端").copied().collect::<Vec<_>>().join("、")) };
+    // Where it is: the parts that are released (the cloud is not), and the version.
+    let names: Vec<String> = parts.iter().filter(|p| **p != "cloud").map(|p| part_name(p)).collect();
+    let place = if parts.is_empty() || parts == ["cloud"] { String::new() } else { t!("core-misc.changelog.place", parts = names.join(&t!("core-misc.changelog.and")), version = name) };
     let (has, note) = if parts.is_empty() || parts == ["cloud"] {
-        (None, "已上线".to_string())
+        (None, t!("core-misc.changelog.live"))
     } else if !mine.is_empty() {
         match build {
-            Some(b) if b >= version => (Some(true), "你的版本已包含".to_string()),
-            _ if mine.iter().all(|p| out(p)) => (Some(false), if app == "web" { "刷新页面后就有".to_string() } else { format!("更新到 {name} 后就有") }),
-            _ => (Some(false), "还没发布".to_string()),
+            Some(b) if b >= version => (Some(true), t!("core-misc.changelog.have")),
+            _ if mine.iter().all(|p| out(p)) => (Some(false), if app == "web" { t!("core-misc.changelog.reload") } else { t!("core-misc.changelog.update", version = name) }),
+            _ => (Some(false), t!("core-misc.changelog.unreleased")),
         }
     } else if parts.iter().all(|p| out(p)) {
-        (None, "已发布".to_string())
+        (None, t!("core-misc.changelog.released"))
     } else {
-        (None, "还没发布".to_string())
+        (None, t!("core-misc.changelog.unreleased"))
     };
     Some(json!({ "version": version, "versionName": name, "text": text, "place": place, "has": has, "note": note, "mine": !mine.is_empty() }))
 }

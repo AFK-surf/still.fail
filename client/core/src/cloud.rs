@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::accounts::{Accounts, encode_component};
 use crate::error::{CoreError, Result};
@@ -25,7 +26,10 @@ pub struct Credential {
 
 /// still.fail cloud's answer to a beta app (`x-stillfail-channel: beta`) used by an account not let into the beta.
 pub const NOT_BETA: &str = "not_beta";
-pub const NOT_BETA_TEXT: &str = "这个账号还没开通测试版";
+/// What a person is told for [`NOT_BETA`].
+pub fn not_beta_text() -> String {
+    t!("core-misc.cloud.not_beta")
+}
 
 pub struct Cloud {
     host: Rc<dyn Host>,
@@ -113,7 +117,7 @@ impl Cloud {
     pub async fn credential(&self, sub: &str, workspace: &str, device: &str) -> Result<Credential> {
         let path = format!("/v1/workspaces/{}/credential", encode_component(workspace));
         let answer = self.request(sub, "POST", &path, Some(json!({ "device": device }))).await?;
-        serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", format!("{} cloud 的回复无法解析：{e}", crate::brand::name())))
+        serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", t!("core-misc.cloud.bad_response", brand = crate::brand::name(), error = e)))
     }
 }
 
@@ -123,32 +127,33 @@ pub fn channel_header(host: &dyn Host) -> Option<(String, String)> {
     host.beta().then(|| ("x-stillfail-channel".to_string(), "beta".to_string()))
 }
 
-/// The error for a cloud error code, with its Chinese message when there is one.
+/// The error for a cloud error code, with its message in the person's language when there is one.
 pub fn cloud_error(code: &str, status: u16) -> CoreError {
     let text = match code {
-        "invalid_email" => format!("要填对方登录 {} 用的邮箱", crate::brand::name()),
-        _ => message(code).unwrap_or(code).to_string(),
+        "invalid_email" => t!("core-misc.cloud.invalid_email", brand = crate::brand::name()),
+        _ => message(code).map(|key| t!(key)).unwrap_or_else(|| code.to_string()),
     };
     CoreError::new(code, text).with_status(status)
 }
 
+/// The words for a cloud error code (their key), if it has its own.
 fn message(code: &str) -> Option<&'static str> {
     Some(match code {
-        "workspace_not_found" => "找不到这个 workspace，或者你已经不在里面了",
-        "member_not_found" => "找不到这个成员",
-        "station_not_found" => "找不到这台 station",
-        "invitation_not_found" => "邀请链接无效或已过期",
-        "invitation_for_other_email" => "这个邀请是发给另一个邮箱的，请换对应的账号接受",
-        "forbidden" => "你在这个 workspace 里没有这个权限",
-        "invalid_name" => "名字不能为空，最长 80 个字",
-        "already_member" => "这个邮箱的主人已经在 workspace 里了",
-        "last_owner" => "workspace 至少要保留一个 owner",
-        "too_many_workspaces" => "你创建的 workspace 太多了",
-        "too_many_invitations" => "未处理的邀请太多了，先撤回一些",
-        "too_many_members" => "成员数量到上限了",
-        "too_many_stations" => "station 数量到上限了",
-        "invalid_session" => "登录已失效，请重新登录",
-        NOT_BETA => NOT_BETA_TEXT,
+        "workspace_not_found" => "core-misc.cloud.workspace_not_found",
+        "member_not_found" => "core-misc.cloud.member_not_found",
+        "station_not_found" => "core-misc.cloud.station_not_found",
+        "invitation_not_found" => "core-misc.cloud.invitation_not_found",
+        "invitation_for_other_email" => "core-misc.cloud.invitation_for_other_email",
+        "forbidden" => "core-misc.cloud.forbidden",
+        "invalid_name" => "core-misc.cloud.invalid_name",
+        "already_member" => "core-misc.cloud.already_member",
+        "last_owner" => "core-misc.cloud.last_owner",
+        "too_many_workspaces" => "core-misc.cloud.too_many_workspaces",
+        "too_many_invitations" => "core-misc.cloud.too_many_invitations",
+        "too_many_members" => "core-misc.cloud.too_many_members",
+        "too_many_stations" => "core-misc.cloud.too_many_stations",
+        "invalid_session" => "core-misc.cloud.invalid_session",
+        NOT_BETA => "core-misc.cloud.not_beta",
         _ => return None,
     })
 }

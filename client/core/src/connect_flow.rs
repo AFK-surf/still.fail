@@ -7,6 +7,7 @@ use crate::{
     store::{Store, Watch},
 };
 use serde_json::{json, Value};
+use stillfail_i18n::t;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -65,7 +66,7 @@ impl Flows {
             return if draft.owner == owner {
                 Ok(())
             } else {
-                Err(CoreError::invalid("不是这个页面的连接草稿"))
+                Err(CoreError::invalid(t!("core-misc.connect.not_yours")))
             };
         }
         let (station, form) = address(topic);
@@ -141,35 +142,35 @@ impl Flows {
         let d = drafts
             .get_mut(topic)
             .filter(|d| d.owner == owner)
-            .ok_or_else(|| CoreError::invalid("连接草稿已关闭"))?;
+            .ok_or_else(|| CoreError::invalid(t!("core-misc.connect.closed")))?;
         if d.pending {
-            return Err(CoreError::invalid("请等当前操作完成"));
+            return Err(CoreError::invalid(t!("core-misc.connect.busy")));
         }
         if let Some(settings) = patch.get("settings") {
             serde_json::from_value::<stillfail_shapes::ConnectAppSettings>(settings.clone())
-                .map_err(|e| CoreError::invalid(format!("app 设置不对：{e}")))?;
+                .map_err(|e| CoreError::invalid(t!("core-misc.connect.bad_settings", error = e)))?;
         }
         for field in ["team", "icon", "iconError"] {
             if patch
                 .get(field)
                 .is_some_and(|v| !v.is_null() && !v.is_string())
             {
-                return Err(CoreError::invalid("参数应为文字"));
+                return Err(CoreError::invalid(t!("core-misc.params.not_text")));
             }
         }
         if patch.get("config").is_some_and(|v| !v.is_string()) {
-            return Err(CoreError::invalid("配置 token 应为文字"));
+            return Err(CoreError::invalid(t!("core-misc.connect.config_not_text")));
         }
         for field in ["adding", "requireMention"] {
             if patch.get(field).is_some_and(|v| !v.is_boolean()) {
-                return Err(CoreError::invalid("参数应为是或否"));
+                return Err(CoreError::invalid(t!("core-misc.params.not_bool")));
             }
         }
         if patch
             .get("mode")
             .is_some_and(|v| v != "single-session" && v != "multi-session")
         {
-            return Err(CoreError::invalid("没有这种会话方式"));
+            return Err(CoreError::invalid(t!("core-misc.connect.no_such_mode")));
         }
         for field in [
             "team",
@@ -212,15 +213,15 @@ impl Flows {
                 _ => false,
             };
         if !allowed {
-            return Err(CoreError::invalid("这一步还不能继续"));
+            return Err(CoreError::invalid(t!("core-misc.connect.not_ready")));
         }
         let mut drafts = self.drafts.borrow_mut();
         let d = drafts
             .get_mut(topic)
             .filter(|d| d.owner == owner)
-            .ok_or_else(|| CoreError::invalid("连接草稿已关闭"))?;
+            .ok_or_else(|| CoreError::invalid(t!("core-misc.connect.closed")))?;
         if d.pending {
-            return Err(CoreError::invalid("请等当前操作完成"));
+            return Err(CoreError::invalid(t!("core-misc.connect.busy")));
         }
         d.value["step"] = json!(target);
         drop(drafts);
@@ -233,7 +234,7 @@ impl Flows {
             .borrow()
             .get(topic)
             .map(|d| d.value.clone())
-            .ok_or_else(|| CoreError::invalid("连接草稿已关闭"))?;
+            .ok_or_else(|| CoreError::invalid(t!("core-misc.connect.closed")))?;
         let (station, form) = address(topic);
         let overview = self.store.get(&Topic::Overview {
             station: station.into(),
@@ -269,14 +270,14 @@ impl Flows {
         let step = v["step"].as_str().unwrap_or("team").to_string();
         let mobile = v["mobile"] == true;
         let title = match step.as_str() {
-            "team" if !mobile && teams.is_empty() => "先拿一个 Slack 配置 token",
-            "team" if !mobile && v["adding"] == true => "添加 Slack 配置 token",
-            "team" => "选 Slack 工作区",
-            "token" => "加配置 token",
-            "app" => "配置 app",
-            "install" => "安装",
-            "manual" => "连接 Slack",
-            _ => "绑定模型",
+            "team" if !mobile && teams.is_empty() => "core-misc.connect.title.get_token",
+            "team" if !mobile && v["adding"] == true => "core-misc.connect.title.add_token",
+            "team" => "core-misc.connect.title.team",
+            "token" => "core-misc.connect.title.token",
+            "app" => "core-misc.connect.title.app",
+            "install" => "core-misc.connect.title.install",
+            "manual" => "core-misc.connect.title.manual",
+            _ => "core-misc.connect.title.bind",
         };
         let order = if step == "manual" || (step == "bind" && v["madeId"].is_null()) {
             vec!["manual", "bind"]
@@ -291,7 +292,7 @@ impl Flows {
             _ if v["madeId"].is_string() => "install",
             _ => "manual",
         };
-        v["title"] = json!(title);
+        v["title"] = json!(t!(title));
         v["back"] = json!(back);
         v["number"] = json!(order
             .iter()
@@ -314,7 +315,7 @@ impl Flows {
             .as_str()
             .is_some_and(|s| s.starts_with("xoxe.xoxp-"))
         {
-            json!("这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。")
+            json!(t!("core-misc.connect.access_token"))
         } else {
             Value::Null
         };
@@ -377,16 +378,16 @@ impl Flows {
                     json!({"input":{"kind":"slack","mode":v["mode"],"requireMention":v["requireMention"],"bind":bind,"slack":slack}}),
                 )
             }
-            _ => return Err(CoreError::invalid("这一步还不能继续")),
+            _ => return Err(CoreError::invalid(t!("core-misc.connect.not_ready"))),
         };
         p["station"] = json!(station);
         let mut drafts = self.drafts.borrow_mut();
         let d = drafts
             .get_mut(topic)
             .filter(|d| d.owner == owner)
-            .ok_or_else(|| CoreError::invalid("连接草稿已关闭"))?;
+            .ok_or_else(|| CoreError::invalid(t!("core-misc.connect.closed")))?;
         if d.pending {
-            return Err(CoreError::invalid("正在处理这一步"));
+            return Err(CoreError::invalid(t!("core-misc.connect.working")));
         }
         d.pending = true;
         Ok((d.generation, name, p))

@@ -9,6 +9,7 @@ use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::host::Host;
 use crate::protocol::Topic;
@@ -177,7 +178,7 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
     }
     let last = row.get("last").filter(|l| l.is_object());
     let text = last.map(|l| crate::format::clean_text(l.get("text").and_then(Value::as_str).unwrap_or(""))).unwrap_or_default();
-    let text = if text.is_empty() && last.is_some() { "（文件）".to_string() } else { text };
+    let text = if text.is_empty() && last.is_some() { t!("core-misc.notice.file") } else { text };
     let by_name = by.as_ref().and_then(|b| b.get("name")).and_then(Value::as_str).unwrap_or("").to_string();
     // Needing them (need_help): what it needs, in its words, else what was said last. Needing an answer to a card is
     // told as the card (above), or not at all once dismissed.
@@ -214,9 +215,9 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
 pub fn body(kind: &str, by: &str, text: &str) -> String {
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let line = match kind {
-        "block" => format!("要你帮忙 · {text}"),
-        "wait" => format!("等你决定 · {text}"),
-        "failed" => format!("出错了 · {text}"),
+        "block" => t!("core-misc.notice.block", text = text),
+        "wait" => t!("core-misc.notice.wait", text = text),
+        "failed" => t!("core-misc.notice.failed", text = text),
         _ if !by.is_empty() => format!("{by}: {text}"),
         _ => text,
     };
@@ -234,7 +235,7 @@ fn cut(text: String, max: usize) -> String {
 
 fn title(row: &Value) -> String {
     row.get("title").and_then(Value::as_str).map(|t| t.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|t| !t.is_empty())
-        .unwrap_or_else(|| "（还没有消息）".to_string())
+        .unwrap_or_else(|| t!("core-misc.notice.untitled"))
 }
 
 /// A path segment, as `encodeURIComponent` has it.

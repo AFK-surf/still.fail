@@ -136,5 +136,5 @@ pub trait Host {
 pub fn background<T: Send + 'static>(host: &dyn Host, task: impl FnOnce() -> T + Send + 'static) -> LocalBoxFuture<'static, Result<T, HostError>> {
     let (send, receive) = futures::channel::oneshot::channel();
     host.background(Box::new(move || { let _ = send.send(task()); }));
-    Box::pin(async move { receive.await.map_err(|_| HostError("后台数据处理没有完成".into())) })
+    Box::pin(async move { receive.await.map_err(|_| HostError(stillfail_i18n::t!("core-misc.host.unfinished"))) })
 }

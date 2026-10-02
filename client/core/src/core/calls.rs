@@ -129,15 +129,15 @@ impl Call {
 
 pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
     if let Some(action @ ("open" | "edit" | "go" | "config" | "make" | "verify" | "create" | "drop")) = name.strip_prefix("connect.flow.") {
-        let form: stillfail_shapes::SlackTokenForm = serde_json::from_value(params.clone()).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
+        let form: stillfail_shapes::SlackTokenForm = serde_json::from_value(params.clone()).map_err(|e| CoreError::invalid(t!("core-misc.params.invalid", error = e)))?;
         StationAddr::parse(&form.station)?;
-        if form.form.is_empty() { return Err(CoreError::invalid("缺少 form")); }
+        if form.form.is_empty() { return Err(CoreError::invalid(t!("core-misc.params.missing_form"))); }
         return Ok(Call::ConnectFlow { topic: Topic::ConnectFlow { station: form.station, form: form.form }, action: action.into(), patch: params.get("input").cloned().unwrap_or(json!({})) });
     }
     if let Some(action @ ("edit" | "verify" | "drop")) = name.strip_prefix("slack.tokens.") {
-        let form: stillfail_shapes::SlackTokenForm = serde_json::from_value(params.clone()).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
+        let form: stillfail_shapes::SlackTokenForm = serde_json::from_value(params.clone()).map_err(|e| CoreError::invalid(t!("core-misc.params.invalid", error = e)))?;
         StationAddr::parse(&form.station)?;
-        if form.form.is_empty() { return Err(CoreError::invalid("缺少 form")); }
+        if form.form.is_empty() { return Err(CoreError::invalid(t!("core-misc.params.missing_form"))); }
         let topic = Topic::SlackTokens { station: form.station, form: form.form };
         return Ok(Call::SlackTokens { topic, action: action.into(), patch: params.get("input").cloned().unwrap_or(json!({})) });
     }
@@ -296,10 +296,10 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
     }
 
     fn read<T: DeserializeOwned>(params: Value) -> Result<T> {
-        serde_json::from_value(params_or_empty(params)).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))
+        serde_json::from_value(params_or_empty(params)).map_err(|e| CoreError::invalid(t!("core-misc.params.invalid", error = e)))
     }
     fn base64(text: &str, what: &str) -> Result<Vec<u8>> {
-        BASE64.decode(text).map_err(|_| CoreError::invalid(format!("{what}不是 base64")))
+        BASE64.decode(text).map_err(|_| CoreError::invalid(t!(what)))
     }
 
     Ok(match name {
@@ -329,7 +329,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
                 _ => false,
             };
             if !ok {
-                return Err(CoreError::invalid("要么是 {kind: \"web\", endpoint, keys: {p256dh, auth}}，要么是 {kind: \"fcm\", token}"));
+                return Err(CoreError::invalid(t!("core-misc.params.push_registration")));
             }
             Call::PushRegister { registration }
         }
@@ -366,7 +366,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             struct P { station: String, thread: u64, seq: u64, option: String }
             let p: P = read(params)?;
             if p.option.trim().is_empty() {
-                return Err(CoreError::invalid("参数不对：option 是空的"));
+                return Err(CoreError::invalid(t!("core-misc.params.empty_option")));
             }
             Call::DecisionAnswer { station: p.station, thread: p.thread, seq: p.seq, option: p.option.trim().to_string() }
         }
@@ -379,7 +379,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             }
             let p: P = read(params)?;
             if p.text.trim().is_empty() && p.attachments.is_empty() && p.quotes.is_empty() {
-                return Err(CoreError::invalid("参数不对：回复是空的"));
+                return Err(CoreError::invalid(t!("core-misc.params.empty_reply")));
             }
             Call::DecisionReply { station: p.station, thread: p.thread, seq: p.seq, text: p.text.trim().to_string(), attachments: json!(p.attachments), quotes: json!(p.quotes) }
         }
@@ -437,7 +437,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
                 _ => &[],
             };
             if let Some(field) = needs.iter().find(|f| params.get(**f).and_then(Value::as_str).is_none_or(str::is_empty)) {
-                return Err(CoreError::invalid(format!("参数不对：缺少 {field}")));
+                return Err(CoreError::invalid(t!("core-misc.params.missing", field = field)));
             }
             Call::Choose { name: name.to_string(), params }
         }
@@ -446,7 +446,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             // By the page's key for it (refs.rs, draft_at), or by its station and chat.
             let at = |field: &str| p.get(field).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
             let (Some(station), Some(chat)) = at("key").and_then(|k| crate::refs::draft_at(&k)).map_or((at("station"), at("chat")), |(s, c)| (Some(s), Some(c))) else {
-                return Err(CoreError::invalid("参数不对：要有 key，或 station 和 chat"));
+                return Err(CoreError::invalid(t!("core-misc.params.key_or_chat")));
             };
             if name == "draft.get" {
                 return Ok(Call::DraftGet { station, chat });
@@ -456,7 +456,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
                 o.remove("chat");
                 o.remove("key");
             }
-            let draft = stillfail_shapes::conform::<stillfail_shapes::DraftView>(p).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
+            let draft = stillfail_shapes::conform::<stillfail_shapes::DraftView>(p).map_err(|e| CoreError::invalid(t!("core-misc.params.invalid", error = e)))?;
             Call::DraftPut { station, chat, draft }
         }
         "chat.ref" => {
@@ -486,7 +486,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
         "changelog.seen" => Call::ChangelogSeen,
         "station.upload" => {
             let p: Upload = read(params)?;
-            Call::StationUpload { bytes: base64(&p.bytes, "文件内容")?, station: p.station, name: p.name }
+            Call::StationUpload { bytes: base64(&p.bytes, "core-misc.call.base64.file")?, station: p.station, name: p.name }
         }
         "station.file" => {
             let p: File = read(params)?;
@@ -494,7 +494,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "station.preview" => {
             let p: Preview = read(params)?;
-            Call::StationPreview { body: base64(&p.body, "请求内容")?, station: p.station, port: p.port, method: p.method, path: p.path, headers: p.headers, stream: p.stream }
+            Call::StationPreview { body: base64(&p.body, "core-misc.call.base64.body")?, station: p.station, port: p.port, method: p.method, path: p.path, headers: p.headers, stream: p.stream }
         }
         "preview.socket" => {
             let p: Socket = read(params)?;
@@ -504,9 +504,9 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             let p: SocketSend = read(params)?;
             let frame = match (p.text, p.binary, p.close) {
                 (Some(text), None, None) => station::SocketFrame::Text(text),
-                (None, Some(bytes), None) => station::SocketFrame::Binary(base64(&bytes, "消息")?),
+                (None, Some(bytes), None) => station::SocketFrame::Binary(base64(&bytes, "core-misc.call.base64.message")?),
                 (None, None, Some((code, reason))) => station::SocketFrame::Close(code, reason),
-                _ => return Err(CoreError::invalid("text、binary、close 要给且只给一个")),
+                _ => return Err(CoreError::invalid(t!("core-misc.params.one_frame"))),
             };
             Call::PreviewSocketSend { socket: p.socket, frame }
         }
@@ -514,9 +514,9 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             let p: Migrate = read(params)?;
             let device = match p.device {
                 Some(text) => {
-                    let key = base64(&text, "设备密钥")?;
+                    let key = base64(&text, "core-misc.call.base64.device_key")?;
                     if key.len() != 32 {
-                        return Err(CoreError::invalid("设备密钥应是 32 字节"));
+                        return Err(CoreError::invalid(t!("core-misc.params.device_key_size")));
                     }
                     Some(key)
                 }
@@ -528,7 +528,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             let op = crate::ops::request(name, &params).expect("an op")?;
             let models = params["input"]["models"].clone();
             if !models.as_array().is_some_and(|a| a.iter().all(Value::is_string)) {
-                return Err(CoreError::invalid("模型列表不对"));
+                return Err(CoreError::invalid(t!("core-misc.params.bad_models")));
             }
             Call::ProfileModels { op, id: params["id"].as_str().unwrap_or_default().into(), models }
         }
@@ -546,7 +546,7 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             match (crate::asks::parse(name, &params), crate::ops::request(name, &params)) {
                 (Some(ask), _) => Call::Ask(ask?),
                 (None, Some(op)) => Call::Op(op?),
-                (None, None) => return Err(CoreError::new("unknown_call", format!("没有这个调用：{name}"))),
+                (None, None) => return Err(CoreError::new("unknown_call", t!("core-misc.call.unknown", name = name))),
             }
         }
     })
