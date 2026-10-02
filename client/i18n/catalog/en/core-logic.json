@@ -379,7 +379,7 @@
   "core-logic.jobs.word.up": "Up",
   "core-logic.jobs.word.watching": "Watching",
   "core-logic.looks.connecting": "{n} connecting",
-  "core-logic.looks.failing": "{n} with errors",
+  "core-logic.looks.failing": "{n} failing",
   "core-logic.looks.failing.offline": "{name} offline · no chats yet",
   "core-logic.looks.failing.retrying": "Can't reach “{name}”, retrying…",
   "core-logic.looks.link.down": "Station unreachable",
