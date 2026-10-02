@@ -90,6 +90,9 @@ async fn connect(data: &Path, id: &str, addrs: &str) -> Result<Connection> {
         line.push(byte[0]);
     }
     let answer: Value = serde_json::from_slice(&line)?;
+    if std::env::var("DEBUG").is_ok() {
+        eprintln!("load: {answer}");
+    }
     if answer["ok"] != true {
         bail!("refused: {answer}");
     }
@@ -99,10 +102,17 @@ async fn connect(data: &Path, id: &str, addrs: &str) -> Result<Connection> {
 }
 
 async fn request(conn: &Connection, path: &str) -> Result<(Value, Vec<u8>)> {
+    let debug = std::env::var("DEBUG").is_ok();
     let (mut send, mut recv) = conn.open_bi().await?;
     send.write_all(format!("{}\n", json!({ "method": "GET", "path": path, "headers": {} })).as_bytes()).await?;
     send.finish()?;
+    if debug {
+        eprintln!("load: asked {path}");
+    }
     let all = recv.read_to_end(256 << 20).await?;
+    if debug {
+        eprintln!("load: {} bytes back", all.len());
+    }
     let at = all.iter().position(|b| *b == b'\n').context("no head")?;
     Ok((serde_json::from_slice(&all[..at])?, all[at + 1..].to_vec()))
 }
