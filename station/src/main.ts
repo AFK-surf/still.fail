@@ -45,7 +45,15 @@ const Loopback = (control: Control) =>
             else res.writeHead(404).end();
           });
           if (control.loopbackFd !== undefined) server.listen({ fd: control.loopbackFd });
-          else server.listen(Number(flag(args, "--port") ?? 4760), "127.0.0.1");
+          else {
+            // On its own (no launcher): 4760, or a free port when that is taken and none was named (local.rs).
+            const named = flag(args, "--port");
+            server.on("error", (e: NodeJS.ErrnoException) => {
+              if (e.code === "EADDRINUSE" && !named) server.listen(0, "127.0.0.1");
+              else log.error("station", "the loopback port is not had", { error: e.message });
+            });
+            server.listen(Number(named ?? 4760), "127.0.0.1");
+          }
           return server;
         }),
         (server) => Effect.sync(() => server.close()),
