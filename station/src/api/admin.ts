@@ -9,6 +9,8 @@ import { routes as usage } from "./routes/usage.ts";
 import { routes as sessions } from "./routes/sessions.ts";
 import { routes as events } from "./routes/events.ts";
 import { routes as marks } from "./routes/marks.ts";
+import { routes as hub } from "./routes/hub.ts";
+import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
 import { Host } from "./host.ts";
@@ -28,10 +30,13 @@ export type Tools = {
   sessionExists(key: string): boolean;
   /// The station's store, for what is written (on this thread); none while the station starts.
   store?: Store;
+  /// The hub, the jobs and the rest of the agents' side, for what needs a session run, stopped or changed; none where
+  /// there are no agents (tests of reads).
+  agents?: AgentsParts;
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
-export type AdminDeps = { events?: Events; store?: Store; host?: Host };
+export type AdminDeps = { events?: Events; store?: Store; host?: Host; agents?: AgentsParts };
 
 export class Admin {
   private routes: Route[];
@@ -54,8 +59,9 @@ export class Admin {
       events: deps.events,
       sessionExists: (key) => deps.store?.getSession(key) != null,
       store: deps.store,
+      agents: deps.agents,
     };
-    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools)];
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools)];
   }
 
   async handle(r: Request): Promise<Answer> {

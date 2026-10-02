@@ -80,8 +80,9 @@ function run() {
   const control = launcher(args);
   const paths = Layer.succeed(Paths)({ data, app });
   const parts = Layer.mergeAll(Cloud.layer, Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AgentsLive(control)).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
     Layer.provideMerge(AdminApi.layer),
+    Layer.provideMerge(AgentsLive(control)),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
     Layer.provideMerge(parts),
