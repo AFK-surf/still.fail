@@ -1,0 +1,23 @@
+[package]
+name = "stillfail-runner"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "stillfail-runner"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+libc = "0.2"
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[workspace]
