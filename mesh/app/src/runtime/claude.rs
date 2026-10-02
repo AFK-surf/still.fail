@@ -25,6 +25,7 @@ use tracing::{debug, info};
 use super::process::{GroupProcess, HandedProcess, Spawn, adopt_group, spawn_group};
 use super::{AgentDriver, AgentSession, Events, FailureReason, LiveEvent, LiveField, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, clean_env, uuid};
 use crate::config::expand_route;
+use crate::lan_share::Borrowed;
 use crate::machine_logins::{CLAUDE_TOKEN_MARGIN_MS, machine_claude_token, process_env};
 use crate::store::{Store, now_ms};
 
@@ -74,17 +75,27 @@ struct Handed {
     process: HandedProcess,
     turn: Turn,
     machine_expires: Option<i64>,
+    /// The borrowed profile it runs on (lan_share.rs), by its id here.
+    #[serde(default)]
+    lent: Option<String>,
 }
 
 pub struct ClaudeDriver {
     store: Arc<Store>,
     command: String,
     live: Mutex<Vec<Arc<ClaudeSession>>>,
+    lan: Arc<Borrowed>,
 }
 
 impl ClaudeDriver {
     pub fn new(store: Arc<Store>, command: &str) -> ClaudeDriver {
-        ClaudeDriver { store, command: command.into(), live: Mutex::new(vec![]) }
+        ClaudeDriver { store, command: command.into(), live: Mutex::new(vec![]), lan: Arc::default() }
+    }
+
+    /// Where the accounts other stations lend this one are (lan_share.rs).
+    pub fn with_lan(mut self, lan: Arc<Borrowed>) -> ClaudeDriver {
+        self.lan = lan;
+        self
     }
 
     /// A session on a process `start` gives (started now, or taken up from the previous binary), fed its lines.
@@ -93,6 +104,7 @@ impl ClaudeDriver {
         session_id: String,
         turn: Turn,
         machine_expires: Option<i64>,
+        lent: Option<String>,
         events: Events,
         start: impl FnOnce(Box<dyn Fn(String) + Send>) -> Result<Arc<GroupProcess>>,
     ) -> Result<Arc<dyn AgentSession>> {
@@ -114,7 +126,8 @@ impl ClaudeDriver {
         }))?;
         *proc_slot.lock().unwrap() = Some(proc.clone());
 
-        let session = Arc::new(ClaudeSession { id: session_id, proc: proc.clone(), turn: turn.clone(), events: events.clone(), machine_expires });
+        let lan = lent.map(|id| (self.lan.clone(), id));
+        let session = Arc::new(ClaudeSession { id: session_id, proc: proc.clone(), turn: turn.clone(), events: events.clone(), machine_expires, lan });
         self.live.lock().unwrap().push(session.clone());
         let exit_turn = turn;
         tokio::spawn(async move {
@@ -142,8 +155,10 @@ pub struct ClaudeSession {
     proc: Arc<GroupProcess>,
     turn: Arc<Mutex<Turn>>,
     events: Events,
-    /// The machine login's token this process runs on (machine profiles): when it runs out.
+    /// The machine login's token this process runs on (machine profiles, and borrowed ones): when it runs out.
     machine_expires: Option<i64>,
+    /// A borrowed profile's (lan_share.rs): runs a next turn only while its station is on the LAN.
+    lan: Option<(Arc<Borrowed>, String)>,
 }
 
 #[async_trait]
@@ -193,7 +208,12 @@ impl AgentDriver for ClaudeDriver {
             env.insert(name, session_id.clone());
         }
         // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
-        let machine = if options.profile.machine { Some(machine_claude_token(&process_env()).await?) } else { None };
+        // A borrowed one, on the token its own station hands over (lan_share.rs), the same way.
+        let machine = match &options.profile.lent {
+            Some(lent) => Some(self.lan.token(lent).await?),
+            None if options.profile.machine => Some(machine_claude_token(&process_env()).await?),
+            None => None,
+        };
         match &machine {
             Some((token, _)) => {
                 env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.clone());
@@ -214,7 +234,8 @@ impl AgentDriver for ClaudeDriver {
         let label = format!("claude {session_id}");
         let (command, store) = (self.command.clone(), self.store.clone());
         let machine_expires = machine.map(|m| m.1);
-        self.wire(session_id, Turn::default(), machine_expires, events, move |on_line| {
+        let lent = options.profile.lent.as_ref().map(|_| options.profile.id.clone());
+        self.wire(session_id, Turn::default(), machine_expires, lent, events, move |on_line| {
             spawn_group(Spawn { command: &command, args, cwd: &options.cwd, env, runtime: "claude", label }, store, on_line)
         })
     }
@@ -223,7 +244,7 @@ impl AgentDriver for ClaudeDriver {
         let handed: Handed = serde_json::from_value(handed.clone())?;
         info!(session = handed.id, pgid = handed.process.pgid, busy = handed.turn.busy, "taking up a claude process handed over");
         let (store, process, label) = (self.store.clone(), handed.process, format!("claude {}", handed.id));
-        self.wire(handed.id, handed.turn, handed.machine_expires, events, move |on_line| adopt_group(&process, store, "claude", &label, on_line))
+        self.wire(handed.id, handed.turn, handed.machine_expires, handed.lent, events, move |on_line| adopt_group(&process, store, "claude", &label, on_line))
     }
 
     async fn shutdown(&self) {
@@ -321,6 +342,9 @@ impl AgentSession for ClaudeSession {
             if self.machine_expires.is_some_and(|at| at - now_ms() < CLAUDE_TOKEN_MARGIN_MS) {
                 bail!("the machine login's token runs out");
             }
+            if self.lan.as_ref().is_some_and(|(lan, id)| !lan.on_lan(id)) {
+                bail!("{}", crate::lan_share::NOT_ON_LAN);
+            }
             t.busy = true;
         }
         self.proc.write(&user_message(text)).await;
@@ -378,7 +402,7 @@ impl AgentSession for ClaudeSession {
             t.closed = true;
             handed
         };
-        Ok(serde_json::to_value(Handed { id: self.id.clone(), process, turn, machine_expires: self.machine_expires })?)
+        Ok(serde_json::to_value(Handed { id: self.id.clone(), process, turn, machine_expires: self.machine_expires, lent: self.lan.as_ref().map(|(_, id)| id.clone()) })?)
     }
 }
 

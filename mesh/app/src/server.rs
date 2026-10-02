@@ -218,7 +218,7 @@ impl App {
             }),
         );
         let codex = Arc::new(CodexDriver::new(store.clone(), "codex").with_settings(settings.clone()));
-        let claude = Arc::new(ClaudeDriver::new(store.clone(), "claude"));
+        let claude = Arc::new(ClaudeDriver::new(store.clone(), "claude").with_lan(settings.lan.clone()));
         let mesh = MeshFile::new(&options.data);
         let (read, chats, link, people) = (settings.clone(), connections.clone(), mesh.clone(), names.clone());
         let hub = Hub::new(HubOptions {
@@ -273,6 +273,8 @@ impl App {
             told.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.notify(session,text)
         }))?;
         hub.set_jobs(&jobs);
+        // Accounts the workspace's stations on this LAN lend this one (lan_share.rs).
+        crate::lan_share::follow(Arc::downgrade(&settings));
         // session_send between stations: out through the station transport, in to the hub.
         let asking = Arc::downgrade(&remote);
         hub.on_peer(Arc::new(move |station, request| {

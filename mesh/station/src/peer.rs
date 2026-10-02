@@ -19,6 +19,27 @@ fn member(station: &Station, peer: &str, workspace: Option<&str>) -> Result<Stri
     Ok(state.workspace.clone())
 }
 
+/// Whether a connection runs over the LAN now: its path is direct, to a private address in a network of one of this
+/// machine's interfaces. A relay, a public address, or a VPN's (Tailscale's 100.64/10 is no network of a LAN) is not.
+fn on_lan(conn: &Connection) -> bool {
+    let paths = conn.paths();
+    let Some(path) = paths.iter().find(|p| p.is_selected()) else { return false };
+    let iroh::TransportAddr::Ip(addr) = path.remote_addr() else { return false };
+    let interfaces = netdev::get_interfaces();
+    lan_address(addr.ip().to_canonical(), &interfaces)
+}
+
+fn lan_address(ip: std::net::IpAddr, interfaces: &[netdev::Interface]) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ip) => ip.is_private() && interfaces.iter().any(|i| i.ipv4.iter().any(|net| net.prefix_len() > 0 && net.contains(&ip))),
+        std::net::IpAddr::V6(ip) => {
+            let segment = ip.segments()[0];
+            let local = segment & 0xffc0 == 0xfe80 || segment & 0xfe00 == 0xfc00;
+            local && interfaces.iter().any(|i| i.ipv6.iter().any(|net| net.prefix_len() > 0 && net.contains(&ip)))
+        }
+    }
+}
+
 pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
     tokio::spawn(async move {
         loop {
@@ -32,7 +53,7 @@ pub fn attach(endpoint: Endpoint, station: Arc<Station>) {
                         if target.is_empty() && request["method"] == "peers" {
                             let s = station.state.lock().unwrap();
                             return Ok(
-                                json!({"workspace":s.workspace,"stations":s.peers,"current":station.peers_current.load(std::sync::atomic::Ordering::SeqCst)}),
+                                json!({"workspace":s.workspace,"stations":s.peers,"self":s.station,"current":station.peers_current.load(std::sync::atomic::Ordering::SeqCst)}),
                             );
                         }
                         let workspace = member(&station, &target, request["workspace"].as_str())?;
@@ -128,7 +149,12 @@ pub async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
             let workspace = envelope["workspace"].as_str().ok_or_else(|| anyhow!("workspace missing"))?;
             member(&station, &peer, Some(workspace))?;
             let app = station.backend.0.get().ok_or_else(|| anyhow!("station is starting"))?;
-            app.remote.handle(workspace, &peer, envelope["request"].clone()).await
+            // Whether it came over the LAN is the transport's to say, never the caller's (lent accounts, lan_share.rs).
+            let mut request = envelope["request"].clone();
+            if request.is_object() {
+                request["lan"] = json!(on_lan(&conn));
+            }
+            app.remote.handle(workspace, &peer, request).await
         }
         .await;
         let answer = match result {
@@ -144,6 +170,23 @@ pub async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_private_address_in_one_of_its_own_networks_is_the_lan() {
+        let mut lan = netdev::Interface::dummy();
+        lan.ipv4 = vec!["192.168.20.11/24".parse().unwrap()];
+        lan.ipv6 = vec!["fe80::1/64".parse().unwrap()];
+        let mut vpn = netdev::Interface::dummy();
+        vpn.ipv4 = vec!["100.101.102.103/32".parse().unwrap()];
+        let interfaces = [lan, vpn];
+        let at = |ip: &str| lan_address(ip.parse().unwrap(), &interfaces);
+        assert!(at("192.168.20.42"));
+        assert!(at("fe80::abcd"));
+        assert!(!at("192.168.21.42"), "another network");
+        assert!(!at("10.0.0.2"), "private, but not one of its networks");
+        assert!(!at("100.101.102.104"), "a VPN's address");
+        assert!(!at("47.76.247.168"), "public");
+    }
 
     #[tokio::test]
     async fn real_peer_connection_runs_a_task_and_returns_its_artifact() -> Result<()> {

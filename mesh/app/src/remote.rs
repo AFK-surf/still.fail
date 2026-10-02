@@ -115,6 +115,8 @@ impl Remote {
     }
 
     pub fn attach(self: &Arc<Self>, call: Call) {
+        // Profiles lent over the LAN are asked for on the same transport (lan_share.rs).
+        self.settings.lan.attach(call.clone());
         *self.call.lock().unwrap() = Some(call);
         if let Ok(entries) = std::fs::read_dir(self.root.join("outgoing")) {
             for e in entries.flatten().filter(|e| e.path().extension().is_some_and(|x| x == "json")) {
@@ -368,13 +370,17 @@ impl Remote {
         let method = text(&request, "method");
         if method == "describe" {
             return Ok(
-                json!({"protocol":1,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"tasks":self.allowed(peer),"sessions":true,"messages":true,"fileChunkBytes":CHUNK,"maxFileBytes":MAX_FILE}),
+                json!({"protocol":1,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"tasks":self.allowed(peer),"sessions":true,"messages":true,"lanProfiles":true,"fileChunkBytes":CHUNK,"maxFileBytes":MAX_FILE}),
             );
         }
         // A message, not execution: workspace membership (checked by the transport) is enough.
         if method == "session.message" {
             let inbox = self.inbox.lock().unwrap().clone().ok_or_else(|| anyhow!("station is starting"))?;
             return inbox(peer.to_string(), request).await;
+        }
+        // Lent accounts: workspace membership and, set by the transport (`lan`), the same LAN.
+        if matches!(method, crate::lan_share::ASK_LENT | crate::lan_share::ASK_TOKEN) {
+            return crate::lan_share::answer(&self.settings, &self.store, request["lan"] == true, &request).await;
         }
         if !self.allowed(peer) {
             bail!(

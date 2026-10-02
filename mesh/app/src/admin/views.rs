@@ -154,6 +154,7 @@ impl AdminApi {
             .collect();
         let checks = self.checks.lock().unwrap().clone();
         let quotas = self.quotas.lock().unwrap().clone();
+        let lan = self.deps.settings.lan.clone();
         let profiles: Vec<Value> = config
             .profiles
             .iter()
@@ -177,7 +178,11 @@ impl AdminApi {
                     "machine": p.machine,
                     "backgroundOnMessage": p.background_on_message,
                     "fast": (p.runtime == RuntimeKind::Codex && p.access_kind == AccessKind::Subscription).then_some(p.fast),
-                    "check": checks.get(&p.id).map(|check| {
+                    // Lent over the LAN (lan_share.rs): this station's, or whose it is (its check and allowance are the
+                    // lending station's).
+                    "shareOnLan": p.share_on_lan,
+                    "lent": p.lent.as_ref().map(|l| json!({ "station": l.station, "profile": l.profile, "onLan": lan.on_lan(&p.id) })),
+                    "check": p.lent.as_ref().and_then(|_| lan.check(&p.id)).or_else(|| checks.get(&p.id).cloned()).as_ref().map(|check| {
                         let mut view = serde_json::to_value(check).unwrap_or(Value::Null);
                         if let Some(decision) = view.get_mut("decision").and_then(Value::as_object_mut) { decision.remove("fingerprint"); }
                         if check.decision.as_ref().is_some_and(|d| d.fingerprint != crate::decision::profiles::fingerprint(p)) {
@@ -186,7 +191,7 @@ impl AdminApi {
                         view
                     }),
                     "login": self.deps.logins.get(&p.id),
-                    "quota": quotas.get(&p.id),
+                    "quota": if p.lent.is_some() { lan.health(&p.id).and_then(|h| h.quota) } else { quotas.get(&p.id).cloned() },
                 })
             })
             .collect();

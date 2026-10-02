@@ -20,6 +20,7 @@ pub mod image_size;
 pub mod instructions;
 pub mod jobs;
 pub mod lang;
+pub mod lan_share;
 pub mod live;
 pub mod login;
 mod claude_oauth;

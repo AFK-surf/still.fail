@@ -44,6 +44,8 @@ pub fn bare_profile(id: &str, runtime: RuntimeKind, kind: AccessKind, key: &str,
         machine: false,
         background_on_message: true,
         fast: false,
+        share_on_lan: false,
+        lent: None,
     }
 }
 
@@ -241,6 +243,7 @@ impl AdminApi {
     }
 
     pub(super) fn put_profile(&self, id: &str, given: &Input, viewer: &Viewer) -> Result<Value> {
+        self.not_lent(id)?;
         self.save(viewer, &format!("profile {id}"), |raw| {
             let existing = raw.profiles.as_deref().unwrap_or_default().iter().find(|p| p.id == id).cloned();
             let machine = existing.as_ref().and_then(|p| p.machine).unwrap_or(false);
@@ -330,6 +333,12 @@ impl AdminApi {
                     _ => existing.as_ref().and_then(|p| p.background_on_message),
                 }
                 .filter(|on| !on),
+                share_on_lan: match get("shareOnLan") {
+                    Some(Value::Bool(on)) => Some(*on),
+                    Some(_) => return Err(http_error(400, "shareOnLan must be a boolean")),
+                    None => existing.as_ref().and_then(|p| p.share_on_lan),
+                }
+                .filter(|on| *on),
             };
             if let Some(old) = &existing {
                 let kept = runtimes_for(next.access.as_ref(), next.runtime);
@@ -349,6 +358,7 @@ impl AdminApi {
     }
 
     pub(super) fn delete_profile(&self, id: &str, viewer: &Viewer) -> Result<Value> {
+        self.not_lent(id)?;
         self.save(viewer, &format!("delete profile {id}"), |raw| {
             let profile = raw.profiles.as_deref().unwrap_or_default().iter().find(|p| p.id == id).cloned().ok_or_else(|| anyhow!("unknown profile {id}"))?;
             for r in runtimes_for(profile.access.as_ref(), profile.runtime) {
@@ -357,6 +367,14 @@ impl AdminApi {
             raw.profiles.get_or_insert_with(Vec::new).retain(|p| p.id != id);
             Ok(())
         })
+    }
+
+    /// A borrowed profile is edited on the station whose it is (lan_share.rs).
+    fn not_lent(&self, id: &str) -> Result<()> {
+        if self.config().profiles.iter().any(|p| p.id == id && p.lent.is_some()) {
+            return Err(http_error(409, "这是别的 station 借来的账号，请到它自己的 station 上修改"));
+        }
+        Ok(())
     }
 
     pub(super) async fn reset_quota(&self, id: &str, key: &str) -> Result<Value> {
@@ -390,6 +408,10 @@ impl AdminApi {
             }
         };
         let profile = self.config().profiles.iter().find(|p| p.id == id).cloned().ok_or_else(|| http_error(404, format!("unknown profile {id}")))?;
+        // A borrowed one's is its own station's to read (lan_share.rs).
+        if profile.lent.is_some() {
+            return Ok(self.deps.settings.lan.health(id).and_then(|h| h.quota));
+        }
         let Some(quota) = self.deps.quota.clone() else { return Ok(self.quotas.lock().unwrap().get(id).cloned()) };
         let read = quota(profile).await;
         self.quotas.lock().unwrap().insert(id.to_string(), read.clone());
@@ -400,6 +422,10 @@ impl AdminApi {
 
     pub(super) async fn check(self: &Arc<Self>, id: &str) -> Result<ProfileCheck> {
         let profile = self.config().profiles.iter().find(|p| p.id == id).cloned().ok_or_else(|| http_error(404, format!("unknown profile {id}")))?;
+        // A borrowed one is checked by its own station (lan_share.rs).
+        if profile.lent.is_some() {
+            return self.deps.settings.lan.check(id).ok_or_else(|| http_error(503, "出借账号的 station 还没回话"));
+        }
         let mut check = (self.deps.check_profile)(CheckRequest { home: profile.home.clone(), profile: profile.clone() }).await;
         // Keep Codex capabilities for each account, including providers whose model ids came from their API.
         let codex_subscription = profile.access_kind == AccessKind::Subscription && profile.runtime == RuntimeKind::Codex;
@@ -503,7 +529,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: None,
-                fast: None, background_on_message: None,
+                fast: None, background_on_message: None, share_on_lan: None,
             });
             Ok(())
         });
@@ -625,7 +651,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: None,
-                fast: None, background_on_message: None,
+                fast: None, background_on_message: None, share_on_lan: None,
             });
             Ok(())
         })?;
@@ -677,7 +703,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: Some(true),
-                fast: None, background_on_message: None,
+                fast: None, background_on_message: None, share_on_lan: None,
             });
             Ok(())
         })?;

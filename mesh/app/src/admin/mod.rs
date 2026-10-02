@@ -364,11 +364,15 @@ impl AdminApi {
             }
         }
         // The account pool picks profiles by what their checks and allowances say.
-        let (checks, quotas) = (api.checks.clone(), api.quotas.clone());
-        api.deps.hub.set_profile_health(Arc::new(move |id| crate::pool::ProfileHealth {
-            check: checks.lock().unwrap().get(id).cloned(),
-            quota: quotas.lock().unwrap().get(id).cloned(),
-            spent: false,
+        // Borrowed ones by what their own station says, and off its LAN as failing (lan_share.rs).
+        let (checks, quotas, lan) = (api.checks.clone(), api.quotas.clone(), api.deps.settings.lan.clone());
+        api.deps.hub.set_profile_health(Arc::new(move |id| match lan.health(id) {
+            Some(lent) => crate::pool::ProfileHealth { check: lan.check(id), quota: lent.quota, spent: false },
+            None => crate::pool::ProfileHealth {
+                check: checks.lock().unwrap().get(id).cloned(),
+                quota: quotas.lock().unwrap().get(id).cloned(),
+                spent: false,
+            },
         }));
         if api.deps.check_on_start {
             let me = api.me.clone();

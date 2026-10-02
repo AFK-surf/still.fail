@@ -181,6 +181,9 @@ pub struct RawProfile {
     pub background_on_message: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fast: Option<bool>,
+    /// Lent to the workspace's other stations on the same LAN (lan_share.rs); a Claude subscription only. Absent: not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub share_on_lan: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -300,6 +303,17 @@ pub struct Profile {
     /// background (Ctrl+B), so it is read now rather than when they end.
     pub background_on_message: bool,
     pub fast: bool,
+    /// Lent to the workspace's other stations on the same LAN (lan_share.rs).
+    pub share_on_lan: bool,
+    /// Borrowed: another station's account, lent while both are on one LAN (lan_share.rs). Not in config.json.
+    pub lent: Option<Lent>,
+}
+
+/// Whose account a borrowed profile is: the lending station's id and its own id for the profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lent {
+    pub station: String,
+    pub profile: String,
 }
 
 impl Profile {
@@ -509,6 +523,8 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
             machine: p.machine == Some(true),
             background_on_message: p.background_on_message != Some(false),
             fast: p.fast == Some(true),
+            share_on_lan: p.share_on_lan == Some(true),
+            lent: None,
         });
     }
     unique("profile", profiles.iter().map(|p| p.id.as_str()))?;
