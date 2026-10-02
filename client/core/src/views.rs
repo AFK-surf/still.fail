@@ -3076,7 +3076,7 @@ mod tests {
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chat { station: "ws/a".into(), thread: None, session: Some("k".into()) });
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
+            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
             t.set(session_of("ws/a", "k"), json!({"session": full_session("k", json!({})), "threads": [slack_thread(3)], "turns": [turn("t1")]}));
             t.read(&mut ui, 1).await;
             assert!(ui.value.is_none(), "its title is the station's: it waits for the items");
