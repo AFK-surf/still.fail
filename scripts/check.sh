@@ -86,9 +86,12 @@ fi
 if touches '^(web/src|apps/desktop/src|apps/android)/'; then
   step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'
 fi
-if touches "$ts_root" || touches "$ts_web" || touches "$ts_cloud" || touches "$ts_desktop"; then deps .; fi
-# The tests import the web core too.
-if touches "$ts_root" || touches "$ts_web"; then wasm_pkg; fi
+# Core tests also run for Rust-only client changes. A fresh CI checkout needs both
+# their JS dependencies and the real wasm package even when no TS file changed.
+core_tests=0
+if [ $full = 1 ] && touches '^(test|client|web/src/core)/|^package\.json$'; then core_tests=1; fi
+if touches "$ts_root" || touches "$ts_web" || touches "$ts_cloud" || touches "$ts_desktop" || [ $core_tests = 1 ]; then deps .; fi
+if touches "$ts_root" || touches "$ts_web" || [ $core_tests = 1 ]; then wasm_pkg; fi
 # The stable channel's release notes (docs/changelog.md): each one read as CI will.
 if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
 if touches "$ts_root"; then step "typecheck: scripts and tests" pnpm exec tsgo -p tsconfig.json; fi
@@ -105,7 +108,7 @@ if touches "$ts_desktop"; then deps apps/desktop; step "typecheck: desktop" sh -
 
 if [ $full = 1 ]; then
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
-  if touches '^(test|client|web/src/core)/|^package\.json$'; then
+  if [ $core_tests = 1 ]; then
     if [ -f web/src/core/pkg/.stand-in ] || [ ! -f web/src/core/pkg/built.js ]; then later "tests (need the wasm core)"; else step "tests" pnpm test; fi
   fi
   if touches "$ts_cloud"; then step "tests: cloud" sh -c 'cd cloud && pnpm test'; fi
