@@ -7,9 +7,9 @@
 // stillfail.db). Where it listens goes to <dir>/ts-station.json.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { type Admitted, revoked, verifyMember } from "./credential.ts";
-import { chats, entries } from "./admin/views.ts";
+import { HttpError, chats, entries } from "./admin/views.ts";
+import { openStore } from "./admin/store.ts";
 
 const ALPN = Buffer.from("stillfail/admin/1");
 const FORMER_ALPN = Buffer.from("ember/admin/1");
@@ -28,7 +28,7 @@ const args = process.argv.slice(2);
 const data = args[args.indexOf("--data") + 1];
 const native: Native = loadNative(process.env.STILLFAIL_MESH_NATIVE ?? new URL("../native/target/release/libstillfail_mesh_native.dylib", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8"));
-const db = new DatabaseSync(join(data, "stillfail.db"), { readOnly: true });
+const store = openStore(data);
 
 function loadNative(path: string): Native {
   const module = { exports: {} as Native };
@@ -174,13 +174,14 @@ async function request(stream: Stream, viewer: Admitted["viewer"]) {
   }
   await reader.rest();
   const url = new URL(path.slice("/admin/api".length), "http://stillfail");
-  const params = Object.fromEntries(url.searchParams);
+  // The first of a name counts, as admin/mod.rs `query_pairs` has it.
+  const pairs = [...url.searchParams.entries()];
   try {
-    if (method === "GET" && url.pathname === "/chats") return await answer(200, chats(db, viewer, params.archived === "1"));
+    if (method === "GET" && url.pathname === "/chats") return await answer(200, chats(store, viewer, url.searchParams.get("archived") === "1"));
     const thread = url.pathname.match(/^\/threads\/(\d+)\/entries$/);
-    if (method === "GET" && thread) return await answer(200, entries(db, viewer, Number(thread[1]), params));
+    if (method === "GET" && thread) return await answer(200, entries(store, viewer, Number(thread[1]), pairs));
     return await answer(404, { error: "not in this prototype" });
   } catch (error) {
-    return answer(500, { error: (error as Error).message });
+    return answer(error instanceof HttpError ? error.status : 500, { error: (error as Error).message });
   }
 }
