@@ -10,6 +10,7 @@ import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { type Admitted, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
+import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
 export const FORMER_ALPN = Buffer.from("ember/admin/1");
@@ -164,6 +165,8 @@ async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], _
   if (!path.startsWith("/admin/api/") || path.includes("..")) {
     return answer(404, '{"error":"only the admin API is reachable over the mesh"}');
   }
+  // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
+  if (head.socket === true) return socket(m, stream, reader, head, path);
   const body = await reader.rest();
   // The caller's headers go on, but not those of the hop, nor any of the station's own: who is asking is only what
   // the credential says.
@@ -180,6 +183,7 @@ async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], _
     method,
     path: at < 0 ? rest : rest.slice(0, at),
     query: at < 0 ? [] : queryPairs(rest.slice(at + 1)),
+    search: at < 0 ? "" : rest.slice(at),
     headers,
     body,
     viewer,
@@ -203,4 +207,30 @@ async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], _
     }
   }
   await stream.finish();
+}
+
+/// A WebSocket of a web service on this machine, for a preview's page (preview.ts `openSocket`): answered 101 once the
+/// service took it, then its messages framed both ways until either side closes. Only a preview's path is opened.
+async function socket(m: Members, stream: Stream, reader: Reader, head: any, path: string) {
+  const refuse = async (status: number, error: string) => {
+    await writeLine(stream, { status, headers: { "content-type": "application/json" } });
+    await stream.write(Buffer.from(JSON.stringify({ error })));
+    await stream.finish();
+  };
+  const rest = path.slice("/admin/api".length);
+  const at = rest.indexOf("?");
+  const target = previewTarget(at < 0 ? rest : rest.slice(0, at));
+  if (target === null) return refuse(404, "only a preview's WebSocket is opened over the mesh");
+  if (!m.up()) return refuse(502, "station unreachable: not started");
+  const headers = Object.entries(head.headers ?? {}).flatMap(([k, v]): [string, string][] => (typeof v === "string" ? [[k.toLowerCase(), v]] : []));
+  const lang = langOfCore(Object.fromEntries(headers));
+  let service;
+  try {
+    service = await openSocket(headers, target[0], target[1] + (at < 0 ? "" : rest.slice(at)), lang);
+  } catch (error) {
+    return refuse(error instanceof SocketRefused ? error.status : 502, (error as Error).message);
+  }
+  await writeLine(stream, { status: 101, headers: service.protocol === null ? {} : { "sec-websocket-protocol": service.protocol } });
+  // What came with the head line is the first of the client's frames.
+  await pumpSocket(service, new FrameReader(stream, reader.carry), stream);
 }

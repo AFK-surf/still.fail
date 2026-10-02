@@ -7,6 +7,8 @@ export type Request = {
   /// After /admin/api, without the query.
   path: string;
   query: [string, string][];
+  /// The query as asked (`?…`, or empty): what a preview passes on as it is.
+  search?: string;
   headers: Record<string, string>;
   body: Buffer;
   viewer: Viewer;
