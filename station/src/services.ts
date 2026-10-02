@@ -12,6 +12,7 @@ import { type StationKey, loadKey } from "./cloud/key.ts";
 import { Cloud as CloudState } from "./cloud/state.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
+import { Agents } from "./sessions/agents.ts";
 
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
@@ -105,12 +106,12 @@ export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/Adm
   );
 }
 
-/// The admin API.
+/// The admin API. Made after the agents' side (it runs sessions and jobs for the pages); the agents do not need it.
 export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/AdminApi") {
   static readonly layer = Layer.effect(
     AdminApi,
     Effect.gen(function* () {
-      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost });
+      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents });
     }),
   );
 }
