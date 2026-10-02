@@ -25,6 +25,7 @@ use tracing::{error, info, warn};
 use crate::agent_home::agent_home_paths;
 use crate::chat::internal::{INTERNAL_CHANNEL, INTERNAL_CONNECT, InternalChat, next_ts};
 use crate::chat::{ChatEvent, ChatSurface, InboundMessage, ThreadRef};
+use crate::lang::{spoken, station, t};
 use crate::config::{Config, Connect, Profile, profiles_for, runtime_named};
 use crate::image_size::image_size;
 use crate::instructions::{format_history, parse_thread_address, thread_address};
@@ -482,7 +483,7 @@ impl Hub {
             });
             if let Err(e) = created {
                 error!(session = key, error = %e, "cannot create session");
-                chat.post(&here, &format!("⚠️ 无法创建会话：{e}"), &[]).await?;
+                chat.post(&here, &format!("⚠️ {}", t!(station(); "station.slack.sessionFailed", error = e)), &[]).await?;
                 return Ok(());
             }
             // As the broker did: a new session says first where it can be followed. Once, as it starts; not waited for.
@@ -490,7 +491,7 @@ impl Hub {
             if let Some(link) = (!single).then(|| (self.link)(&key)).flatten() {
                 let (chat, here, key) = (chat.clone(), here.clone(), key.clone());
                 tokio::spawn(async move {
-                    if let Err(e) = chat.post(&here, &format!("<{link}|在 still.fail 里查看这个会话>"), &[]).await {
+                    if let Err(e) = chat.post(&here, &format!("<{link}|{}>", t!(station(); "station.slack.viewSession")), &[]).await {
                         warn!(session = key, error = %e, "session link not posted");
                     }
                 });
@@ -981,16 +982,16 @@ impl Hub {
         let new_model = change.model.map(nonempty);
         let new_effort = change.effort.map(nonempty);
         if change.fast.flatten().is_some() && runtime != RuntimeKind::Codex {
-            bail!("Fast 只适用于 OpenAI 订阅");
+            bail!(t!(spoken(); "station.session.fastOpenAiOnly"));
         }
         if let Some(Some(id)) = &wanted_profile {
             let next = config.profiles.iter().find(|p| &p.id == id).ok_or_else(|| anyhow!("unknown profile {id}"))?;
             if !next.runtimes.contains(&runtime) {
-                bail!("「{}」不能跑 {runtime_name}", next.name);
+                bail!(t!(spoken(); "station.profile.cannotRun", profile = next.name, runtime = runtime_name));
             }
             let runs = new_model.clone().unwrap_or_else(|| row.model.clone());
             if let Some(runs) = runs.filter(|m| !next.runs(m)) {
-                bail!("「{}」没有启用 {runs}：换一个模型，或先在它的 Profile 里启用", next.name);
+                bail!(t!(spoken(); "station.session.modelOff", profile = next.name, model = runs));
             }
         }
         let model = new_model.clone().unwrap_or_else(|| row.model.clone());
@@ -1008,18 +1009,18 @@ impl Hub {
         // What changes is checked; what stays is as it was.
         if let (Some(Some(_)), Some(model)) = (&new_model, &model) {
             if !config.profiles.iter().any(|p| p.runtimes.contains(&runtime) && p.runs(model)) {
-                bail!("没有能跑 {model} 的 {runtime_name} Profile：先在一个 Profile 上启用它");
+                bail!(t!(spoken(); "station.session.noProfileForModel", model = model, runtime = runtime_name));
             }
         }
         if let Some(effort) = effort.as_ref().filter(|_| new_effort.is_some() || wanted_profile.is_some() || remodel) {
             let pinned = wanted_profile.as_ref().map(|p| p.as_deref()).unwrap_or_else(|| (!remodel && row.profile_pinned).then_some(row.profile.as_str()));
             let allowed = self.model_efforts(runtime, model.as_deref(), pinned);
             if !allowed.contains(effort) {
-                bail!("{runtime_name} 的思考深度只有 {}", allowed.join("、"));
+                bail!(t!(spoken(); "station.profile.efforts", runtime = runtime_name, efforts = allowed.join(&t!(spoken(); "station.list.separator"))));
             }
         }
         if self.process_state(key) == "running" {
-            bail!("这个会话正在跑，等这一轮结束再改");
+            bail!(t!(spoken(); "station.session.busy"));
         }
         self.evict(key).await;
         let profile = match wanted_profile {
@@ -1139,7 +1140,7 @@ impl Hub {
         };
         if let (Some(_), Some(model)) = (&options.profile, &model) {
             if !profile.runs(model) {
-                bail!("「{}」没有启用 {model}", profile.name);
+                bail!(t!(spoken(); "station.profile.modelOff", profile = profile.name, model = model));
             }
         }
         let effort = options.effort.filter(|e| !e.is_empty());
@@ -1207,12 +1208,12 @@ impl Hub {
             }
         }
         if !Path::new(&found.cwd).is_dir() {
-            bail!("它原来的目录 {} 已经不在了", found.cwd);
+            bail!(t!(spoken(); "station.session.cwdGone", cwd = found.cwd));
         }
         let config = self.config();
         let profiles: Vec<&Profile> = config.profiles.iter().filter(|p| p.runtimes.contains(&found.runtime)).collect();
         if profiles.is_empty() {
-            bail!("没有能跑 {} 的 Profile", if found.runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" });
+            bail!(t!(spoken(); "station.session.noProfile", runtime = if found.runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" }));
         }
         // The model it ran, where a profile has it enabled; else the one picked runs its own.
         let kept = found.model.clone().filter(|m| profiles.iter().any(|p| p.models.contains(m)));
@@ -1256,10 +1257,7 @@ impl Hub {
         // at where it was when it came here (the pages open `?history=<session>&entry=<n>` links there).
         let at = last.map(|n| format!("&entry={n}")).unwrap_or_default();
         let name = if found.runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" };
-        let note = format!(
-            "接着本机 {name} 在 {} 的会话 · [查看之前的对话](?history={key}{at})",
-            found.cwd
-        );
+        let note = t!(spoken(); "station.session.continued", runtime = name, cwd = found.cwd, link = format!("?history={key}{at}"));
         self.store.insert_message(NewMessage::new(thread.id, &next_ts(), AuthorKind::StillFail, "ember", &note))?;
         self.store.set_read(created_by, thread.id, self.store.last_entry(thread.id)?)?;
         Ok((key, thread))
@@ -2339,9 +2337,9 @@ fn place_figures(text: &str, files: &[Attachment]) -> String {
 fn slack_with_files(text: &str, files: &[Attachment], link: &str) -> (String, String) {
     let figure = files.iter().find(|f| is_html(f));
     let what = match (figure, files.len()) {
-        (Some(_), 1) => "在 still.fail 里查看图表",
-        (Some(_), _) => "在 still.fail 里查看图表和附件",
-        (None, _) => "在 still.fail 里查看附件",
+        (Some(_), 1) => t!(station(); "station.slack.viewFigure"),
+        (Some(_), _) => t!(station(); "station.slack.viewFigureAndFiles"),
+        (None, _) => t!(station(); "station.slack.viewFiles"),
     };
     let link = match figure.or(files.first()) {
         Some(f) => format!("{link}?file={}", crate::server::encode(&f.name)),

@@ -459,7 +459,7 @@ impl Stations {
     /// A person's message into a thread. Answers its entry number once the thread's topic, where live, holds it.
     pub async fn post(&self, station: &StationAddr, thread: u64, message: Value) -> Result<u64> {
         let answer = self.json(station, "POST", &format!("/threads/{thread}/messages"), Some(message)).await?;
-        let n = answer.get("n").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有消息序号"))?;
+        let n = answer.get("n").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", t!("station.core.noMessageNumber")))?;
         let topic = Topic::Thread { station: station.to_string(), thread };
         // Sent from a window short of its end: the reader goes to the end, where it is.
         if self.sink.get(&topic).is_some_and(|v| !at_end(&v)) {
@@ -573,7 +573,7 @@ impl Stations {
         if self.sink.get(&topic).is_some_and(|v| at_end(&v)) {
             return Ok(());
         }
-        let (value, asked) = self.window(&name, thread, None).await.ok_or_else(|| CoreError::new("offline", "连不上 station"))?;
+        let (value, asked) = self.window(&name, thread, None).await.ok_or_else(|| CoreError::new("offline", t!("station.core.offline")))?;
         if self.is_live(&topic) {
             self.sink.set(&topic, Ok(value));
             self.ahead(&name, thread);

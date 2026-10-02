@@ -185,7 +185,7 @@ impl App {
         let handed = handed_listener.is_some();
         let listener = match handed_listener {
             Some(listener) => listener,
-            None => crate::ports::listen(&config.http.host, config.http.port, config.http.named, "agent 的 MCP 端点").await?,
+            None => crate::ports::listen(&config.http.host, config.http.port, config.http.named, &crate::lang::t!(crate::lang::station(); "station.port.mcp")).await?,
         };
         let port = listener.local_addr()?.port();
         if port != config.http.port && !handed {

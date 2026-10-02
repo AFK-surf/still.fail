@@ -27,9 +27,9 @@ impl Stations {
     async fn update_all(&self, station: &StationAddr) -> Result<Value> {
         let overview = self.get(station, "/overview").await?;
         let updates = overview.get("updates").and_then(Value::as_array)
-            .ok_or_else(|| CoreError::invalid("这台 station 还不支持更新"))?;
+            .ok_or_else(|| CoreError::invalid(t!("station.core.updatesUnsupported")))?;
         if updates.iter().any(|v| v["state"] == "updating") {
-            return Err(CoreError::invalid("已有软件正在更新，请等它完成"));
+            return Err(CoreError::invalid(t!("station.core.updateBusy")));
         }
         let mut selected: Vec<Value> = updates.iter().filter(|v| {
             v["installed"] == true && v["updatable"] == true
@@ -38,7 +38,7 @@ impl Stations {
         selected.sort_by_key(|v| v["id"] == "station");
         let mut answer = json!(updates);
         for item in selected {
-            let id = item["id"].as_str().ok_or_else(|| CoreError::invalid("软件缺少标识"))?;
+            let id = item["id"].as_str().ok_or_else(|| CoreError::invalid(t!("station.core.noSoftwareId")))?;
             answer = self.json(station, "POST", "/updates", Some(json!({"id": id}))).await?;
             self.after_write(station, &Effect::Overview, &answer).await;
             // The station's restart is reflected by its connection and overview, not another queued write.
@@ -46,13 +46,13 @@ impl Stations {
             let deadline = self.host.now_ms() + 15.0 * 60_000.0;
             loop {
                 let status = answer.as_array().and_then(|items| items.iter().find(|v| v["id"] == id))
-                    .ok_or_else(|| CoreError::invalid("读不到更新进度，后续更新未开始"))?;
+                    .ok_or_else(|| CoreError::invalid(t!("station.core.progressUnreadable")))?;
                 if status["state"] == "failed" {
-                    return Err(CoreError::invalid(format!("{} 更新失败：{}", item["name"].as_str().unwrap_or(id), status["message"].as_str().unwrap_or("请在详情中重试"))));
+                    return Err(CoreError::invalid(t!("station.core.updateFailed", name = item["name"].as_str().unwrap_or(id), error = status["message"].as_str().map(str::to_string).unwrap_or_else(|| t!("station.core.retryInDetails")))));
                 }
                 if status["state"] != "updating" { break; }
                 if self.host.now_ms() >= deadline {
-                    return Err(CoreError::invalid("更新仍未完成，后续更新未开始，请在详情中查看进度"));
+                    return Err(CoreError::invalid(t!("station.core.updateUnfinished")));
                 }
                 self.host.sleep(1000).await;
                 let overview = self.get(station, "/overview").await?;
@@ -86,7 +86,7 @@ impl Stations {
             answered(&mut span, &reply);
             if reply.status != 200 {
                 let status = reply.status;
-                return Err(CoreError::new(format!("http_{status}"), "读不到文件").with_status(status));
+                return Err(CoreError::new(format!("http_{status}"), t!("station.core.fileUnreadable")).with_status(status));
             }
             let kind = reply.header("content-type").unwrap_or("").to_string();
             let total = reply.header("content-length").and_then(|n| n.trim().parse::<u64>().ok());
@@ -153,17 +153,19 @@ impl Stations {
     /// station's reason, as an error with its status).
     pub async fn preview_socket(&self, station: &StationAddr, port: u16, path: &str, headers: Vec<(String, String)>) -> Result<WireSocket> {
         let path = format!("/admin/api/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
-        let _waiting = self.of(&station.to_string()).status.begin(Place::Station(station.to_string()), "打开网页服务的 WebSocket", false);
+        let _waiting = self.of(&station.to_string()).status.begin(Place::Station(station.to_string()), t!("station.core.openingPreviewSocket"), false);
         let mut span = self.tracer.span(format!("SOCKET {}", route(&path)), Kind::Client);
         span.set("url.path", route(&path));
         span.set("stillfail.stream", true);
         let mut headers = headers;
         headers.push(("traceparent".into(), span.context().traceparent()));
+        // The station answers in its person's language (its errors, its words in what it answers).
+        headers.push((LANG_HEADER.into(), stillfail_i18n::current().code().into()));
         let opening = self.tracer.instrument(Some(span.context()), self.wire.socket(station, RequestHead { method: "GET".into(), path, headers }));
         let opened = match futures::future::select(opening, self.host.sleep(SOCKET_OPEN_MS)).await {
             Either::Left((opened, _)) => opened,
             // Let go, its stream is reset.
-            Either::Right(_) => Err(CoreError::new("timeout", "网页服务的 WebSocket 没有打开：station 没有回应")),
+            Either::Right(_) => Err(CoreError::new("timeout", t!("station.core.previewSocketTimeout"))),
         };
         let socket = match opened {
             Ok(socket) => socket,
@@ -196,6 +198,8 @@ impl Stations {
             span.set("http.request.body.size", body.len());
         }
         headers.push(("traceparent".into(), span.context().traceparent()));
+        // The station answers in its person's language (its errors, its words in what it answers).
+        headers.push((LANG_HEADER.into(), stillfail_i18n::current().code().into()));
         // A write carries a key of its own: a station that keeps writes to once (mesh/app/src/admin/once.rs) does it
         // once however often it arrives, so the wire may send it again on another way there (a link that went quiet).
         if !method.eq_ignore_ascii_case("GET") && !method.eq_ignore_ascii_case("HEAD") && !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(IDEMPOTENCY_KEY)) {

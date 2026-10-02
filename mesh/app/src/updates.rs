@@ -31,6 +31,7 @@ use tokio::sync::watch;
 use tracing::{info, warn};
 
 use crate::config::RawConfig;
+use crate::lang::{spoken, t};
 use crate::machine_logins::Env;
 use crate::settings::Settings;
 use crate::store::now_ms;
@@ -285,7 +286,7 @@ impl Updates {
     /// is read at once, and a newer release installed.
     pub async fn set_auto(self: &Arc<Self>, on: bool) -> Result<()> {
         if let Some(note) = &self.items.lock().unwrap()[Kind::Station as usize].note {
-            bail!("{}：{note}", Kind::Station.name());
+            bail!(t!(spoken(); "station.list.labeled", name = Kind::Station.name(), note = note));
         }
         if self.auto() != on {
             self.settings.update(|raw| {
@@ -305,7 +306,7 @@ impl Updates {
     /// from that channel. Going back to the stable channel from a beta offers the stable release, older or not.
     pub async fn set_channel(self: &Arc<Self>, channel: Channel) -> Result<()> {
         if let Some(note) = &self.items.lock().unwrap()[Kind::Station as usize].note {
-            bail!("{}：{note}", Kind::Station.name());
+            bail!(t!(spoken(); "station.list.labeled", name = Kind::Station.name(), note = note));
         }
         self.keep_channel(channel)?;
         self.check().await;
@@ -479,12 +480,12 @@ impl Updates {
         let note = if installed(&self.app).is_some_and(|a| Some(a) == installed(&self.data.join("app"))) {
             None
         } else if self.app.to_string_lossy().contains(".app/Contents") {
-            Some("随 still.fail 桌面端一起更新".to_string())
+            Some(t!(spoken(); "station.updates.withDesktop"))
         } else {
-            Some("不是用安装脚本装的，没法在这里更新".to_string())
+            Some(t!(spoken(); "station.updates.notInstaller"))
         };
         let origin = (self.origin)();
-        let note = note.or_else(|| origin.is_none().then(|| "还没加入 workspace，无从更新".to_string()));
+        let note = note.or_else(|| origin.is_none().then(|| t!(spoken(); "station.updates.notJoined")));
         let latest = match &origin {
             Some(origin) => match fetch_json(&channel.feed(origin)).await {
                 Ok(said) => said.get("version").and_then(Value::as_str).map(String::from),
@@ -527,24 +528,24 @@ impl Updates {
 
     /// Updates one (`station`, `claude`, `codex`), or installs a runtime the machine has not: answers once it has started; how it goes shows in `get`.
     pub fn update(self: &Arc<Self>, id: &str) -> Result<()> {
-        let kind = Kind::of(id).ok_or_else(|| anyhow!("没有 {id} 这一项"))?;
+        let kind = Kind::of(id).ok_or_else(|| anyhow!(t!(spoken(); "station.updates.noSuchItem", id = id)))?;
         let item = self.items.lock().unwrap()[kind as usize].clone();
         if item.updating.is_some() {
-            bail!("{} 正在更新", kind.name());
+            bail!(t!(spoken(); "station.updates.alreadyUpdating", name = kind.name()));
         }
         if let Some(note) = &item.note {
-            bail!("{}：{note}", kind.name());
+            bail!(t!(spoken(); "station.list.labeled", name = kind.name(), note = note));
         }
         if kind == Kind::Station {
             if let Some(runtime) = self.runtime_updating() {
-                bail!("{} 正在安装或更新，等它完成再更新 station", runtime.name());
+                bail!(t!(spoken(); "station.updates.runtimeBusy", name = runtime.name()));
             }
             return self.update_station();
         }
         if self.items.lock().unwrap()[Kind::Station as usize].updating.is_some() {
-            bail!("station 正在更新，等它完成再{}{}", if item.installed { "更新" } else { "安装" }, kind.name());
+            bail!(t!(spoken(); if item.installed { "station.updates.stationBusyUpdate" } else { "station.updates.stationBusyInstall" }, name = kind.name()));
         }
-        let how = item.how.ok_or_else(|| anyhow!("{} 没法在这里更新", kind.name()))?;
+        let how = item.how.ok_or_else(|| anyhow!(t!(spoken(); "station.updates.notHere", name = kind.name())))?;
         self.set(kind, |i| {
             i.updating = Some(now_ms());
             i.progress = None;
@@ -559,7 +560,7 @@ impl Updates {
                 Ok(Ok((true, _))) => None,
                 Ok(Ok((false, said))) => Some(tail(&said)),
                 Ok(Err(e)) => Some(e.to_string()),
-                Err(_) => Some("超过 10 分钟还没有完成".to_string()),
+                Err(_) => Some(t!(spoken(); "station.updates.timedOut")),
             };
             if let Some(failed) = &failed {
                 warn!(runtime = kind.id(), failed, "the runtime not updated");
@@ -567,9 +568,9 @@ impl Updates {
             let read = me.read_runtime(kind).await;
             // Done without an error but not there, or not newer: installed somewhere the station's PATH does not find.
             let failed = failed.or_else(|| match (&read.version, &read.latest) {
-                _ if !read.installed => Some(format!("{} 跑完了，但 station 的 PATH 上还是找不到 {}：可能装到了别处", how.program.display(), kind.command())),
+                _ if !read.installed => Some(t!(spoken(); "station.updates.notOnPath", program = how.program.display(), command = kind.command())),
                 (Some(version), Some(latest)) if newer(version, latest) => {
-                    Some(format!("{} 跑完了，但 {} 还是 {version}（最新 {latest}）：可能装到了别处，PATH 上的不是它", how.program.display(), kind.command()))
+                    Some(t!(spoken(); "station.updates.notNewer", program = how.program.display(), command = kind.command(), version = version, latest = latest))
                 }
                 _ => None,
             });
@@ -605,10 +606,10 @@ impl Updates {
         let args: Vec<&str> = how.args.iter().map(String::as_str).collect();
         let said = run_lines(&how.program, &args, &self.env, RUNTIME_LIMIT, |line| {
             if let Some(step) = step_of(line) {
-                if step == INSTALLING {
+                if step == installing_words() {
                     installing.store(true, Ordering::SeqCst);
                 }
-                self.say(kind, step, None);
+                self.say(kind, &step, None);
             }
         })
         .await;
@@ -649,7 +650,7 @@ impl Updates {
         let file = std::env::temp_dir().join(format!("stillfail-codex-{version}-{platform}.tgz"));
         let cached = match self.download(Kind::Codex, &version, &url, &file).await {
             Ok(()) => {
-                self.say(Kind::Codex, INSTALLING, None);
+                self.say(Kind::Codex, &installing_words(), None);
                 run(npm, &["cache", "add", &file.to_string_lossy()], &self.env, Duration::from_secs(120)).await
             }
             Err(e) => Err(e),
@@ -679,7 +680,7 @@ impl Updates {
         let mut file = tokio::fs::File::create(to).await?;
         let mut got = 0;
         self.say_downloading(kind, version, got, total);
-        while let Some(chunk) = tokio::time::timeout(Duration::from_secs(60), response.chunk()).await.map_err(|_| anyhow!("下载一分钟没有动静"))?? {
+        while let Some(chunk) = tokio::time::timeout(Duration::from_secs(60), response.chunk()).await.map_err(|_| anyhow!(t!(spoken(); "station.updates.downloadStalled")))?? {
             file.write_all(&chunk).await?;
             got += chunk.len() as u64;
             self.say_downloading(kind, version, got, total);
@@ -721,7 +722,7 @@ impl Updates {
     /// Runs the cloud's installer apart from the station, as `stillfail update` does, and follows it (`follow`): by
     /// this process, and after a handover or a restart by the one that runs then (run/update.started says to).
     fn update_station(self: &Arc<Self>) -> Result<()> {
-        let origin = (self.origin)().ok_or_else(|| anyhow!("还没加入 workspace，无从更新"))?;
+        let origin = (self.origin)().ok_or_else(|| anyhow!(t!(spoken(); "station.updates.notJoined")))?;
         let run_dir = self.data.join("run");
         std::fs::create_dir_all(&run_dir)?;
         for file in ["update.exit", "update.step"] {
@@ -729,10 +730,10 @@ impl Updates {
         }
         // In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a
         // handover (this process becomes another binary) and a restart (the service's processes are stopped).
-        let script = r#"( curl -fsSL "$1/install.sh" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &"#;
+        let script = r#"( curl -fsSL "$1/install.sh?lang=$3" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &"#;
         let channel = self.channel();
         let status = std::process::Command::new("/bin/sh")
-            .args(["-c", script, "sh", &origin, &run_dir.to_string_lossy()])
+            .args(["-c", script, "sh", &origin, &run_dir.to_string_lossy(), crate::lang::station().code()])
             .env_clear()
             .envs(&self.env)
             // Under both names: the cloud's installer from before the rename reads the old one.
@@ -745,7 +746,7 @@ impl Updates {
             .process_group(0)
             .status()?;
         if !status.success() {
-            bail!("没能开始更新");
+            bail!(t!(spoken(); "station.updates.couldNotStart"));
         }
         info!(origin, channel = channel.id(), "updating the station");
         *self.tried.lock().unwrap() = self.items.lock().unwrap()[Kind::Station as usize].latest.clone();
@@ -790,8 +791,8 @@ impl Updates {
                 let step = std::fs::read_to_string(&step_file).map(|s| s.trim().to_string()).unwrap_or_default();
                 let (failed, done) = match std::fs::read_to_string(&exit) {
                     Ok(code) if code.trim() == "0" => (None, Some(me.done(&started, &step))),
-                    Ok(code) => (Some(tail(&std::fs::read_to_string(&log).unwrap_or_else(|_| format!("安装脚本退出码 {}", code.trim())))), None),
-                    Err(_) if now_ms() - started.at > STATION_LIMIT_MS => (Some("安装脚本 20 分钟没有结束，看 ~/.stillfail/run/update.log".to_string()), None),
+                    Ok(code) => (Some(tail(&std::fs::read_to_string(&log).unwrap_or_else(|_| t!(spoken(); "station.updates.installerExit", code = code.trim())))), None),
+                    Err(_) if now_ms() - started.at > STATION_LIMIT_MS => (Some(t!(spoken(); "station.updates.installerTimedOut")), None),
                     Err(_) => {
                         let progress = me.progress(&step);
                         let percent = if step == "download" { station_download_percent(&log) } else { None };
@@ -840,13 +841,13 @@ impl Updates {
     /// Where the update is, by the installer's step, as the pages say it.
     fn progress(&self, step: &str) -> Option<String> {
         Some(match step {
-            "download" => "正在下载新版本…".to_string(),
-            "handoff" => "正在交接给新版本（agent 不中断）…".to_string(),
+            "download" => t!(spoken(); "station.updates.downloadingStation"),
+            "handoff" => t!(spoken(); "station.updates.handoff"),
             "drain" => match self.running.get().map(|running| running()).unwrap_or(0) {
-                0 => "正在重启…".to_string(),
-                n => format!("等 {n} 个 agent 跑完这一轮再重启（新消息先排队）…"),
+                0 => t!(spoken(); "station.updates.restarting"),
+                n => t!(spoken(); "station.updates.draining", n = n),
             },
-            "restart" => "正在重启…".to_string(),
+            "restart" => t!(spoken(); "station.updates.restarting"),
             _ => return None,
         })
     }
@@ -855,13 +856,16 @@ impl Updates {
     fn done(&self, started: &Started, step: &str) -> String {
         let now = station_version(&self.app);
         if now.is_some() && now == started.from {
-            return "已经是最新版".to_string();
+            return t!(spoken(); "station.updates.upToDate");
         }
-        let to = now.map(|v| format!("到 {v}")).unwrap_or_default();
-        match step {
-            "handoff" => format!("已更新{to}，agent 没有中断"),
-            "drain" | "restart" => format!("已更新{to}（重启了一次 station）"),
-            _ => format!("已更新{to}"),
+        let (with, without) = match step {
+            "handoff" => ("station.updates.doneHandoff", "station.updates.doneHandoffNoVersion"),
+            "drain" | "restart" => ("station.updates.doneRestart", "station.updates.doneRestartNoVersion"),
+            _ => ("station.updates.done", "station.updates.doneNoVersion"),
+        };
+        match now {
+            Some(version) => t!(spoken(); with, version = version),
+            None => t!(spoken(); without),
         }
     }
 }
@@ -894,19 +898,21 @@ fn curl_percent(log: &str) -> Option<u64> {
 fn tail(said: &str) -> String {
     let lines: Vec<&str> = said.trim().lines().filter(|l| !l.trim().is_empty()).collect();
     let tail = lines[lines.len().saturating_sub(4)..].join("\n");
-    if tail.is_empty() { "更新失败，没有输出".to_string() } else { tail.chars().rev().take(600).collect::<Vec<_>>().into_iter().rev().collect() }
+    if tail.is_empty() { t!(spoken(); "station.updates.noOutput") } else { tail.chars().rev().take(600).collect::<Vec<_>>().into_iter().rev().collect() }
 }
 
 /// What a runtime's update says once what it downloads is in.
-const INSTALLING: &str = "正在安装…";
+fn installing_words() -> String {
+    t!(spoken(); "station.updates.installing")
+}
 
 /// The step a line of an installer's output says it is at: Homebrew's, and Claude Code's installer's.
-fn step_of(line: &str) -> Option<&'static str> {
+fn step_of(line: &str) -> Option<String> {
     let line = line.trim();
     if ["==> Fetching", "==> Downloading"].iter().any(|s| line.starts_with(s)) {
-        Some("正在下载…")
+        Some(t!(spoken(); "station.updates.downloading"))
     } else if ["==> Installing", "==> Pouring", "==> Upgrading", "==> Moving", "==> Linking", "Setting up Claude Code"].iter().any(|s| line.starts_with(s)) {
-        Some(INSTALLING)
+        Some(installing_words())
     } else {
         None
     }
@@ -916,8 +922,8 @@ fn step_of(line: &str) -> Option<&'static str> {
 fn downloading(version: &str, got: u64, total: Option<u64>) -> (String, Option<u64>) {
     let mb = |b: u64| (b as f64 / 1_000_000.0).round() as u64;
     match total {
-        Some(total) if total > 0 => (format!("正在下载 {version}（{} MB）", mb(total)), Some(got.min(total) * 100 / total)),
-        _ => (format!("正在下载 {version}：已下 {} MB", mb(got)), None),
+        Some(total) if total > 0 => (t!(spoken(); "station.updates.downloadingSized", version = version, mb = mb(total)), Some(got.min(total) * 100 / total)),
+        _ => (t!(spoken(); "station.updates.downloadingSoFar", version = version, mb = mb(got)), None),
     }
 }
 
@@ -985,16 +991,16 @@ fn how_to_update(kind: Kind, found: &Found, env: &Env) -> Result<How, String> {
         let vp = found.on_path.parent().map(|dir| dir.join("vp"))
             .filter(|p| std::fs::canonicalize(p).is_ok_and(|p| p == found.real))
             .or_else(|| find_command("vp", env).filter(|vp| vp.real == found.real).map(|vp| vp.on_path))
-            .ok_or_else(|| format!("{} 是用 Vite+ 装的，但 station 找不到对应的 vp", kind.name()))?;
+            .ok_or_else(|| t!(spoken(); "station.updates.noVp", name = kind.name()))?;
         return Ok(How::new(vp, &["install", "-g", &format!("{}@latest", kind.package())]));
     }
-    let brew = || find_command("brew", env).map(|b| b.on_path).ok_or_else(|| format!("{} 是用 Homebrew 装的，但 station 找不到 brew", kind.name()));
+    let brew = || find_command("brew", env).map(|b| b.on_path).ok_or_else(|| t!(spoken(); "station.updates.noBrew", name = kind.name()));
     let npm = || {
         // The npm of the Node the command is installed in (…/lib/node_modules/… → …/bin/npm): the link on PATH can sit
         // beside another Node's npm (~/.local/bin with links into two Nodes), which installs where PATH does not look.
         let own = real.split_once("/lib/node_modules/").map(|(prefix, _)| Path::new(prefix).join("bin/npm")).filter(|p| p.exists());
         let beside = || found.on_path.parent().map(|d| d.join("npm")).filter(|p| p.exists());
-        own.or_else(beside).or_else(|| find_command("npm", env).map(|n| n.on_path)).ok_or_else(|| format!("{} 是用 npm 装的，但 station 找不到 npm", kind.name()))
+        own.or_else(beside).or_else(|| find_command("npm", env).map(|n| n.on_path)).ok_or_else(|| t!(spoken(); "station.updates.noNpm", name = kind.name()))
     };
     let package = format!("{}@latest", kind.package());
     match kind {
@@ -1007,19 +1013,19 @@ fn how_to_update(kind: Kind, found: &Found, env: &Env) -> Result<How, String> {
             // npm's shebang uses PATH's node; even the right npm can therefore choose another
             // Node's global prefix. Explicitly target the installation the station actually uses.
             let (prefix, _) = real.split_once("/lib/node_modules/")
-                .ok_or_else(|| format!("无法确定 {real} 的 npm 全局安装目录，要在那台机器上自己更新"))?;
+                .ok_or_else(|| t!(spoken(); "station.updates.npmRootUnknown", path = real))?;
             Ok(How::new(npm()?, &["install", "-g", &package, "--prefix", prefix]))
         },
         Kind::Claude => Ok(How::new(&found.on_path, &["update"])),
         Kind::Codex if real.contains("/packages/standalone/releases/") => standalone_codex_update(found),
-        Kind::Codex => Err(format!("装在 {real}，不是 npm 或 Homebrew 装的，要在那台机器上自己更新")),
+        Kind::Codex => Err(t!(spoken(); "station.updates.codexElsewhere", path = real)),
     }
 }
 
 /// Reuse the official installer's checksums, versioned releases and atomic link switch. Keep both
 /// the package home and the visible command at the locations this station actually uses.
 fn standalone_codex_update(found: &Found) -> Result<How, String> {
-    let invalid = || format!("无法确定 {} 的 standalone 安装入口，要在那台机器上自己更新", found.on_path.display());
+    let invalid = || t!(spoken(); "station.updates.standaloneUnknown", path = found.on_path.display());
     let real = found.real.to_str().ok_or_else(invalid)?;
     let (home, release) = real.rsplit_once("/packages/standalone/releases/").ok_or_else(invalid)?;
     let (_, binary) = release.split_once('/').ok_or_else(invalid)?;
@@ -1046,7 +1052,7 @@ fn how_to_install(kind: Kind, env: &Env) -> Result<How, String> {
             } else if let Some(brew) = find_command("brew", env) {
                 Ok(How::new(brew.on_path, &["install", "--cask", "codex"]))
             } else {
-                Err("这台机器上没有 npm 也没有 Homebrew：先装 Node（带 npm），再回来安装 Codex".to_string())
+                Err(t!(spoken(); "station.updates.noNpmNoBrew"))
             }
         }
     }
@@ -1058,7 +1064,7 @@ async fn run(program: impl AsRef<Path>, args: &[&str], env: &Env, timeout: Durat
     cmd.args(args).env_clear().envs(env).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     // Out of any repository (npm and claude look around them) and in its own group (npm's children stop with it).
     cmd.current_dir(std::env::temp_dir()).process_group(0);
-    let out = tokio::time::timeout(timeout, cmd.output()).await.map_err(|_| anyhow!("{} 没有及时结束", program.as_ref().display()))??;
+    let out = tokio::time::timeout(timeout, cmd.output()).await.map_err(|_| anyhow!(t!(spoken(); "station.updates.notFinished", program = program.as_ref().display())))??;
     Ok((out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr))))
 }
 
@@ -1089,7 +1095,7 @@ async fn run_lines(program: impl AsRef<Path>, args: &[&str], env: &Env, timeout:
         }
         anyhow::Ok(child.wait().await?)
     };
-    let status = tokio::time::timeout(timeout, work).await.map_err(|_| anyhow!("{} 没有及时结束", program.as_ref().display()))??;
+    let status = tokio::time::timeout(timeout, work).await.map_err(|_| anyhow!(t!(spoken(); "station.updates.notFinished", program = program.as_ref().display())))??;
     Ok((status.success(), said))
 }
 
@@ -1103,10 +1109,10 @@ pub(crate) mod tests {
         let mut steps = vec![];
         let (ok, said) = run_lines("/bin/sh", &["-c", "echo '==> Downloading https://x'; echo '==> Pouring codex'; echo 'Warning: x' >&2; exit 3"], &env, Duration::from_secs(10), |line| steps.extend(step_of(line))).await.unwrap();
         assert!(!ok);
-        assert_eq!(steps, ["正在下载…", INSTALLING]);
+        assert_eq!(steps, ["正在下载…".to_string(), installing_words()]);
         // Both streams kept (their order between them is not known).
         assert!(said.contains("==> Pouring codex") && said.contains("Warning: x"));
-        assert_eq!(step_of("Setting up Claude Code..."), Some(INSTALLING));
+        assert_eq!(step_of("Setting up Claude Code..."), Some(installing_words()));
         assert_eq!(step_of("added 2 packages in 4s"), None);
         assert_eq!(downloading("0.159.3", 60_000_000, Some(133_847_481)), ("正在下载 0.159.3（134 MB）".to_string(), Some(44)));
         assert_eq!(downloading("0.159.3", 60_000_000, None), ("正在下载 0.159.3：已下 60 MB".to_string(), None));

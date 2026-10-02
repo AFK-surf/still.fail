@@ -53,6 +53,7 @@ use tokio_tungstenite::tungstenite::{self, Message, client::IntoClientRequest};
 use tracing::{info, warn};
 
 use crate::telemetry::{Parent, Telemetry, route};
+use stillfail_app::lang::{self, t};
 
 const ALPN: &[u8] = b"stillfail/admin/1";
 /// The ALPN clients from before the rename ask for: the same protocol.
@@ -209,7 +210,7 @@ async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
         removed_code: None,
     };
     save_state(data, &state)?;
-    println!("已加入 workspace「{}」，这台 station 叫「{}」（{}）。", state.workspace_name, state.name, &station[..12]);
+    println!("{}", t!(lang::station(); "station.cli.joined", workspace = state.workspace_name, name = state.name, id = &station[..12]));
     Ok(())
 }
 
@@ -582,7 +583,7 @@ struct Held(PathBuf);
 
 impl std::fmt::Display for Held {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "另一个 still.fail station 正在运行这个数据目录（{}）；同一台机器上的一个数据目录只能运行一个 station", self.0.display())
+        f.write_str(&t!(lang::station(); "station.cli.held", dir = self.0.display()))
     }
 }
 
@@ -623,7 +624,7 @@ fn answer_channel_ask(run: &Path, set: impl FnOnce(stillfail_app::updates::Chann
             Ok(()) => format!("ok {}", channel.id()),
             Err(error) => format!("error {error:#}"),
         },
-        None => format!("error 不认识的渠道 {}", asked.trim()),
+        None => format!("error {}", t!(lang::station(); "station.cli.unknownChannel", channel = asked.trim())),
     };
     if let Err(error) = write_whole(&run.join(CHANNEL_ANSWER), &format!("{answer}\n")) {
         warn!(%error, "the update channel's answer not written");
@@ -662,7 +663,7 @@ fn set_channel(data: &Path, config: &Path, channel: stillfail_app::updates::Chan
     // SAFETY: a signal to the process the station's own file names, checked to be a station.
     if unsafe { libc::kill(pid, libc::SIGHUP) } != 0 {
         let _ = std::fs::remove_file(run.join(CHANNEL_ASK));
-        bail!("没能通知运行中的 station（pid {pid}）：{}", std::io::Error::last_os_error());
+        bail!(t!(lang::station(); "station.cli.signalFailed", pid = pid, error = std::io::Error::last_os_error()));
     }
     let until = Instant::now() + wait;
     while Instant::now() < until {
@@ -677,7 +678,7 @@ fn set_channel(data: &Path, config: &Path, channel: stillfail_app::updates::Chan
         std::thread::sleep(Duration::from_millis(100));
     }
     let _ = std::fs::remove_file(run.join(CHANNEL_ASK));
-    bail!("运行中的 station 没有回应（它可能还在启动），过一会儿再试")
+    bail!(t!(lang::station(); "station.cli.noAnswer"))
 }
 
 /// Whether the station's config turns traces on (telemetry.traces in <data>/config.json).
@@ -1320,7 +1321,9 @@ async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut Send
         return refuse(send, 502, "station unreachable: not started".into()).await;
     }
     let headers: Vec<(String, String)> = head["headers"].as_object().into_iter().flatten().filter_map(|(k, v)| Some((k.to_ascii_lowercase(), v.as_str()?.to_string()))).collect();
-    let (service, protocol) = match stillfail_app::preview::open_socket(&headers, port, &path).await {
+    // Its errors in the language the core asks in.
+    let asked = lang::of_core(headers.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    let (service, protocol) = match lang::answering(asked, stillfail_app::preview::open_socket(&headers, port, &path)).await {
         Ok(opened) => opened,
         Err((status, error)) => {
             outcome.status = status;
@@ -1354,39 +1357,40 @@ fn status(data: &Path) -> String {
         // SAFETY: kill with signal 0 only asks whether the process is there.
         s["pid"].as_i64().is_some_and(|pid| pid > 0 && unsafe { libc::kill(pid as i32, 0) } == 0)
     });
-    let mut out = vec![format!("数据目录：{}", data.display())];
+    let say = lang::station();
+    let mut out = vec![t!(say; "station.cli.status.data", path = data.display())];
     out.push(match &running {
-        Some(s) => format!("station：在运行（pid {}，版本 {}）", s["pid"], s["version"].as_str().unwrap_or("?")),
-        None => "station：没有在运行".into(),
+        Some(s) => t!(say; "station.cli.status.running", pid = s["pid"], version = s["version"].as_str().unwrap_or("?")),
+        None => t!(say; "station.cli.status.notRunning"),
     });
-    let join = "stillfail station enroll <cloud> <token>（token 在 still.fail 的「添加 station」里生成）";
+    let join = t!(say; "station.cli.status.join");
     let Ok(state) = load_state(data) else {
-        out.push("workspace：没有加入".into());
-        out.push(format!("工作：停着。不在 workspace 里的 station 不接 Slack、不跑 agent 和任务。加入：{join}"));
+        out.push(t!(say; "station.cli.status.noWorkspace"));
+        out.push(t!(say; "station.cli.status.idleUnjoined", join = join));
         return out.join("\n");
     };
-    out.push(format!("workspace：{}（{}）", state.workspace_name, state.workspace));
-    out.push(format!("station 名字：{}（{}）", state.name, &state.station[..state.station.len().min(12)]));
-    out.push(format!("cloud：{}", state.origin));
+    out.push(t!(say; "station.cli.status.workspace", name = state.workspace_name, id = state.workspace));
+    out.push(t!(say; "station.cli.status.name", name = state.name, id = &state.station[..state.station.len().min(12)]));
+    out.push(t!(say; "station.cli.status.cloud", origin = state.origin));
     if let Some(at) = state.removed_at {
         let how = match state.removed_code {
-            Some(CLOSE_REMOVED) => "cloud 断开连接时说的（4004）".to_string(),
-            Some(404) => "连接时 cloud 说这台 station 已不在 workspace 里（404）".to_string(),
-            Some(code) => format!("代码 {code}"),
+            Some(CLOSE_REMOVED) => t!(say; "station.cli.status.removedOnClose"),
+            Some(404) => t!(say; "station.cli.status.removedOn404"),
+            Some(code) => t!(say; "station.cli.status.removedCode", code = code),
             None => String::new(),
         };
-        out.push(format!("已被移出：workspace「{}」，{}，{how}", state.workspace_name, when(at)));
-        out.push(format!("工作：停着。被移出时停下了 Slack 连接、正在跑的 agent 和任务（任务日志末尾写了原因）；每 10 分钟问一次 cloud，重新被接纳就自动恢复。重新加入：{join}"));
+        out.push(t!(say; "station.cli.status.removed", workspace = state.workspace_name, at = when(at), how = how));
+        out.push(t!(say; "station.cli.status.idleRemoved", join = join));
     }
     let presence = read(data.join("run").join("presence.json")).filter(|_| running.is_some());
     out.push(match presence {
-        Some(p) if p["online"] == true => format!("在线：是（从 {} 起）", p["at"].as_u64().map(when).unwrap_or_default()),
-        Some(p) => format!("在线：否（{}）", p["error"].as_str().unwrap_or("还没连上")),
-        None if running.is_none() => "在线：否（station 没有在运行）".into(),
-        None => "在线：否".into(),
+        Some(p) if p["online"] == true => t!(say; "station.cli.status.onlineSince", at = p["at"].as_u64().map(when).unwrap_or_default()),
+        Some(p) => t!(say; "station.cli.status.offlineWhy", why = p["error"].as_str().map(str::to_string).unwrap_or_else(|| t!(say; "station.cli.status.notConnectedYet"))),
+        None if running.is_none() => t!(say; "station.cli.status.offlineNotRunning"),
+        None => t!(say; "station.cli.status.offline"),
     });
     if state.removed_at.is_none() {
-        out.push("工作：正常（连接 Slack、跑 agent 和任务）".into());
+        out.push(t!(say; "station.cli.status.working"));
     }
     out.join("\n")
 }
@@ -1415,6 +1419,12 @@ async fn main() -> Result<()> {
     let home = stillfail_app::former::home();
     let data = stillfail_app::former::data_dir(&home, take("--data").or_else(|| stillfail_app::former::var("DATA")).map(PathBuf::from));
     stillfail_app::former::link_claude_projects(&data, &home.join(stillfail_app::former::FORMER_DATA_DIR));
+    // What it says on this machine is in the station's language (config.json `language`; the station's settings keep it
+    // as they change).
+    let config = stillfail_app::former::var("CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
+    if let Ok(raw) = stillfail_app::config::read_raw(&config) {
+        lang::set_station(raw.language.as_deref());
+    }
     let app = take("--app");
     // What the Node part ran on, from launchers written before it went (older desktop apps): taken and let be.
     let _ = take("--node");
@@ -1453,7 +1463,7 @@ async fn main() -> Result<()> {
             use stillfail_app::updates::{Channel, channel_of};
             let config = stillfail_app::former::var("CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
             if let Some(named) = args.get(1) {
-                let channel = Channel::of(named).ok_or_else(|| anyhow!("channel 必须是 stable 或 beta，不是 {named}"))?;
+                let channel = Channel::of(named).ok_or_else(|| anyhow!(t!(lang::station(); "station.cli.badChannel", channel = named)))?;
                 set_channel(&data, &config, channel, Duration::from_secs(10), is_station)?;
             }
             let raw = stillfail_app::config::read_raw(&config)?;

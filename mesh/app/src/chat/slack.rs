@@ -16,6 +16,7 @@ use tracing::{error, info, warn};
 use super::names::NameBook;
 use super::status::{Call, ThreadStatus};
 use super::{ChatEvent, ChatMessage, ChatSurface, Handler, InboundMessage, Person, ThreadRef, split_for_slack};
+use crate::lang::{spoken, t};
 use crate::store::Attachment;
 
 /// Who a bot token belongs to, as Slack reports it.
@@ -111,17 +112,17 @@ pub async fn verify_slack_tokens(app_token: &str, bot_token: &str) -> (Option<Sl
     let mut errors = Vec::new();
     let mut identity = None;
     if !bot_token.starts_with("xoxb-") {
-        errors.push("Bot Token 应该以 xoxb- 开头".to_string());
+        errors.push(t!(spoken(); "station.slackTokens.botPrefix"));
     } else {
         match identity_of(bot_token).await {
             Ok(id) => identity = Some(id),
-            Err(e) => errors.push(format!("Bot Token 无效：{e}")),
+            Err(e) => errors.push(t!(spoken(); "station.slackTokens.botInvalid", error = e)),
         }
     }
     if !app_token.starts_with("xapp-") {
-        errors.push("App-Level Token 应该以 xapp- 开头".to_string());
+        errors.push(t!(spoken(); "station.slackTokens.appPrefix"));
     } else if let Err(e) = slack_api("apps.connections.open", &[], app_token).await {
-        errors.push(format!("App-Level Token 无法建立 Socket Mode 连接：{e}"));
+        errors.push(t!(spoken(); "station.slackTokens.appNoSocket", error = e));
     }
     (identity, errors)
 }

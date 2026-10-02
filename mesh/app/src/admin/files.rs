@@ -15,6 +15,7 @@ use tokio::io::AsyncWriteExt;
 
 use super::{AdminApi, Asked, Body, http_error};
 use crate::store::{Attachment, Quote, now_ms};
+use crate::lang::{spoken, t};
 use crate::transcript::iso;
 
 const MAX_UPLOAD: u64 = 50 * 1024 * 1024;
@@ -100,7 +101,7 @@ where
             let chunk = chunk?;
             size += chunk.len() as u64;
             if size > MAX_UPLOAD {
-                return Err(http_error(413, "文件太大了，最多 50 MB"));
+                return Err(http_error(413, t!(spoken(); "station.files.tooLarge")));
             }
             out.write_all(&chunk).await?;
         }

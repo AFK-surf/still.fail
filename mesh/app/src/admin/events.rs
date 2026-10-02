@@ -19,6 +19,7 @@ use tracing::warn;
 
 use super::{AdminApi, Body};
 use crate::access::Viewer;
+use crate::lang::{Lang, answering_now};
 use crate::login::LoginState;
 use crate::store::StoreChange;
 
@@ -33,6 +34,8 @@ const LOG_EVERY: Duration = Duration::from_secs(1);
 struct Client {
     id: u64,
     viewer: Viewer,
+    /// The language its stream was asked in: its overview and rows are said in it.
+    lang: Lang,
     /// Wants host samples.
     host: bool,
     /// The sidebar rows last sent to it, by id (as JSON).
@@ -114,7 +117,7 @@ impl Events {
             clients.retain(|c| {
                 let alive = !to(c) || c.out.send(bytes.clone()).is_ok();
                 if !alive {
-                    gone.push(Client { id: c.id, viewer: c.viewer.clone(), host: c.host, rows: HashMap::new(), out: c.out.clone(), live: c.live.clone() });
+                    gone.push(Client { id: c.id, viewer: c.viewer.clone(), lang: c.lang, host: c.host, rows: HashMap::new(), out: c.out.clone(), live: c.live.clone() });
                 }
                 alive
             });
@@ -138,7 +141,8 @@ impl Events {
         let (out, rx) = mpsc::unbounded_channel::<Bytes>();
         let _ = out.send(Bytes::from_static(b"retry: 3000\n\n"));
         let id = self.next.fetch_add(1, Ordering::SeqCst);
-        let mut client = Client { id, viewer: viewer.clone(), host, rows: HashMap::new(), out: out.clone(), live: vec![] };
+        let lang = crate::lang::spoken();
+        let mut client = Client { id, viewer: viewer.clone(), lang, host, rows: HashMap::new(), out: out.clone(), live: vec![] };
         if let Some(api) = self.api.upgrade() {
             client.rows = api.chats(&viewer, false).unwrap_or_default().into_iter().map(|row| (row["id"].as_str().unwrap_or("").to_string(), row.to_string())).collect();
             // Those sessions as they run, on this same stream: each message a `live` event with its key.
@@ -339,7 +343,7 @@ impl Events {
             clients.retain(|c| {
                 let alive = c.out.send(bytes.clone()).is_ok();
                 if !alive {
-                    gone.push(Client { id: c.id, viewer: c.viewer.clone(), host: c.host, rows: HashMap::new(), out: c.out.clone(), live: c.live.clone() });
+                    gone.push(Client { id: c.id, viewer: c.viewer.clone(), lang: c.lang, host: c.host, rows: HashMap::new(), out: c.out.clone(), live: c.live.clone() });
                 }
                 alive
             });
@@ -439,21 +443,22 @@ impl Events {
                 }
             }
         }
-        let viewers: Vec<Viewer> = {
+        // Each viewer's, in each language their streams were asked in.
+        let viewers: Vec<(Viewer, Lang)> = {
             let clients = self.clients.lock().unwrap();
             let mut seen = HashSet::new();
-            clients.iter().filter(|c| seen.insert(c.viewer.id())).map(|c| c.viewer.clone()).collect()
+            clients.iter().filter(|c| seen.insert((c.viewer.id(), c.lang))).map(|c| (c.viewer.clone(), c.lang)).collect()
         };
         if overview && following {
-            for viewer in &viewers {
-                let value = api.overview(viewer);
+            for (viewer, lang) in &viewers {
+                let value = answering_now(*lang, || api.overview(viewer));
                 let id = viewer.id();
-                self.emit("overview", &value, |c| c.viewer.id() == id);
+                self.emit("overview", &value, |c| c.viewer.id() == id && c.lang == *lang);
             }
         }
         if dirty.rows_all || !dirty.rows.is_empty() {
-            for viewer in viewers.iter().filter(|v| dirty.rows_all || dirty.rows.contains(&v.id())) {
-                let rows = match api.chats(viewer, false) {
+            for (viewer, lang) in viewers.iter().filter(|(v, _)| dirty.rows_all || dirty.rows.contains(&v.id())) {
+                let rows = match answering_now(*lang, || api.chats(viewer, false)) {
                     Ok(rows) => rows,
                     Err(e) => {
                         warn!(error = %e, "sidebar rows not read");
@@ -463,7 +468,7 @@ impl Events {
                 let now: HashMap<String, String> = rows.iter().map(|r| (r["id"].as_str().unwrap_or("").to_string(), r.to_string())).collect();
                 let id = viewer.id();
                 let mut clients = self.clients.lock().unwrap();
-                for client in clients.iter_mut().filter(|c| c.viewer.id() == id) {
+                for client in clients.iter_mut().filter(|c| c.viewer.id() == id && c.lang == *lang) {
                     for row in &rows {
                         let key = row["id"].as_str().unwrap_or("");
                         if client.rows.get(key) != now.get(key) {

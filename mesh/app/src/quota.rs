@@ -14,6 +14,7 @@ use futures_util::future::BoxFuture;
 use serde_json::Value;
 
 use crate::config::Profile;
+use crate::lang::{spoken, t};
 use crate::machine_logins::{Env, codex_auth_file};
 use crate::profiles::{OPENCODE, ProfileQuota, QuotaWindow};
 use crate::store::now_ms;
@@ -52,6 +53,7 @@ fn percent(value: Option<&Value>) -> f64 {
     n.round().clamp(0.0, 100.0)
 }
 
+/// A window's label. Labels are not translated: cores read them (client/core/src/format.rs `window_mark`).
 fn window_label(minutes: Option<f64>, fallback: &str) -> String {
     let Some(minutes) = minutes.filter(|m| *m > 0.0) else { return fallback.into() };
     if minutes <= 60.0 * 6.0 {
@@ -77,8 +79,8 @@ pub fn blocked(text: &str) -> bool {
 }
 
 /// A provider's error body, in a line when it has one.
-fn message(text: &str) -> String {
-    let Ok(body) = serde_json::from_str::<Value>(text) else { return String::new() };
+fn message(text: &str) -> Option<String> {
+    let Ok(body) = serde_json::from_str::<Value>(text) else { return None };
     let said = match body.get("error") {
         Some(Value::String(s)) => Some(s.clone()),
         Some(error) => error.get("message").and_then(Value::as_str).map(String::from),
@@ -86,10 +88,7 @@ fn message(text: &str) -> String {
     }
     .or_else(|| body.get("detail").and_then(Value::as_str).map(String::from))
     .or_else(|| body.get("message").and_then(Value::as_str).map(String::from));
-    match said {
-        Some(said) => format!("：{}", said.chars().take(200).collect::<String>()),
-        None => String::new(),
-    }
+    said.map(|said| said.chars().take(200).collect())
 }
 
 /// A provider's refusal as a quota: the account refused (blocked), or its sign-in no longer good.
@@ -97,18 +96,22 @@ async fn refused(provider: &str, response: reqwest::Response) -> ProfileQuota {
     let status = response.status().as_u16();
     let text: String = response.text().await.unwrap_or_default().chars().take(500).collect();
     if blocked(&text) || status == 403 {
-        return quota("blocked", vec![], Some(format!("{provider}拒绝了这个账号（{status}）{}", message(&text))));
+        let detail = match message(&text) {
+            Some(said) => t!(spoken(); "station.quota.refusedSaying", provider = provider, status = status, said = said),
+            None => t!(spoken(); "station.quota.refused", provider = provider, status = status),
+        };
+        return quota("blocked", vec![], Some(detail));
     }
     if status == 401 {
-        return quota("unavailable", vec![], Some("登录过期或失效了".into()));
+        return quota("unavailable", vec![], Some(t!(spoken(); "station.quota.signInExpired")));
     }
-    quota("unavailable", vec![], Some(format!("{provider}返回 {status}")))
+    quota("unavailable", vec![], Some(t!(spoken(); "station.quota.providerStatus", provider = provider, status = status)))
 }
 
 async fn opencode(key: &str) -> Result<ProfileQuota> {
     let response = http().get(format!("{OPENCODE}/v1/usage")).bearer_auth(key).send().await?;
     if !response.status().is_success() {
-        bail!("OpenCode Go 返回 {}", response.status().as_u16());
+        bail!(t!(spoken(); "station.quota.providerStatus", provider = "OpenCode Go ", status = response.status().as_u16()));
     }
     let body: Value = response.json().await?;
     let windows = body
@@ -221,7 +224,7 @@ fn with_codex_credits(mut quota: ProfileQuota, limits: &Value, resets: &Value) -
 
 fn codex_quota(result: &Value) -> ProfileQuota {
     let limits = result.get("rateLimits").filter(|v| v.is_object()).unwrap_or(result);
-    with_codex_credits(ok_or_unavailable(codex_windows(result), "ChatGPT 没有返回额度信息"), limits, &result["rateLimitResetCredits"])
+    with_codex_credits(ok_or_unavailable(codex_windows(result), &t!(spoken(); "station.quota.chatgptNoWindows")), limits, &result["rateLimitResetCredits"])
 }
 
 /// Reaches a profile's codex app-server for its account/rateLimits/read.
@@ -233,8 +236,8 @@ pub async fn check_quota(profile: &Profile, env: &Env, codex_rate_limits: CodexR
     let asked = async {
         match profile.access_kind {
             AccessKind::OpencodeGo => opencode(&profile.key).await,
-            AccessKind::AnthropicApi => Ok(quota("unsupported", vec![], Some("按量计费，没有额度上限".into()))),
-            AccessKind::Env => Ok(quota("unsupported", vec![], Some("自定义环境变量的账号查不了额度".into()))),
+            AccessKind::AnthropicApi => Ok(quota("unsupported", vec![], Some(t!(spoken(); "station.quota.payAsYouGo")))),
+            AccessKind::Env => Ok(quota("unsupported", vec![], Some(t!(spoken(); "station.quota.envUnsupported")))),
             AccessKind::Subscription if profile.runtime == RuntimeKind::Claude => claude(profile, env).await,
             AccessKind::Subscription => {
                 let limits = codex_rate_limits(profile).await?;
@@ -282,7 +285,7 @@ async fn codex_usage_at(base: &str, auth_file: &Path) -> Result<Option<ProfileQu
             })
         })
         .collect();
-    Ok(Some(with_codex_credits(ok_or_unavailable(windows, "ChatGPT 没有返回额度信息"), &body, &body["rate_limit_reset_credits"])))
+    Ok(Some(with_codex_credits(ok_or_unavailable(windows, &t!(spoken(); "station.quota.chatgptNoWindows")), &body, &body["rate_limit_reset_credits"])))
 }
 
 /// The allowance of the machine's own login of a runtime (machine_logins.rs), read without starting anything of the

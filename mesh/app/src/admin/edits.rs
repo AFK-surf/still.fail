@@ -13,6 +13,7 @@ use tracing::{info, warn};
 
 use super::{AdminApi, CheckRequest, Input, Pending, http_error};
 use crate::access::Viewer;
+use crate::lang::{spoken, t};
 use crate::config::{Owner, Profile, RawBind, RawConfig, RawConnect, RawPlace, RawProfile, RawProfileAccess, RawSlack, runtime_name};
 use crate::login::LoginState;
 use crate::profiles::{ProfileCheck, ProfileQuota, keyed, runtimes_of};
@@ -109,7 +110,7 @@ fn last_of_runtime(raw: &RawConfig, runtime: RuntimeKind, id: &str) -> Result<()
         .map(|c| c.slack.as_ref().and_then(|s| s.bot_name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| c.id.clone()))
         .collect();
     if !users.is_empty() {
-        bail!("它是最后一个 {} 的 Profile，{} 还要用它运行", runtime_name(runtime), users.join("、"));
+        bail!(t!(spoken(); "station.profile.lastForRuntime", runtime = runtime_name(runtime), users = users.join(&t!(spoken(); "station.list.separator"))));
     }
     Ok(())
 }
@@ -123,11 +124,11 @@ fn owner_of(current: Option<Owner>, requested: Option<&Value>, viewer: &Viewer) 
     let id = requested.get("id").and_then(Value::as_str).map(|s| s.trim().to_lowercase()).unwrap_or_default();
     let email = id.split_once('@').is_some_and(|(a, b)| !a.is_empty() && !b.is_empty() && !id.contains(char::is_whitespace) && !b.contains('@'));
     if id != "local" && !email {
-        bail!("所属用户要写成邮箱");
+        bail!(t!(spoken(); "station.connect.ownerEmail"));
     }
     let manager = viewer.manages();
     if !manager && current.as_ref().is_none_or(|c| c.id != viewer.id()) {
-        bail!("只有 workspace 的 owner、管理员或者当前所属用户能改所属用户");
+        bail!(t!(spoken(); "station.connect.ownerWho"));
     }
     let name = requested.get("name").and_then(Value::as_str).map(|n| n.chars().take(120).collect()).unwrap_or_else(|| id.clone());
     Ok(Some(Owner { id, name }))
@@ -178,18 +179,18 @@ impl AdminApi {
                 let p = raw.profiles.as_deref().unwrap_or_default().iter().find(|p| &p.id == profile);
                 let runs = p.is_some_and(|p| runtimes_of(p.access.as_ref().map(|a| a.kind).unwrap_or(AccessKind::Env), p.runtime).contains(&runtime));
                 if !runs {
-                    bail!("「{profile}」不能跑 {}", runtime_name(runtime));
+                    bail!(t!(spoken(); "station.profile.cannotRun", profile = profile, runtime = runtime_name(runtime)));
                 }
                 if let (Some(model), Some(p)) = (&model, p) {
                     if !p.models.as_deref().unwrap_or_default().iter().any(|m| stillfail_shapes::model::same(m, model)) {
-                        bail!("「{}」没有启用 {model}", p.name.clone().unwrap_or_else(|| profile.clone()));
+                        bail!(t!(spoken(); "station.profile.modelOff", profile = p.name.clone().unwrap_or_else(|| profile.clone()), model = model));
                     }
                 }
             }
             if let Some(effort) = effort.as_ref().filter(|_| bind.is_some_and(|b| ["model", "effort", "profile"].iter().any(|f| b.get(f).is_some()))) {
                 let allowed = self.deps.hub.model_efforts(runtime, model.as_deref(), profile.as_deref());
                 if !allowed.contains(effort) {
-                    bail!("{} 的思考深度只有 {}", runtime_name(runtime), allowed.join("、"));
+                    bail!(t!(spoken(); "station.profile.efforts", runtime = runtime_name(runtime), efforts = allowed.join(&t!(spoken(); "station.list.separator"))));
                 }
             }
             // Who it is in Slack: given with new tokens (as they were verified), else as last seen.
@@ -340,18 +341,18 @@ impl AdminApi {
     }
 
     pub(super) async fn reset_quota(&self, id: &str, key: &str) -> Result<Value> {
-        let profile = self.config().profiles.iter().find(|p| p.id == id).cloned().ok_or_else(|| http_error(404, "没有这个 Profile"))?;
+        let profile = self.config().profiles.iter().find(|p| p.id == id).cloned().ok_or_else(|| http_error(404, t!(spoken(); "station.profile.notFound")))?;
         if profile.runtime != RuntimeKind::Codex || profile.access_kind != AccessKind::Subscription {
-            return Err(http_error(400, "只有 OpenAI 订阅支持重置额度"));
+            return Err(http_error(400, t!(spoken(); "station.quota.resetOpenAiOnly")));
         }
-        let reset = self.deps.reset_quota.as_ref().ok_or_else(|| http_error(503, "此 station 不支持重置额度"))?;
+        let reset = self.deps.reset_quota.as_ref().ok_or_else(|| http_error(503, t!(spoken(); "station.quota.resetUnsupported")))?;
         let result = reset(profile, key.to_string()).await?;
         self.read_quota(id, true).await?;
         match result.get("outcome").and_then(Value::as_str) {
             Some("reset" | "alreadyRedeemed") => Ok(result),
-            Some("nothingToReset") => Err(http_error(409, "当前没有可重置的额度")),
-            Some("noCredit") => Err(http_error(409, "没有可用的重置次数")),
-            _ => Err(http_error(502, "OpenAI 没有确认重置结果，请查询额度")),
+            Some("nothingToReset") => Err(http_error(409, t!(spoken(); "station.quota.nothingToReset"))),
+            Some("noCredit") => Err(http_error(409, t!(spoken(); "station.quota.noCredit"))),
+            _ => Err(http_error(502, t!(spoken(); "station.quota.resetUnconfirmed"))),
         }
     }
 
@@ -399,7 +400,7 @@ impl AdminApi {
                             check.models = previous.models.clone();
                         }
                     }
-                    check.detail.push_str("，模型列表暂时无法刷新");
+                    check.detail = t!(spoken(); "station.profile.modelsStale", detail = check.detail);
                     warn!(profile = id, error = %e, "could not list codex model capabilities");
                 }
             }
@@ -463,10 +464,10 @@ impl AdminApi {
         let target: PathBuf = config.data_dir.join("homes").join(&profile_id);
         if let Err(e) = std::fs::rename(&home, &target) {
             warn!(login = id, error = %e, "could not move a new profile's home");
-            self.pending_failed(id, format!("登录成功了，但没能建好 Profile 的目录：{e}"));
+            self.pending_failed(id, t!(spoken(); "station.login.homeFailed", error = e));
             return;
         }
-        let name = email.clone().unwrap_or_else(|| if runtime == RuntimeKind::Claude { "Claude 订阅" } else { "ChatGPT 订阅" }.to_string());
+        let name = email.clone().unwrap_or_else(|| t!(spoken(); if runtime == RuntimeKind::Claude { "station.profile.claudeSubscription" } else { "station.profile.chatgptSubscription" }));
         let made = self.save(&by, &format!("profile {profile_id} from a sign-in"), |raw| {
             raw.profiles.get_or_insert_with(Vec::new).push(RawProfile {
                 id: profile_id.clone(),
@@ -485,7 +486,7 @@ impl AdminApi {
         if let Err(e) = made {
             warn!(login = id, error = %e, "the signed-in profile was not saved");
             let _ = std::fs::rename(&target, &home);
-            self.pending_failed(id, format!("登录成功了，但没能保存 Profile：{e}"));
+            self.pending_failed(id, t!(spoken(); "station.login.saveFailed", error = e));
             return;
         }
         if let Some(p) = self.pending.lock().unwrap().get_mut(id) {
@@ -525,7 +526,7 @@ impl AdminApi {
         let kind = access.and_then(|a| a.get("kind")).and_then(|k| serde_json::from_value::<AccessKind>(k.clone()).ok());
         let Some(kind) = kind else { return Err(http_error(400, format!("unknown access {}", access.and_then(|a| a.get("kind")).map(|k| k.to_string()).unwrap_or_default()))) };
         if kind == AccessKind::Subscription {
-            return Err(http_error(400, "订阅账号用登录来添加"));
+            return Err(http_error(400, t!(spoken(); "station.profile.subscriptionBySignIn")));
         }
         // A key runs every runtime it can (runtimes_of); custom variables are for the runtime given.
         let runtimes = runtimes_of(kind, runtime_of(input.get("runtime")));
@@ -535,7 +536,7 @@ impl AdminApi {
         let runtime = runtimes[0];
         let key = access.and_then(|a| a.get("key")).and_then(Value::as_str).unwrap_or("").trim().to_string();
         if keyed(kind) && key.is_empty() {
-            return Err(http_error(400, "要填 key"));
+            return Err(http_error(400, t!(spoken(); "station.profile.keyRequired")));
         }
         let config = self.config();
         let trial = config.data_dir.join("homes").join(format!("new-{}", random_hex(4)));
@@ -543,12 +544,12 @@ impl AdminApi {
         let check = (self.deps.check_profile)(CheckRequest { profile: bare_profile("new", runtime, kind, &key, &trial), home: trial.clone() }).await;
         if check.state != "ok" && keyed(kind) {
             let _ = std::fs::remove_dir_all(&trial);
-            return Err(http_error(400, format!("验证没通过：{}", check.detail)));
+            return Err(http_error(400, t!(spoken(); "station.profile.checkFailed", detail = check.detail)));
         }
         let label = match kind {
             AccessKind::OpencodeGo => "OpenCode Go".to_string(),
             AccessKind::AnthropicApi => "Anthropic API".to_string(),
-            _ => format!("环境变量（{}）", if runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" }),
+            _ => t!(spoken(); "station.profile.envName", runtime = if runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" }),
         };
         let taken = taken_ids(&config);
         let base = if kind == AccessKind::Env { format!("{}-env", runtime_name(runtime)) } else { serde_json::to_value(kind)?.as_str().unwrap_or("profile").to_string() };
@@ -582,15 +583,15 @@ impl AdminApi {
         let id = format!("machine-{}", runtime_name(runtime));
         let config = self.config();
         if config.profiles.iter().any(|p| p.id == id) {
-            return Err(http_error(409, "已经在用这台机器的登录了"));
+            return Err(http_error(409, t!(spoken(); "station.machine.alreadyUsed")));
         }
-        let machine = self.deps.machine_logins.clone().ok_or_else(|| http_error(400, "这台机器的登录读不到"))?;
+        let machine = self.deps.machine_logins.clone().ok_or_else(|| http_error(400, t!(spoken(); "station.machine.unreadable")))?;
         machine.refresh().await;
         let login = machine.get().into_iter().find(|l| l.runtime == runtime);
         let named = if runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" };
-        let Some(login) = login.filter(|l| l.logged_in) else { return Err(http_error(400, format!("这台机器上的 {named} 没有登录"))) };
+        let Some(login) = login.filter(|l| l.logged_in) else { return Err(http_error(400, t!(spoken(); "station.machine.notSignedIn", runtime = named))) };
         if !login.usable {
-            return Err(http_error(400, "这台机器的登录在 station 读不到的钥匙串里，不能直接用，要单独登录一次"));
+            return Err(http_error(400, t!(spoken(); "station.machine.keychain")));
         }
         let home = config.data_dir.join("homes").join(&id);
         std::fs::create_dir_all(&home)?;
@@ -598,8 +599,8 @@ impl AdminApi {
             crate::machine_logins::link_codex_auth(&home, &machine.env())?;
         }
         let name = match &login.email {
-            Some(email) => format!("{email}（本机）"),
-            None => format!("本机 {named}"),
+            Some(email) => t!(spoken(); "station.machine.emailName", email = email),
+            None => t!(spoken(); "station.machine.runtimeName", runtime = named),
         };
         info!(profile = id, runtime = runtime_name(runtime), by = viewer.id(), "profile on the machine's login made");
         let overview = self.save(viewer, &format!("profile {id} on the machine's login"), |raw| {

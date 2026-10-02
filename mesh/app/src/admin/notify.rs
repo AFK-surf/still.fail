@@ -13,6 +13,7 @@ use tracing::warn;
 
 use super::AdminApi;
 use super::views::chat_title;
+use crate::lang::{station, t};
 use crate::store::{AuthorKind, EntryKind, EntryRow, MessageRow, STILLFAIL_SURFACE, StoreChange, TurnSummary};
 
 /// How long a notice's text is kept, in characters (still.fail cloud cuts it shorter).
@@ -100,7 +101,7 @@ impl Notifier {
         let Some(session) = api.deps.store.thread_sessions(id)?.first().map(|m| m.session.clone()) else { return Ok(()) };
         if let Some(said) = person {
             let by = api.author_names(id)(AuthorKind::Person, &said.author).unwrap_or_else(|| said.author.clone());
-            let text = said.text.clone().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| "（文件）".into());
+            let text = said.text.clone().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| t!(station(); "station.notice.file"));
             self.send(api, id, &session, "message", &by, &text, Some(&said.author));
         }
         if let Some(text) = wrong {
@@ -135,7 +136,7 @@ fn turn_notice(turn: &TurnSummary, last: Option<&MessageRow>, key: &str) -> Opti
         // What it needs, in its words (need_help's `need`), else what it said last.
         (Some("block"), _) => Some(("block", turn.need.clone().filter(|n| !n.trim().is_empty()).or(text).unwrap_or_default())),
         (_, Some("failed")) => None,
-        (Some("final"), _) => theirs.map(|_| ("done", text.unwrap_or_else(|| "（文件）".into()))),
+        (Some("final"), _) => theirs.map(|_| ("done", text.unwrap_or_else(|| t!(station(); "station.notice.file")))),
         _ => None,
     }
 }

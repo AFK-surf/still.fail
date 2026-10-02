@@ -262,7 +262,7 @@ fn codex_timeline(records: &[Value], state: &mut ReadState) -> Vec<TimelineEntry
                     out.push(TimelineEntry {
                         ok: Some(!failed),
                         call_id: Some(format!("{}#{i}", call_id.as_deref().unwrap_or(""))),
-                        ..TimelineEntry::new(at.clone(), "tool_result", "（结果在脚本的输出里）".into())
+                        ..TimelineEntry::new(at.clone(), "tool_result", crate::lang::t!(crate::lang::spoken(); "station.transcript.inScriptOutput"))
                     });
                 }
             }

@@ -20,6 +20,7 @@ impl Settings {
     pub fn open(path: &Path, data_dir: &Path) -> Result<Arc<Settings>> {
         let raw = read_raw(path)?;
         let config = parse_config(&raw, data_dir)?;
+        crate::lang::set_station(raw.language.as_deref());
         Ok(Arc::new(Settings { path: path.to_path_buf(), data_dir: data_dir.to_path_buf(), raw: Mutex::new(raw), config: watch::channel(Arc::new(config)).0 }))
     }
 
@@ -45,6 +46,7 @@ impl Settings {
         edit(&mut next)?;
         let config = Arc::new(parse_config(&next, &self.data_dir)?);
         write(&self.path, &next)?;
+        crate::lang::set_station(next.language.as_deref());
         *raw = next;
         drop(raw);
         self.config.send_replace(config.clone());

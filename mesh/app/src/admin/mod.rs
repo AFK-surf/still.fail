@@ -32,6 +32,7 @@ use crate::chat::slack_apps::SlackApps;
 use crate::config::{Config, Profile};
 use crate::connections::Connections;
 use crate::hub::{Hub, NewChat, SessionChange};
+use crate::lang::{spoken, t};
 use crate::login::LoginManager;
 use crate::machine_logins::MachineLogins;
 use crate::machine_sessions::MachineRoots;
@@ -392,9 +393,9 @@ impl AdminApi {
     /// The station's updates, for someone who may update what runs on the machine: a workspace's owner or admin.
     fn updates_for(&self, viewer: &Viewer) -> Result<Arc<crate::updates::Updates>> {
         if !viewer.manages() {
-            return Err(http_error(403, "只有 workspace 的 owner 或管理员能更新 station 和它的运行时"));
+            return Err(http_error(403, t!(spoken(); "station.admin.updatesManagersOnly")));
         }
-        self.deps.updates.clone().ok_or_else(|| http_error(404, "这台 station 不能在这里更新"))
+        self.deps.updates.clone().ok_or_else(|| http_error(404, t!(spoken(); "station.admin.updatesUnavailable")))
     }
 
     fn config(&self) -> Arc<Config> {
@@ -421,7 +422,9 @@ impl AdminApi {
         if !name.is_empty() {
             self.deps.names.lock().unwrap().insert(email.clone(), name.clone());
         }
-        let answer = async {
+        // In the language the core asks in (lang.rs): its errors and the words its answers carry.
+        let lang = crate::lang::of_core(crate::lang::headers(&parts.headers));
+        let answer = crate::lang::answering(lang, async {
             match self.route(&asked, body, &viewer).await {
                 Ok(response) => response,
                 Err(e) => {
@@ -432,7 +435,7 @@ impl AdminApi {
                     json_response(status, &json!({ "error": e.to_string() }))
                 }
             }
-        };
+        });
         // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
         let key = parts.headers.get(once::KEY).and_then(|v| v.to_str().ok()).filter(|k| !k.is_empty() && k.len() <= 200);
         let mut response = match key {
@@ -467,7 +470,7 @@ impl AdminApi {
             // Retired feature: keep old clients' routes, without scanning or cleanup side effects.
             ("GET", "/footprint") => return ok(footprint::retired()),
             ("POST", "/footprint/scan" | "/footprint/rebuild" | "/footprint/delete" | "/footprint/evict") => {
-                return Err(http_error(410, "占用统计已移除"));
+                return Err(http_error(410, t!(spoken(); "station.admin.footprintRemoved")));
             }
             ("GET", "/events") => {
                 // `live=<key>&from=<n>&last=<m>`, repeated: those sessions as they run, on this same stream (from
@@ -507,7 +510,7 @@ impl AdminApi {
                 let runtime = match input.text("runtime").as_str() {
                     "claude" => stillfail_shapes::RuntimeKind::Claude,
                     "codex" => stillfail_shapes::RuntimeKind::Codex,
-                    _ => return Err(http_error(400, "runtime 必须是 claude 或 codex")),
+                    _ => return Err(http_error(400, t!(spoken(); "station.admin.badRuntime"))),
                 };
                 let given = |k: &str| input.str(k).filter(|s| !s.is_empty()).map(String::from);
                 let chat = NewChat {
@@ -544,7 +547,7 @@ impl AdminApi {
                 let runtime = match input.text("runtime").as_str() {
                     "claude" => stillfail_shapes::RuntimeKind::Claude,
                     "codex" => stillfail_shapes::RuntimeKind::Codex,
-                    _ => return Err(http_error(400, "runtime 必须是 claude 或 codex")),
+                    _ => return Err(http_error(400, t!(spoken(); "station.admin.badRuntime"))),
                 };
                 let id = input.text("id");
                 let roots = MachineRoots::of(&crate::machine_logins::process_env());
@@ -552,7 +555,7 @@ impl AdminApi {
                     let (roots, id) = (roots.clone(), id.clone());
                     tokio::task::spawn_blocking(move || crate::machine_sessions::find(&roots, runtime, &id)).await?
                 };
-                let found = found.ok_or_else(|| http_error(404, format!("本机没有这个会话：{id}")))?;
+                let found = found.ok_or_else(|| http_error(404, t!(spoken(); "station.admin.noLocalSession", id = id)))?;
                 // A long transcript takes a moment to copy and read.
                 let (hub, by) = (self.deps.hub.clone(), viewer.id());
                 let (key, thread) = tokio::task::spawn_blocking(move || hub.continue_machine_session(&roots, &found, &by)).await?.map_err(|e| http_error(400, e.to_string()))?;
@@ -601,7 +604,7 @@ impl AdminApi {
                 let updates = self.updates_for(viewer)?;
                 let input = read_json(body).await?;
                 let channel = crate::updates::Channel::of(input.get("channel").and_then(Value::as_str).unwrap_or_default())
-                    .ok_or_else(|| http_error(400, "channel 必须是 stable 或 beta"))?;
+                    .ok_or_else(|| http_error(400, t!(spoken(); "station.admin.badChannel")))?;
                 updates.set_channel(channel).await.map_err(|e| http_error(400, e.to_string()))?;
                 return ok(serde_json::to_value(updates.get())?);
             }
@@ -609,7 +612,7 @@ impl AdminApi {
             ("POST", "/updates/auto") => {
                 let updates = self.updates_for(viewer)?;
                 let input = read_json(body).await?;
-                let on = input.get("on").and_then(Value::as_bool).ok_or_else(|| http_error(400, "on 必须是 true 或 false"))?;
+                let on = input.get("on").and_then(Value::as_bool).ok_or_else(|| http_error(400, t!(spoken(); "station.admin.badOn")))?;
                 updates.set_auto(on).await.map_err(|e| http_error(400, e.to_string()))?;
                 return ok(serde_json::to_value(updates.get())?);
             }
@@ -668,7 +671,7 @@ impl AdminApi {
                     Some((found, said))
                 })
                 .await?
-                .ok_or_else(|| http_error(404, format!("本机没有这个会话：{session}")))?;
+                .ok_or_else(|| http_error(404, t!(spoken(); "station.admin.noLocalSession", id = session)))?;
                 let mut found = found;
                 let name = crate::config::runtime_name(runtime);
                 found.session = self.deps.store.list_sessions()?.into_iter().find(|r| r.runtime == name && r.runtime_session_id.as_deref() == Some(found.id.as_str())).map(|r| r.key);
@@ -769,7 +772,7 @@ impl AdminApi {
                     None => None,
                     Some(Value::Null) => Some(None),
                     Some(Value::Bool(fast)) => Some(Some(*fast)),
-                    _ => return Err(http_error(400, "fast 必须是布尔值或 null")),
+                    _ => return Err(http_error(400, t!(spoken(); "station.admin.badFast"))),
                 };
                 let change = SessionChange { profile, model: pick("model"), effort: pick("effort"), fast };
                 self.deps.hub.configure(key, change).await.map_err(|e| http_error(400, e.to_string()))?;
@@ -823,21 +826,21 @@ impl AdminApi {
                     (Some("entries"), "GET") => return ok(self.entries(thread_id, asked)?),
                     (Some("messages"), "POST") => {
                         if thread.surface != crate::store::STILLFAIL_SURFACE {
-                            return Err(http_error(400, "只能在 still.fail 自己的对话里发消息"));
+                            return Err(http_error(400, t!(spoken(); "station.admin.postOnlyStillfail")));
                         }
                         let input = read_json(body).await?;
                         let text = input.text("text").trim().to_string();
                         let attachments = self.attachments(thread_id, input.get("attachments"))?;
                         let quotes = files::quotes_of(input.get("quotes"));
                         if text.is_empty() && attachments.is_empty() && quotes.is_empty() {
-                            return Err(http_error(400, "消息是空的"));
+                            return Err(http_error(400, t!(spoken(); "station.admin.emptyMessage")));
                         }
                         let mut answered_card = None;
                         if let Some((asked, card)) = self.deps.store.pending_card(thread_id)? {
                             let selected = card["options"].as_array().into_iter().flatten().any(|o| o["label"].as_str() == Some(text.as_str()) && o["action"] == "close");
                             let quoted = input.get("quotes").and_then(Value::as_array).into_iter().flatten().any(|q| q["ts"].as_str() == Some(asked.ts.as_str()));
                             if attachments.is_empty() && selected && quoted {
-                                return Err(http_error(409, "请更新客户端后选择此选项；它不会发送给 agent"));
+                                return Err(http_error(409, t!(spoken(); "station.admin.updateClientForOption")));
                             }
                             if quoted { answered_card = Some(asked.n); }
                         }
@@ -854,7 +857,7 @@ impl AdminApi {
                     }
                     (Some("read"), "PUT") => {
                         let input = read_json(body).await?;
-                        let n = input.get("n").and_then(Value::as_f64).filter(|n| n.fract() == 0.0 && *n >= 0.0).ok_or_else(|| http_error(400, "n 必须是整数"))?;
+                        let n = input.get("n").and_then(Value::as_f64).filter(|n| n.fract() == 0.0 && *n >= 0.0).ok_or_else(|| http_error(400, t!(spoken(); "station.admin.badN")))?;
                         let n = self.deps.store.set_read(&viewer.id(), thread_id, n as i64)?;
                         return ok(json!({ "viewer": viewer.id(), "thread": thread_id, "n": n }));
                     }
@@ -868,7 +871,7 @@ impl AdminApi {
                     // A chat named by hand; no name (or an empty one) names it by its first message again.
                     (Some("title"), "PUT") => {
                         if thread.surface != crate::store::STILLFAIL_SURFACE {
-                            return Err(http_error(400, "只能给 still.fail 自己的对话改名"));
+                            return Err(http_error(400, t!(spoken(); "station.admin.renameOnlyStillfail")));
                         }
                         let input = read_json(body).await?;
                         let title = input.str("title").map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(80).collect::<String>());
@@ -883,10 +886,10 @@ impl AdminApi {
                     // still pending for everyone else.
                     (Some("dismissed"), "PUT") => {
                         let input = read_json(body).await?;
-                        let n = input.get("n").and_then(Value::as_f64).filter(|n| n.fract() == 0.0 && *n > 0.0).ok_or_else(|| http_error(400, "n 必须是整数"))? as i64;
+                        let n = input.get("n").and_then(Value::as_f64).filter(|n| n.fract() == 0.0 && *n > 0.0).ok_or_else(|| http_error(400, t!(spoken(); "station.admin.badN")))? as i64;
                         let asked = self.deps.store.entries_between(thread_id, n, n)?.into_iter().next().filter(|e| e.card().is_some());
                         if asked.is_none() {
-                            return Err(http_error(404, "这条消息没有在等你回答的事"));
+                            return Err(http_error(404, t!(spoken(); "station.admin.nothingWaiting")));
                         }
                         self.deps.store.dismiss(&viewer.id(), thread_id, n)?;
                         return ok(json!({ "dismissed": { "thread": thread_id, "n": n } }));
@@ -894,10 +897,10 @@ impl AdminApi {
                     // End this question without sending a message or starting an agent turn.
                     (Some("closed-card"), "PUT") => {
                         let input = read_json(body).await?;
-                        let n = input.get("n").and_then(Value::as_i64).filter(|n| *n > 0).ok_or_else(|| http_error(400, "n 必须是整数"))?;
-                        let option = input.str("option").map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| http_error(400, "option 必须是 agent 提供的选项"))?;
+                        let n = input.get("n").and_then(Value::as_i64).filter(|n| *n > 0).ok_or_else(|| http_error(400, t!(spoken(); "station.admin.badN")))?;
+                        let option = input.str("option").map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| http_error(400, t!(spoken(); "station.admin.badOption")))?;
                         if !self.deps.store.close_card(&viewer.id(), thread_id, n, option)? {
-                            return Err(http_error(409, "这次等待已改变，请刷新后重试"));
+                            return Err(http_error(409, t!(spoken(); "station.admin.waitChanged")));
                         }
                         self.deps.store.set_read(&viewer.id(), thread_id, n)?;
                         return ok(json!({ "closedCard": { "thread": thread_id, "n": n } }));
@@ -970,10 +973,10 @@ impl AdminApi {
                     }
                     "POST" => {
                         if profile.access_kind != stillfail_shapes::AccessKind::Subscription {
-                            return Err(http_error(400, "只有订阅账号需要登录"));
+                            return Err(http_error(400, t!(spoken(); "station.admin.loginSubscriptionOnly")));
                         }
                         if profile.machine {
-                            return Err(http_error(400, "这个 Profile 用的是这台机器自己的登录，要在机器上登录"));
+                            return Err(http_error(400, t!(spoken(); "station.admin.loginOnMachine")));
                         }
                         info!(profile = id, by = viewer.id(), "login started from the admin page");
                         return ok(json!({ "job": self.deps.logins.start(profile)? }));

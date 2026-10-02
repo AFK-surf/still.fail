@@ -24,6 +24,7 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 use crate::config::Profile;
+use crate::lang::{spoken, t};
 use crate::no_keychain::file_credentials;
 use crate::runtime::clean_env;
 use crate::store::now_ms;
@@ -168,7 +169,7 @@ impl LoginManager {
             Ok(child) => child,
             Err(e) => {
                 // Recorded like any other failure, so the page shows why.
-                let failed = LoginJob { state: LoginState::Failed, error: Some(format!("无法运行登录命令：{e}")), ..job };
+                let failed = LoginJob { state: LoginState::Failed, error: Some(t!(spoken(); "station.login.cannotRun", error = e)), ..job };
                 self.finished.lock().unwrap().insert(id.clone(), failed.clone());
                 self.emit(&id);
                 return Ok(failed);
@@ -179,7 +180,7 @@ impl LoginManager {
         let timer = tokio::spawn(async move {
             tokio::time::sleep(TIMEOUT).await;
             if let Some(me) = me.upgrade() {
-                me.fail_run(&timer_id, run, "15 分钟内没有完成登录，已取消。".into());
+                me.fail_run(&timer_id, run, t!(spoken(); "station.login.timedOut"));
             }
         });
         let readers: Vec<JoinHandle<()>> = [child.stdout.take().map(boxed), child.stderr.take().map(boxed)]
@@ -229,9 +230,9 @@ impl LoginManager {
                 Ok(status) => {
                     let said = last_lines(&output);
                     let code = status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
-                    me.finish(&exit_id, LoginState::Failed, Some(if said.is_empty() { format!("登录命令退出（{code}）") } else { said }));
+                    me.finish(&exit_id, LoginState::Failed, Some(if said.is_empty() { t!(spoken(); "station.login.exited", code = code) } else { said }));
                 }
-                Err(e) => me.finish(&exit_id, LoginState::Failed, Some(format!("无法运行登录命令：{e}"))),
+                Err(e) => me.finish(&exit_id, LoginState::Failed, Some(t!(spoken(); "station.login.cannotRun", error = e))),
             }
         });
         info!(profile = id, runtime = ?profile.runtime, "login started");
@@ -243,10 +244,10 @@ impl LoginManager {
     pub async fn submit_code(&self, profile: &str, code: &str) -> Result<LoginJob> {
         let (stdin, job) = {
             let mut jobs = self.jobs.lock().unwrap();
-            let running = jobs.get_mut(profile).filter(|r| r.job.state == LoginState::NeedsCode).ok_or_else(|| anyhow!("这个账号没有在等授权码"))?;
+            let running = jobs.get_mut(profile).filter(|r| r.job.state == LoginState::NeedsCode).ok_or_else(|| anyhow!(t!(spoken(); "station.login.notWaitingForCode")))?;
             let clean = code.trim();
             if clean.is_empty() {
-                bail!("授权码是空的");
+                bail!(t!(spoken(); "station.login.emptyCode"));
             }
             running.job.state = LoginState::Verifying;
             (running.stdin.clone(), (running.job.clone(), clean.to_string()))

@@ -65,6 +65,10 @@ pub struct RawConfig {
     /// Whether the station updates itself when a newer release of its channel is out (updates.rs); none: it does not.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_update: Option<bool>,
+    /// What the station says on its own (in Slack, on its machine) is in this language (lang.rs): `zh` or `en`; none:
+    /// Chinese. People's own requests are answered in theirs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
     #[serde(flatten)]
     pub rest: Map<String, Value>,
 }

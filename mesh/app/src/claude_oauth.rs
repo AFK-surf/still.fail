@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
+use crate::lang::{spoken, t};
 use crate::machine_logins::{Env, home_of};
 use crate::store::now_ms;
 
@@ -37,7 +38,7 @@ impl Credentials {
         let token = oauth["accessToken"]
             .as_str()
             .filter(|s| !s.is_empty())
-            .context("没找到 Claude 登录凭据，请重新登录")?;
+            .with_context(|| t!(spoken(); "station.claudeAuth.noCredentials"))?;
         Ok((token.into(), oauth["expiresAt"].as_i64().unwrap_or(0)))
     }
 
@@ -61,7 +62,7 @@ async fn read(env: &Env, home: &Path, machine: bool) -> Result<Credentials> {
             if out.status.success() {
                 // An unreadable/malformed keychain entry must not be replaced with a stale file's login.
                 let data =
-                    serde_json::from_slice(&out.stdout).context("Claude 钥匙串凭据无法解析")?;
+                    serde_json::from_slice(&out.stdout).with_context(|| t!(spoken(); "station.claudeAuth.keychainUnreadable"))?;
                 return Ok(Credentials {
                     data,
                     keychain: true,
@@ -70,9 +71,9 @@ async fn read(env: &Env, home: &Path, machine: bool) -> Result<Credentials> {
         }
     }
     let text = std::fs::read(home.join(".credentials.json"))
-        .context("没找到 Claude 登录凭据，请重新登录")?;
+        .with_context(|| t!(spoken(); "station.claudeAuth.noCredentials"))?;
     Ok(Credentials {
-        data: serde_json::from_slice(&text).context("Claude 登录凭据无法解析")?,
+        data: serde_json::from_slice(&text).with_context(|| t!(spoken(); "station.claudeAuth.credentialsUnreadable"))?,
         keychain: false,
     })
 }
@@ -83,13 +84,13 @@ async fn save(env: &Env, home: &Path, credentials: &Credentials) -> Result<()> {
             &home.join(".credentials.json"),
             &credentials.data.to_string(),
         )
-        .context("无法保存续期后的 Claude 登录");
+        .with_context(|| t!(spoken(); "station.claudeAuth.saveFailed"));
     }
     // Keep secrets off argv, as Claude Code does. security -i reads its commands from stdin.
     let who = Command::new("/usr/bin/id").arg("-un").output().await?;
     let account = String::from_utf8(who.stdout)?.trim().to_string();
     if !who.status.success() || account.is_empty() || account.contains(['"', '\\', '\n', '\r']) {
-        bail!("无法确定 Claude 钥匙串的账号名");
+        bail!(t!(spoken(); "station.claudeAuth.keychainAccount"));
     }
     let input = format!(
         "add-generic-password -U -a \"{account}\" -s \"{ITEM}\" -X \"{}\"\n",
@@ -105,16 +106,16 @@ async fn save(env: &Env, home: &Path, credentials: &Credentials) -> Result<()> {
         .kill_on_drop(true)
         .spawn()?;
     tokio::time::timeout(Duration::from_secs(10), async {
-        let mut stdin = child.stdin.take().context("无法写入钥匙串命令")?;
+        let mut stdin = child.stdin.take().with_context(|| t!(spoken(); "station.claudeAuth.keychainWrite"))?;
         stdin.write_all(input.as_bytes()).await?;
         drop(stdin);
         if !child.wait().await?.success() {
-            bail!("无法把续期后的 Claude 登录保存到钥匙串");
+            bail!(t!(spoken(); "station.claudeAuth.keychainSaveFailed"));
         }
         Ok::<_, anyhow::Error>(())
     })
     .await
-    .context("保存 Claude 钥匙串超时")??;
+    .with_context(|| t!(spoken(); "station.claudeAuth.keychainTimeout"))??;
     Ok(())
 }
 
@@ -144,7 +145,7 @@ pub(crate) async fn token_at(
     let refresh = oauth["refreshToken"]
         .as_str()
         .filter(|s| !s.is_empty())
-        .context("Claude 登录已过期，且没有续期凭据，请重新登录")?;
+        .with_context(|| t!(spoken(); "station.claudeAuth.expiredNoRefresh"))?;
     let mut body = json!({"grant_type": "refresh_token", "refresh_token": refresh,
         "client_id": oauth["clientId"].as_str().filter(|s| !s.is_empty()).unwrap_or(CLIENT_ID)});
     if let Some(scopes) = oauth["scopes"].as_array() {
@@ -162,7 +163,7 @@ pub(crate) async fn token_at(
         .json(&body)
         .send()
         .await
-        .context("Claude 登录续期请求失败，请稍后重试")?;
+        .with_context(|| t!(spoken(); "station.claudeAuth.refreshFailed"))?;
     if !response.status().is_success() {
         // A CLI version using different locks may have won: never erase or roll back its credentials.
         let latest = read(env, &home, machine).await?;
@@ -171,22 +172,22 @@ pub(crate) async fn token_at(
         }
         let status = response.status().as_u16();
         if status == 400 || status == 401 {
-            bail!("Claude 登录续期被拒绝（{status}），请重新登录");
+            bail!(t!(spoken(); "station.claudeAuth.refreshRefused", status = status));
         }
-        bail!("Claude 登录暂时无法续期（{status}），请稍后重试");
+        bail!(t!(spoken(); "station.claudeAuth.refreshUnavailable", status = status));
     }
     let response: Value = response
         .json()
         .await
-        .context("Claude 登录续期返回了无效响应")?;
+        .with_context(|| t!(spoken(); "station.claudeAuth.badResponse"))?;
     let access = response["access_token"]
         .as_str()
         .filter(|s| !s.is_empty())
-        .context("Claude 续期响应缺少 access_token")?;
+        .with_context(|| t!(spoken(); "station.claudeAuth.noAccessToken"))?;
     let seconds = response["expires_in"]
         .as_i64()
         .filter(|s| *s > 0 && *s < i64::MAX / 2000)
-        .context("Claude 续期响应缺少有效期")?;
+        .with_context(|| t!(spoken(); "station.claudeAuth.noExpiry"))?;
     let mut latest = read(env, &home, machine).await?;
     if latest.keychain != credentials.keychain
         || latest.data["claudeAiOauth"]["refreshToken"] != oauth["refreshToken"]
@@ -195,7 +196,7 @@ pub(crate) async fn token_at(
         if latest.usable(None) {
             return latest.access();
         }
-        bail!("Claude 登录在续期期间已更换，请重试");
+        bail!(t!(spoken(); "station.claudeAuth.changedDuringRefresh"));
     }
     let updated = &mut latest.data["claudeAiOauth"];
     updated["accessToken"] = access.into();
@@ -249,11 +250,11 @@ impl RefreshLock {
                         }
                     }
                     if tokio::time::Instant::now() >= deadline {
-                        bail!("另一个 Claude 进程正在续期，稍后重试");
+                        bail!(t!(spoken(); "station.claudeAuth.refreshLocked"));
                     }
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
-                Err(e) => return Err(e).context("无法取得 Claude 登录续期锁"),
+                Err(e) => return Err(e).with_context(|| t!(spoken(); "station.claudeAuth.lockFailed")),
             }
         }
         let directory = std::fs::File::open(&path)?;

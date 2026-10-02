@@ -17,6 +17,7 @@ use crate::chat::slack_apps::{
 };
 use crate::config::{ConfigToken, RawPlace, SlackAppMade, SlackAppOauth};
 use crate::connections::ConnectState;
+use crate::lang::{spoken, t};
 
 /// The tokens with this one in, in place of its person's old one for the workspace.
 pub fn upsert_token(mut tokens: Vec<ConfigToken>, token: ConfigToken) -> Vec<ConfigToken> {
@@ -115,12 +116,12 @@ impl AdminApi {
         let config = self.config();
         let teams: Vec<&ConfigToken> = config.slack_config_tokens.iter().filter(|t| t.by == by).collect();
         if teams.is_empty() {
-            return Err(http_error(400, "你还没有加 Slack 的 App 配置 token"));
+            return Err(http_error(400, t!(spoken(); "station.slackApp.noConfigToken")));
         }
         let team = input.str("team").map(String::from).or_else(|| (teams.len() == 1).then(|| teams[0].team_id.clone()));
         match team {
             Some(team) if teams.iter().any(|t| t.team_id == team) => Ok(team),
-            _ => Err(http_error(400, "选一个 Slack 工作区")),
+            _ => Err(http_error(400, t!(spoken(); "station.slackApp.chooseTeam"))),
         }
     }
 
@@ -165,7 +166,7 @@ impl AdminApi {
     }
 
     pub(super) async fn put_slack_app(self: &Arc<Self>, connect_id: &str, input: &Input, viewer: &Viewer) -> Result<Value> {
-        let app = self.app_id(connect_id).await?.ok_or_else(|| http_error(400, "这个连接还没有 Slack app"))?;
+        let app = self.app_id(connect_id).await?.ok_or_else(|| http_error(400, t!(spoken(); "station.slackApp.none")))?;
         let text = |k: &str| input.str(k).map(String::from);
         let edit = SlackAppEdit {
             name: text("name"),
@@ -176,17 +177,17 @@ impl AdminApi {
             groups: input.get("groups").and_then(|g| serde_json::from_value(g.clone()).ok()),
         };
         if edit.name.as_deref().is_some_and(|n| n.trim().is_empty()) {
-            return Err(http_error(400, "名字不能为空"));
+            return Err(http_error(400, t!(spoken(); "station.slackApp.nameEmpty")));
         }
         if edit.background_color.as_deref().is_some_and(|c| !c.is_empty() && !color_ok(c)) {
-            return Err(http_error(400, "背景色要写成 #RRGGBB"));
+            return Err(http_error(400, t!(spoken(); "station.slackApp.badColor")));
         }
         let by = viewer.id();
         let updated = async {
             let current = self.apps.export_manifest(&by, &app).await?;
             self.apps.update_manifest(&by, &app, &apply_settings(&current, &edit)).await
         };
-        let permissions_updated = updated.await.map_err(|e| http_error(400, format!("Slack 没接受这次修改：{}", slack_error(&e))))?;
+        let permissions_updated = updated.await.map_err(|e| http_error(400, t!(spoken(); "station.slackApp.updateRefused", error = slack_error(&e))))?;
         let icon_error = match input.str("icon").filter(|i| !i.is_empty()) {
             Some(icon) => self.set_icon(&by, &app, icon).await,
             None => None,
@@ -215,7 +216,7 @@ impl AdminApi {
         match self.apps.set_icon(by, app, bytes, mime).await {
             Ok(()) => None,
             Err(e) if e.downcast_ref::<SlackApiError>().is_some_and(|s| s.code == "app_not_owned_by_manager_app") => {
-                Some("Slack 只允许给用 API 创建的 app 换图标。这个 app 是在 Slack 网页上建的，请在 Slack 的 app 设置页上传图标。".into())
+                Some(t!(spoken(); "station.slackApp.iconNotOwned"))
             }
             Err(e) => Some(slack_error(&e)),
         }
@@ -230,7 +231,7 @@ impl AdminApi {
         let mut edit: SlackAppEdit = input.get("settings").filter(|s| s.is_object()).and_then(|s| serde_json::from_value(s.clone()).ok()).unwrap_or_default();
         let name = edit.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(crate::chat::slack_apps::DEFAULT_APP_NAME).to_string();
         if edit.background_color.as_deref().is_some_and(|c| !c.is_empty() && !color_ok(c)) {
-            return Err(http_error(400, "背景色要写成 #RRGGBB"));
+            return Err(http_error(400, t!(spoken(); "station.slackApp.badColor")));
         }
         edit.name = Some(name.clone());
         let mesh = self.deps.mesh.as_ref().map(|m| m.status());
@@ -238,7 +239,7 @@ impl AdminApi {
         let manifest = apply_settings(&slack_manifest(&name, None, redirect.as_deref()), &edit);
         // Made without Socket Mode: its maker turns it on in Slack, which makes the app-level token with its scope
         // picked; the connect that takes it puts Socket Mode and its events in (socket_mode_on).
-        let app = self.apps.create_app(&by, &team, &with_socket_mode(&manifest, false)).await.map_err(|e| http_error(400, format!("Slack 没能创建 app：{}", slack_error(&e))))?;
+        let app = self.apps.create_app(&by, &team, &with_socket_mode(&manifest, false)).await.map_err(|e| http_error(400, t!(spoken(); "station.slackApp.createFailed", error = slack_error(&e))))?;
         let icon_error = match input.str("icon").filter(|i| !i.is_empty()) {
             Some(icon) => self.set_icon(&by, &app.app_id, icon).await,
             None => None,
@@ -274,7 +275,7 @@ impl AdminApi {
             let current = self.apps.export_manifest(&made.by, &made.app_id).await?;
             self.apps.update_manifest(&made.by, &made.app_id, &with_socket_mode(&current, true)).await
         };
-        turned.await.map(|_| ()).map_err(|e| http_error(400, format!("Slack 没能打开 app 的 Socket Mode 和事件：{}", slack_error(&e))))
+        turned.await.map(|_| ()).map_err(|e| http_error(400, t!(spoken(); "station.slackApp.socketModeFailed", error = slack_error(&e))))
     }
 
     /// A Slack app made here and not connected yet, by its app id or its install's state.
@@ -286,7 +287,7 @@ impl AdminApi {
     pub(super) fn drop_made_app(&self, app: &str, viewer: &Viewer) -> Result<Value> {
         let by = viewer.id();
         if !self.config().slack_apps.iter().any(|a| a.app_id == app && a.by == by) {
-            return Err(http_error(404, "没有这个 app"));
+            return Err(http_error(404, t!(spoken(); "station.slackApp.notFound")));
         }
         self.save(viewer, &format!("slack app {app} dropped"), |raw| {
             raw.slack_apps.get_or_insert_with(Vec::new).retain(|a| a.app_id != app);
@@ -298,10 +299,10 @@ impl AdminApi {
     pub(super) async fn installed(&self, input: &Input) -> Result<Value> {
         let state = input.text("state");
         let oauth = self.made_app(&state).and_then(|a| a.oauth).filter(|o| !state.is_empty() && o.state == state);
-        let Some(oauth) = oauth else { return Err(http_error(400, "这个安装不是这台 station 发起的，或者这个 app 已经连上或移除了")) };
+        let Some(oauth) = oauth else { return Err(http_error(400, t!(spoken(); "station.slackApp.installNotOurs"))) };
         let (bot_token, team) = self.apps.exchange_install_code(&oauth.client_id, &oauth.client_secret, &input.text("code"), &oauth.redirect_uri)
             .await
-            .map_err(|e| http_error(400, format!("Slack 没能完成安装：{}", slack_error(&e))))?;
+            .map_err(|e| http_error(400, t!(spoken(); "station.slackApp.installFailed", error = slack_error(&e))))?;
         self.deps.settings.update(|raw| {
             for app in raw.slack_apps.iter_mut().flatten() {
                 if let Some(o) = app.oauth.as_mut().filter(|o| o.state == state) {
@@ -325,12 +326,12 @@ impl AdminApi {
         let install = slack.and_then(|s| s.get("install")).and_then(Value::as_str).map(String::from);
         let installed = install.as_deref().and_then(|i| self.made_app(i)).and_then(|a| a.oauth);
         if install.is_some() && installed.as_ref().and_then(|o| o.bot_token.as_ref()).is_none() {
-            return Err(http_error(400, "app 还没装好：先在 Slack 里安装"));
+            return Err(http_error(400, t!(spoken(); "station.slackApp.notInstalled")));
         }
         let bot_token = installed.and_then(|o| o.bot_token).unwrap_or_else(|| text("botToken"));
         let (identity, errors) = self.apps.verify_tokens(&app_token, &bot_token).await;
         let Some(identity) = identity.filter(|_| errors.is_empty()) else {
-            return Err(http_error(400, if errors.is_empty() { "token 不对".to_string() } else { errors.join("；") }));
+            return Err(http_error(400, if errors.is_empty() { t!(spoken(); "station.slackApp.badToken") } else { errors.join(&t!(spoken(); "station.list.semicolon")) }));
         };
         let given_app = slack.and_then(|s| s.get("appId")).and_then(Value::as_str).filter(|a| !a.is_empty()).map(String::from);
         let made = match (&install, &given_app) {
@@ -384,11 +385,11 @@ impl AdminApi {
     pub(super) async fn create_slack_app(&self, connect_id: &str, input: &Input, viewer: &Viewer) -> Result<Value> {
         let connect = self.config().connects.iter().find(|c| c.id == connect_id).cloned().ok_or_else(|| http_error(404, format!("unknown connect {connect_id}")))?;
         if self.app_id(connect_id).await?.is_some() {
-            return Err(http_error(400, "这个连接已经有 Slack app 了"));
+            return Err(http_error(400, t!(spoken(); "station.slackApp.already")));
         }
         let name = input.str("name").map(str::trim).filter(|n| !n.is_empty()).map(String::from).unwrap_or_else(|| connect.name().to_string());
         let team = self.team_for(input, viewer)?;
-        let app = self.apps.create_app(&viewer.id(), &team, &slack_manifest(&name, None, None)).await.map_err(|e| http_error(400, format!("Slack 没能创建 app：{}", slack_error(&e))))?;
+        let app = self.apps.create_app(&viewer.id(), &team, &slack_manifest(&name, None, None)).await.map_err(|e| http_error(400, t!(spoken(); "station.slackApp.createFailed", error = slack_error(&e))))?;
         self.save(viewer, &format!("create slack app for {connect_id}"), |raw| {
             for c in raw.connects.iter_mut().flatten().filter(|c| c.id == connect_id) {
                 c.slack.get_or_insert_with(Default::default).app_id = Some(app.app_id.clone());
@@ -402,9 +403,9 @@ impl AdminApi {
     pub(super) async fn add_config_token(&self, input: &Input, viewer: &Viewer) -> Result<Value> {
         let refresh = input.text("refreshToken").trim().to_string();
         if !refresh.starts_with("xoxe-") {
-            return Err(http_error(400, "Refresh token 应该以 xoxe- 开头（不是 xoxe.xoxp- 开头的那个）"));
+            return Err(http_error(400, t!(spoken(); "station.slackApp.badRefreshToken")));
         }
-        let token = rotate_config_token(&refresh).await.map_err(|e| http_error(400, format!("Slack 没接受这个 token：{e}")))?;
+        let token = rotate_config_token(&refresh).await.map_err(|e| http_error(400, t!(spoken(); "station.slackApp.tokenRefused", error = e)))?;
         let owner = owner_of_config_token(&token.access_token).await;
         let team = token.team_id.clone();
         let made = ConfigToken { access_token: token.access_token, refresh_token: token.refresh_token, expires_at: token.expires_at, team_id: token.team_id, by: viewer.id(), owner };
@@ -447,7 +448,7 @@ impl AdminApi {
                 let page = match chat.api("users.list", params).await {
                     Ok(page) => page,
                     Err(e) => {
-                        errors.push(format!("{}：{e}", connect.name()));
+                        errors.push(t!(spoken(); "station.list.labeled", name = connect.name(), note = e));
                         break;
                     }
                 };

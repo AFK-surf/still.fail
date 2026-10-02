@@ -200,7 +200,7 @@ impl Stations {
                                 break;
                             }
                             Either::Right((Either::Right(_), _)) => {
-                                why = REPLACED.to_string();
+                                why = replaced();
                                 break;
                             }
                         };
@@ -218,14 +218,14 @@ impl Stations {
                             }
                         }
                     }
-                    let woke = why == wake::GONE || why == wake::NETWORK || why == REPLACED;
+                    let woke = why == wake::GONE || why == wake::NETWORK || why == replaced();
                     if !self.is_current(&station, generation) {
                         return;
                     }
                     previous = Some((why.clone(), self.host.now_ms() - opened_at));
                     self.heard(&station, generation, false);
                     self.set_stale(&station, true);
-                    self.set_link(&station, json!({ "state": "reconnecting", "message": if why == "ended" { "连接断开了".to_string() } else { why } }));
+                    self.set_link(&station, json!({ "state": "reconnecting", "message": if why == "ended" { t!("station.core.disconnected") } else { why } }));
                     // Taken for gone as the UI came back: opened again at once.
                     if woke {
                         continue;
@@ -291,7 +291,7 @@ impl Stations {
                 self.host.spawn(self.kept.forget(&Log::thread(station, id)));
                 let topic = Topic::Thread { station: station.into(), thread: id };
                 if self.is_live(&topic) {
-                    self.sink.set(&topic, Err(CoreError::new("http_404", "没有这个对话").with_status(404)));
+                    self.sink.set(&topic, Err(CoreError::new("http_404", t!("station.core.noChat")).with_status(404)));
                 }
             }
             "read" => {
@@ -422,7 +422,7 @@ impl Stations {
         });
         let topic = Topic::Session { station: station.into(), key: key.into() };
         if self.is_live(&topic) {
-            self.sink.set(&topic, Err(CoreError::new("http_404", "这个会话已经删除了").with_status(404)));
+            self.sink.set(&topic, Err(CoreError::new("http_404", t!("station.core.sessionDeleted")).with_status(404)));
         }
         self.host.spawn(self.kept.forget(&Log::transcript(station, key)));
         // Its threads lose it; those left with nobody went with it.

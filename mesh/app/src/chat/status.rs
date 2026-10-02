@@ -11,6 +11,7 @@ use futures_util::future::BoxFuture;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::warn;
 
+use crate::lang::t;
 use crate::store::now_ms;
 
 /// How often the status line may change: Slack's limit on the call, and enough to follow along.
@@ -142,32 +143,34 @@ impl ThreadStatus {
 }
 
 /// A tool call in words for the status line, by the tool's name (Claude Code's or Codex's).
-pub fn tool_status(tool: &str) -> &'static str {
+pub fn tool_status(tool: &str) -> String {
     let lower = tool.to_lowercase();
     let name = match lower.strip_prefix("mcp__") {
         Some(rest) => rest.split_once("__").map(|(_, n)| n.to_string()).unwrap_or(lower.clone()),
         None => lower.clone(),
     };
     let starts = |prefixes: &[&str]| prefixes.iter().any(|p| name.starts_with(p));
-    if starts(&["read", "grep", "glob", "ls", "list", "view", "search_files", "stat"]) {
-        "正在查看文件…"
+    let key = if starts(&["read", "grep", "glob", "ls", "list", "view", "search_files", "stat"]) {
+        "station.status.readingFiles"
     } else if starts(&["edit", "multiedit", "write", "apply_patch", "notebookedit", "delete", "copy"]) {
-        "正在修改文件…"
+        "station.status.editingFiles"
     } else if starts(&["bash", "shell", "exec", "exec_command", "local_shell", "unified_exec", "run"]) {
-        "正在运行命令…"
+        "station.status.runningCommand"
     } else if starts(&["websearch", "web_search", "search_query", "image_query"]) {
-        "正在搜索网页…"
+        "station.status.searchingWeb"
     } else if starts(&["webfetch", "fetch", "browse"]) {
-        "正在读网页…"
+        "station.status.readingWeb"
     } else if starts(&["task", "agent", "spawn"]) {
-        "正在交给子任务…"
+        "station.status.delegating"
     } else if starts(&["chat_", "slack"]) {
-        "正在看 Slack…"
+        "station.status.readingSlack"
     } else if starts(&["todowrite", "update_plan", "plan"]) {
-        "正在安排步骤…"
+        "station.status.planning"
     } else {
-        "正在处理…"
-    }
+        "station.status.working"
+    };
+    // Said in Slack by the station: in its own language.
+    t!(crate::lang::station(); key)
 }
 
 #[cfg(test)]
@@ -232,7 +235,7 @@ mod tests {
 
     #[test]
     fn tool_calls_in_words_by_either_runtimes_names() {
-        let words: Vec<&str> = ["Read", "Bash", "exec_command", "apply_patch", "WebSearch", "mcp__ember__chat_post", "something"].iter().map(|t| tool_status(t)).collect();
+        let words: Vec<String> = ["Read", "Bash", "exec_command", "apply_patch", "WebSearch", "mcp__ember__chat_post", "something"].iter().map(|t| tool_status(t)).collect();
         assert_eq!(words, vec!["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在看 Slack…", "正在处理…"]);
     }
 }

@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 
 use stillfail_shapes::{AccessKind, RuntimeKind};
 
+use crate::lang::{spoken, t};
+
 /// The access kinds each runtime can use.
 pub fn access_kinds(runtime: RuntimeKind) -> &'static [AccessKind] {
     match runtime {
@@ -213,7 +215,7 @@ async fn status_of(command: &str, args: &[&str], env: &crate::machine_logins::En
 pub async fn check_profile(o: CheckOptions<'_>) -> ProfileCheck {
     match check_inner(&o).await {
         Ok(check) => check,
-        Err(e) => check("failed", format!("检查失败：{e}"), None),
+        Err(e) => check("failed", t!(spoken(); "station.profile.checkError", error = e), None),
     }
 }
 
@@ -223,15 +225,15 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
             // The model list answers any key; the usage is the key's own, so it is what tells a key that works.
             let usage = http().get(format!("{OPENCODE}/v1/usage")).bearer_auth(o.key).send().await?;
             if !usage.status().is_success() {
-                return Ok(check("failed", format!("OpenCode Go 拒绝了这个 key（{}）", usage.status().as_u16()), None));
+                return Ok(check("failed", t!(spoken(); "station.profile.keyRefused", provider = "OpenCode Go", status = usage.status().as_u16()), None));
             }
             let response = http().get(format!("{OPENCODE}/v1/models")).bearer_auth(o.key).send().await?;
             if !response.status().is_success() {
-                return Ok(check("failed", format!("读不到 OpenCode Go 的模型（{}）", response.status().as_u16()), None));
+                return Ok(check("failed", t!(spoken(); "station.profile.modelsUnreadable", provider = "OpenCode Go", status = response.status().as_u16()), None));
             }
             let mut models = model_ids(response).await?;
             models.sort();
-            Ok(check("ok", format!("可用，{} 个模型", models.len()), Some(models)))
+            Ok(check("ok", t!(spoken(); "station.profile.works", n = models.len()), Some(models)))
         }
         (AccessKind::AnthropicApi, _) => {
             let response = http()
@@ -241,10 +243,10 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
                 .send()
                 .await?;
             if !response.status().is_success() {
-                return Ok(check("failed", format!("Anthropic 拒绝了这个 key（{}）", response.status().as_u16()), None));
+                return Ok(check("failed", t!(spoken(); "station.profile.keyRefused", provider = "Anthropic", status = response.status().as_u16()), None));
             }
             let models = model_ids(response).await?;
-            Ok(check("ok", format!("可用，{} 个模型", models.len()), Some(models)))
+            Ok(check("ok", t!(spoken(); "station.profile.works", n = models.len()), Some(models)))
         }
         (AccessKind::Subscription, RuntimeKind::Claude) => {
             let mut env = o.env.clone();
@@ -267,7 +269,7 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
             }
             let status: serde_json::Value = serde_json::from_str(&stdout)?;
             if status["loggedIn"] != true {
-                return Ok(check("login", "还没登录", None));
+                return Ok(check("login", t!(spoken(); "station.profile.signedOut"), None));
             }
             // What the subscription runs, as Anthropic lists it for the account's own token.
             let token = machine_token.or_else(|| crate::quota::claude_token(o.home));
@@ -275,8 +277,9 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
                 Some(token) => claude_models(&token).await,
                 None => None,
             };
-            let detail: Vec<&str> = ["已登录", status["email"].as_str().unwrap_or(""), status["subscriptionType"].as_str().unwrap_or("")].into_iter().filter(|s| !s.is_empty()).collect();
-            Ok(check("ok", detail.join("，"), models))
+            let signed_in = t!(spoken(); "station.profile.signedIn");
+            let detail: Vec<&str> = [signed_in.as_str(), status["email"].as_str().unwrap_or(""), status["subscriptionType"].as_str().unwrap_or("")].into_iter().filter(|s| !s.is_empty()).collect();
+            Ok(check("ok", detail.join(&t!(spoken(); "station.list.comma")), models))
         }
         (AccessKind::Subscription, RuntimeKind::Codex) => {
             if o.machine {
@@ -287,13 +290,13 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
             let output = status_of("codex", &["login", "status"], &env).await?;
             let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)).trim().to_string();
             if text.to_lowercase().contains("not logged in") {
-                return Ok(check("login", "还没登录", None));
+                return Ok(check("login", t!(spoken(); "station.profile.signedOut"), None));
             }
             if !output.status.success() {
                 anyhow::bail!("Command failed: codex login status\n{text}");
             }
-            Ok(check("ok", text.lines().next().unwrap_or("已登录").to_string(), None))
+            Ok(check("ok", text.lines().next().map(str::to_string).unwrap_or_else(|| t!(spoken(); "station.profile.signedIn")), None))
         }
-        _ => Ok(check("unknown", "自定义环境变量，still.fail 无法自动检查", None)),
+        _ => Ok(check("unknown", t!(spoken(); "station.profile.envUnchecked"), None)),
     }
 }

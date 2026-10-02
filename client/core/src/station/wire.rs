@@ -50,12 +50,12 @@ pub trait StationWire {
     }
     /// Measures the ways to the station now (mesh.rs `Mesh::remeasure`). Only the mesh has more than one.
     fn measure(&self, _station: &StationAddr) -> LocalBoxFuture<'static, Result<()>> {
-        async { Err(CoreError::new("unsupported", "这里只有一条路，不用测")) }.boxed_local()
+        async { Err(CoreError::new("unsupported", t!("station.core.oneWay"))) }.boxed_local()
     }
     /// A preview page's WebSocket (`head.path` a preview's): the station's reply, then its frames both ways
     /// ([`SocketFrame`]). Only the mesh carries one.
     fn socket(&self, _station: &StationAddr, _head: RequestHead) -> LocalBoxFuture<'static, Result<WireSocket>> {
-        async { Err(CoreError::new("unsupported", "这里的预览还不支持 WebSocket")) }.boxed_local()
+        async { Err(CoreError::new("unsupported", t!("station.core.previewNoSocket"))) }.boxed_local()
     }
 }
 
@@ -171,11 +171,11 @@ impl StationWire for MeshWire {
             // Bringing up the endpoint (the relay) and opening the link are waits of their own: a request slow for
             // them says so (status.rs).
             let mesh = {
-                let _waiting = status.begin(Place::Relay, "连接", true);
+                let _waiting = status.begin(Place::Relay, t!("station.core.connecting"), true);
                 mesh.await?
             };
             let link = {
-                let _waiting = status.begin(address.clone(), "连接", true);
+                let _waiting = status.begin(address.clone(), t!("station.core.connecting"), true);
                 mesh.link(&station, credentials.clone()).await?
             };
             let repeats = may_repeat(&head, idempotent.borrow().contains(&station));
@@ -212,7 +212,7 @@ impl StationWire for MeshWire {
                     Either::Left((Err(error), _)) if error.code == "mesh" => {
                         // Its link went before it was answered (the station restarting, a network change): once more,
                         // on the link opened in its place.
-                        let _waiting = status.begin(address, "连接", true);
+                        let _waiting = status.begin(address, t!("station.core.connecting"), true);
                         let link = mesh.link(&station, credentials).await?;
                         drop(_waiting);
                         ask(link, head, body).await?
@@ -276,11 +276,11 @@ impl StationWire for MeshWire {
         let (status, address) = ((self.status)(&workspace), Place::Station(format!("{workspace}/{station}")));
         async move {
             let mesh = {
-                let _waiting = status.begin(Place::Relay, "连接", true);
+                let _waiting = status.begin(Place::Relay, t!("station.core.connecting"), true);
                 mesh.await?
             };
             let link = {
-                let _waiting = status.begin(address, "连接", true);
+                let _waiting = status.begin(address, t!("station.core.connecting"), true);
                 mesh.link(&station, credentials).await?
             };
             let (reply, send) = link.socket(head).await?;

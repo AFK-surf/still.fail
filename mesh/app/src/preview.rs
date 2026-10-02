@@ -9,8 +9,10 @@ use std::sync::LazyLock;
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
 
+use crate::lang::{spoken, t};
+
 /// Headers that belong to the hop to here (and the admin call's own), not to the service.
-const HOP: [&str; 11] = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "authorization", "traceparent", "tracestate"];
+const HOP: [&str; 12] = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "authorization", "traceparent", "tracestate", crate::lang::HEADER];
 /// Answers the service gives that would stop its page from being shown framed on another origin.
 const FRAMING: [&str; 3] = ["x-frame-options", "content-security-policy", "content-security-policy-report-only"];
 
@@ -54,7 +56,7 @@ fn plain(status: u16, text: String) -> PreviewAnswer {
 /// Passes a request to localhost:`port` and its answer back. `headers` are the request's, by lowercase name.
 pub async fn proxy_preview(method: &str, headers: &[(String, String)], body: reqwest::Body, port: u16, path: &str) -> PreviewAnswer {
     let Ok(method) = reqwest::Method::from_bytes(method.as_bytes()) else {
-        return plain(400, format!("不认识的请求方法 {method}"));
+        return plain(400, t!(spoken(); "station.preview.badMethod", method = method));
     };
     let mut request = CLIENT.request(method, format!("http://localhost:{port}{path}"));
     for (name, value) in headers {
@@ -67,7 +69,7 @@ pub async fn proxy_preview(method: &str, headers: &[(String, String)], body: req
     request = request.header("host", format!("localhost:{port}")).header("accept-encoding", "identity").body(body);
     let answer = match request.send().await {
         Ok(answer) => answer,
-        Err(e) => return plain(502, format!("这台机器上的 localhost:{port} 没有回应：{e}")),
+        Err(e) => return plain(502, t!(spoken(); "station.preview.noAnswerSaying", port = port, error = e)),
     };
     let service = [format!("http://localhost:{port}"), format!("https://localhost:{port}"), format!("http://127.0.0.1:{port}"), format!("https://127.0.0.1:{port}"), format!("http://[::1]:{port}"), format!("https://[::1]:{port}")];
     let headers = answer
@@ -110,7 +112,7 @@ pub type ServiceSocket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::M
 /// does not answer.
 pub async fn open_socket(headers: &[(String, String)], port: u16, path: &str) -> Result<(ServiceSocket, Option<String>), (u16, String)> {
     use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest, http::HeaderValue};
-    let mut request = format!("ws://localhost:{port}{path}").into_client_request().map_err(|e| (400, format!("地址不对：{e}")))?;
+    let mut request = format!("ws://localhost:{port}{path}").into_client_request().map_err(|e| (400, t!(spoken(); "station.preview.badAddress", error = e)))?;
     for (name, value) in headers {
         if SOCKET_HEADERS.contains(&name.as_str())
             && let (Ok(name), Ok(value)) = (tungstenite::http::HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_str(value))
@@ -122,12 +124,12 @@ pub async fn open_socket(headers: &[(String, String)], port: u16, path: &str) ->
     request.headers_mut().insert("origin", HeaderValue::from_str(&format!("http://localhost:{port}")).expect("an origin"));
     let connecting = tokio_tungstenite::connect_async(request);
     match tokio::time::timeout(std::time::Duration::from_secs(20), connecting).await {
-        Err(_) => Err((502, format!("这台机器上的 localhost:{port} 没有回应"))),
+        Err(_) => Err((502, t!(spoken(); "station.preview.noAnswer", port = port))),
         Ok(Err(tungstenite::Error::Http(answer))) => {
             let status = answer.status().as_u16();
-            Err((if status < 400 { 502 } else { status }, format!("localhost:{port} 没有接受这个 WebSocket（{status}）")))
+            Err((if status < 400 { 502 } else { status }, t!(spoken(); "station.preview.socketRefused", port = port, status = status)))
         }
-        Ok(Err(e)) => Err((502, format!("这台机器上的 localhost:{port} 没有回应：{e}"))),
+        Ok(Err(e)) => Err((502, t!(spoken(); "station.preview.noAnswerSaying", port = port, error = e))),
         Ok(Ok((socket, answer))) => {
             let protocol = answer.headers().get("sec-websocket-protocol").and_then(|v| v.to_str().ok()).map(str::to_string);
             Ok((socket, protocol))

@@ -9,13 +9,21 @@ use anyhow::Result;
 use tokio::net::TcpListener;
 
 /// A port the config names, taken by another program.
-#[derive(Debug, thiserror::Error)]
-#[error("{what} 的端口 {host}:{port} 已被别的程序占用（配置里指定了这个端口）。用 `lsof -nP -iTCP:{port} -sTCP:LISTEN` 看是谁，或在配置里换一个端口。")]
+#[derive(Debug)]
 pub struct PortTaken {
     pub what: String,
     pub host: String,
     pub port: u16,
 }
+
+/// Said on the station's machine, as it starts: in the station's language.
+impl std::fmt::Display for PortTaken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&crate::lang::t!(crate::lang::station(); "station.port.taken", what = self.what, host = self.host, port = self.port))
+    }
+}
+
+impl std::error::Error for PortTaken {}
 
 /// Listens on `port`, or, when it is only the usual one (not named in the config) and taken, on any free port.
 pub async fn listen(host: &str, port: u16, named: bool, what: &str) -> Result<TcpListener> {

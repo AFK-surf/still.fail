@@ -2133,7 +2133,7 @@ impl Store {
                  WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
                    AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND ended_at IS NOT NULL
                    AND ((about_thread = ?2 AND about_n = ?3) OR (about_n IS NULL AND thread = ?2 AND started_at <= ?4))",
-                params![agent, thread, n, at, format!("用户选择「{option}」")],
+                params![agent, thread, n, at, crate::lang::t!(crate::lang::spoken(); "station.card.chosen", option = option)],
             )?;
             tx.commit()?;
             if changed > 0 { changes.push(StoreChange::Session(agent)); }

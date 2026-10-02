@@ -38,6 +38,7 @@ use futures::future::{AbortHandle, Abortable, Either, LocalBoxFuture, join_all};
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, StreamExt, pin_mut};
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::entries::n_of;
 use crate::error::{CoreError, Result};
@@ -97,11 +98,16 @@ const LIST_WAIT_MS: u64 = 3_000;
 
 const EVENT_STREAM: &str = "text/event-stream";
 /// How a stream ends whose link was replaced by another (it is opened again on it at once).
-const REPLACED: &str = "换了一条连接";
+fn replaced() -> String {
+    t!("station.core.replaced")
+}
 /// A write's key (mesh/app/src/admin/once.rs).
 pub const IDEMPOTENCY_KEY: &str = "idempotency-key";
 /// On a station's every answer when it keeps a write asked with a key to once.
 pub const IDEMPOTENT: &str = "stillfail-idempotent";
+/// On every request: the language the station answers its person in (mesh/app/src/lang.rs); a station from before
+/// languages lets it be, and answers in Chinese.
+pub const LANG_HEADER: &str = "stillfail-lang";
 
 /// A request the wire may send twice: a read, or a write with its key to a station known to keep it to once.
 /// A write asked again with its key once its station is back, while it was not answered: this long at most (a station
@@ -112,7 +118,7 @@ pub const RECHECKING: &str = "等它回来确认";
 
 /// A write that went and was not answered (its link gone, its station quiet): it may have been done, or not.
 pub fn unconfirmed(why: &CoreError) -> CoreError {
-    CoreError::new("unconfirmed", format!("不确定做没做成：{}", why.message))
+    CoreError::new("unconfirmed", t!("station.core.unconfirmed", why = why.message))
 }
 
 fn may_repeat(head: &RequestHead, idempotent: bool) -> bool {
@@ -130,13 +136,13 @@ impl StationAddr {
     pub fn parse(text: &str) -> Result<StationAddr> {
         // What a station's own page (gone) was: still in UIs' kept links and prefs.
         if text == "local" {
-            return Err(CoreError::new("gone", "本机页面已经不再提供"));
+            return Err(CoreError::new("gone", t!("station.core.localGone")));
         }
         match text.split_once('/') {
             Some((workspace, station)) if !workspace.is_empty() && !station.is_empty() && !station.contains('/') => {
                 Ok(StationAddr { workspace: workspace.into(), station: station.into() })
             }
-            _ => Err(CoreError::invalid(format!("不认识的站点地址：{text}"))),
+            _ => Err(CoreError::invalid(t!("station.core.badAddress", address = text))),
         }
     }
 }
@@ -224,7 +230,7 @@ pub fn encode(text: &str) -> String {
 
 /// A station's non-2xx answer as an error.
 fn http_error(status: u16, data: &Value) -> CoreError {
-    let message = data.get("error").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("请求失败（{status}）"));
+    let message = data.get("error").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| t!("station.core.requestFailed", status = status));
     CoreError::new(format!("http_{status}"), message).with_status(status)
 }
 
@@ -364,7 +370,7 @@ fn idle_guarded(host: Rc<dyn Host>, body: LocalBoxStream<'static, Result<Vec<u8>
             match futures::future::select(body.next(), host.sleep(STREAM_IDLE_MS)).await {
                 futures::future::Either::Left((Some(item), _)) => Some((item, Some(body))),
                 futures::future::Either::Left((None, _)) => None,
-                futures::future::Either::Right(_) => Some((Err(CoreError::new("stream_idle", "和 station 的连接没有回应")), None)),
+                futures::future::Either::Right(_) => Some((Err(CoreError::new("stream_idle", t!("station.core.streamIdle"))), None)),
             }
         }
     })

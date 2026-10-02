@@ -18,6 +18,7 @@ pub mod hub;
 pub mod image_size;
 pub mod instructions;
 pub mod jobs;
+pub mod lang;
 pub mod live;
 pub mod login;
 mod claude_oauth;

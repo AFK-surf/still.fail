@@ -10,12 +10,16 @@ use super::{AdminApi, Asked, http_error, mask};
 use crate::access::Viewer;
 use crate::chat::internal::INTERNAL_CONNECT;
 use crate::config::runtime_name;
+use crate::lang::{spoken, t};
 use crate::pool::serves;
 use crate::store::{AuthorKind, STILLFAIL_SURFACE, EntryRow, MessageRow, SessionStats, ThreadRow, ThreadSummary};
 
 /// How much of a chat's last message the sidebar gets.
 const LAST_CHARS: usize = 200;
-pub const NO_WORDS: &str = "（还没有消息）";
+/// What a chat with nothing to be called by is called.
+pub fn no_words() -> String {
+    t!(spoken(); "station.chat.noWords")
+}
 
 fn secret_key(key: &str) -> bool {
     let upper = key.to_uppercase();
@@ -93,9 +97,9 @@ pub fn title_of(thread: &ThreadRow, first_text: Option<&str>, channel_name: Opti
         return format!("#{name}");
     }
     if thread.surface != STILLFAIL_SURFACE && thread.channel.starts_with('D') {
-        return "私信".into();
+        return t!(spoken(); "station.chat.directMessage");
     }
-    NO_WORDS.into()
+    no_words()
 }
 
 /// `<@U…>` mentions taken out.
@@ -276,7 +280,7 @@ impl AdminApi {
     pub(super) fn creator(&self, reference: Option<&str>) -> Option<Value> {
         let reference = reference?;
         if reference == "local" {
-            return Some(json!({ "id": "local", "name": "本机管理页", "email": null, "via": "local" }));
+            return Some(json!({ "id": "local", "name": t!(spoken(); "station.creator.localPage"), "email": null, "via": "local" }));
         }
         if let Some(rest) = reference.strip_prefix("slack:") {
             if let Some((connect, user)) = rest.split_once(':').filter(|(c, u)| !c.is_empty() && !u.is_empty()) {
@@ -348,7 +352,7 @@ impl AdminApi {
     /// What the agents spent (crate::usage): its rows, and the threads, people and profiles they name, as the pages show
     /// them. `reading`: the transcripts are still being read for the first time, so the rows are short of it.
     pub(super) fn usage(&self, from: i64, to: i64, utc_offset_min: i64) -> Result<Value> {
-        let Some(usage) = &self.deps.usage else { return Err(http_error(404, "这台 station 不记用量")) };
+        let Some(usage) = &self.deps.usage else { return Err(http_error(404, t!(spoken(); "station.usage.notKept"))) };
         let rows = usage.summary(from, to, utc_offset_min)?;
         let wanted: HashSet<i64> = rows.iter().filter_map(|r| r.thread).collect();
         let threads: serde_json::Map<String, Value> = self
@@ -487,7 +491,7 @@ impl AdminApi {
             let last = last.map(|l| {
                 let text = l["text"].as_str().unwrap_or("").trim().to_string();
                 // Something to show when there are no words: a message that only quotes says so.
-                let text = if text.is_empty() && l["quotes"].as_array().is_some_and(|q| !q.is_empty()) { "引用了一条消息".to_string() } else { text };
+                let text = if text.is_empty() && l["quotes"].as_array().is_some_and(|q| !q.is_empty()) { t!(spoken(); "station.chat.quotedOnly") } else { text };
                 json!({
                     "seq": l["seq"], "authorKind": l["authorKind"], "author": l["author"], "authorName": l["authorName"],
                     "text": l["text"].as_str().map(|_| text.chars().take(LAST_CHARS).collect::<String>()), "createdAt": l["createdAt"],
@@ -548,7 +552,7 @@ impl AdminApi {
                 Some(title) => title.to_string(),
                 None => match (from, &origin) {
                     (Some(f), Some(o)) => chat_title(f, o["channelName"].as_str()),
-                    _ => NO_WORDS.to_string(),
+                    _ => no_words(),
                 },
             };
             let starter = self.creator(s.created_by.as_deref());
@@ -639,14 +643,14 @@ impl AdminApi {
                 None => Ok(None),
                 Some(v) => match v.parse::<f64>() {
                     Ok(n) if n.fract() == 0.0 && n >= 0.0 => Ok(Some(n as i64)),
-                    _ => Err(http_error(400, format!("{name} 必须是整数"))),
+                    _ => Err(http_error(400, t!(spoken(); "station.admin.notInteger", name = name))),
                 },
             }
         };
         let (after, before, from, to) = (number("after")?, number("before")?, number("from")?, number("to")?);
         let limit = asked.param("limit").and_then(|l| l.parse::<f64>().ok()).filter(|l| *l != 0.0).unwrap_or(50.0).clamp(1.0, 500.0) as usize;
         if from.is_some() != to.is_some() {
-            return Err(http_error(400, "from 和 to 要一起给"));
+            return Err(http_error(400, t!(spoken(); "station.admin.fromAndTo")));
         }
         let store = &self.deps.store;
         let last = store.last_entry(thread)?;
@@ -692,7 +696,7 @@ impl AdminApi {
                     }
                 }
                 AuthorKind::Person if t.as_ref().is_some_and(|t| t.surface == STILLFAIL_SURFACE) => {
-                    Some(if author == "local" { "管理员".to_string() } else { self.deps.names.lock().unwrap().get(author).cloned().unwrap_or_else(|| author.to_string()) })
+                    Some(if author == "local" { t!(spoken(); "station.author.admin") } else { self.deps.names.lock().unwrap().get(author).cloned().unwrap_or_else(|| author.to_string()) })
                 }
                 AuthorKind::Person => chat.as_ref().and_then(|c| c.known_person(author)).map(|p| p.name).filter(|n| !n.is_empty()),
             };

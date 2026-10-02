@@ -18,6 +18,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, warn};
 
 use crate::chat::status::tool_status;
+use crate::lang::{station, t};
 use crate::chat::{ChatSurface, ThreadRef};
 use crate::config::Profile;
 use crate::instructions::{GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
@@ -389,7 +390,7 @@ impl SessionActor {
             agent.dispose().await;
         }
         store.stop_wait(&self.key)?;
-        self.notice(&deps, "已停止当前任务").await;
+        self.notice(&deps, &t!(station(); "station.notice.stopped")).await;
         Ok(())
     }
 
@@ -709,7 +710,7 @@ impl SessionActor {
                 }
             }
         }
-        self.say(deps, "正在思考…");
+        self.say(deps, &t!(station(); "station.status.thinking"));
     }
 
     fn say(&self, deps: &Arc<dyn SessionDeps>, status: &str) {
@@ -738,10 +739,10 @@ impl SessionActor {
                 LiveEvent::Phase { .. } => {}
                 _ => return,
             }
-            st.tools.last().map(|(_, tool)| tool_status(tool)).unwrap_or("正在思考…")
+            st.tools.last().map(|(_, tool)| tool_status(tool)).unwrap_or_else(|| t!(station(); "station.status.thinking"))
         };
         if let Ok(deps) = self.deps() {
-            self.say(&deps, status);
+            self.say(&deps, &status);
         }
     }
 
@@ -897,7 +898,7 @@ impl SessionActor {
         }
         store.set_running(&self.key, false)?;
         self.done_working(deps);
-        self.notice(deps, &format!("⚠️ 无法启动 agent：{message}")).await;
+        self.notice(deps, &format!("⚠️ {}", t!(station(); "station.notice.cannotStart", error = message))).await;
         Err(e)
     }
 
@@ -1095,7 +1096,7 @@ impl SessionActor {
             TurnOutcome::Aborted => {
                 self.st().nudges = 0;
                 if stop_requested {
-                    self.notice(&deps, "已停止当前任务").await;
+                    self.notice(&deps, &t!(station(); "station.notice.stopped")).await;
                 }
             }
             TurnOutcome::Completed => {}
@@ -1138,7 +1139,7 @@ impl SessionActor {
                 self.start_turn(&deps, "nudge", NUDGE).await
             }
             None => {
-                self.notice(&deps, "⚠️ 这一轮没有给出结果就停了，回复可继续").await;
+                self.notice(&deps, &format!("⚠️ {}", t!(station(); "station.notice.noResult"))).await;
                 Ok(())
             }
         }
@@ -1212,10 +1213,10 @@ impl SessionActor {
 fn failure_notice(outcome: &TurnOutcome) -> String {
     let TurnOutcome::Failed { reason, message } = outcome else { return String::new() };
     match reason.as_str() {
-        "auth" => format!("⚠️ 认证失败，需要管理员检查账号：{message}"),
-        "rate_limit" => format!("⚠️ 触发额度或限流，换个账号或模型会接着做，稍后回复也可继续：{message}"),
-        "exited" => format!("⚠️ agent 进程意外退出，回复可恢复：{message}"),
-        _ => format!("⚠️ 这一轮出错：{message}"),
+        "auth" => format!("⚠️ {}", t!(station(); "station.notice.auth", error = message)),
+        "rate_limit" => format!("⚠️ {}", t!(station(); "station.notice.rateLimit", error = message)),
+        "exited" => format!("⚠️ {}", t!(station(); "station.notice.exited", error = message)),
+        _ => format!("⚠️ {}", t!(station(); "station.notice.failed", error = message)),
     }
 }
 

@@ -24,6 +24,7 @@ use serde_json::Value;
 use tokio::process::Command;
 use tokio::sync::watch;
 
+use crate::lang::{spoken, t};
 use crate::store::now_ms;
 
 pub type Env = BTreeMap<String, String>;
@@ -186,19 +187,20 @@ async fn run(command: &str, args: &[&str], env: &Env, cwd: Option<&Path>, timeou
 async fn claude_login(env: &Env) -> MachineLogin {
     let rt = RuntimeKind::Claude;
     let ran = run("claude", &["auth", "status"], &machine_env(env, &CLAUDE_DROP), None, Duration::from_secs(20)).await;
-    let Some(ran) = ran else { return MachineLogin::new(rt, false, false, format!("没有装 {}", label(rt))) };
-    let Ok(ran) = ran else { return MachineLogin::new(rt, true, false, format!("读不到 {} 的登录", label(rt))) };
+    let Some(ran) = ran else { return MachineLogin::new(rt, false, false, t!(spoken(); "station.machine.notInstalled", name = label(rt))) };
+    let Ok(ran) = ran else { return MachineLogin::new(rt, true, false, t!(spoken(); "station.machine.unreadableFor", name = label(rt))) };
     // `auth status` exits non-zero when signed out, still printing its JSON.
     let Ok(status) = serde_json::from_str::<Value>(&ran.stdout) else {
-        return MachineLogin::new(rt, true, false, format!("读不到 {} 的登录", label(rt)));
+        return MachineLogin::new(rt, true, false, t!(spoken(); "station.machine.unreadableFor", name = label(rt)));
     };
     if status.get("loggedIn") != Some(&Value::Bool(true)) {
-        return MachineLogin::new(rt, true, false, format!("{} 没有登录", label(rt)));
+        return MachineLogin::new(rt, true, false, t!(spoken(); "station.machine.signedOut", name = label(rt)));
     }
     let email = status.get("email").and_then(Value::as_str).map(String::from);
     let plan = status.get("subscriptionType").and_then(Value::as_str).map(String::from);
     let usable = read_claude_credentials(env).await.is_some();
-    let text = format!("{}{}", said(label(rt), email.as_deref(), plan.as_deref()), if usable { "" } else { "，登录在钥匙串里，station 读不到" });
+    let text = said(label(rt), email.as_deref(), plan.as_deref());
+    let text = if usable { text } else { t!(spoken(); "station.machine.inKeychainUnreadable", text = text) };
     MachineLogin { runtime: rt, installed: true, logged_in: true, email, plan, usable, quota: None, text }
 }
 
@@ -208,18 +210,19 @@ async fn codex_login(env: &Env) -> MachineLogin {
     let mut child_env = machine_env(env, &["OPENAI_API_KEY", "CODEX_API_KEY"]);
     child_env.insert("CODEX_HOME".into(), home.display().to_string());
     let text = match run("codex", &["login", "status"], &child_env, None, Duration::from_secs(20)).await {
-        None => return MachineLogin::new(rt, false, false, format!("没有装 {}", label(rt))),
+        None => return MachineLogin::new(rt, false, false, t!(spoken(); "station.machine.notInstalled", name = label(rt))),
         // `login status` exits non-zero when signed out.
         Some(Ok(ran)) => format!("{}{}", ran.stdout, ran.stderr),
         Some(Err(_)) => String::new(),
     };
     let lower = text.to_lowercase();
     if !lower.contains("logged in") || lower.contains("not logged in") {
-        return MachineLogin::new(rt, true, false, format!("{} 没有登录", label(rt)));
+        return MachineLogin::new(rt, true, false, t!(spoken(); "station.machine.signedOut", name = label(rt)));
     }
     let (email, plan) = codex_account(&home);
     let usable = home.join("auth.json").exists();
-    let text = format!("{}{}", said(label(rt), email.as_deref(), plan.as_deref()), if usable { "" } else { "，登录存在钥匙串里" });
+    let text = said(label(rt), email.as_deref(), plan.as_deref());
+    let text = if usable { text } else { t!(spoken(); "station.machine.inKeychain", text = text) };
     MachineLogin { runtime: rt, installed: true, logged_in: true, email, plan, usable, quota: None, text }
 }
 
@@ -299,11 +302,12 @@ pub fn capitalized(plan: &str) -> String {
 }
 
 fn said(label: &str, email: Option<&str>, plan: Option<&str>) -> String {
-    format!(
-        "{label} 已登录{}{}",
-        email.map(|e| format!(" {e}")).unwrap_or_default(),
-        plan.map(|p| format!("（{}）", capitalized(p))).unwrap_or_default()
-    )
+    match (email, plan.map(capitalized)) {
+        (Some(email), Some(plan)) => t!(spoken(); "station.machine.signedInAsPlan", name = label, email = email, plan = plan),
+        (Some(email), None) => t!(spoken(); "station.machine.signedInAs", name = label, email = email),
+        (None, Some(plan)) => t!(spoken(); "station.machine.signedInPlan", name = label, plan = plan),
+        (None, None) => t!(spoken(); "station.machine.signedIn", name = label),
+    }
 }
 
 #[cfg(test)]

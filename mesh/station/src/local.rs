@@ -13,6 +13,7 @@ use http_body_util::{BodyExt, Full, combinators::UnsyncBoxBody};
 use hyper::{Request, Response, StatusCode, body::Incoming, service::service_fn};
 use serde_json::Value;
 use stillfail_app::handoff::{Door, serve_http1};
+use stillfail_app::lang::{self, t};
 use tokio::{net::TcpListener, sync::watch};
 use tracing::{info, warn};
 
@@ -48,7 +49,7 @@ pub async fn bind(data: &Path, port: u16, named: bool) -> Result<TcpListener> {
             TcpListener::bind(("127.0.0.1", 0)).await?
         }
         Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
-            bail!("端口 127.0.0.1:{port} 已被别的程序占用（--port 指定了这个端口）。用 `lsof -nP -iTCP:{port} -sTCP:LISTEN` 看是谁，或换一个端口。")
+            bail!(t!(lang::station(); "station.local.portTaken", port = port))
         }
         Err(error) => return Err(error.into()),
     };
@@ -75,7 +76,9 @@ pub fn serve(listener: TcpListener, data: PathBuf, ready: watch::Receiver<bool>)
                 let busy = door.get().and_then(Weak::upgrade).map(|d| d.busy());
                 let place = Place::read(&data);
                 async move {
-                    let answer = answer(req.uri().path(), req.uri().query(), up, place.as_ref());
+                    // In the language the browser asks in.
+                    let asked = lang::of_browser(lang::headers(req.headers()));
+                    let answer = lang::answering_now(asked, || answer(req.uri().path(), req.uri().query(), up, place.as_ref()));
                     drop(busy);
                     Ok::<_, Infallible>(answer)
                 }
@@ -113,8 +116,8 @@ pub fn answer(path: &str, query: Option<&str>, ready: bool, place: Option<&Place
         return plain(if ready { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE }, "");
     }
     if path.starts_with("/admin/api/") || path == "/admin/api" {
-        let body = r#"{"error":"这台 station 不在本机提供管理接口：到 still.fail 打开它"}"#;
-        return with_type(StatusCode::NOT_FOUND, "application/json", body);
+        let body = serde_json::json!({ "error": t!(lang::spoken(); "station.local.noAdminApi") }).to_string();
+        return with_type(StatusCode::NOT_FOUND, "application/json", &body);
     }
     if path != "/" && path != "/admin" && !path.starts_with("/admin/") {
         return plain(StatusCode::NOT_FOUND, "");
@@ -157,14 +160,10 @@ pub fn moved(path: &str, query: Option<&str>, place: &Place) -> String {
 
 /// What the port says while the station is in no workspace: that it is not, and how to join one.
 fn unbound(place: Option<&Place>) -> String {
-    let join = "加入 workspace：stillfail station enroll <cloud> <token>（token 在 still.fail 的「添加 station」里生成）";
+    let say = lang::spoken();
     match place.and_then(|p| p.removed_at.map(|at| (p, at))) {
-        Some((place, at)) => format!(
-            "这台 still.fail station 已被移出 workspace「{}」（{}），现在不接 Slack、不跑 agent。\n重新{join}\n",
-            place.workspace_name,
-            stillfail_app::transcript::iso(at as i64 * 1000)
-        ),
-        None => format!("这台 still.fail station 还没有加入 workspace，不接 Slack、不跑 agent。\n{join}\n本机不再提供管理页：加入后到 still.fail 打开它。\n"),
+        Some((place, at)) => t!(say; "station.local.removed", workspace = place.workspace_name, at = stillfail_app::transcript::iso(at as i64 * 1000)),
+        None => t!(say; "station.local.unjoined"),
     }
 }
 

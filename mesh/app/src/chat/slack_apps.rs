@@ -14,6 +14,7 @@ use serde_json::{Map, Value, json};
 use tracing::info;
 
 use crate::config::{ConfigToken, ConfigTokenOwner};
+use crate::lang::{spoken, t};
 use crate::store::now_ms;
 
 /// A permission group in plain words: the scopes and events it adds to the app.
@@ -394,23 +395,27 @@ impl std::error::Error for SlackApiError {}
 pub fn slack_error(error: &anyhow::Error) -> String {
     let Some(error) = error.downcast_ref::<SlackApiError>() else { return error.to_string() };
     let known = match error.code.as_str() {
-        "invalid_auth" => "配置 token 无效，请重新填写",
-        "token_expired" => "配置 token 过期了，请重新填写",
-        "invalid_refresh_token" => "refresh token 已失效，请重新生成配置 token",
-        "not_allowed_token_type" => "这不是 App 配置 token",
-        "app_not_found" => "Slack 找不到这个 app；配置 token 可能属于别的工作区",
-        "invalid_manifest" => "manifest 不合法",
-        other => other,
+        "invalid_auth" => t!(spoken(); "station.slackApi.invalidAuth"),
+        "token_expired" => t!(spoken(); "station.slackApi.tokenExpired"),
+        "invalid_refresh_token" => t!(spoken(); "station.slackApi.invalidRefreshToken"),
+        "not_allowed_token_type" => t!(spoken(); "station.slackApi.notConfigToken"),
+        "app_not_found" => t!(spoken(); "station.slackApi.appNotFound"),
+        "invalid_manifest" => t!(spoken(); "station.slackApi.invalidManifest"),
+        other => other.to_string(),
     };
     let details = match &error.details {
         Some(Value::Array(list)) => list
             .iter()
             .map(|d| format!("{} {}", text(d.get("pointer")), text(d.get("message"))).trim().to_string())
             .collect::<Vec<_>>()
-            .join("；"),
+            .join(&t!(spoken(); "station.list.semicolon")),
         _ => String::new(),
     };
-    [known.to_string(), details].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("：")
+    match (known.is_empty(), details.is_empty()) {
+        (_, true) => known,
+        (true, false) => details,
+        (false, false) => t!(spoken(); "station.slackApi.withDetails", error = known, details = details),
+    }
 }
 
 fn api_base() -> String {
@@ -633,7 +638,7 @@ impl SlackApps {
         }
         let tokens: Vec<ConfigToken> = (self.load)().into_iter().filter(|t| t.by == by).collect();
         if tokens.is_empty() {
-            bail!("你还没有加 Slack App 配置 token");
+            bail!(t!(spoken(); "station.slackApp.noConfigToken"));
         }
         let mut last = None;
         for token in tokens {
@@ -656,14 +661,14 @@ impl SlackApps {
     async fn token(&self, by: &str, team: &str) -> Result<String> {
         let current = || (self.load)().into_iter().find(|t| t.by == by && t.team_id == team);
         let fresh = |t: &ConfigToken| t.expires_at - now_ms() > 5 * 60_000;
-        let token = current().ok_or_else(|| anyhow!("你在这个 Slack 工作区没有配置 token"))?;
+        let token = current().ok_or_else(|| anyhow!(t!(spoken(); "station.slackApi.noTokenForTeam")))?;
         if fresh(&token) {
             return Ok(token.access_token);
         }
         let lock = self.rotating.lock().unwrap().entry(format!("{by}|{team}")).or_default().clone();
         let _one = lock.lock().await;
         // Another call may have rotated it meanwhile: its refresh token is spent, the pair it made is the one to use.
-        let token = current().ok_or_else(|| anyhow!("你在这个 Slack 工作区没有配置 token"))?;
+        let token = current().ok_or_else(|| anyhow!(t!(spoken(); "station.slackApi.noTokenForTeam")))?;
         if fresh(&token) {
             return Ok(token.access_token);
         }
