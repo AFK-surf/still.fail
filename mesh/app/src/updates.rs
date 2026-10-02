@@ -196,7 +196,9 @@ impl How {
         if let Some(arg) = self.args.iter_mut().find(|arg| **arg == format!("{package}@latest")) {
             *arg = format!("{package}@{version}");
         }
-        self.args.push("--prefer-offline".into());
+        // The prefetched tarball does not refresh npm's package index. Revalidate it
+        // so a cached index from before this release cannot reject the pinned version.
+        self.args.push("--prefer-online".into());
     }
 
     fn new(program: impl Into<PathBuf>, args: &[&str]) -> How {
@@ -1419,7 +1421,7 @@ INSTALLER
         let mut how = how_to_update(Kind::Codex, &linked, &env).unwrap();
         assert_eq!(how, How::new(node.join("bin/npm"), &["install", "-g", "@openai/codex@latest", "--prefix", &node.to_string_lossy()]));
         how.pin_npm_version("@openai/codex", "0.159.3");
-        assert_eq!(how.args, ["install", "-g", "@openai/codex@0.159.3", "--prefix", &node.to_string_lossy(), "--prefer-offline"]);
+        assert_eq!(how.args, ["install", "-g", "@openai/codex@0.159.3", "--prefix", &node.to_string_lossy(), "--prefer-online"]);
         assert!(how_to_update(Kind::Codex, &found("/project/node_modules/@openai/codex/bin/codex.js"), &env).unwrap_err().contains("全局安装目录"));
         assert!(how_to_update(Kind::Codex, &found("/usr/local/bin/codex"), &env).unwrap_err().contains("自己更新"));
         assert_eq!(how_to_install(Kind::Codex, &env).unwrap(), How::new(&npm, &["install", "-g", "@openai/codex@latest"]));
