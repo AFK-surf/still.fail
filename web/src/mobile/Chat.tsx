@@ -101,14 +101,6 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   const station = useStation();
   const app = useApp();
   const list = useRef<HTMLDivElement>(null);
-  const top = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const bar = top.current;
-    if (!bar) return;
-    const observer = new ResizeObserver(() => bar.parentElement?.style.setProperty("--chat-top", `${bar.offsetHeight}px`));
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, []);
   const floor = useRef<HTMLDivElement>(null);
   // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
   const { draft, use } = useHost();
@@ -117,10 +109,7 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   return (
     <div className={chatCss.mChat}>
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
-      <div ref={top} className={css.mTopBar}>
-        <ChatBar view={view} here={here} />
-        <StationUpdate notice={view.stationUpdate} />
-      </div>
+      <ChatBar view={view} here={here} />
     </div>
   );
 }
@@ -137,6 +126,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
         {view.archivable && thread && <ArchiveButton here={here} view={view} thread={thread} />}
         {jobs && jobs.jobs.length > 0 && <JobsButton here={here} alarm={jobs.alarm} />}
       </>}>
+      <StationUpdate station={here.station} notice={view.stationUpdate} />
       <PeopleStack people={view.people} max={5} />
       {view.agents.map((a) => (
         <button key={a.session.key} type="button" className={css.mBarAgent} onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={t("web-mobile.chat.agentHistory", { agent: a.session.agentText })}>

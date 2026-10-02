@@ -1130,6 +1130,18 @@ export interface LinkShown {
 	detail?: string;
 }
 
+/** The station update control beside a chat title. Additions default for older cores. */
+export interface StationUpdateNotice {
+	tone: string;
+	text: string;
+	detail?: string;
+	label?: string;
+	version?: string;
+	open?: boolean;
+	canUpdate?: boolean;
+	dismissible?: boolean;
+}
+
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
 	/** The newest message asks for attention or gives a final result: dim earlier messages only at the scroll end. */
@@ -1189,7 +1201,7 @@ export interface ChatView {
 	/** Its link while it is down or coming back, in words; absent while it is up (and from a core before it). */
 	connection?: LinkShown;
 	/** Station update availability or progress, including the local outbox while reconnecting. */
-	stationUpdate?: LinkShown;
+	stationUpdate?: StationUpdateNotice;
 	/** The card it waits on, as its row has it. Absent when there is none. */
 	decision?: RowDecision;
 	/**
@@ -2355,6 +2367,8 @@ export interface PrefsView {
 	chatTabs?: Record<string, KeptTabs>;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
+	/** Versions dismissed on this device, by workspace/station. */
+	stationUpdatesDismissed?: Record<string, string>;
 	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
 	invite?: string;
 	device?: DeviceView;

@@ -1127,6 +1127,19 @@ data class LinkShown (
 	val detail: String? = null
 )
 
+/// The station update control beside a chat title. Additions default for older cores.
+@Serializable
+data class StationUpdateNotice (
+	val tone: String,
+	val text: String,
+	val detail: String? = null,
+	val label: String? = null,
+	val version: String? = null,
+	val open: Boolean? = null,
+	val canUpdate: Boolean? = null,
+	val dismissible: Boolean? = null
+)
+
 /// An item's page: its chat (with the viewer's read position), or its agent before it has one.
 @Serializable
 data class ChatView (
@@ -1177,7 +1190,7 @@ data class ChatView (
 	/// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
 	val connection: LinkShown? = null,
 	/// Station update availability or progress, including the local outbox while reconnecting.
-	val stationUpdate: LinkShown? = null,
+	val stationUpdate: StationUpdateNotice? = null,
 	/// The card it waits on, as its row has it. Absent when there is none.
 	val decision: RowDecision? = null,
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
@@ -2361,6 +2374,8 @@ data class PrefsView (
 	val chatTabs: Map<String, KeptTabs>? = null,
 	/// A Slack app made for a new connect, to go on with, by station (the Android app's).
 	val resume: Map<String, String>? = null,
+	/// Versions dismissed on this device, by workspace/station.
+	val stationUpdatesDismissed: Map<String, String>? = null,
 	/// The invite code a page was opened with, kept through signing in until a workspace is made with it.
 	val invite: String? = null,
 	val device: DeviceView? = null

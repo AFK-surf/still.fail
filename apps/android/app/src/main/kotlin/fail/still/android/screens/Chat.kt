@@ -284,15 +284,7 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
     Box(Modifier.fillMaxSize().background(C.bg)) {
         Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { host.roomForList().toDp() }, host)
-        Column(Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze)) {
-            ChatBar(station, of, view, agents)
-            view.stationUpdate?.let { notice ->
-                Column(Modifier.fillMaxWidth().background(C.bg).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(notice.text, fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
-                    notice.detail?.let { Text(it, fontSize = 12.sp, lineHeight = 18.sp, color = C.muted) }
-                }
-            }
-        }
+        ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
     }
 }
 
@@ -329,6 +321,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
             if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(11.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
         }
     }) {
+        StationUpdateControl(station, view.stationUpdate)
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
         agents.forEach { a ->
             // Not clipped: the state's dot sits over the mark's corner, partly outside it.

@@ -266,6 +266,14 @@ impl Inner {
                 let send = Call::ChatSend { station, thread, text, attachments, quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await
             }
+            Call::StationUpdateNotice { station, action, version } => {
+                if action == "dismiss" {
+                    crate::prefs::dismiss_station_update(&self.data, &station, version.as_deref().unwrap());
+                    self.store.invalidate(&Topic::Prefs);
+                }
+                self.views.update_notice_open(&station, action == "open");
+                Ok(json!({}))
+            }
             Call::DecisionDefer { station, thread, seq } => {
                 // The prefs changed: the decisions page is put together again. Nothing is sent.
                 crate::prefs::defer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq), self.host.now_ms());

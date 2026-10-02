@@ -143,6 +143,15 @@ pub fn undefer_decision(data: &Data, at: &str) {
     }
 }
 
+/// One version dismissed on this device, by workspace/station; auto-update settings are untouched.
+pub fn dismiss_station_update(data: &Data, station: &str, version: &str) {
+    let mut prefs = kept(data);
+    let map = prefs.entry("stationUpdatesDismissed").or_insert_with(|| json!({}));
+    if !map.is_object() { *map = json!({}); }
+    map[station] = json!(version);
+    data.set(&Topic::Prefs, Value::Object(prefs));
+}
+
 /// A workspace made: the invite code kept is done with (it was for that, or another was used).
 pub fn invite_used(data: &Data) {
     if kept(data).contains_key("invite") {

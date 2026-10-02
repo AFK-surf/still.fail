@@ -906,6 +906,10 @@ fn prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over() {
         host.settle().await;
         apply(&host, &mut values);
         assert_eq!(values[&1].get("invite"), None);
+        core.receive(ui, ClientMessage::Call { id: 80, call: "station.updateNotice".into(), params: json!({"station":"ws/st", "action":"dismiss", "version":"stable:2"}) });
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["stationUpdatesDismissed"]["ws/st"], "stable:2");
         // Kept across a restart.
         drop(core);
         let core = Core::new(host.clone()).await;
@@ -915,6 +919,8 @@ fn prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over() {
         let mut values = HashMap::new();
         apply(&host, &mut values);
         assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["appearance"].clone(), values[&1]["lastChat"]["w1"].clone()), (json!(true), json!("dark"), json!("/w/w1/s/st/chats/k1")));
+        assert_eq!(values[&1]["stationUpdatesDismissed"]["ws/st"], "stable:2");
+        assert!(values[&1]["stationUpdatesDismissed"]["other/st"].is_null());
         // The tabs of the latest 200 chats are kept.
         for i in 0..205u64 {
             core.receive(ui, ClientMessage::Call { id: 10 + i, call: "prefs.set".into(), params: json!({ "chatTabs": { format!("ws/st:{i}"): { "tabs": [], "active": null } } }) });

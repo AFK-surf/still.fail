@@ -1445,6 +1445,25 @@ pub struct LinkShown {
     pub detail: Option<String>,
 }
 
+/// The station update control beside a chat title. Additions default for older cores.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StationUpdateNotice {
+    pub tone: String,
+    pub text: String,
+    pub detail: Option<String>,
+    pub label: Option<String>,
+    pub version: Option<String>,
+    #[serde(default)]
+    pub open: bool,
+    #[serde(default)]
+    pub can_update: bool,
+    #[serde(default)]
+    pub dismissible: bool,
+}
+
 /// What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
 /// item (`item`: its `session`, and `service` its web service); the call answers null for any other link.
 #[typeshare]
@@ -1779,6 +1798,9 @@ pub struct PrefsView {
     /// A Slack app made for a new connect, to go on with, by station (the Android app's).
     #[serde(default)]
     pub resume: HashMap<String, String>,
+    /// Versions dismissed on this device, by workspace/station.
+    #[serde(default)]
+    pub station_updates_dismissed: HashMap<String, String>,
     /// The invite code a page was opened with, kept through signing in until a workspace is made with it.
     #[serde(default)]
     pub invite: Option<String>,
@@ -2737,7 +2759,7 @@ pub struct ChatView {
     /// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
     pub connection: Option<LinkShown>,
     /// Station update availability or progress, including the local outbox while reconnecting.
-    pub station_update: Option<LinkShown>,
+    pub station_update: Option<StationUpdateNotice>,
     /// The card it waits on, as its row has it. Absent when there is none.
     pub decision: Option<RowDecision>,
     /// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap

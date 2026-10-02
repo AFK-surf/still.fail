@@ -333,6 +333,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
             : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
           {renamable && !renaming && <IconButton label={t("web-pages.chat.rename")} icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={() => setRenaming(true)} />}
+          <StationUpdate station={station.address} notice={chat.stationUpdate} />
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
             <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · ${t("web-pages.chat.history")}`}>
@@ -355,7 +356,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
-      <StationUpdate notice={chat.stationUpdate} />
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
       <OpenFile.Provider value={(session, file) => openTab(fileTab(session, file.path, file.name))}>

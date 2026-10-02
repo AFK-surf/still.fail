@@ -51,6 +51,7 @@ pub struct Views {
     /// Messages sent from here that the chat does not show yet, per (station, thread), oldest first.
     outbox: RefCell<HashMap<(String, u64), Vec<Value>>>,
     sent: Cell<u64>,
+    update_notices_open: RefCell<HashSet<String>>,
     /// Recent outbox-to-message identities, kept across emissions (the UI may skip the acknowledgement frame).
     delivered: RefCell<VecDeque<((String, u64, u64), String)>>,
     /// Chats asked for here (`chat.create`) by the key the core gave them, until the station has made them and ever
@@ -123,6 +124,7 @@ impl Views {
             views: RefCell::default(),
             outbox: RefCell::default(),
             sent: Cell::new(0),
+            update_notices_open: RefCell::default(),
             delivered: RefCell::default(),
             pending: RefCell::default(),
             archiving: Default::default(),
@@ -443,6 +445,13 @@ impl Views {
         drop(watches);
     }
 
+    pub fn update_notice_open(&self, station: &str, open: bool) {
+        if open { self.update_notices_open.borrow_mut().insert(station.to_string()); }
+        else { self.update_notices_open.borrow_mut().remove(station); }
+        let topics: Vec<_> = self.views.borrow().keys().filter(|t| matches!(t, Topic::Chat { station: s, .. } if s == station)).cloned().collect();
+        for topic in topics { self.store.invalidate(&topic); }
+    }
+
     /// The view's value now; `None` while what it rests on (the workspace, the session) has not been read.
     pub fn compute(&self, view: &Topic) -> Option<Result<Value>> {
         if !self.views.borrow().contains_key(view) {
@@ -456,7 +465,10 @@ impl Views {
                     v["connection"] = crate::looks::link_shown(&v["link"], &self.station_name(station));
                 }
                 let overview = self.ok(Topic::Overview { station: station.clone() });
-                v["stationUpdate"] = crate::looks::station_update(overview.as_ref(), &v);
+                let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
+                let workspace = self.ok(Topic::Workspace { workspace: crate::workspace::of_address(station).to_string() }).unwrap_or(Value::Null);
+                let manager = matches!(workspace["role"].as_str(), Some("owner" | "admin"));
+                v["stationUpdate"] = crate::looks::station_update(overview.as_ref(), &v, prefs["stationUpdatesDismissed"][station].as_str(), self.update_notices_open.borrow().contains(station), manager);
                 v
             }));
         }
@@ -567,6 +579,7 @@ impl Views {
     /// The topics a view is built from, given what is known now.
     fn sources(&self, view: &Topic) -> HashSet<Topic> {
         let mut topics = HashSet::new();
+        if matches!(view, Topic::Chat { .. }) { topics.insert(Topic::Prefs); }
         let (scope, per_station): (&str, fn(String) -> Vec<Topic>) = match view {
             // Its overview says which Slack users are the viewer (a row's last thing said by one is "你").
             Topic::Chats { scope, .. } | Topic::ChatSearch { scope, .. } | Topic::Decisions { workspace: scope } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
@@ -3035,7 +3048,7 @@ mod tests {
             t.read(&mut ui, 1).await;
             // Its thread and its messages are asked for at once.
             // And its workspace, which says whether the station is online.
-            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
+            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace(), Topic::Prefs]));
             assert!(ui.value.is_none(), "nothing before the thread is read");
 
             let now = t.host.now_ms();
@@ -3172,7 +3185,7 @@ mod tests {
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chat { station: "ws/a".into(), thread: None, session: Some("k".into()) });
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
+            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/a"), link("ws/a"), workspace(), Topic::Prefs]));
             t.set(session_of("ws/a", "k"), json!({"session": full_session("k", json!({})), "threads": [slack_thread(3)], "turns": [turn("t1")]}));
             t.read(&mut ui, 1).await;
             assert!(ui.value.is_none(), "its title is the station's: it waits for the items");

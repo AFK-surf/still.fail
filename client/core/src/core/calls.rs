@@ -53,6 +53,7 @@ pub(crate) enum Call {
     HistoryOlder { station: String, key: String },
     /// The ways to a station measured now (its card's 重新测量: mesh.rs `Mesh::remeasure`).
     StationMeasure { station: String },
+    StationUpdateNotice { station: String, action: String, version: Option<String> },
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String, thumb: bool, progress: bool },
@@ -111,7 +112,7 @@ impl Call {
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
             Call::DecisionAnswer { station, .. } | Call::DecisionReply { station, .. } | Call::DecisionDefer { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatNewer { station, .. } | Call::ChatLatest { station, .. } | Call::ChatPlace { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
-            Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } | Call::StationMeasure { station } => Some(station),
+            Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } | Call::StationMeasure { station } | Call::StationUpdateNotice { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
             Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
             Call::DraftPut { station, .. } | Call::DraftGet { station, .. } | Call::ChatRef { station, .. } => Some(station),
@@ -382,6 +383,16 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
                 return Err(CoreError::invalid(t!("core-misc.params.empty_reply")));
             }
             Call::DecisionReply { station: p.station, thread: p.thread, seq: p.seq, text: p.text.trim().to_string(), attachments: json!(p.attachments), quotes: json!(p.quotes) }
+        }
+        "station.updateNotice" => {
+            #[derive(Deserialize)]
+            struct P { station: String, action: String, #[serde(default)] version: Option<String> }
+            let p: P = read(params)?;
+            StationAddr::parse(&p.station)?;
+            if !matches!(p.action.as_str(), "open" | "close" | "dismiss") || (p.action == "dismiss" && p.version.as_ref().is_none_or(|v| v.is_empty() || v.len() > 200)) {
+                return Err(CoreError::invalid("参数不对：更新提示的操作或版本无效"));
+            }
+            Call::StationUpdateNotice { station: p.station, action: p.action, version: p.version }
         }
         "decision.defer" => {
             #[derive(Deserialize)]
