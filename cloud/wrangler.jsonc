@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   // still.fail cloud's API (src/index.ts). Template; deploy.py copies it to the ignored wrangler.local.json with the
   // account id. still.fail cloud is five Workers (deploy.py deploys each only when it changed):
-  //   ember-cloud    this one: the API, on the paths below
+  //   stillfail-cloud this one: the API, on the paths below
   //   ember-relay    the relay (wrangler.relay.jsonc)
   //   ember-web      the web app, static, on PUBLIC_ORIGIN's Custom Domain (wrangler.web.jsonc)
 //   ember-web-beta the same files, on BETA_ORIGIN's: the test channel (wrangler.web-beta.jsonc)
@@ -12,9 +12,9 @@
   // Workers and every other path the static ones.
   // Each host has its new name (still.fail) and its old one (3720.org), both bound for good (docs/rename-still-fail.md):
   // PUBLIC_ORIGIN and ADMIN_ORIGIN are the new ones, which every link is made with; the *_ALIASES the old ones,
-  // answered the same (src/compat.ts). The Workers, Durable Objects, bucket and secrets keep their names from before
-  // the rename: renaming them would make new ones, empty.
-  "name": "ember-cloud",
+  // answered the same (src/compat.ts). migrate-workers.py transfers existing Durable Objects before a Worker rename;
+  // namespace IDs and signing keys must remain unchanged. The release bucket migrates separately.
+  "name": "stillfail-cloud",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-08",
   "compatibility_flags": ["nodejs_compat"],
@@ -69,10 +69,9 @@
       { "name": "TELEMETRY_LIMITS", "class_name": "TelemetryLimiter" },
     ],
   },
+  // Fresh installs create these. Existing production namespaces were transferred with the same
+  // stillfail-v1 tag by migrate-workers.py before route cutover; never replay the old Worker's migrations here.
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Relay", "DiscoveryRecord", "Account", "Directory", "LoginAttempt", "LoginLimiter", "RelayBudget"] },
-    { "tag": "v2", "new_sqlite_classes": ["TelemetryLimiter"] },
-    // The relay moved to ember-relay; stations and devices find each other by the Mainline DHT, not /pkarr.
-    { "tag": "v3", "deleted_classes": ["Relay", "RelayBudget", "DiscoveryRecord"] },
+    { "tag": "stillfail-v1", "new_sqlite_classes": ["Account", "Directory", "LoginAttempt", "LoginLimiter", "TelemetryLimiter"] },
   ],
 }
