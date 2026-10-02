@@ -791,13 +791,14 @@ impl Hub {
         };
         // A chat someone pinned stays in the lists until put away by hand.
         let pinned = self.store.pinned_sessions()?;
+        let kept = self.store.kept_chats(None)?;
         for s in self.store.list_sessions()? {
             if s.archived_at.is_some() || !idle(&[Some(s.last_active_at), s.shown_at]) || bound.contains_key(&s.key) || pinned.contains(&s.key) || busy(&s.key)? {
                 continue;
             }
             let mut unheard = false;
             for t in self.store.session_threads(&s.key)? {
-                unheard |= unread(&t.thread)?;
+                unheard |= kept.contains(&t.thread.id) || unread(&t.thread)?;
             }
             if unheard {
                 continue;
@@ -807,7 +808,7 @@ impl Hub {
         }
         for t in self.store.chats_of_their_own()? {
             let said = self.store.last_message(t.id)?.map(|m| m.created_at);
-            if !idle(&[Some(t.created_at), said, t.shown_at]) || unread(&t)? {
+            if kept.contains(&t.id) || !idle(&[Some(t.created_at), said, t.shown_at]) || unread(&t)? {
                 continue;
             }
             let mut working = false;
@@ -1298,6 +1299,7 @@ impl Hub {
                     "type": "object",
                     "properties": {
                         "to": to.clone(),
+                        "withdraw": { "type": "string", "description": "Withdraw your own answer card by its message ts when the question is resolved or obsolete. Use only to and withdraw; this sends no message, preserves the original post and does not finish your work. Then continue and record the correct ending state." },
                         "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written). With a card: what it asks and the facts it turns on, so it can be answered from this message alone." },
                         "kind": { "type": "string", "enum": ["all_done", "need_human"], "description": "Omit for a progress update. all_done: the chat has nothing unfinished at all (no branch left unmerged, no open question, nothing waiting for a yes); give done. need_human: a person has to give, do or decide something, or answer an open question (a card you posted included); give need. (need_decision, from before cards, is still taken: options, the turn ends need_human.)" },
                         "need": { "type": "string", "description": "For need_human (required): what the person has to give, do or decide, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key, 选统计口径); to verify something, where, how and what to look at; work of yours still running, after the ask (e.g. 选统计口径；CI 还在跑)." },
@@ -1556,6 +1558,17 @@ impl Hub {
     }
 
     async fn chat_post(&self, key: &str, args: &Map<String, Value>) -> Result<String> {
+        if let Some(withdraw) = args.get("withdraw") {
+            if args.keys().any(|k| k != "to" && k != "withdraw") {
+                bail!("withdraw uses only to and withdraw; post updates and record your ending separately");
+            }
+            let ts = withdraw.as_str().filter(|s| !s.trim().is_empty()).ok_or_else(|| anyhow!("withdraw must be your question's message ts"))?;
+            let thread = self.target(key, args.get("to"))?;
+            if !self.store.withdraw_card(key, thread.thread.id, ts)? {
+                bail!("withdraw must name your own message with a card in this conversation");
+            }
+            return Ok("Withdrew the answer card; its message is kept. Continue your work and record the appropriate ending state.".into());
+        }
         let text = args.get("text").map(js_string).unwrap_or_default().trim().to_string();
         let mut paths: Vec<String> = args.get("files").and_then(Value::as_array).map(|a| a.iter().map(js_string).collect()).unwrap_or_default();
         let given = state_arg(args.get("kind"))?;

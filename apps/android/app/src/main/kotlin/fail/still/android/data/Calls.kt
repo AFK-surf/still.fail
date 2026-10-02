@@ -229,6 +229,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Sets a decision aside on this device (待定): last on the decisions page, still pending; nothing is sent. */
     suspend fun deferDecision(thread: Long, seq: Long) { op("decision.defer") { put("thread", thread); put("seq", seq) } }
     /** Dismisses a decision for the viewer, on every device of theirs: off their list, still pending for others. */
+    suspend fun keepChat(thread: Long) { ops.chatKeep(thread) }
     suspend fun dismissDecision(thread: Long, seq: Long) { ops.decisionDismiss(thread, seq) }
 
     // ── the archive (web/src/pages/Archive.tsx) ──

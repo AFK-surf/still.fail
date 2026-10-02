@@ -115,6 +115,9 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
                 None => Ok(fallback),
             }
         })(),
+        // Keep this chat and stop offering to archive it, on every device of this viewer.
+        // @params thread:number
+        "chat.keep" => (|| op("PUT", Ok(format!("/threads/{}/keep", p.u64("thread")?)), None, Effect::Thread { archived: false }))(),
         // A chat named by hand (an empty name: named by its first message again): its thread, or an agent with no chat yet.
         // @params session?:string title?:string thread?:number
         "chat.rename" => (|| match p.0.get("thread").and_then(Value::as_u64) {

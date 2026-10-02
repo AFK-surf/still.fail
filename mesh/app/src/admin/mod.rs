@@ -858,6 +858,10 @@ impl AdminApi {
                         self.deps.store.set_thread_title(thread_id, title.as_deref())?;
                         return ok(self.thread(thread_id, viewer)?);
                     }
+                    (Some("keep"), "PUT") => {
+                        self.deps.store.keep_chat(&viewer.id(), thread_id)?;
+                        return ok(json!({ "kept": true }));
+                    }
                     // A card the viewer will not take up (its post's entry `n`): off their list, on every device of theirs;
                     // still pending for everyone else.
                     (Some("dismissed"), "PUT") => {

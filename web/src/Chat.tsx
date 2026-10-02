@@ -38,7 +38,7 @@ import * as dockCss from "./dock.css.ts";
 import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast, useAct } from "./toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
@@ -850,12 +850,20 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
 function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () => void }) {
   const station = useStation().address;
   const busy = useDoing("chat.archive", { station, thread, archived: true });
+  const keeping = useDoing("chat.keep", { station, thread });
+  const api = useApi();
+  const act = useAct();
   return (
-    <div className={decisionsCss.options}>
-      <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy}
+    <div className={decisionsCss.archiveOptions}>
+      <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
         aria-busy={busy || undefined} onClick={onArchive}>
         <span className={decisionsCss.optionLabel}>归档这个 chat</span>
         {busy && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
+      </button>
+      <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
+        aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), "停止归档提醒", "已保留，不再提醒归档")}>
+        <span className={decisionsCss.optionLabel}>不再提醒归档</span>
+        {keeping && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
       </button>
     </div>
   );

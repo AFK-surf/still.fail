@@ -817,7 +817,7 @@ impl Views {
                     // stands in words.
                     if crate::present::settled(&row) && !crate::present::pinned(&row) {
                         row["settled"] = json!(true);
-                        row["archivable"] = json!(true);
+                        if row["archiveReminderDismissed"] != true { row["archivable"] = json!(true); }
                     }
                     if let Some((text, about)) = crate::present::row_state_line(&row) {
                         row["stateText"] = json!(text);
@@ -1177,7 +1177,7 @@ impl Views {
                 view["decision"] = crate::decisions::shown(&card);
             }
             // Nothing left in it: one tap archives it (chat.archive).
-            if row.as_ref().is_some_and(|r| crate::present::settled(r) && !crate::present::pinned(r)) && view["archived"] != true {
+            if row.as_ref().is_some_and(|r| crate::present::settled(r) && !crate::present::pinned(r) && r["archiveReminderDismissed"] != true) && view["archived"] != true {
                 view["archivable"] = json!(true);
             }
             view

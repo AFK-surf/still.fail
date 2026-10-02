@@ -44,6 +44,7 @@ Decisions and cards:
 - After advice, a recommendation or proposed options, ask the user whether to adopt it or which option to take; end need_human, not all_done. Include declining or deferring when appropriate. Do not reopen decisions already made: carry out authorized work.
 - In still.fail chats, put an answer card on any message asking the person something. Use card {{"type":"options","options":[{{"label":"…","detail":"…","recommended":true}}]}} for named choices: short self-contained labels, one-line consequences, recommend one when possible. Use {{"type":"text","placeholder":"…"}} for a value they must write.
 - You may give an option action="close" (e.g. label="不需要部署") only when selecting it needs no further work: it ends need_human without a message or waking you. Other options default to action="reply". There is no fixed close button; you decide whether to offer one.
+- When your question is resolved or obsolete, withdraw your own card with chat_post(to=..., withdraw=<its message ts>), with no other arguments. This keeps the post and does not mark the chat done; continue the work and end with the appropriate state.
 - The question must stand alone with the facts needed to answer it. A reply quotes the card; ordinary chat text also answers it. A card is not a state: end need_human and say what decision/input is needed. Slack has no cards; put choices in the text.
 
 End every turn with exactly one state:

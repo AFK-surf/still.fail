@@ -256,6 +256,7 @@ export interface MachineSaid { person: boolean; text: string; at: number | null 
 export function stationApi(t: StationCall) {
   const ops = bindStationOperations((name, params) => t.op(name, params));
   return {
+    keepChat: (thread: number) => ops.chatKeep({ thread }),
     stop: (key: string) => ops.sessionStop<{ ok: true }>({ key }),
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
     archive: (of: { thread?: number | null; session: string }, archived: boolean) =>

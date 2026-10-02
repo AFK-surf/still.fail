@@ -2261,3 +2261,41 @@ fn cards_keep_explicit_assignees_and_accept_legacy_cards() {
         }
     }
 }
+
+#[tokio::test]
+async fn an_agent_can_withdraw_its_own_card_without_posting_or_finishing_work() {
+    let r = setup();
+    let (key, thread) = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
+    let to = format!("EMBER/{}", thread.thread_ts);
+    r.call(&key, "chat_post", json!({"to": to, "text": "保留吗？", "card": {"type": "text"}})).await.unwrap();
+    let first = r.said(thread.id).last().unwrap().clone();
+    assert!(!r.store.withdraw_card("someone-else", thread.id, &first.ts).unwrap());
+    assert!(r.call(&key, "chat_post", json!({"to": to, "withdraw": first.ts, "text": "混在一起"})).await.is_err());
+    assert!(r.store.pending_card(thread.id).unwrap().is_some());
+    for _ in 0..2 {
+        r.call(&key, "chat_post", json!({"to": to, "withdraw": first.ts})).await.unwrap();
+    }
+    assert!(r.store.pending_card(thread.id).unwrap().is_none());
+    assert_eq!(r.said(thread.id).len(), 1, "no new message or deleted question");
+    r.call(&key, "chat_post", json!({"to": to, "text": "另一个问题？", "card": {"type": "options", "options": [{"label": "好"}]}})).await.unwrap();
+    r.call(&key, "chat_post", json!({"to": to, "withdraw": first.ts})).await.unwrap();
+    assert!(r.store.pending_card(thread.id).unwrap().is_some(), "retry cannot withdraw the newer card");
+}
+
+#[tokio::test]
+async fn kept_chats_survive_idle_archiving_but_can_be_archived_by_hand() {
+    let r = setup();
+    let (key, thread) = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
+    r.store.keep_chat("alice", thread.id).unwrap();
+    r.hub.auto_archive(now_ms() + 3 * 86_400_000).unwrap();
+    assert_eq!(r.session(&key).archived_at, None);
+    assert_eq!(r.store.get_thread(thread.id).unwrap().unwrap().hidden_at, None);
+    let second = r.hub.open_chat(&key, "alice", None).unwrap();
+    r.store.keep_chat("alice", second.id).unwrap();
+    r.hub.auto_archive(now_ms() + 3 * 86_400_000).unwrap();
+    assert_eq!(r.store.get_thread(second.id).unwrap().unwrap().hidden_at, None);
+    r.hub.archive_chat(second.id, true).unwrap();
+    assert!(r.store.get_thread(second.id).unwrap().unwrap().hidden_at.is_some());
+    r.hub.archive_chat(thread.id, true).unwrap();
+    assert!(r.session(&key).archived_at.is_some());
+}

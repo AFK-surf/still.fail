@@ -59,6 +59,11 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["session"] = JsonPrimitive(session)
         return call("chat.archive", JsonObject(values))
     }
+    suspend fun chatKeep(thread: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["thread"] = JsonPrimitive(thread)
+        return call("chat.keep", JsonObject(values))
+    }
     class ChatRenameFields : OperationFields() {
         var session: String? by field<String>("session") { JsonPrimitive(it) }
         var title: String? by field<String>("title") { JsonPrimitive(it) }

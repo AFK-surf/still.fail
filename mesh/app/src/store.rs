@@ -791,7 +791,13 @@ CREATE TABLE IF NOT EXISTS dismissed (
   at INTEGER NOT NULL,
   PRIMARY KEY (viewer, thread, n)
 );
--- A person closed a card without replying or waking its agent.
+-- A viewer keeps a chat instead of receiving archive reminders.
+CREATE TABLE IF NOT EXISTS kept_chats (
+  viewer TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  PRIMARY KEY (viewer, thread)
+);
+-- A card closed by its viewer or withdrawn by its author.
 CREATE TABLE IF NOT EXISTS closed_cards (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,
@@ -1404,6 +1410,7 @@ impl Store {
                 tx.execute("DELETE FROM items WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM dismissed WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM closed_cards WHERE thread = ?", [thread])?;
+                tx.execute("DELETE FROM kept_chats WHERE thread = ?", [thread])?;
                 tx.execute("DELETE FROM threads WHERE id = ?", [thread])?;
             }
             tx.commit()?;
@@ -1929,6 +1936,22 @@ impl Store {
         })
     }
 
+    /// Chats kept instead of offered for archiving. None selects every viewer, for automatic archiving.
+    pub fn kept_chats(&self, viewer: Option<&str>) -> Result<HashSet<i64>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1")?;
+            Ok(stmt.query_map([viewer], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
+    pub fn keep_chat(&self, viewer: &str, thread: i64) -> Result<()> {
+        self.with(|i, changes| {
+            i.db.execute("INSERT OR IGNORE INTO kept_chats (viewer, thread) VALUES (?, ?)", params![viewer, thread])?;
+            changes.push(StoreChange::Dismissed(viewer.to_string()));
+            Ok(())
+        })
+    }
+
     // ── cards ─────────────────────────────────────────────────────────────
 
     /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long
@@ -1983,6 +2006,20 @@ impl Store {
             i.db.execute("INSERT OR IGNORE INTO dismissed (viewer, thread, n, at) VALUES (?, ?, ?, ?)", params![viewer, thread, n, now_ms()])?;
             changes.push(StoreChange::Dismissed(viewer.to_string()));
             Ok(())
+        })
+    }
+
+    /// The author withdraws one exact card, without deleting its post or declaring the chat complete.
+    pub fn withdraw_card(&self, agent: &str, thread: i64, ts: &str) -> Result<bool> {
+        self.with(|i, changes| {
+            let n: Option<i64> = i.db.query_row(
+                "SELECT n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND (card IS NOT NULL OR options IS NOT NULL)",
+                params![thread, ts, agent], |r| r.get(0),
+            ).optional()?;
+            let Some(n) = n else { return Ok(false) };
+            i.db.execute("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", params![thread, n, agent, now_ms()])?;
+            changes.push(StoreChange::Thread { id: thread, entries: vec![] });
+            Ok(true)
         })
     }
 

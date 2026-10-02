@@ -457,6 +457,7 @@ impl AdminApi {
         let mut rows = Vec::new();
         // The decisions the viewer said they will not take up.
         let dismissed = store.dismissed(&viewer.id())?;
+        let kept = store.kept_chats(Some(&viewer.id()))?;
         for t in threads.iter().filter(|t| t.thread.surface == STILLFAIL_SURFACE && listed(t) && !in_chat(t).is_empty()) {
             let from = t.sessions.iter().find_map(|m| origins.get(&m.session).copied());
             let agents: Vec<Value> = in_chat(t).iter().map(|key| agent(key)).collect();
@@ -496,6 +497,7 @@ impl AdminApi {
                 "creator": creator,
                 "people": people,
             });
+            row["archiveReminderDismissed"] = json!(kept.contains(&t.thread.id));
             if let Some(client) = key.as_str().and_then(|k| self.deps.hub.client_key(k)) {
                 row["clientKey"] = json!(client);
             }

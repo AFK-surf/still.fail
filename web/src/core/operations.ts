@@ -6,6 +6,7 @@ export interface OperationParams {
   "session.delete": { key: string };
   "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
+  "chat.keep": { thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
   "decision.dismiss": { thread: number; seq: number };
@@ -97,6 +98,7 @@ export function bindStationOperations(call: Call) {
     sessionDelete: <T = unknown>(params: OperationParams["session.delete"]) => call("session.delete", params) as Promise<T>,
     sessionSettings: <T = unknown>(params: OperationParams["session.settings"]) => call("session.settings", params) as Promise<T>,
     chatArchive: <T = unknown>(params: OperationParams["chat.archive"]) => call("chat.archive", params) as Promise<T>,
+    chatKeep: <T = unknown>(params: OperationParams["chat.keep"]) => call("chat.keep", params) as Promise<T>,
     chatRename: <T = unknown>(params: OperationParams["chat.rename"] = {}) => call("chat.rename", params) as Promise<T>,
     chatPin: <T = unknown>(params: OperationParams["chat.pin"]) => call("chat.pin", params) as Promise<T>,
     decisionDismiss: <T = unknown>(params: OperationParams["decision.dismiss"]) => call("decision.dismiss", params) as Promise<T>,

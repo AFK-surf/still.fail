@@ -10,6 +10,8 @@ const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
 
 export const options = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "6px", marginTop: "6px" });
 
+export const archiveOptions = style([options, { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }]);
+
 export const option = style({
   position: "relative", display: "grid", gap: "0", width: "100%", boxSizing: "border-box", padding: "9px 14px",
   border: "0", borderRadius: vars.rField, cornerShape: vars.cornerShape, background: chip, color: vars.text,

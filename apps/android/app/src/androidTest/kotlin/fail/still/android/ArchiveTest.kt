@@ -263,6 +263,16 @@ class ArchiveTest {
         assertTrue("button removed after exit", rule.onAllNodesWithText("归档这个 chat").fetchSemanticsNodes().isEmpty())
     }
 
+    @Test fun chatKeepStaysInChat() {
+        val h = chat()
+        val before = h.app.stack.toList()
+        rule.onNodeWithText("不再提醒归档").performClick()
+        rule.waitForIdle()
+        assertTrue(h.fake.calls.any { it.first == "chat.keep" })
+        assertTrue(h.fake.calls.none { it.first == "chat.archive" })
+        assertEquals(before, h.app.stack.toList())
+    }
+
     @Test fun chatButtonArchives() {
         val h = chat()
         val buttons = rule.onAllNodesWithText("归档这个 chat").fetchSemanticsNodes()

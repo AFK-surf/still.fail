@@ -12,6 +12,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (4, "Station instructions and built-in skill wording are shorter; the same routing, decision, completion and safety rules still apply. Use the current instructions file and skill files when you need details."),
     (5, "Options may specify action=close to end need_human without a reply or waking you; default is reply. Offer this only when that choice needs no further work; there is no fixed close button."),
     (6, "Set card.assignee to the decision maker’s email. Only that person sees the card in 奏; anyone may still answer in the chat. Legacy unassigned cards remain in the chat, labelled unassigned."),
+    (7, "chat_post now accepts only to + withdraw (your question’s message ts) to remove your own resolved or obsolete answer card. It preserves the post and does not mark work complete; continue and record the appropriate ending state."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

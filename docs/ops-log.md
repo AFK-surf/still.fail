@@ -23,6 +23,7 @@
 
 - Preview 资源加载圆环：发 web（含新版 wasm core）、桌面和 Android；无 station/cloud 协议改动。统计在各客户端 core，旧客户端维持原样，新 UI 遇到旧 core 不显示圆环。上线后打开服务预览，刷新并 hover 圆环（手机点开），核对加载中、完成和 404 明细；百分比按已发现的服务请求完成数，外部 CDN 请求不在统计内。
 - 奏折按 agent 指定的 `card.assignee`（邮箱）筛选：先发 station，再发 web/桌面和 Android 的新 core/UI。旧 station 会丢弃归属字段，新 core 将其视为未指定；旧客户端仍可能显示所有人的卡片。历史未指定卡片保留在 chat，显示「尚未指定决策人」，由 agent 重发带负责人卡片后进入对应人的奏折。上线用两账号检查各自奏折列表/计数和对方 chat 代答；迁移说明 6 提醒老 agent。
+- 保留 chat / 撤回奏折（chat-dismiss-archive-reminder）：先更新 station，再更新 web/桌面/Android core。新增 keep 接口和幂等 kept_chats 表，按用户跨设备停止归档提醒，任何人保留的 chat 不自动归档，仍可手动归档。旧 station 对 keep 返回错误，客户端显示失败且不隐藏入口，不做本地假成功。chat_post 新增仅与 to 搭配的 withdraw（自己的提问 ts），只撤卡片不删除消息或结束工作；迁移说明 7 通知旧 agent。上线验点击保留后跨端无归档提醒、仍可发消息；withdraw 后奏折消失且原消息仍在。
 
 - Station 概览精简（station-summary-alerts）：发布 web 和桌面端（含同版本 core）；无需更新 station 或迁移数据。概览仅显示异常进度框（边框为已用比例、文字为剩余容量）、网络和可用更新，点击名字查看设备与软件详情。一键更新由 core 调旧版已有的单项更新接口，先运行时后 station；失败则停止后续项目。新 Meter.remaining 为可选字段，旧界面不受影响；移动端布局不变。上线后确认正常指标隐藏、详情可打开、更新失败留在原行。
 - 决策静默选项（dismiss-human-decision）：agent 可给选项标 `action: "close"`（例如「不需要部署」），选后结束对应 need human，不发消息、不唤醒 agent；默认 `reply` 保持原行为。没有固定「无需处理」按钮。先更新 station，再更新 web/桌面/Android core。旧 core 误走普通消息接口时 station 会拒绝该静默选择并提示更新，不会通知 agent；旧 station 的工具 schema 没有新字段，等 station 更新后再提供静默选项。上线后验 agent 同时给「部署」和「不需要部署」（close）：前者正常发消息，后者跨设备清除等待且 agent 无新轮次。

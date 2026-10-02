@@ -1931,3 +1931,19 @@ async fn closing_a_question_clears_its_wait_without_a_message_or_delivery() {
     assert_eq!(t.call("PUT", &path, Some(json!({"n": newest, "option": "不需要部署"}))).await.0, 200);
     assert_eq!(t.store.last_turn(&key).unwrap().unwrap().ending.as_deref(), Some("need_help"));
 }
+
+#[tokio::test]
+async fn keeping_a_chat_suppresses_only_this_viewers_archive_reminder() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({"runtime": "claude"}))).await.1;
+    let thread = made["thread"]["id"].as_i64().unwrap();
+    let row = |rows: Value| rows.as_array().unwrap().iter().find(|r| r["thread"] == thread).unwrap().clone();
+    assert_eq!(row(t.get("/chats").await)["archiveReminderDismissed"], false);
+    for _ in 0..2 {
+        assert_eq!(t.call("PUT", &format!("/threads/{thread}/keep"), None).await.0, 200);
+    }
+    assert_eq!(row(t.get("/chats").await)["archiveReminderDismissed"], true);
+    assert_eq!(row(t.call_as("GET", "/chats", None, dev()).await.1)["archiveReminderDismissed"], false);
+    assert!(t.store.kept_chats(None).unwrap().contains(&thread));
+    assert_eq!(t.store.get_thread(thread).unwrap().unwrap().hidden_at, None);
+}
