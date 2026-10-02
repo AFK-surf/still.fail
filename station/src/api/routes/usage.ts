@@ -32,7 +32,7 @@ const RETIRED = JSON.stringify({
   processes: [],
 });
 
-export const routes = ({ read, host }: Tools): Route[] => {
+export const routes = ({ read, host, agents }: Tools): Route[] => {
   return [
     // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east of
     // UTC), with whom, where and on what.
@@ -44,7 +44,7 @@ export const routes = ({ read, host }: Tools): Route[] => {
         const from = number(r, "from") ?? 0n;
         const tz = number(r, "tz") ?? 0n;
         const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
-        return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped) });
+        return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: agents?.usage.readingAll() ?? true });
       },
     },
     // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat.

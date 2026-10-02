@@ -22,6 +22,7 @@ import { type AgentsDoor, openAgentsDoor } from "../tools/http.ts";
 import { jobTools } from "../tools/jobs.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
+import { UsageCounter } from "../usage/counter.ts";
 import { hubConfig } from "./config.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
@@ -38,7 +39,7 @@ const DRAINED_LIMIT_MS = 300_000;
 /// How long the previous station process is waited for before its sessions are taken up all the same.
 const PREVIOUS_LIMIT_MS = 40_000;
 
-export type AgentsParts = { hub: Hub; jobs: Jobs; remote: Remote; mcp: McpEndpoint; config: ConfigFile };
+export type AgentsParts = { hub: Hub; jobs: Jobs; remote: Remote; mcp: McpEndpoint; config: ConfigFile; usage: UsageCounter };
 
 export class Agents extends Context.Service<Agents, AgentsParts>()("stillfail/Agents") {}
 
@@ -201,6 +202,10 @@ export const AgentsLive = (control: Control) =>
       };
       yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => log.error("hub", "the agents' side did not start", { error: (e as Error).message }))));
 
+      // What the agents spent, read from their transcripts: now, and after each turn ends.
+      const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }) });
+      usage.start();
+
       // Chats idle long enough go to the archive: looked at now and every hour.
       const archiving = setInterval(() => {
         try {
@@ -255,6 +260,7 @@ export const AgentsLive = (control: Control) =>
             await hub.shutdown();
           }
           await jobs.shutdown();
+          await usage.stop();
           if (existsSync(join(run, "hub.json"))) {
             try {
               if (JSON.parse(readFileSync(join(run, "hub.json"), "utf8")).pid === process.pid) rmSync(join(run, "hub.json"), { force: true });
@@ -262,6 +268,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config });
+      return Agents.of({ hub, jobs, remote, mcp, config, usage });
     }),
   );

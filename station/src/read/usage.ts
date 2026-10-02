@@ -1,9 +1,9 @@
 // What the agents spent, as the usage page reads it (GET /usage): admin/views.rs `usage` over usage.rs `summary`,
 // `price_table`, `price`, `cost` and store/usage.rs, with the same JSON field for field.
 //
-// The counting itself (usage.rs `Usage::read`, the transcripts read about once a minute into the `usage` table) is
+// The counting itself (src/usage/counter.ts, usage.rs `Usage::read`: the transcripts read into the `usage` table) is
 // the running station's, not a read: what was counted is read here as it is in the database. `reading` is what the
-// Rust's counter has in its memory (`reading_all`); with nothing known (no read done yet) that is true.
+// counter has in its memory (`readingAll`), given by the asker; not given, it is true (nothing read yet).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
@@ -181,7 +181,8 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 
 /// admin/views.rs `usage`: what the agents spent from `from` until `to` (ms), by day in the asker's time zone
 /// (`utcOffsetMin`), with the threads, people and profiles the rows name. `from`/`to` are i64s, written as such.
-export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint): Json {
+/// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll).
+export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true): Json {
   const rows = summary(s, from, to, utcOffsetMin);
   const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
   const threads: Record<string, Json> = {};
@@ -198,7 +199,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     from: i64(from),
     to: i64(to),
     since: usageSince(s),
-    reading: true,
+    reading,
     prices: priceTable(lang),
     rows,
     threads,
