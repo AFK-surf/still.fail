@@ -20,7 +20,7 @@ def walk(x, y, path):
             found.append(f"{path}: {len(x)} items vs {len(y)}")
         for i, (p, q) in enumerate(zip(x, y)):
             walk(p, q, f"{path}[{i}]")
-    elif x != y or type(x) is bool != (type(y) is bool):
+    elif x != y or (type(x) is bool) != (type(y) is bool):
         found.append(f"{path}: {json.dumps(x, ensure_ascii=False)[:80]} vs {json.dumps(y, ensure_ascii=False)[:80]}")
 
 walk(a, b, "")
