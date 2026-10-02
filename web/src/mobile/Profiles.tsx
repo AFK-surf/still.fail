@@ -193,7 +193,7 @@ function ProfilePage({ p }: { p: Profile }) {
           <>
             <SectionHeader title={t("web-mobile.history.account")} start={24} />
             <ListCard>
-              <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true,
+              <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
                 hint: t("web-mobile.profiles.recheckHintFull"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
                 <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
                 <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
@@ -228,7 +228,7 @@ function ProfileRecovery({ p }: { p: Profile }) {
   const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
   const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
   const run = () => {
-    if (issue.action === "key") ask(app, { title: t("web-mobile.profiles.newKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true,
+    if (issue.action === "key") ask(app, { title: t("web-mobile.profiles.newKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
       hint: t("web-mobile.profiles.recheckHint"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }) });
     else if (issue.action === "env") app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
     else if (issue.action === "quota") act(api.refreshQuota(p.id), t("web-mobile.profiles.what.quota"), t("web-mobile.profiles.quotaUpdated"));
@@ -265,15 +265,15 @@ function ProfileMenu({ p }: { p: Profile }) {
       <SheetGrab />
       <SheetHead title={p.name} />
       <div className={sheetsCss.mSheetScroll}>
-        {!p.machine && <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.profiles.renameTitle"), value: p.name, placeholder: t("web-mobile.workspaces.name"), action: t("common.save"), run: (name) => api.putProfile(p.id, { name }).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />}
+        {!p.machine && <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.profiles.renameTitle"), value: p.name, placeholder: t("web-mobile.workspaces.name"), action: t("common.save"), atOnce: "web-main.rename.failed", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />}
         <PickRow label={t("web-mobile.profiles.recheck")} busy={checking} failed={checkFailed} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast(t("web-mobile.profiles.checked")), failed("web-mobile.profiles.checkFailed")); }} />
         <PickRow label={t("web-mobile.profiles.refreshQuota")} busy={refreshing} failed={quotaFailed} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast(t("web-mobile.profiles.quotaRefreshed")), failed("web-mobile.profiles.quotaFailed")); }} />
         <PickRow label={p.usedBy.length ? t("web-mobile.profiles.inUse", { action: p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete") }) : p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete")} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
-          title: t("web-mobile.profiles.disableAsk", { name: p.name }), text: t("web-mobile.profiles.disableText", { name: NAME }), action: t("web-mobile.connects.disable"), danger: true,
-          run: () => api.deleteProfile(p.id).then(() => { app.toast(t("web-mobile.profiles.disabled")); app.pop(); }),
+          title: t("web-mobile.profiles.disableAsk", { name: p.name }), text: t("web-mobile.profiles.disableText", { name: NAME }), action: t("web-mobile.connects.disable"), danger: true, atOnce: "web-mobile.connects.disableFailed",
+          run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.disabled"))); },
         } : {
-          title: t("web-mobile.archive.deleteAsk", { title: p.name }), text: t("web-mobile.profiles.deleteText", { name: NAME }), action: t("web-mobile.profiles.delete"), danger: true,
-          run: () => api.deleteProfile(p.id).then(() => { app.toast(t("web-mobile.profiles.deleted")); app.pop(); }),
+          title: t("web-mobile.archive.deleteAsk", { title: p.name }), text: t("web-mobile.profiles.deleteText", { name: NAME }), action: t("web-mobile.profiles.delete"), danger: true, atOnce: "web-main.chat.deleteFailed",
+          run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.deleted"))); },
         })} />
       </div>
     </>
@@ -326,7 +326,7 @@ function Quota({ p }: { p: Profile }) {
         {!!windows.length && <div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div>}
         {p.quota?.creditsText && <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.credits")}</span><span className={listsCss.mRowNote}>{p.quota.creditsText}</span></ListRow>}
         {p.quota?.resetCount != null && <ListRow onClick={p.quota.resetCount > 0 && !busy ? () => confirm(app, {
-          title: t("web-mobile.profiles.resetAsk"), text: t("web-mobile.profiles.resetText", { name: p.name, reset: p.quota?.resetText ?? "" }), action: t("web-mobile.profiles.resetAction"),
+          title: t("web-mobile.profiles.resetAsk"), text: t("web-mobile.profiles.resetText", { name: p.name, reset: p.quota?.resetText ?? "" }), action: t("web-mobile.profiles.resetAction"), atOnce: "web-mobile.profiles.resetFailed",
           run: () => api.resetQuota(p.id).then(() => app.toast(t("web-mobile.profiles.resetDone"))),
         }) : undefined}>
           <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("web-mobile.profiles.resets")}</span><span className={listsCss.mRowNote}>{p.quota.resetText}</span></span>
@@ -558,7 +558,7 @@ function EnvSheet({ p }: { p: Profile }) {
         <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setRows([...rows, { row: next.current++, key: "", value: "", masked: null, original: null }])}>{t("web-mobile.profiles.addEnv")}</button>
         <div className={sheetsCss.mFormActions}>
           <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
-          <Button label={t("common.save")} primary busy={busy} onClick={() => { api.putProfile(p.id, { env: patch() }).then(() => { app.toast(t("web-mobile.profiles.saved")); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
+          <Button label={t("common.save")} primary busy={busy} onClick={() => { app.sheet(null); api.putProfile(p.id, { env: patch() }).then(() => app.toast(t("web-mobile.profiles.saved")), (e: Error) => app.toast(t("web-mobile.profiles.saveFailed", { error: e.message }))); }} />
         </div>
       </div>
     </>

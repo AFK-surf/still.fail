@@ -231,12 +231,12 @@ function StationMenu({ s }: { s: StationView }) {
       <SheetGrab />
       <SheetHead title={s.name} />
       <div className={sheetsCss.mSheetScroll}>
-        <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.stations.renameTitle"), value: s.name, placeholder: t("web-mobile.stations.renamePlaceholder"), action: t("common.save"),
+        <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.stations.renameTitle"), value: s.name, placeholder: t("web-mobile.stations.renamePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />
         <PickRow label={t("web-mobile.stations.remove")} accent onClick={() => confirm(app, {
           title: t("web-mobile.stations.removeAsk", { name: s.name }), action: t("web-mobile.stations.removeAction"), danger: true,
-          text: t("web-mobile.stations.removeText", { name: NAME }),
-          run: () => cloud.removeStation(me.sub, app.entry.id, s.id).then(() => { app.toast(t("web-mobile.stations.removed")); app.pop(); }),
+          text: t("web-mobile.stations.removeText", { name: NAME }), atOnce: "web-mobile.workspace.removeFailed",
+          run: () => { app.pop(); return cloud.removeStation(me.sub, app.entry.id, s.id).then(() => app.toast(t("web-mobile.stations.removed"))); },
         })} />
       </div>
     </>

@@ -53,8 +53,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import fail.still.android.ui.QuotaRings
-import fail.still.core.CoreException
-import kotlinx.coroutines.launch
 /**
  * The chat itself: where it came from, who started it and takes part,
  * and its agents (each leads to its history).
@@ -139,17 +137,12 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 InfoList {
                     InfoRow(onClick = {
                         val session = view!!.agents.firstOrNull()?.session?.key ?: (of as? ChatOf.Session)?.key ?: ""
-                        val archive = {
-                            app.sheet = null
-                            app.pop()
-                            app.scope.launch {
-                                try { app.api(station).setArchived(thread.id, session, true); app.toast = t("android-chat.archived") }
-                                catch (e: CoreException) { app.toast = t("android-chat.info.archive.failed", "error" to e.message) }
-                            }
-                        }
+                        val archive: suspend () -> Unit = { app.api(station).setArchived(thread.id, session, true); app.toast = t("android-chat.archived") }
                         // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+                        // Either way the sheet closes and the page goes at once; a toast says if it could not.
                         val watch = view.watch
-                        if (watch != null) confirm(app, t("android-chat.archive.ask", "title" to view.title), watch.ask, t("android-chat.archive")) { archive() } else archive()
+                        if (watch != null) confirm(app, t("android-chat.archive.ask", "title" to view.title), watch.ask, t("android-chat.archive"), what = t("android-chat.archive.verb"), then = app::pop, run = archive)
+                        else { app.sheet = null; app.pop(); app.act(t("android-chat.archive.verb"), run = archive) }
                     }) {
                         IconIn(Icons.Archive, 16.dp, C.ink)
                         Text(t("android-chat.info.archive"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))

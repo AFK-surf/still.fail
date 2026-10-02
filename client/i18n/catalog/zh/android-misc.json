@@ -62,6 +62,7 @@
   "android-misc.archive.deleteNamed": "删除「{title}」",
   "android-misc.archive.deleteText": "它的会话、对话记录和 workspace 目录都会删掉，不能恢复。",
   "android-misc.archive.deleteTitle": "删除「{title}」？",
+  "android-misc.archive.deleteWhat": "删除",
   "android-misc.archive.deleted": "已删除",
   "android-misc.archive.note": "手动归档的对话，和空闲超过一天、已经做完的对话（没在跑、没停在 block、没有未读）。对话里有新消息时会自动回到列表。",
   "android-misc.archive.restoreNamed": "恢复「{title}」",

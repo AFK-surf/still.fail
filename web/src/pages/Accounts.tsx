@@ -161,7 +161,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(profile.name);
   const save = useAction((input: ProfileInput) => api.putProfile(profile.id, input));
-  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast(profile.machine ? t("web-pages.profiles.disabled") : t("web-pages.profiles.deleted")); navigate(profilesPage(station)); });
+  const remove = useAction(() => api.deleteProfile(profile.id), () => toast(profile.machine ? t("web-pages.profiles.disabled") : t("web-pages.profiles.deleted")));
   // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
   const removal = profile.machine
     ? { item: t("web-pages.profiles.disable"), title: t("web-pages.profiles.disableConfirm", { name: profile.name }), action: t("web-pages.profiles.disable"), description: t("web-pages.profiles.disableBody", { name: NAME, runtime: MACHINE_RUNTIME[profile.runtime] }) }
@@ -238,11 +238,12 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
       </Section>
 
       {profile.machine ? <MachineAccount profile={profile} /> : <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
-        onSave={(input, done) => saveThen(input, () => { toast(t("web-pages.profiles.savedChecking")); done(); })} busy={save.busy} />}
+        onSave={(input) => saveThen(input, () => toast(t("web-pages.profiles.savedChecking")))} busy={save.busy} />}
 
       {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast(t("web-pages.profiles.saved")))} busy={save.busy} />}
-      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
-        title={removal.title} action={removal.action} description={removal.description} error={remove.error?.message} />
+      {/* Gone from here at once: the list shows it until the station has dropped it, a failure said by toast. */}
+      <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate(profilesPage(station)); void remove.run(); }}
+        title={removal.title} action={removal.action} description={removal.description} />
     </div>
   );
 }
@@ -264,7 +265,7 @@ function MachineAccount({ profile }: { profile: Profile }) {
  * The account itself: its key (shown masked, replaced here — its provider stays, since a profile is that account), or
  * for a subscription, signing in again (as another account, or after it expired).
  */
-function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile; signedIn: boolean; onSave(input: ProfileInput, done: () => void): void; busy: boolean }) {
+function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile; signedIn: boolean; onSave(input: ProfileInput): void; busy: boolean }) {
   const [replacing, setReplacing] = useState(false);
   const [key, setKey] = useState("");
   const keyed = KEYED.has(profile.access.kind);
@@ -279,14 +280,15 @@ function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile;
                 <strong>{profile.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</strong>
                 <span className={`${shellCss.muted} ${shellCss.mono}`}>{profile.access.key || t("web-pages.profiles.notSaved")}</span>
               </div>
-              <Button onClick={() => setReplacing(true)}>{t("web-pages.profiles.replace")}</Button>
+              <Button busy={busy} onClick={() => setReplacing(true)}>{t("web-pages.profiles.replace")}</Button>
             </div>
           ) : (
             <Field label={profile.access.kind === "opencode-go" ? t("web-pages.profiles.newOpencodeKey") : t("web-pages.profiles.newApiKey")} htmlFor="access-key" hint={t("web-pages.profiles.recheckHint")}>
               <div className={additionsCss.inputRow}>
                 <input id="access-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" autoFocus value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder={t("web-pages.profiles.pasteKey")} />
                 <Button variant="ghost" onClick={() => { setReplacing(false); setKey(""); }}>{t("common.cancel")}</Button>
-                <Button variant="primary" disabled={!key} busy={busy} onClick={() => onSave({ access: { kind: profile.access.kind, key } }, () => { setKey(""); setReplacing(false); })}>{t("common.save")}</Button>
+                {/* Closes at once: the button it came from turns until the key is saved. */}
+                <Button variant="primary" disabled={!key} onClick={() => { onSave({ access: { kind: profile.access.kind, key } }); setKey(""); setReplacing(false); }}>{t("common.save")}</Button>
               </div>
             </Field>
           )}
@@ -474,7 +476,7 @@ function QuotaSection({ profile }: { profile: Profile }) {
   const params = { station: station.address, id: profile.id };
   const busy = useDoing("profile.resetQuota", params);
   const failed = useDoingFailed("profile.resetQuota", params);
-  const reset = useAction(async () => { await api.resetQuota(profile.id); setResetting(false); toast(t("web-pages.profiles.quotaReset")); });
+  const reset = useAction(() => api.resetQuota(profile.id), () => toast(t("web-pages.profiles.quotaReset")));
   return (
     <Section title={<>{t("web-pages.profiles.quota")}{quota?.time?.checkedAt && <About>{t("web-pages.profiles.quotaAbout", { ago: quota.time.checkedAt.ago })}</About>}</>}
       actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>{t("web-pages.profiles.refresh")}</Button>}>
@@ -485,8 +487,8 @@ function QuotaSection({ profile }: { profile: Profile }) {
       </p>}
       {failed && <p className={controlsCss.fieldError}>{failed}</p>}
       <Confirm open={resetting} onClose={() => setResetting(false)} title={t("web-pages.profiles.resetConfirm")} action={t("web-pages.profiles.resetAction")}
-        description={t("web-pages.profiles.resetBody", { name: profile.name, n: quota?.resetCount ?? 0 })} busy={busy}
-        onConfirm={() => void reset.run()} error={reset.error?.message} />
+        description={t("web-pages.profiles.resetBody", { name: profile.name, n: quota?.resetCount ?? 0 })}
+        onConfirm={() => { setResetting(false); void reset.run(); }} />
       {refresh.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.refreshFailed", { error: refresh.error.message })}</p>}
     </Section>
   );

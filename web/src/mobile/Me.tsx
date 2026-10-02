@@ -55,7 +55,8 @@ function AccountRow({ a, only }: { a: Account; only: boolean }) {
     <ListRow>
       <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{a.email}</span>
       <button type="button" className={css.mSignOut} disabled={out} aria-busy={out || undefined} onClick={() => {
-        signOut(a.sub).then(() => { if (!only) app.toast(t("web-mobile.me.signedOut", { email: a.email })); app.home(); }, (e: unknown) => app.toast(t("web-mobile.me.signOutFailed", { error: e instanceof Error ? e.message : String(e) })));
+        app.home();
+        signOut(a.sub).then(() => { if (!only) app.toast(t("web-mobile.me.signedOut", { email: a.email })); }, (e: unknown) => app.toast(t("web-mobile.me.signOutFailed", { error: e instanceof Error ? e.message : String(e) })));
       }}>{out && <Spinner size={13} />}{only ? t("web-mobile.me.signOut") : t("web-mobile.me.signOutOne")}</button>
     </ListRow>
   );

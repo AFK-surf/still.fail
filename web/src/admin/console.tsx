@@ -291,7 +291,7 @@ function ItemRow({ list, row, open, to }: { list: List; row: Row; open: boolean;
 function CodeRow({ account, row }: { account: Account; row: Row }) {
   const toast = useToast();
   const [revoking, setRevoking] = useState(false);
-  const revoke = useAction(() => admin.revokeCode(account.sub, row.id), () => { setRevoking(false); toast(t("web-pages.admin.code.revoked")); });
+  const revoke = useAction(() => admin.revokeCode(account.sub, row.id), () => toast(t("web-pages.admin.code.revoked")));
   const copy = () => void navigator.clipboard.writeText(row.url ?? "").then(() => toast(t("web-pages.admin.code.linkCopied")), (e: unknown) => toast(t("web-pages.admin.copyFailed", { error: failure(e) })));
   const at = row.state === "used" ? stamp(row, "used_at") : row.state === "revoked" ? stamp(row, "revoked_at") : stamp(row, "created_at");
   return (
@@ -303,15 +303,16 @@ function CodeRow({ account, row }: { account: Account; row: Row }) {
           <span className={css.rowTime}>
             {row.state === "open" ? <>
               <IconButton label={t("web-pages.admin.code.copyLink")} icon={Copy} onClick={copy} />
-              <Button variant="ghost" onClick={() => setRevoking(true)}>{t("web-pages.settings.members.revoke")}</Button>
+              <Button variant="ghost" busy={revoke.busy} onClick={() => setRevoking(true)}>{t("web-pages.settings.members.revoke")}</Button>
             </> : <Time stamp={at} fixed />}
           </span>
         </span>
         <span className={css.rowLine2}>{row.line || (row.state === "open" ? t("web-pages.admin.expires", { until: stamp(row, "expires_at")?.until ?? "" }) : "")}</span>
       </span>
-      <Confirm open={revoking} onClose={() => setRevoking(false)} busy={revoke.busy} onConfirm={() => revoke.run()}
+      {/* Closes at once: its button turns until the cloud has it, a failure said by toast. */}
+      <Confirm open={revoking} onClose={() => setRevoking(false)} onConfirm={() => { setRevoking(false); void revoke.run(); }}
         title={t("web-pages.admin.code.revokeConfirm", { code: row.title })} action={t("web-pages.admin.code.revoke")}
-        description={t("web-pages.admin.code.revokeBody")} error={revoke.error?.message} />
+        description={t("web-pages.admin.code.revokeBody")} />
     </div>
   );
 }
@@ -334,8 +335,7 @@ function UserDetail({ account, id, close, search }: { account: Account; id: stri
   const mayCreate = useAction((on: boolean) => admin.setMayCreate(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.mayCreateOn") : t("web-pages.admin.user.mayCreateOff")));
   const beta = useAction((on: boolean) => admin.setBeta(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.betaOn") : t("web-pages.admin.user.betaOff")));
   const [blocking, setBlocking] = useState(false);
-  const block = useAction((on: boolean) => admin.block(account.sub, id, on), (_, on) => { setBlocking(false); toast(on ? t("web-pages.admin.user.blocked") : t("web-pages.admin.user.unblocked")); });
-  useEffect(() => { const e = mayCreate.error ?? beta.error; if (e) toast(t("web-pages.admin.changeFailed", { error: e.message })); }, [mayCreate.error, beta.error, toast]);
+  const block = useAction((on: boolean) => admin.block(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.blocked") : t("web-pages.admin.user.unblocked")));
   if (!u) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}</aside>;
   return (
     <Detail close={close} head={<>
@@ -373,14 +373,15 @@ function UserDetail({ account, id, close, search }: { account: Account; id: stri
           <div className={css.actions}>
             {u.blocked
               ? <Button busy={block.busy} onClick={() => block.run(false)}>{t("web-pages.admin.user.unblock")}</Button>
-              : <Button variant="danger" onClick={() => setBlocking(true)}>{t("web-pages.admin.user.block")}</Button>}
+              : <Button variant="danger" busy={block.busy} onClick={() => setBlocking(true)}>{t("web-pages.admin.user.block")}</Button>}
           </div>
         )}
-        {block.error && !blocking && <p className={controlsCss.fieldError} role="alert">{block.error.message}</p>}
+        {block.error && <p className={controlsCss.fieldError} role="alert">{block.error.message}</p>}
       </>}
-      <Confirm open={blocking} onClose={() => setBlocking(false)} busy={block.busy} onConfirm={() => block.run(true)}
+      {/* Closes at once: the block button turns until the cloud has it, a failure said by toast. */}
+      <Confirm open={blocking} onClose={() => setBlocking(false)} onConfirm={() => { setBlocking(false); void block.run(true); }}
         title={t("web-pages.admin.user.blockConfirm", { name: u.title })} action={t("web-pages.admin.user.block")}
-        description={t("web-pages.admin.user.blockBody")} error={block.error?.message} />
+        description={t("web-pages.admin.user.blockBody")} />
     </Detail>
   );
 }
@@ -390,7 +391,7 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
   const navigate = useNavigate();
   const { value: w, error } = useKept<WorkspacePage>({ topic: "adminItem", account: account.sub, list: "workspaces", id });
   const [deleting, setDeleting] = useState(false);
-  const remove = useAction(() => admin.deleteWorkspace(account.sub, id), () => { setDeleting(false); toast(t("web-pages.settings.workspace.deleted")); void navigate(close, { replace: true }); });
+  const remove = useAction(() => admin.deleteWorkspace(account.sub, id), () => toast(t("web-pages.settings.workspace.deleted")));
   if (!w) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}</aside>;
   return (
     <Detail close={close} head={<>
@@ -432,9 +433,10 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
         ))}
       </>}
       <div className={css.actions}><Button variant="danger" onClick={() => setDeleting(true)}>{t("web-pages.settings.workspace.delete")}</Button></div>
-      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
+      {/* Back to the list at once: it goes on by itself, a failure said by toast. */}
+      <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); void navigate(close, { replace: true }); void remove.run(); }}
         title={t("web-pages.settings.workspace.deleteConfirm", { name: w.title })} action={t("web-pages.settings.workspace.delete")}
-        description={t("web-pages.admin.ws.deleteBody")} error={remove.error?.message} />
+        description={t("web-pages.admin.ws.deleteBody")} />
     </Detail>
   );
 }
@@ -443,7 +445,6 @@ function FeedbackDetail({ account, id, close }: { account: Account; id: string; 
   const toast = useToast();
   const { value: f, error } = useKept<FeedbackPage>({ topic: "adminItem", account: account.sub, list: "feedback", id });
   const status = useAction((to: FeedbackStatus) => admin.feedbackStatus(account.sub, id, to), (_, to) => toast(t("web-pages.admin.fb.marked", { status: f?.statuses.find((s) => s.id === to)?.label ?? to })));
-  useEffect(() => { if (status.error) toast(t("web-pages.admin.changeFailed", { error: status.error.message })); }, [status.error, toast]);
   const copy = () => void navigator.clipboard.writeText(f?.text ?? "").then(() => toast(t("web-pages.admin.fb.copied")), () => toast(t("web-pages.admin.fb.copyFailed")));
   if (!f) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}</aside>;
   return (

@@ -39,8 +39,6 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.t
-import fail.still.core.CoreException
-import fail.still.android.data.errorText
 import kotlinx.coroutines.launch
 
 @Composable
@@ -69,18 +67,11 @@ fun MeScreen(current: WorkspaceEntry) {
             list.forEach { a ->
                 ListRow {
                     Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    // Signing out under way: a spinner in its place, not asked twice.
+                    // Signing out: home at once, the sign-out going on by itself (a toast if it could not); not asked twice meanwhile.
                     if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(14.dp)
                     else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
-                        scope.launch {
-                            try {
-                                Auth.signOut(app.core, a.sub)
-                                app.home()
-                                if (list.size > 1) app.toast = t("android-settings.me.signedOut", "email" to a.email)
-                            } catch (e: CoreException) {
-                                app.toast = t("android-settings.me.signOutFailed", "error" to errorText(e))
-                            }
-                        }
+                        app.home()
+                        app.act(t("android-settings.me.signOutWhat"), if (list.size > 1) t("android-settings.me.signedOut", "email" to a.email) else null) { Auth.signOut(app.core, a.sub) }
                     })
                 }
             }

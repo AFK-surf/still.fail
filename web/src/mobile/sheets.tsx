@@ -11,12 +11,22 @@ import * as css from "./sheets.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import { t } from "../i18n.ts";
 
-/** Asks before something that cannot be undone; the sheet stays, with what went wrong, until it is done. */
-export function confirm(app: MobileApp, spec: { title: string; text: ReactNode; action: string; danger?: boolean; run: () => Promise<unknown> }) {
+/**
+ * Asks before something that cannot be undone; the sheet stays, with what went wrong, until it is done. `atOnce`: the
+ * sheet goes as it is answered and `run` goes on by itself (what it changes shows under way where it is), a failure
+ * said by a toast, `atOnce` its words (with {error}).
+ */
+export function confirm(app: MobileApp, spec: { title: string; text: ReactNode; action: string; danger?: boolean; atOnce?: string; run: () => Promise<unknown> }) {
   app.sheet({ height: 0.36, content: () => <Confirm {...spec} /> });
 }
 
-function Confirm({ title, text, action, danger = false, run }: { title: string; text: ReactNode; action: string; danger?: boolean; run: () => Promise<unknown> }) {
+/** Closes the sheet and lets `doing` go on, a failure said by a toast in `words` (with {error}). */
+function atOnceGo(app: MobileApp, words: string, doing: () => Promise<unknown>) {
+  app.sheet(null);
+  doing().catch((e: unknown) => app.toast(t(words, { error: e instanceof Error ? e.message : String(e) })));
+}
+
+function Confirm({ title, text, action, danger = false, atOnce, run }: { title: string; text: ReactNode; action: string; danger?: boolean; atOnce?: string; run: () => Promise<unknown> }) {
   const app = useApp();
   const operation = useAction(run, () => app.sheet(null));
   const { busy } = operation;
@@ -32,7 +42,8 @@ function Confirm({ title, text, action, danger = false, run }: { title: string; 
           <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
           <span data-danger={danger || undefined} className={css.mDangerButton}>
             <Button label={action} primary busy={busy} onClick={() => {
-              void operation.run();
+              if (atOnce) atOnceGo(app, atOnce, run);
+              else void operation.run();
             }} />
           </span>
         </div>
@@ -57,12 +68,8 @@ function Ask({ title, value: first, placeholder, action, hint, secret = false, e
   const { busy } = operation;
   const error = operation.error?.message;
   const go = () => {
-    if (atOnce) {
-      app.sheet(null);
-      run(value.trim()).catch((e: unknown) => app.toast(t(atOnce, { error: e instanceof Error ? e.message : String(e) })));
-      return;
-    }
-    void operation.run(value.trim());
+    if (atOnce) atOnceGo(app, atOnce, () => run(value.trim()));
+    else void operation.run(value.trim());
   };
   return (
     <>

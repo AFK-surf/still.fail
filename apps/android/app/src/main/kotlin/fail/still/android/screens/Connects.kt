@@ -211,6 +211,9 @@ fun ConnectScreen(station: String, id: String) {
                         Text(connect.team ?: "Slack", fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(item.stationName + (connect.createdBy?.let { t("android-settings.connect.owner", "name" to (it.shown?.display ?: it.name)) } ?: ""), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    // A change asked from its menu or sheets (they close at once): a spinner until the station has it, a red mark a moment if it failed.
+                    val calls = setOf("connect.reconnect", "connect.put")
+                    DoingMark(app.isDoing(calls, "station" to station, "id" to connect.id), app.failedOf(calls, "station" to station, "id" to connect.id))
                 }
             }
             if (c.state == "no_tokens" || c.state == "error" || (c.state == "reconnecting" && c.lastError != null)) Callout {
@@ -240,6 +243,7 @@ fun ConnectScreen(station: String, id: String) {
                 if (connect.mode == "single-session") ListRow(onClick = { app.sheet = SheetSpec(0.7f, draggable = true) { SessionSheet(station, item) } }) {
                     Text(t("android-settings.connect.current"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
                     Text(item.bound?.titleText ?: t("android-settings.connect.noSession"), fontSize = 15.sp, color = if (item.bound != null) C.ink else C.muted, modifier = Modifier.weight(1f))
+                    DoingMark(app.isDoing("connect.bindSession", "station" to station, "connect" to connect.id), app.failedOf("connect.bindSession", "station" to station, "connect" to connect.id))
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
             }
@@ -280,12 +284,10 @@ private fun Callout(content: @Composable () -> Unit) {
 private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
     val api = app.api(station)
     app.sheet = SheetSpec(0.6f) {
-        val scope = rememberCoroutineScope()
         val context = LocalContext.current
-        val act = { done: String, call: suspend () -> Unit ->
-            scope.launch { try { call(); app.toast = done; app.sheet = null } catch (e: CoreException) { app.toast = errorText(e) } }; Unit
-        }
-        // Under way: a spinner on the row tapped, and neither tapped again; the sheet closes once it is done.
+        // Closes at once and goes on by itself: the connect's page marks it under way, a toast says how it ended.
+        val act = { what: String, done: String, call: suspend () -> Unit -> app.sheet = null; app.act(what, done) { call() } }
+        // Under way (asked a moment ago, the sheet opened again): a spinner on its row, and neither tapped again.
         val reconnecting = app.isDoing("connect.reconnect", "station" to station, "id" to connect.id)
         val switching = app.isDoing("connect.put", "station" to station, "id" to connect.id)
         // Failed a moment ago (the sheet may have been closed meanwhile): a red mark on its row, a tap says why.
@@ -294,16 +296,16 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
         SheetGrab()
         SheetHead(connect.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow(t("android-settings.connect.reconnect"), enabled = !switching, busy = reconnecting, failed = reconnectFailed) { act(t("android-settings.connect.reconnected")) { api.reconnect(connect.id) } }
+            PickRow(t("android-settings.connect.reconnect"), enabled = !switching, busy = reconnecting, failed = reconnectFailed) { act(t("android-settings.connect.reconnectWhat"), t("android-settings.connect.reconnected")) { api.reconnect(connect.id) } }
             PickRow(t("android-settings.connect.changeTokens")) { openTokens(app, station, connect) }
             connect.connection.workspace?.url?.let { url -> PickRow(t("android-settings.connect.openSlack")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t("android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
-            else PickRow(t("android-settings.connect.enable"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.enabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
+            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t("android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disableWhat"), t("android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
+            else PickRow(t("android-settings.connect.enable"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.enableWhat"), t("android-settings.connect.enabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
             PickRow(t("android-settings.connect.changeOwner"), connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
             PickRow(t("android-settings.connect.delete"), color = C.red) {
                 confirm(app, t("android-settings.connect.deleteTitle", "name" to connect.name),
                     if (connect.sessions > 0) t("android-settings.connect.deleteTextSessions", "n" to connect.sessions) else t("android-settings.connect.deleteText"),
-                    t("android-settings.connect.delete"), danger = true) { api.deleteConnect(connect.id); app.toast = t("android-settings.connect.deleted"); app.pop() }
+                    t("android-settings.connect.delete"), danger = true, what = t("android-settings.connect.deleteWhat"), then = app::pop) { api.deleteConnect(connect.id); app.toast = t("android-settings.connect.deleted") }
             }
         }
     }
@@ -313,22 +315,19 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
 @Composable
 private fun ColumnScope.OwnerSheet(station: String, connect: Connect) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(station.substringBefore('/')))
     SheetGrab()
     SheetHead(t("android-settings.connect.changeOwner"))
-    // The one picked, until the station has it: a spinner on its row, none picked meanwhile.
-    var picking by remember { mutableStateOf<String?>(null) }
+    // The one picked closes the sheet at once; the connect's page marks it under way until the station has it.
+    val busy = app.isDoing("connect.put", "station" to station, "id" to connect.id)
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         Text(t("android-settings.connect.ownerNote"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         ws.value?.members.orEmpty().forEach { m ->
-            PickRow(m.name.ifEmpty { m.email }, m.email, checked = m.email.equals(connect.createdBy?.id, ignoreCase = true), enabled = picking == null, busy = picking == m.email) {
-                picking = m.email
-                scope.launch {
-                    try {
-                        app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("owner") { put("id", m.email); put("name", m.name.ifEmpty { m.email }) } })
-                        app.toast = t("android-settings.connect.ownerChanged"); app.sheet = null
-                    } catch (e: CoreException) { app.toast = t("android-settings.connect.ownerFailed", "error" to errorText(e)) } finally { picking = null }
+            val current = m.email.equals(connect.createdBy?.id, ignoreCase = true)
+            PickRow(m.name.ifEmpty { m.email }, m.email, checked = current, enabled = !busy) {
+                app.sheet = null
+                if (!current) app.act(t("android-settings.connect.ownerWhat"), t("android-settings.connect.ownerChanged")) {
+                    app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("owner") { put("id", m.email); put("name", m.name.ifEmpty { m.email }) } })
                 }
             }
         }
@@ -391,7 +390,6 @@ internal fun Switch(on: Boolean) {
 @Composable
 private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     val connect = item.connect
     var mode by remember { mutableStateOf(connect.mode) }
     var mention by remember { mutableStateOf(connect.requireMention) }
@@ -408,11 +406,10 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
-            Button(if (mode == connect.mode) t("android-settings.mode.confirm") else if (mode == "single-session") t("android-settings.mode.toSingleButton") else t("android-settings.mode.toMultiButton"), primary = true, busy = busy, enabled = changed) {
-                scope.launch {
-                    try { app.api(station).putConnect(connect.id, buildJsonObject { put("mode", mode); put("requireMention", mention) }); app.toast = t("android-settings.mode.changed"); app.sheet = null }
-                    catch (e: CoreException) { app.toast = e.message }
-                }
+            Button(if (mode == connect.mode) t("android-settings.mode.confirm") else if (mode == "single-session") t("android-settings.mode.toSingleButton") else t("android-settings.mode.toMultiButton"), primary = true, enabled = changed && !busy) {
+                val (m, r) = mode to mention
+                app.sheet = null
+                app.act(t("android-settings.mode.changeWhat"), t("android-settings.mode.changed")) { app.api(station).putConnect(connect.id, buildJsonObject { put("mode", m); put("requireMention", r) }) }
             }
         }
     }
@@ -422,7 +419,6 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
 @Composable
 private fun ColumnScope.SessionSheet(station: String, item: ConnectItem) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     val connect = item.connect
     var choice by remember { mutableStateOf(connect.session ?: "new") }
     var title by remember { mutableStateOf("") }
@@ -436,10 +432,11 @@ private fun ColumnScope.SessionSheet(station: String, item: ConnectItem) {
         item.candidates.forEach { s -> PickRow(s.titleText, s.agentText, checked = choice == s.key) { choice = s.key } }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
-            Button(if (choice == "new") t("android-settings.session.createUse") else t("android-settings.session.use"), primary = true, busy = busy, enabled = choice != connect.session) {
-                scope.launch {
-                    try { app.api(station).bindSession(connect.id, if (choice == "new") null else choice, title); app.toast = if (choice == "new") t("android-settings.session.created") else t("android-settings.session.switched"); app.sheet = null }
-                    catch (e: CoreException) { app.toast = e.message }
+            Button(if (choice == "new") t("android-settings.session.createUse") else t("android-settings.session.use"), primary = true, enabled = choice != connect.session && !busy) {
+                val (picked, name) = choice to title
+                app.sheet = null
+                app.act(if (picked == "new") t("android-settings.session.createWhat") else t("android-settings.session.switchWhat"), if (picked == "new") t("android-settings.session.created") else t("android-settings.session.switched")) {
+                    app.api(station).bindSession(connect.id, if (picked == "new") null else picked, name)
                 }
             }
         }
@@ -671,8 +668,9 @@ fun NewConnectScreen(station: String) {
                     Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("token") })
                     chosen?.let { team ->
                         Text(t("android-settings.flow.removeToken", "name" to team.name), fontSize = 14.sp, color = C.muted, modifier = Modifier.clickable {
-                            confirm(app, t("android-settings.flow.removeTokenTitle", "name" to team.name), t("android-settings.flow.removeTokenText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true) {
-                                api.removeConfigToken(team.teamId); flow.edit { put("team", null as String?) }; app.toast = t("android-settings.flow.tokenRemoved")
+                            confirm(app, t("android-settings.flow.removeTokenTitle", "name" to team.name), t("android-settings.flow.removeTokenText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true,
+                                what = t("android-settings.flow.removeTokenWhat"), then = { flow.edit { put("team", null as String?) } }) {
+                                api.removeConfigToken(team.teamId); app.toast = t("android-settings.flow.tokenRemoved")
                             }
                         })
                     }
@@ -768,6 +766,8 @@ internal fun WaitingApp(app: AppState, station: String, a: MadeSlackApp, online:
             Text(a.name + (a.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(where, fontSize = 13.sp, color = C.muted, maxLines = 2)
         }
+        // Being dropped (the sheet that asked gone): a spinner until the station has it, a red mark a moment if it failed.
+        DoingMark(app.isDoing("slack.dropApp", "station" to station, "appId" to a.appId), app.failedOf("slack.dropApp", "station" to station, "appId" to a.appId))
         if (online) Text(t("android-settings.waiting.continue"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openNewConnect(app, station, a.appId) })
         else Text(t("android-settings.waiting.offline"), fontSize = 12.sp, color = C.muted)
     }
@@ -781,7 +781,8 @@ private fun openWaitingMenu(app: AppState, station: String, a: MadeSlackApp) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow(t("android-settings.waiting.continueRow")) { openNewConnect(app, station, a.appId) }
             PickRow(t("android-settings.waiting.remove"), color = C.red) {
-                confirm(app, t("android-settings.station.removeTitle", "name" to a.name), t("android-settings.waiting.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true) {
+                confirm(app, t("android-settings.station.removeTitle", "name" to a.name), t("android-settings.waiting.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true,
+                    what = t("android-settings.waiting.removeWhat")) {
                     app.api(station).dropSlackApp(a.appId); app.toast = t("android-settings.members.removed")
                 }
             }

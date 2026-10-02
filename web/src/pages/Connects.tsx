@@ -10,6 +10,7 @@ import { MineFilter, OwnerLabel } from "../components.tsx";
 import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
 import { About, Button, Confirm, ConnectAvatar, FirstOne, Menu, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
+import { DoingMark } from "../DoingMark.tsx";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -103,6 +104,8 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
                   <OwnerLabel owner={c.createdBy} />
                 </span>
                 <span className={css.navNote}>{c.statusText}</span>
+                {/* Being deleted (asked on its page, which has gone back here): a ring until the station has dropped it. */}
+                <DoingMark calls="connect.delete" on={{ station, id: c.id }} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} />
                 <StatusDot state={c.presence} label={c.statusText} />
               </Link>
             </li>
@@ -126,7 +129,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
 function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName: string | null; onGo: (() => void) | null }) {
   const api = useApi();
   const [dropping, setDropping] = useState(false);
-  const drop = useAction(() => api.dropSlackApp(app.appId), () => setDropping(false));
+  const drop = useAction(() => api.dropSlackApp(app.appId));
   const where = app.installed ? t("web-pages.connects.installedNeedsToken", { team: app.installedTeam ?? app.team ?? t("web-pages.cloud.slackInstalled.workspace") }) : app.install ? t("web-pages.connects.notInstalled") : t("web-pages.connects.needsToken");
   return (
     <div className={pagesCss.listRow}>
@@ -137,8 +140,10 @@ function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName
       </span>
       {stationName && <span className={css.connectFacts}><span className={cloudCss.stationTag}>{stationName}</span></span>}
       {onGo ? <Button onClick={onGo}>{t("web-pages.connects.continue")}</Button> : <span className={css.navNote}>{t("web-pages.connects.stationOffline")}</span>}
-      {onGo && <Menu items={[{ label: t("web-pages.connects.removeHere"), danger: true, onSelect: () => setDropping(true) }]} />}
-      <Confirm open={dropping} onClose={() => setDropping(false)} busy={drop.busy} onConfirm={() => void drop.run()} error={drop.error?.message}
+      {/* Dropped from the Confirm, which closes at once: a ring in the menu's place until it is gone, a failure said by toast. */}
+      <DoingMark calls="slack.dropApp" on={{ appId: app.appId }} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} />
+      {onGo && !drop.busy && <Menu items={[{ label: t("web-pages.connects.removeHere"), danger: true, onSelect: () => setDropping(true) }]} />}
+      <Confirm open={dropping} onClose={() => setDropping(false)} onConfirm={() => { setDropping(false); void drop.run(); }}
         title={t("web-pages.settings.stations.removeConfirm", { name: app.name })} action={t("web-pages.settings.members.unadd")} description={t("web-pages.connects.removeBody", { name: NAME })} />
     </div>
   );

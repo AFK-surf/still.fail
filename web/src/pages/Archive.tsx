@@ -1,4 +1,3 @@
-import { useDoing } from "../doing.ts";
 // The archive: chats archived by hand or by the station once they idled (a
 // day by default), of every station online in one list, newest first and
 // grouped by the day they were archived; each can be shown again, and one
@@ -8,7 +7,7 @@ import { useState } from "react";
 import { stationApi, stationCall, useArchiveView } from "../api.ts";
 import { useCall } from "../core/react.ts";
 import type { ArchiveItem } from "../core/shapes.ts";
-import { useToast } from "../toast.tsx";
+import { failure, useToast } from "../toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { About, Confirm, MobileBack, Tip } from "../ui.tsx";
 import { Retry, Trash } from "../icons.tsx";
@@ -53,17 +52,11 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
   const toast = useToast();
   const { days, errors, note, restore, remove: removeItem } = useArchive(scope, toast);
   const [deleting, setDeleting] = useState<ArchiveItem | null>(null);
-  const busy = useDoing("session.delete", { station: deleting?.station, key: deleting?.session });
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const remove = async () => {
+  // Asked, the Confirm closes at once: its row turns until the station has deleted it, a failure said by toast.
+  const remove = () => {
     if (!deleting) return;
-    setDeleteError(null);
-    try {
-      await removeItem(deleting);
-      setDeleting(null);
-    } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : String(e));
-    }
+    setDeleting(null);
+    void removeItem(deleting).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) })));
   };
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
@@ -83,9 +76,7 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
                 </span></Tip>
                 <div className={css.archiveActions}>
                   <RestoreButton item={item} restore={restore} />
-                  {item.deletable && (
-                    <Tip label={t("common.delete")}><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction} ${css.archiveDelete}`} aria-label={t("web-pages.archive.deleteNamed", { title: item.title })} onClick={() => { setDeleteError(null); setDeleting(item); }}><Trash size={14} /></button></Tip>
-                  )}
+                  {item.deletable && <DeleteButton item={item} ask={() => setDeleting(item)} />}
                 </div>
               </div>
               <span className={css.archiveMeta}>{item.last}</span>
@@ -95,7 +86,7 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
       ))}
       <Confirm open={deleting !== null} title={t("web-pages.archive.deleteConfirm", { title: deleting?.title ?? "" })}
         description={DELETE_TEXT} action={t("common.delete")}
-        onConfirm={() => void remove()} onClose={() => setDeleting(null)} busy={busy} error={deleteError} />
+        onConfirm={remove} onClose={() => setDeleting(null)} />
     </div>
   );
 }
@@ -110,6 +101,17 @@ function RestoreButton({ item, restore }: { item: ArchiveItem; restore: (item: A
     <Tip label={state.error ?? t("web-pages.archive.restore")}><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction}`} aria-label={t("web-pages.archive.restoreNamed", { title: item.title })}
       disabled={state.running} aria-busy={state.running || undefined} onClick={() => void restore(item)}>
       <DoingShown state={state} className={controlsCss.iconSpinner} size={14} idle={<Retry size={14} />} bare />
+    </button></Tip>
+  );
+}
+
+/** Deleting a row for good, asked first: it turns while the station deletes it, a red mark a few seconds if that failed. */
+function DeleteButton({ item, ask }: { item: ArchiveItem; ask(): void }) {
+  const state = useDoingState("session.delete", { station: item.station, key: item.session });
+  return (
+    <Tip label={state.error ?? t("common.delete")}><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction} ${css.archiveDelete}`} aria-label={t("web-pages.archive.deleteNamed", { title: item.title })}
+      disabled={state.running} aria-busy={state.running || undefined} onClick={ask}>
+      <DoingShown state={state} className={controlsCss.iconSpinner} size={14} idle={<Trash size={14} />} bare />
     </button></Tip>
   );
 }

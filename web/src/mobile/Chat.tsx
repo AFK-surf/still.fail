@@ -623,14 +623,14 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
     app.pop();
     api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived")), (error) => app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) })));
   };
-  // Asked first: its sheet waits and says what went wrong; back to the list once it is done.
-  const asked = () => api.archive(of, true).then(() => { app.pop(); app.toast(t("web-mobile.home.archived")); });
+  // Asked first, then as at once.
+  const asked = () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); };
   return (
     <>
       <GroupLabel>{t("web-mobile.home.archive")}</GroupLabel>
       <InfoList>
         {/* A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words). */}
-        <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>
+        <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>
       </InfoList>
     </>
   );
@@ -650,7 +650,8 @@ function useArchiveChat(here: Here, view: ChatView, thread: ChatThread | null) {
   const of = { thread: thread?.id ?? null, session: view.agents[0]?.session.key ?? here.key };
   return () => {
     if (view.watch) {
-      confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), run: () => api.archive(of, true).then(() => { app.pop(); app.toast(t("web-mobile.home.archived")); }) });
+      confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed",
+        run: () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); } });
       return;
     }
     app.pop();

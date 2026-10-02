@@ -95,7 +95,7 @@ function WaitingAppSheet({ made, online }: { made: MadeSlackApp; online: boolean
           onClick={() => { app.sheet(null); app.push(`${stationBase(station.address)}/connects/new?resume=${encodeURIComponent(made.appId)}`); }} />
         <PickRow label={t("web-mobile.connects.drop")} accent onClick={() => confirm(app, {
           title: t("web-mobile.stations.removeAsk", { name: made.name }), action: t("web-mobile.workspace.remove"), danger: true,
-          text: t("web-mobile.connects.dropText", { name: NAME }),
+          text: t("web-mobile.connects.dropText", { name: NAME }), atOnce: "web-mobile.workspace.removeFailed",
           run: () => api.dropSlackApp(made.appId).then(() => app.toast(t("web-mobile.workspace.removed"))),
         })} />
       </div>
@@ -246,8 +246,8 @@ function ConnectMenu({ connect }: { connect: Connect }) {
   const api = useApi();
   const workspace = connect.connection.workspace;
   const station = useStation().address;
-  // What is under way shows on its row; the sheet stays until it answers (a failure says so and leaves it open, its row
-  // with the failure mark a few seconds).
+  // The sheet goes at once; what is under way shows on its row if it is opened again (one that failed with the failure
+  // mark a few seconds), the toast says how it ended.
   const reconnecting = useDoing("connect.reconnect", { station, id: connect.id });
   const putting = useDoing("connect.put", { station, id: connect.id });
   const deleting = useDoing("connect.delete", { station, id: connect.id });
@@ -255,24 +255,27 @@ function ConnectMenu({ connect }: { connect: Connect }) {
   const putFailed = useDoingFailed("connect.put", { station, id: connect.id });
   const deleteFailed = useDoingFailed("connect.delete", { station, id: connect.id });
   const busy = reconnecting || putting || deleting;
-  const done = (text: string) => () => { app.toast(text); app.sheet(null); };
-  const failed = (key: string) => (e: Error) => app.toast(t(key, { error: e.message }));
+  const go = (doing: Promise<unknown>, done: string, failed: string) => {
+    app.sheet(null);
+    doing.then(() => app.toast(done), (e: Error) => app.toast(t(failed, { error: e.message })));
+  };
   return (
     <>
       <SheetGrab />
       <SheetHead title={connect.name} />
       <div className={sheetsCss.mSheetScroll}>
-        <PickRow label={t("web-mobile.connects.reconnect")} busy={reconnecting} failed={reconnectFailed} enabled={!busy} onClick={() => { api.reconnect(connect.id).then(done(t("web-mobile.connects.reconnected")), failed("web-mobile.connects.reconnectFailed")); }} />
+        <PickRow label={t("web-mobile.connects.reconnect")} busy={reconnecting} failed={reconnectFailed} enabled={!busy} onClick={() => go(api.reconnect(connect.id), t("web-mobile.connects.reconnected"), "web-mobile.connects.reconnectFailed")} />
         <PickRow label={t("web-mobile.connects.changeToken")} onClick={() => openTokens(app, connect)} />
         {workspace?.url && <PickRow label={t("web-mobile.connects.openSlack")} onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
         {connect.enabled
-          ? <PickRow label={t("web-mobile.connects.disable")} sub={t("web-mobile.connects.disableNote")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: false }).then(done(t("web-mobile.connects.disabled")), failed("web-mobile.connects.disableFailed")); }} />
-          : <PickRow label={t("web-mobile.connects.enable")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: true }).then(done(t("web-mobile.connects.enabled")), failed("web-mobile.connects.enableFailed")); }} />}
+          ? <PickRow label={t("web-mobile.connects.disable")} sub={t("web-mobile.connects.disableNote")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: false }), t("web-mobile.connects.disabled"), "web-mobile.connects.disableFailed")} />
+          : <PickRow label={t("web-mobile.connects.enable")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => go(api.putConnect(connect.id, { enabled: true }), t("web-mobile.connects.enabled"), "web-mobile.connects.enableFailed")} />}
         <PickRow label={t("web-mobile.connects.changeOwner")} sub={connect.createdBy?.shown?.display ?? connect.createdBy?.name} enabled={!busy} onClick={() => app.sheet({ height: 0.6, content: () => <OwnerSheet connect={connect} /> })} />
         <PickRow label={t("web-mobile.connects.delete")} accent busy={deleting} failed={deleteFailed} enabled={!busy} onClick={() => confirm(app, {
           title: t("web-mobile.archive.deleteAsk", { title: connect.name }), action: t("web-mobile.connects.delete"), danger: true,
           text: connect.sessions ? t("web-mobile.connects.deleteTextSessions", { n: connect.sessions }) : t("web-mobile.connects.deleteText"),
-          run: () => api.deleteConnect(connect.id).then(() => { app.toast(t("web-mobile.connects.deleted")); app.pop(); }),
+          atOnce: "web-main.chat.deleteFailed",
+          run: () => { app.pop(); return api.deleteConnect(connect.id).then(() => app.toast(t("web-mobile.connects.deleted"))); },
         })} />
       </div>
     </>
@@ -301,8 +304,9 @@ function OwnerSheet({ connect }: { connect: Connect }) {
             busy={asked === m.email} failed={picked === m.email ? putFailed : undefined} enabled={!putting}
             onClick={() => {
               setPicked(m.email);
+              app.sheet(null);
               api.putConnect(connect.id, { owner: { id: m.email, name: m.name || m.email } })
-                .then(() => { app.toast(t("web-mobile.connects.ownerChanged")); app.sheet(null); }, (e: Error) => app.toast(t("web-mobile.connects.ownerFailed", { error: e.message })));
+                .then(() => app.toast(t("web-mobile.connects.ownerChanged")), (e: Error) => app.toast(t("web-mobile.connects.ownerFailed", { error: e.message })));
             }} />
         ))}
       </div>
@@ -329,7 +333,7 @@ function ModeSheet({ item }: { item: ConnectItem }) {
         <div className={sheetsCss.mFormActions}>
           <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
           <Button label={next.mode === connect.mode ? t("web-mobile.connects.confirmChange") : next.mode === "single-session" ? t("web-mobile.connects.toSingle") : t("web-mobile.connects.toMulti")} primary busy={busy} enabled={changed}
-            onClick={() => { api.putConnect(connect.id, next).then(() => { app.toast(t("web-mobile.connects.modeChanged")); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
+            onClick={() => { app.sheet(null); api.putConnect(connect.id, next).then(() => app.toast(t("web-mobile.connects.modeChanged")), (e: Error) => app.toast(t("web-mobile.connects.modeFailed", { error: e.message }))); }} />
         </div>
       </div>
     </>
@@ -375,7 +379,7 @@ function SessionSheet({ item }: { item: ConnectItem }) {
         <div className={sheetsCss.mFormActions}>
           <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
           <Button label={choice === "new" ? t("web-mobile.connects.createUse") : t("web-mobile.connects.useThis")} primary busy={busy} enabled={choice !== connect.session}
-            onClick={() => { api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => { app.toast(choice === "new" ? t("web-mobile.connects.sessionCreated") : t("web-mobile.connects.sessionSwitched")); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
+            onClick={() => { app.sheet(null); api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => app.toast(choice === "new" ? t("web-mobile.connects.sessionCreated") : t("web-mobile.connects.sessionSwitched")), (e: Error) => app.toast(t("web-main.history.bindFailed", { error: e.message }))); }} />
         </div>
       </div>
     </>

@@ -58,7 +58,7 @@ function Row({ item, restore, remove }: { item: ArchiveItem; restore: (item: Arc
           </button>
           {item.deletable && (
             <button type="button" className={css.mArchiveAction} aria-label={t("web-mobile.archive.delete", { title: item.title })} disabled={busy} aria-busy={deleting || undefined}
-              onClick={() => confirm(app, { title: t("web-mobile.archive.deleteAsk", { title: item.title }), text: DELETE_TEXT, action: t("common.delete"), danger: true, run: () => remove(item) })}>
+              onClick={() => confirm(app, { title: t("web-mobile.archive.deleteAsk", { title: item.title }), text: DELETE_TEXT, action: t("common.delete"), danger: true, atOnce: "web-main.chat.deleteFailed", run: () => remove(item) })}>
               {deleting ? <Spinner size={16} /> : <Trash size={16} />}
             </button>
           )}

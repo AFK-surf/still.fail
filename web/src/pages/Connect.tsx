@@ -70,7 +70,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const [deleting, setDeleting] = useState(false);
   const [owning, setOwning] = useState(false);
   const [replacing, setReplacing] = useState(false);
-  const remove = useAction(() => api.deleteConnect(connect.id), () => { toast(t("web-pages.connect.deleted")); navigate(`${station.settings}/connects`); });
+  const remove = useAction(() => api.deleteConnect(connect.id), () => toast(t("web-pages.connect.deleted")));
   const reconnect = useAction(() => api.reconnect(connect.id), () => toast(t("web-pages.connect.reconnected")));
   // Reconnecting, or its settings on their way (from the menu or a section below): said in its status line meanwhile;
   // failed, a red mark and so for a few seconds, why on hover (the menu that asked has closed).
@@ -127,9 +127,10 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
 
       {replacing && <TokenDialog connect={connect} onClose={() => setReplacing(false)} />}
       {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
-      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
+      {/* Back to the list at once: its row turns there until the station has dropped it, a failure said by toast. */}
+      <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate(`${station.settings}/connects`); void remove.run(); }}
         title={t("web-pages.archive.deleteConfirm", { title: connect.name })} action={t("web-pages.connect.delete")}
-        description={connect.sessions ? t("web-pages.connect.deleteBodySessions", { n: connect.sessions }) : t("web-pages.connect.deleteBody")} error={remove.error?.message} />
+        description={connect.sessions ? t("web-pages.connect.deleteBodySessions", { n: connect.sessions }) : t("web-pages.connect.deleteBody")} />
     </div>
   );
 }
@@ -170,10 +171,9 @@ function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" disabled={!check.ready} busy={check.busy || save.busy}
-          onClick={() => check.then(() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { toast(t("web-pages.connect.tokenSavedReconnecting")); onClose(); }))}>{t("web-pages.connect.saveReconnect")}</Button>
+          onClick={() => check.then(() => { save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => toast(t("web-pages.connect.tokenSavedReconnecting"))); onClose(); })}>{t("web-pages.connect.saveReconnect")}</Button>
       </>}>
       <TokenFields value={tokens} onChange={setTokens} masked={connect.slack} check={check} />
-      {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
     </Dialog>
   );
 }
@@ -210,6 +210,8 @@ function RunSection({ item }: { item: ConnectItem }) {
   // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
   const pick = usePick(station.address, `connect:${connect.id}`);
   const saveBind = useAction(() => pick.save(), ({ saved }) => { if (saved) toast(t("web-pages.connect.bindSaved")); });
+  // Its session being switched (the dialog closed at once): a ring beside it, a red mark a moment if that failed.
+  const binding = useDoingState("connect.bindSession", { station: station.address, connect: connect.id });
   return (
     <Section title={t("web-pages.connect.run")}>
       <div className={`${pagesCss.card} ${css.runCard}`}>
@@ -235,7 +237,8 @@ function RunSection({ item }: { item: ConnectItem }) {
                 ? <Link className={chatCss.inlineLink} to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{bound.titleText}</Link>
                 : <span className={shellCss.muted}>{t("web-pages.connect.noSession")}</span>}
             </span>
-            <button type="button" className={chatCss.textButton} onClick={() => setChoosing(true)}>{t("web-pages.connect.switch")}</button>
+            <DoingShown state={binding} className={controlsCss.iconSpinner} size={14} label={t("web-pages.profiles.saving")} />
+            <button type="button" className={chatCss.textButton} disabled={binding.running} onClick={() => setChoosing(true)}>{t("web-pages.connect.switch")}</button>
           </div>
         )}
         {(save.error ?? saveBind.error) && <p className={controlsCss.fieldError} role="alert">{(save.error ?? saveBind.error)!.message}</p>}
@@ -278,8 +281,9 @@ function ModeDialog({ connect, running, onClose }: { connect: Connect; running: 
       description={t("web-pages.connect.modeLead")}
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
-        <Button variant="primary" disabled={!changed} busy={save.busy}
-          onClick={() => save.put(next, () => { toast(t("web-pages.connect.modeChanged")); onClose(); })}>
+        {/* Closes at once: the page's status line says it is saving, a failure said by toast. */}
+        <Button variant="primary" disabled={!changed}
+          onClick={() => { save.put(next, () => toast(t("web-pages.connect.modeChanged"))); onClose(); }}>
           {next.mode === connect.mode ? t("web-pages.connect.confirmChange") : next.mode === "single-session" ? t("web-pages.connect.toSingle") : t("web-pages.connect.toMulti")}
         </Button>
       </>}>
@@ -290,7 +294,6 @@ function ModeDialog({ connect, running, onClose }: { connect: Connect; running: 
           <ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul>
         </div>
       )}
-      {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
     </Dialog>
   );
 }
@@ -302,17 +305,16 @@ function ChooseSessionDialog({ item, onClose }: { item: ConnectItem; onClose(): 
   const toast = useToast();
   const [choice, setChoice] = useState<string>(connect.session ?? "new");
   const [title, setTitle] = useState("");
-  const bind = useAction(() => api.bindSession(connect.id, choice === "new" ? null : choice, title), () => {
-    toast(choice === "new" ? t("web-pages.connect.sessionCreated") : t("web-pages.connect.sessionSwitched"));
-    onClose();
-  });
+  const bind = useAction(() => api.bindSession(connect.id, choice === "new" ? null : choice, title), () =>
+    toast(choice === "new" ? t("web-pages.connect.sessionCreated") : t("web-pages.connect.sessionSwitched")));
   return (
     <Dialog open onClose={onClose} wide title={t("web-pages.connect.chooseTitle")}
       description={t("web-pages.connect.chooseLead", { name: connect.name })}
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
-        <Button variant="primary" busy={bind.busy} disabled={choice === connect.session}
-          onClick={() => void bind.run()}>{choice === "new" ? t("web-pages.connect.createUse") : t("web-pages.connect.useThis")}</Button>
+        {/* Closes at once: the session's line turns until it is switched. */}
+        <Button variant="primary" disabled={choice === connect.session}
+          onClick={() => { void bind.run(); onClose(); }}>{choice === "new" ? t("web-pages.connect.createUse") : t("web-pages.connect.useThis")}</Button>
       </>}>
       <div className={css.sessionChoices}>
         <Choices label={t("web-pages.connect.session")} value={choice} onChange={setChoice} options={[
@@ -327,7 +329,6 @@ function ChooseSessionDialog({ item, onClose }: { item: ConnectItem; onClose(): 
           })),
         ]} />
       </div>
-      {bind.error && <p className={controlsCss.fieldError} role="alert">{bind.error.message}</p>}
     </Dialog>
   );
 }
@@ -695,8 +696,8 @@ function OwnerDialog({ connect, onClose }: { connect: Connect; onClose(): void }
     <Dialog open onClose={onClose} title={t("web-pages.connect.changeOwner")} description={t("web-pages.connect.ownerLead")}
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
-        <Button variant="primary" disabled={!owner.trim() || owner === connect.createdBy?.id} busy={save.busy}
-          onClick={() => save.put({ owner: { id: owner.trim(), name: chosen?.name ?? owner.trim() } }, () => { toast(t("web-pages.connect.ownerChanged")); onClose(); })}>{t("common.save")}</Button>
+        <Button variant="primary" disabled={!owner.trim() || owner === connect.createdBy?.id}
+          onClick={() => { save.put({ owner: { id: owner.trim(), name: chosen?.name ?? owner.trim() } }, () => toast(t("web-pages.connect.ownerChanged"))); onClose(); }}>{t("common.save")}</Button>
       </>}>
       {people.length > 0 ? (
         <Field label={t("web-pages.connect.ownerLabel")}>
@@ -707,7 +708,6 @@ function OwnerDialog({ connect, onClose }: { connect: Connect; onClose(): void }
           <input id="owner-email" className={controlsCss.input} type="email" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="name@example.com" />
         </Field>
       )}
-      {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
     </Dialog>
   );
 }

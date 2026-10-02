@@ -9,7 +9,7 @@ import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate, useSearchParams } from "react-router";
-import { useStations, type StationView } from "../api.ts";
+import { useStations, type Profile, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
@@ -21,14 +21,15 @@ import { MemoryView } from "../Memory.tsx";
 import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
-import { useToast } from "../toast.tsx";
+import { failure, useToast } from "../toast.tsx";
 import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
 import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
 import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
-import { DoingMark } from "../DoingMark.tsx";
+import { DoingMark, DoingShown, useDoingState } from "../DoingMark.tsx";
+import { useDoing } from "../doing.ts";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import type { CarriedStation } from "../core/client.ts";
@@ -101,7 +102,6 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const toast = useToast();
   // Where the account is signed in: a topic of the core, read again after a revoke.
   const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: account.sub });
-  const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => toast(t("web-pages.settings.account.revoked")));
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
   const signOut = useSignOut();
@@ -124,12 +124,11 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
                   <span className={pagesCss.listRowTitle}>{s.name || t("web-pages.settings.account.unnamedDevice")}{s.current && <span className={additionsCss.choiceBadge}>{t("web-pages.settings.account.here")}</span>}</span>
                   <span className={shellCss.muted}>{tx("web-pages.settings.account.sessionTimes", { time: <Time stamp={stamp(s, "created_at")} />, until: stamp(s, "expires_at")?.until ?? "" })}</span>
                 </span>
-                {!s.current && <Button variant="ghost" busy={revoke.busy && revoke.arg === s.id} onClick={() => revoke.run(s.id)}>{t("web-pages.settings.account.revoke")}</Button>}
+                {!s.current && <RevokeDevice account={account} id={s.id} />}
               </li>
             ))}
           </ul>
         )}
-        {revoke.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.account.revokeFailed", { error: revoke.error.message })}</p>}
       </Section>
       <Section title={t("web-pages.settings.account.signOut")}>
         <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
@@ -137,11 +136,24 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <Button icon={LogOut} onClick={() => setSigningOut(true)}>{t("web-pages.settings.account.signOutAction")}</Button>
         </div>
       </Section>
-      <Confirm open={signingOut} onClose={() => setSigningOut(false)} busy={signOut.busy(account.sub)}
-        onConfirm={() => void signOut.signOut(account.sub).then((out) => { if (!out) return; toast(t("web-pages.settings.account.signedOut", { email: account.email })); navigate("/"); })}
+      {/* Away at once; signing out goes on by itself, a failure said by toast (useSignOut). */}
+      <Confirm open={signingOut} onClose={() => setSigningOut(false)}
+        onConfirm={() => { setSigningOut(false); navigate("/"); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
         title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />
     </div>
   );
+}
+
+/**
+ * Signing a device out, each on its own: the button turns until the cloud has it, whichever others are on their way;
+ * a failure is said by toast.
+ */
+function RevokeDevice({ account, id }: { account: Account; id: string }) {
+  const toast = useToast();
+  const busy = useDoing("loginSession.revoke", { account: account.sub, id });
+  const revoke = () => void cloud.revokeLoginSession(account.sub, id).then(() => toast(t("web-pages.settings.account.revoked")),
+    (e: unknown) => toast(t("web-pages.settings.account.revokeFailed", { error: failure(e) })));
+  return <Button variant="ghost" busy={busy} onClick={revoke}>{t("web-pages.settings.account.revoke")}</Button>;
 }
 
 // ── workspace ───────────────────────────────────────────────────────────
@@ -162,8 +174,8 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   const rename = useAction(() => cloud.renameWorkspace(account.sub, entry.id, name), () => toast(t("web-pages.settings.workspace.renamed")));
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => { toast(t("web-pages.settings.workspace.left")); navigate("/"); });
-  const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => { toast(t("web-pages.settings.workspace.deleted")); navigate("/"); });
+  const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => toast(t("web-pages.settings.workspace.left")));
+  const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => toast(t("web-pages.settings.workspace.deleted")));
   if (!view) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   return (
     <Page title="Workspace" back={`/w/${entry.id}/settings`}>
@@ -194,11 +206,12 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
           )}
         </div>
       </Section>
-      <Confirm open={leaving} onClose={() => setLeaving(false)} busy={leave.busy} onConfirm={() => leave.run()}
-        title={t("web-pages.settings.workspace.leaveConfirm", { name: view.name })} action={t("web-pages.settings.workspace.leaveAction")} description={t("web-pages.settings.workspace.leaveConfirmBody")} error={leave.error?.message} />
-      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
+      {/* Away at once: it goes on by itself, a failure said by toast. */}
+      <Confirm open={leaving} onClose={() => setLeaving(false)} onConfirm={() => { setLeaving(false); navigate("/"); void leave.run(); }}
+        title={t("web-pages.settings.workspace.leaveConfirm", { name: view.name })} action={t("web-pages.settings.workspace.leaveAction")} description={t("web-pages.settings.workspace.leaveConfirmBody")} />
+      <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); navigate("/"); void remove.run(); }}
         title={t("web-pages.settings.workspace.deleteConfirm", { name: view.name })} action={t("web-pages.settings.workspace.delete")}
-        description={t("web-pages.settings.workspace.deleteConfirmBody", { n: view.stations.length, name: NAME })} error={remove.error?.message} />
+        description={t("web-pages.settings.workspace.deleteConfirmBody", { n: view.stations.length, name: NAME })} />
     </Page>
   );
 }
@@ -322,7 +335,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                     <ul className={pagesCss.list}>
                       {overview.profiles.map((p) => (
                         <li key={p.id}>
-                          <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: p.usedBy.length }) : ""} />
+                          <ProfileRow profile={p} station={station.station} to={`${base}/settings/accounts/${p.id}`} />
                         </li>
                       ))}
                     </ul>
@@ -342,17 +355,25 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
+/** A profile in the list: a ring in its arrow's place while it is being deleted (asked on its page, gone back here). */
+function ProfileRow({ profile, station, to }: { profile: Profile; station: string; to: string }) {
+  const state = useDoingState("profile.delete", { station, id: profile.id });
+  return <ProfileCard profile={profile} to={to} uses={profile.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: profile.usedBy.length }) : ""}
+    action={state.running || state.error !== undefined ? <DoingShown state={state} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} /> : undefined} />;
+}
+
 function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<StationView | null>(null);
-  const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id), () => setRemoving(null));
+  const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id));
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   const renaming = (s: StationView) => rename.busy && rename.arg?.id === s.id;
   return (
     <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button></>}>
-      {/* A name on its way shows at once, a ring beside its menu until the cloud has it (a red mark a moment if not). */}
+      {/* A name or a removal on its way shows at once, a ring beside its menu until the cloud has it (a red mark a moment if not). */}
       <StationList stations={stations.map((s) => (renaming(s) ? { ...s, name: rename.arg!.name } : s))} manager={manager} menu={(s) => manager && <>
-        <DoingMark calls="workspace.renameStation" on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
+        <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14}
+          label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />
         <Menu items={[
           { label: t("web-pages.settings.stations.rename"), disabled: renaming(s), onSelect: () => { const n = window.prompt(t("web-pages.settings.stations.namePrompt"), s.name); if (n?.trim() && n.trim() !== s.name) rename.run({ id: s.id, name: n.trim() }); } },
           { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
@@ -360,9 +381,9 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
       </>} />
       {rename.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.stations.renameFailed", { name: stations.find((s) => s.id === rename.arg?.id)?.name ?? "station", error: rename.error.message })}</p>}
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
-      <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.busy} onConfirm={() => removing && remove.run(removing)}
+      <Confirm open={removing !== null} onClose={() => setRemoving(null)} onConfirm={() => { if (removing) void remove.run(removing); setRemoving(null); }}
         title={t("web-pages.settings.stations.removeConfirm", { name: removing?.name ?? "" })} action={t("web-pages.settings.stations.removeAction")}
-        description={t("web-pages.settings.stations.removeConfirmBody", { name: NAME })} error={remove.error?.message} />
+        description={t("web-pages.settings.stations.removeConfirmBody", { name: NAME })} />
     </Section>
   );
 }
@@ -421,7 +442,6 @@ function JoinThisMac({ account, workspace, className }: { account: Account; work
     if ("error" in done) throw new Error(done.error);
     return done.station;
   }, (s) => { setHere(s); toast(t("web-pages.settings.thisMac.joined")); });
-  useEffect(() => { if (join.error) toast(t("web-pages.settings.thisMac.failed", { error: join.error.message })); }, [join.error]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!desktop || !here?.carried || here.state === "running") return null;
   return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t("web-pages.settings.thisMac.add")}</Button>;
 }

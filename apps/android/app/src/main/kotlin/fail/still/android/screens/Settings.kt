@@ -80,8 +80,12 @@ import kotlinx.coroutines.launch
 
 // ── asking ─────────────────────────────────────────────────────────────
 
-/** Asks before something that cannot be undone; the sheet stays, with what went wrong, until it is done. */
-fun confirm(app: AppState, title: String, text: String, action: String, danger: Boolean = false, run: suspend () -> Unit) {
+/**
+ * Asks before something that cannot be undone. With `what` (a verb phrase, as [AppState.act] takes) the sheet closes at
+ * once, `then` runs (a page left, say) and `run` goes on by itself, the thing it is about marked under way, a failure
+ * told by a toast; without it the sheet stays, with what went wrong, until it is done.
+ */
+fun confirm(app: AppState, title: String, text: String, action: String, danger: Boolean = false, what: String? = null, then: () -> Unit = {}, run: suspend () -> Unit) {
     app.sheet = SheetSpec(0.36f) {
         val scope = rememberCoroutineScope()
         val operation = remember(app) { Action(app) }
@@ -95,16 +99,16 @@ fun confirm(app: AppState, title: String, text: String, action: String, danger: 
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button(t("common.cancel"), primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, danger = danger) {
-
-                    operation.run { run(); app.sheet = null }
+                    if (what != null) { app.sheet = null; then(); app.act(what) { run() } }
+                    else operation.run { run(); app.sheet = null }
                 }
             }
         }
     }
 }
 
-/** Asks for a line (a name); `run` gets it trimmed. */
-fun ask(app: AppState, title: String, value: String, placeholder: String, action: String, secret: Boolean = false, hint: String? = null, run: suspend (String) -> Unit) {
+/** Asks for a line (a name); `run` gets it trimmed. With `what`, as [confirm]: closes at once and goes on by itself. */
+fun ask(app: AppState, title: String, value: String, placeholder: String, action: String, secret: Boolean = false, hint: String? = null, what: String? = null, run: suspend (String) -> Unit) {
     app.sheet = SheetSpec(0.42f) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(value) }
@@ -120,8 +124,9 @@ fun ask(app: AppState, title: String, value: String, placeholder: String, action
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button(t("common.cancel"), primary = false) { app.sheet = null }
                 Button(action, primary = true, busy = busy, enabled = text.isNotBlank() && text.trim() != value) {
-
-                    operation.run { run(text.trim()); app.sheet = null }
+                    val line = text.trim()
+                    if (what != null) { app.sheet = null; app.act(what) { run(line) } }
+                    else operation.run { run(line); app.sheet = null }
                 }
             }
         }
@@ -169,7 +174,7 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
         if (view == null) return Loading(topic.error?.message ?: t("android-settings.workspace.reading"))
         val waiting = if (view.manager) view.added.size + view.invitations.size else 0
         // Its name is the title, renamed by a tap on it (by its owner and admins).
-        Box(if (view.manager) Modifier.clickable { ask(app, t("android-settings.workspace.name"), view.name, t("android-settings.workspace.namePlaceholder"), t("common.save")) { cloud.renameWorkspace(view.id, it); app.toast = t("android-settings.renamed") } } else Modifier) {
+        Box(if (view.manager) Modifier.clickable { ask(app, t("android-settings.workspace.name"), view.name, t("android-settings.workspace.namePlaceholder"), t("common.save"), what = t("android-settings.workspace.renameWhat")) { cloud.renameWorkspace(view.id, it); app.toast = t("android-settings.renamed") } } else Modifier) {
             LargeTitle("", view.name)
         }
         Text(t(if (view.manager) "android-settings.workspace.aboutRename" else "android-settings.workspace.about", "role" to (ROLE_LABEL[view.role] ?: view.role), "people" to t("android-settings.members.count", "n" to view.members.size), "stations" to t("android-settings.workspace.stations", "n" to view.stations.size)),
@@ -209,13 +214,15 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
         Spacer(Modifier.height(18.dp))
         ListCard {
             ListRow(onClick = {
-                confirm(app, t("android-settings.workspace.leaveTitle", "name" to view.name), t("android-settings.workspace.leaveText"), t("android-settings.workspace.leave"), danger = true) {
-                    cloud.removeMember(view.id, me.sub); app.toast = t("android-settings.workspace.left"); app.home()
+                confirm(app, t("android-settings.workspace.leaveTitle", "name" to view.name), t("android-settings.workspace.leaveText"), t("android-settings.workspace.leave"), danger = true,
+                    what = t("android-settings.workspace.leaveWhat"), then = app::home) {
+                    cloud.removeMember(view.id, me.sub); app.toast = t("android-settings.workspace.left")
                 }
             }) { Text(t("android-settings.workspace.leaveRow"), fontSize = 15.sp, color = C.red) }
             if (view.role == "owner") ListRow(onClick = {
-                confirm(app, t("android-settings.workspace.deleteTitle", "name" to view.name), t("android-settings.workspace.deleteText", "n" to view.stations.size, "app" to BuildConfig.APP_NAME), t("android-settings.workspace.delete"), danger = true) {
-                    cloud.deleteWorkspace(view.id); app.toast = t("android-settings.workspace.deleted"); app.home()
+                confirm(app, t("android-settings.workspace.deleteTitle", "name" to view.name), t("android-settings.workspace.deleteText", "n" to view.stations.size, "app" to BuildConfig.APP_NAME), t("android-settings.workspace.delete"), danger = true,
+                    what = t("android-settings.workspace.deleteWhat"), then = app::home) {
+                    cloud.deleteWorkspace(view.id); app.toast = t("android-settings.workspace.deleted")
                 }
             }) { Text(t("android-settings.workspace.delete"), fontSize = 15.sp, color = C.red) }
         }
@@ -261,20 +268,20 @@ private fun You(text: String) =
 @Composable
 private fun ColumnScope.MemberSheet(view: WorkspaceView, m: Member, cloud: Cloud) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     SheetGrab()
     SheetHead(m.name.ifEmpty { m.email })
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        // A role being set: a spinner on the one tapped, none tapped meanwhile; the sheet closes once it is done.
-        val setting = { r: String? -> app.isDoing("workspace.setRole", "workspace" to view.id, "member" to m.sub, "role" to r) }
+        // A role set closes the sheet at once; the person's row shows it under way (MemberRow), a toast if it failed.
+        val setting = app.isDoing("workspace.setRole", "workspace" to view.id, "member" to m.sub)
         if (view.role == "owner") listOf("owner", "admin", "member").forEach { r ->
-            val failed = app.failedOf("workspace.setRole", "workspace" to view.id, "member" to m.sub, "role" to r)
-            PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = m.role == r, enabled = !setting(null), busy = setting(r), failed = failed) {
-                scope.launch { try { cloud.setRole(view.id, m.sub, r); app.toast = t("android-settings.members.roleSet"); app.sheet = null } catch (e: CoreException) { app.toast = t("android-settings.members.roleFailed", "error" to errorText(e)) } }
+            PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = m.role == r, enabled = !setting) {
+                app.sheet = null
+                if (r != m.role) app.act(t("android-settings.members.roleWhat"), t("android-settings.members.roleSet")) { cloud.setRole(view.id, m.sub, r) }
             }
         }
         PickRow(t("android-settings.members.moveOutRow"), color = C.red) {
-            confirm(app, t("android-settings.members.moveOutTitle", "email" to m.email, "name" to view.name), t("android-settings.members.moveOutText"), t("android-settings.members.moveOut"), danger = true) {
+            confirm(app, t("android-settings.members.moveOutTitle", "email" to m.email, "name" to view.name), t("android-settings.members.moveOutText"), t("android-settings.members.moveOut"), danger = true,
+                what = t("android-settings.members.moveOutWhat")) {
                 cloud.removeMember(view.id, m.sub); app.toast = t("android-settings.members.movedOut")
             }
         }
@@ -522,10 +529,11 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
         SheetGrab()
         SheetHead(s.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.station.renameTitle"), s.name, t("android-settings.station.renamePlaceholder"), t("common.save")) { cloud.renameStation(current.workspace.id, s.id, it); app.toast = t("android-settings.renamed") } }
+            PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.station.renameTitle"), s.name, t("android-settings.station.renamePlaceholder"), t("common.save"), what = t("android-settings.station.renameWhat")) { cloud.renameStation(current.workspace.id, s.id, it); app.toast = t("android-settings.renamed") } }
             PickRow(t("android-settings.station.removeRow"), color = C.red) {
-                confirm(app, t("android-settings.station.removeTitle", "name" to s.name), t("android-settings.station.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.station.remove"), danger = true) {
-                    cloud.removeStation(current.workspace.id, s.id); app.toast = t("android-settings.station.removed"); app.pop()
+                confirm(app, t("android-settings.station.removeTitle", "name" to s.name), t("android-settings.station.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.station.remove"), danger = true,
+                    what = t("android-settings.station.removeWhat"), then = app::pop) {
+                    cloud.removeStation(current.workspace.id, s.id); app.toast = t("android-settings.station.removed")
                 }
             }
         }

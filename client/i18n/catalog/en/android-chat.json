@@ -129,7 +129,6 @@
   "android-chat.home.update": "Update to {version}",
   "android-chat.info.agents": "Agents · Tap one for run history",
   "android-chat.info.archive": "Archive chat",
-  "android-chat.info.archive.failed": "Couldn't archive: {error}",
   "android-chat.info.created": "Created",
   "android-chat.info.creator": "Creator",
   "android-chat.info.creator.none": "Unknown",

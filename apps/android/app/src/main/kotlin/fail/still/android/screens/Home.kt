@@ -515,7 +515,7 @@ private fun rowMenu(app: AppState, item: ChatItem): List<MenuItem>? {
 private fun archiveRow(app: AppState, item: ChatItem) {
     val api = app.api(item.station)
     val watch = item.watch
-    if (watch != null) confirm(app, t("android-chat.archive.ask", "title" to item.title), watch.ask, t("android-chat.archive")) { api.setArchived(item.thread, item.session, true); app.toast = t("android-chat.archived") }
+    if (watch != null) confirm(app, t("android-chat.archive.ask", "title" to item.title), watch.ask, t("android-chat.archive"), what = t("android-chat.archive.verb")) { api.setArchived(item.thread, item.session, true); app.toast = t("android-chat.archived") }
     else app.act(t("android-chat.archive.verb")) { api.setArchived(item.thread, item.session, true); app.toast = t("android-chat.archived") }
 }
 

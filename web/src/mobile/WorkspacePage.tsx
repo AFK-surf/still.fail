@@ -30,15 +30,15 @@ export function WorkspaceScreen() {
   if (!view) return <div className={pagesCss.mScreen}><TopBack label={t("web-mobile.settings.title")} onBack={app.pop} /><Loading text={t("web-mobile.workspace.reading")} /></div>;
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
-    title: t("web-mobile.workspace.leaveAsk", { name: view.name }), text: t("web-mobile.workspace.leaveText"), action: t("web-mobile.workspace.leaveAction"), danger: true,
-    run: () => cloud.removeMember(me.sub, view.id, me.sub).then(() => { app.toast(t("web-mobile.workspace.left")); app.replace("/"); }),
+    title: t("web-mobile.workspace.leaveAsk", { name: view.name }), text: t("web-mobile.workspace.leaveText"), action: t("web-mobile.workspace.leaveAction"), danger: true, atOnce: "web-mobile.workspace.leaveFailed",
+    run: () => { app.replace("/"); return cloud.removeMember(me.sub, view.id, me.sub).then(() => app.toast(t("web-mobile.workspace.left"))); },
   });
   const remove = () => confirm(app, {
     title: t("web-mobile.archive.deleteAsk", { title: view.name }), action: t("web-mobile.workspace.delete"), danger: true,
-    text: t("web-mobile.workspace.deleteText", { n: view.stations.length, name: NAME }),
-    run: () => cloud.deleteWorkspace(me.sub, view.id).then(() => { app.toast(t("web-mobile.workspace.deleted")); app.replace("/"); }),
+    text: t("web-mobile.workspace.deleteText", { n: view.stations.length, name: NAME }), atOnce: "web-main.chat.deleteFailed",
+    run: () => { app.replace("/"); return cloud.deleteWorkspace(me.sub, view.id).then(() => app.toast(t("web-mobile.workspace.deleted"))); },
   });
-  const rename = () => ask(app, { title: t("web-mobile.workspace.renameTitle"), value: view.name, placeholder: t("web-mobile.workspaces.namePlaceholder"), action: t("common.save"),
+  const rename = () => ask(app, { title: t("web-mobile.workspace.renameTitle"), value: view.name, placeholder: t("web-mobile.workspaces.namePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
     run: (name) => cloud.renameWorkspace(me.sub, view.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) });
   const add = () => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> });
   const waiting = manager ? view.added.length + view.invitations.length : 0;
@@ -104,11 +104,11 @@ function MemberRow({ view, m, me }: { view: WorkspaceView; m: MemberView; me: st
 function MemberSheet({ view, m }: { view: WorkspaceView; m: MemberView }) {
   const app = useApp();
   const me = app.entry.account;
-  // The role asked shows its spinner on its row until still.fail cloud answers; the sheet stays open if it fails.
+  // The sheet goes at once; the role asked shows its spinner on its row (opened again) until still.fail cloud answers.
   const list = useDoingList();
   const doing = list.find((d) => !failed(d) && doingMatches(d, "workspace.setRole", { account: me.sub, workspace: view.id, member: m.sub }));
   const roleFailed = list.findLast((d) => failed(d) && doingMatches(d, "workspace.setRole", { account: me.sub, workspace: view.id, member: m.sub }));
-  const setRole = (role: Role) => { cloud.setRole(me.sub, view.id, m.sub, role).then(() => { app.toast(t("web-mobile.workspace.roleChanged")); app.sheet(null); }, (e: Error) => app.toast(t("web-mobile.workspace.roleFailed", { error: e.message }))); };
+  const setRole = (role: Role) => { app.sheet(null); cloud.setRole(me.sub, view.id, m.sub, role).then(() => app.toast(t("web-mobile.workspace.roleChanged")), (e: Error) => app.toast(t("web-mobile.workspace.roleFailed", { error: e.message }))); };
   return (
     <>
       <SheetGrab />
@@ -126,7 +126,7 @@ function MemberSheet({ view, m }: { view: WorkspaceView; m: MemberView }) {
 
 function removeMember(app: MobileApp, view: WorkspaceView, m: MemberView) {
   confirm(app, {
-    title: t("web-mobile.workspace.removeMemberAsk", { email: m.email, name: view.name }), text: t("web-mobile.workspace.removeMemberText"), action: t("web-mobile.workspace.removeMemberAction"), danger: true,
+    title: t("web-mobile.workspace.removeMemberAsk", { email: m.email, name: view.name }), text: t("web-mobile.workspace.removeMemberText"), action: t("web-mobile.workspace.removeMemberAction"), danger: true, atOnce: "web-mobile.workspace.removeFailed",
     run: () => cloud.removeMember(app.entry.account.sub, view.id, m.sub).then(() => app.toast(t("web-mobile.workspace.memberRemoved"))),
   });
 }

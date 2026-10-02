@@ -415,8 +415,8 @@ function useRowMenu(item: ChatItem, busy: boolean) {
     // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
     { label: t("web-mobile.home.archive"), icon: <Archive size={16} />, action: () => {
       const archive = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));
-      // Asked first, its sheet says what went wrong and stays; else the toast does.
-      if (item.watch) confirm(app, { title: t("web-mobile.home.archiveAsk", { title: item.title }), text: item.watch.ask, action: t("web-mobile.home.archive"), run: archive });
+      // Asked first when it keeps watch; either way the row says it is under way and the toast how it ended.
+      if (item.watch) confirm(app, { title: t("web-mobile.home.archiveAsk", { title: item.title }), text: item.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: archive });
       else archive().catch(failed("web-mobile.home.archiveFailed"));
     } },
   ] });

@@ -120,7 +120,6 @@
   "android-chat.home.update": "更新到 {version}",
   "android-chat.info.agents": "参与的 agent · 点开看它的执行历史",
   "android-chat.info.archive": "归档对话",
-  "android-chat.info.archive.failed": "没能归档：{error}",
   "android-chat.info.created": "创建",
   "android-chat.info.creator": "发起",
   "android-chat.info.creator.none": "未记录",

@@ -52,7 +52,8 @@ fun ArchiveScreen(current: WorkspaceEntry) {
     val archive by rememberTopic<ArchiveView>(app.core, Topics.archive(current.workspace.id))
     val restore = { item: ArchiveItem -> app.act(t("android-misc.archive.restoreWhat"), t("android-misc.archive.restored")) { app.api(item.station).setArchived(item.thread, item.session, false) } }
     val delete = { item: ArchiveItem ->
-        confirm(app, t("android-misc.archive.deleteTitle", "title" to item.title), t("android-misc.archive.deleteText"), t("common.delete"), danger = true) {
+        confirm(app, t("android-misc.archive.deleteTitle", "title" to item.title), t("android-misc.archive.deleteText"), t("common.delete"), danger = true,
+            what = t("android-misc.archive.deleteWhat")) {
             app.api(item.station).deleteSession(item.session)
             app.toast = t("android-misc.archive.deleted")
         }

@@ -288,7 +288,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 SectionHeader(t("android-settings.run.account"), start = 24.dp)
                 ListCard {
                     ListRow(onClick = {
-                        ask(app, if (kind == "opencode-go") t("android-settings.profile.newGoKey") else t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHint")) { key ->
+                        ask(app, if (kind == "opencode-go") t("android-settings.profile.newGoKey") else t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHint"), what = t("android-settings.profile.keyWhat")) { key ->
                             api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", kind); put("key", key) } }); app.toast = t("android-settings.profile.savedChecking")
                         }
                     }) {
@@ -296,6 +296,8 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             Text(name, fontSize = 15.sp, color = C.ink)
                             Text(p.access.key.ifEmpty { t("android-settings.profile.notSaved") }, fontSize = 13.sp, color = C.muted, fontFamily = FontFamily.Monospace)
                         }
+                        // A key saved (the sheet that asked gone): a spinner until the station has it.
+                        DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
                         Text(t("android-settings.profile.change"), fontSize = 14.sp, color = C.accent)
                     }
                 }
@@ -311,7 +313,11 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             }
                         }
                     }
-                    ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) } }) { Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent) }
+                    ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) } }) {
+                        Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                        // Saved (the sheet gone): a spinner until the station has them.
+                        DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
+                    }
                 }
             }
             Spacer(Modifier.height(30.dp))
@@ -337,7 +343,7 @@ private fun ProfileRecovery(station: StationView, p: Profile) {
             if (issue.action == "command") CommandBox(p.loginCommand)
             if (issue.action != "login") Button(issue.label, primary = false, enabled = station.online, busy = checking || refreshing) {
                 when (issue.action) {
-                    "key" -> ask(app, t("android-settings.profile.newKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHintShort")) { key ->
+                    "key" -> ask(app, t("android-settings.profile.newKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), secret = true, hint = t("android-settings.profile.keyHintShort"), what = t("android-settings.profile.keyWhat")) { key ->
                         api.putProfile(p.id, buildJsonObject { putJsonObject("access") { put("kind", p.access.kind); put("key", key) } })
                     }
                     "env" -> app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) }
@@ -363,16 +369,18 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
         SheetGrab()
         SheetHead(p.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            if (p.machine != true) PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.profile.nameTitle"), p.name, t("android-settings.station.name"), t("common.save")) { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = t("android-settings.renamed") } }
+            if (p.machine != true) PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.profile.nameTitle"), p.name, t("android-settings.station.name"), t("common.save"), what = t("android-settings.profile.renameWhat")) { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = t("android-settings.renamed") } }
             PickRow(t("android-settings.profile.recheck"), busy = checking, failed = app.failedOf("profile.check", "station" to station, "id" to p.id)) { run(t("android-settings.profile.checkShort"), t("android-settings.profile.checked")) { api.checkProfile(p.id) } }
             // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
             val machine = p.machine == true
             PickRow((if (machine) t("android-settings.connect.disable") else t("android-settings.profile.delete")).let { if (p.usedBy.isNotEmpty()) t("android-settings.profile.inUse", "action" to it) else it }, color = C.red, enabled = p.usedBy.isEmpty()) {
-                if (machine) confirm(app, t("android-settings.profile.disableTitle", "name" to p.name), t("android-settings.profile.disableText", "app" to BuildConfig.APP_NAME, "runtime" to (MACHINE_RUNTIME[p.runtime] ?: p.runtime)), t("android-settings.connect.disable"), danger = true) {
-                    api.deleteProfile(p.id); app.toast = t("android-settings.profile.disabled"); app.pop()
+                if (machine) confirm(app, t("android-settings.profile.disableTitle", "name" to p.name), t("android-settings.profile.disableText", "app" to BuildConfig.APP_NAME, "runtime" to (MACHINE_RUNTIME[p.runtime] ?: p.runtime)), t("android-settings.connect.disable"), danger = true,
+                    what = t("android-settings.profile.disableWhat"), then = app::pop) {
+                    api.deleteProfile(p.id); app.toast = t("android-settings.profile.disabled")
                 }
-                else confirm(app, t("android-settings.connect.deleteTitle", "name" to p.name), t("android-settings.profile.deleteText", "app" to BuildConfig.APP_NAME), t("android-settings.profile.delete"), danger = true) {
-                    api.deleteProfile(p.id); app.toast = t("android-settings.profile.deleted"); app.pop()
+                else confirm(app, t("android-settings.connect.deleteTitle", "name" to p.name), t("android-settings.profile.deleteText", "app" to BuildConfig.APP_NAME), t("android-settings.profile.delete"), danger = true,
+                    what = t("android-settings.profile.deleteWhat"), then = app::pop) {
+                    api.deleteProfile(p.id); app.toast = t("android-settings.profile.deleted")
                 }
             }
         }
@@ -426,7 +434,7 @@ private fun QuotaSection(station: String, p: Profile) {
             Text(text, fontSize = 13.sp, color = C.muted)
         } }
         p.quota?.resetCount?.let { count -> ListRow(onClick = if (count <= 0 || resetting) null else ({
-            confirm(app, t("android-settings.quota.resetTitle"), t("android-settings.quota.resetText", "name" to p.name, "text" to p.quota.resetText), t("android-settings.quota.resetUse")) {
+            confirm(app, t("android-settings.quota.resetTitle"), t("android-settings.quota.resetText", "name" to p.name, "text" to p.quota.resetText), t("android-settings.quota.resetUse"), what = t("android-settings.quota.resetWhat")) {
                 app.api(station).resetQuota(p.id); app.toast = t("android-settings.quota.resetDone")
             }
         })) {
@@ -593,7 +601,6 @@ private class EnvRow(val row: Int, key: String, value: String, val masked: Strin
 @Composable
 private fun ColumnScope.EnvSheet(station: String, p: Profile) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     var next by remember { mutableIntStateOf(1) }
     var rows by remember { mutableStateOf(p.env.mapIndexed { i, e -> EnvRow(-i - 1, e.key, if (e.secret) "" else e.value, if (e.secret) e.value else null, e.key) }) }
     val busy = app.isDoing("profile.put", "station" to station, "id" to p.id)
@@ -630,11 +637,10 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
         Text(t("android-settings.env.add"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { rows = rows + EnvRow(next++, "", "", null, null) })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
-            Button(t("common.save"), primary = true, busy = busy) {
-                    scope.launch {
-                    try { app.api(station).putProfile(p.id, buildJsonObject { put("env", patch()) }); app.toast = t("android-settings.saved"); app.sheet = null }
-                    catch (e: CoreException) { app.toast = e.message }
-                }
+            Button(t("common.save"), primary = true, enabled = !busy) {
+                val env = patch()
+                app.sheet = null
+                app.act(t("android-settings.env.saveWhat"), t("android-settings.saved")) { app.api(station).putProfile(p.id, buildJsonObject { put("env", env) }) }
             }
         }
     }
