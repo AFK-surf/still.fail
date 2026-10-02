@@ -137,12 +137,13 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   const moves: Promise<unknown>[] = [transitionLive(go, () => findList()?.querySelector(`.${msgCss.msgMine}`) != null, 480 + wait)];
   let ghost: HTMLElement | null = null;
   let list: HTMLElement | null = null;
+  // The departing scene responds now, while the first row becomes ready behind it.
+  for (const { el, up } of leaving) moves.push(el.animate([
+    { opacity: 1, transform: "none" },
+    { opacity: 0, transform: up ? "translateY(-32px) scale(.96)" : "none" },
+  ], { duration: up ? 140 : 80, easing: EASE, fill: "forwards" }).finished);
   // The new page, before its first paint: what arrives set where it comes from.
   pageChanging()?.settle.push(() => {
-    for (const { el, up } of leaving) moves.push(el.animate([
-      { opacity: 1, transform: "none" },
-      { opacity: 0, transform: up ? "translateY(-32px) scale(.96)" : "none" },
-    ], { duration: up ? 140 : 80, easing: EASE, fill: "forwards" }).finished);
     list = findList();
     const first = list?.querySelector<HTMLElement>(`.${msgCss.msgMine}`);
     const words = first?.querySelector(`.${msgCss.msgPlain}`);
