@@ -206,7 +206,15 @@ class Host {
     var composerHeight by mutableIntStateOf(0)
     /** Measured from the composer's final content, independent of its visual height animation. */
     internal var naturalHeight by mutableIntStateOf(0)
-    fun roomForList(): Int = if (flight?.carried == false && naturalHeight > 0) naturalHeight else composerHeight
+    fun roomForList(): Int {
+        val shown = if (flight?.carried == false && naturalHeight > 0) naturalHeight else composerHeight
+        // One text line, its padding, toolbar and margins: focusing uses space already kept by the list.
+        val reserved = density?.run {
+            maxOf(36.dp.roundToPx(), SendTextStyle.lineHeight.roundToPx() + 14.dp.roundToPx()) +
+                (ComposerInset * 2 + 18.dp + 4.dp + 36.dp).roundToPx()
+        } ?: 0
+        return maxOf(shown, reserved)
+    }
     internal val rowPositions = mutableMapOf<String, Float>()
     internal var prepareFlight: (suspend (Flight) -> Unit)? = null
     internal var field: LayoutCoordinates? = null
@@ -390,6 +398,8 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
                     // Held taller than what it holds (words just sent leaving it): that at its foot, as it was.
                     .layout { m, c ->
                         val p = m.measure(c)
+                        // Own bubbles always wrap at the expanded field width, so focusing cannot reflow the history.
+                        host.fieldWidth = (p.width - with(density) { 28.dp.roundToPx() }).coerceAtLeast(0)
                         host.contentHeight = p.height
                         host.naturalHeight = p.height + composerChrome
                         val h = maxOf(p.height, host.hold ?: 0)
@@ -401,7 +411,7 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
                 DraftExtras(draft)
                 ComposerBar(
                     draft, spec.placeholder, onPlus = spec.onPlus, onType = spec.onType, onSend = spec.onSend,
-                    hint = { if (host.hintAway) 0f else hint.value }, morph = morph, onField = { host.field = it; host.fieldWidth = it.size.width }, onFieldText = { host.fieldText = it },
+                    hint = { if (host.hintAway) 0f else hint.value }, morph = morph, onField = { host.field = it }, onFieldText = { host.fieldText = it },
                 )
                 draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
             }
