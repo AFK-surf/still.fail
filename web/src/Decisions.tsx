@@ -182,7 +182,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   }, [front && keyOf(front), turn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The decision in view goes (a copy of it flies off that way, from where it is now), the next one rising in its place. */
-  const leave = (to: "left" | "right") => {
+  const leave = (to: "left" | "right" | "down") => {
     const el = card.current;
     const place = host.current;
     if (under.current) delete under.current.dataset.side;
@@ -199,7 +199,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
       if (from && copy) copy.scrollTop = from.scrollTop;
       const start = el.style.transform || "translateX(0px)";
       const w = place.offsetWidth;
-      const end = `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
+      const end = to === "down" ? `translateY(${place.offsetHeight}px)` : `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
       setLeaving((n) => n + 1);
       void ghost.animate([{ transform: start }, { transform: end }], { duration: 260, easing: "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
         .finished.then(() => { ghost.remove(); setLeaving((n) => n - 1); }, () => { ghost.remove(); setLeaving((n) => n - 1); });
@@ -226,7 +226,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
     drop(d);
     act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), "不再提醒");
   };
-  const answered = (d: DecisionItem) => { leave("right"); drop(d); };
+  const answered = (d: DecisionItem) => { leave("down"); drop(d); };
 
   // The wide screen's keys: ← 待定, → 不再提醒 (not while writing somewhere).
   const latest = useRef({ defer, dismiss });

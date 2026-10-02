@@ -287,12 +287,14 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     // The front one's way across (px), its coming in (0 → 1) and its departure as it is answered: its own, new with
     // another in front, so what went is not snapped back a frame before the next takes its place.
     val drag = remember(item.key) { Animatable(0f) }
+    val down = remember(item.key) { Animatable(0f) }
     val arrive = remember(item.key) { Animatable(if (local.arriving && !still) 0f else 1f) }
     LaunchedEffect(item.key) {
         local.arriving = false
         if (arrive.value < 1f) arrive.animateTo(1f, tween(260, easing = Ease.Out))
     }
     var width by remember { mutableIntStateOf(1) }
+    var height by remember { mutableIntStateOf(1) }
     var busy by remember { mutableStateOf(false) }
     // The deck's frame and a text card's field in it: a touch that begins in the field is the field's (no swipe).
     var frame by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -310,13 +312,14 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         }
     }
 
-    /** The front one goes (`dir` its side), `then` is done, and the next comes in. */
+    /** The front one goes (`dir` its side, 0 down after answering), `then` is done, and the next comes in. */
     fun go(dir: Int, then: () -> Unit) {
         if (busy) return
         busy = true
         scope.launch {
             if (!still) {
-                drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
+                if (dir == 0) down.animateTo(height.toFloat(), tween(260, easing = Ease.Standard))
+                else drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
             }
             // The next card is already laid out underneath the departing one.
             local.arriving = n == 1
@@ -333,7 +336,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     }
     val defer = { if (local.replying == null) go(-1) { local.later.remove(item.key); local.later.add(item.key); call("待定") { app.api(item.station).deferDecision(item.thread, item.seq) } } }
     val dismiss = { if (local.replying == null) go(1) { local.gone.add(item.key); call("不再提醒") { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
-    val answer = { o: DecisionOption -> if (local.replying == null) go(1) { local.gone.add(item.key); call("回答") { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
+    val answer = { o: DecisionOption -> if (local.replying == null) go(0) { local.gone.add(item.key); call("回答") { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
     // A text card's reply: it stays (a spinner on its send) until the core has it, then goes as an answer does; refused,
     // what was written stays and why is said.
     val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
@@ -348,7 +351,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                 try {
                     app.api(item.station).replyDecision(item.thread, item.seq, text, files, quotes)
                     replyDraft.take()
-                    go(1) { local.gone.add(item.key); local.replying = null }
+                    go(0) { local.gone.add(item.key); local.replying = null }
                 } catch (e: CoreException) { local.replying = null; app.toast = "没能回复：${errorText(e)}" }
                 finally { replyDraft.starting = false }
             }
@@ -358,7 +361,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
 
     Column(modifier.fillMaxWidth()) {
         Box(
-            Modifier.weight(1f).fillMaxWidth().clipToBounds().onSizeChanged { width = it.width.coerceAtLeast(1) }
+            Modifier.weight(1f).fillMaxWidth().clipToBounds().onSizeChanged { width = it.width.coerceAtLeast(1); height = it.height.coerceAtLeast(1) }
                 .onGloballyPositioned { frame = it }
                 .pointerInput(item.key, still) {
                     awaitEachGesture {
@@ -431,6 +434,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                     val s = lerp(0.94f, 1f, a)
                     scaleX = s; scaleY = s
                     translationX = drag.value
+                    translationY = down.value
                     rotationZ = drag.value / width * 4f
                     alpha = a
                 }.background(C.bg),
