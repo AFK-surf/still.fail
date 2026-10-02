@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 空奏页显示今天的情况（zou-empty-page）：station 的 chat 列表行多了可选字段 `answered`（看的人最近 36 小时答过的卡片），core 的 `decisions` 视图多了可选的 `answered`/`working`/`today`；web 和安卓的空奏页读它们。station 新加一个部分索引 `entries_people_at`（IF NOT EXISTS，无迁移）。新旧混跑：旧 station 不给 `answered` 时页面只缺「今天批过的」和平均等待，正在办照常；旧客户端忽略新字段。web、station、安卓都要发。上线后验：批完所有奏后停在奏页，看到今天批了几件、平均等你多久，「今天批过的」里有刚批的那件。
 - 发布桶与静态 Worker 改名：189 个对象约 10.76 GB 已复制并校验到 stillfail-releases；切换前保存完整基线报告，切换后用 migrate-releases.py --reconcile --baseline <基线> --report <新报告> 补旧上传器晚到的对象，新桶有更改或删除则保留新值。停止旧上传器后再做最后一轮，旧桶留回退期，不再日常使用。API 的 RELEASES、release.sh、changelog 和 web build 元数据上传同时换新桶。静态 Worker 换 stillfail-*，自定义域名随部署转移；正式 web 必须用已上线的原构建迁移，不顺带转正 beta。
 
 - Relay 云资源改名：已转移到 stillfail-relay，Relay / RelayBudget 两个 namespace ID 与原容器 application ID 均保持不变。先无 containers 转移，再挂回原容器，避免 Cloudflare 10074；中断可按私有报告续跑。模板使用 stillfail-v1，现有部署不重复创建；旧 ember-relay 禁止用原模板重新部署。容器 application 仍显式绑定 ember-relay-relay，须另行验证新 application 滚动替换后才退役。路由切换与回退用 cutover-worker.py。
