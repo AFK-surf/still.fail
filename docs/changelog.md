@@ -19,6 +19,26 @@ Session: ember:c-…
 - 归哪一端，看提交改了哪些目录（scripts/changelog.ts `PARTS`）：`mesh/` 归 station，`web/` 归网页版（桌面 app 带着网页，也算），`client/` 归网页和安卓，`apps/android/` 归安卓，`apps/desktop/` 归桌面，`cloud/src/` 归云端（一部署就上线）。其余（官网、文档、脚本）不需要发版。
 - 写错了或漏写了：在 `docs/changelog-notes.json` 里按提交号（至少 7 位）补或改：`{ "<提交>": { "text": [...], "fixes": [...] } }`，它的 `text` 会替换提交里的那几行。
 
+## 正式版的日志：每次正式发布写一份
+
+上面那些逐个提交的条目是测试版的日志。正式版用户隔一阵才更新一次，看的是一次发布一条、重新写过的日志：`docs/releases/0.1.<n>.md`。
+
+```
+---
+version: 1400          # 这次发布从哪个提交构建：各端都发到这个版本（或更新）
+date: 2026-10-02
+parts: [web, station, android, desktop, cloud]   # 这次发出去的端
+---
+- 新功能：……
+- 改进：……
+- 修复：……
+```
+
+- 正式发布时，agent 先跑 `node scripts/changelog.ts --draft`，拿到上次正式版之后测试版的所有条目（从旧到新，带版本、端和 FB 号），据此重写：按「新功能 / 改进 / 修复」分组，合并说同一件事的多条，去掉中间态（改了又改的只留最后的样子，修的是测试版里自己刚引入的问题就不写），用正式版用户看得懂的话写，不提测试版。只有 `- ` 开头的行会显示。
+- 稿子发到 chat 里给人看，认可后和这次发布一起合进 main，再转正和发正式版 app。各端要从同一个提交发（`version` 就是它），app 才能准确说出「你的版本已包含」。
+- 合进 main 后，CI 用 `node scripts/changelog.ts --stable` 把这些文件拼成 `changelog-stable.json` 放进 releases 桶。cloud 给正式通道（app.still.fail、不带测试版标记的 app）读它，给测试通道读 `changelog.json`。还没有任何一份正式版日志时，正式通道也读测试版的。每条的 `fixes` 是它和上一次正式发布之间测试版条目里的 FB 号，只用来展示：反馈标成已修复，仍然按测试版的逐提交记录来判断。
+- `scripts/check.sh` 改到 `docs/releases/` 时会照 CI 的读法读一遍，格式不对就不让提交。
+
 ## 怎么到用户那里
 
 - `node scripts/changelog.ts` 从 main 的历史生成 JSON（新的在前）。CI 的 pipeline 在 main 每次部署完（api 没失败）跑它，把结果放进 releases 桶的 `changelog.json`。

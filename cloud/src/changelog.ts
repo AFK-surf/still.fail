@@ -47,10 +47,22 @@ async function read(bucket: Bucket, key: string): Promise<string | null> {
   return object ? new Response(object.body).text() : null;
 }
 
-/** The changelog as CI last put it; empty before it has. */
-export async function changelog(bucket: Bucket): Promise<ChangelogEntry[]> {
+/**
+ * The changelog as CI last put it; empty before it has. The test channel's (changelog.json) is a commit an entry, and
+ * is what reports are marked fixed by; the stable channel's (changelog-stable.json) a release an entry, as written for
+ * it (docs/releases): read for the stable channel's apps, with the test channel's until there is one.
+ */
+export async function changelog(bucket: Bucket, channel: Channel = "beta"): Promise<ChangelogEntry[]> {
+  if (channel === "stable") {
+    const written = await entries(bucket, "changelog-stable.json");
+    if (written.length) return written;
+  }
+  return entries(bucket, "changelog.json");
+}
+
+async function entries(bucket: Bucket, key: string): Promise<ChangelogEntry[]> {
   try {
-    const value = JSON.parse((await read(bucket, "changelog.json")) ?? "[]") as unknown;
+    const value = JSON.parse((await read(bucket, key)) ?? "[]") as unknown;
     return Array.isArray(value) ? (value as ChangelogEntry[]).filter((e) => Number.isSafeInteger(e?.version) && Array.isArray(e.text) && Array.isArray(e.parts)) : [];
   } catch {
     return [];
@@ -96,8 +108,9 @@ const channelOf = (request: Request, env: Env): Channel => (new URL(request.url)
 
 /** GET /v1/changelog: { entries, released } on the channel of the host (or x-stillfail-channel). Anyone may read it. */
 export async function serveChangelog(request: Request, env: Env): Promise<Response> {
-  const [entries, have] = await Promise.all([changelog(env.RELEASES), released(env.RELEASES, channelOf(request, env))]);
-  return reply({ entries, released: have }, 200, { "cache-control": "public, max-age=300" });
+  const channel = channelOf(request, env);
+  const [list, have] = await Promise.all([changelog(env.RELEASES, channel), released(env.RELEASES, channel)]);
+  return reply({ entries: list, released: have }, 200, { "cache-control": "public, max-age=300" });
 }
 
 /** Marks the reports the changelog fixes, and gives what has been fixed of a station's reports and is out on their channel. */

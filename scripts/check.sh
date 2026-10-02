@@ -89,6 +89,8 @@ fi
 if touches "$ts_root" || touches "$ts_web" || touches "$ts_cloud" || touches "$ts_desktop"; then deps .; fi
 # The tests import the web core too.
 if touches "$ts_root" || touches "$ts_web"; then wasm_pkg; fi
+# The stable channel's release notes (docs/changelog.md): each one read as CI will.
+if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
 if touches "$ts_root"; then step "typecheck: scripts and tests" pnpm exec tsgo -p tsconfig.json; fi
 if touches "$ts_web"; then
   step "typecheck: web" pnpm exec tsgo -p web/tsconfig.json
