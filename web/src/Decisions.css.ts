@@ -1,4 +1,5 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
+import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
 
@@ -102,6 +103,8 @@ export const reply = style({
   minHeight: `calc(${vars.textBody} * 1.5 + 102px)`,
   selectors: { '&[data-mobile]': { minHeight: "100px" } },
 });
+// The footer already supplies the page gutters. Do not inset the chat composer a second time.
+globalStyle(`${reply} > ${composerWrap}`, { paddingLeft: "0", paddingRight: "0" });
 export const footColumn = style({ maxWidth: "760px", margin: "0 auto" });
 globalStyle(`${footColumn} ${options}`, { marginTop: "0" });
 /** ← 待定　不再提醒 →: what a swipe does (the phone), or the two as words to press (the wide screen). */
