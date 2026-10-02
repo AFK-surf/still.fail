@@ -40,7 +40,8 @@ let catalog: Record<string, Json> | undefined;
 function words(): Record<string, Json> {
   if (!catalog) {
     catalog = {};
-    const dir = new URL("../../../../client/i18n/catalog/zh/", import.meta.url).pathname;
+    // A bundle is elsewhere: STILLFAIL_CATALOG says where the words are.
+    const dir = process.env.STILLFAIL_CATALOG ?? new URL("../../../../client/i18n/catalog/zh/", import.meta.url).pathname;
     for (const file of readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
       Object.assign(catalog, JSON.parse(readFileSync(join(dir, file), "utf8")));
     }
