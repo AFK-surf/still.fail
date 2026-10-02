@@ -5,10 +5,9 @@
 // message, their bubble forming around them, and what follows comes up after them out of the composer. Nothing is
 // crossfaded over anything.
 //
-// Only the leaving is a view transition (pictures of what is gone). What arrives moves on the page itself: a named
-// element taken away ends a view transition at once, and the chat's rows are (the message sent is drawn anew once its
-// station has it, maybe while it moves).
-import { pageChanging, transitionTo } from "./ui.tsx";
+// What leaves is kept as DOM copies; what arrives moves on the page itself. No whole-page snapshot blocks painting
+// while the chat mounts. The message flies as a copy because its row can be replaced by the station receipt.
+import { pageChanging, transitionLive } from "./ui.tsx";
 import { cubicBezier } from "motion";
 import { reducedMotion } from "./motion.ts";
 import * as msgCss from "./styles/chat.css.ts";
@@ -111,17 +110,39 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   const now = sending;
   sending = null;
   const root = document.documentElement;
-  const leaving = [...scope.querySelectorAll<HTMLElement>("[data-made-leave]")];
-  leaving.forEach((el, i) => {
-    el.style.viewTransitionName = `made-leave-${i}`;
-    el.style.setProperty("view-transition-class", `made-${el.dataset.madeLeave}`);
-  });
+  // Keep only the departing scene. Capturing the whole document with startViewTransition freezes painting
+  // while the chat mounts, and turns its layout work into a visible pause before any of the flight can move.
+  const leaving: { el: HTMLElement; original: HTMLElement; visibility: string; up: boolean }[] = [];
+  const scene = layer();
+  if (scene && !reducedMotion()) {
+    const base = scene.getBoundingClientRect();
+    for (const el of scope.querySelectorAll<HTMLElement>("[data-made-leave]")) {
+      const at = el.getBoundingClientRect();
+      const copy = el.cloneNode(true) as HTMLElement;
+      const style = getComputedStyle(el);
+      copy.setAttribute("aria-hidden", "true");
+      copy.inert = true;
+      Object.assign(copy.style, {
+        position: "absolute", left: `${at.left - base.left}px`, top: `${at.top - base.top}px`,
+        width: `${at.width}px`, height: `${at.height}px`, margin: "0", zIndex: z, pointerEvents: "none",
+        font: style.font, color: style.color, textAlign: style.textAlign,
+      });
+      scene.append(copy);
+      leaving.push({ el: copy, original: el, visibility: el.style.visibility, up: el.dataset.madeLeave === "up" });
+      // React can keep the old page while its next topic is loading; do not draw it twice.
+      el.style.visibility = "hidden";
+    }
+  }
   root.dataset.made = "";
-  const moves: Promise<unknown>[] = [transitionTo(go, () => findList()?.querySelector(`.${msgCss.msgMine}`) != null)];
+  const moves: Promise<unknown>[] = [transitionLive(go, () => findList()?.querySelector(`.${msgCss.msgMine}`) != null, 480 + wait)];
   let ghost: HTMLElement | null = null;
   let list: HTMLElement | null = null;
-  // The new page, before its picture is taken: what arrives set where it comes from.
+  // The new page, before its first paint: what arrives set where it comes from.
   pageChanging()?.settle.push(() => {
+    for (const { el, up } of leaving) moves.push(el.animate([
+      { opacity: 1, transform: "none" },
+      { opacity: 0, transform: up ? "translateY(-32px) scale(.96)" : "none" },
+    ], { duration: up ? 140 : 80, easing: EASE, fill: "forwards" }).finished);
     list = findList();
     const first = list?.querySelector<HTMLElement>(`.${msgCss.msgMine}`);
     const words = first?.querySelector(`.${msgCss.msgPlain}`);
@@ -164,8 +185,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     });
     ghost.append(copy);
     into.append(ghost);
-    // Over the pictures of what leaves (named, it is pictured after them; it is not taken away while they go).
-    ghost.style.viewTransitionName = "made-arrive";
+    ghost.dataset.madeArrive = "";
     now.stand?.remove();
     // Images leave from their own thumbnails, not from the text's baseline. Keep the decoded image throughout:
     // cloning the outbox alone would capture its loading placeholder and flash at the start of the flight.
@@ -208,7 +228,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   void Promise.allSettled(moves).then(async () => {
     // The page's own moves, begun as the new page settled (within the transition), are over too.
     await Promise.allSettled(moves);
-    for (const el of leaving) { el.style.viewTransitionName = ""; el.style.removeProperty("view-transition-class"); }
+    for (const { el, original, visibility } of leaving) { el.remove(); original.style.visibility = visibility; }
     ghost?.remove();
     now?.stand?.remove();
     for (const picture of now?.pictures ?? []) picture.stand.remove();

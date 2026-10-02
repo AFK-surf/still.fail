@@ -643,3 +643,26 @@ export function transitionTo(go: () => void, ready?: () => boolean, patience = 8
   changing = now;
   return transition.finished.catch(() => {}).finally(() => { if (changing === now) changing = null; delete document.documentElement.dataset.transitioning; });
 }
+
+/** A page change whose leaving elements are kept by its caller: no document snapshot or rendering freeze. */
+export function transitionLive(go: () => void, ready: () => boolean, duration: number): Promise<void> {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { go(); return Promise.resolve(); }
+  let begin!: () => void;
+  const moving = new Promise<void>((resolve) => { begin = resolve; });
+  const now = { settle: [] as (() => void)[], moving, done: Promise.resolve() };
+  changing = now;
+  now.done = Promise.resolve().then(async () => {
+    flushSync(go);
+    // Composer layout effects queue their own setup; let them join settle before measuring the destination.
+    await Promise.resolve();
+    const until = performance.now() + 800;
+    while (!ready() && performance.now() < until) await new Promise((resolve) => setTimeout(resolve, 16));
+    for (const settle of now.settle.splice(0)) settle();
+    begin();
+    await new Promise((resolve) => setTimeout(resolve, duration));
+  }).finally(() => {
+    begin();
+    if (changing === now) changing = null;
+  });
+  return now.done;
+}
