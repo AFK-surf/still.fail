@@ -213,7 +213,11 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     now?.stand?.remove();
     for (const picture of now?.pictures ?? []) picture.stand.remove();
     if (now) delete now.field.dataset.madeField;
-    if (list) delete list.dataset.madeList;
+    if (list) {
+      // Removing the flight flag must not start the ordinary row entrance a second time.
+      for (const row of list.querySelectorAll<HTMLElement>(`.${msgCss.msgMine}`)) row.style.animation = "none";
+      delete list.dataset.madeList;
+    }
     delete root.dataset.made;
     delete root.dataset.madeHint;
   });
