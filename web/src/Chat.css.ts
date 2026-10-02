@@ -36,9 +36,6 @@ export const chatToBottom = style({
       backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
       vars: { "--composer-inset": "32px", "--composer-curve": "22px" },
     },
-    [`body:has(${composerBox}[data-multiline]) ${chat}[data-under-composer] &`]: {
-      vars: { "--composer-curve": `calc(32px * ${vars.cornerScale})` },
-    },
     // With how many new messages wait at the end (a window short of it): a pill, growing leftwards from where it sits.
     "&[data-count]": {
       width: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "0 12px 0 9px", borderRadius: "17px",
