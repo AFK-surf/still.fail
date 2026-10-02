@@ -749,7 +749,7 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
 @Composable
 private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Modifier) {
     // Floating over the list at the bottom right: 奏 N (奏 alone at 0, a disc), and the new-chat button, a disc of
-    // the same glass with 令 in the accent.
+    // the same glass in the accent, 令 white.
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
@@ -757,9 +757,9 @@ private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Mo
     ) {
         DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
         Box(
-            Modifier.floating(haze, CircleShape).size(56.dp)
+            Modifier.floating(haze, CircleShape, C.accent).size(56.dp)
                 .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Ling, 44.dp, C.accent) }
+        ) { IconIn(Icons.Ling, 44.dp, Color.White) }
     }
 }

@@ -98,17 +98,17 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
 }
 
 /**
- * The new-chat button: a disc of the 奏 capsule's glass, 令 in the accent (Home.kt's Toolbar). Not frosted over the
+ * The new-chat button: a disc of the 奏 capsule's glass in the accent, 令 white (Home.kt's Toolbar). Not frosted over the
  * pages (app.haze): drawn inside what that blurs, a frosted ring there shows the blur's own edges.
  */
 @Composable
 fun NewChatDisc() {
     val app = LocalApp.current
     Box(
-        Modifier.floatingStill(CircleShape).size(56.dp)
+        Modifier.floatingStill(CircleShape, C.accent).size(56.dp)
             .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-misc.wide.newChat") },
         contentAlignment = Alignment.Center,
-    ) { IconIn(Icons.Ling, 44.dp, C.accent) }
+    ) { IconIn(Icons.Ling, 44.dp, Color.White) }
 }
 
 /**

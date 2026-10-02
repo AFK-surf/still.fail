@@ -57,12 +57,12 @@ val InComposer = RoundedCornerShape(ComposerCorner - ComposerInset)
 
 /**
  * A capsule floating over the list that `state` is the source of: raised and frosted as the web phone's (pages.css.ts
- * mFloating: `--raised` at 72% over a 20px blur, no line round it, only a breath of shadow).
+ * mFloating: `--raised` at 72% over a 20px blur, no line round it, only a breath of shadow); `tint` for glass of
+ * another colour (the new-chat disc's accent).
  */
 @Composable
-fun Modifier.floating(state: HazeState, shape: Shape): Modifier {
+fun Modifier.floating(state: HazeState, shape: Shape, tint: Color = Raised): Modifier {
     val bg = C.bg
-    val tint = Raised
     return shadow(1.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
         .clip(shape)
         .hazeEffect(state) {
@@ -81,8 +81,8 @@ fun Modifier.floating(state: HazeState, shape: Shape): Modifier {
  * smear its last row of pixels into the capsule.
  */
 @Composable
-fun Modifier.floatingStill(shape: Shape): Modifier {
-    val ground = Raised.copy(alpha = 0.72f).compositeOver(C.bg)
+fun Modifier.floatingStill(shape: Shape, tint: Color = Raised): Modifier {
+    val ground = tint.copy(alpha = 0.72f).compositeOver(C.bg)
     return shadow(1.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
         .clip(shape).background(ground)
         .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
