@@ -8,6 +8,7 @@ import { readJson, readText, reply } from "./auth";
 import type { PushDevice, PushRegistration } from "./directory";
 import type { Env } from "./env";
 import { fcmPush, serviceAccount } from "./fcm";
+import { langOf, requestLang, type Lang } from "./i18n.ts";
 import { line, noticeBody } from "./noticeText";
 import { stationSender } from "./tracing";
 import { validAuthSecret, validPoint, webPush, type Outcome, type Vapid } from "./webpush";
@@ -71,7 +72,9 @@ export async function registration(request: Request, env: Env, sub: string, sid:
   } else {
     return reply({ error: "invalid_request" }, 400);
   }
-  await dir.registerPush(sub, sid, device);
+  // The language its notifications are said in: the one the client says, else its request's.
+  const lang = typeof input.lang === "string" && input.lang ? langOf(input.lang) : requestLang(request);
+  await dir.registerPush(sub, sid, device, lang);
   return new Response(null, { status: 204 });
 }
 
@@ -124,25 +127,26 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   const pushes: Promise<{ device: PushRegistration; outcome: Outcome }>[] = [];
   for (const n of notices) {
     const base = `${targets.workspace}/${station}`;
-    const payload: Record<string, string> = {
+    // In each device's language.
+    const payload = (lang: Lang): Record<string, string> => ({
       type: "notice",
       kind: n.kind,
       title: line(n.title),
-      body: noticeBody(n.kind, n.text, n.by),
+      body: noticeBody(n.kind, n.text, n.by, lang),
       tag: `${base}/${n.session}`,
       url: `/o/${base}/${encodeURIComponent(n.session)}`,
       workspace: targets.workspace,
       station,
       session: n.session,
       at: String(n.at),
-    };
-    const json = JSON.stringify(payload);
+    });
     // A device signed in with several of the people named gets it once.
     const devices = new Map<string, PushRegistration>();
     for (const email of n.to) for (const device of targets.devices[email.toLowerCase()] ?? []) devices.set(device.kind === "web" ? `web ${device.endpoint}` : `fcm ${device.token}`, device);
     for (const device of devices.values()) {
       if (pushes.length >= MAX_PUSHES) break;
-      const push = device.kind === "web" ? (keys ? webPush(keys, device, json, payload.tag!) : null) : fcm ? fcmPush(fcm, device.token, payload) : null;
+      const said = payload(device.lang);
+      const push = device.kind === "web" ? (keys ? webPush(keys, device, JSON.stringify(said), said.tag!) : null) : fcm ? fcmPush(fcm, device.token, said) : null;
       if (!push) continue;
       pushes.push(push.then((outcome) => ({ device, outcome }), (error) => {
         console.warn(`push: ${error}`);

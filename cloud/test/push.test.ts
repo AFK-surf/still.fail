@@ -109,6 +109,8 @@ test("a notification's text is one line of at most 140 characters, made by its k
   assert.equal(noticeBody("block", "要你确认", "Claude"), "需要处理 · 要你确认");
   assert.equal(noticeBody("failed", "token runs out"), "出错了 · token runs out");
   assert.equal(noticeBody("done", "no one said it"), "no one said it");
+  // In the language of the device it goes to.
+  assert.equal(noticeBody("block", "confirm this", "Claude", "en"), "Needs you · confirm this");
   const long = line("字".repeat(200));
   assert.equal(Array.from(long).length, 140);
   assert.ok(long.endsWith("…"));

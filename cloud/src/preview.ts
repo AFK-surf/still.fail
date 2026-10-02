@@ -32,6 +32,7 @@
 // Its limits: cookies the service sets are not sent back (the service
 // worker's requests carry none).
 
+import { browserWords, tr } from "./i18n.ts";
 import { SOCKET_TAG_JS, socketScript } from "./previewSocket.ts";
 
 const FRAME = `<!doctype html>
@@ -122,7 +123,7 @@ const FRAME = `<!doctype html>
     port = event.ports[0];
     streams = event.data.streams === true;
     port.onmessage = fromClient;
-    start().catch((error) => { document.body.innerHTML = "<p></p>"; document.querySelector("p").textContent = "预览没能启动：" + error.message; });
+    start().catch((error) => { document.body.innerHTML = "<p></p>"; document.querySelector("p").textContent = ${browserWords("cloud.preview.startFailed", { error: "error.message" })}; });
   });
   // The service's frame, and a history of its own: the bar's back, forward and go move along it with replace(), so they
   // never step the page it sits in (a frame shares its window's history: history.back() at its start leaves the page).
@@ -217,7 +218,7 @@ function plain(status, text) {
 ${SOCKET_TAG_JS}
 async function relay(event, url) {
   const frame = await frameOf(nonceOf(event));
-  if (!frame) return plain(502, "预览已经断开：在 still.fail 里重新打开它。");
+  if (!frame) return plain(502, ${browserWords("cloud.preview.gone")});
   const request = event.request;
   const body = request.method === "GET" || request.method === "HEAD" ? null : new Uint8Array(await request.arrayBuffer());
   const channel = new MessageChannel();
@@ -290,7 +291,7 @@ export function previewFiles(annotate = ""): Record<string, string> {
       [`${prefix}/socket.js`, SOCKET],
     ])),
     // Only reached before the service worker runs, or when a frame opens this host by itself.
-    "404.html": `<!doctype html><meta charset="utf-8"><title>still.fail preview</title><p>这是 still.fail 的预览地址：在 still.fail 里打开一个预览。</p>`,
+    "404.html": `<!doctype html><meta charset="utf-8"><title>still.fail preview</title><p>${tr("zh", "cloud.preview.host")}</p><script>document.querySelector("p").textContent = ${browserWords("cloud.preview.host")};</script>`,
     // The service worker is the whole host's, from under either prefix.
     "_headers": PREVIEW_PREFIXES.map((prefix) => `/${prefix}/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/${prefix}/frame\n  Cache-Control: no-cache\n/${prefix}/annotate.js\n  Cache-Control: no-cache\n/${prefix}/socket.js\n  Cache-Control: no-cache\n`).join(""),
   };

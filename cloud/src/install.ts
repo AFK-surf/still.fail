@@ -20,12 +20,14 @@
 // (its definition differs, so it is never handed over), ~/.ember moved to ~/.stillfail with a link left at the old
 // place, the old service's definition removed and the new one started; `ember` is linked to the new command.
 
+import { tr, type Lang } from "./i18n.ts";
+
 /**
  * The installer for a still.fail cloud at `origin`, getting the release of `channel` by default: the stable one, or the
  * test channel's (beta/, scripts/release.sh --beta). STILLFAIL_CHANNEL where it runs says otherwise.
  */
-export function installScript(origin: string, channel: "stable" | "beta" = "stable"): string {
-  return SCRIPT.replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel);
+export function installScript(origin: string, channel: "stable" | "beta" = "stable", lang: Lang = "zh"): string {
+  return script((key, args) => tr(lang, key, args)).replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel);
 }
 
 /**
@@ -67,7 +69,9 @@ export function releaseType(file: string): string | null {
 
 // A variable is always braced where words follow it ("\${app}（…）"): sh may take the first byte of a non-ASCII
 // character for part of its name, and set -u stops the script there.
-const SCRIPT = `#!/bin/sh
+// What it says is in the language it was asked for (?lang=, Accept-Language); `say` gives it, with what the shell puts
+// in ($names, $(commands)) given as arguments.
+const script = (say: (key: string, args?: Record<string, string>) => string) => `#!/bin/sh
 # Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
 #   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token>
 # STILLFAIL_CHANNEL=beta gets the test channel's release (stable: the usual one); this copy defaults to __CHANNEL__.
@@ -96,8 +100,8 @@ cur="$data"
 step() { [ -d "$cur/run" ] && printf '%s\n' "$1" > "$cur/run/update.step" 2>/dev/null || true; }
 # A station already in a workspace is only updated: no token, and it stays the same station.
 if [ -z "$token" ] && [ ! -f "$cur/mesh/cloud.json" ]; then
-  echo "用法：curl -fsSL $origin/install.sh | sh -s -- <token>（token 在 still.fail 的「添加 station」里生成）" >&2
-  echo "已经加入 workspace 的 station 更新时不需要 token：stillfail update" >&2
+  echo "${say("cloud.install.usage", { origin: "$origin" })}" >&2
+  echo "${say("cloud.install.updateNoToken")}" >&2
   exit 2
 fi
 os=$(uname -s)
@@ -105,7 +109,7 @@ case "$os-$(uname -m)" in
   Darwin-arm64) platform=darwin-arm64 ;;
   Linux-x86_64) platform=linux-x64 ;;
   Linux-aarch64|Linux-arm64) platform=linux-arm64 ;;
-  *) echo "暂时只支持 macOS（Apple 芯片）和 Linux（x64、arm64）的机器，这台是 $(uname -s) $(uname -m)。" >&2; exit 1 ;;
+  *) echo "${say("cloud.install.unsupported", { machine: "$(uname -s) $(uname -m)" })}" >&2; exit 1 ;;
 esac
 app="$data/app"
 label="fail.still.station"
@@ -123,8 +127,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 channel="\${STILLFAIL_CHANNEL:-__CHANNEL__}"
 case "$channel" in
-  beta) release="beta/stillfail-station-$platform.tar.gz"; echo "下载 still.fail station（测试版）…" ;;
-  *) channel=stable; release="stillfail-station-$platform.tar.gz"; echo "下载 still.fail station…" ;;
+  beta) release="beta/stillfail-station-$platform.tar.gz"; echo "${say("cloud.install.downloadBeta")}" ;;
+  *) channel=stable; release="stillfail-station-$platform.tar.gz"; echo "${say("cloud.install.download")}" ;;
 esac
 step download
 curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz"
@@ -206,7 +210,7 @@ inside_station() {
 # Already on this release, and running as its service would: nothing to do.
 if [ -n "$pid" ] && [ -z "$migrate" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/stillfail/VERSION" "$app/VERSION" && same_service; then
   cp "$tmp/stillfail/CHANNEL" "$app/CHANNEL" 2>/dev/null || true
-  echo "still.fail station 已经是最新版（$(cut -c1-7 "$app/VERSION")），不用更新。"
+  echo "${say("cloud.install.upToDate", { version: '$(cut -c1-7 "$app/VERSION")' })}"
   exit 0
 fi
 
@@ -225,11 +229,11 @@ move_data() {
   [ -n "$migrate" ] || return 0
   if [ -d "$data" ] && [ ! -L "$data" ]; then rmdir "$data" 2>/dev/null || true; fi
   if mv "$old_data" "$data" 2>/dev/null; then
-    ln -s "$data" "$old_data" || echo "数据已经搬到 \${data}，但没能在 \${old_data} 留下链接。" >&2
-    echo "数据目录从 \${old_data} 搬到了 \${data}（旧位置留了一个指向它的链接）。"
+    ln -s "$data" "$old_data" || echo "${say("cloud.install.move.noLink", { data: "${data}", old: "${old_data}" })}" >&2
+    echo "${say("cloud.install.move.moved", { data: "${data}", old: "${old_data}" })}"
   else
     ln -s "$old_data" "$data"
-    echo "没能把 \${old_data} 搬到 \${data}，改为让 \${data} 指向它。" >&2
+    echo "${say("cloud.install.move.linked", { data: "${data}", old: "${old_data}" })}" >&2
   fi
   migrate=""
 }
@@ -241,7 +245,7 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   swap_app
   rm -f "$data/run/handoff-failed"
   step handoff
-  echo "把运行中的 station 交接给新版本（agent 不中断）…"
+  echo "${say("cloud.install.handoff.start")}"
   kill -USR2 "$pid"
   for _ in $(seq 1 120); do
     sleep 1
@@ -254,13 +258,13 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   if [ -n "$handed" ]; then
     rm -rf "$app.old"
   elif [ -f "$data/run/handoff-failed" ]; then
-    echo "没能交接（$(cat "$data/run/handoff-failed")），改为重启 station。" >&2
+    echo "${say("cloud.install.handoff.failed", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
   elif [ "$(said startedAt)" != "$started" ]; then
     # It went down mid-way and its service started the new release: done, the usual way.
     handed=restarted
     rm -rf "$app.old"
   else
-    echo "station 没有回应交接，改为重启。" >&2
+    echo "${say("cloud.install.handoff.noAnswer")}" >&2
   fi
 fi
 
@@ -271,7 +275,7 @@ if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${STILL
   rm -f "$cur/run/drained"
   step drain
   kill -USR1 "$pid"
-  echo "等 agent 正在跑的这一轮结束再重启（最多 10 分钟；新消息会排队，重启后处理）…"
+  echo "${say("cloud.install.drain")}"
   for _ in $(seq 1 630); do
     { [ -f "$cur/run/drained" ] || ! kill -0 "$pid" 2>/dev/null; } && break
     sleep 1
@@ -312,7 +316,7 @@ ln -sf "$app/bin/stillfail" "$HOME/.local/bin/stillfail"
 ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
 
 if [ -n "$token" ]; then
-  echo "加入 workspace…"
+  echo "${say("cloud.install.join")}"
   "$app/bin/stillfail" station enroll "$origin" "$token"
 fi
 
@@ -326,7 +330,7 @@ elif [ "$os" = Darwin ]; then
     launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null && { started=yes; break; }
     sleep 2
   done
-  [ -n "$started" ] || { echo "launchd 没能启动 still.fail station（launchctl bootstrap gui/$(id -u) \${plist}）" >&2; exit 1; }
+  [ -n "$started" ] || { echo "${say("cloud.install.launchdFailed", { command: "launchctl bootstrap gui/$(id -u) ${plist}" })}" >&2; exit 1; }
 else
   if user_systemd; then
     mkdir -p "$unit_dir"
@@ -345,33 +349,33 @@ fi
 
 echo
 if [ "$handed" = yes ]; then
-  echo "still.fail station 已更新，正在跑的 agent 没有中断。"
+  echo "${say("cloud.install.updated")}"
 else
-  echo "still.fail station 已安装并在后台运行，几秒后会出现在 workspace 里。"
+  echo "${say("cloud.install.installed")}"
 fi
-echo "  程序：\${app}（命令 stillfail 在 ~/.local/bin，旧名字 ember 也还能用）"
-echo "  数据和日志：$data"
-echo "  状态：stillfail status（在哪个 workspace、在不在线、没在干活的原因）"
-[ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  服务：systemctl --user status $unit"
-[ -n "\${lingering:-}" ] && echo "  没人登录时也要运行的话，执行：sudo loginctl enable-linger $(id -un)"
-[ -n "\${no_service:-}" ] && echo "  这台机器没有 systemd 用户服务，station 现在在后台运行，但重启后不会自动启动：到时执行 stillfail start。"
+echo "  ${say("cloud.install.where.app", { app: "${app}" })}"
+echo "  ${say("cloud.install.where.data", { data: "$data" })}"
+echo "  ${say("cloud.install.where.status")}"
+[ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  ${say("cloud.install.where.service", { unit: "$unit" })}"
+[ -n "\${lingering:-}" ] && echo "  ${say("cloud.install.where.linger", { user: "$(id -un)" })}"
+[ -n "\${no_service:-}" ] && echo "  ${say("cloud.install.where.noService")}"
 missing=""
 command -v claude >/dev/null 2>&1 || missing="$missing Claude Code"
 command -v codex >/dev/null 2>&1 || missing="$missing Codex"
 if [ -n "$missing" ]; then
   echo
-  echo "这台机器上还没有：\${missing}。station 用它们来跑 agent，装一个就能用："
-  echo "  Claude Code：curl -fsSL https://claude.ai/install.sh | bash"
-  echo "  Codex：      npm install -g @openai/codex（需要 Node）"
-  echo "装好之后，在 still.fail 的「设置 → Profile」里登录账号。"
+  echo "${say("cloud.install.agents.missing", { missing: "${missing}" })}"
+  echo "  ${say("cloud.install.agents.claude")}"
+  echo "  ${say("cloud.install.agents.codex")}"
+  echo "${say("cloud.install.agents.signIn")}"
 fi
 }
 
 if [ -z "$handed" ] && [ -n "$pid" ] && inside_station; then
   # Apart from the caller (a process group of its own, output to a file): it restarts once the caller's turn is over.
   mkdir -p "$cur/run"
-  echo "这次更新是在 station 里面发起的（agent 的轮次或 job），在后台等正在跑的轮次（包括这一轮）结束后重启 station。"
-  echo "  进度看 $data/run/update.log"
+  echo "${say("cloud.install.inside")}"
+  echo "  ${say("cloud.install.insideLog", { log: "$data/run/update.log" })}"
   trap - EXIT
   set -m
   ( trap '' HUP; restart_and_finish; rm -rf "$tmp" ) > "$cur/run/update.log" 2>&1 < /dev/null &

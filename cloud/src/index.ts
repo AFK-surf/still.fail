@@ -5,6 +5,7 @@
 // connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
 // *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
 import { installScript, releaseType } from "./install.ts";
+import { requestLang, tr } from "./i18n.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
@@ -31,7 +32,7 @@ const notFound = () => new Response("Not found", { status: 404 });
 // (on the test channel's host it starts on PUBLIC_ORIGIN, as from the console, and comes back to its /auth/callback);
 // any other call carrying an account's token answers 403 not_beta for an account not let in, which the page takes for
 // "go to the stable one" and an app for "this account cannot use the test build".
-const notBetaReply = (env: Env) => reply({ error: "not_beta", message: "这个账号还没有开通测试版", stable: env.PUBLIC_ORIGIN }, 403);
+const notBetaReply = (env: Env, request: Request) => reply({ error: "not_beta", message: tr(requestLang(request), "cloud.beta.notLetIn"), stable: env.PUBLIC_ORIGIN }, 403);
 
 /** Whether a call of the test channel comes from an account not let in: one with a valid token, not beta. */
 async function notBeta(request: Request, env: Env): Promise<boolean> {
@@ -71,7 +72,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   // fetched from the test channel's host; either way the station joins PUBLIC_ORIGIN.
   if ((onPublic || onBeta) && request.method === "GET") {
     const channel = url.searchParams.get("channel") === "beta" || (onBeta && url.searchParams.get("channel") !== "stable") ? "beta" : "stable";
-    if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN, channel), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
+    if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
     const release = /^\/releases\/(.+)$/.exec(path)?.[1];
     const type = release ? releaseType(release) : null;
     if (release && type) {
@@ -91,7 +92,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
     // Signing in, refreshing and signing out stay open to it, so a login completes and the page or app can be told.
     const ofBeta = onBeta || header(request, "channel") === "beta";
-    if (ofBeta && !path.startsWith("/v1/auth/") && (await notBeta(request, env))) return notBetaReply(env);
+    if (ofBeta && !path.startsWith("/v1/auth/") && (await notBeta(request, env))) return notBetaReply(env, request);
   }
   if (onConsole) {
     if (path === "/v1/auth/google/start" && request.method === "GET") return toPublic(env, url);
@@ -104,7 +105,8 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return googleStart(env, request);
   }
   if (path === "/v1/auth/device/complete" && request.method === "GET") {
-    return devicePage("请返回 still.fail", "<p>登录结果会在发起登录的地方显示，现在可以关闭此页。</p>");
+    const lang = requestLang(request);
+    return devicePage(lang, tr(lang, "cloud.login.complete.title"), `<p>${tr(lang, "cloud.login.complete.body")}</p>`);
   }
   const device = /^\/v1\/auth\/device\/([A-Za-z0-9_-]{43})$/.exec(path);
   if (device && (request.method === "GET" || request.method === "POST")) {

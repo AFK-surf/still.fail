@@ -17,6 +17,7 @@ import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
+import { langOf, type Lang } from "./i18n.ts";
 import { relays } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
@@ -68,7 +69,8 @@ type Row = Record<string, SqlStorageValue>;
 
 /** A device to push to, as registered (POST /v1/push). */
 export type PushDevice = { kind: "web"; endpoint: string; p256dh: string; auth: string } | { kind: "fcm"; token: string };
-export type PushRegistration = PushDevice & { id: string };
+/** A device registered, with the language its notifications are said in (Chinese for one registered before languages). */
+export type PushRegistration = PushDevice & { id: string; lang: Lang };
 
 export class Directory extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -107,6 +109,8 @@ export class Directory extends DurableObject<Env> {
     for (const column of ["fixed_in INTEGER", "fixed_parts TEXT", "told_at INTEGER"]) {
       if (!reported.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE feedback ADD COLUMN ${column}`);
     }
+    // Nor did push keep a device's language, before there were languages.
+    if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
   }
 
   #rows(query: string, ...args: SqlStorageValue[]): Row[] {
@@ -588,13 +592,13 @@ export class Directory extends DurableObject<Env> {
   // (revokeSessions).
 
   /** Registers a device's push subscription or token to an account's session (moving it there from the account's other). */
-  registerPush(sub: string, sid: string, device: PushDevice): void {
+  registerPush(sub: string, sid: string, device: PushDevice, lang: Lang = "zh"): void {
     const [column, value] = device.kind === "web" ? ["endpoint", device.endpoint] : ["token", device.token];
     this.#run(`DELETE FROM push WHERE sub = ? AND ${column} = ?`, sub, value);
     if (device.kind === "web") {
-      this.#run("INSERT INTO push (id, sub, sid, kind, endpoint, p256dh, auth, created) VALUES (?, ?, ?, 'web', ?, ?, ?, ?)", ulid(), sub, sid, device.endpoint, device.p256dh, device.auth, nowSeconds());
+      this.#run("INSERT INTO push (id, sub, sid, kind, endpoint, p256dh, auth, created, lang) VALUES (?, ?, ?, 'web', ?, ?, ?, ?, ?)", ulid(), sub, sid, device.endpoint, device.p256dh, device.auth, nowSeconds(), lang);
     } else {
-      this.#run("INSERT INTO push (id, sub, sid, kind, token, created) VALUES (?, ?, ?, 'fcm', ?, ?)", ulid(), sub, sid, device.token, nowSeconds());
+      this.#run("INSERT INTO push (id, sub, sid, kind, token, created, lang) VALUES (?, ?, ?, 'fcm', ?, ?, ?)", ulid(), sub, sid, device.token, nowSeconds(), lang);
     }
     // An account's oldest go past a few dozen devices.
     this.#run("DELETE FROM push WHERE sub = ? AND id NOT IN (SELECT id FROM push WHERE sub = ? ORDER BY id DESC LIMIT ?)", sub, sub, LIMITS.pushPerUser);
@@ -625,10 +629,13 @@ export class Directory extends DurableObject<Env> {
     const devices: Record<string, PushRegistration[]> = {};
     for (const email of new Set(emails.map((e) => e.toLowerCase()))) {
       devices[email] = this.#rows(
-        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
+        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token, p.lang FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
          WHERE lower(u.email) = ? ORDER BY p.id LIMIT ?`,
         workspace, email, LIMITS.pushPerUser,
-      ).map((r): PushRegistration => (r.kind === "web" ? { id: r.id as string, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string } : { id: r.id as string, kind: "fcm", token: r.token as string }));
+      ).map((r): PushRegistration => {
+        const lang = langOf(r.lang as string | null);
+        return r.kind === "web" ? { id: r.id as string, lang, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string } : { id: r.id as string, lang, kind: "fcm", token: r.token as string };
+      });
     }
     return { workspace, devices };
   }

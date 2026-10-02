@@ -2,6 +2,7 @@
 // (apps/desktop/src/main.ts): a script first in each of the service's pages gives it a WebSocket that, for the
 // preview's own host (a dev server's live reload), goes to the station and on to the service's port; any other stays
 // the browser's own. How it gets there is each host's `link`.
+import { browserWords } from "./i18n.ts";
 
 /**
  * The page's script. `link` is JavaScript for an expression that gives `(path, protocols, on) => ({ send, close })`,
@@ -24,7 +25,7 @@ export function socketScript(link: string): string {
       super();
       const to = new URL(url, location.href);
       if (to.protocol === "http:" || to.protocol === "https:") to.protocol = to.protocol === "http:" ? "ws:" : "wss:";
-      if (to.protocol !== "ws:" && to.protocol !== "wss:") throw new DOMException("不是 WebSocket 地址：" + url, "SyntaxError");
+      if (to.protocol !== "ws:" && to.protocol !== "wss:") throw new DOMException(${browserWords("cloud.preview.socket.notWebSocket", { url: "url" })}, "SyntaxError");
       if (to.host !== location.host) return new Native(url, protocols);
       this.url = to.href;
       this.readyState = 0;
@@ -68,7 +69,7 @@ export function socketScript(link: string): string {
       this.dispatchEvent(event);
     }
     send(data) {
-      if (this.readyState === 0) throw new DOMException("WebSocket 还没连上", "InvalidStateError");
+      if (this.readyState === 0) throw new DOMException(${browserWords("cloud.preview.socket.notOpen")}, "InvalidStateError");
       if (this.readyState !== 1) return;
       // In the order sent, a Blob read first.
       this._sending = this._sending.then(async () => {
@@ -214,7 +215,7 @@ const WORKER_SOCKET = `(() => {
       this.dispatchEvent(event);
     }
     send(data) {
-      if (this.readyState === 0) throw new DOMException("WebSocket 还没连上", "InvalidStateError");
+      if (this.readyState === 0) throw new DOMException(${browserWords("cloud.preview.socket.notOpen")}, "InvalidStateError");
       if (this.readyState === 1) post({ id: this._id, send: data });
     }
     close(code, reason) {
