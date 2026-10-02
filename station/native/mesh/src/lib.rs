@@ -286,7 +286,9 @@ impl Stream {
     /// Resolves when the other end stops reading (or the stream is gone).
     #[napi]
     pub async fn stopped(&self) {
-        let _ = self.send.lock().await.stopped().await;
+        // The future owns what it waits on: taken under the lock and awaited without it, so writes go on meanwhile.
+        let stopped = self.send.lock().await.stopped();
+        let _ = stopped.await;
     }
 
     /// Ends it at once, both ways.
