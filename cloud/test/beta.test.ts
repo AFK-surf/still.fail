@@ -66,9 +66,9 @@ test("on the test channel's host an account not let in is told not_beta; signing
     const me = await bobBeta("GET", "/v1/me");
     assert.equal(me.status, 200);
     assert.equal(((await me.json()) as { user: { beta?: boolean } }).user.beta, true);
-    // What the stable host would answer (bob has no invite code), not the test channel's refusal.
+    // What the stable host would answer (bob's free workspace), not the test channel's refusal.
     const made = await bobBeta("POST", "/v1/workspaces", { name: "W" });
-    assert.equal(((await made.json()) as { error: string }).error, "invite_code_required");
+    assert.equal(made.status, 200);
     assert.equal((await h.fetchBeta("/healthz")).status, 200);
   } finally {
     await h.close();

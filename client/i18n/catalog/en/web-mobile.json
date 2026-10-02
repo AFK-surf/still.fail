@@ -609,7 +609,7 @@
   "web-mobile.workspaces.addAccount": "Add account",
   "web-mobile.workspaces.addAccountNote": "Another Google account; others stay signed in",
   "web-mobile.workspaces.code": "Invite code",
-  "web-mobile.workspaces.codeNote": "{name} is invite-only for now. This account has no invites, so creating a workspace needs an invite code.",
+  "web-mobile.workspaces.codeNote": "The free plan includes 1 workspace and this account has used it. Enter an invite code to upgrade to Standard and create more.",
   "web-mobile.workspaces.create": "Create",
   "web-mobile.workspaces.current": "Current",
   "web-mobile.workspaces.decline": "Decline",

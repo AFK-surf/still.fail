@@ -105,7 +105,7 @@ test("the admin sees every user, workspace and code", async () => {
   }
 });
 
-test("creating a workspace takes the admin, an account with a code (or from before codes), and no one only invited", async () => {
+test("anyone creates one workspace free; more take the admin, a code (or being from before codes)", async () => {
   const h = await harness();
   try {
     const aliceTokens = await h.login("alice");
@@ -121,6 +121,9 @@ test("creating a workspace takes the admin, an account with a code (or from befo
     const code = async (days?: number) => ((await (await aliceAdmin("POST", "/v1/admin/invite-codes", days ? { days } : {})).json()) as any).code as string;
 
     assert.equal(await create(alice, {}), 200, "the admin needs no code");
+    // A code given while a free one is left is still looked at: it is what the person asked for.
+    assert.deepEqual(await create(dave, { invite_code: "not a code" }), [404, "invite_code_invalid"]);
+    assert.equal(await create(dave, {}), 200, "the free plan's one");
     assert.deepEqual(await create(dave, {}), [403, "invite_code_required"]);
     assert.deepEqual(await create(dave, { invite_code: "   " }), [403, "invite_code_required"]);
     assert.deepEqual(await create(dave, { invite_code: "not a code" }), [404, "invite_code_invalid"]);
@@ -140,14 +143,15 @@ test("creating a workspace takes the admin, an account with a code (or from befo
     const good = await code();
     assert.equal(await create(dave, { invite_code: ` ${good.toLowerCase().replaceAll("-", " ")} ` }), 200);
     assert.deepEqual(await create(carol, { invite_code: good }), [409, "invite_code_used"]);
-    assert.equal(await create(dave, { invite_code: "whatever" }), 200, "once in, a code is not needed (nor looked at) again");
+    assert.equal(await create(dave, { invite_code: "whatever" }), 200, "once standard, a code is not needed (nor looked at) again");
     const codes = ((await (await aliceAdmin("GET", "/v1/admin/invite-codes")).json()) as any).codes;
     assert.equal(codes.filter((c: any) => c.used_by).length, 1, "one code, one workspace");
 
-    // Invited into a workspace: in there only; making one of their own takes a code, and then the account may again.
+    // Invited into a workspace, an account still has its free one; past it, a code, and then the account may again.
     const home = await (await alice("POST", "/v1/workspaces", { name: "Home" })).json() as any;
     const invite = await (await alice("POST", `/v1/workspaces/${home.id}/invitations`, { role: "member", email: "bob@example.test" })).json() as any;
     assert.equal((await bob("POST", "/v1/invitations/accept", { token: invite.token })).status, 200);
+    assert.equal(await create(bob, {}), 200);
     assert.deepEqual(await create(bob, {}), [403, "invite_code_required"]);
     assert.equal(await create(bob, { invite_code: await code() }), 200);
     const bobSub = ((await (await bob("GET", "/v1/me")).json()) as any).user.sub;
@@ -230,6 +234,62 @@ test("an account creates up to five workspaces, and a workspace lets in up to fi
   }
 });
 
+test("a workspace on the free plan holds just its creator and two stations; the standard plan lifts both", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    const aliceAdmin = h.as(aliceTokens, "admin");
+    const bobTokens = await h.login("bob");
+    const bob = h.as(bobTokens);
+    const w = (await (await bob("POST", "/v1/workspaces", { name: "Free" })).json() as any).id;
+    const invited = await bob("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "carol@example.test" });
+    assert.deepEqual([invited.status, ((await invited.json()) as any).error], [429, "too_many_members"]);
+    const added = await bob("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["carol@example.test"] });
+    assert.deepEqual([added.status, ((await added.json()) as any).error], [429, "too_many_members"]);
+
+    const enroll = async () => {
+      const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
+      const station = hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
+      const made = await bob("POST", `/v1/workspaces/${w}/enrollments`, { name: "s" });
+      if (!made.ok) return [made.status, ((await made.json()) as any).error];
+      const { token } = await made.json() as any;
+      const signature = hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(`stillfail-station-enroll-v1:${h.origin}:${token}:${station}`)));
+      return (await h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, station, signature, version: "0.3.1" }) })).status;
+    };
+    assert.equal(await enroll(), 200);
+    assert.equal(await enroll(), 200);
+    assert.deepEqual(await enroll(), [429, "too_many_stations"]);
+    const plans = async () => ((await (await aliceAdmin("GET", "/v1/admin/workspaces")).json()) as any).workspaces.map((x: any) => [x.plan, x.seats]);
+    assert.deepEqual(await plans(), [["free", 1]]);
+
+    await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: true });
+    assert.deepEqual(await plans(), [["standard", 6]]);
+    assert.equal((await bob("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "carol@example.test" })).status, 200);
+    assert.equal(await enroll(), 200);
+  } finally {
+    await h.close();
+  }
+});
+
+test("those who created a workspace before the free plan keep creating, as the admin's say", async () => {
+  const h = await harness();
+  try {
+    const aliceAdmin = h.as(await h.login("alice"), "admin");
+    const bobTokens = await h.login("bob");
+    const bob = h.as(bobTokens);
+    assert.equal((await bob("POST", "/v1/workspaces", { name: "Old" })).status, 200);
+    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+    const directory = directories.get(directories.idFromName("primary"));
+    // As it was: let in by an invitation, then made one when making one was the right to make more; the object starts again.
+    await directory.beforeFreePlan(bobTokens.subject, "invitation");
+    const user = (((await (await aliceAdmin("GET", "/v1/admin/users")).json()) as any).users as any[]).find((u) => u.sub === bobTokens.subject);
+    assert.deepEqual([user.admission, user.plan], ["granted", "standard"]);
+    assert.equal((await bob("POST", "/v1/workspaces", { name: "New" })).status, 200);
+  } finally {
+    await h.close();
+  }
+});
+
 test("the admin gives an account the right to create workspaces, or takes it back; blocks it; deletes a workspace", async () => {
   const h = await harness();
   try {
@@ -243,22 +303,25 @@ test("the admin gives an account the right to create workspaces, or takes it bac
     const bobSub = (await userOf("bob@example.test")).sub;
     const carolSub = (await userOf("carol@example.test")).sub;
 
-    // Bob, not let in, may not create; given the right, he may, with no code; it shows in the list.
-    assert.deepEqual([(await userOf("bob@example.test")).may_create, (await userOf("bob@example.test")).admission], [false, null]);
-    assert.equal((await bob("POST", "/v1/workspaces", { name: "Nope" })).status, 403);
-    assert.deepEqual(await (await aliceAdmin("POST", `/v1/admin/users/${bobSub}/may-create`, { on: true })).json(), { sub: bobSub, may_create: true });
-    assert.deepEqual([(await userOf("bob@example.test")).may_create, (await userOf("bob@example.test")).admission], [true, "granted"]);
+    // Bob, on the free plan, makes his one and no more; put on the standard plan, he may, with no code; it shows in the list.
+    assert.deepEqual([(await userOf("bob@example.test")).may_create, (await userOf("bob@example.test")).plan, (await userOf("bob@example.test")).admission], [false, "free", null]);
     const made = await (await bob("POST", "/v1/workspaces", { name: "Bob's" })).json() as any;
     assert.ok(made.id);
-    // Once he has made one, taking the right back leaves him the right to make more (as a code's would).
-    assert.equal(((await (await aliceAdmin("POST", `/v1/admin/users/${bobSub}/may-create`, { on: false })).json()) as any).may_create, true);
-    assert.deepEqual([(await userOf("bob@example.test")).creator, (await userOf("bob@example.test")).admission], [true, "invitation"]);
+    assert.equal((await userOf("bob@example.test")).admission, "free");
+    assert.equal((await bob("POST", "/v1/workspaces", { name: "Nope" })).status, 403);
+    assert.deepEqual(await (await aliceAdmin("POST", `/v1/admin/users/${bobSub}/may-create`, { on: true })).json(), { sub: bobSub, may_create: true });
+    assert.deepEqual([(await userOf("bob@example.test")).may_create, (await userOf("bob@example.test")).plan, (await userOf("bob@example.test")).admission], [true, "standard", "granted"]);
+    assert.equal((await bob("POST", "/v1/workspaces", { name: "Second" })).status, 200);
+    // Taken back, having made some does not keep it: he is on the free plan again.
+    assert.equal(((await (await aliceAdmin("POST", `/v1/admin/users/${bobSub}/may-create`, { on: false })).json()) as any).may_create, false);
+    assert.deepEqual([(await userOf("bob@example.test")).creator, (await userOf("bob@example.test")).admission], [false, "free"]);
+    assert.equal((await bob("POST", "/v1/workspaces", { name: "Nope" })).status, 403);
 
-    // Carol, given it and having it taken back before making any, may not.
+    // Carol, given it and having it taken back before making any, is on the free plan.
     await aliceAdmin("POST", `/v1/admin/users/${carolSub}/may-create`, { on: true });
     assert.equal(((await (await aliceAdmin("POST", `/v1/admin/users/${carolSub}/may-create`, { on: false })).json()) as any).may_create, false);
     assert.equal((await userOf("carol@example.test")).admission, null);
-    assert.equal((await carol("POST", "/v1/workspaces", { name: "Nope" })).status, 403);
+    assert.equal((await carol("POST", "/v1/workspaces", { name: "Free" })).status, 200);
     assert.equal((await aliceAdmin("POST", "/v1/admin/users/nobody/may-create", { on: true })).status, 404);
     assert.equal((await aliceAdmin("POST", `/v1/admin/users/${carolSub}/may-create`, {})).status, 400);
 

@@ -29,9 +29,18 @@ const MANAGERS: readonly Role[] = ["owner", "admin"];
 
 export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SEC = 60 * 60;
-// A workspace holds its creator and up to five people they let in; an account may create five. The admin's (and the
-// workspaces they created) go up to the old bounds.
-const LIMITS = { workspacesPerUser: 5, membersPerWorkspace: 6, adminWorkspaces: 32, adminMembers: 200, stationsPerWorkspace: 64, openInvitations: 50, pushPerUser: 32 };
+const LIMITS = { openInvitations: 50, pushPerUser: 32 };
+/**
+ * What an account may create, and what each workspace it created may hold (its creator counted among the people). Every
+ * account is on the free plan: one workspace, just its creator, two stations. A code or the admin's say makes it
+ * standard (#standard); the admin's own go up to the old bounds.
+ */
+export const PLANS = {
+  free: { workspaces: 1, members: 1, stations: 2 },
+  standard: { workspaces: 5, members: 6, stations: 64 },
+  admin: { workspaces: 32, members: 200, stations: 64 },
+} as const;
+export type Plan = keyof typeof PLANS;
 
 /** The events socket's subprotocols (api.ts socketToken), the new one first: clients from before the rename say "ember-events". */
 export const EVENTS_PROTOCOLS = ["stillfail-events", "ember-events"] as const;
@@ -95,6 +104,7 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, number INTEGER NOT NULL UNIQUE, key TEXT NOT NULL, channel TEXT NOT NULL, sender TEXT NOT NULL, station TEXT, workspace TEXT, account TEXT, title TEXT NOT NULL, body TEXT NOT NULL, area TEXT NOT NULL, reporter TEXT NOT NULL DEFAULT '', context TEXT, logs TEXT, status TEXT NOT NULL DEFAULT 'new', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
       CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
+      CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
     // the admin blocked the account; the account's own object is what keeps it out) before the console could block;
@@ -111,6 +121,20 @@ export class Directory extends DurableObject<Env> {
     }
     // Nor did push keep a device's language, before there were languages.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
+    this.migrateFreePlan();
+  }
+
+  /**
+   * Before the free plan, having created a workspace was itself the right to create more; it is the standard plan's
+   * now, so those who created one keep it as if the admin had said so. Once: creating on the free plan says 'free'.
+   */
+  protected migrateFreePlan(): void {
+    if (this.#one("SELECT 1 AS x FROM migrations WHERE name = 'free-plan'")) return;
+    this.ctx.storage.transactionSync(() => {
+      this.#run(`UPDATE users SET admitted = 'granted' WHERE sub IN (SELECT created_by FROM workspaces)
+        AND (admitted IS NULL OR admitted NOT IN ('code', 'granted')) AND NOT (admitted IS NULL AND sub IN (SELECT sub FROM members))`);
+      this.#run("INSERT INTO migrations (name, at) VALUES ('free-plan', ?)", nowSeconds());
+    });
   }
 
   #rows(query: string, ...args: SqlStorageValue[]): Row[] {
@@ -269,17 +293,20 @@ export class Directory extends DurableObject<Env> {
   }
 
   /**
-   * still.fail is invite-only, and creating workspaces is the account's to earn: the admin may, and so may an account
-   * that redeemed a code (the code is used up by the workspace it made first), or that was in a workspace before codes
-   * existed, or has made one before. Being invited into a workspace lets one in there only; to make one of their own
-   * they redeem a code. An account makes up to LIMITS.workspacesPerUser. Nothing here awaits, so two creations with one
-   * code cannot both see it unused.
+   * Anyone signed in may create a workspace on the free plan (PLANS.free.workspaces of them). The standard plan's are
+   * the account's to earn: the admin's say, or a code (used up by the workspace it is redeemed with), or having been in
+   * a workspace before codes existed. An account on the free plan that has used its free ones is asked for a code, and
+   * redeeming it makes the account, and so every workspace it created, standard. Nothing here awaits, so two creations
+   * with one code cannot both see it unused.
    */
   createWorkspace(sub: string, name: string, admin: boolean, code: unknown): WorkspaceView {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
     const made = this.#one("SELECT COUNT(*) AS n FROM workspaces WHERE created_by = ?", sub)!.n as number;
-    if (made >= (admin ? LIMITS.adminWorkspaces : LIMITS.workspacesPerUser)) fail(429, "too_many_workspaces");
-    const redeem = admin || this.#mayCreate(sub) ? null : this.#redeemable(code);
+    const standard = admin || this.#standard(sub);
+    const given = typeof code === "string" && code.trim() !== "";
+    // A code given on the free plan is redeemed even while a free workspace is left: it is what the person asked for.
+    const redeem = standard || (!given && made < PLANS.free.workspaces) ? null : this.#redeemable(code);
+    if (made >= PLANS[admin ? "admin" : "standard"].workspaces) fail(429, "too_many_workspaces");
     const id = ulid();
     const now = nowSeconds();
     this.ctx.storage.transactionSync(() => {
@@ -287,25 +314,32 @@ export class Directory extends DurableObject<Env> {
       this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, 'owner', ?)", id, sub, now);
       if (redeem) {
         this.#run("UPDATE invite_codes SET used_by = ?, used_at = ?, workspace = ? WHERE code = ?", sub, now, id, redeem);
-        // An account let in by an invitation earns creating with its code.
-        this.#run("UPDATE users SET admitted = 'code' WHERE sub = ? AND (admitted IS NULL OR admitted = 'invitation')", sub);
+        this.#run("UPDATE users SET admitted = 'code' WHERE sub = ? AND (admitted IS NULL OR admitted IN ('invitation', 'free'))", sub);
+      } else if (!standard) {
+        // In a workspace, but not from before codes (#standard).
+        this.#run("UPDATE users SET admitted = 'free' WHERE sub = ? AND (admitted IS NULL OR admitted = 'invitation')", sub);
       }
     });
     this.#tell([sub], LIST);
     return this.workspace(sub, id);
   }
 
-  /** Whether an account may create workspaces without a code (the admin aside): see createWorkspace. */
-  #mayCreate(sub: string): boolean {
+  /** Whether an account is on the standard plan (the admin aside): see createWorkspace. */
+  #standard(sub: string): boolean {
     return Boolean(this.#one(`SELECT 1 AS x FROM users WHERE sub = ? AND admitted IN ('code', 'granted')
-      UNION ALL SELECT 1 FROM users u JOIN members m ON m.sub = u.sub WHERE u.sub = ? AND u.admitted IS NULL
-      UNION ALL SELECT 1 FROM workspaces WHERE created_by = ? LIMIT 1`, sub, sub, sub));
+      UNION ALL SELECT 1 FROM users u JOIN members m ON m.sub = u.sub WHERE u.sub = ? AND u.admitted IS NULL LIMIT 1`, sub, sub));
+  }
+
+  /** The plan a workspace is on: its creator's. */
+  #plan(workspace: string): Plan {
+    const creator = this.#one("SELECT u.sub, u.email FROM workspaces w JOIN users u ON u.sub = w.created_by WHERE w.id = ?", workspace);
+    if (!creator) return "free";
+    return isAdmin(this.env, creator.email as string) ? "admin" : this.#standard(creator.sub as string) ? "standard" : "free";
   }
 
   /** How many people a workspace may hold, its creator among them. */
   #memberCap(workspace: string): number {
-    const creator = this.#one("SELECT u.email FROM workspaces w JOIN users u ON u.sub = w.created_by WHERE w.id = ?", workspace);
-    return creator && isAdmin(this.env, creator.email as string) ? LIMITS.adminMembers : LIMITS.membersPerWorkspace;
+    return PLANS[this.#plan(workspace)].members;
   }
 
   /** Who a workspace holds or has let in: members, emails added but not signed in yet, and, with `invited`, open invitations. */
@@ -494,13 +528,17 @@ export class Directory extends DurableObject<Env> {
   async createEnrollment(sub: string, workspace: string, name: string): Promise<{ token: string; expires_at: number }> {
     this.#role(sub, workspace, MANAGERS);
     const clean = cleanName(name) ?? fail(400, "invalid_name");
-    const stations = this.#one("SELECT COUNT(*) AS n FROM stations WHERE workspace = ?", workspace)!.n as number;
-    if (stations >= LIMITS.stationsPerWorkspace) fail(429, "too_many_stations");
+    if (this.#stationsFull(workspace)) fail(429, "too_many_stations");
     const token = randomSecret();
     const expires = nowSeconds() + ENROLLMENT_TTL_SEC;
     this.#run("DELETE FROM enrollments WHERE expires_at <= ?", nowSeconds());
     this.#run("INSERT INTO enrollments (token_hash, workspace, name, created_by, expires_at) VALUES (?, ?, ?, ?, ?)", await digest(token), workspace, clean, sub, expires);
     return { token, expires_at: expires };
+  }
+
+  #stationsFull(workspace: string): boolean {
+    const stations = this.#one("SELECT COUNT(*) AS n FROM stations WHERE workspace = ?", workspace)!.n as number;
+    return stations >= PLANS[this.#plan(workspace)].stations;
   }
 
   /**
@@ -512,6 +550,8 @@ export class Directory extends DurableObject<Env> {
     const row = this.#one("SELECT workspace, name, created_by FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
     if (!row) fail(404, "enrollment_not_found");
     const moved = this.#one("SELECT workspace FROM stations WHERE id = ?", station)?.workspace as string | undefined;
+    // Several tokens may be out at once: the last free place goes to the first redeemed.
+    if (moved !== row!.workspace && this.#stationsFull(row!.workspace as string)) fail(429, "too_many_stations");
     this.ctx.storage.transactionSync(() => {
       this.#run("DELETE FROM enrollments WHERE token_hash = ?", hash);
       this.#run(`INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -650,36 +690,37 @@ export class Directory extends DurableObject<Env> {
       list.push({ id: row.id as string, name: row.name as string, role: row.role as Role });
       memberships.set(row.sub as string, list);
     }
-    const creators = new Set(this.#rows("SELECT DISTINCT created_by FROM workspaces").map((r) => r.created_by as string));
     return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted, beta, blocked FROM users ORDER BY created_at DESC").map((row) => {
       const sub = row.sub as string;
       const workspaces = memberships.get(sub) ?? [];
       const admin = isAdmin(this.env, row.email as string);
       const admission: Admission | null = admin ? "admin" : (row.admitted as Admission | null) ?? (workspaces.length ? "early" : null);
-      // As #mayCreate has it, without a query per account.
-      const mayCreate = admin || creators.has(sub) || row.admitted === "code" || row.admitted === "granted" || (row.admitted === null && workspaces.length > 0);
+      // As #standard has it, without a query per account.
+      const mayCreate = admin || row.admitted === "code" || row.admitted === "granted" || (row.admitted === null && workspaces.length > 0);
       return {
         sub, email: row.email as string, name: row.name as string, picture: row.picture as string,
         created_at: row.created_at as number, last_seen: row.last_seen as number | null, admission, workspaces, beta: Boolean(row.beta),
-        may_create: mayCreate, creator: creators.has(sub), blocked: Boolean(row.blocked),
+        // creator: no longer keeps the standard plan by itself (#standard); false so the console lets it be taken back.
+        may_create: mayCreate, plan: admin ? "admin" : mayCreate ? "standard" : "free", creator: false, blocked: Boolean(row.blocked),
       };
     });
   }
 
   /**
-   * The admin gives an account the right to create workspaces, as a code would (`granted`), or takes it back: it is
-   * then one that may only join (`invitation`), or, in no workspace, one not let in. One that has created a workspace
-   * keeps the right whatever this says (#mayCreate).
+   * The admin puts an account on the standard plan, as a code would (`granted`), or back on the free one: `free` if it
+   * created a workspace, `invitation` if it is only in others', or, in none, nothing. Its workspaces go with it (#plan);
+   * what they hold beyond the free plan stays, only nothing more is let in.
    */
   setMayCreate(sub: string, on: boolean): { sub: string; may_create: boolean } {
     const row = this.#one("SELECT email FROM users WHERE sub = ?", sub);
     if (!row) fail(404, "user_not_found");
-    if (on) this.#run("UPDATE users SET admitted = 'granted' WHERE sub = ? AND (admitted IS NULL OR admitted = 'invitation')", sub);
+    if (on) this.#run("UPDATE users SET admitted = 'granted' WHERE sub = ? AND (admitted IS NULL OR admitted IN ('invitation', 'free'))", sub);
     else {
+      const creator = this.#one("SELECT 1 AS x FROM workspaces WHERE created_by = ? LIMIT 1", sub);
       const member = this.#one("SELECT 1 AS x FROM members WHERE sub = ? LIMIT 1", sub);
-      this.#run("UPDATE users SET admitted = ? WHERE sub = ?", member ? "invitation" : null, sub);
+      this.#run("UPDATE users SET admitted = ? WHERE sub = ?", creator ? "free" : member ? "invitation" : null, sub);
     }
-    return { sub, may_create: isAdmin(this.env, row!.email as string) || this.#mayCreate(sub) };
+    return { sub, may_create: isAdmin(this.env, row!.email as string) || this.#standard(sub) };
   }
 
   /** Notes that the admin blocked the account or let it back (the account's own object is what keeps it out). */
@@ -723,7 +764,11 @@ export class Directory extends DurableObject<Env> {
     const stations = group<StationView>(this.#rows("SELECT workspace, id, name, enrolled_at, enrolled_by, last_seen, version FROM stations ORDER BY enrolled_at"));
     const invitations = group<AdminWorkspace["invitations"][number]>(this.#rows(`SELECT i.workspace, i.id, i.role, i.email, i.created_by, i.expires_at,
       COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
-    return this.#rows(`SELECT w.id, w.name, w.created_at, u.sub, u.email, u.name AS user_name, u.picture FROM workspaces w
+    // As #plan has it, in the same read.
+    const plan = (w: Row): Plan => w.sub === null ? "free" : isAdmin(this.env, w.email as string) ? "admin"
+      : w.admitted === "code" || w.admitted === "granted" || (w.admitted === null && w.member) ? "standard" : "free";
+    return this.#rows(`SELECT w.id, w.name, w.created_at, u.sub, u.email, u.name AS user_name, u.picture, u.admitted,
+      EXISTS (SELECT 1 FROM members m WHERE m.sub = u.sub) AS member FROM workspaces w
       LEFT JOIN users u ON u.sub = w.created_by ORDER BY w.created_at DESC`).map((w) => ({
       id: w.id as string,
       name: w.name as string,
@@ -732,8 +777,8 @@ export class Directory extends DurableObject<Env> {
       members: members.get(w.id as string) ?? [],
       stations: stations.get(w.id as string) ?? [],
       invitations: invitations.get(w.id as string) ?? [],
-      // As #memberCap has it.
-      seats: w.email !== null && isAdmin(this.env, w.email as string) ? LIMITS.adminMembers : LIMITS.membersPerWorkspace,
+      seats: PLANS[plan(w)].members,
+      plan: plan(w),
     }));
   }
 

@@ -17,6 +17,12 @@ export class Directory extends ProductionDirectory {
   forgetAdmission(sub: string) {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = NULL WHERE sub = ?", sub);
   }
+  /** An account that created its workspaces before the free plan, admitted as `admitted` then; the plan's change runs again. */
+  beforeFreePlan(sub: string, admitted: string | null) {
+    this.ctx.storage.sql.exec("UPDATE users SET admitted = ? WHERE sub = ?", admitted, sub);
+    this.ctx.storage.sql.exec("DELETE FROM migrations WHERE name = 'free-plan'");
+    this.migrateFreePlan();
+  }
   /**
    * `users` made-up accounts over the last four months, about one in three with a workspace of up to five people and
    * up to three stations (none ever connects), some invitations and codes: what the admin's console looks like once

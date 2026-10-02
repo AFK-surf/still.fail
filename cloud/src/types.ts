@@ -22,8 +22,13 @@ export type AccountEvent =
 
 // ── the operator's console (/v1/admin/*, the admin account only) ──────────
 
-/** How someone got in: the admin, a code, the admin's say (`granted`), an invitation, or a member from before codes existed. */
-export type Admission = "admin" | "code" | "granted" | "invitation" | "early";
+/**
+ * How someone got in: the admin, a code, the admin's say (`granted`), an invitation, a member from before codes existed,
+ * or creating a workspace on the free plan.
+ */
+export type Admission = "admin" | "code" | "granted" | "invitation" | "early" | "free";
+/** Which plan an account, or a workspace (its creator's), is on (directory.ts PLANS). */
+export type PlanName = "free" | "standard" | "admin";
 export interface AdminUser extends UserView {
   created_at: number;
   /** When they last signed in or opened still.fail (its events socket); null before this was recorded. */
@@ -33,8 +38,10 @@ export interface AdminUser extends UserView {
   workspaces: { id: string; name: string; role: Role }[];
   /** Let into the test channel (app.youdid.wtf). Missing from a cloud from before it. */
   beta?: boolean;
-  /** Whether they may create workspaces; `creator`: they have made one, and so keep that. Missing from a cloud from before. */
+  /** Whether they are on the standard plan (create up to 5 workspaces of 6 people); `creator`: kept it by having made one (before the free plan). Missing from a cloud from before. */
   may_create?: boolean;
+  /** may_create as a plan. Missing from a cloud from before; creator is false from the free plan on. */
+  plan?: PlanName;
   creator?: boolean;
   /** Blocked by the admin from the console. Missing from a cloud from before. */
   blocked?: boolean;
@@ -50,6 +57,8 @@ export interface AdminWorkspace {
   invitations: (InvitationView & { inviter: string })[];
   /** How many people it may hold. Missing from a cloud from before. */
   seats?: number;
+  /** Its creator's plan. Missing from a cloud from before. */
+  plan?: PlanName;
 }
 /** What a bug report is about (feedback.ts). */
 export type FeedbackArea = "station" | "web" | "android" | "desktop" | "slack" | "cloud" | "unknown";

@@ -61,6 +61,7 @@ fn admission_label(admission: &str) -> String {
         "granted" => t!("core-views.admin.admission.granted"),
         "invitation" => t!("core-views.admin.admission.invitation"),
         "early" => t!("core-views.admin.admission.early"),
+        "free" => t!("core-views.admin.admission.free"),
         _ => t!("core-views.admin.not_in"),
     }
 }

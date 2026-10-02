@@ -579,7 +579,7 @@
   "web-mobile.workspaces.addAccount": "登录其它账号",
   "web-mobile.workspaces.addAccountNote": "保留已登录账号，添加另一个 Google 账号",
   "web-mobile.workspaces.code": "邀请码",
-  "web-mobile.workspaces.codeNote": "{name} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。",
+  "web-mobile.workspaces.codeNote": "免费版只能建 1 个 workspace，这个账号已经建过了。填邀请码升级成标准版，就能再建。",
   "web-mobile.workspaces.create": "新建",
   "web-mobile.workspaces.current": "当前使用",
   "web-mobile.workspaces.decline": "忽略",
