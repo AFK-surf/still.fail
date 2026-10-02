@@ -45,7 +45,7 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
     fun control(action: String) { app.act("设置更新提醒") { app.core.call("station.updateNotice", buildJsonObject { put("station", station); put("action", action); put("version", notice.version) }) } }
     val accent = if (notice.tone == "trouble") C.red else C.accentInk
     val density = LocalDensity.current
-    val gap = with(density) { 10.dp.roundToPx() }
+    val gap = with(density) { (-4).dp.roundToPx() }
     val margin = with(density) { 12.dp.roundToPx() }
     val arrowX = remember { mutableFloatStateOf(0f) }
     val position = remember(gap, margin) { object : PopupPositionProvider {
