@@ -696,11 +696,11 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
     }
     val decide = state.startsWith("奏")
     val text = androidx.compose.ui.text.buildAnnotatedString {
-        if (decide) { pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append("奏"); pop(); append(state.substring(1)) }
+        if (lead != null) { pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append(lead); pop(); append(state.substring(lead.length)) }
         else append(state)
     }
     Text(
-        text, modifier, fontSize = 14.sp, lineHeight = 20.sp, color = if (decide) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        text, modifier, fontSize = 14.sp, lineHeight = 20.sp, color = if (lead != null) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),

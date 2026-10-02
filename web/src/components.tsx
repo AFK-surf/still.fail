@@ -65,7 +65,7 @@ export function MineFilter({ compact, archive, watching }: { label?: string; min
  * "由 X 创建": the person as the core names them (你 for the viewer). `verb`: created (a connect), or started (a chat;
  * "发起", as it was given before).
  */
-export function CreatorText({ creator, verb = "created" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: "created" | "started" | "发起" }) {
+export function CreatorText({ creator, verb = "created" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: "created" | "started" }) {
   if (!creator?.shown) return null;
   const said = verb === "created" ? "created" : "started";
   return <span className={css.creator}>{t(`web-main.creator.${said}${creator.via === "slack" ? ".slack" : ""}`, { name: creator.shown.display })}</span>;

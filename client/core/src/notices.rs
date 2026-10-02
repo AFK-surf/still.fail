@@ -174,7 +174,7 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
     if let Some(decision) = crate::decisions::of_row(row).filter(|_| now.decision.is_some() && now.decision != then.decision) {
         let text = decision.get("message").and_then(|m| m.get("text")).and_then(Value::as_str).unwrap_or("");
         let line = crate::decisions::line(text);
-        return Some(("wait", body("wait", "", line.strip_prefix("奏 · ").unwrap_or(&line))));
+        return Some(("wait", body("wait", "", line.split_once(" · ").filter(|(lead, _)| *lead == stillfail_i18n::t("core-logic.decisions.line.empty")).map_or(line.as_str(), |(_, rest)| rest))));
     }
     let last = row.get("last").filter(|l| l.is_object());
     let text = last.map(|l| crate::format::clean_text(l.get("text").and_then(Value::as_str).unwrap_or(""))).unwrap_or_default();

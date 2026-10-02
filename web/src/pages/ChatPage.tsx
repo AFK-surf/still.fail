@@ -520,7 +520,7 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
             {row(t("web-pages.chat.info.from"), where
               ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
               : t("web-pages.chat.info.native", { name: NAME }))}
-            {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb={t("web-pages.chat.info.startedVerb")} /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
+            {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
             {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
             {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
             {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}

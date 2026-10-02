@@ -517,8 +517,11 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   // By series, newest first (the core's); one a newer check found that the core has not placed yet goes with 其他.
   const placed = new Set(profile.series.flatMap((s) => s.models));
   const loose = all.filter((m) => !placed.has(m));
-  const series = [...profile.series.filter((s) => s.name !== "其他"),
-    ...((profile.series.find((s) => s.name === "其他")?.models.length ?? 0) + loose.length ? [{ name: "其他", models: [...(profile.series.find((s) => s.name === "其他")?.models ?? []), ...loose] }] : [])];
+  // The core's series of the rest, as it names it in either language (core-views.present.models_other).
+  const isOther = (name: string) => name === "其他" || name === "Other";
+  const other = profile.series.find((s) => isOther(s.name));
+  const series = [...profile.series.filter((s) => !isOther(s.name)),
+    ...((other?.models.length ?? 0) + loose.length ? [{ name: other?.name ?? t("web-pages.profiles.otherSeries"), models: [...(other?.models ?? []), ...loose] }] : [])];
   const ordered = series.flatMap((s) => s.models);
   const on = [...enabled].sort((a, b) => ordered.indexOf(a) - ordered.indexOf(b));
   return (

@@ -66,12 +66,12 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 
 /**
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
- * 奏 · … in ink, its lead (奏) bold; 要你帮忙：… in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
+ * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
  * last message would be.
  */
 export function WaitingText({ text, className }: { text: string; className: string }) {
-  const lead = text.startsWith("奏") ? text.split(" · ")[0]! : "";
-  const turn = lead !== "" || text.startsWith("要你帮忙");
+  const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
+  const turn = lead !== "" || /^(?:要你帮忙|Needs you:)/.test(text);
   return (
     <span className={className} data-turn={turn || undefined} data-state-line="">
       {lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} />

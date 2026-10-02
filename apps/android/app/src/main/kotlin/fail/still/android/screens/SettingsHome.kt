@@ -199,18 +199,10 @@ fun AppearanceScreen() {
 @Composable
 private fun Language() {
     val app = LocalApp.current
-    // Chosen and not in the core's prefs yet: shown meanwhile; refused, back as it was, and said.
-    var chosen by remember(app.kept.language) { mutableStateOf(app.kept.language) }
     val languages = languages()
     SectionHeader(t("common.language"), start = 24.dp)
-    Seg(languages.map { it.second }, languages.indexOfFirst { it.first == chosen }.coerceAtLeast(0), { i ->
+    Seg(languages.map { it.second }, languages.indexOfFirst { it.first == app.language }.coerceAtLeast(0), { i ->
         val value = languages[i].first
-        if (value != chosen) {
-            chosen = value
-            app.scope.launch {
-                try { app.core.call("prefs.set", buildJsonObject { put("language", value) }) }
-                catch (e: CoreException) { chosen = app.kept.language; app.toast = t("android-settings.language.failed", "error" to errorText(e)) }
-            }
-        }
+        if (value != app.language) app.setLanguage(value)
     }, Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
 }

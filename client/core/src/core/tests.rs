@@ -1015,7 +1015,7 @@ fn the_device_says_what_it_is_once_and_the_core_decides_what_follows() {
         host.settle().await;
         let mut values = HashMap::new();
         apply(&host, &mut values);
-        assert_eq!(values[&1]["device"], json!({ "app": "web", "phone": true, "handoff": false, "locale": null }));
+        assert_eq!(values[&1]["device"], json!({ "app": "web", "phone": true, "handoff": false }));
         // A message goes with the app it is sent from, unless the UI says.
         core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({ "station": "ws/st", "thread": 7, "text": "hi" }) });
         host.settle().await;
@@ -1037,7 +1037,7 @@ fn the_device_says_what_it_is_once_and_the_core_decides_what_follows() {
         host.settle().await;
         let mut values = HashMap::new();
         apply(&host, &mut values);
-        assert_eq!(values[&7]["device"], json!({ "app": "web", "phone": false, "handoff": true, "locale": null }));
+        assert_eq!(values[&7]["device"], json!({ "app": "web", "phone": false, "handoff": true }));
     });
 }
 
