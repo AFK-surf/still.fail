@@ -1,7 +1,7 @@
 // Decisions an agent left to people (a block post with options, client/core/src/decisions.rs), as both screens draw
 // them. In a chat: the post is a message like any other, its options right under it, one per line, the recommended one
 // last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
-// what came just before it drawn as the chat draws them, its options and the chat's composer floating together
+// what came just before it drawn as the chat draws them, its options under the post and the chat's composer floating
 // over them at the foot; 待定 puts it at the back of the
 // queue on this device, 不再提醒 stops asking this viewer. The phone swipes for those two (left, right); the wide
 // screen lists them all and shows the one picked (DecisionDesk.tsx), with those two as buttons.
@@ -295,11 +295,11 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
                 <span className={css.count}>1 / {items.length}</span>
               </div>
               <DecisionMessages d={d} inline={inline} />
+              <DecisionPicks d={d} onAnswered={() => answered(d)} onOpen={() => onOpen(path)} />
             </div>
           </div>
           <DecisionFoot>
             <div className={css.footColumn}>
-              <DecisionPicks d={d} onAnswered={() => answered(d)} onOpen={() => onOpen(path)} />
               <DecisionAnswer d={d} mobile onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} />
               <div className={css.hint} aria-hidden="true"><span>← {t("web-main.decisions.defer")}</span><span>{t("web-main.decisions.dismiss")} →</span></div>
             </div>
@@ -333,8 +333,8 @@ export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boole
 }
 
 /**
- * At the page's foot, over the composer: its options (options), or a way to its chat (a type this page does not
- * know). `onAnswered` once one is picked.
+ * Under the post, as in its chat: its options (options), or a way to its chat (a type this page does not know).
+ * `onAnswered` once one is picked.
  */
 export function DecisionPicks({ d, onAnswered, onOpen }: { d: DecisionItem; onAnswered: () => void; onOpen: () => void }) {
   const type = cardType(d.card, d.options);

@@ -14,8 +14,6 @@ package fail.still.android.screens
 
 import fail.still.android.ui.t
 import dev.chrisbanes.haze.hazeSource
-import fail.still.android.ui.floating
-import dev.chrisbanes.haze.HazeState
 import androidx.compose.animation.AnimatedVisibility
 import fail.still.android.ui.AgentStateMark
 import fail.still.android.data.ChatState
@@ -127,11 +125,10 @@ import kotlinx.coroutines.launch
 /**
  * A decision's options, one per line, full width: the label (medium) and its detail under it, small and quiet; the
  * recommended one (last, as the core orders them) filled in ink with the page's colour for its words, the others in the
- * chip colour, or on the composer's glass over what `glass` blurs (the decisions page, over its messages). `busy`: the
- * label of the one being sent (a spinner on it, none pressed meanwhile).
+ * chip colour. `busy`: the label of the one being sent (a spinner on it, none pressed meanwhile).
  */
 @Composable
-internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, failed: String? = null, glass: HazeState? = null, onPick: (DecisionOption) -> Unit) {
+internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, failed: String? = null, onPick: (DecisionOption) -> Unit) {
     val still = reducedMotion()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { o ->
@@ -146,7 +143,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
             )
             Row(
                 Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
-                    .then(if (glass != null && !strong) Modifier.floating(glass, RoundedCornerShape(12.dp)) else Modifier.clip(RoundedCornerShape(12.dp)).background(if (strong) C.ink else C.chip))
+                    .clip(RoundedCornerShape(12.dp)).background(if (strong) C.ink else C.chip)
                     .alpha(if (enabled) 1f else 0.5f)
                     .clickable(enabled = free, interactionSource = touch, indication = ripple(color = ink)) { onPick(o) }
                     .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -569,11 +566,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
     }
     val card = item.card
     val type = card?.type ?: "options"
-    // The options and the composer float over the messages, as the chat's composer does: they scroll on under them,
-    // their end kept clear of them.
+    // The composer floats over the messages, as in the chat: they scroll on under it, their end kept clear of it.
     val host = remember(item.key) { Host() }
     var footHeight by remember(item.key) { mutableIntStateOf(0) }
-    // The room an expanded composer takes, kept over the options rather than between them and the composer.
+    // The room an expanded composer's toolbar takes, kept clear at the messages' end.
     val room = remember(item.key) { mutableIntStateOf(0) }
     Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(
@@ -586,9 +582,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
                     SaidAlone(ctx, m)
                 }
             }
-            // A card this app does not know: the way to answer it in its chat, under the post.
-            if (type != "options" && type != "text") {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Under the post, as in its chat: its options, or (a card this app does not know) the way to answer it there.
+            when (type) {
+                "options" -> DecisionOptions(card?.options ?: item.options, onPick = onPick)
+                "text" -> {}
+                else -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)
                     Box(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink)
@@ -599,8 +597,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
             }
         }
         if (type == "options" || type == "text") {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { footHeight = it.height }) {
-                if (type == "options") DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 10.dp), glass = host.haze, onPick = onPick)
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { footHeight = it.height }) {
                 DecisionComposer(item, host, if (type == "text") card?.placeholder else null, room, onField, onReply)
             }
         }
