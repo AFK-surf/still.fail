@@ -280,7 +280,7 @@ mod tests {
             "id": "ds:C1:1.2", "session": "ds:C1:1.2", "thread": 7, "title": "部署挂了", "mine": true, "unread": unread, "connect": null,
             "agents": [{ "key": "ds:C1:1.2", "model": "gpt-6-astra", "runtime": "codex", "process": process, "pending": 0,
                 "lastTurn": { "declared": declared, "outcome": outcome } }],
-            "last": { "agentIdentity": {"model": "claude-opus-5-5", "runtime": "claude"}, "seq": seq, "authorKind": by.0, "author": by.1, "authorName": null, "text": "修好了\n  再看看" },
+            "last": { "agentIdentity": {"model": "claude-opus-5-5"}, "seq": seq, "authorKind": by.0, "author": by.1, "authorName": null, "text": "修好了\n  再看看" },
         })
     }
 

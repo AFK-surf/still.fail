@@ -322,12 +322,12 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
         "agent" => {
             let agent = row.get("agents").and_then(Value::as_array).and_then(|a| a.iter().find(|a| a.get("key").and_then(Value::as_str) == Some(author)));
             let identity = last.get("agentIdentity").unwrap_or(&Value::Null);
-            let model = identity.get("model").and_then(Value::as_str);
+            let model = identity.get("model").and_then(Value::as_str).or_else(|| agent.and_then(|a| a.get("model")).and_then(Value::as_str));
             json!({
                 "kind": "agent",
-                "name": model.map(stillfail_shapes::model::name).unwrap_or_else(|| "agent".into()),
+                "name": model.map(stillfail_shapes::model::name).or(said_name.map(str::to_string)).unwrap_or_else(|| "agent".into()),
                 "model": model,
-                "runtime": identity.get("runtime"),
+                "runtime": agent.and_then(|a| a.get("runtime")).cloned().unwrap_or(json!("claude")),
                 "mine": false,
                 "state": agent.and_then(mark_of),
             })
@@ -1001,10 +1001,13 @@ mod tests {
         let members = [json!({"email": "b@x.com", "name": "阿二", "picture": "https://p/b"})];
         let row = |kind: &str, author: &str| json!({
             "agents": [{"key": "k", "model": "gpt-6-astra", "runtime": "codex", "lastTurn": {"declared": "block"}}],
-            "last": {"authorKind": kind, "author": author, "authorName": null, "text": "hi", "agentIdentity": {"model": "deepseek-flash", "runtime": "claude"}},
+            "last": {"authorKind": kind, "author": author, "authorName": null, "text": "hi", "agentIdentity": {"model": "deepseek-flash"}},
         });
         let agent = last_by(&row("agent", "k"), &me, &[], &members).unwrap();
         assert_eq!((agent["name"].as_str(), agent["state"].as_str()), (Some("DeepSeek Flash"), Some("block")));
+        let mut legacy = row("agent", "k");
+        legacy["last"].as_object_mut().unwrap().remove("agentIdentity");
+        assert_eq!(last_by(&legacy, &me, &[], &members).unwrap()["name"], "GPT-6 Astra");
         let other = last_by(&row("person", "b@x.com"), &me, &[], &members).unwrap();
         assert_eq!((other["name"].as_str(), other["picture"].as_str(), other["mine"].as_bool()), (Some("阿二"), Some("https://p/b"), Some(false)));
         assert_eq!(last_by(&row("person", "A@x.com"), &me, &[], &members).unwrap()["name"], "你");

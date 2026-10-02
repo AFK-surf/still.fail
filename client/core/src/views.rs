@@ -1211,13 +1211,15 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
     m["by"] = match kind.as_str() {
         "agent" => {
             let agent = agents.iter().find(|a| a["session"].get("key").and_then(Value::as_str) == Some(&author));
+            let session = agent.map(|a| &a["session"]);
             let identity = m.get("agentIdentity").unwrap_or(&Value::Null);
             let model = identity.get("model").and_then(Value::as_str);
             json!({
-                "name": model.map(|m| crate::format::agent_label(Some(m), identity.get("effort").and_then(Value::as_str))).unwrap_or_else(|| "agent".into()),
+                "name": model.map(|m| crate::format::agent_label(Some(m), identity.get("effort").and_then(Value::as_str)))
+                    .or_else(|| session.and_then(|s| s.get("agentText")).and_then(Value::as_str).map(str::to_string)).or(said_name).unwrap_or_else(|| "agent".into()),
                 "agent": agent.map(|_| author.clone()),
-                "maker": crate::present::maker(model),
-                "runtime": identity.get("runtime"),
+                "maker": model.map(|m| crate::present::maker(Some(m))).or_else(|| session.map(|s| s["maker"].clone())),
+                "runtime": session.and_then(|s| s.get("runtime")),
             })
         }
         "ember" => json!({ "name": crate::brand::name() }),
@@ -1829,15 +1831,15 @@ mod tests {
 
     #[test]
     fn historical_messages_do_not_follow_the_current_model() {
-        let mut message = json!({"authorKind": "agent", "author": "k", "agentIdentity": {"model": "gpt-6-sol", "effort": "high", "runtime": "codex"}});
-        let agents = [json!({"session": {"key": "k", "agentText": "GPT-6 Astra", "model": "gpt-6-astra", "runtime": "claude"}})];
+        let mut message = json!({"authorKind": "agent", "author": "k", "agentIdentity": {"model": "gpt-6-sol", "effort": "high"}});
+        let agents = [json!({"session": {"key": "k", "agentText": "GPT-6 Astra", "model": "gpt-6-astra", "runtime": "claude", "maker": {"id": "openai", "name": "OpenAI"}}})];
         shown_message(&mut message, &agents, &Value::Null, &[], &[], &[]);
         assert_eq!(message["by"]["name"], crate::format::agent_label(Some("gpt-6-sol"), Some("high")));
-        assert_eq!(message["by"]["runtime"], "codex");
+        assert_eq!(message["by"]["runtime"], "claude");
         message.as_object_mut().unwrap().remove("agentIdentity");
         shown_message(&mut message, &agents, &Value::Null, &[], &[], &[]);
-        assert_eq!(message["by"]["name"], "agent");
-        assert_eq!(message["by"]["maker"], Value::Null);
+        assert_eq!(message["by"]["name"], "GPT-6 Astra");
+        assert_eq!(message["by"]["maker"]["id"], "openai");
     }
 
     #[test]

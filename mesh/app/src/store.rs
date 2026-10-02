@@ -255,7 +255,7 @@ pub struct Attachment {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryRow {
-    /// Identity at posting time, never read from the current session.
+    /// Model and effort at posting time, never read from the current session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_identity: Option<Value>,
     pub thread: i64,
@@ -846,8 +846,6 @@ CREATE TABLE IF NOT EXISTS usage (
   output INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
-CREATE INDEX IF NOT EXISTS usage_message_model ON usage (session, turn, at);
-CREATE INDEX IF NOT EXISTS turns_message_model ON turns (session_key, started_at);
 -- How far each transcript has been read for it.
 CREATE TABLE IF NOT EXISTS usage_files (
   path TEXT PRIMARY KEY,
@@ -1647,24 +1645,6 @@ impl Store {
             summaries.sort_by(|a, b| said(b).cmp(&said(a)).then(b.thread.created_at.cmp(&a.thread.created_at)).then(b.thread.id.cmp(&a.thread.id)));
             Ok(summaries)
         })
-    }
-
-    /// Recover old posts only from calls in the turn that was running then, never today's session.
-    pub fn message_identity(&self, author: &str, at: i64, snapshot: Option<&Value>) -> Option<Value> {
-        if snapshot.and_then(|s| s.get("model")).and_then(Value::as_str).is_some() {
-            return snapshot.cloned();
-        }
-        self.with(|i, _| {
-            Ok(i.db.query_row(
-                "SELECT model, runtime FROM usage
-                 WHERE session = ?1 AND subagent = 0 AND model IS NOT NULL AND at <= ?2
-                   AND turn = (SELECT id FROM turns WHERE session_key = ?1 AND started_at <= ?2
-                               ORDER BY started_at DESC, rowid DESC LIMIT 1)
-                 ORDER BY at DESC, id DESC LIMIT 1",
-                params![author, at],
-                |r| Ok(serde_json::json!({"model": r.get::<_, String>(0)?, "runtime": r.get::<_, String>(1)?}))
-            ).optional()?)
-        }).ok().flatten().or_else(|| snapshot.cloned())
     }
 
     /// The thread's latest message as merged, for lists.
@@ -2743,8 +2723,8 @@ impl Inner {
     fn append(&mut self, mut entry: EntryRow, changes: &mut Changes) -> Result<EntryRow> {
         if entry.kind == EntryKind::Message && entry.author_kind == AuthorKind::Agent {
             entry.agent_identity = self.db.query_row(
-                "SELECT model, effort, runtime FROM sessions WHERE key = ?", [&entry.author],
-                |r| Ok(serde_json::json!({"model": r.get::<_, Option<String>>(0)?, "effort": r.get::<_, Option<String>>(1)?, "runtime": r.get::<_, String>(2)?}))
+                "SELECT model, effort FROM sessions WHERE key = ?", [&entry.author],
+                |r| Ok(serde_json::json!({"model": r.get::<_, Option<String>>(0)?, "effort": r.get::<_, Option<String>>(1)?}))
             ).optional()?;
         }
 

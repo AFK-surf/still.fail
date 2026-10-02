@@ -396,7 +396,7 @@ impl AdminApi {
         let mut v = serde_json::to_value(&t.thread).unwrap_or_else(|_| json!({}));
         v["sessions"] = serde_json::to_value(&t.sessions).unwrap_or(Value::Null);
         v["last"] = json!(t.last);
-        v["lastMessage"] = t.last_message.as_ref().map(|m| message_view(&self.deps.store, m, &mut names)).unwrap_or(Value::Null);
+        v["lastMessage"] = t.last_message.as_ref().map(|m| message_view(m, &mut names)).unwrap_or(Value::Null);
         v["read"] = json!(t.read);
         v["unread"] = json!(t.unread);
         v["people"] = json!(self.people(&t.people));
@@ -481,7 +481,7 @@ impl AdminApi {
             let creator = self.creator(t.thread.created_by.as_deref());
             let people = self.people(&t.people);
             let mut names = self.author_names(t.thread.id);
-            let last = t.last_message.as_ref().map(|m| message_view(&self.deps.store, m, &mut names));
+            let last = t.last_message.as_ref().map(|m| message_view(m, &mut names));
             let starters: Vec<Option<Value>> = agents.iter().map(|a| self.creator(all.get(a["key"].as_str().unwrap_or("")).and_then(|s| s.created_by.as_deref()))).collect();
             let key = agents[0]["key"].clone();
             let title = match (from, &origin) {
@@ -593,12 +593,12 @@ impl AdminApi {
     fn card_view(&self, thread: i64, dismissed: &HashSet<(i64, i64)>, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Option<Value> {
         let store = &self.deps.store;
         let (m, card) = store.pending_card(thread).ok().flatten()?;
-        let mut message = message_view(store, &m, names);
+        let mut message = message_view(&m, names);
         if card["type"] == "options" {
             message["options"] = card["options"].clone();
         }
         message["card"] = card.clone();
-        let before: Vec<Value> = store.messages_before(thread, Some(m.n), 2).unwrap_or_default().iter().map(|b| message_view(store, b, names)).collect();
+        let before: Vec<Value> = store.messages_before(thread, Some(m.n), 2).unwrap_or_default().iter().map(|b| message_view(b, names)).collect();
         let mut v = json!({ "seq": m.n, "card": card, "message": message, "before": before });
         if dismissed.contains(&(thread, m.n)) {
             v["dismissed"] = json!(true);
@@ -713,9 +713,6 @@ impl AdminApi {
             .map(|e| {
                 let mut v = serde_json::to_value(e).unwrap_or(Value::Null);
                 v["authorName"] = json!(names(e.author_kind, &e.author));
-                if e.author_kind == AuthorKind::Agent {
-                    v["agentIdentity"] = json!(self.deps.store.message_identity(&e.author, e.at, e.agent_identity.as_ref()));
-                }
                 declared_view(&mut v, e.declared.as_deref());
                 // Its card, a post's options from before cards (kept so, in an archive file too) as an options card.
                 if let Some(card) = e.card() {
@@ -742,9 +739,9 @@ impl AdminApi {
 }
 
 /// A merged message as lists show it (a thread's latest), with its author's name.
-pub fn message_view(store: &crate::store::Store, m: &MessageRow, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Value {
+pub fn message_view(m: &MessageRow, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Value {
     let mut v = json!({
-        "agentIdentity": if m.author_kind == AuthorKind::Agent { store.message_identity(&m.author, m.created_at, m.agent_identity.as_ref()) } else { None }, "seq": m.n, "thread": m.thread, "ts": m.ts, "authorKind": m.author_kind, "author": m.author, "authorName": names(m.author_kind, &m.author),
+        "agentIdentity": m.agent_identity, "seq": m.n, "thread": m.thread, "ts": m.ts, "authorKind": m.author_kind, "author": m.author, "authorName": names(m.author_kind, &m.author),
         "text": m.text, "attachments": m.attachments, "quotes": m.quotes, "declared": m.declared, "createdAt": m.created_at, "editedAt": m.edited_at,
     });
     declared_view(&mut v, m.declared.as_deref());
