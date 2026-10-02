@@ -80,6 +80,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -697,8 +698,9 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
     // (web: ChatMark.tsx WaitingText compactNeed).
     needLead.find(state)?.let { need ->
         val rest = state.substring(need.value.length)
-        Row(modifier.semantics(mergeDescendants = true) { contentDescription = state }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconIn(Icons.Bell, 14.dp, C.ink)
+        Row(modifier.semantics(mergeDescendants = true) { contentDescription = state }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Centred under the title's mark (ChatMark, 10dp then 8dp), so what follows starts where the title does.
+            Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) { IconIn(Icons.Bell, 14.dp, C.ink, Modifier.requiredSize(14.dp)) }
             if (rest.isNotEmpty()) Text(
                 rest, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
