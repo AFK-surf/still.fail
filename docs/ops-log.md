@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- Relay 云资源改名：已转移到 stillfail-relay，Relay / RelayBudget 两个 namespace ID 与原容器 application ID 均保持不变。先无 containers 转移，再挂回原容器，避免 Cloudflare 10074；中断可按私有报告续跑。模板使用 stillfail-v1，现有部署不重复创建；旧 ember-relay 禁止用原模板重新部署。容器 application 仍显式绑定 ember-relay-relay，须另行验证新 application 滚动替换后才退役。路由切换与回退用 cutover-worker.py。
+
 - 恢复页面的历史消息（fix/resume-message-performance）：发布 web（含新 wasm core）；桌面/Android 更新各自 core 后也会把后台和补缺口消息视为历史，180ms 整批淡入在共用 web 聊天组件（桌面 web/手机 web）。无需更新 station/cloud，无协议或持久化格式变化，新旧版本可混用。上线检查：离开后积累旧消息再返回，旧消息同时淡入，不排队飞出；随后实时新消息仍有原动画，阅读位置不跳。
 - 云资源迁移：API 已用 migrate-workers.py 将 5 个 Durable Object 命名空间转到 stillfail-cloud，并核对原 ID 不变；切路由用 cutover-worker.py，保存私有报告用于回退。新模板以 stillfail-v1 创建全新安装的命名空间；已迁移的部署跳过同名迁移。原 ember-cloud 不再用旧配置重新部署，旧路由/绑定在切换前仍转发到同一数据。发布桶另行复制校验，未完成前保持 ember-releases 绑定。
 

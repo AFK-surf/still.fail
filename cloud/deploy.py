@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Deploys still.fail cloud, six Workers (wrangler.jsonc says what each is; they keep their names from before the
 rename to still.fail, as do their Durable Objects, bucket and secrets: renaming would make new, empty ones):
-  api       ember-cloud     the API (wrangler.jsonc)
-  relay     ember-relay     the relay and its container (wrangler.relay.jsonc)
+  api       stillfail-cloud     the API (wrangler.jsonc)
+  relay     stillfail-relay     the relay and its container (wrangler.relay.jsonc)
   web       ember-web       the web app, static (wrangler.web.jsonc): app.still.fail, the stable one
   web-beta  ember-web-beta  the same build on app.youdid.wtf, the test channel (wrangler.web-beta.jsonc)
   admin     ember-admin     the admin's console, static (wrangler.admin.jsonc)
