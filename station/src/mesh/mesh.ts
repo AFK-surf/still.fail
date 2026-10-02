@@ -5,6 +5,8 @@ import { Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { presence } from "../cloud/presence.ts";
 import { log } from "../ops/log.ts";
 import { AdminApi, Cloud, Key, MeshNative, Up } from "../services.ts";
+import { Agents } from "../sessions/agents.ts";
+import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
@@ -16,11 +18,12 @@ export const MeshLive = Layer.effectDiscard(
     const native = yield* MeshNative;
     const admin = yield* AdminApi;
     const up = yield* Up;
+    const agents = yield* Agents;
     const run = Effect.gen(function* () {
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
+        Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
@@ -32,6 +35,12 @@ export const MeshLive = Layer.effectDiscard(
       const online = yield* Effect.timeoutOption(Effect.promise(() => endpoint.online()), "15 seconds");
       if (Option.isNone(online)) log.warn("mesh", "no relay link after 15 s; going online at still.fail cloud anyway");
       yield* Effect.forkScoped(presence);
+      // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
+      agents.remote.attach(peerCall(endpoint, cloud.state));
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followRoster(cloud.state, agents.remote, agents.config)),
+        (stop) => Effect.sync(stop),
+      );
       const connections = yield* FiberSet.make();
       const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up) };
       for (;;) {
@@ -39,7 +48,7 @@ export const MeshLive = Layer.effectDiscard(
         if (!conn) return;
         yield* FiberSet.run(
           connections,
-          Effect.tryPromise(() => serve(members, conn)).pipe(
+          Effect.tryPromise(() => (conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote) : serve(members, conn))).pipe(
             Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
             Effect.ensuring(Effect.sync(() => conn.close(0, "station stopping"))),
           ),

@@ -25,5 +25,5 @@ export interface Remote {
   closeSession(session: string): void;
 }
 
-/// An answer another station gave: it refused the request (remote.rs `Refused`).
-export class Refused extends Error {}
+/// An answer another station gave: it refused the request (remote.rs `Refused`). The transport's own.
+export { Refused } from "../jobs/remote.ts";

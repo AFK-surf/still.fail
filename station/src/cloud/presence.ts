@@ -160,6 +160,8 @@ function applyState(s: CloudState, text: string) {
     return;
   }
   if (body?.type === "state") {
+    // Current before it is told, so whoever hears of the new roster reads it as current.
+    s.peersCurrent = Array.isArray(body.peers);
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {
         if (typeof body[k] === "string") st[k] = body[k];
@@ -170,7 +172,6 @@ function applyState(s: CloudState, text: string) {
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
     });
-    s.peersCurrent = Array.isArray(body.peers);
   } else if (body?.type === "revoke" && isRevocation(body)) {
     s.update((st) => {
       st.revocations = st.revocations.filter((r) => !(r.kind === body.kind && r.id === body.id));
