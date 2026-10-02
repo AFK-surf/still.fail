@@ -8,6 +8,8 @@ import { routes as chats } from "./routes/chats.ts";
 import { routes as usage } from "./routes/usage.ts";
 import { routes as sessions } from "./routes/sessions.ts";
 import { routes as events } from "./routes/events.ts";
+import { routes as marks } from "./routes/marks.ts";
+import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
 import { Host } from "./host.ts";
 
@@ -23,10 +25,12 @@ export type Tools = {
   events?: Events;
   /// Whether that session is there.
   sessionExists(key: string): boolean;
+  /// The station's store, for what is written (on this thread); none while the station starts.
+  store?: Store;
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
-export type AdminDeps = { events?: Events; sessionExists?: (key: string) => boolean };
+export type AdminDeps = { events?: Events; store?: Store };
 
 export class Admin {
   private routes: Route[];
@@ -47,9 +51,10 @@ export class Admin {
       },
       host: this.host,
       events: deps.events,
-      sessionExists: deps.sessionExists ?? (() => false),
+      sessionExists: (key) => deps.store?.getSession(key) != null,
+      store: deps.store,
     };
-    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools)];
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools)];
   }
 
   async handle(r: Request): Promise<Answer> {
