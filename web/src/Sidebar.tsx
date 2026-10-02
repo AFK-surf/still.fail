@@ -1,6 +1,6 @@
-import { Archive, Edit, Compose, Pin, Unplug } from "./icons.tsx";
+import { Archive, Edit, Pin, Unplug } from "./icons.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "./station.tsx";
-import { MineFilter } from "./components.tsx";
+import { SidebarActions } from "./SidebarActions.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
 import { prime } from "./core/react.ts";
@@ -37,7 +37,6 @@ import { t } from "./i18n.ts";
  */
 export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
   const [filter] = useChatFilter();
-  const move = useComposerMove();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
   // The lists are followed at once, side by side: switching slides from one to another with nothing to wait for.
@@ -49,11 +48,8 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
   useEffect(() => setGoing(null), [path]);
   return (
     <>
-      <div className={nav.navNew}>
-        <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />{t("web-main.sidebar.newChat")}</NavLink>
-        {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
-        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} watching decisions={{ to: `/w/${scope}/decisions`, chats: `/w/${scope}` }} />}
-      </div>
+      <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
+        showFilter={!(all.value && !all.value.loading && all.value.stations.length === 0)} />
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={filter}>
           <ChatPane chats={all} scope={scope} filter="all" stationsPage={stationsPage} hidden={filter !== "all"} />

@@ -5,9 +5,8 @@ export const emptyList = style({ padding: "20px 10px", fontSize: vars.textXs, li
 
 /** 奏 and how many, over the list. */
 export const title = style({
-  display: "flex", alignItems: "center", gap: 8, padding: "6px 8px 2px 18px", minHeight: 40, fontSize: vars.textBody, lineHeight: "20px",
+  display: "flex", alignItems: "center", gap: 8, padding: "10px 18px 6px", fontSize: vars.textBody, lineHeight: "20px",
 });
-export const filter = style({ marginLeft: "auto" });
 export const titleWord = style({ fontWeight: 600 });
 export const titleCount = style({ fontSize: vars.textXs, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
 

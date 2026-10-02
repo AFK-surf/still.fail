@@ -17,7 +17,7 @@ import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
 import { MOVE, reducedMotion } from "./motion.ts";
 import { SidebarBrand } from "./brand.tsx";
-import { MineFilter } from "./components.tsx";
+import { SidebarActions } from "./SidebarActions.tsx";
 import { ResizeHandle, Time } from "./ui.tsx";
 import * as css from "./DecisionDesk.css.ts";
 import * as deckCss from "./Decisions.css.ts";
@@ -108,10 +108,10 @@ export function DecisionDesk({ workspace, back, onOpen, footer }: { workspace: s
       <nav className={nav.sidebar} aria-label={t("web-main.decisions.title")}>
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-main.sidebar.resize")} />
         <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
+        <SidebarActions newChat={`${back}/new`} archive={`${back}/archive`} workspace={back} decisions />
         <div className={css.title}>
           <span className={css.titleWord}>奏</span>
           {items.length > 0 && <span className={css.titleCount}>{items.length} 件等你决定</span>}
-          <div className={css.filter}><MineFilter label="会话" mine="我参与的" compact watching archive={`${back}/archive`} decisions={{ to: `${back}/decisions`, chats: back, active: true }} /></div>
         </div>
         <div ref={list} className={nav.navScroll} role="list">
           {items.map((x, i) => (
