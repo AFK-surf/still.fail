@@ -37,7 +37,9 @@ use crate::trace::{Kind, Tracer};
 
 /// The mDNS service stations announce themselves under (mesh/station's `MDNS_SERVICE`).
 #[cfg(all(not(target_arch = "wasm32"), not(test)))]
-const MDNS_SERVICE: &str = "ember";
+const MDNS_SERVICE: &str = "stillfail";
+#[cfg(all(not(target_arch = "wasm32"), not(test)))]
+const FORMER_MDNS_SERVICE: &str = "ember";
 
 pub const DEVICE_KEY: &str = "device";
 pub const ALPN: &[u8] = b"stillfail/admin/1";
@@ -901,10 +903,11 @@ async fn bind(secret: &[u8; 32], relays: &[String]) -> Result<Endpoint> {
         builder
     } else {
         builder
-            // Stations on the LAN, among still.fail's own (`_ember._udp`, as the station announces itself: mesh/station); a
+            // Stations on the LAN, under the new service and its pre-rename alias; a
             // device is never dialed, so it only asks. Answers to a query stop after a few, so every endpoint that
             // answers is one more a station may be crowded out by for a round (0.7 s).
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
+            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
             .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish())
     };
     // The tests' relays (`tests::relays`) have certificates of their own, and the tests go through them alone.

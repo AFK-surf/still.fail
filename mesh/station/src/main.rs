@@ -700,10 +700,9 @@ async fn mesh(data: PathBuf, backend: local::Backend, ready: watch::Receiver<boo
     }
 }
 
-/// The mDNS service this station announces itself under: ours (named before the rename, and kept: clients look for it
-/// by this name), not iroh's shared `irohv1`, where any iroh
-/// app's endpoints answer too and a query's answers stop after a few (client/core/src/mesh.rs asks for it).
-const MDNS_SERVICE: &str = "ember";
+/// Advertise the canonical service plus the legacy alias until old clients retire.
+const MDNS_SERVICE: &str = "stillfail";
+const FORMER_MDNS_SERVICE: &str = "ember";
 
 async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, ready: watch::Receiver<bool>, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
@@ -719,6 +718,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
         .alpns(vec![ALPN.to_vec(), FORMER_ALPN.to_vec(), peer::ALPN.to_vec()])
         .relay_mode(RelayMode::Custom(relays))
         .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE))
+        .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE))
         .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key))
         .transport_config(transport())
         .bind()
@@ -1486,6 +1486,27 @@ fn transport() -> QuicTransportConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Run on a machine with LAN multicast; ordinary CI networks may suppress it.
+    #[tokio::test]
+    #[ignore = "requires LAN multicast; run in an isolated Studio test process"]
+    async fn mdns_canonical_and_legacy_names_can_advertise_the_same_station() {
+        use iroh::address_lookup::{AddressLookup, EndpointData};
+        use iroh_mdns_address_lookup::MdnsAddressLookup;
+        let station = SecretKey::from([41u8; 32]).public();
+        let client = SecretKey::from([42u8; 32]).public();
+        let data = EndpointData::from_iter([iroh::TransportAddr::Ip("127.0.0.1:47999".parse().unwrap())]);
+        let canonical = MdnsAddressLookup::builder().service_name(MDNS_SERVICE).build(station).unwrap();
+        let legacy = MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).build(station).unwrap();
+        for name in [MDNS_SERVICE, FORMER_MDNS_SERVICE] {
+            let reader = MdnsAddressLookup::builder().service_name(name).advertise(false).build(client).unwrap();
+            let mut answers = reader.resolve(station).unwrap();
+            canonical.publish(&data);
+            legacy.publish(&data);
+            let answer = tokio::time::timeout(Duration::from_secs(12), answers.next()).await.unwrap();
+            assert!(answer.is_some_and(|item| item.is_ok()), "{name} must discover the same station");
+        }
+    }
 
     #[tokio::test]
     async fn enrollment_prefers_canonical_signatures_and_only_retries_signature_rejection() {
