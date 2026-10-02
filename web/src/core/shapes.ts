@@ -154,11 +154,21 @@ export interface Attention {
 	quota?: QuotaAttention;
 }
 
+/** A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come. */
+export interface Stamp {
+	at: number;
+	ago: string;
+	full: string;
+	until: string;
+	past: boolean;
+}
+
 export interface AutomaticDecisionCheck {
 	id: number;
 	session: string;
 	title: string;
 	at: number;
+	stamp?: Stamp;
 	label: string;
 	accepted: boolean;
 	model: string;
@@ -320,15 +330,6 @@ export type Badge = "run" | "block" | "failed";
 export interface Maker {
 	id: string;
 	name: string;
-}
-
-/** A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come. */
-export interface Stamp {
-	at: number;
-	ago: string;
-	full: string;
-	until: string;
-	past: boolean;
 }
 
 /**

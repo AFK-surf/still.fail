@@ -3390,6 +3390,8 @@ pub struct AutomaticDecisionCheck {
     pub title: String,
     #[typeshare(serialized_as = "I54")]
     pub at: i64,
+    #[serde(default)]
+    pub stamp: Option<Stamp>,
     pub label: String,
     pub accepted: bool,
     pub model: String,

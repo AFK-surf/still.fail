@@ -43,7 +43,10 @@ impl Forms {
             if d.pending {return Err(CoreError::invalid("请等保存完成"));}
             if let Some(p)=patch.as_object() {
                 for (key,value) in p { if ["enabled","model"].contains(&key.as_str()) {d.value[key]=value.clone();} }
-                d.value["dirty"]=json!(true);
+                let overview=self.store.value(&Topic::Overview{station:station.clone()}).transpose()?.unwrap_or(Value::Null);
+                let saved=&overview["automaticDecisions"]["settings"]["completion"];
+                d.value["dirty"]=json!(d.value["enabled"].as_bool().unwrap_or(false)!=saved["enabled"].as_bool().unwrap_or(false)
+                    || d.value["model"].as_str().unwrap_or("")!=saved["model"].as_str().unwrap_or(""));
             }
         }
         self.store.invalidate(topic); Ok(d.value.clone())
@@ -80,6 +83,12 @@ mod tests {
             store.set(&overview,Ok(json!({"automaticDecisions":{"settings":{"completion":{"enabled":true,"model":"gpt-6-luna"}}}})));
             let current=forms.value(&form).unwrap();
             assert_eq!(current["enabled"],true);assert_eq!(current["model"],"gpt-6-luna");
+            forms.change(&form,1,"edit",&json!({"model":"gpt-6-luna"})).unwrap();
+            assert_eq!(forms.value(&form).unwrap()["dirty"],false);
+            forms.change(&form,1,"edit",&json!({"enabled":false})).unwrap();
+            assert_eq!(forms.value(&form).unwrap()["dirty"],true);
+            forms.change(&form,1,"edit",&json!({"enabled":true})).unwrap();
+            assert_eq!(forms.value(&form).unwrap()["dirty"],false);
             forms.change(&form,1,"edit",&json!({"model":"another"})).unwrap();
             store.set(&overview,Ok(json!({"automaticDecisions":{"settings":{"completion":{"enabled":false,"model":null}}}})));
             assert_eq!(forms.value(&form).unwrap()["model"],"another");
