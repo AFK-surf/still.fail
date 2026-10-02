@@ -5,6 +5,8 @@
 //   tool          a Bash call that waits until background_tasks (or interrupt)
 //   again         a reply, then a turn of its own (no prompt of ours)
 //   exit          exits 3 in the middle of the turn
+//   …post:<text>  (anywhere in a message the station hands it) calls chat_post through the MCP endpoint of --mcp-config
+//                 with its token, to the message's thread, ending the turn all_done; then a reply with what it answered
 // Input while busy is read into the turn (a delta "steer:<text>"); "queue:<text>" becomes a turn after it.
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin.
 import fs from "node:fs";
@@ -70,6 +72,15 @@ async function turn(text) {
       await sleep(100);
     }
     result({ subtype: "error_during_execution", is_error: true, result: "" });
+  } else if (text.includes("post:")) {
+    const server = JSON.parse(flag("--mcp-config")).mcpServers.stillfail;
+    const to = /thread="([^"]+)"/.exec(text)?.[1] ?? "";
+    const said = text.slice(text.indexOf("post:") + 5).split("\n")[0];
+    const call = (id, method, params) =>
+      fetch(server.url, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.STILLFAIL_MCP_TOKEN}` }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) }).then((r) => r.json());
+    await call(1, "initialize", { protocolVersion: "2025-06-18" });
+    const answer = await call(2, "tools/call", { name: "chat_post", arguments: { to, text: said, kind: "all_done", done: "answered the question that was asked" } });
+    result({ result: await message([answer.result.content[0].text], 0) });
   } else if (text === "exit") {
     await message(["partial"], 0);
     process.exit(3);
