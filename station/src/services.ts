@@ -2,7 +2,12 @@
 // long-lived work is Effect (fibers in scopes: a part stopped stops all it started); computing what to answer is plain
 // functions (src/read). docs/station-ts.md, 「模块划分」.
 import { Context, Effect, Layer, Queue, Stream, SubscriptionRef } from "effect";
+import { join } from "node:path";
 import { Admin } from "./api/admin.ts";
+import { Events as EventStreams } from "./api/events.ts";
+import { Host } from "./api/host.ts";
+import { outputAt, tail } from "./read/jobs.ts";
+import { Store as StationStore } from "./store/store.ts";
 import { type StationKey, loadKey } from "./cloud/key.ts";
 import { Cloud as CloudState } from "./cloud/state.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
@@ -55,12 +60,57 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
   );
 }
 
+/// The station's store (stillfail.db, archive/): what is written, on this thread; the readers read the same file.
+export class Store extends Context.Service<Store, StationStore>()("stillfail/Store") {
+  static readonly layer = Layer.effect(
+    Store,
+    Effect.gen(function* () {
+      const { data } = yield* Paths;
+      return yield* Effect.acquireRelease(
+        Effect.sync(() => StationStore.open(join(data, "stillfail.db"), join(data, "archive"))),
+        (store) => Effect.sync(() => store.close()),
+      );
+    }),
+  );
+}
+
+/// The event streams (GET /events): the store's changes, pushed.
+export class Events extends Context.Service<Events, EventStreams>()("stillfail/Events") {
+  static readonly layer = Layer.effect(
+    Events,
+    Effect.gen(function* () {
+      const store = yield* Store;
+      const readers = yield* Readers;
+      const admin = yield* AdminHost;
+      return new EventStreams({
+        readers,
+        subscribe: (listener) => store.subscribe(listener),
+        host: () => admin.sample(),
+        jobLog: (id) => store.getJob(id)?.log ?? null,
+        tail,
+        outputAt,
+        sessionExists: (key) => store.getSession(key) !== null,
+      });
+    }),
+  );
+}
+
+/// The machine's state, shared by GET /host and the events.
+export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/AdminHost") {
+  static readonly layer = Layer.effect(
+    AdminHost,
+    Effect.gen(function* () {
+      return new Host(yield* Readers);
+    }),
+  );
+}
+
 /// The admin API.
 export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/AdminApi") {
   static readonly layer = Layer.effect(
     AdminApi,
     Effect.gen(function* () {
-      return new Admin(yield* Readers);
+      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost });
     }),
   );
 }

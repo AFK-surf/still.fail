@@ -17,7 +17,7 @@ import { type Control, launcher } from "./ops/launcher.ts";
 import { log } from "./ops/log.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { version } from "./ops/version.ts";
-import { AdminApi, Cloud, Key, MeshNative, Paths, Readers, Up } from "./services.ts";
+import { AdminApi, AdminHost, Cloud, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
 
 const args = process.argv.slice(2);
 const data = dataDir(args);
@@ -78,9 +78,11 @@ function run() {
   if (!app) usage();
   const control = launcher(args);
   const paths = Layer.succeed(Paths)({ data, app });
-  const parts = Layer.mergeAll(Cloud.layer, Key.layer, Readers.layer, MeshNative.layer, Up.layer).pipe(Layer.provide(paths));
+  const parts = Layer.mergeAll(Cloud.layer, Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
   const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
     Layer.provideMerge(AdminApi.layer),
+    Layer.provideMerge(Events.layer),
+    Layer.provideMerge(AdminHost.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {
