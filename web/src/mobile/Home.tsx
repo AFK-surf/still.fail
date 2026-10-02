@@ -6,7 +6,7 @@ import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Ling, Pin, Settings, Unplug, Zou } from "../icons.tsx";
+import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
@@ -76,7 +76,7 @@ export function Home() {
         {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, only while there are some. */}
         {decisions > 0 && (
           <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
-            <Zou size={40} /><span>{decisions}</span>
+            <Zou size={40} /><Count n={decisions} />
           </button>
         )}
         <div className={css.mHomeCapsule}>
@@ -427,4 +427,11 @@ function useRowMenu(item: ChatItem, busy: boolean) {
 /** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */
 function LastMessage({ item }: { item: ChatItem }) {
   return <span className={css.mLast}><span className={css.mLastText}>{item.last!.preview}</span></span>;
+}
+
+/** How many decisions wait, drawn (design/icons num-*): 1 to 9, and + past that. */
+const NUMS = [Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9];
+function Count({ n }: { n: number }) {
+  const Shown = n > 9 ? NumMore : NUMS[n - 1] ?? NumMore;
+  return <Shown size={24} />;
 }

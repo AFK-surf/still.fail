@@ -737,7 +737,8 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         IconIn(Icons.Zou, 40.dp, C.ink)
-        Text("$n", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = C.ink)
+        // How many, drawn (design/icons num-*): 1 to 9, and + past that.
+        IconIn(if (n in 1..9) listOf(Icons.Num1, Icons.Num2, Icons.Num3, Icons.Num4, Icons.Num5, Icons.Num6, Icons.Num7, Icons.Num8, Icons.Num9)[n - 1] else Icons.NumMore, 24.dp, C.ink)
     }
 }
 

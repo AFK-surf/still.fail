@@ -186,4 +186,3 @@ export const mSwipeUnder = style({
 });
 globalStyle(`${mSwipeUnder} span`, { paddingLeft: "24px" });
 globalStyle(`${mDecisions} svg`, { flex: "none" });
-globalStyle(`${mDecisions} span`, { fontSize: "16px", lineHeight: "24px", fontVariantNumeric: "tabular-nums" });

@@ -197,6 +197,46 @@ export function Move(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5V20.5 M3.5 12H20.5 M9.5 6L12 3.5L14.5 6 M9.5 18L12 20.5L14.5 18 M6 9.5L3.5 12L6 14.5 M18 9.5L20.5 12L18 14.5" /></Svg>;
 }
 
+export function Num1(props: IconProps) {
+  return <Svg {...props}><path d="M5.9 8.4 L15.6 1.8 L13.1 20.8 L10.1 22 L11.3 6.8Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num2(props: IconProps) {
+  return <Svg {...props}><path d="M5.2 7.9 L8.4 2.9 L14.5 1.8 L18.4 5.2 L17.1 9.1 L6.8 17.9 L17.9 16.5 L16.4 21.2 L4.3 20.2 L4.8 18.4 L13.8 8.3 Q15.3 6.6 13.5 4.9 L10.4 4.2Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num3(props: IconProps) {
+  return <Svg {...props}><path d="M5.3 5.8 L12.8 1.8 L17.9 4.6 L16.4 8.7 L12.8 11 L18 13.6 L16.8 18.1 L11.2 22 L4.9 18.7 L10.7 19.5 L14.1 16.3 L12.5 13.5 L8.5 13 L9.3 11 L13.3 8.1 L14 5.8 L11.5 4.4Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num4(props: IconProps) {
+  return <Svg {...props}><path d="M12.7 1.8 L6.3 14.1 L20 12.6 L18.7 15.8 L3.7 16 L3.4 14.5Z" fill="currentColor" stroke="none" /><path d="M17.2 6.1 L15.7 18.8 L12 22 L11.8 19.3Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num5(props: IconProps) {
+  return <Svg {...props}><path d="M7.7 3.6 L18.9 1.8 L16.9 5.8 L8.6 5.1 L7.7 10.8 L13.4 9 L18 12.9 L16.8 18.1 L11 22 L4.8 18.6 L10.6 19.5 L14 16 L13.4 12.8 L10.8 11.5 L5.9 13Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num6(props: IconProps) {
+  return <Svg {...props}><path d="M18.1 1.7 L10.3 9.7 L8 15.1 L11.5 19.8 L14.9 16.3 L13.5 12.4 L9.5 12.9 L12.1 10.3 L16.2 10.9 L18 15.8 L14.3 21 L9.5 21.8 L5.5 17.5 L6.3 12 L11.8 5.6Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num7(props: IconProps) {
+  return <Svg {...props}><path d="M4.5 2.6 L10.6 4 L19.7 1.9 L19 5 L14.9 11.4 L11.7 22 L8 20.6 L12.6 10.9 L16.9 5.2 L6.1 6.3Z" fill="currentColor" stroke="none" /><path d="M8 13.4 L17.1 10.2 L16.4 12.4 L7.7 14.2Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num8(props: IconProps) {
+  return <Svg {...props}><path d="M12.9 1.7 L17.9 4.5 L16.7 8.2 L13.5 10.8 L18.3 14.4 L16.6 19.6 L10.9 22 L5.3 18.6 L6.3 14.4 L9.8 11.5 L6.2 8.5 L7.6 3.9Z M12.6 9.9 L15.2 6.6 L11.2 3.5 L8.9 6.8Z M11 12.4 L8 16.6 L12.5 20 L15.4 16.5Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Num9(props: IconProps) {
+  return <Svg {...props}><path d="M5.9 22.1 L13.7 14.1 L16 8.7 L12.5 4 L9.1 7.5 L10.5 11.4 L14.5 10.9 L11.9 13.5 L7.8 12.9 L6 8 L9.7 2.8 L14.5 2 L18.5 6.3 L17.7 11.8 L12.2 18.2Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function NumMore(props: IconProps) {
+  return <Svg {...props}><path d="M12.8 3.3 L15 5.5 L11.9 18.9 L9.7 20.7 L10.4 12.5Z" fill="currentColor" stroke="none" /><path d="M3.7 12.1 L20.5 9.7 L18.8 13 L5.2 13.6Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
 export function Other(props: IconProps) {
   return <Svg {...props}><path d="M4.43396 16.73762 L10.58579 10.58579 C12.00000 9.17157 9.66655 7.54523 11.71716 5.49462 L14.19203 3.01974 L15.95980 4.78751 L14.05061 6.69670 A2.3 2.3 0 0 0 17.30330 9.94939 L19.21249 8.04020 L20.98026 9.80797 L18.50538 12.28284 C16.45477 14.33345 14.82843 12.00000 13.41421 13.41421 L7.26238 19.56604 A2 2 0 0 1 4.43396 16.73762 Z" /></Svg>;
 }
@@ -397,6 +437,16 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "monitor": Monitor,
   "more": More,
   "move": Move,
+  "num-1": Num1,
+  "num-2": Num2,
+  "num-3": Num3,
+  "num-4": Num4,
+  "num-5": Num5,
+  "num-6": Num6,
+  "num-7": Num7,
+  "num-8": Num8,
+  "num-9": Num9,
+  "num-more": NumMore,
   "other": Other,
   "panel-close": PanelClose,
   "panel-open": PanelOpen,
