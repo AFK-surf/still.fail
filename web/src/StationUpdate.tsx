@@ -19,7 +19,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
       <Popover.Anchor asChild><span className={css.dot} /></Popover.Anchor>{notice.label ?? notice.text}
     </Popover.Trigger>
     <Popover.Portal>
-      <Popover.Content className={css.popover} side="bottom" align="end" sideOffset={10} collisionPadding={12} onOpenAutoFocus={(e) => e.preventDefault()}>
+      <Popover.Content className={css.popover} side="bottom" align="end" alignOffset={-30} sideOffset={10} collisionPadding={12} arrowPadding={22} onOpenAutoFocus={(e) => e.preventDefault()}>
         <div className={css.words}><span className={css.title}>{notice.text}</span>{notice.detail && <span className={css.detail}>{notice.detail}</span>}</div>
         {notice.canUpdate && <button className={css.update} disabled={busy} onClick={() => act(api.updateSoftware("station"), "更新 station")}>
           <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? "更新中" : "现在更新"}
