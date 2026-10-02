@@ -183,7 +183,7 @@
   "web-main.decisions.dismiss": "不再提醒",
   "web-main.decisions.dismissWhat": "不再提醒",
   "web-main.decisions.elsewhere": "去 chat 里回",
-  "web-main.decisions.empty": "暂无",
+  "web-main.decisions.empty": "没有待决的奏折",
   "web-main.decisions.entry": "奏：{n} 件等你决定",
   "web-main.decisions.idle.answered": "今天批了",
   "web-main.decisions.idle.answeredTitle": "今天批过的",

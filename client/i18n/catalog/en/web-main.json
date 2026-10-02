@@ -204,7 +204,7 @@
   "web-main.decisions.dismiss": "Dismiss",
   "web-main.decisions.dismissWhat": "dismiss it",
   "web-main.decisions.elsewhere": "Reply in chat",
-  "web-main.decisions.empty": "None",
+  "web-main.decisions.empty": "No pending decisions",
   "web-main.decisions.entry": {
     "one": "Decisions: 1 waiting",
     "other": "Decisions: {n} waiting"
