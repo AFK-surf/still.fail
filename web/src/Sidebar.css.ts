@@ -5,7 +5,7 @@ import { vars } from "./styles/tokens.css.ts";
 import { accountTrigger } from "./cloud/workspace.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
 import { shell } from "./styles/shell.css.ts";
-import { doneMark, kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
+import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -91,6 +91,8 @@ export const navText = style(ellipsis);
 /** 新建对话, with the filter beside it. */
 export const navNew = style({ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
+// Align the compose icon with the 14px completion check below.
+globalStyle(`${navNew} > ${navRow} > svg`, { transform: "translateX(-1px)" });
 
 // ── a chat's row ──
 
@@ -143,8 +145,6 @@ export const navSessionMeta = style({
   height: 18, lineHeight: "18px",
   selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
-// Match the new-chat icon’s 16px column while keeping the check itself 14px.
-globalStyle(`${navSessionMeta} ${doneMark}`, { width: 16 });
 export const navSessionLast = style({
   flex: 1, ...ellipsis, fontSize: vars.textXs, color: vars.muted,
   // Its turn (something waits on the viewer, ChatMark.tsx WaitingText): in ink.
