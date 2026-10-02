@@ -41,11 +41,27 @@ for i in $(seq 1 100); do
 done
 echo "handed over: node $first -> $second, launcher $launcher alive: $(kill -0 $launcher && echo yes)"
 for i in $(seq 1 150); do
-  ended=$(sqlite3 "$work/data/stillfail.db" "select count(*) from turns where session='$key' and ended_at is not null")
+  ended=$(sqlite3 "$work/data/stillfail.db" "select count(*) from turns where session_key='$key' and ended_at is not null")
   [ "$ended" -ge 1 ] && break
   sleep 0.2
 done
-echo "turns: $(sqlite3 "$work/data/stillfail.db" "select outcome || '/' || coalesce(declared,'-') from turns where session='$key'" | tr '\n' ' ')"
+# Then a crash in the middle of a turn: the launcher starts Node again, which takes the turn up from its runner.
+port=$(udp_port "$second")
+ask POST "/admin/api/threads/$thread/messages" '{"text":"slow:60 post:said after a crash"}'
+sleep 2
+kill -9 "$second"
+for i in $(seq 1 100); do
+  third=$(node_pid)
+  [ -n "$third" ] && [ "$third" != "$second" ] && break
+  sleep 0.2
+done
+echo "crashed: node $second -> $third, launcher $launcher alive: $(kill -0 $launcher && echo yes)"
+for i in $(seq 1 200); do
+  ended=$(sqlite3 "$work/data/stillfail.db" "select count(*) from turns where session_key='$key' and ended_at is not null")
+  [ "$ended" -ge 2 ] && break
+  sleep 0.2
+done
+echo "turns: $(sqlite3 "$work/data/stillfail.db" "select outcome || '/' || coalesce(declared,'-') from turns where session_key='$key'" | tr '\n' ' ')"
 echo "chat:"
 sqlite3 "$work/data/stillfail.db" "select '  ' || author_kind || ': ' || text from entries where thread=$thread order by n"
 grep -E "ERROR|WARN" "$work/station.log" | grep -v presence || true
