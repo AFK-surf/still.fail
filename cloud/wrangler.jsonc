@@ -4,10 +4,10 @@
   // account id. still.fail cloud is five Workers (deploy.py deploys each only when it changed):
   //   stillfail-cloud this one: the API, on the paths below
   //   ember-relay    the relay (wrangler.relay.jsonc)
-  //   ember-web      the web app, static, on PUBLIC_ORIGIN's Custom Domain (wrangler.web.jsonc)
-//   ember-web-beta the same files, on BETA_ORIGIN's: the test channel (wrangler.web-beta.jsonc)
-  //   ember-admin    the admin's console, static, on ADMIN_ORIGIN's (wrangler.admin.jsonc)
-  //   ember-preview  the preview host, static, on PREVIEW_ORIGIN's (wrangler.preview.jsonc)
+  //   stillfail-web      the web app, static, on PUBLIC_ORIGIN's Custom Domain (wrangler.web.jsonc)
+//   stillfail-web-beta the same files, on BETA_ORIGIN's: the test channel (wrangler.web-beta.jsonc)
+  //   stillfail-admin    the admin's console, static, on ADMIN_ORIGIN's (wrangler.admin.jsonc)
+  //   stillfail-preview  the preview host, static, on PREVIEW_ORIGIN's (wrangler.preview.jsonc)
   // A route takes precedence over a Custom Domain on the same host, so the API's and the relay's paths reach their
   // Workers and every other path the static ones.
   // Each host has its new name (still.fail) and its old one (3720.org), both bound for good (docs/rename-still-fail.md):
@@ -48,7 +48,7 @@
     "PUBLIC_ORIGIN_ALIASES": "https://ember.3720.org",
     "ADMIN_ORIGIN": "https://admin.still.fail",
     "ADMIN_ORIGIN_ALIASES": "https://admin.ember.3720.org",
-    // The web app's test channel (ember-web-beta); removing it turns the channel off (its calls answer 421).
+    // The web app's test channel (stillfail-web-beta); removing it turns the channel off (its calls answer 421).
     "BETA_ORIGIN": "https://app.youdid.wtf",
     // Relays beside still.fail's own (src/relays.ts): one in Beijing (Alibaba Cloud, by its IP: no ICP filing), for
     // stations and devices in mainland China, where Cloudflare's is slow or out of reach; one in Hong Kong (Alibaba
@@ -59,7 +59,7 @@
     "GOOGLE_CLIENT_ID": "",
   },
   // The stations' releases (scripts/release.sh puts them, install.sh gets them from /releases/).
-  "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "ember-releases" }],
+  "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "stillfail-releases" }],
   "durable_objects": {
     "bindings": [
       { "name": "ACCOUNTS", "class_name": "Account" },

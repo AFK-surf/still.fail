@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 发布桶与静态 Worker 改名：189 个对象约 10.76 GB 已复制并校验到 stillfail-releases；切换前保存完整基线报告，切换后用 migrate-releases.py --reconcile --baseline <基线> --report <新报告> 补旧上传器晚到的对象，新桶有更改或删除则保留新值。停止旧上传器后再做最后一轮，旧桶留回退期，不再日常使用。API 的 RELEASES、release.sh、changelog 和 web build 元数据上传同时换新桶。静态 Worker 换 stillfail-*，自定义域名随部署转移；正式 web 必须用已上线的原构建迁移，不顺带转正 beta。
+
 - Relay 云资源改名：已转移到 stillfail-relay，Relay / RelayBudget 两个 namespace ID 与原容器 application ID 均保持不变。先无 containers 转移，再挂回原容器，避免 Cloudflare 10074；中断可按私有报告续跑。模板使用 stillfail-v1，现有部署不重复创建；旧 ember-relay 禁止用原模板重新部署。容器 application 仍显式绑定 ember-relay-relay，须另行验证新 application 滚动替换后才退役。路由切换与回退用 cutover-worker.py。
 
 - 恢复页面的历史消息（fix/resume-message-performance）：发布 web（含新 wasm core）；桌面/Android 更新各自 core 后也会把后台和补缺口消息视为历史，180ms 整批淡入在共用 web 聊天组件（桌面 web/手机 web）。无需更新 station/cloud，无协议或持久化格式变化，新旧版本可混用。上线检查：离开后积累旧消息再返回，旧消息同时淡入，不排队飞出；随后实时新消息仍有原动画，阅读位置不跳。

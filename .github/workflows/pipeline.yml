@@ -212,7 +212,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           node scripts/changelog.ts > "$RUNNER_TEMP/changelog.json"
-          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm exec wrangler r2 object put ember-releases/changelog.json --file "$RUNNER_TEMP/changelog.json" --content-type application/json --remote > /dev/null)
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm exec wrangler r2 object put stillfail-releases/changelog.json --file "$RUNNER_TEMP/changelog.json" --content-type application/json --remote > /dev/null)
           echo "changelog: $(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).length)' "$RUNNER_TEMP/changelog.json") entries"
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
