@@ -185,12 +185,12 @@ jobs:
 
   station-update:
     needs: station
-    if: github.ref == 'refs/heads/main' && needs.station.result == 'success'
+    if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.station.result == 'success'
     runs-on: [self-hosted, mini1]
     timeout-minutes: 10
     steps:
       - name: studio's station takes the published release
-        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1; tail -2 /tmp/ember-station-update.log'
+        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
 
   # The test channel's Android app (fail.still.android.beta), on android/beta/latest.json.
   android:
