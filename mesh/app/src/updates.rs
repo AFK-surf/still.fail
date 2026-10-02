@@ -158,7 +158,7 @@ impl Kind {
 
     fn name(self) -> &'static str {
         match self {
-            Kind::Station => "still.fail station",
+            Kind::Station => "Station",
             Kind::Claude => "Claude Code",
             Kind::Codex => "Codex",
         }

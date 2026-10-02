@@ -112,7 +112,7 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
           <section className={css.detailSection} aria-label={t("web-pages.stations.software")}>
             <h3 className={css.detailTitle}>{t("web-pages.stations.software")}</h3>
             {s.online ? <Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} rows /> : <span>{t("web-pages.stations.softwareOffline")}</span>}
-            {!s.overview?.updates?.length && s.version && <span>still.fail station {s.version}</span>}
+            {!s.overview?.updates?.length && s.version && <span>Station {s.version}</span>}
           </section>
         </div>
       </Dialog>

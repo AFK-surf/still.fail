@@ -814,6 +814,10 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
                 crate::footprint::brief(usage);
             }
             value.get_mut("connects").and_then(Value::as_array_mut).into_iter().flatten().for_each(connect);
+            // The station itself is just "Station" in its software list (older stations still say "still.fail station").
+            if let Some(station) = value.get_mut("updates").and_then(Value::as_array_mut).into_iter().flatten().find(|u| u["id"] == "station") {
+                station["name"] = json!("Station");
+            }
             if let Some(profiles) = value.get_mut("profiles").and_then(Value::as_array_mut) {
                 profiles.iter_mut().for_each(profile);
                 // Both mobile clients open the settings count onto the same, actionable profiles first.
