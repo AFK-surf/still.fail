@@ -21,10 +21,11 @@ export function langOf(locale: string | undefined | null): Lang {
   return !l || l.startsWith("zh") ? "zh" : "en";
 }
 
-/** The language a request is answered in: its `?lang=`, else its Accept-Language (the first named). */
+/** The language a request is answered in: its `?lang=`, else its Accept-Language (the first named; `*` names none). */
 export function requestLang(request: Request): Lang {
   const asked = new URL(request.url).searchParams.get("lang");
-  return langOf(asked || request.headers.get("accept-language"));
+  const accepted = request.headers.get("accept-language")?.split(/[,;]/)[0]?.trim();
+  return langOf(asked || (accepted === "*" ? "" : accepted));
 }
 
 type Args = Record<string, string | number>;
