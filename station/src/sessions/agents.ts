@@ -27,6 +27,7 @@ import { jobTools } from "../tools/jobs.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
+import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
@@ -43,7 +44,7 @@ const DRAINED_LIMIT_MS = 300_000;
 /// How long the previous station process is waited for before its sessions are taken up all the same.
 const PREVIOUS_LIMIT_MS = 40_000;
 
-export type AgentsParts = { hub: Hub; jobs: Jobs; remote: Remote; mcp: McpEndpoint; config: ConfigFile; usage: UsageCounter };
+export type AgentsParts = { hub: Hub; jobs: Jobs; remote: Remote; mcp: McpEndpoint; config: ConfigFile; usage: UsageCounter; updates: Updates };
 
 export class Agents extends Context.Service<Agents, AgentsParts>()("stillfail/Agents") {}
 
@@ -77,7 +78,7 @@ export const AgentsLive = (control: Control) =>
   Layer.effect(
     Agents,
     Effect.gen(function* () {
-      const { data } = yield* Paths;
+      const { data, app } = yield* Paths;
       const store = yield* Store;
       const cloud = (yield* Cloud).state;
       const readers = yield* Readers;
@@ -142,8 +143,22 @@ export const AgentsLive = (control: Control) =>
         }),
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null),
       ];
+      // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
+      // itself while nothing runs and nobody looks (auto update).
+      const updates = makeUpdates({
+        app,
+        data,
+        config,
+        origin: () => cloud.state?.origin ?? null,
+        running: () => hub.running(),
+        inUse: () => events.inUse(),
+      });
+      updates.start();
+      // `stillfail update --beta|--stable` asks a running station by SIGHUP (run/channel-ask).
+      control.on("hup", () => updates.answerChannelAsk());
+
       // Bug reports to the still.fail team, from stations on the stable channel (updates.rs `channel_of`).
-      const stable = (config.raw()?.updateChannel ?? "stable") === "stable";
+      const stable = updates.channel() === "stable";
       const sendReport = async (report: any) => {
         if (cloud.removed()) throw new Error("this station was removed from its workspace");
         report.context = { ...(report.context ?? {}), version: version() };
@@ -294,6 +309,7 @@ export const AgentsLive = (control: Control) =>
           }
           await jobs.shutdown();
           await usage.stop();
+          await updates.close();
           if (existsSync(join(run, "hub.json"))) {
             try {
               if (JSON.parse(readFileSync(join(run, "hub.json"), "utf8")).pid === process.pid) rmSync(join(run, "hub.json"), { force: true });
@@ -301,6 +317,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config, usage });
+      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates });
     }),
   );
