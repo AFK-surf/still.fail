@@ -96,8 +96,8 @@ async fn connect(data: &Path, id: &str, addrs: &str) -> Result<Connection> {
     if answer["ok"] != true {
         bail!("refused: {answer}");
     }
-    // The credential stream stays open for the connection's life.
-    std::mem::forget((send, recv));
+    // The credential stream stays open for the connection's life, and the endpoint (dropped, it closes) for the program's.
+    std::mem::forget((send, recv, endpoint));
     Ok(conn)
 }
 
