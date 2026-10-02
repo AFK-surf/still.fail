@@ -9,9 +9,8 @@ import { vars } from "./styles/tokens.css.ts";
 
 interface Placed { el: HTMLElement; top: number; left: number; width: number; y: MotionValue<number>; run?: AnimationPlaybackControls | undefined }
 
-/** What leaves takes this long; the rest start closing over it a little after it begins to go. */
+/** The departing row fades while its neighbours close the gap in the same motion. */
 const LEAVE_MS = 200;
-const CLOSE_DELAY = 0.1;
 
 /**
  * Moves the children of `list` marked `data-flip="<key>"` from where they were at the last render to where this one
@@ -46,6 +45,14 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
         }
         continue;
       }
+      // A new snapshot with the same layout must not restart an in-flight spring.
+      // Archive acknowledgements and pointer changes can arrive halfway through the move.
+      if (!still && p.el === el && p.top === at.top) {
+        now.set(key, p);
+        p.left = at.left;
+        p.width = at.width;
+        continue;
+      }
       const from = p.top + p.y.get() - at.top;
       const velocity = p.y.getVelocity();
       const entry: Placed = { ...p, ...at, el };
@@ -59,7 +66,7 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
       entry.y.jump(from);
       const overtook = before.indexOf(key) > kept.indexOf(key);
       if (overtook) lift(el);
-      const run = animate(entry.y, 0, { ...MOVE, velocity, delay: gone.length && !overtook ? CLOSE_DELAY : 0 });
+      const run = animate(entry.y, 0, { ...MOVE, velocity });
       entry.run = run;
       void run.finished.then(() => { if (entry.run === run) entry.run = undefined; }, () => {});
     }
