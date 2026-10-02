@@ -2015,6 +2015,7 @@ fn session_speed_pick_sends_true_false_and_null_and_new_chats_keep_it() {
     run(async {
         let (host, core) = choosing_core_speed(true).await;
         let ui = core.connect();
+        core.receive(ui, ClientMessage::Subscribe { id: 9, subscribe: Topic::NewChat { scope: "ws".into() } });
         core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Pick { station: "ws/st".into(), of: "session:k1".into() } });
         host.settle().await;
         let mut values = HashMap::new();
