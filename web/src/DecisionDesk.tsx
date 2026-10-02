@@ -15,7 +15,7 @@ import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { StationContext, stationBase } from "./station.tsx";
 import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
-import { MOVE, reducedMotion } from "./motion.ts";
+import { LOCAL_MS, MOVE, reducedMotion } from "./motion.ts";
 import { SidebarBrand } from "./brand.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
 import { ResizeHandle, Time } from "./ui.tsx";
@@ -174,15 +174,19 @@ export function DecisionDesk({ workspace, back, onOpen, footer }: { workspace: s
  */
 function useOpening(list: React.RefObject<HTMLDivElement | null>) {
   const done = useRef(false);
+  const shown = useRef(0);
   useLayoutEffect(() => {
     if (done.current) return;
+    shown.current ||= performance.now();
     const box = list.current;
     const rows = box ? [...box.querySelectorAll<HTMLElement>(":scope > [data-flip]")] : [];
     if (!rows.length) return;
     done.current = true;
     const from = openedFrom;
     openedFrom = null;
-    if (!from || performance.now() - from.at > 1000 || reducedMotion()) return;
+    // Only with the rows here already as the page shows (the core's copy): ones that had to come from a station, at no
+    // time known, show where they rest when they come.
+    if (!from || shown.current - from.at > 1000 || performance.now() - shown.current > LOCAL_MS || reducedMotion()) return;
     rows.forEach((row, i) => {
       const dy = from.top - row.getBoundingClientRect().top;
       row.style.transform = `translateY(${dy}px)`;

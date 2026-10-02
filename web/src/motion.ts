@@ -12,6 +12,13 @@ export const EASE_OUT = [0.2, 0.7, 0.2, 1] as const;
  * they are on their way (a slot easing in, the room changing again) is followed smoothly, not restarted. */
 export const MOVE = { type: "spring", visualDuration: 0.28, bounce: 0 } as const;
 
+/**
+ * The most a motion, or a page moved to, waits for what is here already: the core's answer from what it holds, a picture
+ * decoded. Never for the network: what has to come from a station shows when it is there, the motion played and its
+ * loading state in its place meanwhile.
+ */
+export const LOCAL_MS = 100;
+
 export const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**

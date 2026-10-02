@@ -4,7 +4,7 @@
 // thumbnail (its box, its corners, the picture cropped to it as the chat shows it), 1 the picture where the viewer puts
 // it (zoomed and panned, or not); the viewer's ground and its bars come in with it. With no thumbnail on the screen, the
 // viewer fades, as it always has.
-import { reducedMotion } from "./motion.ts";
+import { LOCAL_MS, reducedMotion } from "./motion.ts";
 
 /** How long it takes to open out of the thumbnail, and to close back into it; both slowing into place. */
 const OPEN = 320;
@@ -13,8 +13,6 @@ const EASE = "cubic-bezier(.2, .8, .2, 1)";
 /** Opened or closed with no thumbnail to go from or to. */
 const FADE = 140;
 const FADE_EASE = "cubic-bezier(.2, .7, .2, 1)";
-/** How long an opened viewer waits for its picture (its size known, placed) before it fades in instead. */
-const WAIT = 400;
 
 /** What names a thumbnail of a file in the chat (`data-viewer-thumb`), and the viewer showing the same file. */
 export const thumbId = (station: string, sessionKey: string, path: string): string => `${station}\n${sessionKey}\n${path}`;
@@ -160,12 +158,14 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
       const el = root();
       const thumb = thumbOf(id);
       if (!el || !thumb || reducedMotion()) return;
-      // Nothing shows until the picture can go from the thumbnail (its size known, placed), or it has waited long enough.
+      // Nothing shows until the picture can go from the thumbnail (its size known, placed), or what is here is shown.
       p = 0;
       phase = "wait";
       restore = [keep(el, ["opacity"])];
       el.style.animation = "none";
       el.style.opacity = "0";
+      // Waited for only as long as what is here already takes (its size sent with it, its thumbnail's picture): what
+      // has to come over the network (at no time known) it does not wait for, it fades in and shows it coming.
       const began = performance.now();
       const look = () => {
         if (closing) return;
@@ -174,7 +174,7 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
         const ready = !!picture && picture.style.visibility !== "hidden" && picture.getBoundingClientRect().width > 0 && (!video || video.readyState >= 2);
         const there = thumbOf(id);
         if (ready && there) { fly(el, there, 1, OPEN, () => { settle(); show(); }); return; }
-        if (performance.now() - began > WAIT || !there) { p = 1; fade(el, 1, settle); return; }
+        if (performance.now() - began > LOCAL_MS || !there) { p = 1; fade(el, 1, settle); return; }
         frame = requestAnimationFrame(look);
       };
       look();
