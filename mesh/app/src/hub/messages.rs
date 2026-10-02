@@ -18,7 +18,7 @@ use crate::store::{AuthorKind, NewMessage, STILLFAIL_SURFACE, SessionThread};
 /// Calls another station of the workspace by its id with a request; its answer.
 pub type PeerCall = Arc<dyn Fn(String, Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
 
-/// The method another station's message comes as (Remote::handle hands it to Hub::receive).
+/// The method another station's message comes as (Remote::handle hands it to Hub::from_peer).
 pub const METHOD: &str = "session.message";
 
 /// At most this much text in one message (a peer request is bounded at 1 MiB).
@@ -108,7 +108,7 @@ impl Hub {
     }
 
     /// A message another station's session sent here (session_send there), from station `peer`.
-    pub async fn receive(&self, peer: &str, request: &Value) -> Result<Value> {
+    pub async fn from_peer(&self, peer: &str, request: &Value) -> Result<Value> {
         let text = request["text"].as_str().unwrap_or("").trim();
         let target = request["to"].as_str().unwrap_or("");
         let sender = request["session"].as_str().unwrap_or("");

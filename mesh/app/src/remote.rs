@@ -23,7 +23,7 @@ use std::{
 
 pub type Notify = Arc<dyn Fn(&str, String) -> Result<()> + Send + Sync>;
 pub type Call = Arc<dyn Fn(String, Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
-/// Takes a message a session of another station sent here (Hub::receive): from which station, the request.
+/// Takes a message a session of another station sent here (Hub::from_peer): from which station, the request.
 pub type Inbox = Arc<dyn Fn(String, Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]

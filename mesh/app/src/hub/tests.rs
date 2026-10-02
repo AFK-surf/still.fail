@@ -2593,12 +2593,12 @@ async fn a_message_to_another_stations_session_goes_through_the_station_transpor
     assert_eq!(request["from"]["link"], json!(format!("https://ember.test/o/ws/st/{}", key_a.replace(':', "%3A"))));
     // The other way: what a session there sent arrives in B's chat, from that station's session.
     let from = json!({ "title": "部署", "link": "https://ember.test/o/ws/far/s%3A1" });
-    let got = r.hub.receive("far", &json!({ "method": "session.message", "session": "s:1", "to": key_b, "text": "yes", "from": from })).await.unwrap();
+    let got = r.hub.from_peer("far", &json!({ "method": "session.message", "session": "s:1", "to": key_b, "text": "yes", "from": from })).await.unwrap();
     assert_eq!(got["thread"], json!(format!("C1/{}", b.thread_ts)));
     let thread = r.thread("C1", &b.thread_ts);
     let last = r.said(thread.id).pop().unwrap();
     assert_eq!((last.author_kind, last.author.as_str()), (AuthorKind::Agent, "far/s:1"));
     assert!(matches(&last.text, &["<https://ember.test/o/ws/far/s%3A1|部署>", "\n\nyes"]), "{}", last.text);
     assert_eq!(r.store.pending_messages(&key_b).unwrap().len(), 1);
-    assert!(r.hub.receive("far", &json!({ "session": "s:1", "to": "nobody", "text": "yes" })).await.is_err());
+    assert!(r.hub.from_peer("far", &json!({ "session": "s:1", "to": "nobody", "text": "yes" })).await.is_err());
 }

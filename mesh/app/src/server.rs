@@ -282,7 +282,7 @@ impl App {
         let receiving = Arc::downgrade(&hub);
         remote.set_inbox(Arc::new(move |peer, request| {
             let receiving = receiving.clone();
-            Box::pin(async move { receiving.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.receive(&peer, &request).await })
+            Box::pin(async move { receiving.upgrade().ok_or_else(|| anyhow::anyhow!("station is shutting down"))?.from_peer(&peer, &request).await })
         }));
         let closing = Arc::downgrade(&remote);
         hub.on_close(Arc::new(move |session| {
