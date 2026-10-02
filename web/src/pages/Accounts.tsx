@@ -446,9 +446,9 @@ function FastSection({ profile }: { profile: Profile }) {
   const params = { station: station.address, id: profile.id };
   const busy = useDoing("profile.put", params);
   const error = useDoingFailed("profile.put", params);
-  return <Section title="运行"><SwitchRow title="Fast" checked={!!profile.fast} disabled={busy}
-    description="更快响应，消耗更多额度或积分 · 下一轮生效"
-    onChange={(fast) => act(api.putProfile(profile.id, { fast }), "保存 Fast", fast ? "已打开 Fast" : "已关闭 Fast")} />
+  return <Section title="运行"><SwitchRow title="默认 Fast" checked={!!profile.fast} disabled={busy}
+    description="跟随订阅的会话使用此设置；Fast 消耗更多额度或积分"
+    onChange={(fast) => act(api.putProfile(profile.id, { fast }), "保存 Fast", fast ? "已打开默认 Fast" : "已关闭默认 Fast")} />
     {busy && <p className={shellCss.muted}>正在保存…</p>}
     {error && <p className={controlsCss.fieldError}>{error}</p>}
   </Section>;

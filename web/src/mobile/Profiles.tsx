@@ -286,9 +286,9 @@ function FastRow({ p }: { p: Profile }) {
   const act = useAct();
   const busy = useDoing("profile.put", { station: station.address, id: p.id });
   const error = useDoingFailed("profile.put", { station: station.address, id: p.id });
-  return <ListRow onClick={busy ? undefined : () => act(api.putProfile(p.id, { fast: !p.fast }), "保存 Fast", p.fast ? "已关闭 Fast" : "已打开 Fast")}>
-    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>Fast</span>
-      <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>更快响应，消耗更多额度或积分 · 下一轮生效</span></span>
+  return <ListRow onClick={busy ? undefined : () => act(api.putProfile(p.id, { fast: !p.fast }), "保存 Fast", p.fast ? "已关闭默认 Fast" : "已打开默认 Fast")}>
+    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>默认 Fast</span>
+      <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>跟随订阅的会话使用此设置；Fast 消耗更多额度或积分</span></span>
     {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
     <span className={connectsCss.mSwitch} data-on={p.fast || undefined} />
   </ListRow>;

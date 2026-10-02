@@ -230,10 +230,10 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 val busy = app.isDoing("profile.put", "station" to address, "id" to p.id)
                 SectionHeader("运行", start = 24.dp)
                 ListCard {
-                    ListRow(onClick = if (busy) null else ({ app.act("保存 Fast", if (p.fast) "已关闭 Fast" else "已打开 Fast") { api.putProfile(p.id, buildJsonObject { put("fast", !p.fast) }) } })) {
+                    ListRow(onClick = if (busy) null else ({ app.act("保存 Fast", if (p.fast) "已关闭默认 Fast" else "已打开默认 Fast") { api.putProfile(p.id, buildJsonObject { put("fast", !p.fast) }) } })) {
                         Column(Modifier.weight(1f)) {
-                            Text("Fast", fontSize = 15.sp, color = C.ink)
-                            Text("更快响应，消耗更多额度或积分 · 下一轮生效", fontSize = 13.sp, color = C.muted)
+                            Text("默认 Fast", fontSize = 15.sp, color = C.ink)
+                            Text("跟随订阅的会话使用此设置；Fast 消耗更多额度或积分", fontSize = 13.sp, color = C.muted)
                         }
                         DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id), 14.dp)
                         Switch(p.fast)
