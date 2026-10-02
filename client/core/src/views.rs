@@ -2416,10 +2416,10 @@ mod tests {
             t.set(workspace(), one_station());
             t.host.settle().await;
             let mut done = row("done", now);
-            done["agents"] = json!([{
-                "key": "k", "process": "warm", "pending": 0,
-                "lastTurn": { "declared": "final", "ending": "all_done", "outcome": "completed" }
-            }]);
+            done["agents"][0]["lastTurn"] = json!({
+                "kind": "message", "declared": "final", "ending": "all_done", "outcome": "completed",
+                "startedAt": 1, "endedAt": 1
+            });
             let active = row("active", now - 1.0);
             for dismissed in [false, true] {
                 done["archiveReminderDismissed"] = json!(dismissed);
