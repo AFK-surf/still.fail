@@ -19,33 +19,39 @@ import * as modelCss from "../ModelTriple.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 /** Permission groups in plain words; mirrors SLACK_GROUPS on the server. */
+/** A group's words, read in the language at the time. */
+const group = (key: string) => ({
+  get label() { return t(`web-pages.slackApp.group.${key}`); },
+  get description() { return t(`web-pages.slackApp.group.${key}.description`); },
+});
 const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
-  base: { label: "读取和回复消息", description: "被 @ 时收到消息，读取所在频道、私信和群聊的消息并回复。必须开启。" },
-  public: { label: "在没加入的公开频道发言", description: "不用先邀请，也能在公开频道回复。" },
-  dm: { label: "主动发私信", description: "给人或多人开启私信对话。" },
-  customize: { label: "用别的名字和头像发消息", description: "每条消息可以换显示名和头像。" },
-  files: { label: "读写文件", description: "读取消息里的附件，上传截图、日志等文件。" },
-  reactions: { label: "表情回应、置顶和书签", description: "用表情标记进度，置顶消息，管理频道书签。" },
-  channels: { label: "创建和管理频道", description: "建频道、邀请成员，知道有人加入或新建频道。" },
-  people: { label: "查看成员资料", description: "读取邮箱、个人资料、用户组、工作区信息和自定义表情。" },
-  extras: { label: "链接预览、提醒和状态", description: "展开链接、设置提醒、读取勿扰和通话状态。" },
-  canvases: { label: "读写 canvas", description: "新建、编辑和读取 canvas 文档，比如把方案、报告写成频道里的 canvas。" },
-  lists: { label: "读写列表", description: "新建、编辑和读取 Slack 列表（Lists），比如维护任务清单。" },
-  topics: { label: "改频道话题和邀请成员", description: "设置频道和私信的话题、用途，把人邀请进频道。" },
-  usergroups: { label: "管理用户组和发起通话", description: "建用户组、改成员，发起和更新 Slack 通话。" },
-  search: { label: "搜索消息、文件和成员", description: "在公开频道里搜消息和文件、按名字找人，回答问题时自己找上下文。" },
-  connect: { label: "Slack Connect 跨组织频道", description: "查看、发出和接受和别的公司共享频道的邀请。" },
-  more: { label: "状态、元数据和斜杠命令", description: "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。" },
+  base: group("base"),
+  public: group("public"),
+  dm: group("dm"),
+  customize: group("customize"),
+  files: group("files"),
+  reactions: group("reactions"),
+  channels: group("channels"),
+  people: group("people"),
+  extras: group("extras"),
+  canvases: group("canvases"),
+  lists: group("lists"),
+  topics: group("topics"),
+  usergroups: group("usergroups"),
+  search: group("search"),
+  connect: group("connect"),
+  more: group("more"),
 };
 
 /** The groups in sections, as the form shows them. */
 const SECTIONS: { title: string; groups: SlackGroup[] }[] = [
-  { title: "消息", groups: ["base", "public", "dm", "customize", "reactions"] },
-  { title: "频道和群", groups: ["channels", "topics", "connect"] },
-  { title: "文件和文档", groups: ["files", "canvases", "lists"] },
-  { title: "成员和搜索", groups: ["people", "usergroups", "search"] },
-  { title: "其他", groups: ["extras", "more"] },
+  { get title() { return t("web-pages.slackApp.section.messages"); }, groups: ["base", "public", "dm", "customize", "reactions"] },
+  { get title() { return t("web-pages.slackApp.section.channels"); }, groups: ["channels", "topics", "connect"] },
+  { get title() { return t("web-pages.slackApp.section.files"); }, groups: ["files", "canvases", "lists"] },
+  { get title() { return t("web-pages.slackApp.section.people"); }, groups: ["people", "usergroups", "search"] },
+  { get title() { return t("web-pages.slackApp.section.other"); }, groups: ["extras", "more"] },
 ];
 
 /**
@@ -63,28 +69,28 @@ export function SlackAppSection({ connect }: { connect: Connect }) {
     <details className={css.appFold}>
       <summary>
         <span className={css.appFoldTitle}>Slack app</span>
-        <span className={shellCss.muted}>名字、头像和权限</span>
+        <span className={shellCss.muted}>{t("web-pages.slackApp.foldNote")}</span>
       </summary>
       <div className={css.appFoldBody}>
         {app.error ? <p className={controlsCss.fieldError}>{app.error.message}</p>
-          : !app.value ? <p className={shellCss.muted}>正在读取 Slack 上的配置…</p>
-          : app.value.state === "no_app" ? <p className={shellCss.muted}>{app.value.error ? `找不到这个连接的 Slack app（${app.value.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p>
+          : !app.value ? <p className={shellCss.muted}>{t("web-pages.slackApp.loading")}</p>
+          : app.value.state === "no_app" ? <p className={shellCss.muted}>{app.value.error ? t("web-pages.slackApp.noApp", { error: app.value.error }) : t("web-pages.slackApp.notConnected")}</p>
           : app.value.state === "no_config_token" ? (
             <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-              <span className={pagesCss.cardRowText}><span>要在这里改 app，需要你在这个 Slack 工作区的 App 配置 token。</span><span className={shellCss.muted}>它只归你用，这台 station 上的其他人看不到。</span></span>
-              <Button onClick={() => setAdding(true)}>添加配置 token</Button>
+              <span className={pagesCss.cardRowText}><span>{t("web-pages.slackApp.needsToken")}</span><span className={shellCss.muted}>{t("web-pages.slackApp.needsTokenNote")}</span></span>
+              <Button onClick={() => setAdding(true)}>{t("web-pages.slackApp.addToken")}</Button>
             </div>
           )
           : app.value.state === "error" ? (
             <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-              <span className={`${pagesCss.cardRowText} ${controlsCss.fieldError}`}>读不到 app 配置：{app.value.error}</span>
-              <Button onClick={() => setAdding(true)}>换一个配置 token</Button>
+              <span className={`${pagesCss.cardRowText} ${controlsCss.fieldError}`}>{t("web-pages.slackApp.readFailed", { error: app.value.error ?? "" })}</span>
+              <Button onClick={() => setAdding(true)}>{t("web-pages.slackApp.replaceToken")}</Button>
             </div>
           )
           : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={saved} />}
-        {links && <a className={`${chatCss.textButton} ${css.appFoldLink}`} href={links.settings} target="_blank" rel="noopener">在 Slack 打开这个 app</a>}
+        {links && <a className={`${chatCss.textButton} ${css.appFoldLink}`} href={links.settings} target="_blank" rel="noopener">{t("web-pages.slackApp.openInSlack")}</a>}
       </div>
-      <Dialog open={adding} onClose={() => setAdding(false)} wide title="添加 Slack 配置 token">
+      <Dialog open={adding} onClose={() => setAdding(false)} wide title={t("web-pages.slackApp.addTokenTitle")}>
         <ConfigTokenForm onSaved={() => setAdding(false)} />
       </Dialog>
     </details>
@@ -99,26 +105,26 @@ export function ConfigTokenForm({ replacing, onSaved, flow }: { replacing?: bool
   const api = useApi();
   const toast = useToast();
   const [token, echo] = useState("");
-  const legacySave = useAction((value: string) => api.addConfigToken(value), ({ teamId }) => { setToken(""); toast("已加上配置 token"); onSaved(teamId); });
+  const legacySave = useAction((value: string) => api.addConfigToken(value), ({ teamId }) => { setToken(""); toast(t("web-pages.slackApp.tokenAdded")); onSaved(teamId); });
   const setToken = (config: string) => { echo(config); flow?.edit({ config }); };
   const save = flow ? { busy: flow.busy, error: flow.error ? new Error(flow.error) : null, run: (_value: string) => flow.act("config") } : legacySave;
-  const wrong = flow ? flow.view?.configError : token.startsWith("xoxe.xoxp-") ? "这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。"
-    : token && !token.startsWith("xoxe-") ? "Refresh Token 以 xoxe-1- 开头。" : null;
+  const wrong = flow ? flow.view?.configError : token.startsWith("xoxe.xoxp-") ? t("web-pages.slackApp.accessToken")
+    : token && !token.startsWith("xoxe-") ? t("web-pages.slackApp.refreshPrefix") : null;
   const ready = flow ? flow.view?.configReady : token.startsWith("xoxe-1-") && token.length > 20;
   return (
     <ol className={css.tokenGuide}>
       <li>
-        <strong>打开 Slack 的 app 列表</strong>
-        <span className={shellCss.muted}>用要放 bot 的那个 Slack 工作区的账号登录。</span>
-        <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href="https://api.slack.com/apps" target="_blank" rel="noopener"><External {...ICON} />打开 api.slack.com/apps</a>
+        <strong>{t("web-pages.slackApp.step1")}</strong>
+        <span className={shellCss.muted}>{t("web-pages.slackApp.step1Note")}</span>
+        <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href="https://api.slack.com/apps" target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.slackApp.openApps")}</a>
       </li>
       <li>
-        <strong>生成配置 token</strong>
-        <span className={shellCss.muted}>拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</span>
+        <strong>{t("web-pages.slackApp.step2")}</strong>
+        <span className={shellCss.muted}>{t("web-pages.slackApp.step2Note")}</span>
       </li>
       <li>
-        <strong>把 Refresh Token 粘贴到这里</strong>
-        <span className={shellCss.muted}>Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。{NAME} 会自己续期，以后不用再管。</span>
+        <strong>{t("web-pages.slackApp.step3")}</strong>
+        <span className={shellCss.muted}>{t("web-pages.slackApp.step3Note", { name: NAME })}</span>
         <div className={additionsCss.inputRow}>
           <input className={`${controlsCss.input} ${shellCss.mono}`} type="password" autoComplete="off" spellCheck={false} value={token} aria-label="Refresh Token"
             onChange={(e) => setToken(e.target.value.trim())}
@@ -127,7 +133,7 @@ export function ConfigTokenForm({ replacing, onSaved, flow }: { replacing?: bool
               if (pasted.startsWith("xoxe-1-") && pasted.length > 20) { e.preventDefault(); setToken(pasted); void save.run(pasted); }
             }}
             placeholder="xoxe-1-…" />
-          <Button variant="primary" disabled={!ready} busy={save.busy} onClick={() => void save.run(token)}>{replacing ? "换成这个" : "加上"}</Button>
+          <Button variant="primary" disabled={!ready} busy={save.busy} onClick={() => void save.run(token)}>{replacing ? t("web-pages.slackApp.useThis") : t("web-pages.slackApp.add")}</Button>
         </div>
         {(wrong || save.error) && <p className={controlsCss.fieldError} role="alert">{wrong ?? save.error?.message}</p>}
       </li>
@@ -174,7 +180,7 @@ export const MAKERS: Avatar[] = [
   { id: "gemini", label: "Gemini", src: `${BASE}models/gemini.svg`, bg: "#FFFFFF" },
   { id: "deepseek", label: "DeepSeek", src: `${BASE}models/deepseek.svg`, bg: "#FFFFFF" },
   { id: "qwen", label: "Qwen", src: `${BASE}models/qwen.svg`, bg: "#FFFFFF" },
-  { id: "zhipu", label: "智谱", src: `${BASE}models/zhipu.svg`, bg: "#FFFFFF" },
+  { id: "zhipu", get label() { return t("web-pages.slackApp.maker.zhipu"); }, src: `${BASE}models/zhipu.svg`, bg: "#FFFFFF" },
   { id: "kimi", label: "Kimi", src: `${BASE}models/kimi.svg`, bg: "#0D0D0D", mono: true },
   { id: "minimax", label: "MiniMax", src: `${BASE}models/minimax.svg`, bg: "#FFFFFF" },
   { id: "xai", label: "xAI", src: `${BASE}models/xai.svg`, bg: "#0D0D0D", mono: true },
@@ -296,7 +302,7 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   const setName = (name: string) => onChange({ ...settings, name, displayName: name });
   const recommended = picked ? ("upload" in picked ? picked.bg : picked.avatar.bg) : null;
   const draw = (p: typeof picked, bg: string) => {
-    if (p && !("upload" in p)) void renderAvatar(p.avatar, bg, p.maker).then((i) => onIcon(i, null), () => onIcon(null, "画不出这个头像"));
+    if (p && !("upload" in p)) void renderAvatar(p.avatar, bg, p.maker).then((i) => onIcon(i, null), () => onIcon(null, t("web-pages.slackApp.drawFailed")));
   };
   const pick = (avatar: Avatar, maker: boolean, next = settings) => {
     const p = { avatar, maker };
@@ -328,8 +334,8 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   return (
     <>
       <div className={css.appLook}>
-        <Tip label="上传图片"><button type="button" className={css.appAvatar} onClick={() => file.current?.click()} style={{ background: settings.backgroundColor || undefined }}>
-          {icon ? <img src={icon} alt="头像" /> : <span className={css.appAvatarEmpty}><ImageUpload {...ICON} size={20} />{fresh ? "上传" : "保持现在的"}</span>}
+        <Tip label={t("web-pages.slackApp.upload")}><button type="button" className={css.appAvatar} onClick={() => file.current?.click()} style={{ background: settings.backgroundColor || undefined }}>
+          {icon ? <img src={icon} alt={t("web-pages.slackApp.avatar")} /> : <span className={css.appAvatarEmpty}><ImageUpload {...ICON} size={20} />{fresh ? t("web-pages.slackApp.uploadShort") : t("web-pages.slackApp.keep")}</span>}
         </button></Tip>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
           const f = e.target.files?.[0];
@@ -339,32 +345,32 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
             setPicked({ upload: true, bg });
             onIcon(i, null);
             if (!colourSet) set("backgroundColor", bg);
-          }, () => onIcon(null, "读不了这张图片"));
+          }, () => onIcon(null, t("web-pages.slackApp.readImageFailed")));
         }} />
         <div className={css.appLookMain}>
-          <input id="app-name" className={`${controlsCss.input} ${css.appNameInput}`} aria-label="名字" placeholder="名字" value={settings.name} onChange={(e) => setName(e.target.value)} />
-          <input id="app-desc" className={`${controlsCss.input} ${css.appDesc}`} aria-label="简介" maxLength={140} placeholder="简介，显示在 app 资料卡上" value={settings.description} onChange={(e) => set("description", e.target.value)} />
+          <input id="app-name" className={`${controlsCss.input} ${css.appNameInput}`} aria-label={t("web-pages.settings.workspace.name")} placeholder={t("web-pages.settings.workspace.name")} value={settings.name} onChange={(e) => setName(e.target.value)} />
+          <input id="app-desc" className={`${controlsCss.input} ${css.appDesc}`} aria-label={t("web-pages.slackApp.description")} maxLength={140} placeholder={t("web-pages.slackApp.descriptionPlaceholder")} value={settings.description} onChange={(e) => set("description", e.target.value)} />
           <div className={css.appColour}>
-            <input type="color" className={css.colorSwatch} aria-label="底色" value={/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e"}
+            <input type="color" className={css.colorSwatch} aria-label={t("web-pages.slackApp.colour")} value={/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e"}
               onChange={(e) => colour(e.target.value.toUpperCase(), true)} />
-            <input className={`${controlsCss.input} ${shellCss.mono} ${css.appColourHex}`} aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
+            <input className={`${controlsCss.input} ${shellCss.mono} ${css.appColourHex}`} aria-label={t("web-pages.slackApp.colourHex")} spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
             {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
-              <button type="button" className={chatCss.textButton} onClick={() => colour(recommended, false)}>用推荐色</button>
+              <button type="button" className={chatCss.textButton} onClick={() => colour(recommended, false)}>{t("web-pages.slackApp.recommended")}</button>
             )}
           </div>
         </div>
       </div>
-      <div className={css.avatarPicker} aria-label="头像">
+      <div className={css.avatarPicker} aria-label={t("web-pages.slackApp.avatar")}>
         {(buddyList ?? []).map((a) => tile(a, false))}
         {MAKERS.map((a) => tile(a, true))}
       </div>
       <details className={css.appPerms}>
         <summary>
-          权限 · 开了 {on} / {Object.keys(GROUPS).length} 项
+          {t("web-pages.slackApp.permissions", { on, all: Object.keys(GROUPS).length })}
           {on < Object.keys(GROUPS).length && (
             <button type="button" className={`${controlsCss.textToggle} ${css.permAll}`}
               onClick={(e) => { e.preventDefault(); set("groups", Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) as Record<SlackGroup, boolean>); }}>
-              全部打开
+              {t("web-pages.slackApp.allOn")}
             </button>
           )}
         </summary>
@@ -377,7 +383,7 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
                   <h4>{title}</h4>
                   <button type="button" className={controlsCss.textToggle}
                     onClick={() => set("groups", { ...settings.groups, ...Object.fromEntries(groups.map((g) => [g, g === "base" || !all])) })}>
-                    {all ? "全不选" : "全选"}
+                    {all ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}
                   </button>
                 </div>
                 <ul className={css.permGrid}>
@@ -436,7 +442,7 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
     if (result.permissionsUpdated && tab) tab.location.href = links.install;
     else if (result.permissionsUpdated && window.stillfailDesktop) window.open(links.install, "_blank");
     else tab?.close();
-    toast(result.permissionsUpdated ? "已更新，在 Slack 同意新权限后生效" : "已更新 Slack app");
+    toast(result.permissionsUpdated ? t("web-pages.slackApp.updatedApprove") : t("web-pages.slackApp.updated"));
     onSaved();
   });
   const save = () => {
@@ -444,9 +450,9 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
       const tab = window.open("", "_blank");
       if (tab) {
         tab.opener = null;
-        tab.document.title = "正在更新 Slack app";
+        tab.document.title = t("web-pages.slackApp.updatingTitle");
         tab.document.body.style.cssText = "font: 15px system-ui, sans-serif; color: #666; display: grid; place-items: center; height: 100vh; margin: 0";
-        tab.document.body.textContent = "正在更新 Slack app…";
+        tab.document.body.textContent = t("web-pages.slackApp.updating");
       }
       approval.current = tab;
     }
@@ -458,16 +464,16 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
       {approve && (
         <div className={additionsCss.callout} data-tone="blue" role="status">
           <ShieldCheck {...ICON} />
-          <span>权限变了，Slack 需要你同意一次才会生效。</span>
-          <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={links.install} target="_blank" rel="noopener" onClick={() => setApprove(false)}>去 Slack 同意</a>
+          <span>{t("web-pages.slackApp.approveNote")}</span>
+          <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={links.install} target="_blank" rel="noopener" onClick={() => setApprove(false)}>{t("web-pages.slackApp.approve")}</a>
         </div>
       )}
       <AppFields settings={draft} onChange={setDraft} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
       {iconError && <p className={controlsCss.fieldError} role="alert">{iconError}</p>}
       {apply.error && <p className={controlsCss.fieldError} role="alert">{apply.error.message}</p>}
       <div className={pagesCss.cardActions}>
-        {dirty && <Button variant="ghost" onClick={() => { setDraft(settings); setIcon(null); }}>还原</Button>}
-        <Button variant="primary" disabled={!dirty} busy={apply.busy} onClick={save}>应用到 Slack</Button>
+        {dirty && <Button variant="ghost" onClick={() => { setDraft(settings); setIcon(null); }}>{t("web-pages.slackApp.revert")}</Button>}
+        <Button variant="primary" disabled={!dirty} busy={apply.busy} onClick={save}>{t("web-pages.slackApp.apply")}</Button>
       </div>
     </div>
   );

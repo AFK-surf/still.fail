@@ -28,6 +28,7 @@ import * as chatCss from "../styles/chat.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 export function ConnectPage() {
   const { id } = useParams();
   const station = useStation();
@@ -36,9 +37,9 @@ export function ConnectPage() {
   const item = connects.value?.items.find((i) => i.station === station.address && i.connect.id === id);
   if (!overview.value || !connects.value || (connects.value.loading && !item)) {
     const error = overview.error ?? connects.error;
-    return error ? <Empty><p>{error.message}</p></Empty> : <Loading label="正在读取连接…" />;
+    return error ? <Empty><p>{error.message}</p></Empty> : <Loading label={t("web-pages.connect.loading")} />;
   }
-  if (!item) return <Empty><p>没有 ID 为 {id} 的连接。</p></Empty>;
+  if (!item) return <Empty><p>{t("web-pages.connect.notFound", { id: id ?? "" })}</p></Empty>;
   return <ConnectDetail key={item.connect.id} item={item} overview={overview.value} />;
 }
 
@@ -69,8 +70,8 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const [deleting, setDeleting] = useState(false);
   const [owning, setOwning] = useState(false);
   const [replacing, setReplacing] = useState(false);
-  const remove = useAction(() => api.deleteConnect(connect.id), () => { toast("已删除连接"); navigate(`${station.settings}/connects`); });
-  const reconnect = useAction(() => api.reconnect(connect.id), () => toast("已重新连接"));
+  const remove = useAction(() => api.deleteConnect(connect.id), () => { toast(t("web-pages.connect.deleted")); navigate(`${station.settings}/connects`); });
+  const reconnect = useAction(() => api.reconnect(connect.id), () => toast(t("web-pages.connect.reconnected")));
   // Reconnecting, or its settings on their way (from the menu or a section below): said in its status line meanwhile;
   // failed, a red mark and so for a few seconds, why on hover (the menu that asked has closed).
   const reconnectState = useDoingState("connect.reconnect", { station: station.address, id: connect.id });
@@ -78,15 +79,15 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const reconnecting = reconnectState.running;
   const saving = saveState.running;
   const switching = save.busy && save.args?.[0].enabled !== undefined;
-  const doing = reconnecting ? "正在重新连接…" : switching ? (connect.enabled ? "正在停用…" : "正在启用…") : saving ? "正在保存…" : null;
-  const failing = reconnectState.error !== undefined ? { error: reconnectState.error, text: "没能重新连接" }
-    : saveState.error !== undefined ? { error: saveState.error, text: "没能保存" } : null;
+  const doing = reconnecting ? t("web-pages.connect.reconnecting") : switching ? (connect.enabled ? t("web-pages.connect.disabling") : t("web-pages.connect.enabling")) : saving ? t("web-pages.profiles.saving") : null;
+  const failing = reconnectState.error !== undefined ? { error: reconnectState.error, text: t("web-pages.connect.reconnectFailedShort") }
+    : saveState.error !== undefined ? { error: saveState.error, text: t("web-pages.connect.saveFailedShort") } : null;
   const c = connect.connection;
   const workspace = c.state === "connected" || c.state === "reconnecting" ? c.workspace : null;
 
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <BackLink to={`${station.settings}/connects`} label="连接" />
+      <BackLink to={`${station.settings}/connects`} label={t("web-pages.settings.nav.connects")} />
       {/* Who it is and whether it is up; what is done to it less often is in the menu. */}
       <header className={pagesCss.identity}>
         <ConnectAvatar connect={connect} size={52} />
@@ -100,24 +101,24 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
             </span>
             <span className={css.kindTag}><SlackLogo size={13} />{connect.team ?? "Slack"}</span>
             {station.name && <span className={cloudCss.stationTag}>{station.name}</span>}
-            <span className={css.ownerLine}>所属 <OwnerLabel owner={connect.createdBy} /></span>
+            <span className={css.ownerLine}>{t("web-pages.connect.owner")} <OwnerLabel owner={connect.createdBy} /></span>
           </p>
         </div>
         <Menu items={[
-          { label: "重新连接", icon: Refresh, disabled: reconnecting, onSelect: () => void reconnect.run() },
-          { label: "更换 token", icon: Key, onSelect: () => setReplacing(true) },
-          ...(workspace?.url ? [{ label: "打开 Slack", icon: External, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
+          { label: t("web-pages.connect.reconnect"), icon: Refresh, disabled: reconnecting, onSelect: () => void reconnect.run() },
+          { label: t("web-pages.connect.replaceToken"), icon: Key, onSelect: () => setReplacing(true) },
+          ...(workspace?.url ? [{ label: t("web-pages.connect.openSlack"), icon: External, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
           "separator",
           connect.enabled
-            ? { label: "停用", icon: Power, disabled: saving, onSelect: () => save.put({ enabled: false }, () => toast("已停用，Slack 连接已断开")) }
-            : { label: "启用", icon: Power, disabled: saving, onSelect: () => save.put({ enabled: true }, () => toast("已启用")) },
-          { label: "更改所属用户", icon: User, onSelect: () => setOwning(true) },
+            ? { label: t("web-pages.profiles.disable"), icon: Power, disabled: saving, onSelect: () => save.put({ enabled: false }, () => toast(t("web-pages.connect.disabled"))) }
+            : { label: t("web-pages.connect.enable"), icon: Power, disabled: saving, onSelect: () => save.put({ enabled: true }, () => toast(t("web-pages.connect.enabled"))) },
+          { label: t("web-pages.connect.changeOwner"), icon: User, onSelect: () => setOwning(true) },
           "separator",
-          { label: "删除连接", icon: Trash, danger: true, onSelect: () => setDeleting(true) },
+          { label: t("web-pages.connect.delete"), icon: Trash, danger: true, onSelect: () => setDeleting(true) },
         ]} />
       </header>
       {save.error && <p className={`${controlsCss.fieldError} ${css.pageError}`} role="alert">{save.error.message}</p>}
-      {reconnect.error && <p className={`${controlsCss.fieldError} ${css.pageError}`} role="alert">没能重新连接：{reconnect.error.message}</p>}
+      {reconnect.error && <p className={`${controlsCss.fieldError} ${css.pageError}`} role="alert">{t("web-pages.connect.reconnectFailed", { error: reconnect.error.message })}</p>}
 
       <SlackSection connect={connect} />
       <RunSection item={item} />
@@ -127,8 +128,8 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
       {replacing && <TokenDialog connect={connect} onClose={() => setReplacing(false)} />}
       {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
-        title={`删除「${connect.name}」？`} action="删除连接"
-        description={`Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`} error={remove.error?.message} />
+        title={t("web-pages.archive.deleteConfirm", { title: connect.name })} action={t("web-pages.connect.delete")}
+        description={connect.sessions ? t("web-pages.connect.deleteBodySessions", { n: connect.sessions }) : t("web-pages.connect.deleteBody")} error={remove.error?.message} />
     </div>
   );
 }
@@ -141,20 +142,20 @@ function SlackSection({ connect }: { connect: Connect }) {
   const c = connect.connection;
   if (c.state === "no_tokens") {
     return (
-      <Section title="接上 Slack" description="这个连接还没接上 Slack。">
+      <Section title={t("web-pages.connect.slack")} description={t("web-pages.connect.slackLead")}>
         <div className={pagesCss.card}>
           <CreateAppSteps name={connect.name} />
           <TokenFields value={tokens} onChange={setTokens} check={check} />
           <div className={pagesCss.cardActions}>
             <Button variant="primary" disabled={!check.ready} busy={check.busy || save.busy}
-              onClick={() => check.then(() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { setTokens(emptyTokens); toast("已保存 token，正在连接"); }))}>保存并连接</Button>
+              onClick={() => check.then(() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { setTokens(emptyTokens); toast(t("web-pages.connect.tokenSavedConnecting")); }))}>{t("web-pages.connect.saveConnect")}</Button>
           </div>
         </div>
       </Section>
     );
   }
   if (c.state === "error" || (c.state === "reconnecting" && c.lastError)) {
-    return <div className={additionsCss.callout} data-tone="amber" role="status"><span>{c.state === "error" ? c.error : `正在重连：${c.lastError}`}</span></div>;
+    return <div className={additionsCss.callout} data-tone="amber" role="status"><span>{c.state === "error" ? c.error : t("web-pages.connect.retrying", { error: c.lastError ?? "" })}</span></div>;
   }
   return null;
 }
@@ -165,11 +166,11 @@ function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }
   const save = useSaveConnect(connect.id);
   const [tokens, setTokens, check] = useSlackTokens({ connect: connect.id });
   return (
-    <Dialog open onClose={onClose} title="更换 Slack token" description="只换其中一个也可以，另一个留空会沿用已保存的。"
+    <Dialog open onClose={onClose} title={t("web-pages.connect.replaceTitle")} description={t("web-pages.connect.replaceLead")}
       footer={<>
-        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" disabled={!check.ready} busy={check.busy || save.busy}
-          onClick={() => check.then(() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { toast("已保存 token，正在重新连接"); onClose(); }))}>保存并重新连接</Button>
+          onClick={() => check.then(() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { toast(t("web-pages.connect.tokenSavedReconnecting")); onClose(); }))}>{t("web-pages.connect.saveReconnect")}</Button>
       </>}>
       <TokenFields value={tokens} onChange={setTokens} masked={connect.slack} check={check} />
       {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
@@ -181,12 +182,12 @@ function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }
 export function ModeChoices({ mode, requireMention, onChange, disabled }:
   { mode: ConnectMode; requireMention: boolean; onChange(next: { mode: ConnectMode; requireMention: boolean }): void; disabled?: boolean | undefined }) {
   return (
-    <Choices label="会话方式" value={mode} onChange={(m) => onChange({ mode: m, requireMention: m === "multi-session" ? true : requireMention })}
+    <Choices label={t("web-pages.connect.mode")} value={mode} onChange={(m) => onChange({ mode: m, requireMention: m === "multi-session" ? true : requireMention })}
       options={(["multi-session", "single-session"] as const).map((m) => ({
         value: m, title: MODE[m].label, description: MODE[m].description, disabled,
         extra: m === "single-session" ? (
-          <SwitchRow title="只在被 @ 时唤醒" checked={requireMention} disabled={disabled}
-            description={requireMention ? "被 @ 的 thread 之后的回复不用再 @。" : "频道里它能看到的每条消息都会送进会话。"}
+          <SwitchRow title={t("web-pages.connect.mentionOnly")} checked={requireMention} disabled={disabled}
+            description={requireMention ? t("web-pages.connect.mentionOn") : t("web-pages.connect.mentionOff")}
             onChange={(v) => onChange({ mode, requireMention: v })} />
         ) : undefined,
       }))} />
@@ -208,37 +209,37 @@ function RunSection({ item }: { item: ConnectItem }) {
   const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime));
   // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
   const pick = usePick(station.address, `connect:${connect.id}`);
-  const saveBind = useAction(() => pick.save(), ({ saved }) => { if (saved) toast("已保存，新会话会用新的设置"); });
+  const saveBind = useAction(() => pick.save(), ({ saved }) => { if (saved) toast(t("web-pages.connect.bindSaved")); });
   return (
-    <Section title="怎么跑">
+    <Section title={t("web-pages.connect.run")}>
       <div className={`${pagesCss.card} ${css.runCard}`}>
         <div className={css.runCardRow}>
-          <span className={css.runCardLabel}>模型</span>
+          <span className={css.runCardLabel}>{t("web-pages.profiles.models")}</span>
           {models.length === 0
-            ? <Link className={chatCss.inlineLink} to={profilesPage(station)}>{connect.runtimeText} 的 Profile 还没有启用模型 · 去勾选</Link>
+            ? <Link className={chatCss.inlineLink} to={profilesPage(station)}>{t("web-pages.connect.noModelsFor", { runtime: connect.runtimeText })}</Link>
             : <ModelTriple pick={pick} onConfirm={() => void saveBind.run()} />}
         </div>
         <div className={css.runCardRow}>
-          <span className={css.runCardLabel}>会话</span>
+          <span className={css.runCardLabel}>{t("web-pages.connect.session")}</span>
           <span className={css.runCardText}>
             <strong>{MODE[connect.mode].label}</strong>
-            <span className={shellCss.muted}>{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? "只在被 @ 时唤醒。" : "它能看到的每条消息都会送进会话。")}</span>
+            <span className={shellCss.muted}>{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-pages.connect.mentionOnlySentence") : t("web-pages.connect.everyMessageSentence"))}</span>
           </span>
-          <button type="button" className={chatCss.textButton} onClick={() => setChangingMode(true)}>更改</button>
+          <button type="button" className={chatCss.textButton} onClick={() => setChangingMode(true)}>{t("web-pages.connect.change")}</button>
         </div>
         {connect.mode === "single-session" && (
           <div className={css.runCardRow}>
-            <span className={css.runCardLabel}>当前</span>
+            <span className={css.runCardLabel}>{t("web-pages.connect.current")}</span>
             <span className={css.runCardText}>
               {bound
                 ? <Link className={chatCss.inlineLink} to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{bound.titleText}</Link>
-                : <span className={shellCss.muted}>还没有会话；下一条消息会开始一个新的。</span>}
+                : <span className={shellCss.muted}>{t("web-pages.connect.noSession")}</span>}
             </span>
-            <button type="button" className={chatCss.textButton} onClick={() => setChoosing(true)}>换一个</button>
+            <button type="button" className={chatCss.textButton} onClick={() => setChoosing(true)}>{t("web-pages.connect.switch")}</button>
           </div>
         )}
         {(save.error ?? saveBind.error) && <p className={controlsCss.fieldError} role="alert">{(save.error ?? saveBind.error)!.message}</p>}
-        <p className={`${controlsCss.cardFoot} ${shellCss.muted}`}>跑在 {connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
+        <p className={`${controlsCss.cardFoot} ${shellCss.muted}`}>{t("web-pages.connect.runtimeNote", { runtime: connect.runtimeText })}</p>
       </div>
       {changingMode && <ModeDialog connect={connect} running={item.running} onClose={() => setChangingMode(false)} />}
       {choosing && <ChooseSessionDialog item={item} onClose={() => setChoosing(false)} />}
@@ -250,19 +251,19 @@ function RunSection({ item }: { item: ConnectItem }) {
 export function consequences(connect: Connect, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
   const out: string[] = [];
   if (connect.mode === "multi-session" && next.mode === "single-session") {
-    out.push("之后它收到的消息都进同一个会话；已有的每个 thread 的会话不再收到新消息，包括这些 thread 里的回复。记录会保留。");
-    out.push(connect.session ? "会接着使用之前绑定的单会话。" : "下一条消息会开始一个新的单会话；也可以在切换后选一个已有会话。");
-    if (!next.requireMention) out.push("不需要 @：它能看到的所有频道和私信里的每条消息都会送给 agent，消耗会明显增加。");
+    out.push(t("web-pages.connect.effects.toSingle"));
+    out.push(connect.session ? t("web-pages.connect.effects.resumeSingle") : t("web-pages.connect.effects.newSingle"));
+    if (!next.requireMention) out.push(t("web-pages.connect.effects.noMention"));
   } else if (connect.mode === "single-session" && next.mode === "multi-session") {
-    out.push("当前绑定的会话不再收到新消息。之后每个 thread 被 @ 时各开一个新会话。");
-    out.push("在单会话里进行过的 thread，要继续就需要重新 @，会开一个新会话，不带之前的上下文。");
-    out.push("以后切回单会话，会接着用原来的那个会话。");
+    out.push(t("web-pages.connect.effects.toMulti"));
+    out.push(t("web-pages.connect.effects.threadsRestart"));
+    out.push(t("web-pages.connect.effects.switchBack"));
   } else if (next.requireMention !== connect.requireMention) {
     out.push(next.requireMention
-      ? "之后只有被 @ 的 thread 会进会话；已经进来的 thread 里的回复仍然会送到。"
-      : "不需要 @：它能看到的所有频道和私信里的每条消息都会送给 agent，消耗会明显增加。");
+      ? t("web-pages.connect.effects.mentionOnly")
+      : t("web-pages.connect.effects.noMention"));
   }
-  if (running > 0) out.push(`现在有 ${running} 个会话正在运行，它们会跑完当前这一轮。`);
+  if (running > 0) out.push(t("web-pages.connect.effects.running", { n: running }));
   return out;
 }
 
@@ -273,19 +274,19 @@ function ModeDialog({ connect, running, onClose }: { connect: Connect; running: 
   const changed = next.mode !== connect.mode || (next.mode === "single-session" && next.requireMention !== connect.requireMention);
   const effects = changed ? consequences(connect, next, running) : [];
   return (
-    <Dialog open onClose={onClose} wide title="更改会话方式"
-      description="这会改变之后每条消息进哪个会话。已经开始的对话可能因此断开，请看清下面的影响再确认。"
+    <Dialog open onClose={onClose} wide title={t("web-pages.connect.modeTitle")}
+      description={t("web-pages.connect.modeLead")}
       footer={<>
-        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" disabled={!changed} busy={save.busy}
-          onClick={() => save.put(next, () => { toast("已更改会话方式"); onClose(); })}>
-          {next.mode === connect.mode ? "确认更改" : `改为${next.mode === "single-session" ? "单会话" : "多会话"}`}
+          onClick={() => save.put(next, () => { toast(t("web-pages.connect.modeChanged")); onClose(); })}>
+          {next.mode === connect.mode ? t("web-pages.connect.confirmChange") : next.mode === "single-session" ? t("web-pages.connect.toSingle") : t("web-pages.connect.toMulti")}
         </Button>
       </>}>
       <ModeChoices mode={next.mode} requireMention={next.requireMention} onChange={setNext} />
       {effects.length > 0 && (
         <div className={additionsCss.callout} data-tone="amber" role="note">
-          <strong>更改之后</strong>
+          <strong>{t("web-pages.connect.afterChange")}</strong>
           <ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul>
         </div>
       )}
@@ -302,26 +303,26 @@ function ChooseSessionDialog({ item, onClose }: { item: ConnectItem; onClose(): 
   const [choice, setChoice] = useState<string>(connect.session ?? "new");
   const [title, setTitle] = useState("");
   const bind = useAction(() => api.bindSession(connect.id, choice === "new" ? null : choice, title), () => {
-    toast(choice === "new" ? "已新建会话" : "已换成这个会话");
+    toast(choice === "new" ? t("web-pages.connect.sessionCreated") : t("web-pages.connect.sessionSwitched"));
     onClose();
   });
   return (
-    <Dialog open onClose={onClose} wide title="选择会话"
-      description={`之后「${connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。`}
+    <Dialog open onClose={onClose} wide title={t("web-pages.connect.chooseTitle")}
+      description={t("web-pages.connect.chooseLead", { name: connect.name })}
       footer={<>
-        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" busy={bind.busy} disabled={choice === connect.session}
-          onClick={() => void bind.run()}>{choice === "new" ? "新建并使用" : "使用这个会话"}</Button>
+          onClick={() => void bind.run()}>{choice === "new" ? t("web-pages.connect.createUse") : t("web-pages.connect.useThis")}</Button>
       </>}>
       <div className={css.sessionChoices}>
-        <Choices label="会话" value={choice} onChange={setChoice} options={[
+        <Choices label={t("web-pages.connect.session")} value={choice} onChange={setChoice} options={[
           {
-            value: "new", title: "新建会话", description: "从空白上下文开始。",
-            extra: <input className={controlsCss.input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="给它起个名字（可选），例如：值班" aria-label="新会话的名字" />,
+            value: "new", title: t("web-pages.connect.newSession"), description: t("web-pages.connect.newSessionLead"),
+            extra: <input className={controlsCss.input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("web-pages.connect.newSessionPlaceholder")} aria-label={t("web-pages.connect.newSessionName")} />,
           },
           ...candidates.map((s) => ({
             value: s.key,
-            title: <>{s.titleText}{s.current && <span className={additionsCss.choiceBadge}>当前</span>}</>,
+            title: <>{s.titleText}{s.current && <span className={additionsCss.choiceBadge}>{t("web-pages.connect.current")}</span>}</>,
             description: s.description,
           })),
         ]} />
@@ -340,8 +341,8 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
   const [all, setAll] = useState(false);
   const shown = all ? sessions : sessions.slice(0, SESSIONS_SHOWN);
   return (
-    <Section title="最近的会话">
-      {sessions.length === 0 ? <p className={shellCss.muted}>还没有会话。在 Slack 里 @{connect.name} 就会开始。</p> : (
+    <Section title={t("web-pages.connect.recent")}>
+      {sessions.length === 0 ? <p className={shellCss.muted}>{t("web-pages.connect.recentNone", { name: connect.name })}</p> : (
         <ul className={pagesCss.list}>
           {shown.map((s) => {
             const row = (
@@ -357,7 +358,7 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
       )}
       {sessions.length > SESSIONS_SHOWN && (
         <button type="button" className={`${chatCss.textButton} ${css.moreSessions}`} onClick={() => setAll(!all)}>
-          {all ? "收起" : `显示全部 ${sessions.length} 个`}
+          {all ? t("web-pages.profiles.collapse") : t("web-pages.connect.showAll", { n: sessions.length })}
         </button>
       )}
     </Section>
@@ -414,7 +415,7 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
   const [echo, setEcho] = useState<SlackAppSettings | null>(null);
   if (flow.unsupported) return <LegacyNewConnectDialog open={open} onClose={onClose} resume={resume} />;
   const view = flow.view;
-  if (!view) return <Dialog open={open} onClose={onClose} title="添加连接">正在读取…</Dialog>;
+  if (!view) return <Dialog open={open} onClose={onClose} title={t("web-pages.connects.add")}>{t("web-pages.settings.reading")}</Dialog>;
   const { step, teams, chosen, made, madeId, adding, gettingToken } = view;
   const app = echo ?? view.settings as SlackAppSettings;
   const icon = view.icon ?? null;
@@ -434,49 +435,49 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
   const check = { ...tokenCheck, busy: flow.busy, then: (_go: () => void) => flow.act("verify") };
   const makeApp = { busy: flow.busy, error: flow.error ? new Error(flow.error) : null, run: () => flow.act("make") };
   const create = { busy: flow.busy, error: flow.error ? new Error(flow.error) : null, run: () => flow.act("create", ({ id }) => {
-    toast("已添加连接，正在连接 Slack"); close(); navigate(link(`/connects/${id}`));
+    toast(t("web-pages.connect.added")); close(); navigate(link(`/connects/${id}`));
   }) };
   const footer = step === "team" ? (
     <>
       {adding && teams.length > 0
-        ? <Button variant="ghost" onClick={() => setAdding(false)}>返回</Button>
-        : <Button variant="ghost" onClick={close}>取消</Button>}
-      {!gettingToken && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>}
+        ? <Button variant="ghost" onClick={() => setAdding(false)}>{t("common.back")}</Button>
+        : <Button variant="ghost" onClick={close}>{t("common.cancel")}</Button>}
+      {!gettingToken && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>{t("web-pages.connect.next")}</Button>}
     </>
   ) : step === "app" ? (
     <>
-      <Button variant="ghost" onClick={() => setStep("team")}>上一步</Button>
-      <Button variant="primary" disabled={!view.canMake} busy={makeApp.busy} onClick={() => void makeApp.run()}>创建 app</Button>
+      <Button variant="ghost" onClick={() => setStep("team")}>{t("web-pages.connect.previous")}</Button>
+      <Button variant="primary" disabled={!view.canMake} busy={makeApp.busy} onClick={() => void makeApp.run()}>{t("web-pages.connect.createApp")}</Button>
     </>
   ) : step === "install" || step === "manual" ? (
     <>
-      <Button variant="ghost" onClick={step === "manual" ? () => setStep("team") : close}>{step === "manual" ? "上一步" : "取消"}</Button>
-      <Button variant="primary" disabled={!check.ready} busy={check.busy} onClick={() => check.then(() => setStep("bind"))}>下一步</Button>
+      <Button variant="ghost" onClick={step === "manual" ? () => setStep("team") : close}>{step === "manual" ? t("web-pages.connect.previous") : t("common.cancel")}</Button>
+      <Button variant="primary" disabled={!check.ready} busy={check.busy} onClick={() => check.then(() => setStep("bind"))}>{t("web-pages.connect.next")}</Button>
     </>
   ) : (
     <>
-      <Button variant="ghost" onClick={() => setStep(madeId ? "install" : "manual")}>上一步</Button>
-      <Button variant="primary" disabled={models.length === 0} busy={create.busy} onClick={() => void create.run()}>添加并连接</Button>
+      <Button variant="ghost" onClick={() => setStep(madeId ? "install" : "manual")}>{t("web-pages.connect.previous")}</Button>
+      <Button variant="primary" disabled={models.length === 0} busy={create.busy} onClick={() => void create.run()}>{t("web-pages.connect.addConnect")}</Button>
     </>
   );
 
   return (
     <Dialog open={open} onClose={close} wide title={<>{view.title}<span className={css.dialogStep}>{view.number} / {view.total}</span></>} footer={footer}
-      description={step === "team" && !gettingToken ? "用哪个 Slack 工作区的配置 token 建 app。" : undefined}>
+      description={step === "team" && !gettingToken ? t("web-pages.connect.teamLead") : undefined}>
       {gettingToken && (
         <div className={css.tokenStart}>
-          <p className={shellCss.muted}>有了它，{NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
+          <p className={shellCss.muted}>{t("web-pages.connect.tokenWhy", { name: NAME })}</p>
           <ConfigTokenForm flow={flow} onSaved={() => {}} />
-          {teams.length === 0 && <p className={`${shellCss.muted} ${css.tokenManual}`}>不想用配置 token？<button type="button" className={chatCss.textButton} onClick={() => setStep("manual")}>自己在 Slack 建 app，再粘贴 token</button></p>}
+          {teams.length === 0 && <p className={`${shellCss.muted} ${css.tokenManual}`}>{t("web-pages.connect.noToken")}<button type="button" className={chatCss.textButton} onClick={() => setStep("manual")}>{t("web-pages.connect.manualApp")}</button></p>}
         </div>
       )}
       {step === "team" && !gettingToken && (
         <>
-          <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
+          <Choices label={t("web-pages.connect.slackWorkspace")} value={chosen?.teamId ?? ""} onChange={setTeam}
             options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackTeamIcon team={t} />, description: <TokenOwner team={t} /> }))} />
           <div className={css.teamMore}>
-            <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />添加工作区的配置 token</Button>
-            <button type="button" className={`${chatCss.textButton} ${css.tokenManual}`} onClick={() => setStep("manual")}>不用配置 token，自己建 app</button>
+            <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />{t("web-pages.connect.addTeamToken")}</Button>
+            <button type="button" className={`${chatCss.textButton} ${css.tokenManual}`} onClick={() => setStep("manual")}>{t("web-pages.connect.manualShort")}</button>
           </div>
         </>
       )}
@@ -490,7 +491,7 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
       {step === "install" && made && (
         <>
           <MadeAppSteps made={made} />
-          {iconError && <p className={controlsCss.fieldError} role="alert">图标没传上：{iconError}</p>}
+          {iconError && <p className={controlsCss.fieldError} role="alert">{t("web-pages.connect.iconFailed", { error: iconError })}</p>}
           <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} check={check} />
         </>
       )}
@@ -502,12 +503,12 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
       )}
       {step === "bind" && (
         <>
-          <Field label="模型" hint={(pick.view?.valueOption?.runtimes.length ?? 0) > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
+          <Field label={t("web-pages.profiles.models")} hint={(pick.view?.valueOption?.runtimes.length ?? 0) > 1 ? t("web-pages.connect.bothRuntimes") : undefined}>
             {models.length === 0
-              ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
-              : <ModelTriple pick={pick} onConfirm={() => act(pick.save(), "改模型")} />}
+              ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>{t("web-pages.connect.noModels")}</Link>
+              : <ModelTriple pick={pick} onConfirm={() => act(pick.save(), t("web-pages.connect.changeModel"))} />}
           </Field>
-          <Field label="会话方式">
+          <Field label={t("web-pages.connect.mode")}>
             <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />
           </Field>
           {create.error && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
@@ -560,56 +561,56 @@ function LegacyNewConnectDialog({ open, onClose, resume }: { open: boolean; onCl
     slack: made?.state ? { appToken: tokens.appToken, install: made.state }
       : { appToken: tokens.appToken, botToken: tokens.botToken, ...(made ? { appId: made.appId } : {}) },
   }), ({ id }) => {
-    toast("已添加连接，正在连接 Slack");
+    toast(t("web-pages.connect.added"));
     close();
     navigate(link(`/connects/${id}`));
   });
 
   // Getting a token is a view of its own: when there is none yet, or another is being added.
   const gettingToken = step === "team" && (teams.length === 0 || adding);
-  const TITLES: Record<NewStep, string> = { team: teams.length === 0 ? "先拿一个 Slack 配置 token" : adding ? "添加 Slack 配置 token" : "选 Slack 工作区", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
+  const TITLES: Record<NewStep, string> = { team: teams.length === 0 ? t("web-pages.connect.step.firstToken") : adding ? t("web-pages.slackApp.addTokenTitle") : t("web-pages.connect.step.team"), app: t("web-pages.connect.step.app"), install: t("web-pages.connect.step.install"), manual: t("web-pages.connect.step.manual"), bind: t("web-pages.connect.step.bind") };
   const order: NewStep[] = step === "manual" || (step === "bind" && !madeId) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
   const footer = step === "team" ? (
     <>
       {adding && teams.length > 0
-        ? <Button variant="ghost" onClick={() => setAdding(false)}>返回</Button>
-        : <Button variant="ghost" onClick={close}>取消</Button>}
-      {!gettingToken && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>}
+        ? <Button variant="ghost" onClick={() => setAdding(false)}>{t("common.back")}</Button>
+        : <Button variant="ghost" onClick={close}>{t("common.cancel")}</Button>}
+      {!gettingToken && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>{t("web-pages.connect.next")}</Button>}
     </>
   ) : step === "app" ? (
     <>
-      <Button variant="ghost" onClick={() => setStep("team")}>上一步</Button>
-      <Button variant="primary" disabled={!app.name.trim()} busy={makeApp.busy} onClick={() => void makeApp.run()}>创建 app</Button>
+      <Button variant="ghost" onClick={() => setStep("team")}>{t("web-pages.connect.previous")}</Button>
+      <Button variant="primary" disabled={!app.name.trim()} busy={makeApp.busy} onClick={() => void makeApp.run()}>{t("web-pages.connect.createApp")}</Button>
     </>
   ) : step === "install" || step === "manual" ? (
     <>
-      <Button variant="ghost" onClick={step === "manual" ? () => setStep("team") : close}>{step === "manual" ? "上一步" : "取消"}</Button>
-      <Button variant="primary" disabled={!check.ready} busy={check.busy} onClick={() => check.then(() => setStep("bind"))}>下一步</Button>
+      <Button variant="ghost" onClick={step === "manual" ? () => setStep("team") : close}>{step === "manual" ? t("web-pages.connect.previous") : t("common.cancel")}</Button>
+      <Button variant="primary" disabled={!check.ready} busy={check.busy} onClick={() => check.then(() => setStep("bind"))}>{t("web-pages.connect.next")}</Button>
     </>
   ) : (
     <>
-      <Button variant="ghost" onClick={() => setStep(madeId ? "install" : "manual")}>上一步</Button>
-      <Button variant="primary" disabled={models.length === 0} busy={create.busy} onClick={() => void create.run()}>添加并连接</Button>
+      <Button variant="ghost" onClick={() => setStep(madeId ? "install" : "manual")}>{t("web-pages.connect.previous")}</Button>
+      <Button variant="primary" disabled={models.length === 0} busy={create.busy} onClick={() => void create.run()}>{t("web-pages.connect.addConnect")}</Button>
     </>
   );
 
   return (
     <Dialog open={open} onClose={close} wide title={<>{TITLES[step]}<span className={css.dialogStep}>{order.indexOf(step) + 1} / {order.length}</span></>} footer={footer}
-      description={step === "team" && !gettingToken ? "用哪个 Slack 工作区的配置 token 建 app。" : undefined}>
+      description={step === "team" && !gettingToken ? t("web-pages.connect.teamLead") : undefined}>
       {gettingToken && (
         <div className={css.tokenStart}>
-          <p className={shellCss.muted}>有了它，{NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
+          <p className={shellCss.muted}>{t("web-pages.connect.tokenWhy", { name: NAME })}</p>
           <ConfigTokenForm onSaved={(id) => { setTeam(id); setAdding(false); setStep("app"); }} />
-          {teams.length === 0 && <p className={`${shellCss.muted} ${css.tokenManual}`}>不想用配置 token？<button type="button" className={chatCss.textButton} onClick={() => setStep("manual")}>自己在 Slack 建 app，再粘贴 token</button></p>}
+          {teams.length === 0 && <p className={`${shellCss.muted} ${css.tokenManual}`}>{t("web-pages.connect.noToken")}<button type="button" className={chatCss.textButton} onClick={() => setStep("manual")}>{t("web-pages.connect.manualApp")}</button></p>}
         </div>
       )}
       {step === "team" && !gettingToken && (
         <>
-          <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
+          <Choices label={t("web-pages.connect.slackWorkspace")} value={chosen?.teamId ?? ""} onChange={setTeam}
             options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackTeamIcon team={t} />, description: <TokenOwner team={t} /> }))} />
           <div className={css.teamMore}>
-            <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />添加工作区的配置 token</Button>
-            <button type="button" className={`${chatCss.textButton} ${css.tokenManual}`} onClick={() => setStep("manual")}>不用配置 token，自己建 app</button>
+            <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />{t("web-pages.connect.addTeamToken")}</Button>
+            <button type="button" className={`${chatCss.textButton} ${css.tokenManual}`} onClick={() => setStep("manual")}>{t("web-pages.connect.manualShort")}</button>
           </div>
         </>
       )}
@@ -623,7 +624,7 @@ function LegacyNewConnectDialog({ open, onClose, resume }: { open: boolean; onCl
       {step === "install" && made && (
         <>
           <MadeAppSteps made={made} />
-          {iconError && <p className={controlsCss.fieldError} role="alert">图标没传上：{iconError}</p>}
+          {iconError && <p className={controlsCss.fieldError} role="alert">{t("web-pages.connect.iconFailed", { error: iconError })}</p>}
           <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} check={check} />
         </>
       )}
@@ -635,12 +636,12 @@ function LegacyNewConnectDialog({ open, onClose, resume }: { open: boolean; onCl
       )}
       {step === "bind" && (
         <>
-          <Field label="模型" hint={(pick.view?.valueOption?.runtimes.length ?? 0) > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
+          <Field label={t("web-pages.profiles.models")} hint={(pick.view?.valueOption?.runtimes.length ?? 0) > 1 ? t("web-pages.connect.bothRuntimes") : undefined}>
             {models.length === 0
-              ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
-              : <ModelTriple pick={pick} onConfirm={() => act(pick.save(), "改模型")} />}
+              ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>{t("web-pages.connect.noModels")}</Link>
+              : <ModelTriple pick={pick} onConfirm={() => act(pick.save(), t("web-pages.connect.changeModel"))} />}
           </Field>
-          <Field label="会话方式">
+          <Field label={t("web-pages.connect.mode")}>
             <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />
           </Field>
           {create.error && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
@@ -661,24 +662,24 @@ function MadeAppSteps({ made }: { made: MadeSlackApp }) {
       {made.install ? (
         <li>
           {made.installed
-            ? <span className={controlsCss.verifyOk}><CheckCircle {...ICON} />已装进「{made.installedTeam ?? made.team ?? "工作区"}」</span>
-            : <span>app 已经建好。把它安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。</span>}
-          {!made.installed && <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={made.install} target="_blank" rel="noopener"><External {...ICON} />安装到工作区</a>}
+            ? <span className={controlsCss.verifyOk}><CheckCircle {...ICON} />{t("web-pages.cloud.slackInstalled.done", { team: made.installedTeam ?? made.team ?? t("web-pages.cloud.slackInstalled.workspace") })}</span>
+            : <span>{t("web-pages.connect.made.oauth")}</span>}
+          {!made.installed && <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={made.install} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.connect.made.install")}</a>}
         </li>
       ) : (
         <li>
-          <span>app 已经建好。把它安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。</span>
+          <span>{t("web-pages.connect.made.manual")}</span>
           <span className={css.stepActions}>
-            <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={links.install} target="_blank" rel="noopener"><External {...ICON} />安装到工作区</a>
-            <a className={`${controlsCss.btn} btn-secondary`} href={links.oauth} target="_blank" rel="noopener">打开 OAuth 页</a>
+            <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={links.install} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.connect.made.install")}</a>
+            <a className={`${controlsCss.btn} btn-secondary`} href={links.oauth} target="_blank" rel="noopener">{t("web-pages.connect.made.openOauth")}</a>
           </span>
         </li>
       )}
       <li>
-        <span>在 Socket Mode 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。</span>
-        <a className={`${controlsCss.btn} btn-secondary`} href={links.appToken} target="_blank" rel="noopener"><External {...ICON} />打开 Socket Mode</a>
+        <span>{t("web-pages.connect.made.appToken")}</span>
+        <a className={`${controlsCss.btn} btn-secondary`} href={links.appToken} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.connect.made.openSocket")}</a>
       </li>
-      <li>{made.install ? "把 App-Level Token 填在下面。" : "把两个 token 填在下面。"}</li>
+      <li>{made.install ? t("web-pages.connect.made.fillOne") : t("web-pages.connect.made.fillBoth")}</li>
     </ol>
   );
 }
@@ -691,18 +692,18 @@ function OwnerDialog({ connect, onClose }: { connect: Connect; onClose(): void }
   const [owner, setOwner] = useState(connect.createdBy?.id ?? people[0]?.email ?? "");
   const chosen = people.find((p) => p.email.toLowerCase() === owner.toLowerCase());
   return (
-    <Dialog open onClose={onClose} title="更改所属用户" description="连接属于谁，决定它出现在谁的「我创建的」里。只有 owner、管理员和当前所属用户能改。"
+    <Dialog open onClose={onClose} title={t("web-pages.connect.changeOwner")} description={t("web-pages.connect.ownerLead")}
       footer={<>
-        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" disabled={!owner.trim() || owner === connect.createdBy?.id} busy={save.busy}
-          onClick={() => save.put({ owner: { id: owner.trim(), name: chosen?.name ?? owner.trim() } }, () => { toast("已更改所属用户"); onClose(); })}>保存</Button>
+          onClick={() => save.put({ owner: { id: owner.trim(), name: chosen?.name ?? owner.trim() } }, () => { toast(t("web-pages.connect.ownerChanged")); onClose(); })}>{t("common.save")}</Button>
       </>}>
       {people.length > 0 ? (
-        <Field label="所属用户">
-          <Select value={owner} onChange={setOwner} label="所属用户" options={people.map((p) => ({ value: p.email, label: p.name ? `${p.name}（${p.email}）` : p.email }))} />
+        <Field label={t("web-pages.connect.ownerLabel")}>
+          <Select value={owner} onChange={setOwner} label={t("web-pages.connect.ownerLabel")} options={people.map((p) => ({ value: p.email, label: p.name ? t("web-pages.connect.person", { name: p.name, email: p.email }) : p.email }))} />
         </Field>
       ) : (
-        <Field label="所属用户的邮箱" htmlFor="owner-email">
+        <Field label={t("web-pages.connect.ownerEmail")} htmlFor="owner-email">
           <input id="owner-email" className={controlsCss.input} type="email" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="name@example.com" />
         </Field>
       )}

@@ -380,6 +380,7 @@
   "core-logic.jobs.word.watching": "Watching",
   "core-logic.looks.connecting": "{n} connecting",
   "core-logic.looks.failing": "{n} with errors",
+  "core-logic.looks.failing.offline": "{name} offline · no chats yet",
   "core-logic.looks.failing.retrying": "Can't reach “{name}”, retrying…",
   "core-logic.looks.link.down": "Can't reach the station",
   "core-logic.looks.link.down.named": "Can't reach “{name}”",

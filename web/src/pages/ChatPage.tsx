@@ -41,6 +41,8 @@ import * as controlsCss from "../styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
+import { tx } from "../cloud/words.tsx";
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
@@ -191,7 +193,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     const file = fileOf(key);
     const service = file ? fileService(file) : serviceOf(key);
     if (service) closePreview(previewKey(station.address, service));
-    const next = open.filter((t) => t !== key);
+    const next = open.filter((tab) => tab !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
   };
   const openJobs = (job?: string) => {
@@ -254,7 +256,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const running = agents.filter((a) => a.status === "running" || a.status === "queued");
   const act = useAct();
   useShortcut("chat.stop", running.length ? () => {
-    act(Promise.all(running.map((a) => api.stop(a.session.key))), "停止", "已请求停止");
+    act(Promise.all(running.map((a) => api.stop(a.session.key))), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"));
   } : null);
   // The history tab in front closes the panel; else the first agent's opens.
   useShortcut("chat.history", agents[0] ? () => {
@@ -271,9 +273,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     if (!goToNeighbour(1) && !goToNeighbour(-1)) navigate(link("/chats"));
     try {
       await api.archive({ thread, session: keeper }, true);
-      toast("已归档");
+      toast(t("web-pages.chat.archived"));
     } catch (error) {
-      toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
+      toast(t("web-pages.chat.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     }
   };
   // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
@@ -287,17 +289,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const rename = (title: string | null) => {
     setRenaming(false);
     if (title === null || !keeper) return;
-    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(`没能改名：${failure(error)}`));
+    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(t("web-pages.settings.workspace.renameFailed", { error: failure(error) })));
   };
   if (!chatView.value) {
-    if (chatView.error) return <Empty><p>读不到这个对话：{chatView.error.message}</p></Empty>;
+    if (chatView.error) return <Empty><p>{t("web-pages.chat.loadFailed", { error: chatView.error.message })}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
     // moves there at once rather than going away until the chat is read (it cannot send until then).
     return (
       <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
         <div className={jobsCss.sessionMain}>
-          <section className={sessionCss.chat} aria-label="对话" data-under-composer="" data-avoid-previews="">
-            <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} detail={<StatusLine workspace={scopeOf(station.address)} />} />
+          <section className={sessionCss.chat} aria-label={t("web-pages.decisions.back")} data-under-composer="" data-avoid-previews="">
+            <Loading label={station.name ? t("web-pages.chat.loadingFrom", { name: station.name }) : t("web-pages.chat.loading")} detail={<StatusLine workspace={scopeOf(station.address)} />} />
             <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
           </section>
         </div>
@@ -319,21 +321,21 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   };
   return (
     <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
-      {chat.watch && <Confirm open={askArchive} title={`归档「${chat.title}」？`} description={chat.watch.ask} action="归档"
+      {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={jobsCss.sessionMain}>
       <header className={sidebarCss.pageBar}>
-        <MobileBack to={link("/chats")} label="对话" />
+        <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
           {renaming
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
             : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
-          {renamable && !renaming && <IconButton label="重命名" icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={() => setRenaming(true)} />}
+          {renamable && !renaming && <IconButton label={t("web-pages.chat.rename")} icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={() => setRenaming(true)} />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
-            <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · 执行历史`}>
-              <button type="button" className={css.agentMarkBtn} onClick={() => toggleHistory(a.session.key)} aria-label={`${a.session.agentText} 的执行历史`}>
+            <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · ${t("web-pages.chat.history")}`}>
+              <button type="button" className={css.agentMarkBtn} onClick={() => toggleHistory(a.session.key)} aria-label={t("web-pages.chat.historyOf", { agent: a.session.agentText })}>
                 <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={20} />
               </button>
             </Tip>
@@ -341,15 +343,15 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         </div>
         <div className={css.pageBarActions}>
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
-          {chat.archivable && keeper && <IconButton label="归档" icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
+          {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} view={jobsView} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
-            <Tip label="在 Slack 中打开">
-              <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
+            <Tip label={t("web-pages.chat.openInSlack")}>
+              <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
             </Tip>
           )}
-          {!panel && agents[0] && <IconButton label="打开侧栏" icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
+          {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
@@ -360,17 +362,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       </div>
         {side && (
           <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
-            <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label="调整侧栏宽度" />
+            <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label={t("web-pages.chat.resizePanel")} />
             <div className={css.sideBar}>
-              <Tabs.List className={css.sideTabList} aria-label="执行历史">
+              <Tabs.List className={css.sideTabList} aria-label={t("web-pages.chat.history")}>
                 {side.tabs.map((key) => {
                   if (key === JOBS) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
                         <Tabs.Trigger className={css.sideTab} value={key}>
-                          <span className={css.sideTabAgent}><Boxes size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text="任务">任务</span></span>
+                          <span className={css.sideTabAgent}><Boxes size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={t("web-pages.chat.jobs")}>{t("web-pages.chat.jobs")}</span></span>
                         </Tabs.Trigger>
-                        <button type="button" className={css.sideTabClose} aria-label="关闭任务" onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                        <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeJobs")} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
@@ -381,7 +383,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                         <Tip label={file.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
                           <span className={css.sideTabAgent}><File size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={file.name}>{file.name}</span></span>
                         </Tabs.Trigger></Tip>
-                        <button type="button" className={css.sideTabClose} aria-label={`关闭 ${file.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                        <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: file.name })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
@@ -392,7 +394,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                         <Tip label={service.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
                           <span className={css.sideTabAgent}><JobDot tone={service.tone} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger></Tip>
-                        <button type="button" className={css.sideTabClose} aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                        <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: service.name })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
@@ -405,13 +407,13 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                       <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key}>
                         <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={14} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
                       </Tabs.Trigger></Tip>
-                      <button type="button" className={css.sideTabClose} aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeHistory", { agent: label })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                     </span>
                   );
                 })}
               </Tabs.List>
               {/* The panel's switch stays in the top-right corner, open or closed. */}
-              <IconButton label="收起侧栏" icon={PanelClose} shortcut="panel.close" onClick={() => saveTabs([])} />
+              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onClick={() => saveTabs([])} />
             </div>
             {side.tabs.map((key) => {
               if (key === JOBS) {
@@ -437,7 +439,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
                     {service.port != null && (service.state === "running" || service.state === "exited")
                       ? <PreviewSlot station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} draftKey={chatKey} />
-                      : <Empty><p>「{service.name}」{service.state === "failed" ? "没能启动" : "已经停了"}。</p></Empty>}
+                      : <Empty><p>{service.state === "failed" ? t("web-pages.chat.serviceFailed", { name: service.name }) : t("web-pages.chat.serviceStopped", { name: service.name })}</p></Empty>}
                   </Tabs.Content>
                 );
               }
@@ -480,9 +482,9 @@ function JobsPanel({ station, view, onService, onTab }: { station: string; view:
   const close = (then: () => void) => { setOpen(false); then(); };
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Tip label="服务和后台任务" shortcut="chat.jobs">
+      <Tip label={t("web-pages.chat.services")} shortcut="chat.jobs">
         <Popover.Trigger asChild>
-          <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label="服务和后台任务" data-alarm={alarm} data-none={view.jobs.length === 0 || undefined}><Web {...ICON} /></button>
+          <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label={t("web-pages.chat.services")} data-alarm={alarm} data-none={view.jobs.length === 0 || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
@@ -507,21 +509,21 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
   const where = chat.place;
   return (
     <Popover.Root>
-      <Tip label="对话信息">
+      <Tip label={t("web-pages.chat.info")}>
         <Popover.Trigger asChild>
-          <button type="button" className={pagesCss.iconBtn} aria-label="对话信息"><Info {...ICON} /></button>
+          <button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.chat.info")}><Info {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
           <dl className={css.details}>
-            {row("来自", where
+            {row(t("web-pages.chat.info.from"), where
               ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
-              : `${NAME} 对话`)}
-            {row("发起", thread.creator ? <CreatorText creator={thread.creator} verb="发起" /> : <span className={shellCss.muted}>未记录</span>)}
-            {row("参与", <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{chat.people.length} 人</span>)}
-            {row("创建", <Time stamp={thread.time?.createdAt} />)}
-            {thread.lastMessage && row("最近消息", <Time stamp={thread.lastMessage.time?.createdAt} />)}
+              : t("web-pages.chat.info.native", { name: NAME }))}
+            {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb={t("web-pages.chat.info.startedVerb")} /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
+            {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
+            {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
+            {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
           </dl>
           {chat.agents.length > 0 && (
             <ul className={css.detailsList}>
@@ -541,7 +543,7 @@ function AgentLine({ agent }: { agent: ChatAgent }) {
     <li>
       <span className={css.detailInline}><AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={14} />{session.agentText}</span>
       <span className={shellCss.muted}>
-        {connect ? <><ConnectKindIcon kind={connect.kind} size={11} /> {connect.name} · </> : null}{session.processText} · 最近活动 <Time stamp={session.time?.lastActiveAt} />
+        {connect ? <><ConnectKindIcon kind={connect.kind} size={11} /> {connect.name} · </> : null}{session.processText} · {tx("web-pages.chat.lastActive", { time: <Time stamp={session.time?.lastActiveAt} /> })}
       </span>
     </li>
   );
@@ -581,7 +583,7 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   const host = useHost(station.address).value;
   // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
   const pick = usePick(station.address, `session:${session.key}`);
-  const change = useAction(() => pick.save(), () => toast("已改，下一轮起生效"));
+  const change = useAction(() => pick.save(), () => toast(t("web-pages.chat.pickSaved")));
   const usage = useHistory(station.address, session.key).value?.usageLine;
   return (
     <div className={css.sessionDetails}>
@@ -592,11 +594,11 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
       <p className={`${css.runUsage} ${shellCss.muted}`}>
         {session.runtimeText} · {session.processText}
         {usage && <> · {usage}</>}
-        {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>Profile 详情</Link>
+        {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
       </p>
       {/* The station it runs on, and how loaded it is. */}
       <div className={css.runStation}>
-        <p className={shellCss.muted}>{station.name || host?.hostname || "本机"}{host ? ` · ${host.summary}` : ""}</p>
+        <p className={shellCss.muted}>{station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.summary}` : ""}</p>
         {host && (
           <div className={css.resourceRings}>
             {host.meters.map((m) => <Ring key={m.label} percent={m.percent} level={m.level} label={m.short} title={`${m.label} ${m.value}`} />)}
@@ -617,7 +619,7 @@ function ChatTitle({ station, session, title, onRename }: { station: string; ses
   return (
     <>
       <h1 onDoubleClick={onRename}>{renamingTo ?? title}</h1>
-      <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label="正在改名" />
+      <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
     </>
   );
 }
@@ -634,9 +636,9 @@ function SessionActions({ session, status }: { session: Session; status: Status 
   const evictFailed = useDoingFailed("session.evict", { station, key: session.key });
   return (
     <>
-      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} shortcut="chat.stop" busy={stopping} failed={stopFailed}
-        onClick={() => act(api.stop(session.key), "停止", "已请求停止")} />}
-      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} busy={evicting} failed={evictFailed} onClick={() => act(api.evict(session.key), "释放进程", "已释放进程")} />}
+      {(status === "running" || status === "queued") && <IconButton label={t("web-pages.chat.stopTurn")} icon={Stop} shortcut="chat.stop" busy={stopping} failed={stopFailed}
+        onClick={() => act(api.stop(session.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))} />}
+      {session.process === "warm" && <IconButton label={t("web-pages.chat.evict")} icon={Unplug} busy={evicting} failed={evictFailed} onClick={() => act(api.evict(session.key), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))} />}
     </>
   );
 }

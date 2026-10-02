@@ -17,6 +17,7 @@ import * as css from "./Connects.css.ts";
 import * as cloudCss from "../styles/cloud.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 /** The connects of a workspace, from the core's `connects` view; `settings` is where the scope's settings live. */
 export function ConnectList({ scope, settings }: { scope: string; settings: string }) {
   const [onlyMine] = useOnlyMine();
@@ -30,7 +31,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
     id: s.id, name: s.name, base: stationBase(s.station), address: s.station, online: true, settings,
   }));
   // The Slack apps the viewer made that no connect has taken yet, each on its station: to be finished any time.
-  const waiting = (stations.value ?? []).flatMap((s) => (s.overview?.slackApps ?? []).map((app) => ({ app, station: targets.find((t) => t.address === s.station) ?? null, stationName: s.name })));
+  const waiting = (stations.value ?? []).flatMap((s) => (s.overview?.slackApps ?? []).map((app) => ({ app, station: targets.find((target) => target.address === s.station) ?? null, stationName: s.name })));
   // None at all yet (not only none of the viewer's): the page is about adding the first.
   const first = !loading && !connects.error && shown.length === 0 && !onlyMine && waiting.length === 0;
   // A connect runs a profile's model: with none on any station (each read), the first step is a profile.
@@ -43,7 +44,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
       <DropdownMenu.Trigger asChild><Button variant={primary ? "primary" : "secondary"} icon={Plus}>{label}</Button></DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align={primary ? "center" : "end"} sideOffset={4}>
-          <DropdownMenu.Label className={controlsCss.menuLabel}>加在哪台 station 上</DropdownMenu.Label>
+          <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-pages.connects.whichStation")}</DropdownMenu.Label>
           {targets.map((s) => <DropdownMenu.Item key={s.id} className={controlsCss.menuItem} onSelect={() => setAdding({ station: s })}>{s.name}</DropdownMenu.Item>)}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -52,26 +53,26 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
 
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={settings} label="设置" />
+      <MobileBack to={settings} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}>
         <div>
-          <h1>连接<About>连接是人找到 {NAME} 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</About></h1>
+          <h1>{t("web-pages.settings.nav.connects")}<About>{t("web-pages.connects.about", { name: NAME })}</About></h1>
         </div>
-        {!first && add("添加连接")}
+        {!first && add(t("web-pages.connects.add"))}
       </header>
       <div>
       {first && noProfile ? (
-        <FirstOne art={<Illustration name="no-profile" />} title="先添加一个 Profile" lead="连接要用 Profile 来跑模型。先添加一个，再来加连接。">
-          <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profiles}>去添加 Profile</Link>
+        <FirstOne art={<Illustration name="no-profile" />} title={t("web-pages.connects.profileFirst")} lead={t("web-pages.connects.profileFirstLead")}>
+          <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profiles}>{t("web-pages.connects.goAddProfile")}</Link>
         </FirstOne>
       ) : first ? (
-        <FirstOne art={<Illustration name="no-connect" />} title="添加第一个连接" lead="连接让大家在 Slack 里 @ 到 agent：一个 Slack app，接到一台 station 上。">
-          {add("添加连接", true) || <p className={shellCss.muted}>{stations.value?.length ? "没有在线的 station，等它上线再加。" : "先添加一台 station。"}</p>}
+        <FirstOne art={<Illustration name="no-connect" />} title={t("web-pages.connects.addFirst")} lead={t("web-pages.connects.addFirstLead")}>
+          {add(t("web-pages.connects.add"), true) || <p className={shellCss.muted}>{stations.value?.length ? t("web-pages.connects.noOnline") : t("web-pages.connects.stationFirst")}</p>}
         </FirstOne>
-      ) : <MineFilter label="连接" />}
+      ) : <MineFilter label={t("web-pages.settings.nav.connects")} />}
       {waiting.length > 0 && (
-        <section className={pagesCss.section} aria-label="还没连上的 Slack app">
-          <h2 className={css.sectionTitleQuiet}>还没连上的 Slack app</h2>
+        <section className={pagesCss.section} aria-label={t("web-pages.connects.waiting")}>
+          <h2 className={css.sectionTitleQuiet}>{t("web-pages.connects.waiting")}</h2>
           <ul className={pagesCss.list}>
             {waiting.map(({ app, station, stationName }) => (
               <li key={`${stationName}/${app.appId}`}>
@@ -86,7 +87,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
         </section>
       )}
       {first ? null : shown.length === 0 ? (
-        <p className={connects.error ? controlsCss.fieldError : shellCss.muted}>{connects.error?.message ?? (loading ? "正在读取…" : onlyMine ? "没有你添加的连接。" : "还没有连接。")}</p>
+        <p className={connects.error ? controlsCss.fieldError : shellCss.muted}>{connects.error?.message ?? (loading ? t("web-pages.settings.reading") : onlyMine ? t("web-pages.connects.noneMine") : t("web-pages.connects.none"))}</p>
       ) : (
         <ul className={pagesCss.list}>
           {shown.map(({ connect: c, station, stationName }) => (
@@ -126,7 +127,7 @@ function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName
   const api = useApi();
   const [dropping, setDropping] = useState(false);
   const drop = useAction(() => api.dropSlackApp(app.appId), () => setDropping(false));
-  const where = app.installed ? `已装进「${app.installedTeam ?? app.team ?? "工作区"}」，还差 App-Level Token` : app.install ? "还没安装到工作区" : "还差 token";
+  const where = app.installed ? t("web-pages.connects.installedNeedsToken", { team: app.installedTeam ?? app.team ?? t("web-pages.cloud.slackInstalled.workspace") }) : app.install ? t("web-pages.connects.notInstalled") : t("web-pages.connects.needsToken");
   return (
     <div className={pagesCss.listRow}>
       <SlackLogo size={18} />
@@ -135,10 +136,10 @@ function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName
         <span className={shellCss.muted}>{where}</span>
       </span>
       {stationName && <span className={css.connectFacts}><span className={cloudCss.stationTag}>{stationName}</span></span>}
-      {onGo ? <Button onClick={onGo}>继续</Button> : <span className={css.navNote}>station 离线</span>}
-      {onGo && <Menu items={[{ label: "从这里移除", danger: true, onSelect: () => setDropping(true) }]} />}
+      {onGo ? <Button onClick={onGo}>{t("web-pages.connects.continue")}</Button> : <span className={css.navNote}>{t("web-pages.connects.stationOffline")}</span>}
+      {onGo && <Menu items={[{ label: t("web-pages.connects.removeHere"), danger: true, onSelect: () => setDropping(true) }]} />}
       <Confirm open={dropping} onClose={() => setDropping(false)} busy={drop.busy} onConfirm={() => void drop.run()} error={drop.error?.message}
-        title={`移除「${app.name}」？`} action="移除" description={`只从 ${NAME} 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。`} />
+        title={t("web-pages.settings.stations.removeConfirm", { name: app.name })} action={t("web-pages.settings.members.unadd")} description={t("web-pages.connects.removeBody", { name: NAME })} />
     </div>
   );
 }

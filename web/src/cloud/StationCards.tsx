@@ -9,6 +9,8 @@ import { MeterChips } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
+import { tx } from "./words.tsx";
 
 /** `manager`: may update a station and its runtimes (a workspace owner or admin). */
 export function StationList({ stations, menu, manager = false }: { stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean }) {
@@ -17,17 +19,17 @@ export function StationList({ stations, menu, manager = false }: { stations: Sta
 
 /** Whether its agents are at work, or when it was last seen. */
 function state(s: StationView): ReactNode {
-  if (!s.online) return s.lastSeen ? <><Time stamp={stamp(s, "lastSeen")} />在线</> : "还没上线";
-  if (!s.overview) return "正在连接…";
+  if (!s.online) return s.lastSeen ? tx("web-pages.stations.lastSeen", { time: <Time stamp={stamp(s, "lastSeen")} /> }) : t("web-pages.stations.neverOnline");
+  if (!s.overview) return t("web-pages.stations.connecting");
   const running = s.overview.counts.running;
-  return running > 0 ? <span className={css.busy}>{running} 个 agent 在跑</span> : "空闲";
+  return running > 0 ? <span className={css.busy}>{t("web-pages.stations.running", { n: running })}</span> : t("web-pages.stations.idle");
 }
 
 /** What may be wrong with it, each in words, worst first. */
 function problems(s: StationView, silent: boolean): { key: string; level: Level; text: string }[] {
-  if (s.online && silent) return [{ key: "silent", level: "amber", text: `没有回应：${NAME} cloud 说它在线，但一直读不到它的状态，那台机器可能断网或睡眠了` }];
+  if (s.online && silent) return [{ key: "silent", level: "amber", text: t("web-pages.stations.silent", { name: NAME }) }];
   if (!s.online) {
-    return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? `离线：在那台机器上打开 ${NAME}，它就会重新连上` : `还没连上过：在那台机器上打开 ${NAME}` }];
+    return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? t("web-pages.stations.away", { name: NAME }) : t("web-pages.stations.neverConnected", { name: NAME }) }];
   }
   return [];
 }
@@ -53,11 +55,11 @@ export function Net({ net, stacked = false }: { net: StationNet; stacked?: boole
           <span>{net.path}</span>
           {net.loss && <Figure f={net.loss} />}
         </span>
-        {net.rtt && <span>当前延时 <Figure f={net.rtt} /></span>}
+        {net.rtt && <span>{tx("web-pages.stations.latency", { latency: <Figure f={net.rtt} /> })}</span>}
       </span>
       <span className={css.netRates}>
-        <span>↑</span><b>{net.up}</b><span>{net.upTotal && `共 ${net.upTotal}`}</span>
-        <span>↓</span><b>{net.down}</b><span>{net.downTotal && `共 ${net.downTotal}`}</span>
+        <span>↑</span><b>{net.up}</b><span>{net.upTotal && t("web-pages.stations.total", { total: net.upTotal })}</span>
+        <span>↓</span><b>{net.down}</b><span>{net.downTotal && t("web-pages.stations.total", { total: net.downTotal })}</span>
       </span>
     </div>
   );
@@ -82,9 +84,9 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
   return (
     <div className={css.card} data-online={s.online || undefined}>
       <div className={css.cardHead}>
-        <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
+        <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
         <span className={css.cardTitle}>
-          <button type="button" className={css.name} onClick={() => setDetails(true)} aria-label={`查看 ${s.name} 详情`}>{s.name}</button>
+          <button type="button" className={css.name} onClick={() => setDetails(true)} aria-label={t("web-pages.stations.details", { name: s.name })}>{s.name}</button>
           <span className={css.state}>{state(s)}</span>
         </span>
         {s.online && s.host && <MeterChips meters={s.host.meters} alerts />}
@@ -97,19 +99,19 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
       {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
       <Dialog open={details} title={s.name} onClose={() => setDetails(false)}>
         <div className={css.details}>
-          <section className={css.detailSection} aria-label="设备信息">
-            <h3 className={css.detailTitle}>设备信息</h3>
+          <section className={css.detailSection} aria-label={t("web-pages.stations.device")}>
+            <h3 className={css.detailTitle}>{t("web-pages.stations.device")}</h3>
             {s.host ? <>
               <span>{machine(s.host)}</span>
               <span>{s.host.hostname} · {s.host.arch} · {s.host.emberText}</span>
               <MeterChips meters={s.host.meters} />
               {s.host.meters.map((m) => <span key={m.label}>{m.label} · {m.value}{m.note ? ` · ${m.note}` : ""}</span>)}
-            </> : <span>{s.online ? "正在读取设备信息…" : "离线，暂无设备信息"}</span>}
+            </> : <span>{s.online ? t("web-pages.stations.deviceLoading") : t("web-pages.stations.deviceOffline")}</span>}
             <span className={css.mono}>{s.id}</span>
           </section>
-          <section className={css.detailSection} aria-label="软件与更新">
-            <h3 className={css.detailTitle}>软件与更新</h3>
-            {s.online ? <Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} rows /> : <span>station 离线，连接后可查看更新</span>}
+          <section className={css.detailSection} aria-label={t("web-pages.stations.software")}>
+            <h3 className={css.detailTitle}>{t("web-pages.stations.software")}</h3>
+            {s.online ? <Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} rows /> : <span>{t("web-pages.stations.softwareOffline")}</span>}
             {!s.overview?.updates?.length && s.version && <span>still.fail station {s.version}</span>}
           </section>
         </div>

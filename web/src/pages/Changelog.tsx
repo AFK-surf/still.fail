@@ -7,6 +7,7 @@ import { useChangelog, useChangelogSeen } from "../changelog.ts";
 import type { ChangelogItem } from "../core/shapes.ts";
 import { Close, Sparks } from "../icons.tsx";
 import { Loading, MobileBack, Tip } from "../ui.tsx";
+import { t } from "../i18n.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
@@ -22,16 +23,16 @@ export function ChangelogPage({ back }: { back: string }) {
   }, [news, seen]);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={back} label="设置" />
+      <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}>
         <div>
-          <h1>更新日志</h1>
-          {view?.build != null && <p className={shellCss.muted}>这个 app 是 0.1.{view.build}</p>}
+          <h1>{t("web-pages.settings.nav.changelog")}</h1>
+          {view?.build != null && <p className={shellCss.muted}>{t("web-pages.changelog.build", { build: view.build })}</p>}
         </div>
       </header>
-      {!view || view.loading ? <Loading label="正在读取…" fill={false} />
+      {!view || view.loading ? <Loading label={t("web-pages.settings.reading")} fill={false} />
         : view.error ? <p className={controlsCss.fieldError}>{view.error}</p>
-        : view.days.length === 0 ? <p className={shellCss.muted}>还没有更新记录</p>
+        : view.days.length === 0 ? <p className={shellCss.muted}>{t("web-pages.changelog.empty")}</p>
         : view.days.map((day) => (
           <section key={day.label} aria-label={day.label}>
             <div className={css.heading}>{day.label}</div>
@@ -63,12 +64,12 @@ export function ChangelogNews({ to }: { to: string }) {
   return (
     <div className={css.news}>
       <Link className={css.newsLink} to={to}>
-        <span className={css.newsHead}><Sparks size={15} strokeWidth={1.8} />已更新{news.build ? `到 ${news.build}` : ""}</span>
+        <span className={css.newsHead}><Sparks size={15} strokeWidth={1.8} />{news.build ? t("web-pages.changelog.updatedTo", { build: news.build }) : t("web-pages.changelog.updated")}</span>
         {lines.slice(0, 3).map((line, i) => <span key={i} className={css.newsLine}>{line}</span>)}
-        {lines.length > 3 && <span className={css.newsMore}>还有 {lines.length - 3} 项</span>}
+        {lines.length > 3 && <span className={css.newsMore}>{t("web-pages.changelog.more", { n: lines.length - 3 })}</span>}
       </Link>
-      <Tip label="知道了" side="top">
-        <button type="button" className={css.newsClose} aria-label="知道了" onClick={seen}><Close size={14} strokeWidth={1.8} /></button>
+      <Tip label={t("web-pages.changelog.dismiss")} side="top">
+        <button type="button" className={css.newsClose} aria-label={t("web-pages.changelog.dismiss")} onClick={seen}><Close size={14} strokeWidth={1.8} /></button>
       </Tip>
     </div>
   );

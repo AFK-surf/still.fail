@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { core, useTopic } from "../core/react.ts";
 import { doingMatches, failed, useDoing, useDoingList } from "../doing.ts";
 import { failure, useToast } from "../toast.tsx";
+import { t } from "../i18n.ts";
 import { signedOut, telemetrySettled, track } from "../telemetry.ts";
 
 /** A signed-in account, as the `accounts` topic lists it. */
@@ -54,7 +55,7 @@ export function useSignIn(): { signIn(returnTo?: string): Promise<boolean>; busy
   const toast = useToast();
   const busy = useDoing("auth.begin");
   const go = useCallback((returnTo?: string) => (returnTo === undefined ? signIn() : signIn(returnTo))
-    .then(() => true, (e: unknown) => { toast(`没能登录：${failure(e)}`); return false; }), [toast]);
+    .then(() => true, (e: unknown) => { toast(t("web-pages.accounts.signInFailed", { error: failure(e) })); return false; }), [toast]);
   return { signIn: go, busy };
 }
 
@@ -63,6 +64,6 @@ export function useSignOut(): { signOut(sub: string): Promise<boolean>; busy(sub
   const toast = useToast();
   const doing = useDoingList();
   const go = useCallback((sub: string) => signOut(sub)
-    .then(() => true, (e: unknown) => { toast(`没能退出登录：${failure(e)}`); return false; }), [toast]);
+    .then(() => true, (e: unknown) => { toast(t("web-pages.accounts.signOutFailed", { error: failure(e) })); return false; }), [toast]);
   return { signOut: go, busy: (sub) => doing.some((item) => !failed(item) && doingMatches(item, "auth.signOut", { account: sub })) };
 }

@@ -42,11 +42,18 @@ import * as css from "./settings.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 
 import { NAME } from "../channel.ts";
-export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
+import { t } from "../i18n.ts";
+import { tx } from "./words.tsx";
+// Getters: read in the language at the time.
+export const ROLE_LABEL: Record<Role, string> = {
+  get owner() { return t("web-pages.roles.owner"); },
+  get admin() { return t("web-pages.roles.admin"); },
+  get member() { return t("web-pages.roles.member"); },
+};
 export const ROLE_HINT: Record<Role, string> = {
-  owner: "管理一切，包括成员角色和删除 workspace",
-  admin: "邀请成员、添加和移除 station",
-  member: "使用 workspace 里的 station",
+  get owner() { return t("web-pages.roles.ownerHint"); },
+  get admin() { return t("web-pages.roles.adminHint"); },
+  get member() { return t("web-pages.roles.memberHint"); },
 };
 
 /** The sidebar while in settings. */
@@ -57,19 +64,19 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   const back = useLastChat(entry.id, `/w/${entry.id}`) ?? `/w/${entry.id}`;
   return (
     <div className={nav.navScroll}>
-      <NavLink className={nav.navRow} to={back} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
-      <div className={nav.navHeading}>客户端</div>
-      <NavLink className={nav.navRow} to={`${base}/appearance`}><Sliders {...ICON} />外观</NavLink>
-      {CAN_NOTIFY && <NavLink className={nav.navRow} to={`${base}/notifications`}><Bell {...ICON} />通知</NavLink>}
-      {CHANGEABLE && <NavLink className={nav.navRow} to={`${base}/shortcuts`}><Command {...ICON} />快捷键</NavLink>}
-      {HAS_VERSION && <NavLink className={nav.navRow} to={`${base}/version`}><Info {...ICON} />版本</NavLink>}
-      <NavLink className={nav.navRow} to={`${base}/changelog`}><Sparks {...ICON} />更新日志</NavLink>
+      <NavLink className={nav.navRow} to={back} end><ArrowLeft {...ICON} />{some ? t("web-pages.settings.nav.backToChats") : t("common.back")}</NavLink>
+      <div className={nav.navHeading}>{t("web-pages.settings.nav.client")}</div>
+      <NavLink className={nav.navRow} to={`${base}/appearance`}><Sliders {...ICON} />{t("web-pages.settings.nav.appearance")}</NavLink>
+      {CAN_NOTIFY && <NavLink className={nav.navRow} to={`${base}/notifications`}><Bell {...ICON} />{t("web-pages.settings.nav.notifications")}</NavLink>}
+      {CHANGEABLE && <NavLink className={nav.navRow} to={`${base}/shortcuts`}><Command {...ICON} />{t("web-pages.settings.nav.shortcuts")}</NavLink>}
+      {HAS_VERSION && <NavLink className={nav.navRow} to={`${base}/version`}><Info {...ICON} />{t("web-pages.settings.nav.version")}</NavLink>}
+      <NavLink className={nav.navRow} to={`${base}/changelog`}><Sparks {...ICON} />{t("web-pages.settings.nav.changelog")}</NavLink>
       <div className={nav.navHeading}>Station</div>
       <NavLink className={nav.navRow} to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
-      {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}
+      {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />{t("web-pages.settings.nav.connects")}</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
-      {some && <NavLink className={nav.navRow} to={`${base}/memory`}><Brain {...ICON} />记忆</NavLink>}
-      {some && <NavLink className={nav.navRow} to={`${base}/usage`}><Chart {...ICON} />用量</NavLink>}
+      {some && <NavLink className={nav.navRow} to={`${base}/memory`}><Brain {...ICON} />{t("web-pages.settings.nav.memory")}</NavLink>}
+      {some && <NavLink className={nav.navRow} to={`${base}/usage`}><Chart {...ICON} />{t("web-pages.settings.nav.usage")}</NavLink>}
       <div className={nav.navHeading}>Cloud</div>
       <NavLink className={nav.navRow} to={`${base}/workspace`}><Users {...ICON} /><span className={nav.navText}>Workspace · {entry.name}</span></NavLink>
       <NavLink className={nav.navRow} to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className={nav.navText}>{entry.account.email}</span></NavLink>
@@ -80,7 +87,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
 function Page({ title, lead, back, actions, children }: { title: string; lead?: string; back: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={back} label="设置" />
+      <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{title}{lead && <About>{lead}</About>}</h1></div>{actions}</header>
       {children}
     </div>
@@ -94,45 +101,45 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const toast = useToast();
   // Where the account is signed in: a topic of the core, read again after a revoke.
   const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: account.sub });
-  const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => toast("已让那台设备退出"));
+  const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => toast(t("web-pages.settings.account.revoked")));
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
   const signOut = useSignOut();
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={`/w/${entry.id}/settings`} label="设置" />
+      <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
       <header className={pagesCss.identity}>
         <Avatar account={account} size={52} />
         <div className={pagesCss.identityText}>
           <h1 className={pagesCss.identityName}>{account.name || account.email}</h1>
-          <p className={pagesCss.identitySub}><span>{account.email}</span><span>Google 账号</span></p>
+          <p className={pagesCss.identitySub}><span>{account.email}</span><span>{t("web-pages.settings.account.google")}</span></p>
         </div>
       </header>
-      <Section title="登录的地方" description={`这个账号在哪些浏览器或设备上登录了 ${NAME}。认不出来的可以让它退出。`}>
-        {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>读不到登录记录：{devices.error.message}</p> : <Loading label="正在读取…" fill={false} /> : (
+      <Section title={t("web-pages.settings.account.sessions")} description={t("web-pages.settings.account.sessionsLead", { name: NAME })}>
+        {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.account.sessionsFailed", { error: devices.error.message })}</p> : <Loading label={t("web-pages.settings.reading")} fill={false} /> : (
           <ul className={pagesCss.list}>
             {devices.value.map((s) => (
               <li key={s.id} className={pagesCss.listRow}>
                 <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{s.name || "未命名设备"}{s.current && <span className={additionsCss.choiceBadge}>这里</span>}</span>
-                  <span className={shellCss.muted}><Time stamp={stamp(s, "created_at")} />登录 · {stamp(s, "expires_at")?.until}过期</span>
+                  <span className={pagesCss.listRowTitle}>{s.name || t("web-pages.settings.account.unnamedDevice")}{s.current && <span className={additionsCss.choiceBadge}>{t("web-pages.settings.account.here")}</span>}</span>
+                  <span className={shellCss.muted}>{tx("web-pages.settings.account.sessionTimes", { time: <Time stamp={stamp(s, "created_at")} />, until: stamp(s, "expires_at")?.until ?? "" })}</span>
                 </span>
-                {!s.current && <Button variant="ghost" busy={revoke.busy && revoke.arg === s.id} onClick={() => revoke.run(s.id)}>退出</Button>}
+                {!s.current && <Button variant="ghost" busy={revoke.busy && revoke.arg === s.id} onClick={() => revoke.run(s.id)}>{t("web-pages.settings.account.revoke")}</Button>}
               </li>
             ))}
           </ul>
         )}
-        {revoke.error && <p className={controlsCss.fieldError} role="alert">没能让那台设备退出：{revoke.error.message}</p>}
+        {revoke.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.account.revokeFailed", { error: revoke.error.message })}</p>}
       </Section>
-      <Section title="退出登录">
+      <Section title={t("web-pages.settings.account.signOut")}>
         <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-          <div className={pagesCss.cardRowText}><strong>在这个浏览器上退出 {account.email}</strong><span className={shellCss.muted}>它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
-          <Button icon={LogOut} onClick={() => setSigningOut(true)}>退出账号</Button>
+          <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.account.signOutHere", { email: account.email })}</strong><span className={shellCss.muted}>{t("web-pages.settings.account.signOutHereBody")}</span></div>
+          <Button icon={LogOut} onClick={() => setSigningOut(true)}>{t("web-pages.settings.account.signOutAction")}</Button>
         </div>
       </Section>
       <Confirm open={signingOut} onClose={() => setSigningOut(false)} busy={signOut.busy(account.sub)}
-        onConfirm={() => void signOut.signOut(account.sub).then((out) => { if (!out) return; toast(`已退出 ${account.email}`); navigate("/"); })}
-        title={`退出 ${account.email}？`} action="退出账号" description="这个浏览器上不再使用这个账号；它所在的 workspace 也会从这里消失。其他已登录的账号不受影响。" />
+        onConfirm={() => void signOut.signOut(account.sub).then((out) => { if (!out) return; toast(t("web-pages.settings.account.signedOut", { email: account.email })); navigate("/"); })}
+        title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />
     </div>
   );
 }
@@ -152,46 +159,46 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   const toast = useToast();
   const [name, setName] = useState("");
   useEffect(() => { if (view) setName(view.name); }, [view?.name]);
-  const rename = useAction(() => cloud.renameWorkspace(account.sub, entry.id, name), () => toast("已改名"));
+  const rename = useAction(() => cloud.renameWorkspace(account.sub, entry.id, name), () => toast(t("web-pages.settings.workspace.renamed")));
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => { toast("已退出 workspace"); navigate("/"); });
-  const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => { toast("已删除 workspace"); navigate("/"); });
-  if (!view) return <Loading label="正在读取 workspace…" />;
+  const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => { toast(t("web-pages.settings.workspace.left")); navigate("/"); });
+  const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => { toast(t("web-pages.settings.workspace.deleted")); navigate("/"); });
+  if (!view) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   return (
     <Page title="Workspace" back={`/w/${entry.id}/settings`}>
-      <Section title="名字">
+      <Section title={t("web-pages.settings.workspace.name")}>
         <div className={pagesCss.card}>
-          <Field label="Workspace 名字" htmlFor="ws-rename" hint={manager ? undefined : "只有 owner 和管理员能改名。"} error={rename.error ? `没能改名：${rename.error.message}` : undefined}>
+          <Field label={t("web-pages.settings.workspace.nameLabel")} htmlFor="ws-rename" hint={manager ? undefined : t("web-pages.settings.workspace.nameHint")} error={rename.error ? t("web-pages.settings.workspace.renameFailed", { error: rename.error.message }) : undefined}>
             <div className={additionsCss.inputRow}>
               <input id="ws-rename" className={controlsCss.input} value={name} maxLength={80} disabled={!manager} onChange={(e) => setName(e.target.value)} />
-              {manager && <Button variant="primary" disabled={!name.trim() || name.trim() === view.name} busy={rename.busy} onClick={() => rename.run()}>保存</Button>}
+              {manager && <Button variant="primary" disabled={!name.trim() || name.trim() === view.name} busy={rename.busy} onClick={() => rename.run()}>{t("common.save")}</Button>}
             </div>
           </Field>
-          <p className={`${shellCss.muted} ${controlsCss.cardFoot}`}>你在这里是{ROLE_LABEL[view.role]}，通过 {account.email} 访问。</p>
+          <p className={`${shellCss.muted} ${controlsCss.cardFoot}`}>{t("web-pages.settings.workspace.youAre", { role: ROLE_LABEL[view.role], email: account.email })}</p>
         </div>
       </Section>
       <Members view={view} account={account} manager={manager} />
-      <Section title="退出与删除">
+      <Section title={t("web-pages.settings.workspace.leaveDelete")}>
         {/* One card, as the name's: leaving, and (the owner) deleting, each asked again before it is done. */}
         <div className={pagesCss.card}>
           <div className={pagesCss.cardRow}>
-            <div className={pagesCss.cardRowText}><strong>退出这个 workspace</strong><span className={shellCss.muted}>退出后不能再访问里面的 station，需要重新被邀请。</span></div>
-            <Button variant="danger" icon={LogOut} onClick={() => setLeaving(true)}>退出</Button>
+            <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.workspace.leave")}</strong><span className={shellCss.muted}>{t("web-pages.settings.workspace.leaveBody")}</span></div>
+            <Button variant="danger" icon={LogOut} onClick={() => setLeaving(true)}>{t("web-pages.settings.workspace.leaveAction")}</Button>
           </div>
           {view.role === "owner" && (
             <div className={pagesCss.cardRow}>
-              <div className={pagesCss.cardRowText}><strong>删除 workspace</strong><span className={shellCss.muted}>所有成员失去访问权限，station 断开与 {NAME} cloud 的连接；station 本机的数据不受影响。</span></div>
-              <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>删除</Button>
+              <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.workspace.delete")}</strong><span className={shellCss.muted}>{t("web-pages.settings.workspace.deleteBody", { name: NAME })}</span></div>
+              <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>{t("common.delete")}</Button>
             </div>
           )}
         </div>
       </Section>
       <Confirm open={leaving} onClose={() => setLeaving(false)} busy={leave.busy} onConfirm={() => leave.run()}
-        title={`退出「${view.name}」？`} action="退出" description="退出后你就不能再访问里面的 station，需要重新被邀请才能回来。" error={leave.error?.message} />
+        title={t("web-pages.settings.workspace.leaveConfirm", { name: view.name })} action={t("web-pages.settings.workspace.leaveAction")} description={t("web-pages.settings.workspace.leaveConfirmBody")} error={leave.error?.message} />
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
-        title={`删除「${view.name}」？`} action="删除 workspace"
-        description={`所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ${NAME} cloud 的连接（station 本机上的数据不受影响）。`} error={remove.error?.message} />
+        title={t("web-pages.settings.workspace.deleteConfirm", { name: view.name })} action={t("web-pages.settings.workspace.delete")}
+        description={t("web-pages.settings.workspace.deleteConfirmBody", { n: view.stations.length, name: NAME })} error={remove.error?.message} />
     </Page>
   );
 }
@@ -199,9 +206,9 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
 export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const stations = useStations(entry.id).value;
-  if (!view || !stations) return <Loading label="正在读取 workspace…" />;
+  if (!view || !stations) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   return (
-    <Page title="Station" lead={`每台 station 是一台运行 ${NAME} 的机器：它的连接、会话和 Profile 都在那台机器上。`} back={`/w/${entry.id}/settings`}>
+    <Page title="Station" lead={t("web-pages.settings.stations.lead", { name: NAME })} back={`/w/${entry.id}/settings`}>
       {/* None yet: adding the first, as the workspace's page does. */}
       {stations.length === 0 ? <FirstStation entry={entry} />
         : <Stations view={view} account={entry.account} manager={manager} stations={stations} />}
@@ -215,11 +222,11 @@ export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
   if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
   const stations = listed ?? [];
   return (
-    <Page title="记忆" lead="每台 station 上所有会话共用的记忆：全局记忆放跨项目的，项目记忆每个项目一份。记忆在各台 station 上，不互相同步。" back={`/w/${entry.id}/settings`}>
+    <Page title={t("web-pages.settings.memory.title")} lead={t("web-pages.settings.memory.lead")} back={`/w/${entry.id}/settings`}>
       {stations.map((s) => (
         <div key={s.id} className={css.memoryStation}>
           {stations.length > 1 && <h2 className={css.memoryStationName}>{s.name}</h2>}
-          {s.online ? <MemoryView station={s.station} /> : <p className={shellCss.muted}>离线，等它上线再看。</p>}
+          {s.online ? <MemoryView station={s.station} /> : <p className={shellCss.muted}>{t("web-pages.settings.memory.offline")}</p>}
         </div>
       ))}
     </Page>
@@ -233,10 +240,10 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
   const usage = useUsage(entry.id, days);
   if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
   return (
-    <Page title="用量" lead="各台 station 上的 agent 调用模型用了多少 token，按 API 价折算成钱；按人、对话、账号和模型分开看。workspace 里的人都能看。" back={`/w/${entry.id}/settings`}
-      actions={<Segmented<UsageDays> className={usageCss.pick} label="多少天" value={days} onChange={setDays} options={DAYS} />}>
+    <Page title={t("web-pages.settings.usage.title")} lead={t("web-pages.settings.usage.lead")} back={`/w/${entry.id}/settings`}
+      actions={<Segmented<UsageDays> className={usageCss.pick} label={t("web-pages.settings.usage.days")} value={days} onChange={setDays} options={DAYS} />}>
       {usage.value ? <UsageBody view={usage.value} pricesPath={`/w/${entry.id}/settings/usage/prices?days=${days}`} />
-        : usage.error ? <p className={controlsCss.fieldError}>读不到用量：{usage.error.message}</p> : <Loading label="正在读取…" fill={false} />}
+        : usage.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.usage.failed", { error: usage.error.message })}</p> : <Loading label={t("web-pages.settings.reading")} fill={false} />}
     </Page>
   );
 }
@@ -244,8 +251,8 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
 export function UsagePricesSettings({ entry }: { entry: WorkspaceEntry }) {
   const [params] = useSearchParams();
   const usage = useUsage(entry.id, params.get("days") === "30" ? "30" : "7");
-  return <Page title="价目表" lead="当前各台 station 用于折算费用的单价" back={`/w/${entry.id}/settings/usage`}>
-    {usage.value ? <PriceTables view={usage.value} /> : <Loading label={usage.error ? `读不到价目：${usage.error.message}` : "正在读取…"} fill={false} />}
+  return <Page title={t("web-pages.settings.prices.title")} lead={t("web-pages.settings.prices.lead")} back={`/w/${entry.id}/settings/usage`}>
+    {usage.value ? <PriceTables view={usage.value} /> : <Loading label={usage.error ? t("web-pages.settings.prices.failed", { error: usage.error.message }) : t("web-pages.settings.reading")} fill={false} />}
   </Page>;
 }
 
@@ -271,25 +278,25 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   // Not one profile on any station (each read): the page is about adding the first.
   const first = stations.length > 0 && stations.every((s) => s.overview && s.overview.profiles.length === 0);
   return (
-    <Page title="Profile" lead={`Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行，能跑哪些运行时，${NAME} 会自己配好。`} back={`/w/${entry.id}/settings`}
-      actions={!first && online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>添加 Profile</Button>}>
+    <Page title="Profile" lead={t("web-pages.settings.profiles.lead", { name: NAME })} back={`/w/${entry.id}/settings`}
+      actions={!first && online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>{t("web-pages.settings.profiles.add")}</Button>}>
       {addingTo && (
         <StationContext.Provider value={asStation(addingTo)}>
           <AddAccountDialog key={addKind} initial={addKind} open onClose={() => setAdding(null)} />
         </StationContext.Provider>
       )}
       {first ? (
-        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={PROFILE_LEAD}>
+        <FirstOne art={<Illustration name="no-profile" />} title={t("web-pages.settings.profiles.addFirst")} lead={PROFILE_LEAD}>
           {/* Each station in a row: where a profile is added is part of adding it. */}
           <div className={css.firstStations}>
             {stations.map((s) => (
               <div key={s.id} className={css.firstStation}>
                 <div className={css.firstStationRow}>
-                  <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
+                  <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
                   <span className={css.firstStationName}>{s.name}</span>
                   {s.online
-                    ? <Button variant={stations.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>添加 Profile</Button>
-                    : <span className={shellCss.muted}>离线，等它上线再加</span>}
+                    ? <Button variant={stations.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>{t("web-pages.settings.profiles.add")}</Button>
+                    : <span className={shellCss.muted}>{t("web-pages.settings.profiles.offlineAdd")}</span>}
                 </div>
                 {s.online && (
                   <StationContext.Provider value={asStation(s)}>
@@ -305,17 +312,17 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
         const base = stationBase(station.station);
         return (
           <Section key={station.id}
-            title={<span className={css.stationHeading}><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
-            actions={station.online && online.length > 1 && <Button variant="ghost" icon={Plus} onClick={() => setAdding(station.station)}>添加</Button>}>
-            {!station.online && !overview ? <p className={shellCss.muted}>离线，还没有读到过它的 Profile。</p>
-              : !overview ? <Loading label={`正在连接 ${station.name}…`} fill={false} />
+            title={<span className={css.stationHeading}><StatusDot state={station.online ? "online" : "offline"} label={station.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />{station.name}</span>}
+            actions={station.online && online.length > 1 && <Button variant="ghost" icon={Plus} onClick={() => setAdding(station.station)}>{t("web-pages.settings.profiles.addShort")}</Button>}>
+            {!station.online && !overview ? <p className={shellCss.muted}>{t("web-pages.settings.profiles.offlineNone")}</p>
+              : !overview ? <Loading label={t("web-pages.settings.profiles.connecting", { name: station.name })} fill={false} />
               : (
                 <>
-                  {overview.profiles.length === 0 ? <p className={shellCss.muted}>还没有 Profile。</p> : (
+                  {overview.profiles.length === 0 ? <p className={shellCss.muted}>{t("web-pages.settings.profiles.none")}</p> : (
                     <ul className={pagesCss.list}>
                       {overview.profiles.map((p) => (
                         <li key={p.id}>
-                          <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? `${p.usedBy.length} 个连接在用` : ""} />
+                          <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: p.usedBy.length }) : ""} />
                         </li>
                       ))}
                     </ul>
@@ -342,20 +349,20 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   const renaming = (s: StationView) => rename.busy && rename.arg?.id === s.id;
   return (
-    <Section title={`${stations.length} 台`} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button></>}>
+    <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button></>}>
       {/* A name on its way shows at once, a ring beside its menu until the cloud has it (a red mark a moment if not). */}
       <StationList stations={stations.map((s) => (renaming(s) ? { ...s, name: rename.arg!.name } : s))} manager={manager} menu={(s) => manager && <>
-        <DoingMark calls="workspace.renameStation" on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14} label="正在改名" />
+        <DoingMark calls="workspace.renameStation" on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
         <Menu items={[
-          { label: "改名", disabled: renaming(s), onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim() && n.trim() !== s.name) rename.run({ id: s.id, name: n.trim() }); } },
-          { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
+          { label: t("web-pages.settings.stations.rename"), disabled: renaming(s), onSelect: () => { const n = window.prompt(t("web-pages.settings.stations.namePrompt"), s.name); if (n?.trim() && n.trim() !== s.name) rename.run({ id: s.id, name: n.trim() }); } },
+          { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
         ]} />
       </>} />
-      {rename.error && <p className={controlsCss.fieldError} role="alert">没能给「{stations.find((s) => s.id === rename.arg?.id)?.name ?? "station"}」改名：{rename.error.message}</p>}
+      {rename.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.stations.renameFailed", { name: stations.find((s) => s.id === rename.arg?.id)?.name ?? "station", error: rename.error.message })}</p>}
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.busy} onConfirm={() => removing && remove.run(removing)}
-        title={`移除「${removing?.name ?? ""}」？`} action="移除 station"
-        description={`它会断开与 ${NAME} cloud 的连接，成员不能再从这里访问它。那台机器上的 ${NAME} 和数据不受影响，之后可以重新添加。`} error={remove.error?.message} />
+        title={t("web-pages.settings.stations.removeConfirm", { name: removing?.name ?? "" })} action={t("web-pages.settings.stations.removeAction")}
+        description={t("web-pages.settings.stations.removeConfirmBody", { name: NAME })} error={remove.error?.message} />
     </Section>
   );
 }
@@ -371,19 +378,19 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
   useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
   useEffect(() => { if (joined) track("station_added", { ms: Math.round(performance.now() - shown.current) }); }, [Boolean(joined)]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <Dialog open onClose={onClose} wide title="添加 station"
-      description="给它起个名字，再在那台机器上执行一条命令。"
-      footer={joined ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
-        <Button variant="ghost" onClick={onClose}>{enroll.result ? "关闭" : "取消"}</Button>
-        {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>}
+    <Dialog open onClose={onClose} wide title={t("web-pages.settings.stations.add")}
+      description={t("web-pages.settings.stations.addLead")}
+      footer={joined ? <Button variant="primary" onClick={onClose}>{t("common.done")}</Button> : <>
+        <Button variant="ghost" onClick={onClose}>{enroll.result ? t("common.close") : t("common.cancel")}</Button>
+        {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>{t("web-pages.settings.stations.generate")}</Button>}
       </>}>
       {!enroll.result ? (
-        <Field label="名字" htmlFor="station-name">
-          <input id="station-name" className={controlsCss.input} value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
+        <Field label={t("web-pages.settings.stations.nameLabel")} htmlFor="station-name">
+          <input id="station-name" className={controlsCss.input} value={name} autoFocus placeholder={t("web-pages.settings.stations.namePlaceholder")} onChange={(e) => setName(e.target.value)} maxLength={80}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && !enroll.busy) enroll.run(); }} />
         </Field>
       ) : joined ? (
-        <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>「{joined.name}」已加入，现在可以打开它了。</span></div>
+        <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{t("web-pages.settings.stations.joined", { name: joined.name })}</span></div>
       ) : <EnrollSteps enrollment={enroll.result} />}
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
     </Dialog>
@@ -410,24 +417,24 @@ function JoinThisMac({ account, workspace, className }: { account: Account; work
   }, [desktop]);
   const join = useAction(async () => {
     const done = await desktop!.join(account.sub, workspace);
-    if (!done) throw new Error("app 没有回应");
+    if (!done) throw new Error(t("web-pages.settings.thisMac.noAnswer"));
     if ("error" in done) throw new Error(done.error);
     return done.station;
-  }, (s) => { setHere(s); toast("这台 Mac 已加入，稍等它出现在列表里"); });
-  useEffect(() => { if (join.error) toast(`没能添加这台 Mac：${join.error.message}`); }, [join.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, (s) => { setHere(s); toast(t("web-pages.settings.thisMac.joined")); });
+  useEffect(() => { if (join.error) toast(t("web-pages.settings.thisMac.failed", { error: join.error.message })); }, [join.error]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!desktop || !here?.carried || here.state === "running") return null;
-  return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>添加这台 Mac</Button>;
+  return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t("web-pages.settings.thisMac.add")}</Button>;
 }
 
 /** An enrollment's command, and that the station is awaited. */
 function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
   return (
     <>
-      <p>在那台机器的终端里执行<About>macOS（Apple 芯片）和 Linux 都行；装过 {NAME} 的机器也用这条命令。</About></p>
+      <p>{t("web-pages.settings.enroll.run")}<About>{t("web-pages.settings.enroll.about", { name: NAME })}</About></p>
       <CopyCommand text={enrollment.install} />
       <div className={css.enrollWait} role="status">
         <span className={waitingCss.spinner} aria-hidden="true" />
-        <span><strong>等待这台机器加入</strong><span className={shellCss.muted}>执行命令后会自动继续 · 命令 1 小时内有效</span></span>
+        <span><strong>{t("web-pages.settings.enroll.waiting")}</strong><span className={shellCss.muted}>{t("web-pages.settings.enroll.waitingNote")}</span></span>
       </div>
     </>
   );
@@ -445,16 +452,16 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
   useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
   // Joined: the page is gone (the workspace has a station), so this is said as it goes.
   useEffect(() => () => { if (shown.current) track("station_added", { ms: Math.round(performance.now() - shown.current), first: true }); }, []);
-  if (!view) return <Loading label="正在读取 workspace…" fill={false} />;
-  if (!manager) return <div className={additionsCss.callout}>这个 workspace 还没有 station，等管理员添加。</div>;
+  if (!view) return <Loading label={t("web-pages.settings.workspace.loading")} fill={false} />;
+  if (!manager) return <div className={additionsCss.callout}>{t("web-pages.settings.stations.noneYet")}</div>;
   if (enroll.result) return <div className={css.onboardingCard}><EnrollSteps enrollment={enroll.result} /></div>;
   return (
     <div className={css.onboardingCard}>
-      <Field label="给这台机器起个名字" htmlFor="first-station-name">
+      <Field label={t("web-pages.settings.stations.nameFirst")} htmlFor="first-station-name">
         <div className={css.onboardingRow}>
-          <input id="first-station-name" className={controlsCss.input} value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
+          <input id="first-station-name" className={controlsCss.input} value={name} autoFocus placeholder={t("web-pages.settings.stations.namePlaceholder")} onChange={(e) => setName(e.target.value)} maxLength={80}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && !enroll.busy) enroll.run(); }} />
-          <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>
+          <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>{t("web-pages.settings.stations.generate")}</Button>
         </div>
       </Field>
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
@@ -466,41 +473,41 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
 function Members({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
   const toast = useToast();
   const [inviting, setInviting] = useState(false);
-  const setRole = useAction(({ sub, role }: { sub: string; role: Role }) => cloud.setRole(account.sub, view.id, sub, role), () => toast("已更改角色"));
-  const remove = useAction((sub: string) => cloud.removeMember(account.sub, view.id, sub), () => toast("已移除成员"));
+  const setRole = useAction(({ sub, role }: { sub: string; role: Role }) => cloud.setRole(account.sub, view.id, sub, role), () => toast(t("web-pages.settings.members.roleChanged")));
+  const remove = useAction((sub: string) => cloud.removeMember(account.sub, view.id, sub), () => toast(t("web-pages.settings.members.removed")));
   const revoke = useAction((id: string) => cloud.revokeInvitation(account.sub, view.id, id));
   const unadd = useAction((email: string) => cloud.removeAdded(account.sub, view.id, email));
   return (
-    <Section title={`${view.members.length} 人`} actions={manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>添加成员</Button>}>
+    <Section title={t("web-pages.settings.members.count", { n: view.members.length })} actions={manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>{t("web-pages.settings.members.add")}</Button>}>
       <ul className={pagesCss.list}>
         {view.members.map((m) => (
           <li key={m.sub} className={pagesCss.listRow}>
             <Avatar account={m} size={28} />
             <span className={pagesCss.listRowText}>
-              <span className={pagesCss.listRowTitle}>{m.name || m.email}{m.sub === account.sub && <span className={additionsCss.choiceBadge}>你</span>}</span>
+              <span className={pagesCss.listRowTitle}>{m.name || m.email}{m.sub === account.sub && <span className={additionsCss.choiceBadge}>{t("web-pages.settings.members.you")}</span>}</span>
               <span className={shellCss.muted}>{m.email}</span>
             </span>
             {view.role === "owner" && m.sub !== account.sub ? (
               <div className={css.roleSelect}>
                 <Select value={setRole.busy && setRole.arg?.sub === m.sub ? setRole.arg.role : m.role} disabled={setRole.busy && setRole.arg?.sub === m.sub}
-                  onChange={(role) => setRole.run({ sub: m.sub, role: role as Role })} label="角色"
+                  onChange={(role) => setRole.run({ sub: m.sub, role: role as Role })} label={t("web-pages.settings.members.role")}
                   options={(["owner", "admin", "member"] as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
               </div>
             ) : <Pill>{ROLE_LABEL[m.role]}</Pill>}
             {/* Its role or its removal on the way, wherever asked; failed: a red mark a few seconds, why on hover. */}
             <DoingMark calls={["workspace.setRole", "workspace.removeMember"]} on={{ account: account.sub, workspace: view.id, member: m.sub }}
-              className={controlsCss.iconSpinner} size={14} label={remove.busy && remove.arg === m.sub ? "正在移出" : "正在更改角色"} />
+              className={controlsCss.iconSpinner} size={14} label={remove.busy && remove.arg === m.sub ? t("web-pages.settings.members.removing") : t("web-pages.settings.members.changingRole")} />
             {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && !(remove.busy && remove.arg === m.sub) && (
-              <Menu items={[{ label: "移出 workspace", icon: Trash, danger: true, onSelect: () => { if (window.confirm(`把 ${m.email} 移出「${view.name}」？`)) remove.run(m.sub); } }]} />
+              <Menu items={[{ label: t("web-pages.settings.members.remove"), icon: Trash, danger: true, onSelect: () => { if (window.confirm(t("web-pages.settings.members.removeConfirm", { email: m.email, name: view.name }))) remove.run(m.sub); } }]} />
             )}
           </li>
         ))}
       </ul>
       {(setRole.error || remove.error) && <p className={controlsCss.fieldError} role="alert">{(setRole.error ?? remove.error)!.message}</p>}
-      {unadd.error && <p className={controlsCss.fieldError} role="alert">没能移除 {unadd.arg}：{unadd.error.message}</p>}
+      {unadd.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.members.unaddFailed", { email: unadd.arg ?? "", error: unadd.error.message })}</p>}
       {manager && view.added.length > 0 && (
         <>
-          <div className={css.groupHead}><strong>还没登录过</strong><span className={shellCss.muted}>{view.added.length} 人 · 第一次登录 {NAME} 时自动加入</span></div>
+          <div className={css.groupHead}><strong>{t("web-pages.settings.members.added")}</strong><span className={shellCss.muted}>{t("web-pages.settings.members.addedNote", { n: view.added.length, name: NAME })}</span></div>
           <ul className={pagesCss.list}>
             {view.added.map((a) => (
               <li key={a.email} className={pagesCss.listRow}>
@@ -508,7 +515,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
                   <span className={pagesCss.listRowTitle}>{a.email}</span>
                   <span className={shellCss.muted}>{ROLE_LABEL[a.role]}</span>
                 </span>
-                <Button variant="ghost" busy={unadd.busy && unadd.arg === a.email} onClick={() => unadd.run(a.email)}>移除</Button>
+                <Button variant="ghost" busy={unadd.busy && unadd.arg === a.email} onClick={() => unadd.run(a.email)}>{t("web-pages.settings.members.unadd")}</Button>
               </li>
             ))}
           </ul>
@@ -516,19 +523,19 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
       )}
       {manager && view.invitations.length > 0 && (
         <>
-          <div className={css.groupHead}><strong>未接受的邀请</strong><span className={shellCss.muted}>{view.invitations.length} 个</span></div>
+          <div className={css.groupHead}><strong>{t("web-pages.settings.members.invitations")}</strong><span className={shellCss.muted}>{t("web-pages.settings.members.invitationsCount", { n: view.invitations.length })}</span></div>
           <ul className={pagesCss.list}>
             {view.invitations.map((i) => (
               <li key={i.id} className={pagesCss.listRow}>
                 <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{i.email ?? "任何拿到链接的人"}</span>
-                  <span className={shellCss.muted}>{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
+                  <span className={pagesCss.listRowTitle}>{i.email ?? t("web-pages.settings.members.anyone")}</span>
+                  <span className={shellCss.muted}>{t("web-pages.settings.members.invitationNote", { role: ROLE_LABEL[i.role], until: stamp(i, "expires_at")?.until ?? "" })}</span>
                 </span>
-                <Button variant="ghost" busy={revoke.busy && revoke.arg === i.id} onClick={() => revoke.run(i.id)}>撤回</Button>
+                <Button variant="ghost" busy={revoke.busy && revoke.arg === i.id} onClick={() => revoke.run(i.id)}>{t("web-pages.settings.members.revoke")}</Button>
               </li>
             ))}
           </ul>
-          {revoke.error && <p className={controlsCss.fieldError} role="alert">没能撤回邀请：{revoke.error.message}</p>}
+          {revoke.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.members.revokeFailed", { error: revoke.error.message })}</p>}
         </>
       )}
       {inviting && <AddDialog view={view} account={account} onClose={() => setInviting(false)} />}
@@ -558,25 +565,25 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
   });
   const done = add.result;
   return (
-    <Dialog open onClose={onClose} title="添加成员" description={`直接加进「${view.name}」，不用对方接受：已经登录过 ${NAME} 的人马上就是成员，其他人第一次用这个邮箱登录时自动加入。`}
-      footer={done ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
-        <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" disabled={emails.length === 0} busy={add.busy} onClick={() => add.run()}>{emails.length > 1 ? `添加 ${emails.length} 人` : "添加"}</Button>
+    <Dialog open onClose={onClose} title={t("web-pages.settings.members.add")} description={t("web-pages.settings.members.addLead", { workspace: view.name, name: NAME })}
+      footer={done ? <Button variant="primary" onClick={onClose}>{t("common.done")}</Button> : <>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="primary" disabled={emails.length === 0} busy={add.busy} onClick={() => add.run()}>{emails.length > 1 ? t("web-pages.settings.members.addN", { n: emails.length }) : t("web-pages.settings.members.addOne")}</Button>
       </>}>
       {!done ? (
         <>
-          <Field label="邮箱" htmlFor="add-emails" hint={`对方登录 ${NAME} 用的 Google 账号邮箱；一次可以粘贴多个。`}>
+          <Field label={t("web-pages.settings.members.emails")} htmlFor="add-emails" hint={t("web-pages.settings.members.emailsHint", { name: NAME })}>
             <textarea id="add-emails" className={controlsCss.input} rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="name@example.com" />
           </Field>
           {slack.available && (
             slack.people === null ? (
-              <Button variant="secondary" busy={slack.busy} onClick={fromSlack}>从 Slack 里选人</Button>
+              <Button variant="secondary" busy={slack.busy} onClick={fromSlack}>{t("web-pages.settings.members.fromSlack")}</Button>
             ) : (
               <div className={chatCss.modelPool}>
                 <div className={chatCss.modelPoolTools}>
-                  <span className={shellCss.muted}>Slack 里 {slack.people.length} 人，选中 {[...picked].filter((e) => !inside.has(e)).length} 人</span>
-                  <button type="button" className={controlsCss.textToggle} onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>全选</button>
-                  <button type="button" className={controlsCss.textToggle} onClick={() => setPicked(new Set())}>全不选</button>
+                  <span className={shellCss.muted}>{t("web-pages.settings.members.slackPicked", { n: slack.people.length, picked: [...picked].filter((e) => !inside.has(e)).length })}</span>
+                  <button type="button" className={controlsCss.textToggle} onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>{t("web-pages.settings.members.all")}</button>
+                  <button type="button" className={controlsCss.textToggle} onClick={() => setPicked(new Set())}>{t("web-pages.settings.members.none")}</button>
                 </div>
                 <ul className={chatCss.modelPoolList}>
                   {slack.people.map((p) => (
@@ -585,25 +592,25 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
                         <input type="checkbox" disabled={inside.has(p.email)} checked={picked.has(p.email) || inside.has(p.email)} onChange={() => toggle(p.email)} />
                         <span>{p.name}</span>
                         <span className={shellCss.muted}>{p.email}</span>
-                        {inside.has(p.email) ? <span className={shellCss.muted}>已在</span> : p.guest && <span className={shellCss.muted}>访客</span>}
+                        {inside.has(p.email) ? <span className={shellCss.muted}>{t("web-pages.settings.members.inside")}</span> : p.guest && <span className={shellCss.muted}>{t("web-pages.settings.members.guest")}</span>}
                       </label>
                     </li>
                   ))}
                 </ul>
-                {slack.errors.length > 0 && <p className={controlsCss.fieldError}>{slack.errors.join("；")}</p>}
+                {slack.errors.length > 0 && <p className={controlsCss.fieldError}>{slack.errors.join(t("web-pages.settings.members.errorSeparator"))}</p>}
               </div>
             )
           )}
-          <Field label="角色" hint={ROLE_HINT[role]}>
-            <Select value={role} onChange={(r) => setRole(r as Role)} label="角色" options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
+          <Field label={t("web-pages.settings.members.role")} hint={ROLE_HINT[role]}>
+            <Select value={role} onChange={(r) => setRole(r as Role)} label={t("web-pages.settings.members.role")} options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
           </Field>
         </>
       ) : (
-        <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{[
-          done.joined.length ? `${done.joined.length} 人已经加入` : "",
-          done.added.length ? `${done.added.length} 人第一次登录 ${NAME} 时自动加入` : "",
-          done.already.length ? `${done.already.length} 人本来就在` : "",
-        ].filter(Boolean).join("，")}。</span></div>
+        <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{t("web-pages.settings.members.doneSentence", { list: [
+          done.joined.length ? t("web-pages.settings.members.doneJoined", { n: done.joined.length }) : "",
+          done.added.length ? t("web-pages.settings.members.doneAdded", { n: done.added.length, name: NAME }) : "",
+          done.already.length ? t("web-pages.settings.members.doneAlready", { n: done.already.length }) : "",
+        ].filter(Boolean).join(t("web-pages.settings.members.doneSeparator")) })}</span></div>
       )}
       {add.error && <p className={controlsCss.fieldError} role="alert">{errorText(add.error)}</p>}
     </Dialog>

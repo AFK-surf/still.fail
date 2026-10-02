@@ -9,7 +9,7 @@ import { startScrollbars } from "../scrollbars.ts";
 import { Tooltip } from "radix-ui";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { I18nRoot } from "../i18n.ts";
+import { I18nRoot, t } from "../i18n.ts";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "@fontsource-variable/inter";
 import { Illustration } from "../brand.tsx";
@@ -39,7 +39,7 @@ function AdminApp() {
 function Home() {
   const list = useAccounts();
   const account = useAdminAccount();
-  if (list?.length === 0) return <SignInPage title={`${NAME} 管理后台`} lead={`只有 ${NAME} 的管理员能用这里。用管理员的 Google 账号登录。`} />;
+  if (list?.length === 0) return <SignInPage title={t("web-pages.admin.signIn.title", { name: NAME })} lead={t("web-pages.admin.signIn.lead", { name: NAME })} />;
   if (account === undefined) return <div className={shellCss.gate}><Loading /></div>;
   if (account === null) return <NoPermission />;
   return <Console account={account} />;
@@ -53,10 +53,10 @@ function NoPermission() {
   return (
     <div className={shellCss.gate}>
       <Illustration name="sign-in" />
-      <h1>没有权限</h1>
-      <p>{list.map((a) => a.email).join("、")} 不是 {NAME} 的管理员。</p>
-      <Button variant="primary" busy={signOut.busy()} onClick={() => { for (const a of list) void signOut.signOut(a.sub); }}>退出登录</Button>
-      <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
+      <h1>{t("web-pages.admin.noPermission.title")}</h1>
+      <p>{t("web-pages.admin.noPermission.body", { emails: list.map((a) => a.email).join(t("web-pages.admin.noPermission.separator")), name: NAME })}</p>
+      <Button variant="primary" busy={signOut.busy()} onClick={() => { for (const a of list) void signOut.signOut(a.sub); }}>{t("web-pages.admin.signOut")}</Button>
+      <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.admin.switchAccount")}</Button>
     </div>
   );
 }

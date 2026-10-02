@@ -16,6 +16,8 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./Archive.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
+import { t } from "../i18n.ts";
+import { Words } from "../cloud/words.tsx";
 
 /**
  * The archive of a scope's stations online, as both screens show it (the phone's in ../mobile/Archive.tsx), as the
@@ -30,17 +32,17 @@ export function useArchive(scope: string, toast: (text: string) => void) {
   const restore = async (item: ArchiveItem) => {
     try {
       await api(item).archive(item, false);
-      toast("已恢复到列表");
+      toast(t("web-pages.archive.restored"));
     } catch (e) {
-      toast(`没能恢复：${e instanceof Error ? e.message : String(e)}`);
+      toast(t("web-pages.archive.restoreFailed", { error: e instanceof Error ? e.message : String(e) }));
     }
   };
   const remove = async (item: ArchiveItem) => {
     await api(item).deleteSession(item.session);
-    toast("已删除");
+    toast(t("web-pages.archive.deleted"));
   };
   // Not there yet: being read; refused (a core from before the archive): why.
-  const note = view.value ? view.value.note : view.error ? view.error.message : "正在读取 station…";
+  const note = view.value ? view.value.note : view.error ? view.error.message : t("web-pages.archive.loading");
   return { days: view.value?.days ?? [], errors: view.value?.errors ?? [], note, restore, remove };
 }
 
@@ -65,8 +67,8 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
   };
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={back} label="对话" />
-      <header className={pagesCss.pageHead}><div><h1>已归档<About>{ABOUT}</About></h1></div></header>
+      <MobileBack to={back} label={t("web-pages.decisions.back")} />
+      <header className={pagesCss.pageHead}><div><h1>{t("web-pages.archive.title")}<About>{ABOUT}</About></h1></div></header>
       {errors.map((e) => <p key={e.station} className={controlsCss.fieldError}>{e.text}</p>)}
       {note && <p className={shellCss.muted}>{note}</p>}
       {days.map((day) => (
@@ -82,7 +84,7 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
                 <div className={css.archiveActions}>
                   <RestoreButton item={item} restore={restore} />
                   {item.deletable && (
-                    <Tip label="删除"><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction} ${css.archiveDelete}`} aria-label={`删除「${item.title}」`} onClick={() => { setDeleteError(null); setDeleting(item); }}><Trash size={14} /></button></Tip>
+                    <Tip label={t("common.delete")}><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction} ${css.archiveDelete}`} aria-label={t("web-pages.archive.deleteNamed", { title: item.title })} onClick={() => { setDeleteError(null); setDeleting(item); }}><Trash size={14} /></button></Tip>
                   )}
                 </div>
               </div>
@@ -91,8 +93,8 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
           ))}
         </section>
       ))}
-      <Confirm open={deleting !== null} title={`删除「${deleting?.title ?? ""}」？`}
-        description={DELETE_TEXT} action="删除"
+      <Confirm open={deleting !== null} title={t("web-pages.archive.deleteConfirm", { title: deleting?.title ?? "" })}
+        description={DELETE_TEXT} action={t("common.delete")}
         onConfirm={() => void remove()} onClose={() => setDeleting(null)} busy={busy} error={deleteError} />
     </div>
   );
@@ -105,13 +107,13 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
 function RestoreButton({ item, restore }: { item: ArchiveItem; restore: (item: ArchiveItem) => Promise<void> }) {
   const state = useDoingState("chat.archive", { station: item.station, session: item.session, archived: false });
   return (
-    <Tip label={state.error ?? "恢复到列表"}><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction}`} aria-label={`恢复「${item.title}」`}
+    <Tip label={state.error ?? t("web-pages.archive.restore")}><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction}`} aria-label={t("web-pages.archive.restoreNamed", { title: item.title })}
       disabled={state.running} aria-busy={state.running || undefined} onClick={() => void restore(item)}>
       <DoingShown state={state} className={controlsCss.iconSpinner} size={14} idle={<Retry size={14} />} bare />
     </button></Tip>
   );
 }
 
-/** What the archive is (the wide screen's tip; the phone says it at the top). */
-export const ABOUT = "手动归档的对话，和空闲超过一天、已经做完的对话（没在跑、没停在 block、没有未读）。对话里有新消息时会自动回到列表。";
-export const DELETE_TEXT = "它的会话、对话记录和 workspace 目录都会删掉，不能恢复。";
+/** What the archive is (the wide screen's tip; the phone says it at the top). Elements: their words are read as drawn. */
+export const ABOUT = <Words k="web-pages.archive.about" />;
+export const DELETE_TEXT = <Words k="web-pages.archive.deleteText" />;

@@ -23,19 +23,28 @@ import * as conversationCss from "../styles/conversation.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 
 import { NAME } from "../channel.ts";
-/** What can be added, by whose account it is; `runtime` only where the account is for one (a subscription, variables). */
+import { t } from "../i18n.ts";
+import { tx } from "../cloud/words.tsx";
+/**
+ * What can be added, by whose account it is; `runtime` only where the account is for one (a subscription, variables).
+ * Its words are getters, read in the language at the time.
+ */
 export const CHOICES = {
-  "claude-sub": { kind: "subscription", runtime: "claude", title: "Claude 订阅", description: "Claude Pro / Max，跑 Claude Code。在浏览器里登录一次。" },
-  "chatgpt-sub": { kind: "subscription", runtime: "codex", title: "ChatGPT 订阅", description: "ChatGPT Plus / Pro，跑 Codex。用设备码登录一次。" },
-  "opencode-go": { kind: "opencode-go", runtime: null, title: "OpenCode Go", description: "一个 key，Claude Code 和 Codex 都能用。" },
-  "anthropic-api": { kind: "anthropic-api", runtime: null, title: "Anthropic API", description: "Anthropic 的 API key，跑 Claude Code。" },
-  "env-claude": { kind: "env", runtime: "claude", title: "自定义环境变量（Claude Code）", description: "自己设置接模型服务的环境变量。" },
-  "env-codex": { kind: "env", runtime: "codex", title: "自定义环境变量（Codex）", description: "自己设置接模型服务的环境变量。" },
+  "claude-sub": { kind: "subscription", runtime: "claude", get title() { return t("web-pages.profiles.choice.claudeSub"); }, get description() { return t("web-pages.profiles.choice.claudeSubLead"); } },
+  "chatgpt-sub": { kind: "subscription", runtime: "codex", get title() { return t("web-pages.profiles.choice.chatgptSub"); }, get description() { return t("web-pages.profiles.choice.chatgptSubLead"); } },
+  "opencode-go": { kind: "opencode-go", runtime: null, title: "OpenCode Go", get description() { return t("web-pages.profiles.choice.opencodeGoLead"); } },
+  "anthropic-api": { kind: "anthropic-api", runtime: null, title: "Anthropic API", get description() { return t("web-pages.profiles.choice.anthropicApiLead"); } },
+  "env-claude": { kind: "env", runtime: "claude", get title() { return t("web-pages.profiles.choice.envClaude"); }, get description() { return t("web-pages.profiles.choice.envLead"); } },
+  "env-codex": { kind: "env", runtime: "codex", get title() { return t("web-pages.profiles.choice.envCodex"); }, get description() { return t("web-pages.profiles.choice.envLead"); } },
 } as const satisfies Record<string, { kind: AccessKind; runtime: RuntimeKind | null; title: string; description: string }>;
 export type Choice = keyof typeof CHOICES;
 
-/** What a profile is, in a line, where the first one is asked for. */
-export const PROFILE_LEAD = <>agent 用它来跑模型：<span className={baseCss.phrase}>一份订阅（Claude、ChatGPT），</span>或者一个模型服务的 key。</>;
+/** What a profile is, in a line, where the first one is asked for (an element: its words are read as it is drawn). */
+export const PROFILE_LEAD = <ProfileLead />;
+
+function ProfileLead() {
+  return <>{tx("web-pages.profiles.lead", { subscription: <span className={baseCss.phrase}>{t("web-pages.profiles.leadSubscription")}</span> })}</>;
+}
 
 /**
  * Where a first profile is asked for: the accounts this machine's own Claude Code and Codex are signed in with (the
@@ -48,19 +57,19 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   const navigate = useNavigate();
   const toast = useToast();
   const use = useAction((runtime: MachineLogin["runtime"]) => api.useMachineLogin(runtime), ({ id }) => {
-    toast("已添加 Profile，用的是这台机器的登录");
+    toast(t("web-pages.profiles.machineAdded"));
     navigate(link(`/settings/accounts/${id}`));
   });
   const offers = (logins ?? []).filter((l) => l.offered);
   if (!offers.length) return null;
   return (
     <div className={css.machineLogins}>
-      <p className={css.machineLoginsHead}>这台机器上已经登录了</p>
+      <p className={css.machineLoginsHead}>{t("web-pages.profiles.machineSignedIn")}</p>
       {offers.map((l) => (
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
-          ? <Tip label="直接用这台机器的登录，不用再登录；在这台机器上换号或登出，它也跟着变"><Button busy={use.busy && use.args?.[0] === l.runtime} disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button></Tip>
-          : <Tip label={`这份登录在 station 读不到的钥匙串里，不能直接用：为 ${NAME} 单独登录一次，这台机器上原来的登录不受影响`}><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button></Tip>} />
+          ? <Tip label={t("web-pages.profiles.useMachineTip")}><Button busy={use.busy && use.args?.[0] === l.runtime} disabled={use.busy} onClick={() => void use.run(l.runtime)}>{t("web-pages.profiles.useThis")}</Button></Tip>
+          : <Tip label={t("web-pages.profiles.keychainTip", { name: NAME })}><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>{t("web-pages.profiles.signIn")}</Button></Tip>} />
       ))}
       {use.error && <p className={controlsCss.fieldError} role="alert">{use.error.message}</p>}
     </div>
@@ -94,39 +103,39 @@ export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { op
   };
   const go = (id: string, message: string) => { toast(message); setLogin(null); setKey(""); setCode(""); onClose(); navigate(link(`/settings/accounts/${id}`)); };
   // The sign-in made its profile: on to it.
-  useEffect(() => { if (pending?.created) go(pending.created, "已登录，添加了 Profile"); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pending?.created) go(pending.created, t("web-pages.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
   const start = useAction(() => api.newLogin(runtime!), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
-  const add = useAction(() => api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }), ({ id }) => go(id, "已验证并添加 Profile"));
+  const add = useAction(() => api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }), ({ id }) => go(id, t("web-pages.profiles.verifiedAdded")));
   const job = pending?.job ?? null;
   const signing = login !== null;
   return (
-    <Dialog open={open} onClose={close} title={station.name ? `给 ${station.name} 添加 Profile` : "添加 Profile"}
+    <Dialog open={open} onClose={close} title={station.name ? t("web-pages.profiles.addTo", { name: station.name }) : t("web-pages.settings.profiles.add")}
       footer={<>
-        <Button variant="ghost" onClick={close}>取消</Button>
+        <Button variant="ghost" onClick={close}>{t("common.cancel")}</Button>
         {!signing && (kind === "subscription"
-          ? <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>登录 {provider}</Button>
-          : <Button variant="primary" disabled={KEYED.has(kind) && !key.trim()} busy={add.busy} onClick={() => void add.run()}>{KEYED.has(kind) ? "验证并添加" : "添加"}</Button>)}
+          ? <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>{t("web-pages.profiles.signInTo", { provider })}</Button>
+          : <Button variant="primary" disabled={KEYED.has(kind) && !key.trim()} busy={add.busy} onClick={() => void add.run()}>{KEYED.has(kind) ? t("web-pages.profiles.verifyAdd") : t("web-pages.settings.members.addOne")}</Button>)}
       </>}>
       {signing ? (
         pending?.error || job?.state === "failed" || job?.state === "cancelled"
-          ? <div className={pagesCss.card}><p className={controlsCss.fieldError}>{pending?.error ?? job?.error ?? "登录没有完成。"}</p><Button onClick={() => { void api.dropLogin(login!).catch(() => {}); setLogin(null); }}>重新开始</Button></div>
+          ? <div className={pagesCss.card}><p className={controlsCss.fieldError}>{pending?.error ?? job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { void api.dropLogin(login!).catch(() => {}); setLogin(null); }}>{t("web-pages.profiles.restart")}</Button></div>
           : <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
       ) : (
         <>
-          <Field label="账号">
-            <Choices label="账号" value={choice} onChange={(v) => setChoice(v as Choice)}
+          <Field label={t("web-pages.profiles.account")}>
+            <Choices label={t("web-pages.profiles.account")} value={choice} onChange={(v) => setChoice(v as Choice)}
               options={(Object.keys(CHOICES) as Choice[]).map((c) => ({
                 value: c, title: CHOICES[c].title, description: CHOICES[c].description,
                 icon: <span className={pagesCss.mark} style={{ width: 28, height: 28 }}><ProviderLogo runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={16} /></span>,
               }))} />
           </Field>
           {KEYED.has(kind) && (
-            <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="account-key" hint="先验证能用，再添加。">
+            <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="account-key" hint={t("web-pages.profiles.keyHint")}>
               <input id="account-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
             </Field>
           )}
-          {kind === "subscription" && <p className={shellCss.muted}>登录在运行 {NAME} 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
+          {kind === "subscription" && <p className={shellCss.muted}>{t("web-pages.profiles.subscriptionNote", { name: NAME })}</p>}
           {(start.error ?? add.error) && <p className={controlsCss.fieldError} role="alert">{(start.error ?? add.error)!.message}</p>}
         </>
       )}
@@ -138,8 +147,8 @@ export function AccountPage() {
   const { id } = useParams();
   const overview = useOverview(useStation().address);
   const profile = overview.value?.profiles.find((p) => p.id === id);
-  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <Loading label="正在读取 Profile…" />;
-  if (!profile) return <Empty><p>没有 ID 为 {id} 的 Profile。</p></Empty>;
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <Loading label={t("web-pages.profiles.loading")} />;
+  if (!profile) return <Empty><p>{t("web-pages.profiles.notFound", { id: id ?? "" })}</p></Empty>;
   return <AccountView key={profile.id} profile={profile} overview={overview.value} />;
 }
 
@@ -152,18 +161,18 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(profile.name);
   const save = useAction((input: ProfileInput) => api.putProfile(profile.id, input));
-  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast(profile.machine ? "已停用" : "已删除 Profile"); navigate(profilesPage(station)); });
+  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast(profile.machine ? t("web-pages.profiles.disabled") : t("web-pages.profiles.deleted")); navigate(profilesPage(station)); });
   // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
   const removal = profile.machine
-    ? { item: "停用", title: `停用「${profile.name}」？`, action: "停用", description: `${NAME} 不再用这台机器上 ${MACHINE_RUNTIME[profile.runtime]} 的登录；这台机器上的登录不受影响，之后可以再用。` }
-    : { item: "删除 Profile", title: `删除「${profile.name}」？`, action: "删除 Profile", description: `只从 ${NAME} 的配置里移除；配置目录和里面的登录状态不会删除。` };
+    ? { item: t("web-pages.profiles.disable"), title: t("web-pages.profiles.disableConfirm", { name: profile.name }), action: t("web-pages.profiles.disable"), description: t("web-pages.profiles.disableBody", { name: NAME, runtime: MACHINE_RUNTIME[profile.runtime] }) }
+    : { item: t("web-pages.profiles.delete"), title: t("web-pages.archive.deleteConfirm", { title: profile.name }), action: t("web-pages.profiles.delete"), description: t("web-pages.profiles.deleteBody", { name: NAME }) };
   const check = useAction(() => api.checkProfile(profile.id));
   const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
   // Its new name shows while it is saved.
   const renamingTo = save.busy ? save.args?.[0].name : undefined;
   const rename = () => {
     setEditingName(false);
-    if (name.trim() && name.trim() !== profile.name) saveThen({ name: name.trim() }, () => toast("已改名"));
+    if (name.trim() && name.trim() !== profile.name) saveThen({ name: name.trim() }, () => toast(t("web-pages.settings.workspace.renamed")));
   };
   // Its last check, as the station has it (a check done here, or after a sign-in, comes back with the overview).
   const latest = profile.check;
@@ -180,22 +189,22 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
         <span className={`${pagesCss.mark} ${waitingCss.runtimeMark}`} style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={26} /></span>
         <div className={pagesCss.identityText}>
           {editingName ? (
-            <input className={`${controlsCss.input} ${css.identityNameInput}`} value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
+            <input className={`${controlsCss.input} ${css.identityNameInput}`} value={name} autoFocus aria-label={t("web-pages.profiles.name")} onChange={(e) => setName(e.target.value)} onBlur={rename}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
             <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
-              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在改名" />}<RuntimeTags runtimes={profile.runtimes} />{!profile.machine && <IconButton label="改名" icon={Edit} onClick={() => setEditingName(true)} />}</h1>
+              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} />{!profile.machine && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
             {profile.checkTone !== "green" && <Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
             {/* Keep check details without repeating the healthy status. */}
-            <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}</span>
-            {latest && <span className={shellCss.muted}><Time stamp={latest.time?.checkedAt} />检查</span>}
-            <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={Refresh} busy={check.busy} onClick={() => void check.run()} />
+            <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : t("web-pages.profiles.neverChecked")}</span>
+            {latest && <span className={shellCss.muted}>{tx("web-pages.profiles.checkedAt", { time: <Time stamp={latest.time?.checkedAt} /> })}</span>}
+            <IconButton label={check.busy ? t("web-pages.version.checking") : t("web-pages.profiles.recheck")} icon={Refresh} busy={check.busy} onClick={() => void check.run()} />
           </p>
-          {check.error && <p className={controlsCss.fieldError} role="alert">没能检查：{check.error.message}</p>}
+          {check.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.checkFailed", { error: check.error.message })}</p>}
         </div>
-        <Menu items={[{ label: profile.usedBy.length ? `${removal.item}（还有连接在用）` : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
+        <Menu items={[{ label: profile.usedBy.length ? t("web-pages.profiles.inUse", { item: removal.item }) : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
       {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
@@ -209,29 +218,29 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 
       {/* A station older than the setting says nothing of it. */}
       {profile.runtimes.includes("claude") && profile.backgroundOnMessage !== undefined && (
-        <Section title="运行">
-          <SwitchRow title="新消息到来时，把正在执行的命令转到后台" checked={profile.backgroundOnMessage} disabled={save.busy}
+        <Section title={t("web-pages.profiles.run")}>
+          <SwitchRow title={t("web-pages.profiles.background")} checked={profile.backgroundOnMessage} disabled={save.busy}
             description={profile.backgroundOnMessage
-              ? "Claude Code 正在等命令或 subagent 时，新消息会让它们转到后台继续跑（像按 Ctrl+B），agent 马上读到消息，跑完再回来处理结果。"
-              : "新消息要等正在执行的命令或 subagent 结束后才会读到。"}
-            onChange={(on) => saveThen({ backgroundOnMessage: on }, () => toast(on ? "已打开" : "已关闭"))} />
+              ? t("web-pages.profiles.backgroundOn")
+              : t("web-pages.profiles.backgroundOff")}
+            onChange={(on) => saveThen({ backgroundOnMessage: on }, () => toast(on ? t("web-pages.profiles.turnedOn") : t("web-pages.profiles.turnedOff")))} />
         </Section>
       )}
 
-      <Section title="使用它的连接">
-        {users.length === 0 ? <p className={shellCss.muted}>还没有连接使用这个 Profile。</p> : (
+      <Section title={t("web-pages.profiles.usedBy")}>
+        {users.length === 0 ? <p className={shellCss.muted}>{t("web-pages.profiles.usedByNone")}</p> : (
           <ul className={pagesCss.list}>
             {users.map((c) => (
-              <li key={c.id}><Link className={pagesCss.listRow} to={link(`/connects/${c.id}`)}><ConnectAvatar connect={c} size={24} /><span className={pagesCss.listRowTitle}>{c.name}</span><span className={shellCss.muted}>{c.modelName ?? (profile.model ? profile.names[profile.model] ?? profile.model : "默认模型")}</span></Link></li>
+              <li key={c.id}><Link className={pagesCss.listRow} to={link(`/connects/${c.id}`)}><ConnectAvatar connect={c} size={24} /><span className={pagesCss.listRowTitle}>{c.name}</span><span className={shellCss.muted}>{c.modelName ?? (profile.model ? profile.names[profile.model] ?? profile.model : t("web-pages.profiles.defaultModel"))}</span></Link></li>
             ))}
           </ul>
         )}
       </Section>
 
       {profile.machine ? <MachineAccount profile={profile} /> : <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
-        onSave={(input, done) => saveThen(input, () => { toast("已保存，正在检查"); done(); })} busy={save.busy} />}
+        onSave={(input, done) => saveThen(input, () => { toast(t("web-pages.profiles.savedChecking")); done(); })} busy={save.busy} />}
 
-      {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />}
+      {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast(t("web-pages.profiles.saved")))} busy={save.busy} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={removal.title} action={removal.action} description={removal.description} error={remove.error?.message} />
     </div>
@@ -245,8 +254,8 @@ function MachineAccount({ profile }: { profile: Profile }) {
   const station = useStation();
   const runtime = MACHINE_RUNTIME[profile.runtime];
   return (
-    <Section title="账号">
-      <p>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录<About>要换号、重新登录或登出，在这台机器的 {runtime} 里做，这个 Profile 跟着它变；不想用了就停用（右上角菜单）。</About></p>
+    <Section title={t("web-pages.profiles.account")}>
+      <p>{station.name ? t("web-pages.profiles.machineLoginOn", { station: station.name, runtime }) : t("web-pages.profiles.machineLoginHere", { runtime })}<About>{t("web-pages.profiles.machineLoginAbout", { runtime })}</About></p>
     </Section>
   );
 }
@@ -261,23 +270,23 @@ function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile;
   const keyed = KEYED.has(profile.access.kind);
   if (!keyed && profile.access.kind !== "subscription") return null;
   return (
-    <Section title="账号">
+    <Section title={t("web-pages.profiles.account")}>
       {keyed ? (
         <div className={pagesCss.card}>
           {!replacing ? (
             <div className={pagesCss.cardRow}>
               <div className={pagesCss.cardRowText}>
                 <strong>{profile.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</strong>
-                <span className={`${shellCss.muted} ${shellCss.mono}`}>{profile.access.key || "没有保存"}</span>
+                <span className={`${shellCss.muted} ${shellCss.mono}`}>{profile.access.key || t("web-pages.profiles.notSaved")}</span>
               </div>
-              <Button onClick={() => setReplacing(true)}>更换</Button>
+              <Button onClick={() => setReplacing(true)}>{t("web-pages.profiles.replace")}</Button>
             </div>
           ) : (
-            <Field label={profile.access.kind === "opencode-go" ? "新的 OpenCode Go key" : "新的 API key"} htmlFor="access-key" hint="保存后会重新检查。">
+            <Field label={profile.access.kind === "opencode-go" ? t("web-pages.profiles.newOpencodeKey") : t("web-pages.profiles.newApiKey")} htmlFor="access-key" hint={t("web-pages.profiles.recheckHint")}>
               <div className={additionsCss.inputRow}>
-                <input id="access-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" autoFocus value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="粘贴 key" />
-                <Button variant="ghost" onClick={() => { setReplacing(false); setKey(""); }}>取消</Button>
-                <Button variant="primary" disabled={!key} busy={busy} onClick={() => onSave({ access: { kind: profile.access.kind, key } }, () => { setKey(""); setReplacing(false); })}>保存</Button>
+                <input id="access-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" autoFocus value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder={t("web-pages.profiles.pasteKey")} />
+                <Button variant="ghost" onClick={() => { setReplacing(false); setKey(""); }}>{t("common.cancel")}</Button>
+                <Button variant="primary" disabled={!key} busy={busy} onClick={() => onSave({ access: { kind: profile.access.kind, key } }, () => { setKey(""); setReplacing(false); })}>{t("common.save")}</Button>
               </div>
             </Field>
           )}
@@ -308,24 +317,24 @@ function EnvSection({ profile, onSave, busy }: { profile: Profile; onSave(input:
   };
   const update = (row: number, p: Partial<EnvRow>) => setRows(rows.map((r) => (r.row === row ? { ...r, ...p } : r)));
   return (
-    <Section title="环境变量" description="运行时启动时带上这些变量，用来接到你的模型服务。值里的 {route} 会换成会话的路由 ID。">
+    <Section title={t("web-pages.profiles.env")} description={t("web-pages.profiles.envLead", { route: "{route}" })}>
       <div className={pagesCss.card}>
         <div className={css.envTable}>
           {rows.map((r) => {
             const secret = r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key);
             return (
               <div key={r.row} className={css.envRow}>
-                <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} aria-label="变量名" value={r.key} onChange={(e) => update(r.row, { key: e.target.value })} placeholder="NAME" />
-                <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} aria-label={`${r.key || "变量"} 的值`} type={secret ? "password" : "text"} autoComplete="off" value={r.value}
-                  onChange={(e) => update(r.row, { value: e.target.value })} placeholder={r.masked !== null ? `已保存 ${r.masked}，留空保持不变` : "值"} />
-                <Button variant="ghost" onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>删除</Button>
+                <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} aria-label={t("web-pages.profiles.envName")} value={r.key} onChange={(e) => update(r.row, { key: e.target.value })} placeholder="NAME" />
+                <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} aria-label={t("web-pages.profiles.envValueOf", { name: r.key || t("web-pages.profiles.envVariable") })} type={secret ? "password" : "text"} autoComplete="off" value={r.value}
+                  onChange={(e) => update(r.row, { value: e.target.value })} placeholder={r.masked !== null ? t("web-pages.profiles.envSaved", { masked: r.masked }) : t("web-pages.profiles.envValue")} />
+                <Button variant="ghost" onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>{t("common.delete")}</Button>
               </div>
             );
           })}
-          <div><Button variant="ghost" icon={Plus} onClick={() => setRows([...rows, { row: nextRow++, key: "", value: "", masked: null, original: null }])}>添加变量</Button></div>
+          <div><Button variant="ghost" icon={Plus} onClick={() => setRows([...rows, { row: nextRow++, key: "", value: "", masked: null, original: null }])}>{t("web-pages.profiles.envAdd")}</Button></div>
         </div>
         <div className={pagesCss.cardActions}>
-          <Button variant="primary" busy={busy} onClick={() => onSave({ env: patch() })}>保存</Button>
+          <Button variant="primary" busy={busy} onClick={() => onSave({ env: patch() })}>{t("common.save")}</Button>
         </div>
       </div>
     </Section>
@@ -350,7 +359,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   // Announce a sign-in finishing while the page is open, not one that finished earlier.
   const previous = useRef(job?.state);
   useEffect(() => {
-    if (job?.state === "done" && previous.current && previous.current !== "done") toast("登录成功");
+    if (job?.state === "done" && previous.current && previous.current !== "done") toast(t("web-pages.profiles.signedIn"));
     previous.current = job?.state;
   }, [job?.state, toast]);
 
@@ -359,17 +368,17 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
       <div className={pagesCss.card}>
         <div className={pagesCss.cardRow}>
           <div className={pagesCss.cardRowText}>
-            <strong>{needed ? `还没登录 ${provider} 账号` : `${provider} 订阅登录`}</strong>
+            <strong>{needed ? t("web-pages.profiles.notSignedIn", { provider }) : t("web-pages.profiles.subscriptionSignIn", { provider })}</strong>
             <span className={shellCss.muted}>
-              {job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : `登录在运行 ${NAME} 的机器上完成，你只需要在浏览器里授权。`}
+              {job?.state === "failed" ? t("web-pages.profiles.lastFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-pages.profiles.signedInSwitch") : t("web-pages.profiles.signInNote", { name: NAME })}
             </span>
           </div>
           <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
-            {job?.state === "done" || !needed ? "重新登录" : "登录"}
+            {job?.state === "done" || !needed ? t("web-pages.signIn.again") : t("web-pages.profiles.signIn")}
           </Button>
         </div>
         {start.error && <p className={controlsCss.fieldError} role="alert">{start.error.message}</p>}
-        <button type="button" className={controlsCss.textToggle} onClick={() => setManual(!manual)}>{manual ? "收起" : "也可以在服务器上手动登录"}</button>
+        <button type="button" className={controlsCss.textToggle} onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</button>
         {manual && <CopyCommand text={profile.loginCommand} />}
       </div>
     );
@@ -378,10 +387,10 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   return (
     <div className={`${pagesCss.card} ${css.signIn}`} aria-live="polite">
       <div className={pagesCss.cardRow}>
-        <div className={pagesCss.cardRowText}><strong>正在登录 {provider}</strong><span className={shellCss.muted}>15 分钟内完成，过期会自动取消。</span></div>
-        <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>取消</Button>
+        <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
+        <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button>
       </div>
-      {cancel.error && <p className={controlsCss.fieldError} role="alert">没能取消：{cancel.error.message}</p>}
+      {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
       <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
     </div>
   );
@@ -396,13 +405,13 @@ function DeviceCode({ url, code }: { url: string; code: string }) {
   const toast = useToast();
   const go = () => {
     // Not copied: the page opens all the same, the code to type in by hand.
-    void navigator.clipboard.writeText(code).then(() => setCopied(true), () => toast("没能复制代码，请照着输入")).finally(() => window.open(url, "_blank", "noopener"));
+    void navigator.clipboard.writeText(code).then(() => setCopied(true), () => toast(t("web-pages.profiles.copyFailed"))).finally(() => window.open(url, "_blank", "noopener"));
   };
   return (
     <div className={css.deviceCode}>
       <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>
-      <Button variant="primary" icon={External} onClick={go}>{copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"}</Button>
-      <p className={shellCss.muted}>在打开的 OpenAI 页面用要给 {NAME} 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续，不用回来点。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
+      <Button variant="primary" icon={External} onClick={go}>{copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
+      <p className={shellCss.muted}>{t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
 }
@@ -412,29 +421,29 @@ function DeviceCode({ url, code }: { url: string; code: string }) {
 function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
   job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
 }) {
-  if (!job || job.state === "starting") return <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />正在生成 {provider} 的登录链接…</p>;
+  if (!job || job.state === "starting") return <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.generatingLink", { provider })}</p>;
   return (
     <>
       {job.state === "needs_code" && job.url && (
         <ol className={controlsCss.steps}>
           <li>
-            <span>打开授权页面，用要给 {NAME} 使用的 Claude 账号登录并同意。</span>
-            <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />打开授权页面</a>
+            <span>{t("web-pages.profiles.step1", { name: NAME })}</span>
+            <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
           </li>
           <li>
-            <span>同意后页面上会显示一段授权码，复制过来：</span>
+            <span>{t("web-pages.profiles.step2")}</span>
             <div className={additionsCss.inputRow}>
-              <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="粘贴授权码" aria-label="授权码"
+              <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("web-pages.profiles.pasteCode")} aria-label={t("web-pages.profiles.code")}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && code.trim() && !sending) send(); }} />
-              <Button variant="primary" disabled={!code.trim()} busy={sending} onClick={() => send()}>完成登录</Button>
+              <Button variant="primary" disabled={!code.trim()} busy={sending} onClick={() => send()}>{t("web-pages.profiles.finish")}</Button>
             </div>
             {sendError && <p className={controlsCss.fieldError} role="alert">{sendError}</p>}
           </li>
         </ol>
       )}
       {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} />}
-      {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />正在完成登录…</p>}
-      {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />已登录，正在添加…</p>}
+      {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
+      {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
     </>
   );
 }
@@ -446,10 +455,10 @@ function FastSection({ profile }: { profile: Profile }) {
   const params = { station: station.address, id: profile.id };
   const busy = useDoing("profile.put", params);
   const error = useDoingFailed("profile.put", params);
-  return <Section title="运行"><SwitchRow title="默认 Fast" checked={!!profile.fast} disabled={busy}
-    description="跟随订阅的会话使用此设置；Fast 消耗更多额度或积分"
-    onChange={(fast) => act(api.putProfile(profile.id, { fast }), "保存 Fast", fast ? "已打开默认 Fast" : "已关闭默认 Fast")} />
-    {busy && <p className={shellCss.muted}>正在保存…</p>}
+  return <Section title={t("web-pages.profiles.run")}><SwitchRow title={t("web-pages.profiles.fast")} checked={!!profile.fast} disabled={busy}
+    description={t("web-pages.profiles.fastLead")}
+    onChange={(fast) => act(api.putProfile(profile.id, { fast }), t("web-pages.profiles.fastSave"), fast ? t("web-pages.profiles.fastOn") : t("web-pages.profiles.fastOff"))} />
+    {busy && <p className={shellCss.muted}>{t("web-pages.profiles.saving")}</p>}
     {error && <p className={controlsCss.fieldError}>{error}</p>}
   </Section>;
 }
@@ -465,20 +474,20 @@ function QuotaSection({ profile }: { profile: Profile }) {
   const params = { station: station.address, id: profile.id };
   const busy = useDoing("profile.resetQuota", params);
   const failed = useDoingFailed("profile.resetQuota", params);
-  const reset = useAction(async () => { await api.resetQuota(profile.id); setResetting(false); toast("已重置额度"); });
+  const reset = useAction(async () => { await api.resetQuota(profile.id); setResetting(false); toast(t("web-pages.profiles.quotaReset")); });
   return (
-    <Section title={<>额度{quota?.time?.checkedAt && <About>{quota.time.checkedAt.ago}查询，每几分钟自动更新</About>}</>}
-      actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
+    <Section title={<>{t("web-pages.profiles.quota")}{quota?.time?.checkedAt && <About>{t("web-pages.profiles.quotaAbout", { ago: quota.time.checkedAt.ago })}</About>}</>}
+      actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>{t("web-pages.profiles.refresh")}</Button>}>
       {(quota?.windows.length || !quota?.creditsText) ? <QuotaBars quota={quota} /> : null}
-      {quota?.creditsText && <p>积分余额 <span className={shellCss.muted}>{quota.creditsText}</span></p>}
-      {quota?.resetCount != null && <p>额度重置 <span className={shellCss.muted}>{quota.resetText}</span>{" "}
-        <Button variant="ghost" disabled={!quota.resetCount || busy} busy={busy} onClick={() => setResetting(true)}>重置额度</Button>
+      {quota?.creditsText && <p>{tx("web-pages.profiles.credits", { credits: <span className={shellCss.muted}>{quota.creditsText}</span> })}</p>}
+      {quota?.resetCount != null && <p>{tx("web-pages.profiles.resets", { resets: <span className={shellCss.muted}>{quota.resetText}</span> })}{" "}
+        <Button variant="ghost" disabled={!quota.resetCount || busy} busy={busy} onClick={() => setResetting(true)}>{t("web-pages.profiles.reset")}</Button>
       </p>}
       {failed && <p className={controlsCss.fieldError}>{failed}</p>}
-      <Confirm open={resetting} onClose={() => setResetting(false)} title="重置额度？" action="使用一次重置"
-        description={`将使用「${profile.name}」的 1 次额度重置，剩余 ${quota?.resetCount ?? 0} 次`} busy={busy}
+      <Confirm open={resetting} onClose={() => setResetting(false)} title={t("web-pages.profiles.resetConfirm")} action={t("web-pages.profiles.resetAction")}
+        description={t("web-pages.profiles.resetBody", { name: profile.name, n: quota?.resetCount ?? 0 })} busy={busy}
         onConfirm={() => void reset.run()} error={reset.error?.message} />
-      {refresh.error && <p className={controlsCss.fieldError} role="alert">没能刷新额度：{refresh.error.message}</p>}
+      {refresh.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.refreshFailed", { error: refresh.error.message })}</p>}
     </Section>
   );
 }
@@ -513,11 +522,11 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   const ordered = series.flatMap((s) => s.models);
   const on = [...enabled].sort((a, b) => ordered.indexOf(a) - ordered.indexOf(b));
   return (
-    <Section title={<>模型<About>{all.length ? "只有启用的模型能在新对话和连接里选。" : "检查过 Profile 后，这里会列出它能用的模型，启用后才能使用。"}</About></>}
-      actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? "收起" : `选择模型（${enabled.size} / ${all.length}）`}</Button>}>
+    <Section title={<>{t("web-pages.profiles.models")}<About>{all.length ? t("web-pages.profiles.modelsAbout") : t("web-pages.profiles.modelsAboutNone")}</About></>}
+      actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? t("web-pages.profiles.collapse") : t("web-pages.profiles.chooseModels", { on: enabled.size, all: all.length })}</Button>}>
       {/* What it can be used for now, first; the whole list only when choosing. */}
       {all.length > 0 && !choosing && (
-        on.length === 0 ? <p className={shellCss.muted}>还没有启用模型。</p> : (
+        on.length === 0 ? <p className={shellCss.muted}>{t("web-pages.profiles.noModels")}</p> : (
           <ul className={css.modelChips}>
             {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} /><span>{name(m)}</span></li></Tip>)}
           </ul>
@@ -526,9 +535,9 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
       {all.length > 0 && choosing && (
         <div className={chatCss.modelPool}>
           <div className={chatCss.modelPoolTools}>
-            {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder="筛选模型" autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
-            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>全选{filter ? "筛选结果" : ""}</button>
-            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>全不选{filter ? "筛选结果" : ""}</button>
+            {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder={t("web-pages.profiles.filter")} autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
+            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
+            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
           </div>
           {series.map((s) => {
             const list = s.models.filter((m) => shown.includes(m));
@@ -538,7 +547,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
               <div key={s.name} className={modelCss.poolSeries}>
                 <div className={modelCss.poolSeriesHead}>
                   <h4>{s.name}</h4>
-                  <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? "全不选" : "全选"}</button>
+                  <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}</button>
                 </div>
                 <ul className={chatCss.modelPoolList}>
                   {list.map((m) => (
@@ -547,8 +556,8 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
                         <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
                         <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
                         <span>{name(m)}</span>
-                        {profile.modelsSaving?.includes(m) && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在保存" />}
-                        {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>检查里没有了</span>}
+                        {profile.modelsSaving?.includes(m) && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.profiles.saving")} />}
+                        {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
                       </label></Tip>
                     </li>
                   ))}

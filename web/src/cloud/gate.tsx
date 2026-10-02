@@ -8,6 +8,7 @@ import * as cloudCss from "../styles/cloud.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./gate.css.ts";
 import { NAME } from "./beta.tsx";
+import { t } from "../i18n.ts";
 
 export function Avatar({ account, size = 24 }: { account: { name: string; email: string; picture: string }; size?: number }) {
   const letter = ([...(account.name || account.email)][0] ?? "?").toUpperCase();
@@ -17,14 +18,14 @@ export function Avatar({ account, size = 24 }: { account: { name: string; email:
     : <span className={`${cloudCss.person} ${cloudCss.personLetter}`} style={{ width: size, height: size, fontSize: size * .45 }} aria-hidden="true">{letter}</span>;
 }
 
-export function SignInPage({ title = `登录 ${NAME}`, lead }: { title?: string; lead?: ReactNode }) {
+export function SignInPage({ title = t("web-pages.signIn.title", { name: NAME }), lead }: { title?: string; lead?: ReactNode }) {
   const signIn = useSignIn();
   return (
     <div className={`${shellCss.gate} ${css.signInPage}`}>
       <Illustration name="sign-in" />
       <h1>{title}</h1>
-      <p>{lead ?? "用 Google 账号登录，管理你的 workspace 和里面的 station。"}</p>
-      <Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn()}>使用 Google 账号登录</Button>
+      <p>{lead ?? t("web-pages.signIn.lead")}</p>
+      <Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.signIn.google")}</Button>
     </div>
   );
 }
@@ -39,8 +40,8 @@ export function Callback() {
   return (
     <div className={shellCss.gate}>
       <Illustration name="sign-in" />
-      <h1>{error ? "登录没有完成" : "正在登录…"}</h1>
-      {error && <><p>{error}</p><Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn("/")}>重新登录</Button></>}
+      <h1>{error ? t("web-pages.signIn.failed") : t("web-pages.signIn.signingIn")}</h1>
+      {error && <><p>{error}</p><Button variant="primary" busy={signIn.busy} onClick={() => void signIn.signIn("/")}>{t("web-pages.signIn.again")}</Button></>}
     </div>
   );
 }

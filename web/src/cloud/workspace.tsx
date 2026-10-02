@@ -49,6 +49,8 @@ import * as chatMarkCss from "../ChatMark.css.ts";
 
 import { WebUpdate } from "../WebUpdate.tsx";
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
+import { tx } from "./words.tsx";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
 
@@ -91,12 +93,13 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   return (
     <PeopleContext.Provider value={people}>
       <div className={shellCss.shell} data-detail={detail}>
+
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
         {decisions
           ? <DecisionDesk workspace={entry.id} back={`/w/${entry.id}`} onOpen={(to) => navigate(to)} />
           : <>
           {settings
-            ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
+            ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
             : <WorkspaceSidebar entry={entry} />}
           <main className={shellCss.main}>
             <ComposerDock>
@@ -140,7 +143,7 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
   const { station: id } = useParams();
   if (!stations) return null;
   const station = stations.find((s) => s.id === id);
-  if (!station) return <Empty><p>这个 workspace 里没有这台 station。</p></Empty>;
+  if (!station) return <Empty><p>{t("web-pages.workspace.noSuchStation")}</p></Empty>;
   // Offline, its pages still show what the core kept of it; the core says where nothing can be done.
   return (
     <StationContext.Provider value={station}>
@@ -172,13 +175,13 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
       </header>
       <main className={css.onboardingMain}>
         <Illustration name="no-station" />
-        <h1 className={css.onboardingTitle}>添加第一台 station</h1>
-        <p className={css.onboardingLead}>agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
+        <h1 className={css.onboardingTitle}>{t("web-pages.workspace.onboarding.title")}</h1>
+        <p className={css.onboardingLead}>{t("web-pages.workspace.onboarding.lead")}</p>
         <FirstStation entry={entry} />
         <p className={`${css.onboardingFoot} ${shellCss.muted}`}>
-          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>邀请成员</Link>
+          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>{t("web-pages.workspace.onboarding.invite")}</Link>
           <span aria-hidden="true"> · </span>
-          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>workspace 设置</Link>
+          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>{t("web-pages.workspace.onboarding.settings")}</Link>
         </p>
       </main>
     </div>
@@ -188,14 +191,14 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
 /** `stations` is undefined until the core has listed them. */
 function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
   const last = useLastChat(id, `/w/${id}/new`);
-  if (!stations) return <Loading label="正在读取 workspace…" />;
+  if (!stations) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   // With stations there is always a chat in view: the one last open (the core keeps it), or a new one.
-  if (stations.length) return last ? <Navigate to={last} replace /> : <Loading label="正在读取 workspace…" />;
+  if (stations.length) return last ? <Navigate to={last} replace /> : <Loading label={t("web-pages.settings.workspace.loading")} />;
   return (
     <Empty>
       <Illustration name="no-station" />
-      <h2>这个 workspace 还没有 station</h2>
-      <p>到 <Link className={chatCss.inlineLink} to={`/w/${id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 {NAME} 的机器上执行一条命令即可。</p>
+      <h2>{t("web-pages.workspace.empty.title")}</h2>
+      <p>{tx("web-pages.workspace.empty.body", { name: NAME, link: <Link className={chatCss.inlineLink} to={`/w/${id}/settings/stations`}>{t("web-pages.workspace.empty.link")}</Link> })}</p>
     </Empty>
   );
 }
@@ -204,8 +207,8 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
 
 function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
-    <nav className={nav.sidebar} aria-label="导航">
-      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
+    <nav className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
+      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
       <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
       <div className={nav.navFoot}>
@@ -216,7 +219,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
         <WorkspaceOpenJobs scope={entry.id} />
         <div className={nav.navFootRow}>
           <WorkspaceSwitcher current={entry} />
-          <Tip label="设置" side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
+          <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
         </div>
       </div>
     </nav>
@@ -240,7 +243,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
     ({ invite, accept }: { invite: InvitationEntry; accept: boolean }) =>
       accept ? cloud.acceptInvitationById(invite.account.sub, invite.id) : cloud.declineInvitation(invite.account.sub, invite.id).then(() => null),
     (joined, { invite }) => {
-      if (joined) { toast(`已加入「${invite.name}」`); navigate(`/w/${joined.id}`); } else toast("已忽略邀请");
+      if (joined) { toast(t("web-pages.workspace.joined", { name: invite.name })); navigate(`/w/${joined.id}`); } else toast(t("web-pages.workspace.ignored"));
     },
   );
   const pending = byAccount.flatMap((a) => a.invitations.map((i): InvitationEntry => ({ ...i, account: a.account })));
@@ -260,9 +263,9 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             </span>
             {othersTone
               ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} title={marks?.othersLabel ?? undefined} />
-              : pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={`${pending.length} 个邀请`} />}
+              : pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} />}
             {respond.busy || signIn.busy
-              ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? "正在打开登录" : "正在回复邀请"} />
+              ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
               : <ChevronsUpDown {...ICON} size={14} />}
           </button>
         </DropdownMenu.Trigger>
@@ -273,19 +276,19 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
               <DropdownMenu.Item className={`${controlsCss.menuItem} ${css.menuCurrent}`} onSelect={() => navigate(`/w/${current.id}/settings/workspace`)}>
                 <span className={css.menuCurrentText}>
                   <b>{shown.name}</b>
-                  <span className={shellCss.muted}>你是{ROLE_LABEL[shown.role]} · {shown.stations} 台 station · {shown.members} 人</span>
+                  <span className={shellCss.muted}>{t("web-pages.workspace.youAre", { role: ROLE_LABEL[shown.role] })} · {t("web-pages.workspace.stations", { n: shown.stations })} · {t("web-pages.workspace.people", { n: shown.members })}</span>
                   {byAccount.length > 1 && <span className={shellCss.muted}>{current.account.email}</span>}
                 </span>
-                <span className={css.menuCurrentGo}>设置<ChevronRight {...ICON} size={14} /></span>
+                <span className={css.menuCurrentGo}>{t("web-pages.settings.title")}<ChevronRight {...ICON} size={14} /></span>
               </DropdownMenu.Item>
             )}
             {pending.length > 0 && (
               <>
-                <DropdownMenu.Label className={controlsCss.menuLabel}>邀请</DropdownMenu.Label>
+                <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-pages.workspace.invitations")}</DropdownMenu.Label>
                 {pending.map((invite) => (
                   <div key={invite.id} className={css.menuInvite}>
                     <span className={css.threadItem}>
-                      <span>{invite.inviter || "有人"}邀请你加入「{invite.name}」</span>
+                      <span>{t("web-pages.workspace.invitedYou", { inviter: invite.inviter || t("web-pages.cloud.someone"), name: invite.name })}</span>
                       <span className={shellCss.muted}>{invite.account.email}{list.length > 1 ? "" : ""}</span>
                     </span>
                     {/* The menu stays open while it goes: the button turns, and what went wrong shows under it. */}
@@ -293,21 +296,21 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: true }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}加入
+                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}{t("web-pages.cloud.join")}
                       </DropdownMenu.Item>
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: false }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}忽略
+                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}{t("web-pages.workspace.ignore")}
                       </DropdownMenu.Item>
                     </span>
-                    {respond.error && respond.arg?.invite.id === invite.id && <p className={`${controlsCss.fieldError} ${css.menuInviteError}`} role="alert">{respond.arg.accept ? "没能加入" : "没能忽略"}：{errorText(respond.error)}</p>}
+                    {respond.error && respond.arg?.invite.id === invite.id && <p className={`${controlsCss.fieldError} ${css.menuInviteError}`} role="alert">{respond.arg.accept ? t("web-pages.cloud.joinFailed", { error: errorText(respond.error) }) : t("web-pages.workspace.ignoreFailed", { error: errorText(respond.error) })}</p>}
                   </div>
                 ))}
                 <DropdownMenu.Separator className={controlsCss.menuSep} />
               </>
             )}
-            {others.length > 0 && <DropdownMenu.Label className={controlsCss.menuLabel}>切换到</DropdownMenu.Label>}
+            {others.length > 0 && <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-pages.workspace.switchTo")}</DropdownMenu.Label>}
             {/* Each workspace says whose it is under its name (a heading per account read as something to pick), what it holds at its end. */}
             {/* Its page goes back to the chat last open there (WorkspaceHome). */}
             {others.map(({ account, w }) => {
@@ -319,15 +322,15 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                     <span className={css.menuWorkspaceText}>{w.name}</span>
                     <MarkCounts mark={mark} />
                   </span>
-                  <span className={css.menuStat}>{w.stations} 台 station</span>
-                  {byAccount.length > 1 ? <span className={shellCss.muted}>{account.email}</span> : <span />}<span className={css.menuStat}>{w.members} 人</span>
+                  <span className={css.menuStat}>{t("web-pages.workspace.stations", { n: w.stations })}</span>
+                  {byAccount.length > 1 ? <span className={shellCss.muted}>{account.email}</span> : <span />}<span className={css.menuStat}>{t("web-pages.workspace.people", { n: w.members })}</span>
                 </span>
               </DropdownMenu.Item>
               );
             })}
             <DropdownMenu.Separator className={controlsCss.menuSep} />
-            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
-            <DropdownMenu.Item className={controlsCss.menuItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
+            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />{t("web-pages.workspace.create")}</DropdownMenu.Item>
+            <DropdownMenu.Item className={controlsCss.menuItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} />{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -348,20 +351,20 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
   useEffect(() => { if (needsInviteCode(create.error)) setAsked(true); }, [create.error]);
   const asking = asked || needsInviteCode(create.error);
   return (
-    <Dialog open={open} onClose={onClose} title="新建 workspace" description="workspace 是一组人和他们共用的 station。你会成为它的 owner。"
-      footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>新建</Button></>}>
-      <Field label="名字" htmlFor="ws-name">
-        <input id="ws-name" className={controlsCss.input} value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：产品团队" maxLength={80}
+    <Dialog open={open} onClose={onClose} title={t("web-pages.workspace.create")} description={t("web-pages.workspace.createLead")}
+      footer={<><Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>{t("web-pages.workspace.createAction")}</Button></>}>
+      <Field label={t("web-pages.settings.workspace.name")} htmlFor="ws-name">
+        <input id="ws-name" className={controlsCss.input} value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder={t("web-pages.workspace.namePlaceholder")} maxLength={80}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && !create.busy) create.run(); }} />
       </Field>
       {list.length > 1 && (
-        <Field label="属于哪个账号" htmlFor="ws-owner">
+        <Field label={t("web-pages.workspace.owner")} htmlFor="ws-owner">
           <Select id="ws-owner" value={owner} onChange={setOwner} options={list.map((a) => ({ value: a.sub, label: a.email }))} />
         </Field>
       )}
       {asking && (
-        <Field label="邀请码" htmlFor="ws-code" error={create.error && needsInviteCode(create.error) && code.trim() ? errorText(create.error) : undefined}
-          hint={`${NAME} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。`}>
+        <Field label={t("web-pages.cloud.inviteCode")} htmlFor="ws-code" error={create.error && needsInviteCode(create.error) && code.trim() ? errorText(create.error) : undefined}
+          hint={t("web-pages.workspace.codeHint", { name: NAME })}>
           <input id="ws-code" className={`${controlsCss.input} ${shellCss.mono}`} value={code} autoFocus onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && code.trim() && !create.busy) create.run(); }} />
         </Field>

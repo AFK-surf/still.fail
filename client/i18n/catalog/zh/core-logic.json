@@ -299,6 +299,7 @@
   "core-logic.jobs.word.watching": "监控中",
   "core-logic.looks.connecting": "{n} 台正在连接",
   "core-logic.looks.failing": "{n} 台出错",
+  "core-logic.looks.failing.offline": "{name} 离线 · 还没读到会话",
   "core-logic.looks.failing.retrying": "连不上「{name}」，正在重试…",
   "core-logic.looks.link.down": "连不上 station",
   "core-logic.looks.link.down.named": "连不上「{name}」",

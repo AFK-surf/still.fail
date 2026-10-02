@@ -6,6 +6,7 @@ import { useAction as useOperation } from "../action.ts";
 import type { ErrorBody } from "../core/client.ts";
 import { core, useTopic, type TopicState } from "../core/react.ts";
 import { prefs, setPrefs } from "../prefs.ts";
+import { t } from "../i18n.ts";
 import type { Account } from "./accounts.ts";
 import type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
@@ -83,26 +84,26 @@ export const admin = {
   feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => operations(sub).adminFeedbackStatus<{ ok: true }>({ id, status }),
 };
 
-// still.fail cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).
-const INVITE_ERRORS: Record<string, string> = {
-  invite_code_required: "新建 workspace 要有邀请码，被邀请加入别人的 workspace 不用",
-  invite_code_invalid: "这个邀请码不对，检查一下有没有输错",
-  invite_code_used: "这个邀请码已经被用过了",
-  invite_code_expired: "这个邀请码已经过期了",
-};
+// still.fail cloud's invite-code errors in words; the core passes their codes through (see CoreError).
+const INVITE_ERRORS = (): Record<string, string> => ({
+  invite_code_required: t("web-pages.errors.inviteCodeRequired"),
+  invite_code_invalid: t("web-pages.errors.inviteCodeInvalid"),
+  invite_code_used: t("web-pages.errors.inviteCodeUsed"),
+  invite_code_expired: t("web-pages.errors.inviteCodeExpired"),
+});
 
 const codeOf = (error: Error | null) => (error as { code?: string } | null)?.code ?? "";
 
 /** Whether creating a workspace failed for want of a (good) invite code. */
-export const needsInviteCode = (error: Error | null): boolean => codeOf(error) in INVITE_ERRORS;
+export const needsInviteCode = (error: Error | null): boolean => codeOf(error) in INVITE_ERRORS();
 
 // Its limits: what an account may create, and how many a workspace holds.
-const LIMIT_ERRORS: Record<string, string> = {
-  too_many_workspaces: "一个账号最多新建 5 个 workspace",
-  too_many_members: "一个 workspace 最多邀请 5 个人",
-};
+const LIMIT_ERRORS = (): Record<string, string> => ({
+  too_many_workspaces: t("web-pages.errors.tooManyWorkspaces"),
+  too_many_members: t("web-pages.errors.tooManyMembers"),
+});
 
-export const errorText = (error: Error): string => INVITE_ERRORS[codeOf(error)] ?? LIMIT_ERRORS[codeOf(error)] ?? error.message;
+export const errorText = (error: Error): string => INVITE_ERRORS()[codeOf(error)] ?? LIMIT_ERRORS()[codeOf(error)] ?? error.message;
 
 /** Where a tab kept the code before the core did (moved into it the first time it is read). */
 const INVITE_KEY = "stillfail.invite";

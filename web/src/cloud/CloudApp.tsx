@@ -31,6 +31,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 export function CloudApp() {
   const narrow = useNarrow();
   return (
@@ -69,12 +70,12 @@ function SlackInstalled() {
     sent.current = true;
     api.slackInstalled(code, state).then(setResult, (error: Error) => setResult({ error: error.message }));
   }, [api, code, state, list]);
-  const back = <a className={`${controlsCss.btn} btn-secondary`} href="/">回到 {NAME}</a>;
-  if (query.get("error") || !code) return <div className={shellCss.gate}><h1>没有安装</h1><p>Slack 里没有允许安装这个 app。回到 {NAME} 重新点「安装到工作区」。</p>{back}</div>;
-  if (list && list.length === 0) return <div className={shellCss.gate}><h1>先登录 {NAME}</h1><p>要用建这个 app 的账号登录，才能把安装交给 station。登录后再从 {NAME} 里点一次「安装到工作区」。</p>{back}</div>;
-  if (!result) return <Splash label="正在把安装交给 station…" />;
-  if ("error" in result) return <div className={shellCss.gate}><h1>没能完成安装</h1><p>{result.error}</p>{back}</div>;
-  return <div className={shellCss.gate}><h1>已装进「{result.team ?? "工作区"}」</h1><p>回到 {NAME}：这个 app 在「连接」页等着，填上 App-Level Token 就能连上。这个页面可以关了。</p></div>;
+  const back = <a className={`${controlsCss.btn} btn-secondary`} href="/">{t("web-pages.cloud.backTo", { name: NAME })}</a>;
+  if (query.get("error") || !code) return <div className={shellCss.gate}><h1>{t("web-pages.cloud.slackInstalled.notInstalled")}</h1><p>{t("web-pages.cloud.slackInstalled.notInstalledBody", { name: NAME })}</p>{back}</div>;
+  if (list && list.length === 0) return <div className={shellCss.gate}><h1>{t("web-pages.cloud.slackInstalled.signIn", { name: NAME })}</h1><p>{t("web-pages.cloud.slackInstalled.signInBody", { name: NAME })}</p>{back}</div>;
+  if (!result) return <Splash label={t("web-pages.cloud.slackInstalled.handing")} />;
+  if ("error" in result) return <div className={shellCss.gate}><h1>{t("web-pages.cloud.slackInstalled.failed")}</h1><p>{result.error}</p>{back}</div>;
+  return <div className={shellCss.gate}><h1>{t("web-pages.cloud.slackInstalled.done", { team: result.team ?? t("web-pages.cloud.slackInstalled.workspace") })}</h1><p>{t("web-pages.cloud.slackInstalled.doneBody", { name: NAME })}</p></div>;
 }
 
 function Home() {
@@ -92,7 +93,7 @@ function Home() {
   if (!list) return <Splash />;
   if (list.length > 0) return <SignedIn />;
   if (narrow) return <MobileSignIn />;
-  return <SignInPage lead={inviteCode() ? `你拿到了 ${NAME} 的邀请码。用 Google 账号登录，就能建一个自己的 workspace。` : undefined} />;
+  return <SignInPage lead={inviteCode() ? t("web-pages.cloud.signInWithCode", { name: NAME }) : undefined} />;
 }
 
 /** Signed in: the workspaces, and the notices of their chats (notify.ts). */
@@ -124,7 +125,7 @@ function Landing() {
   const signIn = useSignIn();
   const signOut = useSignOut();
   const create = useAction(
-    (code: string) => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`, code),
+    (code: string) => cloud.createWorkspace(list[0]!.sub, t("web-pages.cloud.defaultWorkspaceName", { name: list[0]!.name || list[0]!.email.split("@")[0]! }), code),
     (w) => { track("workspace_created", { first: true }); navigate(`/w/${w.id}`, { replace: true }); },
   );
   const accept = useAction(
@@ -149,8 +150,8 @@ function Landing() {
         <Illustration name="sign-in" />
         <h1>{blocked.blocked}</h1>
         <p>{blocked.account.email}</p>
-        <Button variant="primary" busy={signOut.busy(blocked.account.sub)} onClick={() => void signOut.signOut(blocked.account.sub)}>退出这个账号</Button>
-        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
+        <Button variant="primary" busy={signOut.busy(blocked.account.sub)} onClick={() => void signOut.signOut(blocked.account.sub)}>{t("web-pages.cloud.signOutThis")}</Button>
+        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.cloud.switchAccount")}</Button>
       </div>
     );
   }
@@ -158,17 +159,17 @@ function Landing() {
     return (
       <div className={`${shellCss.gate} ${css.invitePage}`}>
         <Illustration name="sign-in" />
-        <h1>你收到了邀请</h1>
+        <h1>{t("web-pages.cloud.invited")}</h1>
         {pending.map((i) => (
           <div key={i.id} className={`${pagesCss.card} ${pagesCss.cardRow} ${css.inviteCard}`}>
-            <div className={pagesCss.cardRowText}><strong>{i.name}</strong><span className={shellCss.muted}>{i.inviter || "有人"}邀请 {i.account.email} 以{ROLE_LABEL[i.role]}身份加入</span></div>
-            <Button variant="primary" busy={accept.busy && accept.arg?.id === i.id} onClick={() => accept.run({ sub: i.account.sub, id: i.id })}>加入</Button>
+            <div className={pagesCss.cardRowText}><strong>{i.name}</strong><span className={shellCss.muted}>{t("web-pages.cloud.invitedAs", { inviter: i.inviter || t("web-pages.cloud.someone"), email: i.account.email, role: ROLE_LABEL[i.role] })}</span></div>
+            <Button variant="primary" busy={accept.busy && accept.arg?.id === i.id} onClick={() => accept.run({ sub: i.account.sub, id: i.id })}>{t("web-pages.cloud.join")}</Button>
           </div>
         ))}
-        {accept.error && <p className={controlsCss.fieldError} role="alert">没能加入：{errorText(accept.error)}</p>}
+        {accept.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.cloud.joinFailed", { error: errorText(accept.error) })}</p>}
         {asking
           ? <InviteCodeForm create={create} />
-          : <Button variant="ghost" busy={create.busy} onClick={() => create.run(inviteCode())}>不加入，建一个自己的 workspace</Button>}
+          : <Button variant="ghost" busy={create.busy} onClick={() => create.run(inviteCode())}>{t("web-pages.cloud.createInstead")}</Button>}
         {!asking && create.error && !needsInviteCode(create.error) && <p className={controlsCss.fieldError} role="alert">{errorText(create.error)}</p>}
       </div>
     );
@@ -177,10 +178,10 @@ function Landing() {
     return (
       <div className={`${shellCss.gate} ${css.invitePage}`}>
         <Illustration name="sign-in" />
-        <h1>{NAME} 目前只对受邀的人开放</h1>
-        <p>有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 {NAME} 的人把 {list[0]!.email} 邀请进他们的 workspace。</p>
+        <h1>{t("web-pages.cloud.inviteOnly", { name: NAME })}</h1>
+        <p>{t("web-pages.cloud.inviteOnlyBody", { name: NAME, email: list[0]!.email })}</p>
         <InviteCodeForm create={create} />
-        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
+        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.cloud.switchAccount")}</Button>
       </div>
     );
   }
@@ -188,15 +189,15 @@ function Landing() {
     return (
       <div className={`${shellCss.gate} ${css.invitePage}`}>
         <Illustration name="sign-in" />
-        <h1>你还不在任何 workspace 里</h1>
-        <p>可以请已经在用 {NAME} 的人把 {list[0]!.email} 邀请进他们的 workspace，也可以自己建一个。</p>
-        <Button variant="primary" busy={create.busy} onClick={() => create.run(inviteCode())}>建一个 workspace</Button>
+        <h1>{t("web-pages.cloud.noWorkspace")}</h1>
+        <p>{t("web-pages.cloud.noWorkspaceBody", { name: NAME, email: list[0]!.email })}</p>
+        <Button variant="primary" busy={create.busy} onClick={() => create.run(inviteCode())}>{t("web-pages.cloud.createWorkspace")}</Button>
         {create.error && <p className={controlsCss.fieldError} role="alert">{errorText(create.error)}</p>}
-        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
+        <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.cloud.switchAccount")}</Button>
       </div>
     );
   }
-  return <Splash label={failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} now={Boolean(failed)}>{!failed && <StatusLine />}</Splash>;
+  return <Splash label={failed ? t("web-pages.cloud.workspacesFailed", { error: failed.message }) : t("web-pages.cloud.workspacesLoading")} now={Boolean(failed)}>{!failed && <StatusLine />}</Splash>;
 }
 
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */
@@ -207,9 +208,9 @@ function InviteCodeForm({ create }: { create: { run(code: string): void; busy: b
   return (
     <form className={css.inviteCode} onSubmit={(e) => { e.preventDefault(); if (code.trim()) create.run(code.trim()); }}>
       <div className={additionsCss.inputRow}>
-        <input className={`${controlsCss.input} ${shellCss.mono}`} aria-label="邀请码" value={code} autoFocus placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
+        <input className={`${controlsCss.input} ${shellCss.mono}`} aria-label={t("web-pages.cloud.inviteCode")} value={code} autoFocus placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
           onChange={(e) => setCode(e.target.value)} />
-        <Button variant="primary" type="submit" disabled={!code.trim()} busy={create.busy}>建 workspace</Button>
+        <Button variant="primary" type="submit" disabled={!code.trim()} busy={create.busy}>{t("web-pages.cloud.create")}</Button>
       </div>
       {said && <p className={controlsCss.fieldError} role="alert">{said}</p>}
     </form>
@@ -221,13 +222,13 @@ function WorkspaceRoute() {
   const { ws = "" } = useParams();
   const narrow = useNarrow();
   const workspaces = useWorkspaces().value;
-  if (!workspaces) return <Splash label="正在打开 workspace…"><StatusLine /></Splash>;
+  if (!workspaces) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;
   const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
   const found = owner?.workspaces.find((w) => w.id === ws);
   // One just joined (or kept from before) may not be in what was kept yet: until every account has answered (or failed),
   // it is waited for, not said to be out of reach.
-  if ((!owner || !found) && !workspaces.every((a) => a.loaded || a.error)) return <Splash label="正在打开 workspace…"><StatusLine /></Splash>;
-  if (!owner || !found) return <div className={shellCss.gate}><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className={`${controlsCss.btn} btn-secondary`} href="/">回到 {NAME}</a></div>;
+  if ((!owner || !found) && !workspaces.every((a) => a.loaded || a.error)) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;
+  if (!owner || !found) return <div className={shellCss.gate}><h1>{t("web-pages.cloud.cantOpen")}</h1><p>{t("web-pages.cloud.cantOpenBody")}</p><a className={`${controlsCss.btn} btn-secondary`} href="/">{t("web-pages.cloud.backTo", { name: NAME })}</a></div>;
   const entry = { id: ws, name: found.name, account: owner.account };
   // A narrow screen is the Android app's (../mobile).
   return narrow
@@ -257,22 +258,22 @@ function Invite() {
   const accept = useAction(() => cloud.acceptInvitation(sub, token), (w) => location.assign(`/w/${w.id}`));
   const signIn = useSignIn();
   if (!list) return <Splash />;
-  if (list.length === 0) return <SignInPage lead={`你收到了一个 ${NAME} workspace 的邀请。先用 Google 账号登录，再决定是否加入。`} />;
+  if (list.length === 0) return <SignInPage lead={t("web-pages.cloud.inviteSignIn", { name: NAME })} />;
   return (
     <div className={`${shellCss.gate} ${css.invitePage}`}>
       <Illustration name="sign-in" />
-      {!preview ? <h1>正在读取邀请…</h1> : "error" in preview ? (
-        <><h1>邀请不能用</h1><p>{preview.error.message}</p><a className={`${controlsCss.btn} btn-secondary`} href="/">回到 {NAME}</a></>
+      {!preview ? <h1>{t("web-pages.cloud.inviteLoading")}</h1> : "error" in preview ? (
+        <><h1>{t("web-pages.cloud.inviteUnusable")}</h1><p>{preview.error.message}</p><a className={`${controlsCss.btn} btn-secondary`} href="/">{t("web-pages.cloud.backTo", { name: NAME })}</a></>
       ) : (
         <>
-          <h1>加入「{preview.data.name}」</h1>
-          <p>{preview.data.inviter || "有人"}邀请你以{ROLE_LABEL[preview.data.role]}身份加入。{preview.data.email ? `这个邀请只能由 ${preview.data.email} 接受。` : ""}</p>
+          <h1>{t("web-pages.cloud.joinNamed", { name: preview.data.name })}</h1>
+          <p>{t("web-pages.cloud.invitedYouAs", { inviter: preview.data.inviter || t("web-pages.cloud.someone"), role: ROLE_LABEL[preview.data.role] })}{preview.data.email ? t("web-pages.cloud.inviteOnlyFor", { email: preview.data.email }) : ""}</p>
           {list.length > 1 && (
-            <div className={css.inviteAccount}><Select value={sub} onChange={setChosen} label="用哪个账号加入" options={list.map((a) => ({ value: a.sub, label: a.email }))} /></div>
+            <div className={css.inviteAccount}><Select value={sub} onChange={setChosen} label={t("web-pages.cloud.joinWith")} options={list.map((a) => ({ value: a.sub, label: a.email }))} /></div>
           )}
           <div className={css.inviteActions}>
-            <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>换一个账号</Button>
-            <Button variant="primary" busy={accept.busy} onClick={() => accept.run()}>以 {list.find((a) => a.sub === sub)?.email} 加入</Button>
+            <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.cloud.switchAccount")}</Button>
+            <Button variant="primary" busy={accept.busy} onClick={() => accept.run()}>{t("web-pages.cloud.joinAs", { email: list.find((a) => a.sub === sub)?.email ?? "" })}</Button>
           </div>
           {accept.error && <p className={controlsCss.fieldError} role="alert">{errorText(accept.error)}</p>}
         </>
@@ -311,8 +312,8 @@ function OpenItem() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (here) return <Navigate to={target} replace />;
   return (
-    <Splash label={`正在用 ${NAME} 打开…`} now>
-      <Button variant="ghost" onClick={() => setHere(true)}>在网页里打开</Button>
+    <Splash label={t("web-pages.cloud.openingIn", { name: NAME })} now>
+      <Button variant="ghost" onClick={() => setHere(true)}>{t("web-pages.cloud.openHere")}</Button>
     </Splash>
   );
 }
