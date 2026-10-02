@@ -6,7 +6,7 @@ import { ops } from "./ops.ts";
 import { openStore } from "./store.ts";
 import { HttpError, setSpoken } from "./views.ts";
 
-export type Ask = { id: number; op: string; args: any; lang: Lang; names: [string, string][] };
+export type Ask = { id: number; op: string; args: any; lang: Lang; names: [string, string][]; processes: [string, string][]; clientKeys: [string, string][] };
 export type Answer = { id: number; text?: string; status?: number; error?: string };
 
 const store = openStore(workerData.data as string);
@@ -16,6 +16,8 @@ parentPort!.on("message", (ask: Ask) => {
   try {
     setSpoken(ask.lang);
     store.names = new Map(ask.names);
+    store.processes = new Map(ask.processes);
+    store.clientKeys = new Map(ask.clientKeys);
     const op = ops[ask.op];
     if (!op) throw new HttpError(500, `no read ${ask.op}`);
     answer = { id: ask.id, text: JSON.stringify(op(store, ask.args)) };

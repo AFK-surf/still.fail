@@ -22,6 +22,9 @@ export class Readers {
   private readonly size: number;
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
+  /// What only the hub knows, given to every read: sessions' process states and client keys (the hub sets these).
+  processes: () => Map<string, string> = () => new Map();
+  clientKeys: () => Map<string, string> = () => new Map();
 
   /// At most two by default (STILLFAIL_READERS says otherwise).
   constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1))) {
@@ -77,7 +80,7 @@ export class Readers {
     slot.held.add(id);
     return new Promise((resolve, reject) => {
       this.waiting.set(id, { resolve, reject });
-      slot.worker.postMessage({ id, op, args, lang, names: [...this.names] } satisfies Ask);
+      slot.worker.postMessage({ id, op, args, lang, names: [...this.names], processes: [...this.processes()], clientKeys: [...this.clientKeys()] } satisfies Ask);
     });
   }
 
