@@ -1533,6 +1533,9 @@ impl Hub {
                         if kind == DeclaredState::NeedHelp && about.is_none() && args.get("kind").and_then(Value::as_str) != Some("block") {
                             bail!("need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person");
                         }
+                        if kind == DeclaredState::AllDone {
+                            hub.review_completion(&key, &args).await?;
+                        }
                         match (kind, &words) {
                             (DeclaredState::Waiting(_), Some(what)) => hub.wait_for(&key, what),
                             (_, Some(need)) => hub.need(&key, need),
@@ -1653,6 +1656,54 @@ impl Hub {
         Ok(pending.pop().map(|m| (m.thread, m.n, m.ts)))
     }
 
+    /// Review before any post, attachment or ending mutation, including legacy `final`.
+    async fn review_completion(&self, key: &str, args: &Map<String, Value>) -> Result<()> {
+        use crate::decision::{Mode, completion_question, decide};
+        let Some(config) = self.config().decision.clone() else { return Ok(()); };
+        let started = std::time::Instant::now();
+        let mut versions = Vec::new();
+        let reviewed: Result<crate::decision::ChoiceResult> = async {
+            let mut conversations = Vec::new();
+            // An ending belongs to the session, so review every thread it would close.
+            for thread in self.store.session_threads(key)? {
+                let id = thread.thread.id;
+                let version = self.store.last_entry(id)?;
+                let messages = self.store.messages_before(id, None, 201)?;
+                if messages.len() > 200 { bail!("completion history exceeds review limit; evidence was not truncated"); }
+                let history: Vec<_> = messages.iter().map(|m| json!({
+                    "authorKind":m.author_kind,"author":m.author,"text":m.text,"ts":m.ts,
+                    "hasAttachments":!m.attachments.is_empty()
+                })).collect();
+                conversations.push(json!({"thread":id,"messages":history,
+                    "pendingCard":self.store.pending_card(id)?.map(|(m, _)| json!({"ts":m.ts,"text":m.text}))}));
+                versions.push((id, version));
+            }
+            if conversations.is_empty() { bail!("completion review has no conversation evidence"); }
+            let state = json!({"agent":key,"conversations":conversations,
+                "proposedPost":args.get("text"),"done":args.get("done"),"hasNewCard":args.get("card").is_some(),
+                "attachmentContentsAvailable":false});
+            let result = decide(&config, &completion_question(), &state).await?;
+            for (id, version) in &versions {
+                if self.store.last_entry(*id)? != *version { bail!("conversation changed during completion review; read the new messages and try again"); }
+            }
+            Ok(result)
+        }.await;
+        let accepted = reviewed.as_ref().is_ok_and(|r| r.accepts_completion(config.threshold));
+        let error = reviewed.as_ref().err().map(ToString::to_string);
+        self.store.record_decision(key, &json!({"purpose":"completion","version":1,
+            "mode":config.mode,"provider":config.provider,"model":config.model,"threshold":config.threshold,
+            "elapsedMs":started.elapsed().as_millis(),"threads":versions,"accepted":accepted,
+            "result":reviewed.as_ref().ok(),"error":error}))?;
+        if config.mode == Mode::Enforce && !accepted {
+            let detail = match reviewed {
+                Ok(result) => format!("status={}, probabilities={}", result.selected, serde_json::to_string(&result.probabilities)?),
+                Err(error) => error.to_string(),
+            };
+            bail!("Completion review did not accept all_done ({detail}). Nothing was posted or marked done. Reconcile this with the conversation: continue authorized work, or visibly ask a real outstanding question and use need_human. Do not invent a question or repeat the same completion claim. Provider failure or uncertainty is not evidence of unfinished work; explain an unavailable check if it prevents finishing.");
+        }
+        Ok(())
+    }
+
     fn declare(&self, key: &str, kind: DeclaredState) {
         let actor = self.actors.lock().unwrap().get(key).cloned();
         if let Some(actor) = actor {
@@ -1729,6 +1780,9 @@ impl Hub {
             })?),
             None => None,
         };
+        if kind == Some(DeclaredState::AllDone) {
+            self.review_completion(key, args).await?;
+        }
         // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
         // them in still.fail instead.
         let text = if thread.thread.surface == STILLFAIL_SURFACE {

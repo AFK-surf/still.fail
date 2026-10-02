@@ -2436,3 +2436,79 @@ async fn fast_is_per_session_and_null_restores_the_subscription_default() {
     let (claude, _) = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
     assert!(r.hub.configure(&claude, SessionChange { fast: Some(Some(true)), ..Default::default() }).await.is_err());
 }
+
+/// Local deterministic provider: tests routing and mutations, not model accuracy.
+async fn completion_provider(complete: bool) -> (String, tokio::task::JoinHandle<()>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/v1/systemone", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        loop {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            tokio::spawn(async move {
+                let mut request = Vec::new();
+                let mut buf = [0; 8192];
+                loop {
+                    let n = socket.read(&mut buf).await.unwrap();
+                    if n == 0 { return; }
+                    request.extend_from_slice(&buf[..n]);
+                    if let Some(end) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let header = String::from_utf8_lossy(&request[..end]).to_lowercase();
+                        let len: usize = header.lines().find_map(|l| l.strip_prefix("content-length: ")).unwrap().parse().unwrap();
+                        if request.len() >= end + 4 + len { break; }
+                    }
+                }
+                let (done, human) = if complete { (0.96, 0.01) } else { (0.01, 0.96) };
+                let body = json!({"model":"test-jev","answers":{"decision":{"type":"choice","probabilities":{
+                    "complete":done,"human_needed":human,"agent_work":0.02,"uncertain":0.01
+                }}}}).to_string();
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).as_bytes()).await.unwrap();
+            });
+        }
+    });
+    (url, task)
+}
+
+#[tokio::test]
+async fn completion_review_precedes_posts_and_states_and_covers_legacy_final() {
+    use crate::decision::{DecisionConfig, Provider, Mode};
+    let r = setup();
+    let m = say("<@UBOT> ship the requested fix");
+    r.accept(&m).await; settle().await;
+    let key = format!("cl:C1:{}",m.thread_ts);
+    let to = format!("C1/{}",m.thread_ts);
+    let (endpoint, server) = completion_provider(false).await;
+    r.edit(|c| c.decision = Some(DecisionConfig { provider:Provider::Jev, endpoint, model:"test".into(), key_env:None, mode:Mode::Enforce, threshold:0.85 }));
+    let before = r.chat.texts().len();
+    for tool in ["chat_post", "chat_state"] {
+        for kind in ["all_done", "final"] {
+            let err = r.call(&key,tool,json!({"to":to,"text":"Ready, approve merging?","kind":kind,"done":"Branch is ready and tests passed"})).await.unwrap_err();
+            assert!(err.to_string().contains("human_needed"),"{err}");
+        }
+    }
+    assert_eq!(r.chat.texts().len(),before,"rejected completion must not post");
+    assert_ne!(r.store.last_turn(&key).unwrap().unwrap().ending.as_deref(),Some("all_done"));
+    // Observe-only rollout records judgments without changing historical behavior.
+    r.edit(|c| c.decision.as_mut().unwrap().mode=Mode::Shadow);
+    r.call(&key,"chat_post",json!({"to":to,"text":"Answer given","kind":"all_done","done":"The factual question was answered"})).await.unwrap();
+    assert_eq!(r.chat.texts().len(),before+1);
+    server.abort();
+}
+
+#[tokio::test]
+async fn completion_review_allows_answers_and_does_not_turn_outages_into_done() {
+    use crate::decision::{DecisionConfig, Provider, Mode};
+    let r=setup(); let m=say("<@UBOT> what does this setting do?");
+    r.accept(&m).await; settle().await;
+    let key=format!("cl:C1:{}",m.thread_ts); let to=format!("C1/{}",m.thread_ts);
+    let (endpoint, server)=completion_provider(true).await;
+    r.edit(|c| c.decision=Some(DecisionConfig {provider:Provider::Jev,endpoint,model:"test".into(),key_env:None,mode:Mode::Enforce,threshold:0.85}));
+    r.call(&key,"chat_post",json!({"to":to,"text":"This setting controls retention.","kind":"all_done","done":"Explained the setting and its effect"})).await.unwrap();
+    server.abort();
+    r.edit(|c| c.decision.as_mut().unwrap().endpoint="http://127.0.0.1:1".into());
+    let before=r.chat.texts().len();
+    assert!(r.call(&key,"chat_post",json!({"to":to,"text":"done","kind":"all_done","done":"The release has been confirmed"})).await.unwrap_err().to_string().contains("request failed"));
+    assert_eq!(r.chat.texts().len(),before);
+    // An outage must not stop progress or a real request for human help.
+    r.call(&key,"chat_post",json!({"to":to,"text":"Which retention period do you want?","kind":"need_human","need":"Choose the retention period"})).await.unwrap();
+}
