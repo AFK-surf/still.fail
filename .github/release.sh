@@ -21,7 +21,7 @@ case "${1:?usage: release.sh station|android}" in
     (cd mesh && cargo build --release -p stillfail-station)
     mkdir -p mesh/target/release
     cp "$CARGO_TARGET_DIR/release/stillfail-station" mesh/target/release/
-    export LINUX_TARGET_DIR="$CARGO_TARGET_DIR/linux"
+    export LINUX_TARGET_DIR="$HOME/stillfail-ci/linux-${RUNNER_NAME:-local}"
     sh scripts/release.sh --beta
     ;;
   android)

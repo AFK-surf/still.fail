@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
             if not password:
                 raise SystemExit('MACOS_SIGNING_CERTIFICATE_PASSWORD is required')
             path = Path(directory) / 'certificate.p12'
-            path.write_bytes(base64.b64decode(certificate, validate=True))
+            path.write_bytes(base64.b64decode(''.join(certificate.split()), validate=True))
             path.chmod(0o600)
             keypass = secrets.token_urlsafe(48)
             run(['security', 'create-keychain', '-p', keypass, keychain])
