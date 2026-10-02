@@ -569,7 +569,10 @@ pub fn profile(p: &mut Value) {
         .chain(p.get("model").into_iter())
         .filter_map(Value::as_str).filter(|m| !m.is_empty()).map(|m| (m.to_string(), json!(stillfail_shapes::model::name(m)))).collect();
     let (uses, provider) = uses(p);
-    p["canAddModel"] = json!(p["access"]["kind"] == "api-provider");
+    // A provider that only answers the automatic decisions (Jev) has no model to name: the probe knows its own.
+    let decision_only = p["access"]["provider"].as_str().and_then(stillfail_shapes::providers::find)
+        .is_some_and(|s| s.decision.is_some() && s.chat.is_none() && s.responses.is_none() && s.anthropic.is_none());
+    p["canAddModel"] = json!(p["access"]["kind"] == "api-provider" && !decision_only);
     p["uses"] = json!(uses);
     // Said where it is not plain from the runtime marks: a key on a provider, or what the automatic decisions can use.
     let plain = matches!(p["access"]["kind"].as_str(), Some("subscription" | "env")) && !uses.contains(&"decision");
@@ -1006,6 +1009,9 @@ mod tests {
         // A plain env profile is the runtime it was made for, and gains the decisions only when its probe verified them.
         assert_eq!(text(json!({"runtimes": ["codex"], "access": {"kind": "env"}})), ("env".into(), "".into()), "its runtime mark says it");
         assert_eq!(text(json!({"runtimes": ["codex"], "access": {"kind": "env"}, "check": {"decision": {"state": "ready"}}})).1, "Codex · 自动决策");
+        // Jev answers the decisions alone: no runtime, and no model to name by hand; one that lists nothing still can.
+        let can_name = |provider: &str| { let mut p = json!({"runtimes": [], "access": {"kind": "env", "provider": provider}}); profile(&mut p); p["canAddModel"] == true };
+        assert!(!can_name("jev") && can_name("minimax") && can_name("deepseek"));
         let mut p = json!({"runtimes": [], "access": {"kind": "env", "provider": "xiaomi"}, "check": {"state": "failed"}});
         profile(&mut p);
         assert_eq!((p["providerName"].as_str(), p["trouble"]["action"].as_str()), (Some("Xiaomi MiMo"), Some("key")));

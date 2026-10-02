@@ -199,7 +199,7 @@ mod tests {
         let dir = std::path::Path::new("/nonexistent-check-test");
         let started = std::time::Instant::now();
         let check = check_profile(CheckOptions { runtime: RuntimeKind::Claude, kind: AccessKind::ApiProvider, key: "k", via: Via::of("jev"), home: dir, env: &env, machine: false }).await;
-        assert_eq!(check.state, "unknown", "{}", check.detail);
+        assert_eq!(check.state, "ok", "{}", check.detail);
         assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 
@@ -479,9 +479,9 @@ pub fn opencode_session() -> (&'static str, String) {
 /// A provider's key, asked by its model list: a refusal (401/403) is a key that does not work; a provider with no list
 /// (some answer 404 there) is not held against it, its key is only unchecked.
 async fn check_api(source: &Source, at: &providers::Endpoints, key: &str) -> anyhow::Result<ProfileCheck> {
-    // A decision-only provider has no model list: the key is tried when the decisions are discovered.
+    // A decision-only provider has no model list and nothing to name: its key is tried by the decision probe.
     if at.decision.is_some() && at.chat.is_none() && at.responses.is_none() && at.anthropic.is_none() {
-        return Ok(check("unknown", t!(spoken(); "station.profile.noModelList", provider = source.name), None));
+        return Ok(check("ok", t!(spoken(); "station.profile.decisionOnly", provider = source.name), None));
     }
     let (base, anthropic_only) = match (&at.chat, &at.responses, &at.anthropic) {
         (Some(base), _, _) | (None, Some(base), _) => (base.clone(), false),

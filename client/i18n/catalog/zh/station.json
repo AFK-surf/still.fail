@@ -163,6 +163,7 @@
   "station.profile.checkError": "检查失败：{error}",
   "station.profile.checkFailed": "验证没通过：{detail}",
   "station.profile.claudeSubscription": "Claude 订阅",
+  "station.profile.decisionOnly": "{provider} 只用于自动决策：模型由决策探测自己识别，不用手动填；key 在探测时才被试",
   "station.profile.efforts": "{runtime} 的思考深度只有 {efforts}",
   "station.profile.envName": "环境变量（{runtime}）",
   "station.profile.envUnchecked": "自定义环境变量，still.fail 无法自动检查",

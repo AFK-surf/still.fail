@@ -163,6 +163,7 @@
   "station.profile.checkError": "Check failed: {error}",
   "station.profile.checkFailed": "Verification failed: {detail}",
   "station.profile.claudeSubscription": "Claude subscription",
+  "station.profile.decisionOnly": "{provider} serves the automatic decisions only: the decision probe finds its model, nothing to name by hand; the key is tried by that probe",
   "station.profile.efforts": "{runtime} effort levels: {efforts}",
   "station.profile.envName": "Env vars ({runtime})",
   "station.profile.envUnchecked": "Custom env vars; still.fail can't check them",
