@@ -1,19 +1,13 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 
-/** Back to the chats, at the top of the list. */
-export const back = style({
-  display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", minHeight: 32,
-  fontSize: vars.textSm, lineHeight: "20px", color: vars.muted, borderRadius: vars.rNav,
-  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
-});
 export const emptyList = style({ padding: "20px 10px", fontSize: vars.textXs, lineHeight: "20px", color: vars.subtle });
-export const backRow = style({ padding: "6px 8px 2px" });
 
 /** 奏 and how many, over the list. */
 export const title = style({
-  display: "flex", alignItems: "baseline", gap: 8, padding: "10px 18px 6px", fontSize: vars.textBody, lineHeight: "20px",
+  display: "flex", alignItems: "center", gap: 8, padding: "6px 8px 2px 18px", minHeight: 40, fontSize: vars.textBody, lineHeight: "20px",
 });
+export const filter = style({ marginLeft: "auto" });
 export const titleWord = style({ fontWeight: 600 });
 export const titleCount = style({ fontSize: vars.textXs, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
 

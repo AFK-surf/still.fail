@@ -8,7 +8,6 @@
 // phone), its row closing over the one gone (listMotion.ts); set aside, it goes left and its row down to 待定; dismissed,
 // it goes right.
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink } from "react-router";
 import { animate } from "motion";
 import type { DecisionItem } from "./core/shapes.ts";
 import { DecisionAnswer, DecisionMessages, flyOff, keyOf, useDecisionQueue } from "./Decisions.tsx";
@@ -18,8 +17,8 @@ import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
 import { MOVE, reducedMotion } from "./motion.ts";
 import { SidebarBrand } from "./brand.tsx";
-import { ChevronLeft } from "./icons.tsx";
-import { ICON, ResizeHandle, Time } from "./ui.tsx";
+import { MineFilter } from "./components.tsx";
+import { ResizeHandle, Time } from "./ui.tsx";
 import * as css from "./DecisionDesk.css.ts";
 import * as deckCss from "./Decisions.css.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -109,12 +108,10 @@ export function DecisionDesk({ workspace, back, onOpen, footer }: { workspace: s
       <nav className={nav.sidebar} aria-label={t("web-main.decisions.title")}>
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-main.sidebar.resize")} />
         <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
-        <div className={css.backRow}>
-          <NavLink className={css.back} to={back} end><ChevronLeft {...ICON} />{t("web-main.decisions.back")}</NavLink>
-        </div>
         <div className={css.title}>
-          <span className={css.titleWord}>{t("web-main.decisions.title")}</span>
-          {items.length > 0 && <span className={css.titleCount}>{t("web-main.decisions.count", { n: items.length })}</span>}
+          <span className={css.titleWord}>奏</span>
+          {items.length > 0 && <span className={css.titleCount}>{items.length} 件等你决定</span>}
+          <div className={css.filter}><MineFilter label="会话" mine="我参与的" compact watching archive={`${back}/archive`} decisions={{ to: `${back}/decisions`, chats: back, active: true }} /></div>
         </div>
         <div ref={list} className={nav.navScroll} role="list">
           {items.map((x, i) => (

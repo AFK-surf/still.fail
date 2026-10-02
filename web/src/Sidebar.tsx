@@ -52,7 +52,7 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
       <div className={nav.navNew}>
         <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />{t("web-main.sidebar.newChat")}</NavLink>
         {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
-        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter compact archive={archive} watching />}
+        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} watching decisions={{ to: `/w/${scope}/decisions`, chats: `/w/${scope}` }} />}
       </div>
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={filter}>
