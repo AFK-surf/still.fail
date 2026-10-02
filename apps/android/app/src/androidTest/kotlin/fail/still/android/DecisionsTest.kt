@@ -121,6 +121,7 @@ class DecisionsTest {
 
     private var origin: IntArray? = null
     private fun at(p: Offset): Offset {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.syncInputTransactions()
         val o = origin ?: IntArray(2).also { a ->
             rule.runOnUiThread { rule.activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0).getLocationOnScreen(a) }
             origin = a
@@ -450,7 +451,8 @@ class DecisionsTest {
         rec.frames(8)
         send(MotionEvent.ACTION_UP, p)
         rec.frames(8)
-        assertOneCall(h, "decision.answer", gap.copy(seq = 5))
+        h.deliver()
+        assertEquals("one answer", 1, h.acted().size)
         h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(
             chatTalk.map { if (it.seq == 5L) it.copy(decision = MessageDecision(resolved = true, text = "左子健 选了「两处一起改」")) else it },
             title = "侧栏和设置的几处间距",

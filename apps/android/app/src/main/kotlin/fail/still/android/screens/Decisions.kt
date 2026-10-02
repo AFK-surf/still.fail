@@ -177,8 +177,8 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
                 card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
             DecisionOptions(
                 options, Modifier.padding(top = 6.dp),
-                enabled = !resolved && !ctx.view.offline && ctx.view.archived != true, busy = busy,
-            ) { o -> app.act("回答") { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
+                enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
+            ) { o -> if (!resolved) app.act("回答") { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
             }
         }
         AnimatedVisibility(
