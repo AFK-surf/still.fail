@@ -99,14 +99,21 @@ export const foot = style({
   position: "absolute", left: "0", right: "0", bottom: "0", padding: "8px 32px 16px", pointerEvents: "none",
   "@media": { "(max-width: 700px)": { padding: "8px 16px calc(12px + var(--m-foot, 0px))" } },
 });
-/** Keep one expanded line ready: focus changes the capsule, never the messages or answer buttons above it. */
-export const reply = style({
-  display: "flex", flexDirection: "column", justifyContent: "flex-end",
-  minHeight: `calc(${vars.textBody} * 1.5 + 102px)`,
-  selectors: { '&[data-mobile]': { minHeight: "100px" } },
+/** The composer, right under the options. */
+export const reply = style({ position: "relative", display: "flex", flexDirection: "column" });
+/**
+ * The room of one expanded line, kept over the options (DecisionFoot: the messages' end clear of it), not between them
+ * and the composer: focus grows the capsule into it, never moving the messages. Drawn as nothing; only measured.
+ */
+export const replyRoom = style({
+  position: "absolute", left: "0", bottom: "0", width: "0", visibility: "hidden", pointerEvents: "none",
+  height: `calc(${vars.textBody} * 1.5 + 102px)`,
+  selectors: { [`${reply}[data-mobile] &`]: { height: "100px" } },
 });
 // The footer already supplies the page gutters. Do not inset the chat composer a second time.
 globalStyle(`${reply} > ${composerWrap}`, { paddingLeft: "0", paddingRight: "0" });
+// Right under the options (the column's gap apart), not a composer's own margin further.
+globalStyle(`${reply} > *`, { paddingTop: "0" });
 export const footColumn = style({ maxWidth: "760px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "8px" });
 globalStyle(`${footColumn} ${options}`, { marginTop: "0" });
 // Only what is drawn takes the pointer: the room kept over the composer passes it to the messages under it.

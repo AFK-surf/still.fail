@@ -111,6 +111,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
   const root = useRef<HTMLDivElement>(null);
   return (
     <div ref={root} className={css.reply} data-mobile={mobile || undefined} onPointerDown={(e) => e.stopPropagation()}>
+      <div className={css.replyRoom} aria-hidden="true" />
       {mobile
         ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} inline />
         : <ComposerView draft={draft} thread={thread} sessionKey={session} draftKey={draftKey} submitDraft={send}
@@ -358,7 +359,8 @@ export function DecisionAnswer({ d, mobile, onAnswered, onReplying }: {
 
 /**
  * The page's foot, floating over the decision's messages as the chat's composer does over its own: they scroll on
- * under it, kept clear of it at their end by its height (`--foot-height` on the card).
+ * under it, kept clear at their end of its height and of the room an expanded composer takes over the options
+ * (`--foot-height` on the card).
  */
 export function DecisionFoot({ children }: { children: ReactNode }) {
   const foot = useRef<HTMLDivElement>(null);
@@ -366,7 +368,12 @@ export function DecisionFoot({ children }: { children: ReactNode }) {
     const el = foot.current;
     const card = el?.parentElement;
     if (!el || !card) return;
-    const put = () => card.style.setProperty("--foot-height", `${el.offsetHeight}px`);
+    const put = () => {
+      const reply = el.querySelector<HTMLElement>(`.${css.reply}`);
+      const room = reply?.querySelector<HTMLElement>(`.${css.replyRoom}`);
+      const more = reply && room ? Math.max(0, room.offsetHeight - reply.offsetHeight) : 0;
+      card.style.setProperty("--foot-height", `${el.offsetHeight + more}px`);
+    };
     put();
     const seen = new ResizeObserver(put);
     seen.observe(el);

@@ -68,6 +68,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -571,10 +572,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
     // their end kept clear of them.
     val host = remember(item.key) { Host() }
     var footHeight by remember(item.key) { mutableIntStateOf(0) }
+    // The room an expanded composer takes, kept over the options rather than between them and the composer.
+    val room = remember(item.key) { mutableIntStateOf(0) }
     Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(
             Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg).verticalScroll(scroll)
-                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp + with(density) { footHeight.toDp() }),
+                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp + with(density) { (footHeight + room.intValue).toDp() }),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             messages.forEach { m ->
@@ -597,7 +600,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
         if (type == "options" || type == "text") {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { footHeight = it.height }) {
                 if (type == "options") DecisionOptions(card?.options ?: item.options, Modifier.padding(horizontal = 14.dp), glass = host.haze, onPick = onPick)
-                DecisionComposer(item, host, if (type == "text") card?.placeholder else null, onField, onReply)
+                DecisionComposer(item, host, if (type == "text") card?.placeholder else null, room, onField, onReply)
             }
         }
     }
@@ -605,7 +608,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
 
 /** Uses the chat's entire composer: attachments, references, draft extras, capsule and resizing. */
 @Composable
-private fun DecisionComposer(item: DecisionItem, host: Host, placeholder: String?, onField: (LayoutCoordinates) -> Unit, onReply: () -> Unit) {
+private fun DecisionComposer(item: DecisionItem, host: Host, placeholder: String?, room: MutableIntState, onField: (LayoutCoordinates) -> Unit, onReply: () -> Unit) {
     val app = LocalApp.current
     val draft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
     val launchers = AttachLaunchers { picked -> app.upload(draft, item.station, picked, app.scope) }
@@ -615,9 +618,9 @@ private fun DecisionComposer(item: DecisionItem, host: Host, placeholder: String
     )
     HostComposer(host, Modifier.onGloballyPositioned(onField).layout { measurable, constraints ->
         val composer = measurable.measure(constraints)
-        // Reserve the toolbar below the actual field, including its font metrics and pixel rounding.
-        val extra = if (draft.composerExpanded) 0 else 4.dp.roundToPx() + 36.dp.roundToPx()
-        val height = constraints.constrainHeight(composer.height + extra)
-        layout(composer.width, height) { composer.place(0, height - composer.height) }
+        // The toolbar an expanded composer adds, kept as room over the options (the messages' end clear of it), not
+        // between them and the composer.
+        room.intValue = if (draft.composerExpanded) 0 else 4.dp.roundToPx() + 36.dp.roundToPx()
+        layout(composer.width, composer.height) { composer.place(0, 0) }
     })
 }
