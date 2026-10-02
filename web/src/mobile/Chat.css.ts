@@ -5,8 +5,6 @@ import { mChat, mMessages } from "./styles/chat.css.ts";
 export const mCenter = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: "14px",
 });
-export const mLoading = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" });
-export const mLoadingLine = style({ display: "inline-flex", alignItems: "center", gap: "8px" });
 export const mInfoLabel = style({ width: "72px", flex: "none", color: "var(--m-muted)" });
 export const mInfoName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" });
 export const mInfoAgent = style({ display: "flex", flexDirection: "column" });

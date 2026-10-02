@@ -1226,6 +1226,8 @@ export interface StationFailing {
  */
 export interface ListNote {
 	reading: boolean;
+	/** While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it. */
+	text?: string;
 	failing: StationFailing[];
 	empty: boolean;
 }

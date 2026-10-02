@@ -57,12 +57,19 @@ pub fn list_note(stations: &[Value], days: &[Value], loading: bool, unread: &[St
     let failing: Vec<Value> = if loading { Vec::new() } else {
         stations.iter().filter(|s| is(s, "error") || (is(s, "offline") && s.get("station").and_then(Value::as_str).is_some_and(|a| unread.iter().any(|u| u == a)))).map(|s| {
             let name = s.get("name").and_then(Value::as_str).unwrap_or("");
-            let text = if is(s, "error") { format!("连不上「{name}」，正在重试…") } else { format!("「{name}」离线，还没读到它的会话") };
+            let text = if is(s, "error") { format!("连不上「{name}」，正在重试…") } else { format!("{name} 离线 · 还没读到会话") };
             json!({ "station": s["station"], "text": text, "message": s["message"] })
         }).collect()
     };
     let empty = !loading && !connecting && failing.is_empty();
-    json!({ "reading": loading || connecting, "failing": failing, "empty": empty })
+    // What it waits on, in the pill over the placeholder rows: the stations whose link is on its way (by name for one).
+    let on_way: Vec<&str> = stations.iter().filter(|s| is(s, "connecting")).map(|s| s.get("name").and_then(Value::as_str).unwrap_or("")).collect();
+    let text = match on_way.as_slice() {
+        [] => "正在读取会话".to_string(),
+        [one] => format!("正在连接 {one}"),
+        all => format!("正在连接 {} 台 station", all.len()),
+    };
+    json!({ "reading": loading || connecting, "text": text, "failing": failing, "empty": empty })
 }
 
 /// A chat's link to its station while it is not as it should be (web/src/Connection.tsx, Android screens/Connection.kt):
@@ -143,6 +150,9 @@ mod tests {
     fn a_list_with_no_rows_says_it_reads_fails_or_has_none() {
         let days = [json!({ "items": [{}] })];
         assert_eq!(list_note(&[station("w/a", "A", "error")], &days, false, &[]), json!({ "reading": false, "failing": [], "empty": false }));
+        assert_eq!(list_note(&[station("w/a", "A", "connecting")], &[], false, &[])["text"], "正在连接 A");
+        assert_eq!(list_note(&[station("w/a", "A", "connecting"), station("w/b", "B", "connecting")], &[], false, &[])["text"], "正在连接 2 台 station");
+        assert_eq!(list_note(&[station("w/a", "A", "online")], &[], true, &[])["text"], "正在读取会话");
         assert_eq!(list_note(&[station("w/a", "A", "online")], &[], true, &[])["reading"], true);
         assert_eq!(list_note(&[station("w/a", "A", "connecting")], &[], false, &[])["reading"], true);
         let failing = list_note(&[station("w/a", "A", "error"), station("w/b", "B", "online")], &[], false, &[]);
@@ -152,7 +162,7 @@ mod tests {
         assert_eq!(list_note(&[], &[], false, &[])["empty"], true);
         // An offline station never read here: its chats are not known, not none.
         let unread = list_note(&[station("w/a", "A", "offline")], &[], false, &["w/a".to_string()]);
-        assert_eq!((unread["empty"].as_bool(), unread["failing"][0]["text"].as_str()), (Some(false), Some("「A」离线，还没读到它的会话")));
+        assert_eq!((unread["empty"].as_bool(), unread["failing"][0]["text"].as_str()), (Some(false), Some("A 离线 · 还没读到会话")));
         assert_eq!(list_note(&[station("w/a", "A", "offline")], &[], false, &[])["empty"], true);
     }
 

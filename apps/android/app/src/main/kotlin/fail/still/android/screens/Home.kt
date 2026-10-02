@@ -236,9 +236,6 @@ fun HomeScreen(current: WorkspaceEntry) {
 private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: String, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
     val view = chats.value
     val app = LocalApp.current
-    val status by rememberTopic<StatusView>(app.core, Topics.status(current.workspace.id))
-    // "Reading", and what the core has been waiting on for a while if anything (the core's `status`).
-    val reading = status.value?.text?.let { "正在读取会话… $it" } ?: "正在读取会话…"
     // The rows move as the list changes (ListMotion.kt); while a finger is on the list or it scrolls, they keep their
     // places (the web holds them while the mouse is over the list), and move when it is let go.
     val still = reducedMotion()
@@ -266,13 +263,18 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
         // What the last update brought (Changelog.kt), until it is seen: even while the list is being read.
         item(key = "changelog-news") { ChangelogNews() }
         if (view == null) {
-            item(key = "wait") { Note(chats.error?.message ?: reading, error = chats.error != null) }
+            // Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (Loading.kt).
+            item(key = "wait") { LoadingPill(chats.error?.message ?: "正在读取会话", error = chats.error != null) }
+            item(key = "placeholders") { PlaceholderRows(7, still = chats.error != null) }
         } else {
             val stations = view.stations
-            // A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's `note`).
+            // A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
+            // `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones.
             val note = view.note
-            if (note?.reading == true) item(key = "loading") { Note(reading) }
-            note?.failing?.forEach { s -> item(key = "e/${s.station}") { Note(s.text, error = true) } }
+            if (note?.reading == true) item(key = "loading") { LoadingPill(note.text ?: "正在读取会话") }
+            note?.failing?.forEach { s -> item(key = "e/${s.station}") { LoadingPill(s.text, error = true) } }
+            val waiting = note?.reading == true
+            if (waiting || note?.failing?.isNotEmpty() == true) item(key = "placeholders") { PlaceholderRows(if (waiting) 7 else 4, still = !waiting) }
             if (note?.empty == true) item(key = "empty") { Empty(current, view, filter) }
             // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
             item(key = "open-jobs") { OpenJobs(current.workspace.id) }
@@ -333,10 +335,6 @@ private fun Leaving(g: Ghost, view: ChatsView, motion: ListMotion) {
         if (g.item != null) ChatRow(g.item, view, live = false) else if (g.label != null) SectionHeader(g.label)
     }
 }
-
-@Composable
-private fun Note(text: String, error: Boolean = false) =
-    Text(text, color = if (error) C.red else C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
 
 @Composable
 private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {

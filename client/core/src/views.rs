@@ -2351,7 +2351,7 @@ mod tests {
             ]));
             assert_eq!(v["days"], json!([]));
             // No rows yet: the list says it is reading; the glyph has the three dim (looks.rs).
-            assert_eq!(v["note"], json!({"reading": true, "failing": [], "empty": false}));
+            assert_eq!(v["note"], json!({"reading": true, "text": "正在连接 3 台 station", "failing": [], "empty": false}));
             assert_eq!((v["glyph"]["dim"].as_u64(), v["glyph"]["online"].as_u64(), v["glyph"]["summary"].as_str()), (Some(3), Some(0), Some("3 台 station")));
             // gamma is not reached: down.
             t.set(link("ws/c"), json!({"state": "offline"}));

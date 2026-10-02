@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
-import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
+import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
 import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Pin, Settings, Unplug } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
@@ -18,6 +18,7 @@ import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { ChangelogNews } from "./Changelog.tsx";
+import { LoadingPill, PlaceholderRows } from "./Loading.tsx";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
@@ -101,7 +102,10 @@ export function Recent() {
         <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label="新建对话"><Edit size={17} /></button>
       </div>
       <div className={css.mRecentRows}>
-        {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} /> : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
+        {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} />
+          // No rows: what the list says in their place (the core's `note`), as the home list does.
+          : !items.length ? <Note text={view.note?.reading ? view.note.text ?? "正在读取会话" : view.note?.failing[0]?.text ?? "还没有会话"} error={!view.note?.reading && !!view.note?.failing.length} />
+          : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
       </div>
       <button type="button" className={css.mRecentAll} onClick={app.home}>全部会话<ChevronRight size={16} /></button>
     </>
@@ -145,26 +149,23 @@ function StationButton({ view }: { view: ChatsView | undefined }) {
   );
 }
 
-/** "Reading", and what the core has been waiting on for a while if anything (the core's `status`). */
-function reading(status: StatusView | undefined): string {
-  return status?.text ? `正在读取会话… ${status.text}` : "正在读取会话…";
-}
-
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days. */
 function ChatPane({ chats, filter }: { chats: TopicState<ChatsView>; filter: ChatFilter }) {
   const view = chats.value;
   const scope = useApp().entry.id;
-  const status = useStatus(scope);
   const lead = view?.leading ?? "agents";
   return (
     <div className={css.mHomePane}>
       {/* What the last update brought (./Changelog.tsx), until it is seen: even while the list is being read. */}
       <ChangelogNews />
-      {!view ? <Note text={chats.error?.message ?? reading(status)} error={!!chats.error} /> : (
+      {/* Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (./Loading.tsx). */}
+      {!view ? <><LoadingPill text={chats.error?.message ?? "正在读取会话"} error={!!chats.error} /><PlaceholderRows count={7} still={!!chats.error} /></> : (
         <>
-          {/* A station's link coming back is said on its rows; only with no rows to show does the list say it. */}
-          {view.note?.reading && <Note text={reading(status)} />}
-          {view.note?.failing.map((s) => <Note key={`e/${s.station}`} text={s.text} error />)}
+          {/* A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
+              `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones. */}
+          {view.note?.reading && <LoadingPill text={view.note.text ?? "正在读取会话"} />}
+          {view.note?.failing.map((s) => <LoadingPill key={`e/${s.station}`} text={s.text} error />)}
+          {(view.note?.reading || !!view.note?.failing.length) && <PlaceholderRows count={view.note.reading ? 7 : 4} still={!view.note.reading} />}
           {view.note?.empty && <Empty view={view} filter={filter} />}
           {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
           <OpenJobs scope={scope} />

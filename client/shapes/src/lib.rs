@@ -1415,6 +1415,8 @@ pub struct StationsGlyph {
 #[serde(rename_all = "camelCase")]
 pub struct ListNote {
     pub reading: bool,
+    /// While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it.
+    pub text: Option<String>,
     pub failing: Vec<StationFailing>,
     pub empty: bool,
 }

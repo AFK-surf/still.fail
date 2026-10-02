@@ -1212,6 +1212,8 @@ data class StationFailing (
 @Serializable
 data class ListNote (
 	val reading: Boolean,
+	/// While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it.
+	val text: String? = null,
 	val failing: List<StationFailing>,
 	val empty: Boolean
 )
