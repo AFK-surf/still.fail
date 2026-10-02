@@ -9,12 +9,16 @@ of client/shapes and the words of client/i18n) as `ts/chats.ts`, about as long a
 - `rust/`: the Rust core's own functions over that input, as the view calls them: the baseline, and the reference.
 - `ts/chats.ts` (+ `build.mjs` for QuickJS with the catalog, `node-run.mjs` for V8); `compare.py`: outputs equal?
 
-Results on studio (2026-10-03), median ms for the whole list, including turning it into the text the UI gets:
+Results on studio (2026-10-03), median ms for the whole list, including turning it into the text the UI gets. Hermes
+is built from source (facebook/hermes 6e2181b; for the Android CLI, hermes.cpp's fbjni lines left out), run as source
+and as bytecode from `hermesc -O` (as React Native ships it: the same numbers).
 
-| rows | Rust core (Mac) | TS on V8 (Mac) | TS on QuickJS (Mac) | Rust core (Android emulator) | TS on QuickJS (Android emulator) |
-|---|---|---|---|---|---|
-| 342 (one station's real chats) | 9.3 | 5.1 | 25.4 | 12.0 | 25.5 |
-| 2000 | 56.8 | 23.0 | 150.3 | 85.4 | 153.0 |
+| rows | Rust core | TS on V8 | TS on QuickJS | TS on Hermes |
+|---|---|---|---|---|
+| Mac, 342 (one station's real chats) | 9.6 | 5.0 | 25.5 | 11 |
+| Mac, 2000 | 58–64 | 23–25 | 152 | 61–64 |
+| Android emulator, 342 | 14–15 | | 27.5 | 12 |
+| Android emulator, 2000 | 98–121 | | 157–166 | 68–70 |
 
 Equal outputs, field by field, between the Rust core and the TypeScript port on every engine, for the 342 real rows,
 2000 rows and 2000 varied rows (cards, waits, failures, watches, Slack origins, several agents, …).
