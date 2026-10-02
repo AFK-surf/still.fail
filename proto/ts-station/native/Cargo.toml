@@ -1,0 +1,35 @@
+[package]
+name = "stillfail-mesh-native"
+edition = "2024"
+version = "0.1.0"
+publish = false
+description = "Prototype: the station's iroh, for a station written in TypeScript (../src): built once, released as a prebuilt .node"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+hex = "0.4"
+iroh = { version = "=1.0.3" }
+iroh-mdns-address-lookup = "=0.4.0"
+iroh-mainline-address-lookup = "=0.5.0"
+napi = { version = "3", features = ["async", "tokio_rt"] }
+napi-derive = "3"
+noq-proto = { version = "1", default-features = false }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+
+[build-dependencies]
+napi-build = "2"
+
+# A workspace of its own: not part of mesh/ or client/.
+[workspace]
+
+# As mesh/ has them (vendor/README.md).
+[patch.crates-io]
+swarm-discovery = { path = "../../../vendor/swarm-discovery" }
+iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
+noq-udp = { path = "../../../vendor/noq-udp" }
+iroh = { path = "../../../vendor/iroh" }
+
+[profile.release]
+strip = true
