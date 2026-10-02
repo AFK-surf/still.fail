@@ -13,7 +13,7 @@ import { stationBase, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
-import { shortcutOf, takesKeys, useKeymap, useShortcut } from "./keymap.ts";
+import { shortcutOf, takesKeys, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear } from "./FilePreview.tsx";
 import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -1365,19 +1365,9 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
  * "composer.focus"'s key puts the cursor there. Null while it has the cursor (or another field or button has).
  */
 function useSpaceHint(locked: boolean): string | null {
-  const [away, setAway] = useState(false);
-  useEffect(() => {
-    if (!window.matchMedia("(pointer: fine)").matches) return;
-    const at = (el: EventTarget | null) => setAway(!takesKeys(el instanceof Element ? el : null));
-    const onIn = (e: FocusEvent) => at(e.target);
-    const onOut = (e: FocusEvent) => at(e.relatedTarget);
-    at(document.activeElement);
-    document.addEventListener("focusin", onIn);
-    document.addEventListener("focusout", onOut);
-    return () => { document.removeEventListener("focusin", onIn); document.removeEventListener("focusout", onOut); };
-  }, []);
+  const available = usePageKeysAvailable();
   const key = shortcutOf("composer.focus");
-  if (!away || locked || !key) return null;
+  if (!available || locked || !key || !window.matchMedia("(pointer: fine)").matches) return null;
   return t(/^[\u4e00-\u9fff]+$/.test(key) ? "web-main.composer.pressToTypeCjk" : "web-main.composer.pressToType", { key });
 }
 

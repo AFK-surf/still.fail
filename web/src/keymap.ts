@@ -167,6 +167,36 @@ export function takesKeys(el: Element | null): boolean {
 }
 const OVER = "[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']";
 
+function hasShortcutOverlay(): boolean {
+  return !!document.querySelector(OVER);
+}
+
+function pageKeysAvailable(): boolean {
+  return !takesKeys(document.activeElement) && !hasShortcutOverlay();
+}
+
+function watchPageKeys(changed: () => void): () => void {
+  document.addEventListener("focusin", changed);
+  document.addEventListener("focusout", changed);
+  // Portalled menus can open/close without a focus change. Ignore ordinary message mutations.
+  const hasOverlay = (node: Node) => node instanceof Element && (node.matches(OVER) || !!node.querySelector(OVER));
+  const observer = new MutationObserver((records) => {
+    if (records.some((r) => r.type === "attributes" || [...r.addedNodes, ...r.removedNodes].some(hasOverlay))) changed();
+  });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["role"] });
+  return () => {
+    document.removeEventListener("focusin", changed);
+    document.removeEventListener("focusout", changed);
+    observer.disconnect();
+  };
+}
+
+/** Whether an unmodified page shortcut can take focus, including portalled overlays. */
+export function usePageKeysAvailable(): boolean {
+  return useSyncExternalStore(watchPageKeys, pageKeysAvailable, () => false);
+}
+
+
 function onKey(e: KeyboardEvent) {
   if (e.defaultPrevented || e.isComposing) return;
   const at = e.target instanceof Element ? e.target : null;
@@ -180,7 +210,7 @@ function onKey(e: KeyboardEvent) {
     if (field && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key.length === 1)) continue;
     // A key with no modifier is the focused control's own (Space presses a button).
     if (!e.metaKey && !e.ctrlKey && !e.altKey && at?.closest(PRESSED) && !field) continue;
-    if (document.querySelector(OVER)) continue;
+    if (hasShortcutOverlay()) continue;
     if (handler(e) === false) continue;
     e.preventDefault();
     return;
