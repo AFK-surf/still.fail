@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 可见提问约束（require-visible-question）：发布并更新 station；无需客户端、cloud 或数据迁移。chat_state 的 need_human/need_help 必须带指向自己提问的 about 或已有待答卡片，旧 block 别名保持兼容；旧会话通过迁移说明 9 获知变更。上线后检查追问澄清后的回复：若仍需确认，agent 应在消息中明确提出；仅内部 need 不得挂回「要你帮忙」。卡片继续按需使用，不追溯修改历史状态。
+
 - 安卓决策按钮动效（android-decision-feedback）：需随 Android 包发布；仅视图变化，无 core/API、数据迁移或 station 顺序要求。选项按压缩小回弹，回答后沿用 chat list 归档的整块缩小淡出和延迟弹簧补位；深浅主题录屏已获确认。上线后在聊天里点击普通及静默结束选项，确认反馈、退场和重复点击保护；系统关闭动画时直接完成。
 
 - 新对话常用搭配（new-chat-combos）：发布 web（含 wasm core）和 Android，桌面随 web 更新；无需更新 station。沿用本地 choice 表，按设备和 workspace 记录更新后创建的新对话组合，最多显示 4 个，仅保留当前 station 可运行的模型/深度。NewChatView.frequent 可选，新旧页面/core 混跑兼容。上线后分别用两组模型/深度开新对话，再返回新对话页，确认常用项、点选同步和重启后保留；切 workspace 不串记录。
