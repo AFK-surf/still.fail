@@ -145,6 +145,7 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
         decision.text?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
         return
     }
+    card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
     if (options.isNullOrEmpty()) return
     val app = LocalApp.current
     val station = ctx.station
@@ -418,6 +419,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
         Text(item.title, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
     }
+    item.card?.assigneeText?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     var postAt by remember(item.key) { mutableStateOf<Float?>(null) }

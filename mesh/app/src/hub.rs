@@ -1325,6 +1325,7 @@ impl Hub {
                                         "additionalProperties": false,
                                     },
                                 },
+                                "assignee": { "type": "string", "description": "The email of the person who must decide, chosen explicitly by you from the conversation. Only their 奏 list includes this card; others can still answer in the chat. Always set it for new cards. Omitted on legacy cards: unassigned, chat only." },
                                 "placeholder": { "type": "string", "description": "For a text card: a hint shown in the empty field (e.g. sk_test_…)." },
                             },
                             "required": ["type"],
@@ -2030,10 +2031,10 @@ fn card_arg(card: Option<&Value>, options: Option<&Value>) -> Result<Option<Valu
     }
     let Some(fields) = card.as_object() else { bail!("{shape}") };
     let kind = fields.get("type").map(js_string).unwrap_or_default().trim().to_string();
-    match kind.as_str() {
+    let mut kept = match kind.as_str() {
         "options" => {
             let options = options_arg(fields.get("options"))?.ok_or_else(|| anyhow!("an options card has options: 1 to {MAX_OPTIONS} answers {{label, detail?, recommended?}}"))?;
-            Ok(Some(crate::store::options_card(options)))
+            crate::store::options_card(options)
         }
         "text" => {
             let placeholder = fields.get("placeholder").map(js_string).map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
@@ -2044,11 +2045,20 @@ fn card_arg(card: Option<&Value>, options: Option<&Value>) -> Result<Option<Valu
             if let Some(placeholder) = placeholder {
                 kept["placeholder"] = json!(placeholder);
             }
-            Ok(Some(kept))
+            kept
         }
         "" => bail!("a card says its type: one of {}", CARDS.join(", ")),
         other => bail!("unknown card type {other:?}: the types known are {}", CARDS.join(", ")),
+    };
+    if let Some(value) = fields.get("assignee") {
+        let email = value.as_str().map(str::trim).filter(|v| {
+            let mut parts = v.split('@');
+            matches!((parts.next(), parts.next(), parts.next()), (Some(a), Some(b), None) if !a.is_empty() && !b.is_empty())
+                && !v.chars().any(char::is_whitespace) && v.len() <= 254
+        }).ok_or_else(|| anyhow!("card.assignee must be the decision maker's email, not a display name"))?;
+        kept["assignee"] = json!(email.to_lowercase());
     }
+    Ok(Some(kept))
 }
 
 /// What chat_post says of the card it posted.

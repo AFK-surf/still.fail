@@ -84,7 +84,7 @@ impl Views {
                 for s in stations {
                     let rows = self.ok(Topic::ChatRows { station: s.address.clone() }).and_then(|r| r.as_array().cloned()).unwrap_or_default();
                     for row in rows.iter().filter(|r| !self.being_archived(&s.address, r)) {
-                        let waits = crate::decisions::waits(row);
+                        let waits = crate::decisions::for_viewer(row, &self.me(&id)).is_some();
                         decisions += u64::from(waits);
                         match (row_tone(row), waits) {
                             (Some("alert"), _) => counts.alert += 1,

@@ -119,11 +119,14 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
  */
 export function MessageDecision({ message: m, thread }: { message: ChatMessage; thread: number | null }) {
   const station = useStation().address;
-  // Only an options card draws anything here; a text card is answered on the 奏 page (or by writing in the chat).
-  if (cardType(m.card, m.options) !== "options" || !m.options?.length) return null;
+  if (!m.card && !m.options?.length) return null;
   const d = m.decision;
   const open = !d?.resolved && !d?.dismissed;
-  if (open && thread !== null) return <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />;
+  if (open) return <>
+    {m.card?.assigneeText && <p className={css.settledLine}>{m.card.assigneeText}</p>}
+    {thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
+      <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />}
+  </>;
   return d?.text ? <p className={css.settledLine}>{d.text}</p> : null;
 }
 
@@ -262,6 +265,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
                 <button type="button" className={css.chatLink} onClick={() => onOpen(path)}>{d.title}</button>
                 <span className={css.count}>1 / {items.length}</span>
               </div>
+              {d.card?.assigneeText && <p className={css.settledLine}>{d.card.assigneeText}</p>}
               <div className={`${chatCss.chatMessages} ${inline ? chatCss.inlineHeads : ""}`} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                 {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} owner={owner} />)}
               </div>

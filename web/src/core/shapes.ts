@@ -845,6 +845,10 @@ export interface DecisionOption {
  * `decision.reply`). A type a UI does not know: answered by writing in the chat.
  */
 export interface MessageCard {
+	/** The person the agent asks to decide, by email. Absent on legacy cards. */
+	assignee?: string;
+	/** Who needs to decide, in the viewer's words; prepared by the core. */
+	assigneeText?: string;
 	/** options | text */
 	type: string;
 	options?: DecisionOption[];

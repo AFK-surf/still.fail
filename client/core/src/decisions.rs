@@ -66,6 +66,9 @@ pub fn of_message(m: &Value) -> Option<Value> {
 /// placeholder.
 pub fn card_shown(card: &Value) -> Value {
     let mut v = json!({ "type": kind(card) });
+    for field in ["assignee", "assigneeText"] {
+        if let Some(value) = card.get(field) { v[field] = value.clone(); }
+    }
     match kind(card) {
         "options" => v["options"] = json!(options_shown(&card["options"])),
         "text" => {
@@ -76,6 +79,25 @@ pub fn card_shown(card: &Value) -> Value {
         _ => {}
     }
     v
+}
+
+/// The pending card explicitly assigned to this viewer. Participation is not ownership.
+pub fn for_viewer(row: &Value, me: &Value) -> Option<Value> {
+    pending(row).filter(|d| d["card"]["assignee"].as_str()
+        .is_some_and(|email| crate::present::is_viewer(me, email, &[])))
+}
+
+/// The assignment in words is shared by web and Android, in both the chat and 奏.
+pub fn label_assignee(card: &mut Value, me: &Value, members: &[Value]) {
+    let text = match card.get("assignee").and_then(Value::as_str) {
+        Some(email) => {
+            let name = if crate::present::is_viewer(me, email, &[]) { "你" }
+                else { crate::present::member_name(members, email).unwrap_or(email) };
+            format!("需要{name}决策")
+        }
+        None => "尚未指定决策人".to_string(),
+    };
+    card["assigneeText"] = json!(text);
 }
 
 /// A card's line: 奏 · its post's first line, without mentions or markup, cut to about 40 characters.
@@ -300,6 +322,28 @@ mod tests {
     fn text_card(seq: u64) -> Value {
         json!({ "seq": seq, "card": { "type": "text", "placeholder": " sk_test_… " },
             "message": { "seq": seq, "ts": "9.000003", "text": "Stripe 的测试 key 是多少？", "authorName": "Claude" }, "before": [] })
+    }
+
+    #[test]
+    fn only_the_assignee_gets_a_card_but_anyone_can_answer_in_chat() {
+        let mut d = text_card(5);
+        d["card"]["assignee"] = json!("owner@x.com");
+        let row = json!({ "mine": true, "card": d });
+        assert!(for_viewer(&row, &json!({"email":"OWNER@x.com"})).is_some());
+        assert!(for_viewer(&row, &json!({"email":"helper@x.com"})).is_none());
+        assert!(reply(&of_row(&row).unwrap(), "I can help", false).is_some());
+        assert!(for_viewer(&json!({"mine":true,"card":text_card(6)}), &json!({"email":"owner@x.com"})).is_none());
+        let mut dismissed = row.clone();
+        dismissed["card"]["dismissed"] = json!(true);
+        assert!(for_viewer(&dismissed, &json!({"email":"owner@x.com"})).is_none());
+        let mut card = d["card"].clone();
+        label_assignee(&mut card, &json!({"email":"helper@x.com"}), &[json!({"email":"owner@x.com","name":"小王"})]);
+        assert_eq!(card["assigneeText"], "需要小王决策");
+        label_assignee(&mut card, &json!({"email":"owner@x.com"}), &[]);
+        assert_eq!(card_shown(&card)["assigneeText"], "需要你决策");
+        let mut old = json!({"type":"text"});
+        label_assignee(&mut old, &Value::Null, &[]);
+        assert_eq!(old["assigneeText"], "尚未指定决策人");
     }
 
     #[test]

@@ -447,6 +447,10 @@ pub struct ChatMessage {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageCard {
+    /// The person the agent asks to decide, by email. Absent on legacy cards.
+    pub assignee: Option<String>,
+    /// Who needs to decide, in the viewer's words; prepared by the core.
+    pub assignee_text: Option<String>,
     /// options | text
     #[serde(rename = "type")]
     pub kind: String,

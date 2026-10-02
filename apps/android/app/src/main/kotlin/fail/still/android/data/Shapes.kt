@@ -864,6 +864,10 @@ data class DecisionOption (
 /// `decision.reply`). A type a UI does not know: answered by writing in the chat.
 @Serializable
 data class MessageCard (
+	/// The person the agent asks to decide, by email. Absent on legacy cards.
+	val assignee: String? = null,
+	/// Who needs to decide, in the viewer's words; prepared by the core.
+	val assigneeText: String? = null,
 	/// options | text
 	val type: String,
 	val options: List<DecisionOption>? = null,

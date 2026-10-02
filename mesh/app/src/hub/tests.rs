@@ -2247,3 +2247,17 @@ fn only_explicit_valid_option_actions_close_silently() {
     assert_eq!(parsed[2]["action"], "reply");
     assert!(options_arg(Some(&json!([{"label":"不需要", "action":"typo"}]))).is_err());
 }
+
+#[test]
+fn cards_keep_explicit_assignees_and_accept_legacy_cards() {
+    for card in [json!({"type":"text"}), json!({"type":"options","options":[{"label":"好"}]})] {
+        assert!(super::card_arg(Some(&card), None).unwrap().unwrap().get("assignee").is_none());
+        let mut card = card;
+        card["assignee"] = json!(" Owner@Example.com ");
+        assert_eq!(super::card_arg(Some(&card), None).unwrap().unwrap()["assignee"], "owner@example.com");
+        for bad in [json!("小王"), json!(""), json!(["owner@example.com"]), json!("a@b@c")] {
+            card["assignee"] = bad;
+            assert!(super::card_arg(Some(&card), None).is_err());
+        }
+    }
+}

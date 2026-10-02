@@ -1189,6 +1189,10 @@ impl Views {
 /// it (an agent by its label and mark, a person by name and picture), and mentions named. `agents`: the chat's, each
 /// `{session}` as its view has them.
 fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &[String], members: &[Value], bots: &[(String, String)]) {
+    if let Some(mut card) = crate::decisions::of_message(m) {
+        crate::decisions::label_assignee(&mut card, viewer, members);
+        m["card"] = card;
+    }
     let kind = m.get("authorKind").and_then(Value::as_str).unwrap_or("").to_string();
     let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
     let said_name = m.get("authorName").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
@@ -1249,7 +1253,7 @@ impl Views {
                 .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
                 .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
             for row in rows.as_array().into_iter().flatten().filter(|r| !self.being_archived(&s.address, r)) {
-                let Some(d) = crate::decisions::pending(row) else { continue };
+                let Some(d) = crate::decisions::for_viewer(row, &me) else { continue };
                 let (Some(thread), Some(seq)) = (row.get("thread").and_then(Value::as_u64), d.get("seq").and_then(Value::as_u64)) else { continue };
                 let agents: Vec<Value> = row.get("agents").and_then(Value::as_array).into_iter().flatten().map(|a| {
                     let mut a = a.clone();
@@ -1262,7 +1266,8 @@ impl Views {
                     m["waiting"] = json!(false);
                     m
                 };
-                let card = crate::decisions::card_shown(&d["card"]);
+                let mut card = crate::decisions::card_shown(&d["card"]);
+                crate::decisions::label_assignee(&mut card, &me, &members);
                 let options = card.get("options").cloned().unwrap_or(json!([]));
                 let mut message = shown(&d["message"]);
                 if crate::decisions::kind(&d["card"]) == "options" {
@@ -2061,7 +2066,7 @@ mod tests {
         let options = json!([{ "label": "合", "recommended": true }, { "label": "先不改", "detail": "留到下周" }]);
         let mut message = said(seq, "agent", id, &format!("**{id}** 要合吗？\n细节"), at);
         message["options"] = options.clone();
-        r["decision"] = json!({ "seq": seq, "options": options, "message": message,
+        r["decision"] = json!({ "seq": seq, "options": options, "card": { "type": "options", "options": options, "assignee": "me@x.com" }, "message": message,
             "before": [said(seq - 2, "person", "me@x.com", "改一下", at - 20.0), said(seq - 1, "agent", id, "好", at - 10.0)] });
         if dismissed {
             r["decision"]["dismissed"] = json!(true);
@@ -2140,7 +2145,7 @@ mod tests {
         let mut r = row(id, at);
         r["thread"] = json!(thread);
         r["session"] = json!(id);
-        let card = json!({ "type": "text", "placeholder": "sk_test_…" });
+        let card = json!({ "type": "text", "placeholder": "sk_test_…", "assignee": "me@x.com" });
         let mut message = said(seq, "agent", id, "Stripe 的测试 key 是多少？", at);
         message["card"] = card.clone();
         r["card"] = json!({ "seq": seq, "card": card, "message": message, "before": [] });
@@ -2172,7 +2177,7 @@ mod tests {
             let v = page.value.clone().unwrap();
             assert_eq!(v["count"], 1);
             let it = &v["items"][0];
-            assert_eq!((it["card"].clone(), it["options"].clone()), (json!({ "type": "text", "placeholder": "sk_test_…" }), json!([])));
+            assert_eq!((it["card"].clone(), it["options"].clone()), (json!({ "type": "text", "placeholder": "sk_test_…", "assignee": "me@x.com", "assigneeText": "需要你决策" }), json!([])));
             assert_eq!((it["message"]["card"].clone(), it["message"].get("options"), it["text"].clone()), (it["card"].clone(), None, json!("奏 · Stripe 的测试 key 是多少？")));
             stillfail_shapes::conform::<stillfail_shapes::DecisionsView>(v.clone()).unwrap();
             let v = chats.value.clone().unwrap();
