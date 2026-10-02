@@ -16,6 +16,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import fail.still.android.Screen
 import fail.still.android.data.ChatOf
@@ -33,7 +34,7 @@ class ChatMotionTest {
     private val topic = Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))
     private val talk = Fixtures.talk
 
-    private fun Harness.type(text: String) = rule.onAllNodes(hasSetTextAction())[0].performTextReplacement(text)
+    private fun Harness.type(text: String) = rule.onAllNodes(hasSetTextAction())[0].performClick().performTextReplacement(text)
 
     // Its click action, not a touch: no input injected (which fails while the window is busy, e.g. an IME coming up).
     private fun Harness.send() = rule.onNode(hasContentDescription("发送")).performSemanticsAction(SemanticsActions.OnClick)
@@ -84,9 +85,13 @@ class ChatMotionTest {
     @Test
     fun sentInAShortChatDark() = sentInAShortChat(true)
 
-    private fun sentInAShortChat(dark: Boolean) {
+    @Test
+    fun sentInALongChat() = sentInAShortChat(false, crowded = true)
+
+    private fun sentInAShortChat(dark: Boolean, crowded: Boolean = false) {
         val h = Harness(rule)
-        val history = listOf(Fixtures.mine(1, "上一条消息", said = true))
+        val history = if (crowded) (1L..24L).map { Fixtures.mine(it, "第 $it 条消息：检查发送时旧消息平滑上移", said = true) }
+            else listOf(Fixtures.mine(1, "上一条消息", said = true))
         val text = "这条消息应该直接落在上一条下面"
         h.fake.put(topic, Fixtures.chat(history))
         h.fake.answer = { name, _ ->
@@ -96,11 +101,11 @@ class ChatMotionTest {
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))), dark = dark)
         h.type(text)
         h.keyboard()
-        val r = h.record(if (dark) "sent-short-chat-dark" else "sent-short-chat")
+        val r = h.record(if (crowded) "sent-long-chat" else if (dark) "sent-short-chat-dark" else "sent-short-chat")
         r.frame { h.send() }
         r.frames(55)
         val jump = r.end()
-        assertTrue("message snapped into place (changed fraction $jump)", jump < 0.025f)
+        if (!crowded) assertTrue("message snapped into place (changed fraction $jump)", jump < 0.025f)
     }
 
     /** A message in the outbox that the station takes (its seq), then shows as the chat's: the row stays the same one. */
