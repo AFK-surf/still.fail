@@ -10,19 +10,8 @@ export type Watch = { on: boolean };
 
 /// jobs.rs `Jobs`, its public functions.
 export interface Jobs {
-  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: Watch): JobRow | Promise<JobRow>;
-  /// A session's jobs, or all.
-  list(session: string | null): JobRow[];
-  /// The last `lines` of a job's output.
-  log(id: string, lines: number): string;
+  /// Stops a job (its session's, archived or deleted).
   stop(id: string): Promise<JobRow>;
-  /// Stopped by someone (`who`: an email), as the pages do.
-  stopFor(id: string, who: string): Promise<JobRow>;
-  stopAll(why: string): Promise<void>;
-  /// Starts again the services that were up when the station stopped.
-  relaunch(): void;
-  /// The watches running, by session (jobs.rs `watching`).
-  watching(): Map<string, Json>;
 }
 
 /// remote.rs `Remote`, as far as the hub and its tools reach it.

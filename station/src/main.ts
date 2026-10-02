@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, status } from "./cli.ts";
 import { MeshLive } from "./mesh/mesh.ts";
+import { AgentsLive } from "./sessions/agents.ts";
 import { dataDir, flag } from "./ops/files.ts";
 import { setStationLang } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
@@ -79,7 +80,7 @@ function run() {
   const control = launcher(args);
   const paths = Layer.succeed(Paths)({ data, app });
   const parts = Layer.mergeAll(Cloud.layer, Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
-  const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AgentsLive(control)).pipe(
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
@@ -109,8 +110,6 @@ function run() {
   };
   control.on("stop", () => stop("asked to stop"));
   control.on("handover", () => stop("handed over to the next station process"));
-  // Nothing runs yet that a drain would wait for.
-  control.on("drain", () => control.drained("idle"));
   fiber.addObserver((exit) => {
     if (!stopping) {
       log.error("station", "the station stopped by itself", { exit: String(exit) });

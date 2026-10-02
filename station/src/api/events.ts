@@ -61,6 +61,11 @@ export class Events {
     deps.subscribe((change) => this.storeChanged(change));
   }
 
+  /// Where `live` sessions are followed from (the hub's, once it is made).
+  followLive(live: NonNullable<EventsDeps["live"]>) {
+    this.deps.live = live;
+  }
+
   inUse(): boolean {
     return this.clients.length > 0;
   }
