@@ -1621,7 +1621,7 @@ pub struct DeviceView {
     #[serde(default)]
     pub handoff: bool,
     /// The device's language as its host says (`zh-CN`, `en-US`, …); none until told.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locale: Option<String>,
 }
 

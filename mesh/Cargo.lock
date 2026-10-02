@@ -4070,6 +4070,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "stillfail-i18n",
  "stillfail-shapes",
  "tar",
  "tempfile",
@@ -4079,6 +4080,13 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "zstd",
+]
+
+[[package]]
+name = "stillfail-i18n"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
