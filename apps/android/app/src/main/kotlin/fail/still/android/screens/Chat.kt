@@ -1171,7 +1171,8 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
         val words = fail.still.android.ui.withRefs(text)
         val (mark, laid) = passageMark(words.text)
         Text(
-            words, style = SendTextStyle.copy(color = ink.text), onTextLayout = { laid(it); flight?.words = it },
+            // A lone full-width mark (？ ！ 。) sits at the left of its wide cell: proportional alternates ("palt") cut that cell to the glyph, so the bubble's padding centres it.
+            words, style = SendTextStyle.copy(color = ink.text, fontFeatureSettings = if (text.trim().let { it.codePointCount(0, it.length) == 1 && !it[0].isLetterOrDigit() }) "palt" else null), onTextLayout = { laid(it); flight?.words = it },
             modifier = Modifier.widthIn(max = if (fieldWidth > 0) with(density) { fieldWidth.toDp() } + 28.dp else maxWidth * 0.78f).then(hold)
                 .let { m ->
                     if (flight == null || host == null) m else m.onGloballyPositioned {
