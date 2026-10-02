@@ -15,7 +15,8 @@ import { Remote } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
-import { Cloud, Events, Paths, Readers, Store } from "../services.ts";
+import { Cloud, Events, Key, Paths, Readers, Store } from "../services.ts";
+import { Notifier } from "../cloud/notify.ts";
 import { adbTools } from "../tools/adb.ts";
 import { chatTools } from "../tools/chat.ts";
 import { type AgentsDoor, openAgentsDoor } from "../tools/http.ts";
@@ -78,6 +79,7 @@ export const AgentsLive = (control: Control) =>
       const cloud = (yield* Cloud).state;
       const readers = yield* Readers;
       const events = yield* Events;
+      const key = yield* Key;
       const run = join(data, "run");
       const config = new ConfigFile(data);
       const place = () => {
@@ -206,6 +208,9 @@ export const AgentsLive = (control: Control) =>
       const usage = new UsageCounter({ store, config: () => ({ dataDir: data, profiles: settings().profiles }) });
       usage.start();
 
+      // What the chats' people hear about while no client of theirs runs: pushed by still.fail cloud.
+      const notifier = new Notifier(store, readers, cloud, key);
+
       // Chats idle long enough go to the archive: looked at now and every hour.
       const archiving = setInterval(() => {
         try {
@@ -252,6 +257,7 @@ export const AgentsLive = (control: Control) =>
           if (handing) return;
           handing = true;
           clearInterval(archiving);
+          notifier.close();
           await door?.close(30_000);
           try {
             await hub.handOver();

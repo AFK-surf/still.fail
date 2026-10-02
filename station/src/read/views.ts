@@ -76,8 +76,10 @@ function connectsOf(s: Store): Connect[] {
   return connects;
 }
 
-type Api = { store: Store; connects: Connect[] };
-const apiOf = (s: Store): Api => ({ store: s, connects: connectsOf(s) });
+export type Api = { store: Store; connects: Connect[] };
+export const apiOf = (s: Store): Api => ({ store: s, connects: connectsOf(s) });
+/// The cloud's names of the store being answered for, for `people` and `authorNames` used on their own.
+export const useNames = (s: Store) => (cloudNames = s.names);
 
 // ---- titles ----
 
@@ -161,7 +163,7 @@ function creator(reference: string | null): Json | null {
 }
 
 /// Several people, once each: one person may write through Slack and the station's chat under the same email.
-function people(refs: string[]): Json[] {
+export function people(refs: string[]): Json[] {
   const seen = new Set<string>();
   return refs
     .map((r) => creator(r))
@@ -199,7 +201,7 @@ function origin(t: ThreadSummary): Json {
 type Names = (kind: AuthorKind, author: string) => string | null;
 
 /// Who wrote in a thread, in words: each author asked once.
-function authorNames(api: Api, thread: number): Names {
+export function authorNames(api: Api, thread: number): Names {
   const th = store.getThread(api.store, thread);
   const members = store.threadSessions(api.store, thread);
   const names = new Map<string, string | null>();
