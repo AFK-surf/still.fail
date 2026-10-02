@@ -59,7 +59,7 @@ export const underSide = style({
   },
 });
 
-/** One decision: its chat's title, messages and options scrolling, the composer floating at the foot. Covers what is under it. */
+/** One decision: its chat's title and messages scrolling, its options and the composer floating at the foot. Covers what is under it. */
 export const card = style({
   position: "absolute", inset: "0", zIndex: "1", display: "flex", flexDirection: "column", background: ground,
   touchAction: "pan-y",
@@ -94,7 +94,7 @@ export const count = style({
   fontVariantNumeric: "tabular-nums",
 });
 
-/** The composer (and the phone's hint) over the messages' foot, nothing of its own behind it: they run on under it. */
+/** The options, the composer (and the phone's hint) over the messages' foot, nothing of their own behind them: they run on under it. */
 export const foot = style({
   position: "absolute", left: "0", right: "0", bottom: "0", padding: "8px 32px 16px", pointerEvents: "none",
   "@media": { "(max-width: 700px)": { padding: "8px 16px calc(12px + var(--m-foot, 0px))" } },
@@ -107,7 +107,8 @@ export const reply = style({
 });
 // The footer already supplies the page gutters. Do not inset the chat composer a second time.
 globalStyle(`${reply} > ${composerWrap}`, { paddingLeft: "0", paddingRight: "0" });
-export const footColumn = style({ maxWidth: "760px", margin: "0 auto" });
+export const footColumn = style({ maxWidth: "760px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "8px" });
+globalStyle(`${footColumn} ${options}`, { marginTop: "0" });
 // Only what is drawn takes the pointer: the room kept over the composer passes it to the messages under it.
 globalStyle(`${footColumn} > :not(${reply}), ${reply} > *`, { pointerEvents: "auto" });
 /**
@@ -153,4 +154,9 @@ export const elsewhere = style({
   cornerShape: vars.cornerShape, background: chip, color: vars.text, fontFamily: "inherit", fontSize: vars.textSm,
   fontWeight: "500", cursor: "pointer",
   selectors: { "&:hover": { filter: "brightness(.96)" } },
+});
+
+// Over the messages with the composer: the options on its glass, so what runs under them never shows through.
+globalStyle(`${footColumn} ${option}:not([data-recommended]), ${footColumn} ${elsewhere}`, {
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
 });
