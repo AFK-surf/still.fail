@@ -71,8 +71,8 @@ export function cardType(card: MessageCard | undefined, options: readonly Decisi
  * A text card's field and send button: Enter or the button sends what is written (`decision.reply`), a spinner on the
  * button meanwhile; failed, the words stay and a toast says why. `onSent` once it went through.
  */
-export function DecisionReply({ station, thread, seq, session, mobile, placeholder, onSent }: {
-  station: string; thread: number; seq: number; session: string; mobile: boolean; placeholder?: string | undefined; onSent?: () => void;
+export function DecisionReply({ station, thread, seq, session, mobile, placeholder, onSent, onSending }: {
+  station: string; thread: number; seq: number; session: string; mobile: boolean; placeholder?: string | undefined; onSent?: () => void; onSending?: (sending: boolean) => void;
 }) {
   const call = useCall();
   const act = useAct();
@@ -89,13 +89,14 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
     if (!written.ready || replying.current) return;
     replying.current = true;
     setAsked(true);
+    onSending?.(true);
     const reply = call("decision.reply", {
       station, thread, seq, text: written.text.trim(),
       attachments: written.files.flatMap((f) => f.done ? [f.done] : []),
       quotes: written.quotes.map(({ id: _, ...q }) => q),
     });
     act(reply, "回复");
-    reply.then(() => { written.take(); onSent?.(); }, () => undefined).finally(() => { replying.current = false; setAsked(false); });
+    reply.then(() => { written.take(); onSent?.(); }, () => undefined).finally(() => { replying.current = false; setAsked(false); onSending?.(false); });
   };
   const spec: HostComposer = { station, session, placeholder: placeholder || "发消息", offline: false, send };
   const latest = useRef<HostComposer | null>(spec);
@@ -144,12 +145,14 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   // Let the core confirm that nothing remains: a locally hidden card can still come back on failure.
   const empty = !!view.value && !view.value.loading && view.value.count === 0 && !view.error;
   const returned = useRef(false);
+  const [leaving, setLeaving] = useState(0);
+  const [replying, setReplying] = useState<DecisionItem | null>(null);
   useEffect(() => {
-    if (empty && onEmpty && !returned.current) {
+    if (empty && !leaving && !replying && onEmpty && !returned.current) {
       returned.current = true;
       onEmpty();
     }
-  }, [empty, onEmpty]);
+  }, [empty, leaving, replying, onEmpty]);
   const stations = useStations(workspace).value;
   const call = useCall();
   const act = useAct();
@@ -158,10 +161,12 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   // Set aside here: at the back at once, as the core will have them.
   const [aside, setAside] = useState<readonly string[]>([]);
   const items = useMemo(() => {
-    const left = (view.value?.items ?? []).filter((d) => !gone.has(keyOf(d)));
+    const source = view.value?.items ?? [];
+    const held = replying ? [replying, ...source.filter((d) => keyOf(d) !== keyOf(replying))] : source;
+    const left = held.filter((d) => !gone.has(keyOf(d)));
     const at = (d: DecisionItem) => aside.indexOf(keyOf(d));
     return [...left.filter((d) => at(d) < 0), ...left.filter((d) => at(d) >= 0).sort((a, b) => at(a) - at(b))];
-  }, [view.value, gone, aside]);
+  }, [view.value, gone, aside, replying]);
   const front = items[0];
   // Each time one leaves another comes, even the same again (set aside, the only one).
   const [turn, setTurn] = useState(0);
@@ -177,7 +182,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   }, [front && keyOf(front), turn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The decision in view goes (a copy of it flies off that way, from where it is now), the next one rising in its place. */
-  const leave = (to: "left" | "right" | "up") => {
+  const leave = (to: "left" | "right") => {
     const el = card.current;
     const place = host.current;
     if (under.current) delete under.current.dataset.side;
@@ -193,10 +198,11 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
       const copy = ghost.querySelector<HTMLElement>(`.${css.scroll}`);
       if (from && copy) copy.scrollTop = from.scrollTop;
       const start = el.style.transform || "translateX(0px)";
-      const w = place.offsetWidth, h = place.offsetHeight;
-      const end = to === "up" ? `translateY(${-h}px)` : `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
-      void ghost.animate([{ transform: start }, { transform: end }], { duration: to === "up" ? 300 : 260, easing: "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
-        .finished.finally(() => ghost.remove());
+      const w = place.offsetWidth;
+      const end = `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
+      setLeaving((n) => n + 1);
+      void ghost.animate([{ transform: start }, { transform: end }], { duration: 260, easing: "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
+        .finished.then(() => { ghost.remove(); setLeaving((n) => n - 1); }, () => { ghost.remove(); setLeaving((n) => n - 1); });
     }
     if (el) { el.style.transform = ""; delete el.dataset.dragging; }
     setTurn((t) => t + 1);
@@ -207,7 +213,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
 
   const defer = () => {
-    if (!front) return;
+    if (!front || replying) return;
     leave("left");
     const key = keyOf(front);
     setAside((was) => [...was.filter((k) => k !== key), key]);
@@ -215,12 +221,12 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   };
   const dismiss = () => {
     const d = front;
-    if (!d) return;
+    if (!d || replying) return;
     leave("right");
     drop(d);
     act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), "不再提醒");
   };
-  const answered = (d: DecisionItem) => { leave("up"); drop(d); };
+  const answered = (d: DecisionItem) => { leave("right"); drop(d); };
 
   // The wide screen's keys: ← 待定, → 不再提醒 (not while writing somewhere).
   const latest = useRef({ defer, dismiss });
@@ -277,9 +283,9 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
                 const type = cardType(d.card, d.options);
                 if (type === "options") return <>
                   <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={() => answered(d)} />
-                  <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} onSent={() => answered(d)} />
+                  <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} onSent={() => answered(d)} onSending={(sending) => setReplying(sending ? d : null)} />
                 </>;
-                if (type === "text") return <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} />;
+                if (type === "text") return <DecisionReply key={keyOf(d)} session={d.session} mobile={swipe} station={d.station} thread={d.thread} seq={d.seq} placeholder={d.card?.placeholder} onSent={() => answered(d)} onSending={(sending) => setReplying(sending ? d : null)} />;
                 return <button type="button" className={css.elsewhere} onClick={() => onOpen(path)}>去 chat 里回</button>;
               })()}
               {swipe

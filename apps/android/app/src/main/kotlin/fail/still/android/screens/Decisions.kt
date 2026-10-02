@@ -219,6 +219,8 @@ private class DecisionsLocal {
     val later = mutableStateListOf<String>()
     /** The decision in front came in as the one before went: it comes in, not there at once. */
     var arriving by mutableStateOf(false)
+    // Keep a reply visible if the core removes it before its exit finishes.
+    var replying by mutableStateOf<DecisionItem?>(null)
 
     fun undo(key: String) { gone.remove(key); later.remove(key) }
 
@@ -229,7 +231,9 @@ private class DecisionsLocal {
     }
 
     fun shown(items: List<DecisionItem>): List<DecisionItem> {
-        val left = items.filter { it.key !in gone }
+        val held = replying
+        val source = if (held != null) listOf(held) + items.filter { it.key != held.key } else items
+        val left = source.filter { it.key !in gone }
         val (moved, rest) = left.partition { it.key in later }
         return rest + later.mapNotNull { k -> moved.find { it.key == k } }
     }
@@ -248,8 +252,8 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     // Covered pages stay composed: never pop the chat opened over this page.
     val empty = view != null && !view.loading && view.count == 0u && topic.error == null
     val active = app.stack.lastOrNull() == Screen.Decisions
-    LaunchedEffect(empty, active) {
-        if (empty && active) app.pop()
+    LaunchedEffect(empty, active, local.replying) {
+        if (empty && active && local.replying == null) app.pop()
     }
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         TopBack("会话", app::pop)
@@ -280,11 +284,10 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     val n = shown.size
     val still = reducedMotion()
     val scope = rememberCoroutineScope()
-    // The front one's way across (px), its coming in (0 → 1) and its fading as it is answered: its own, new with
+    // The front one's way across (px), its coming in (0 → 1) and its departure as it is answered: its own, new with
     // another in front, so what went is not snapped back a frame before the next takes its place.
     val drag = remember(item.key) { Animatable(0f) }
     val arrive = remember(item.key) { Animatable(if (local.arriving && !still) 0f else 1f) }
-    val fade = remember(item.key) { Animatable(1f) }
     LaunchedEffect(item.key) {
         local.arriving = false
         if (arrive.value < 1f) arrive.animateTo(1f, tween(260, easing = Ease.Out))
@@ -307,30 +310,29 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         }
     }
 
-    /** The front one goes (`dir` its side; 0 fades where it is), `then` is done, and the next comes in. */
+    /** The front one goes (`dir` its side), `then` is done, and the next comes in. */
     fun go(dir: Int, then: () -> Unit) {
         if (busy) return
         busy = true
         scope.launch {
             if (!still) {
-                if (dir != 0) drag.animateTo(dir * width * 1.25f, tween(220, easing = Ease.Standard))
-                else fade.animateTo(0f, tween(160, easing = Ease.Css))
+                drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
             }
             local.arriving = true
             val alone = n == 1
             then()
             busy = false
             // The only one, set aside: still the one in front; it comes in again.
-            if (alone) {
-                drag.snapTo(0f); fade.snapTo(1f)
+            if (alone && item.key !in local.gone) {
+                drag.snapTo(0f)
                 if (!still) { arrive.snapTo(0f); arrive.animateTo(1f, tween(260, easing = Ease.Out)) }
                 local.arriving = false
             }
         }
     }
-    val defer = { go(-1) { local.later.remove(item.key); local.later.add(item.key); call("待定") { app.api(item.station).deferDecision(item.thread, item.seq) } } }
-    val dismiss = { go(1) { local.gone.add(item.key); call("不再提醒") { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
-    val answer = { o: DecisionOption -> go(0) { local.gone.add(item.key); call("回答") { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
+    val defer = { if (local.replying == null) go(-1) { local.later.remove(item.key); local.later.add(item.key); call("待定") { app.api(item.station).deferDecision(item.thread, item.seq) } } }
+    val dismiss = { if (local.replying == null) go(1) { local.gone.add(item.key); call("不再提醒") { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
+    val answer = { o: DecisionOption -> if (local.replying == null) go(1) { local.gone.add(item.key); call("回答") { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
     // A text card's reply: it stays (a spinner on its send) until the core has it, then goes as an answer does; refused,
     // what was written stays and why is said.
     val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
@@ -338,14 +340,15 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         val text = replyDraft.text.trim()
         val files = replyDraft.files.mapNotNull { it.done }
         val quotes = replyDraft.quotes.map { it.sent() }
-        if (replyDraft.ready) {
+        if (replyDraft.ready && !busy && local.replying == null) {
+            local.replying = item
             replyDraft.starting = true
             app.scope.launch {
                 try {
                     app.api(item.station).replyDecision(item.thread, item.seq, text, files, quotes)
                     replyDraft.take()
-                    go(0) { local.gone.add(item.key) }
-                } catch (e: CoreException) { app.toast = "没能回复：${errorText(e)}" }
+                    go(1) { local.gone.add(item.key); local.replying = null }
+                } catch (e: CoreException) { local.replying = null; app.toast = "没能回复：${errorText(e)}" }
                 finally { replyDraft.starting = false }
             }
         }
@@ -359,7 +362,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                 .pointerInput(item.key, still) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        if (busy || inField(down.position)) return@awaitEachGesture
+                        if (busy || local.replying != null || inField(down.position)) return@awaitEachGesture
                         val tracker = VelocityTracker()
                         var pos = drag.value
                         var across = 0f
@@ -410,7 +413,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         ) {
             // Under it, what letting it go that way does: left 待定 (at the right edge it uncovers), right 不再提醒.
             val x = drag.value
-            if (x != 0f) Box(
+            if (x != 0f && !busy) Box(
                 Modifier.matchParentSize().padding(horizontal = 24.dp).graphicsLayer { alpha = (abs(drag.value) / (width * 0.12f)).coerceIn(0f, 1f) },
                 contentAlignment = if (x > 0) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
@@ -423,7 +426,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                     scaleX = s; scaleY = s
                     translationX = drag.value
                     rotationZ = drag.value / width * 4f
-                    alpha = a * fade.value
+                    alpha = a
                 }.background(C.bg),
             ) { Face(item, onPick = answer, onReply = reply, onField = { field = it }) }
         }
