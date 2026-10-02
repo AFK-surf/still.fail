@@ -125,7 +125,7 @@ impl Inner {
                 if !self.attend.on() {
                     return Ok(Value::Null);
                 }
-                let kept = KeptPush { registration, with: Vec::new() };
+                let kept = KeptPush { registration, with: Vec::new(), lang: None };
                 let _ = self.host.storage_set(PUSH_KEY, serde_json::to_vec(&kept).unwrap_or_default()).await;
                 let done = self.push_registered().await;
                 self.attend.set_pushing(done.is_ok());
