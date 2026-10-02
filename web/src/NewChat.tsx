@@ -18,6 +18,8 @@ import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 import { keepTabs } from "./chatTabs.ts";
 import * as css from "./NewChat.css.ts";
+import { FrequentCombos } from "./FrequentCombos.tsx";
+import type { PickPatch } from "./pick.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -58,13 +60,14 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   const station: Station = { id: view.id, name: view.name, base: stationBase(view.station), address: view.station, online: true, settings: `/w/${scope}/settings` };
   return (
     <StationContext.Provider value={station}>
-      <NewChatOn key={view.station} choice={choice} view={view} station={station} stations={choice.stations} onStation={onStation} create={chat.create} onCreated={onCreated} />
+      <NewChatOn key={view.station} choice={choice} view={view} station={station} stations={choice.stations} onStation={onStation} pickCombo={chat.pick} create={chat.create} onCreated={onCreated} />
     </StationContext.Provider>
   );
 }
 
-function NewChatOn({ choice, view, station, stations, onStation, create, onCreated }: {
+function NewChatOn({ choice, view, station, stations, onStation, pickCombo, create, onCreated }: {
   choice: NewChatView; view: StationView; station: Station; stations: StationView[]; onStation(id: string): void;
+  pickCombo(patch: PickPatch): void;
   create(station: string): Promise<Made>; onCreated(station: string, session: string): void;
 }) {
   // What it runs on, as the core resolved it against what the station has (its model control: ../pick.ts).
@@ -147,6 +150,7 @@ function NewChatOn({ choice, view, station, stations, onStation, create, onCreat
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
         {composer}
+        <FrequentCombos items={choice.frequent} onPick={pickCombo} />
         {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
         <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting ? choice.problem : ""}</p>
         {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}

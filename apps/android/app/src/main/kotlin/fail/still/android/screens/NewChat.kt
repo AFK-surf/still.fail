@@ -35,6 +35,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -160,6 +163,21 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
             Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
             Text("想让 agent 做什么？", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
             Text("说要做什么。它会在 ${view.name} 上用选好的模型开一个新会话。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+            choice.frequent?.takeIf { it.isNotEmpty() }?.let { combos ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("常用", fontSize = 12.sp, color = C.muted)
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        combos.forEach { combo ->
+                            Text(combo.label, fontSize = 13.sp, lineHeight = 18.sp, color = if (combo.selected) C.ink else C.muted,
+                                modifier = Modifier.semantics { selected = combo.selected }.clip(RoundedCornerShape(8.dp))
+                                    .background(C.ink.copy(alpha = if (combo.selected) 0.10f else 0.04f))
+                                    .clickable(enabled = !leaving) { app.pickNew(workspace) {
+                                        put("model", combo.model); put("runtime", combo.runtime); put("effort", combo.effort)
+                                    } }.padding(horizontal = 10.dp, vertical = 8.dp))
+                        }
+                    }
+                }
+            }
             choice.problem?.let { Text(it, fontSize = 13.sp, color = if (choice.waiting) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)) }
             // No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too).
             val overview = view.overview

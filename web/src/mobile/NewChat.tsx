@@ -3,6 +3,7 @@
 // message (or file) makes the session on that station; then the page becomes the chat.
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { ModelOption, RuntimeKind, StationView } from "../api.ts";
+import { FrequentCombos } from "../FrequentCombos.tsx";
 import type { NewChatView } from "../core/shapes.ts";
 import { useNewChat, type PickPatch } from "../pick.ts";
 import { RUNTIME_LABEL } from "../format.ts";
@@ -94,6 +95,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
         <Illustration name="new-chat" width={230} />
         <h2>想让 agent 做什么？</h2>
         <p className={partsCss.mMuted}>说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
+        <FrequentCombos items={choice.frequent} onPick={pick} />
         {problem && <p className={css.mNewProblem} data-wait={choice.waiting || undefined}>{problem}</p>}
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
         {choice.blocked === "profile" && <NoProfile view={view} />}

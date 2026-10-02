@@ -171,6 +171,42 @@ pub fn machine_meta(session: &mut Value, now: f64) {
     s.insert("meta".into(), json!([Some(runtime.to_string()), Some(short), ago].into_iter().flatten().collect::<Vec<_>>().join(" · ")));
 }
 
+/// Usage stays bounded on the device; ties favour the most recently started chat.
+fn record_combo(history: &mut Vec<Value>, choice: &Value, now: f64) {
+    let same = |v: &Value| ["model", "runtime", "effort"].iter().all(|f| text(v.get(*f)) == text(choice.get(*f)));
+    let count = history.iter().find(|v| same(v)).and_then(|v| v["count"].as_u64()).unwrap_or(0).saturating_add(1);
+    history.retain(|v| !same(v));
+    history.push(json!({ "model": choice["model"], "runtime": choice["runtime"], "effort": text(choice.get("effort")), "count": count, "last": now }));
+    history.sort_by(|a, b| b["last"].as_f64().unwrap_or(0.0).total_cmp(&a["last"].as_f64().unwrap_or(0.0)));
+    history.truncate(64);
+}
+
+/// Only exact, still runnable combinations are offered: never silently change a remembered depth or runtime.
+fn frequent_combos(mut history: Vec<Value>, options: &[Value], current: &Resolved) -> Vec<Value> {
+    history.sort_by(|a, b| b["count"].as_u64().cmp(&a["count"].as_u64())
+        .then_with(|| b["last"].as_f64().unwrap_or(0.0).total_cmp(&a["last"].as_f64().unwrap_or(0.0))));
+    let mut seen = HashSet::new();
+    history.into_iter().filter_map(|v| {
+        let entry = option_of(options, v["model"].as_str())?;
+        let runtime = v["runtime"].as_str()?;
+        if !list(&entry["runtimes"]).iter().any(|r| r == runtime) { return None; }
+        let effort = text(v.get("effort"));
+        // Preserve a currently pinned account if it supports the model, as newChat.pick does.
+        let r = resolve(options, &json!({ "model": entry["model"], "runtime": runtime, "effort": effort, "profile": current.profile }));
+        if r.effort != effort { return None; }
+        let model = entry["model"].as_str()?;
+        if !seen.insert((model.to_string(), runtime.to_string(), effort.clone())) { return None; }
+        let depth = effort.as_deref().unwrap_or("默认深度");
+        let name = entry["name"].as_str().unwrap_or(model);
+        let label = if list(&entry["runtimes"]).len() > 1 {
+            format!("{name} · {} · {depth}", crate::format::runtime_label(runtime))
+        } else { format!("{name} · {depth}") };
+        let selected = current.entry.as_ref().is_some_and(|e| e["model"] == model)
+            && current.runtime.as_deref() == Some(runtime) && current.effort == effort;
+        Some(json!({ "model": model, "runtime": runtime, "effort": effort, "label": label, "selected": selected }))
+    }).take(4).collect()
+}
+
 impl Choose {
     pub fn new(host: Rc<dyn Host>, store: Rc<Store>, data: Rc<Data>, views: Rc<Views>, check: Check) -> Rc<Choose> {
         Rc::new(Choose { host, store, data, views, check, watches: RefCell::default(), drafts: RefCell::default(), adding: RefCell::default(), checked: RefCell::default() })
@@ -276,7 +312,7 @@ impl Choose {
 
     fn new_chat(&self, scope: &str) -> Value {
         let kept = self.kept(scope);
-        let mut view = json!({ "kept": kept, "any": false, "efforts": [], "accounts": [], "pickAccount": false, "waiting": false });
+        let mut view = json!({ "kept": kept, "any": false, "efforts": [], "accounts": [], "pickAccount": false, "waiting": false, "frequent": [] });
         let (online, any) = match self.online(scope) {
             Ok(found) => found,
             Err(error) => {
@@ -292,6 +328,8 @@ impl Choose {
         let name = station["name"].as_str().unwrap_or("");
         let options = list(&station["models"]);
         let r = resolve(&options, &self.choice(scope, id));
+        let history = self.record(&format!("ws:{scope}:frequent")).map(|v| list(&v)).unwrap_or_default();
+        view["frequent"] = json!(frequent_combos(history, &options, &r));
         let overview = station.get("overview").filter(|o| o.is_object());
         let profiles = overview.map(|o| list(&o["profiles"])).unwrap_or_default();
         // The model list is what a profile's check found: those not checked since the station started are, now.
@@ -401,6 +439,15 @@ impl Choose {
         self.keep_station(scope, station_id(station));
         self.changed();
         Ok(ask)
+    }
+
+    /// A new chat accepted by the core, rather than merely clicking around its model picker.
+    pub fn used(&self, station: &str, choice: &Value) {
+        let key = format!("ws:{}:frequent", crate::workspace::of_address(station));
+        let mut history = self.record(&key).map(|v| list(&v)).unwrap_or_default();
+        record_combo(&mut history, choice, self.host.now_ms());
+        self.data.put(TABLE, &key, json!(history));
+        self.changed();
     }
 
     /// `newChat.migrate`: what a client kept before the core did (per station id, and the station per scope), each
@@ -650,6 +697,45 @@ impl Choose {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frequent_combos_rank_usage_break_ties_by_recency_and_never_substitute_unavailable_choices() {
+        let options = vec![json!({"model": "astra", "name": "Astra", "ids": ["openai/astra"], "runtimes": ["codex"],
+            "efforts": {"codex": ["low", "medium", "high"]}, "accounts": {"codex": []}})];
+        let choice = |model: &str, runtime: &str, effort: Option<&str>| json!({"model": model, "runtime": runtime, "effort": effort});
+        let medium = choice("astra", "codex", Some("medium"));
+        let current = resolve(&options, &medium);
+        let mut history = vec![];
+        for (at, c) in [medium.clone(), medium.clone(), choice("astra", "codex", None), choice("astra", "codex", Some("high")),
+            choice("astra", "codex", Some("ultra")), choice("astra", "claude", Some("medium")), choice("gone", "codex", None)].iter().enumerate() {
+            record_combo(&mut history, c, at as f64);
+        }
+        let combos = frequent_combos(history, &options, &current);
+        assert_eq!(combos.len(), 3);
+        assert_eq!(combos[0]["label"], "Astra · medium");
+        assert_eq!(combos[0]["selected"], true);
+        assert_eq!(combos[1]["effort"], "high");
+        assert_eq!(combos[2]["label"], "Astra · 默认深度");
+        assert_eq!(combos[2]["selected"], false);
+    }
+
+    #[test]
+    fn frequent_combos_deduplicate_aliases_and_limit_visible_and_stored_history() {
+        let mut history = vec![];
+        let mut options = vec![];
+        for i in 0..70 {
+            let model = format!("m{i}");
+            record_combo(&mut history, &json!({"model": model, "runtime": "codex"}), i as f64);
+            options.push(json!({"model": model, "name": model, "runtimes": ["codex"]}));
+        }
+        assert_eq!(history.len(), 64);
+        let current = resolve(&options, &json!({}));
+        assert_eq!(frequent_combos(history, &options, &current).len(), 4);
+        let options = vec![json!({"model": "astra", "name": "Astra", "ids": ["openai/astra"], "runtimes": ["codex"]})];
+        let mut history = vec![];
+        for model in ["astra", "openai/astra"] { record_combo(&mut history, &json!({"model": model, "runtime": "codex"}), 1.0); }
+        assert_eq!(frequent_combos(history, &options, &resolve(&options, &json!({}))).len(), 1);
+    }
 
     #[test]
     fn model_efforts_follow_the_account_and_survive_resolving_saved_choices() {

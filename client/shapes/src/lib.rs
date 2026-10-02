@@ -1754,6 +1754,21 @@ pub struct NewChatView {
     pub spent: Option<String>,
     /// Its model control (the `pick` topic of `new` on the station), with the page.
     pub pick: Option<PickView>,
+    /// Up to four combinations used on this device in this workspace, filtered to this station.
+    pub frequent: Option<Vec<FrequentCombo>>,
+}
+
+/// One-click model and depth for a new chat; ranked and labelled by the core.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrequentCombo {
+    pub model: String,
+    pub runtime: RuntimeKind,
+    pub effort: Option<String>,
+    pub label: String,
+    pub selected: bool,
 }
 
 /// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the

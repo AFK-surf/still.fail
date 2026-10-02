@@ -1635,6 +1635,15 @@ export interface FootprintView {
 	memory: FootprintRow[];
 }
 
+/** One-click model and depth for a new chat; ranked and labelled by the core. */
+export interface FrequentCombo {
+	model: string;
+	runtime: RuntimeKind;
+	effort?: string;
+	label: string;
+	selected: boolean;
+}
+
 export interface HistoryFrom {
 	name: string;
 	slackUser?: string;
@@ -2166,6 +2175,8 @@ export interface NewChatView {
 	spent?: string;
 	/** Its model control (the `pick` topic of `new` on the station), with the page. */
 	pick?: PickView;
+	/** Up to four combinations used on this device in this workspace, filtered to this station. */
+	frequent?: FrequentCombo[];
 }
 
 /**

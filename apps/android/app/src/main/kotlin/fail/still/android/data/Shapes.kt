@@ -1627,6 +1627,16 @@ data class FootprintView (
 	val memory: List<FootprintRow>
 )
 
+/// One-click model and depth for a new chat; ranked and labelled by the core.
+@Serializable
+data class FrequentCombo (
+	val model: String,
+	val runtime: RuntimeKind,
+	val effort: String? = null,
+	val label: String,
+	val selected: Boolean
+)
+
 @Serializable
 data class HistoryFrom (
 	val name: String,
@@ -2178,7 +2188,9 @@ data class NewChatView (
 	/// Every account of the model has used up its allowance: what is sent waits for it.
 	val spent: String? = null,
 	/// Its model control (the `pick` topic of `new` on the station), with the page.
-	val pick: PickView? = null
+	val pick: PickView? = null,
+	/// Up to four combinations used on this device in this workspace, filtered to this station.
+	val frequent: List<FrequentCombo>? = null
 )
 
 /// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something

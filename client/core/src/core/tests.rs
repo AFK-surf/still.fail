@@ -1189,6 +1189,45 @@ fn token_forms_publish_core_validation_and_keep_the_legacy_call_working() {
 }
 
 #[test]
+fn new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_together() {
+    run(async {
+        let (host, core) = choosing_core().await;
+        let ui = core.connect();
+        let topic = Topic::NewChat { scope: "ws".into() };
+        core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: topic.clone() });
+        host.settle().await;
+        let mut values = HashMap::new();
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["frequent"], json!([]));
+        call(&host, &core, ui, 2, "newChat.pick", json!({"scope": "ws", "model": "gpt-6-astra", "runtime": "codex", "effort": "medium"})).await.unwrap();
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["frequent"], json!([]), "picking alone is not usage");
+        core.inner.choose.used("other/st", &json!({"model": "claude-opus-5-5", "runtime": "claude", "effort": "high"}));
+        call(&host, &core, ui, 3, "newChat.create", json!({"station": "ws/st"})).await.unwrap();
+        apply(&host, &mut values);
+        let combos = values[&1]["frequent"].as_array().unwrap();
+        assert_eq!(combos.len(), 1, "another workspace's history must not appear");
+        assert_eq!(combos[0]["effort"], "medium");
+        drop(core);
+        host.take_emitted();
+        let core = over_fetch(&host, 0.0).await;
+        let ui = core.connect();
+        core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: topic });
+        host.settle().await;
+        let mut values = HashMap::new();
+        apply(&host, &mut values);
+        let combo = values[&1]["frequent"][0].clone();
+        assert_eq!(combo["model"], "gpt-6-astra");
+        call(&host, &core, ui, 2, "newChat.pick", json!({"scope": "ws", "model": "claude-opus-5-5", "effort": "low"})).await.unwrap();
+        call(&host, &core, ui, 3, "newChat.pick", json!({"scope": "ws", "model": combo["model"], "runtime": combo["runtime"], "effort": combo["effort"]})).await.unwrap();
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["model"]["model"], "gpt-6-astra");
+        assert_eq!(values[&1]["effort"], "medium");
+        assert_eq!(values[&1]["frequent"][0]["selected"], true);
+    });
+}
+
+#[test]
 fn a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_has_it() {
     run(async {
         let (host, core) = choosing_core().await;

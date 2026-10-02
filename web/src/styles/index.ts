@@ -101,3 +101,5 @@ import "../Switcher.css.ts";
 import "../Shortcuts.css.ts";
 import "../madeChat.css.ts";
 import "../DoingMark.css.ts";
+
+import "../FrequentCombos.css.ts";

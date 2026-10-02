@@ -359,6 +359,7 @@ impl Inner {
                     "newChat.create" => {
                         let ask = self.choose.create(&at("station"))?;
                         let made = Box::pin(self.execute(Call::ChatCreate { station: at("station"), ask: ask.clone() }, progress, at_call)).await?;
+                        self.choose.used(&at("station"), &ask);
                         Ok(json!({ "key": made["key"], "runtime": ask["runtime"], "model": ask["model"], "effort": ask.get("effort") }))
                     }
                     "pick.set" => self.choose.set(&at("station"), &at("of"), &params).map(|_| Value::Null),
