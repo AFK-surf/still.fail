@@ -72,7 +72,10 @@ def main():
                 def call(path, body=None):
                     data = None if body is None else json.dumps(body).encode()
                     req = urllib.request.Request(f'http://127.0.0.1:{port}{path}', data=data, headers={'authorization': f'Bearer {token}', 'content-type': 'application/json'})
-                    with urllib.request.urlopen(req, timeout=600) as response: return json.load(response)
+                    try:
+                        with urllib.request.urlopen(req, timeout=600) as response: return json.load(response)
+                    except urllib.error.HTTPError as error:
+                        raise RuntimeError(f"migration proxy HTTP {error.code}: {error.read(2000).decode(errors='replace')}") from None
                 for attempt in range(90):
                     if child.poll() is not None: raise RuntimeError('Wrangler migration proxy exited; no cutover performed')
                     try:

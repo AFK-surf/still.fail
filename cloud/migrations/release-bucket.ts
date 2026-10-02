@@ -8,6 +8,11 @@ async function digest(body: ReadableStream<Uint8Array>): Promise<string> {
 }
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    try { return await migrate(request, env); }
+    catch (error) { return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 }); }
+  },
+};
+async function migrate(request: Request, env: Env): Promise<Response> {
     if (!env.MIGRATION_TOKEN || request.headers.get("authorization") !== `Bearer ${env.MIGRATION_TOKEN}`) return new Response("unauthorized", { status: 401 });
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/list") {
@@ -43,5 +48,4 @@ export default {
     const latest = await env.SOURCE.head(input.key);
     if (latest?.etag !== input.etag) return new Response("source changed during copy; list again", { status: 409 });
     return Response.json({ key: input.key, sourceEtag: input.etag, targetEtag: target.etag, size: source.size, sha256: sourceHash });
-  },
-};
+}
