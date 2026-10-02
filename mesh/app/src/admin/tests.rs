@@ -804,6 +804,10 @@ async fn a_key_on_a_listed_provider_makes_a_profile_that_runs_what_its_endpoints
     let groq = added(&t, "groq");
     assert_eq!((groq.access_kind, groq.provider.as_deref(), groq.runtimes.clone()), (stillfail_shapes::AccessKind::ApiProvider, Some("groq"), vec![]));
     assert_eq!(groq.name, "Groq");
+    // Jev answers the automatic decisions alone: no runtime, and no model list to try the key on.
+    let (status, body) = t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "jev", "key": "jev-key-1" } }))).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(added(&t, "jev").runtimes, vec![]);
     // Anthropic and Responses endpoints: both runtimes, set up from where the provider speaks.
     assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "opencode", "key": "oc-key-1" } }))).await.0, 200);
     let zen = added(&t, "opencode");

@@ -193,6 +193,16 @@ pub fn runtimes_for(access: Option<&crate::config::RawProfileAccess>, runtime: O
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn a_decision_only_provider_is_checked_without_asking_it_anything() {
+        let env = crate::machine_logins::Env::default();
+        let dir = std::path::Path::new("/nonexistent-check-test");
+        let started = std::time::Instant::now();
+        let check = check_profile(CheckOptions { runtime: RuntimeKind::Claude, kind: AccessKind::ApiProvider, key: "k", via: Via::of("jev"), home: dir, env: &env, machine: false }).await;
+        assert_eq!(check.state, "unknown", "{}", check.detail);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
+
     use super::*;
 
     #[test]

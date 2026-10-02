@@ -1231,6 +1231,36 @@ fn posted(host: &FakeHost, path: &str) -> Vec<Value> {
 }
 
 #[test]
+fn a_profile_added_through_the_flow_is_posted_and_answers_its_id() {
+    run(async {
+        let (host, core) = station_core(0.0).await;
+        station_answers(&host, |req| {
+            let path = req.url.trim_start_matches("https://stillfail.test");
+            match (req.method.as_str(), path.split('?').next().unwrap()) {
+                ("GET", "/admin/api/overview") => json_response(200, json!({
+                    "viewer": { "via": "local" }, "connects": [], "processes": [], "counts": { "sessions": 0, "running": 0, "warm": 0 },
+                    "mesh": null, "slackUsers": [], "slackTeams": [], "slackApps": [], "disk": null, "logins": [], "profiles": [],
+                    "apiProviders": [{ "id": "jev" }, { "id": "groq" }],
+                })),
+                ("POST", "/admin/api/profiles") => json_response(200, json!({ "id": "jev", "overview": {} })),
+                _ => json_response(404, json!({})),
+            }
+        });
+        let ui = core.connect();
+        let params = json!({ "station": "ws1/st1", "form": "add-test" });
+        let r = call(&host, &core, ui, 1, "profile.flow.open", params.clone()).await; assert!(r.is_ok(), "open: {r:?}");
+        let edit = |input: Value| json!({ "station": "ws1/st1", "form": "add-test", "input": input });
+        let r = call(&host, &core, ui, 2, "profile.flow.edit", edit(json!({ "provider": "jev" }))).await; assert!(r.is_ok(), "edit provider: {r:?}");
+        call(&host, &core, ui, 3, "profile.flow.edit", edit(json!({ "key": "k" }))).await.unwrap();
+        let added = call(&host, &core, ui, 4, "profile.flow.submit", params.clone()).await;
+        assert!(added.is_ok(), "{added:?}");
+        let sent = posted(&host, "/profiles");
+        assert_eq!(sent.len(), 1, "the add reaches the station");
+        assert_eq!(sent[0]["access"]["provider"], "jev");
+    });
+}
+
+#[test]
 fn token_forms_publish_core_validation_and_keep_the_legacy_call_working() {
     run(async {
         let host = FakeHost::new();

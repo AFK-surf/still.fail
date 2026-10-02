@@ -629,13 +629,28 @@ impl AdminApi {
             });
             Ok(())
         })?;
-        let mut check = check;
-        if let Some(profile) = self.config().profiles.iter().find(|p| p.id == id) {
-            check.decision = Some(crate::decision::profiles::discover(profile, &check).await);
-        }
         self.checks.lock().unwrap().insert(id.clone(), check.clone());
         self.deps.store.set_profile_check(&id, &serde_json::to_value(&check)?)?;
         self.events.overview_changed();
+        // What the automatic decisions can use is found out once the profile is made: the probe asks the provider
+        // with a model of its own, and a request to add must not wait on that (a slow provider ran the add out of time).
+        if let Some(profile) = self.config().profiles.iter().find(|p| p.id == id).cloned() {
+            let hub = Arc::clone(self);
+            let id = id.clone();
+            let mut check = check;
+            tokio::spawn(async move {
+                check.decision = Some(crate::decision::profiles::discover(&profile, &check).await);
+                // A profile edited or removed meanwhile must not inherit what was found for the one it was.
+                if hub.config().profiles.iter().find(|p| p.id == id).is_none_or(|p| crate::decision::profiles::fingerprint(p) != crate::decision::profiles::fingerprint(&profile)) {
+                    return;
+                }
+                hub.checks.lock().unwrap().insert(id.clone(), check.clone());
+                if let Err(e) = hub.deps.store.set_profile_check(&id, &serde_json::to_value(&check).unwrap_or_default()) {
+                    warn!(profile = id, error = %e, "could not keep what the decisions can use");
+                }
+                hub.events.overview_changed();
+            });
+        }
         Ok(json!({ "id": id, "overview": overview }))
     }
 

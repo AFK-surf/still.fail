@@ -26,8 +26,18 @@ impl Inner {
             Call::ProfileFlow { topic, action, patch } => {
                 if matches!(action.as_str(), "open" | "edit" | "drop") { return self.profile_flow.change(&topic, at.0, &action, &patch); }
                 let Topic::ProfileFlow { station, .. } = &topic else { unreachable!() };
-                let input = self.profile_flow.begin(&topic, at.0)?;
-                let op = crate::ops::request("profile.add", &input).unwrap()?;
+                let mut input = self.profile_flow.begin(&topic, at.0)?;
+                // The operation names its station, as every other: without it the request is refused before it is sent.
+                input["station"] = json!(station);
+                let op = match crate::ops::request("profile.add", &input).unwrap() {
+                    Ok(op) => op,
+                    // The page waits on the answer: a request that cannot even be made is its answer.
+                    Err(e) => {
+                        let failed: Result<Value> = Err(e);
+                        self.profile_flow.finish(&topic, at.0, &failed);
+                        return failed;
+                    }
+                };
                 let answer = self.stations.perform(&StationAddr::parse(station)?, &op).await;
                 self.profile_flow.finish(&topic, at.0, &answer);
                 answer
