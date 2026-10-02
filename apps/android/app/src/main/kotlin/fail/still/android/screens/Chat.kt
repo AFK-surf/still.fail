@@ -1195,8 +1195,9 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
 private fun Out(ctx: Here, o: Outgoing) {
     val app = LocalApp.current
     val thread = ctx.view.thread
-    // A chat made here has no thread until its station makes it: what failed in it goes by its key.
-    val pending = (ctx.of as? ChatOf.Session)?.key?.takeIf { it.startsWith("new:") }
+    // With no thread yet (a chat made here, or an agent's before its station has made its chat): what failed in it goes
+    // by the page's key.
+    val pending = (ctx.of as? ChatOf.Session)?.key
     val failed = o.state == "failed"
     val ink = chatInk()
     // On its way, it says so only if that takes a moment, counted from when it was sent: the row is drawn anew as a chat

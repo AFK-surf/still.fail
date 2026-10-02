@@ -238,6 +238,22 @@ impl Inner {
                         }
                         Ok(json!({ "id": id }))
                     }
+                    // An agent's page: into its chat's outbox once it has one; before, it waits here while its
+                    // station makes the chat, nothing waiting on that.
+                    // (Behind what waits already, in order.)
+                    None if !session.starts_with(crate::views::PENDING_PREFIX) => match self.views.bound_thread(&station, &session).filter(|_| !self.views.first_waits(&station, &session)) {
+                        Some(thread) => {
+                            let id = self.views.outbox_add(&station, thread, message.clone());
+                            self.deliver(&station, thread, &id, message).await
+                        }
+                        None => {
+                            let (id, ask) = self.views.first_queue(&station, &session, message);
+                            if ask {
+                                self.make_first(&station, &session);
+                            }
+                            Ok(json!({ "id": id }))
+                        }
+                    },
                     None => Err(CoreError::invalid(t!("core-misc.call.no_chat"))),
                 }
             }
@@ -285,6 +301,12 @@ impl Inner {
                     self.make_chat(&session);
                     Ok(Value::Null)
                 }
+                None if self.views.first_waits(&station, &session) => {
+                    if self.views.first_try(&station, &session) {
+                        self.make_first(&station, &session);
+                    }
+                    Ok(Value::Null)
+                }
                 None => Err(CoreError::invalid(t!("core-misc.call.no_chat"))),
             },
             Call::ChatDiscardIn { station, session, id } => {
@@ -293,6 +315,7 @@ impl Inner {
                     Some(None) => {
                         self.views.pending_discard(&session, &id);
                     }
+                    None if self.views.first_waits(&station, &session) => self.views.first_discard(&station, &session, &id),
                     None => return Err(CoreError::invalid(t!("core-misc.call.no_chat"))),
                 }
                 Ok(Value::Null)
@@ -533,6 +556,28 @@ impl Inner {
                     }
                 }
                 Err(error) => core.views.pending_failed(&key, &error.message),
+            }
+        }.boxed_local());
+    }
+    /// Asks an agent's station for its chat (`chat.forSession`), behind what was sent to it meanwhile: once made, that
+    /// goes, in order; else it says why, to be sent again.
+    pub(super) fn make_first(&self, station: &str, key: &str) {
+        let (Some(core), station, key) = (self.me.upgrade(), station.to_string(), key.to_string()) else { return };
+        self.host.spawn(async move {
+            let made = async {
+                let op = crate::ops::request("chat.forSession", &json!({ "station": station, "session": key }))
+                    .expect("chat.forSession is an operation")?;
+                core.stations.perform(&StationAddr::parse(&station)?, &op).await
+            }.await;
+            let made = made.and_then(|answer| answer.get("id").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", t!("core-misc.call.no_chat"))));
+            match made {
+                Ok(thread) => {
+                    for (id, message) in core.views.first_made(&station, &key, thread) {
+                        // One failing stays in the outbox as failed; the rest still go, in order.
+                        let _ = core.deliver(&station, thread, &id, message).await;
+                    }
+                }
+                Err(error) => core.views.first_failed(&station, &key, &error.message),
             }
         }.boxed_local());
     }

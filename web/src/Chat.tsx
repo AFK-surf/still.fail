@@ -70,7 +70,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   /** Whose draft the composer shows here. */
   chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: ChatTo }>; onSent?: (to: ChatTo) => void;
-  /** The core's key of a chat made here (`chat.create`): sent to by it until its thread is known. */
+  /** What is sent to until its thread is known: the core's key of a chat made here (`chat.create`), or the agent's
+   *  whose page it is (the core has the station make its chat behind what is sent). */
   made?: string;
   /** Archives the chat, as its bar's 归档 does: offered under the agent's last post once it is all done (ChatRows). */
   onArchive?: (() => void) | undefined;
@@ -1296,9 +1297,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
     const layer = dock?.offsetParent;
     const list = document.querySelector<HTMLElement>(`.${css.chatMessages}`);
     list?.dispatchEvent(new Event("sent"));
-    // Not before the agent has a chat: its row is only there once the station has made one (ensureChat), at no time
-    // known, so the words do not wait for it; the row comes in as rows do.
-    if (!onSending && (thread !== null || !ensureChat) && field && list && layer instanceof HTMLElement) sendingHere(field, draft.text, { layer, z: OVER_DOCK, list });
+    if (!onSending && field && list && layer instanceof HTMLElement) sendingHere(field, draft.text, { layer, z: OVER_DOCK, list });
     const to = await sendDraft(draft, thread, ensureChat, onSending);
     if (to !== null) onSent?.(to);
   };

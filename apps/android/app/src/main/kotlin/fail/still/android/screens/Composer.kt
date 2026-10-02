@@ -777,8 +777,8 @@ private fun ArchiveNotice(offline: Boolean, restore: suspend () -> Unit) {
 /**
  * What the chat's composer (the host's: ChatHost.kt) writes to. The composer empties at once: the message lives in the
  * chat's outbox until the station has it (a failure shows there too), its words flying from the composer to its place in
- * the list (Host.sending). Before the agent has a chat, the first message makes one, bound to the agent, and the page
- * moves to it.
+ * the list (Host.sending). Before the agent has a chat, what is sent waits in the outbox while the core has the station
+ * make one, bound to the agent; the page becomes it.
  */
 @Composable
 internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, draft: Draft): ComposerSpec {
@@ -807,12 +807,10 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
         },
         onSend = {
             if (!draft.locked) {
-                // Its words stay where they were typed until its row is in the list, then go there. Only when that row is
-                // made here at once: not before the agent has a chat (the station makes it, at no time known), nor from a
-                // window short of the chat's end (its row is past the window until the station has the message). Then the
-                // row comes in as rows do.
-                val pendingKey = (of as? ChatOf.Session)?.key?.takeIf { thread == null && it.startsWith("new:") }
-                if ((thread != null || pendingKey != null) && view.newer != true) host.sending(draft.text.trim(), carried = false)
+                // Its words stay where they were typed until its row is in the list, then go there. Not from a window short
+                // of the chat's end: its row is past the window until the station has the message (at no time known); it
+                // comes in as rows do.
+                if (view.newer != true) host.sending(draft.text.trim(), carried = false)
                 val taken = draft.take()
                 // Refused by the core before it reached the outbox (`invalid_params`: no such chat, a bad address): the words
                 // come back if nothing was written since, and why is said. A station's failure is in the outbox (未发送, 重试).
@@ -824,27 +822,17 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
                     }
                     Unit
                 }
-                scope.launch {
-                    // A chat made here (`new:…`) is sent to by its key until its station has made it.
-                    val pending = (of as? ChatOf.Session)?.key?.takeIf { thread == null && it.startsWith("new:") }
-                    if (pending != null) {
-                        app.scope.launch { try { api.sendIn(pending, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (e: CoreException) { refused(e) } }
-                        return@launch
-                    }
-                    val to = thread?.id ?: try {
-                        draft.starting = true
-                        api.chatFor((of as ChatOf.Session).key)
-                    } catch (e: CoreException) {
-                        // No chat to send into: the draft comes back.
-                        host.notSent()
-                        draft.restore(taken)
-                        draft.error = e.message
-                        return@launch
-                    } finally {
-                        draft.starting = false
-                    }
-                    // Sent from the app's scope: the page may move to the new chat before the station answers.
-                    app.scope.launch { try { api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() }) } catch (e: CoreException) { refused(e) } }
+                // Sent to by the page's key until its thread is known: a chat made here (`new:…`), or the agent's, whose
+                // chat the core has its station make behind what is sent (it waits in the outbox meanwhile).
+                val to = thread?.id
+                val key = (of as? ChatOf.Session)?.key ?: keeper
+                // Sent from the app's scope: the page may move on before the station answers.
+                app.scope.launch {
+                    try {
+                        if (to != null) api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                        else if (key != null) api.sendIn(key, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                        else host.notSent()
+                    } catch (e: CoreException) { refused(e) }
                 }
             }
         },

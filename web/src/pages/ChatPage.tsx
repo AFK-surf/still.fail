@@ -314,12 +314,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
   const slackUrl = chat.slackUrl;
-  // Before its agent has a chat, the first message makes one, bound to the agent; the page stays (the core shows the
-  // chat at the same address once it is there).
-  const session = "session" in of && !chat.thread && !made ? of.session : null;
-  const firstMessage = session === null ? {} : {
-    ensureChat: async () => ({ key: session, thread: (await stationApi(call).chatFor(session)).id }),
-  };
+  // Before its agent has a chat, what is sent goes to the agent: it waits in the outbox at once while the core has the
+  // station make the chat behind it; the page stays (the core shows the chat at the same address once it is there).
+  const sendTo = made ?? ("session" in of && !chat.thread ? of.session : undefined);
   return (
     <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
       {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
@@ -359,7 +356,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
       <OpenFile.Provider value={(session, file) => openTab(fileTab(session, file.path, file.name))}>
-        <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} onArchive={chat.archivable && keeper ? archiveAsked : undefined} {...firstMessage} {...(made ? { made } : {})} />
+        <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} onArchive={chat.archivable && keeper ? archiveAsked : undefined} {...(sendTo ? { made: sendTo } : {})} />
       </OpenFile.Provider>
       </div>
         {side && (

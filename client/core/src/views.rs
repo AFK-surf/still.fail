@@ -57,9 +57,22 @@ pub struct Views {
     /// Chats asked for here (`chat.create`) by the key the core gave them, until the station has made them and ever
     /// after (a page that opened one keeps its key).
     pending: RefCell<HashMap<String, Pending>>,
+    /// Messages sent to an agent with no chat yet (its station, its key), waiting here while its station makes one.
+    firsts: RefCell<HashMap<(String, String), First>>,
     archiving: archive::Archiving,
     /// Views whose words count seconds (a chat's jobs): each computed again when they next change, by the newest timer.
     again: Rc<RefCell<(u64, HashMap<Topic, u64>)>>,
+}
+
+/// An agent's first messages, sent before it has a chat: shown in its page's outbox at once, while its station makes
+/// the chat (`chat.forSession`) behind them; then they go to the chat's outbox, in order, and on.
+#[derive(Default)]
+struct First {
+    queue: Vec<Value>,
+    /// Asked for its chat, not answered yet.
+    making: bool,
+    /// Why its chat could not be made, the last time it was tried.
+    failed: Option<String>,
 }
 
 /// A chat asked for here. Until its station has made it, it is shown at once from what is known here: its page,
@@ -127,6 +140,7 @@ impl Views {
             update_notices_open: RefCell::default(),
             delivered: RefCell::default(),
             pending: RefCell::default(),
+            firsts: RefCell::default(),
             archiving: Default::default(),
             again: Rc::default(),
         })
@@ -237,6 +251,104 @@ impl Views {
         self.pending_changed(key);
         self.outbox_changed(&station, thread);
         sends
+    }
+
+    /// A message sent to an agent with no chat yet: it waits here, shown as `sending`. Answers its id, and whether its
+    /// chat is to be asked for now (nothing asking already).
+    pub fn first_queue(&self, station: &str, key: &str, message: Value) -> (String, bool) {
+        self.sent.set(self.sent.get() + 1);
+        let id = format!("out-{}", self.sent.get());
+        let mut firsts = self.firsts.borrow_mut();
+        let first = firsts.entry((station.to_string(), key.to_string())).or_default();
+        let mut entry = message;
+        entry["id"] = json!(id);
+        entry["after"] = json!(0);
+        entry["createdAt"] = json!(self.host.now_ms().round() as i64);
+        entry["state"] = json!("sending");
+        first.queue.push(entry);
+        let ask = !first.making;
+        drop(firsts);
+        if ask {
+            self.first_try(station, key);
+        } else {
+            self.first_changed(station, key);
+        }
+        (id, ask)
+    }
+
+    /// Its chat asked for (again): what waits is `sending` once more. False when nothing waits.
+    pub fn first_try(&self, station: &str, key: &str) -> bool {
+        let mut firsts = self.firsts.borrow_mut();
+        let Some(first) = firsts.get_mut(&(station.to_string(), key.to_string())).filter(|f| !f.queue.is_empty()) else { return false };
+        first.making = true;
+        first.failed = None;
+        for m in &mut first.queue {
+            m["state"] = json!("sending");
+            m["error"] = Value::Null;
+        }
+        drop(firsts);
+        self.first_changed(station, key);
+        true
+    }
+
+    /// Whether messages wait here for this agent's chat.
+    pub fn first_waits(&self, station: &str, key: &str) -> bool {
+        self.firsts.borrow().get(&(station.to_string(), key.to_string())).is_some_and(|f| !f.queue.is_empty())
+    }
+
+    /// Its chat could not be made: what waits says why, to be sent again (or dropped) from its row.
+    pub fn first_failed(&self, station: &str, key: &str, error: &str) {
+        if let Some(first) = self.firsts.borrow_mut().get_mut(&(station.to_string(), key.to_string())) {
+            first.making = false;
+            first.failed = Some(error.to_string());
+            for m in &mut first.queue {
+                m["state"] = json!("failed");
+                m["error"] = json!(error);
+            }
+        }
+        self.first_changed(station, key);
+    }
+
+    /// Drops a message waiting for its agent's chat.
+    pub fn first_discard(&self, station: &str, key: &str, id: &str) {
+        let mut firsts = self.firsts.borrow_mut();
+        let k = (station.to_string(), key.to_string());
+        if let Some(first) = firsts.get_mut(&k) {
+            first.queue.retain(|m| m["id"] != id);
+            if first.queue.is_empty() && !first.making {
+                firsts.remove(&k);
+            }
+        }
+        drop(firsts);
+        self.first_changed(station, key);
+    }
+
+    /// Its station made the agent's chat, `thread`: what waited goes to the chat's outbox, in order (the same rows), and
+    /// is answered (id, message) to be delivered.
+    pub fn first_made(&self, station: &str, key: &str, thread: u64) -> Vec<(String, Value)> {
+        let queue = self.firsts.borrow_mut().remove(&(station.to_string(), key.to_string())).map(|f| f.queue).unwrap_or_default();
+        let sends = queue.iter().map(|m| (m["id"].as_str().unwrap_or("").to_string(), sent_as(m))).collect();
+        if !queue.is_empty() {
+            self.outbox.borrow_mut().entry((station.to_string(), thread)).or_default().extend(queue);
+        }
+        self.first_changed(station, key);
+        self.outbox_changed(station, thread);
+        sends
+    }
+
+    /// What waits here for an agent's chat, as its page's outbox has it.
+    fn first_outbox(&self, station: &str, key: &str) -> Vec<Value> {
+        self.firsts.borrow().get(&(station.to_string(), key.to_string())).map(|f| f.queue.clone()).unwrap_or_default()
+    }
+
+    /// The agent's page shows it anew.
+    fn first_changed(&self, station: &str, key: &str) {
+        let views: Vec<Topic> = self.views.borrow().keys().cloned().collect();
+        for view in views {
+            if matches!(&view, Topic::Chat { station: s, thread: None, session: Some(k) } if s == station && k == key) {
+                self.store.invalidate(&view);
+            }
+        }
     }
 
     /// Its page and the sidebars show it anew.
@@ -497,10 +609,23 @@ impl Views {
                 self.pending_chat(station, key).or_else(|| Some(Err(CoreError::new("http_404", t!("core-views.error.no_chat")).with_status(404))))
             }
             // An item's page by its agent: its chat once it has one (made here or elsewhere), else the agent alone.
-            Topic::Chat { station, thread: None, session: Some(key) } => match self.bound_thread(station, key) {
-                Some(thread) => self.chat(station, thread),
-                None => self.unchatted(station, key),
-            },
+            // What was sent to it before it had one is in its outbox too, till its station's answer moves it there.
+            Topic::Chat { station, thread: None, session: Some(key) } => {
+                let view = match self.bound_thread(station, key) {
+                    Some(thread) => self.chat(station, thread),
+                    None => self.unchatted(station, key),
+                };
+                let waiting = self.first_outbox(station, key);
+                if waiting.is_empty() {
+                    return view;
+                }
+                view.map(|v| v.map(|mut v| {
+                    if let Some(outbox) = v.get_mut("outbox").and_then(Value::as_array_mut) {
+                        outbox.extend(waiting);
+                    }
+                    v
+                }))
+            }
             Topic::Chat { .. } => Some(Err(CoreError::invalid(t!("core-views.error.chat_needs_thread")))),
             Topic::History { station, key } => self.history(station, key),
             Topic::Archive { scope } => self.archive(scope),
@@ -712,7 +837,7 @@ impl Views {
     /// A thread as the station's `threads` topic has it.
     /// The chat an agent's item has: the still.fail chat bound to it (its first session), as the station's items say, or
     /// its threads do.
-    fn bound_thread(&self, station: &str, key: &str) -> Option<u64> {
+    pub(crate) fn bound_thread(&self, station: &str, key: &str) -> Option<u64> {
         let from_rows = self.ok(Topic::ChatRows { station: station.to_string() }).and_then(|rows| {
             rows.as_array()?.iter().find(|r| r.get("session").and_then(Value::as_str) == Some(key))?.get("thread")?.as_u64()
         });
@@ -2995,6 +3120,43 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(v["thread"]["id"], 7);
             assert_eq!(v["messages"].as_array().unwrap().len(), 1);
+        });
+    }
+
+    #[test]
+    fn an_agents_first_messages_show_at_once_and_go_on_into_its_chat_as_the_same_rows() {
+        run(async {
+            let t = setup();
+            let views = t.router.views();
+            let mut ui = Ui::default();
+            t.subscribe(1, agent_page("ws/a", "k"));
+            t.set(sessions("ws/a"), json!([full_session("k", json!({"connect": "ember"}))]));
+            t.set(rows("ws/a"), json!([{"id": "k", "session": "k", "thread": null, "title": "修构建", "agents": []}]));
+            t.read(&mut ui, 1).await;
+            // Sent before it has a chat: in its page at once, its chat asked for once.
+            let (first, ask) = views.first_queue("ws/a", "k", json!({"text": "修一下", "attachments": [], "quotes": []}));
+            let (second, again) = views.first_queue("ws/a", "k", json!({"text": "还有", "attachments": [], "quotes": []}));
+            assert!(ask && !again);
+            t.read(&mut ui, 1).await;
+            let outbox = ui.value.clone().unwrap()["outbox"].clone();
+            assert_eq!(outbox.as_array().unwrap().iter().map(|m| (m["id"].clone(), m["state"].clone())).collect::<Vec<_>>(),
+                vec![(json!(first), json!("sending")), (json!(second), json!("sending"))]);
+            // Its chat could not be made: they say why, and a new try sends them again.
+            views.first_failed("ws/a", "k", "连不上");
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.clone().unwrap()["outbox"][0]["state"], "failed");
+            assert!(views.first_try("ws/a", "k"));
+            // Made: the same rows are its chat's outbox, in order, and the page is the chat.
+            let sends = views.first_made("ws/a", "k", 7);
+            assert_eq!(sends.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(), vec![first.clone(), second.clone()]);
+            assert!(!views.first_waits("ws/a", "k"));
+            t.set(rows("ws/a"), json!([{"id": "k", "session": "k", "thread": 7, "title": "修构建", "agents": []}]));
+            t.set(threads("ws/a"), json!([thread(7, &["k"], t.host.now_ms())]));
+            t.set(page_of("ws/a", 7), page(1, &["开始吧"], Value::Null));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            assert_eq!(v["thread"]["id"], 7);
+            assert_eq!(v["outbox"].as_array().unwrap().iter().map(|m| m["id"].clone()).collect::<Vec<_>>(), vec![json!(first), json!(second)]);
         });
     }
 

@@ -159,8 +159,8 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
 }) {
   const app = useApp();
   const rows = useMessageList(list, floor, view, `${here.station}:${view.thread?.id ?? here.key}`, lives);
-  // A chat made here is sent to by its key until its thread is known.
-  const to = view.thread?.id ?? (here.key.startsWith(PENDING) ? here.key : null);
+  // Sent to by the page's key until its thread is known (a chat made here, or the agent's: useComposer).
+  const to = view.thread?.id ?? here.key;
   const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))], (f) => ownerIn(view, f));
   // The messages are kept as they are while nothing they show changes: what they are handed stays the same function,
   // the latest one behind it.
@@ -338,27 +338,25 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
 /**
  * What the chat's composer (its host's, ChatHost.tsx) writes to: this chat, as the wide screen's composer sends
  * (../Chat.tsx's sendDraft). The composer empties at once: the message lives in the chat's outbox until the station has
- * it (a failure shows there too). Before the agent has a chat, the first message makes one, bound to the agent, and the
- * page stays (the core shows the chat at the same address).
+ * it (a failure shows there too). Before the agent has a chat, what is sent waits in its outbox while the core has the
+ * station make one, bound to the agent, and the page stays (the core shows the chat at the same address).
  */
 function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
-  const call = useStationCall(here.station);
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
   const send = (draft: Draft) => {
     if (view.offline || view.archived) return;
-    // A chat made here is sent to by its key until its thread is known.
-    const to = view.thread?.id ?? (here.key.startsWith(PENDING) ? here.key : null);
+    // Sent to by the page's key until its thread is known: a chat made here, or the agent whose page it is (what is sent
+    // waits in the outbox at once while the core has the station make its chat).
+    const to = view.thread?.id ?? here.key;
     // Its words stay where they were typed until its row is in the list, then go there (../madeChat.ts), over the composer.
     const into = list.current;
     const host = into?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
     const field = host?.querySelector<HTMLElement>(`[data-made-composer] textarea:not([aria-hidden])`);
     into?.dispatchEvent(new Event("sent"));
-    // Not before the agent has a chat (`to` null): its row is only there once the station has made one, at no time
-    // known, so the words do not wait for it; the row comes in as rows do.
-    if (to !== null && into && host && field) sendingHere(field, draft.text, { layer: host, z: "7", list: into });
-    void sendDraft(draft, to, async () => ({ thread: (await stationApi(call).chatFor(here.key)).id }));
+    if (into && host && field) sendingHere(field, draft.text, { layer: host, z: "7", list: into });
+    void sendDraft(draft, to, undefined);
   };
   useLayoutEffect(() => use({
     station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, archived: !!view.archived, send,
