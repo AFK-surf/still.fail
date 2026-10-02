@@ -78,9 +78,9 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     const issued = await (await bob("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).json() as any;
     const keys = await (await h.fetch("/.well-known/stillfail-grant-keys")).json() as any;
     assert.equal(keys.keys[0].d, undefined, "no private half");
-    const { payload, protectedHeader } = await jwtVerify(issued.credential, await importJWK(keys.keys[0], "EdDSA"), { issuer: "ember-cloud" });
+    const { payload, protectedHeader } = await jwtVerify(issued.credential, await importJWK(keys.keys[0], "EdDSA"), { issuer: "stillfail-cloud" });
     assert.deepEqual([payload.ws, payload.role, payload.device, payload.email, payload.name], [home.id, "admin", device.id, "bob@example.test", "Name of bob"]);
-    assert.deepEqual([protectedHeader.typ, payload.exp! - payload.iat!, typeof payload.sid, issued.expires_at - issued.issued_at], ["ember-member+jwt", 30 * 86400, "string", 30 * 86400]);
+    assert.deepEqual([protectedHeader.typ, payload.exp! - payload.iat!, typeof payload.sid, issued.expires_at - issued.issued_at], ["stillfail-member+jwt", 30 * 86400, "string", 30 * 86400]);
     assert.equal((await carol("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).status, 404);
 
     // Removing a member: no new credential, and the stations are told to refuse the ones it holds.

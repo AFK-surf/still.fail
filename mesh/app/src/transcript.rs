@@ -113,7 +113,7 @@ fn to_text(value: &Value) -> String {
 /// Posting a message: the station keeps what an agent posted (its messages), so a transcript's copies of the calls are
 /// left out.
 pub fn is_posting(tool: &str) -> bool {
-    tool == "mcp__ember__chat_post"
+    matches!(tool, "mcp__stillfail__chat_post" | "mcp__ember__chat_post")
 }
 
 /// What reading a transcript keeps between reads: the calls left out (their results follow later), and calls taken out

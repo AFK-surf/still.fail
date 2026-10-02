@@ -130,10 +130,7 @@ async fn open() -> Result<IdbDatabase, HostError> {
     let db = match open_at(&factory, DATABASE, Some(VERSION), Vec::new(), false).await? {
         Some(db) => db,
         None => {
-            let rows = former_rows(&factory).await.unwrap_or_else(|error| {
-                web_sys::console::warn_1(&JsValue::from_str(&format!("reading {FORMER_DATABASE} failed: {}", error.0)));
-                Vec::new()
-            });
+            let rows = former_rows(&factory).await?;
             open_at(&factory, DATABASE, Some(VERSION), rows, true).await?.ok_or_else(|| HostError("IndexedDB 打不开".into()))?
         }
     };

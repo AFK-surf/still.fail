@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 旧名称迁移第一阶段：新 access JWT issuer 和成员凭证 issuer/type 改用 stillfail，云端继续验证已有 ember issuer；部署前确认在用 station 已支持双 issuer/type（此次之前的版本已有支持）。新启动的 agent MCP namespace 为 stillfail，交接中的老进程仍用 ember；历史 transcript 两种都识别，迁移提示第 10 条告知老会话。官网主题新写 stillfail.site.theme，迁移旧选择。IndexedDB 旧库读取出错时终止新库创建并重试，防止空库盖过迁移机会。部署后验证新登录、老 access token、老成员凭证、新/交接会话各一次。
+
 - 开源跟进与旧品牌清理（open-source-followup）：根包名、MCP initialize 服务显示名称、官网内部命名及当前文档/注释统一 still.fail / stillfail；旧数据、协议、MCP 配置 namespace、桌面存储 origin 与云资源名保持兼容，不做数据迁移。wasm 构建按 LLVM_BIN/Homebrew/PATH 寻找 LLVM 并提前校验 wasm32；桌面 stable/beta 均支持 UNSIGNED=1（正式发布默认签名不变）。本地开发文档构建时指定本地 preview origin。MCP 名称需 station 更新后生效；官网注释/内部事件与颜色常量改名无视觉变化，按正常 site 发版即可。
 
 - 奏折回答离场（decision-card-swipe-exit）：更新 web 和 Android，卡片回答后收拢并以先慢后快的速度向上抽走，下一张保持原位；左右滑仍为待定和不再提醒。纯视图改动，无 core、station 或数据迁移依赖，可独立更新。上线检查选项回答、文字回复和最后一张返回；减少动态效果时跳过动画。

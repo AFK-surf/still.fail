@@ -9,7 +9,8 @@ export const LOGIN_TTL_SEC = 10 * 60;
 export const CODE_TTL_SEC = 60;
 export const REFRESH_RETRY_SEC = 120;
 // Existing sessions' tokens name it: it keeps its old name.
-const ISSUER = "ember-cloud";
+const ISSUER = "stillfail-cloud";
+const ACCEPTED_ISSUERS = [ISSUER, "ember-cloud"];
 const encoder = new TextEncoder();
 const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 
@@ -123,7 +124,7 @@ export async function verifyToken(env: Env, token: string, type: "access" | "ref
     const { payload } = await jwtVerify(token, encoder.encode(env.AUTH_SIGNING_KEY), {
       algorithms: ["HS256"],
       typ: "JWT",
-      issuer: ISSUER,
+      issuer: ACCEPTED_ISSUERS,
       // Tokens signed before the move name the old origin.
       audience: publicOrigins(env),
       requiredClaims: ["sub", "sid", "iat", "exp", "type"],

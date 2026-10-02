@@ -2266,7 +2266,7 @@ pub fn post_entries(posts: &[Post]) -> Vec<TimelineEntry> {
                     at: Some(at.clone()),
                     kind: "tool_call".into(),
                     text: serde_json::to_string_pretty(&args).unwrap_or_default(),
-                    tool: Some("mcp__ember__chat_post".into()),
+                    tool: Some("mcp__stillfail__chat_post".into()),
                     ok: None,
                     call_id: Some(call_id.clone()),
                     subagent: None,

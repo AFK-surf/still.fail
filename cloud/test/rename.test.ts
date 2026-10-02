@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { SignJWT } from "jose";
+import { decodeJwt, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 import { previewFiles } from "../src/preview.ts";
 
@@ -98,10 +98,12 @@ test("signing in on an old host goes on to the new one, which Google calls back,
   }
 });
 
-test("tokens issued for the old origin stay good", async () => {
+test("new tokens use stillfail while tokens issued for the old origin stay good", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
+    assert.equal(decodeJwt(tokens.access_token).iss, "stillfail-cloud");
+    assert.equal((await h.fetch("/v1/me", { headers: { authorization: `Bearer ${tokens.access_token}` } })).status, 200);
     const now = Math.floor(Date.now() / 1000);
     const old = await new SignJWT({ sub: tokens.subject, sid: tokens.session_id, email: tokens.email, type: "access" })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuer("ember-cloud").setAudience(h.oldOrigin).setIssuedAt(now - 1).setExpirationTime(now + 240)

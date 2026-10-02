@@ -162,7 +162,7 @@ impl AgentDriver for ClaudeDriver {
             }
         }
         let session_id = options.resume.clone().unwrap_or_else(uuid);
-        let mcp_config = json!({ "mcpServers": { "ember": { "type": "http", "url": options.mcp_url, "headers": { "Authorization": format!("Bearer ${{{MCP_TOKEN_VAR}}}") } } } });
+        let mcp_config = json!({ "mcpServers": { "stillfail": { "type": "http", "url": options.mcp_url, "headers": { "Authorization": format!("Bearer ${{{MCP_TOKEN_VAR}}}") } } } });
         let model = options.model.clone().or_else(|| options.profile.model.clone());
         let mut args: Vec<String> = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--dangerously-skip-permissions"]
             .map(String::from)
