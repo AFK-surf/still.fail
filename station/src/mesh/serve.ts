@@ -11,6 +11,7 @@ import { nowSecs } from "../ops/files.ts";
 import { type Admitted, revoked, verifyMember } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
+import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
@@ -70,6 +71,8 @@ export type Members = {
   up(): boolean;
   /// Phones lent to the agents.
   shares: Shares;
+  /// The mesh's spans, when traces are on.
+  traces?: Traces;
 };
 
 /// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
@@ -154,12 +157,80 @@ export async function serve(m: Members, conn: Connection) {
 }
 
 /// One request: to the admin API in this process.
-async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], conn: Connection) {
-  const reader = new Reader(stream);
-  const head = await reader.line();
+async function request(m: Members, raw: Stream, viewer: Admitted["viewer"], conn: Connection) {
+  const accepted = { wall: Date.now(), at: process.hrtime.bigint() };
+  const firstReader = new Reader(raw);
+  const head = await firstReader.line();
   if (head === null) return;
-  const method: string = typeof head.method === "string" ? head.method : "GET";
+  const method: string = typeof head.method === "string" ? head.method.toUpperCase() : "GET";
   const path: string = typeof head.path === "string" ? head.path : "";
+  // A span of the caller's trace when it records one: from the stream's acceptance to its answer's last byte (an
+  // event stream's, a socket's or a phone's offer: to its head). The admin API's goes under ours.
+  const traced = tracing(m.traces, head, method, path, conn.via(), accepted, raw, firstReader.carry.length);
+  const stream = traced.stream;
+  const reader = firstReader;
+  reader.stream = stream;
+  try {
+    await answerRequest(m, stream, reader, head, method, path, viewer, conn);
+    traced.end(null);
+  } catch (error) {
+    traced.end(error as Error);
+    throw error;
+  }
+}
+
+/// A request's span while it runs, and the stream it is answered on, counted: what the head line said (status, a
+/// stream or not), how much came and went.
+function tracing(traces: Traces | undefined, head: any, method: string, path: string, via: string | null, accepted: { wall: number; at: bigint }, stream: Stream, carried: number) {
+  const theirs = typeof head.headers?.traceparent === "string" ? head.headers.traceparent : undefined;
+  let span = traces?.start(parseParent(theirs)) ?? null;
+  if (span === null || traces === undefined) return { stream, end: (_: Error | null) => {} };
+  // Started when the stream was accepted, not when its head was read.
+  span = { ...span, wallNs: BigInt(accepted.wall) * 1_000_000n, started: accepted.at };
+  head.headers = { ...(head.headers ?? {}), traceparent: Traces.traceparent(span) };
+  const outcome = { status: 0, received: carried, sent: 0, headSeen: false };
+  const end = (streamed: boolean, error: Error | null) => {
+    if (span === null) return;
+    const attributes: [string, unknown][] = [
+      ["http.request.method", method],
+      ["url.path", route(path)],
+      ["http.response.status_code", outcome.status],
+      ["http.request.body.size", outcome.received],
+    ];
+    attributes.push(streamed ? ["stillfail.stream", true] : ["http.response.body.size", outcome.sent]);
+    if (via !== null) attributes.push(["stillfail.path", via]);
+    if (error !== null) attributes.push(["error.type", error.message]);
+    traces.end(span, `${method} ${route(path)}`, attributes, error !== null || outcome.status >= 500);
+    span = null;
+  };
+  const counted: Stream = {
+    read: async () => {
+      const more = await stream.read();
+      if (more) outcome.received += more.length;
+      return more;
+    },
+    write: async (bytes) => {
+      await stream.write(bytes);
+      if (!outcome.headSeen) {
+        outcome.headSeen = true;
+        const line = bytes.subarray(0, bytes.indexOf(10) < 0 ? bytes.length : bytes.indexOf(10));
+        try {
+          const said = JSON.parse(line.toString());
+          outcome.status = Number(said.status) || 0;
+          const type = String(said.headers?.["content-type"] ?? "");
+          if (outcome.status === 101 || type.startsWith("text/event-stream") || type.startsWith("application/x-ndjson")) end(true, null);
+        } catch {}
+        outcome.sent += bytes.length - line.length - 1;
+      } else outcome.sent += bytes.length;
+    },
+    finish: () => stream.finish(),
+    stopped: () => stream.stopped(),
+    reset: (code) => stream.reset(code),
+  };
+  return { stream: counted, end: (error: Error | null) => end(false, error) };
+}
+
+async function answerRequest(m: Members, stream: Stream, reader: Reader, head: any, method: string, path: string, viewer: Admitted["viewer"], conn: Connection) {
   const answer = async (status: number, body: unknown) => {
     await writeLine(stream, { status, headers: { "content-type": "application/json" } });
     await stream.write(Buffer.from(typeof body === "string" ? body : JSON.stringify(body)));

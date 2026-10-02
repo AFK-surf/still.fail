@@ -7,6 +7,7 @@ import { log } from "../ops/log.ts";
 import { AdbShares, AdminApi, Cloud, Key, MeshNative, Up } from "../services.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
+import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
@@ -43,7 +44,10 @@ export const MeshLive = Layer.effectDiscard(
         (stop) => Effect.sync(stop),
       );
       const connections = yield* FiberSet.make();
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares };
+      // The mesh's spans, when the config turns traces on (read at start, as the Rust does).
+      const traces = new Traces(agents.config.raw()?.telemetry?.traces === true);
+      if (traces.enabled) traces.exportTo(cloud.state, key);
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, traces };
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;
