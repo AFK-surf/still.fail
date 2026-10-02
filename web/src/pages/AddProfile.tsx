@@ -157,6 +157,11 @@ function ConnectForm({ d, edit, submitting, onSubmit }: { d: ProfileFlowView; ed
             onChange={(e) => { setEndpoint(e.target.value); edit({ endpoint: e.target.value }); }} placeholder={d.tile?.endpointExample ?? "https://"} />
         </Field>
       )}
+      {(d.regions?.length ?? 0) > 1 && (
+        <Field label={t("web-pages.addProfile.region")}>
+          <Segmented label={t("web-pages.addProfile.region")} value={d.region ?? ""} options={(d.regions ?? []).map((r) => ({ value: r.id, label: r.label }))} onChange={(region) => edit({ region })} />
+        </Field>
+      )}
       {d.protocols.length > 1 && (
         <Field label={t("web-pages.addProfile.protocol")} htmlFor="add-protocol">
           <Select id="add-protocol" value={d.protocol ?? ""} onChange={(protocol) => edit({ protocol })} disabled={d.pending} options={d.protocols.map((p) => ({ value: p.id, label: p.label }))} />

@@ -2543,6 +2543,9 @@ data class ProfileFlowView (
 	/// Asked only when there are more than one.
 	val protocols: List<FlowOption>,
 	val protocol: String? = null,
+	/// Asked only for a provider that runs in more than one region (international and China).
+	val regions: List<FlowOption>? = null,
+	val region: String? = null,
 	val showKey: Boolean,
 	val key: String,
 	val keyLabel: String,

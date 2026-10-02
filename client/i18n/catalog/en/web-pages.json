@@ -5,6 +5,7 @@
   "web-pages.addProfile.openAction": "open the add page",
   "web-pages.addProfile.pick": "Choose a provider",
   "web-pages.addProfile.protocol": "Protocol",
+  "web-pages.addProfile.region": "Region",
   "web-pages.addProfile.station": "Add on station",
   "web-pages.admin.backToList": "Back",
   "web-pages.admin.changeFailed": "Couldn't change: {error}",

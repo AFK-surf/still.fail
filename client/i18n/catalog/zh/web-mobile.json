@@ -396,6 +396,7 @@
   "web-mobile.profiles.pasteKey": "粘贴 key",
   "web-mobile.profiles.pick": "选择服务商",
   "web-mobile.profiles.protocol": "协议",
+  "web-mobile.profiles.region": "区域",
   "web-mobile.profiles.quota": "额度",
   "web-mobile.profiles.quotaChecked": "{ago}查询",
   "web-mobile.profiles.quotaFailed": "没能刷新额度：{error}",

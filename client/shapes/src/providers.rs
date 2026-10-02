@@ -150,6 +150,20 @@ pub fn of_kind(kind: AccessKind) -> Option<&'static Source> {
     SOURCES.iter().find(|s| s.legacy == Some(kind))
 }
 
+/// The providers that run a second source in China, as (the international source, the Chinese one): one tile in the
+/// picker, the region chosen on the connect page.
+pub const REGIONS: &[(&str, &str)] = &[("qwen", "qwen-cn"), ("moonshotai", "moonshotai-cn"), ("zai", "zai-coding-cn"), ("minimax", "minimax-cn")];
+
+/// The Chinese source of an international one, if it has one.
+pub fn china_of(id: &str) -> Option<&'static str> {
+    REGIONS.iter().find(|(base, _)| *base == id).map(|(_, cn)| *cn)
+}
+
+/// Whether the source is the Chinese variant of another (not a tile of its own).
+pub fn is_china_variant(id: &str) -> bool {
+    REGIONS.iter().any(|(_, cn)| *cn == id)
+}
+
 /// An example of the address a provider at the reader's own is given.
 pub fn example(id: &str) -> Option<&'static str> {
     match id {

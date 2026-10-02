@@ -782,6 +782,12 @@ private fun ColumnScope.ConnectForm(d: ProfileFlowView, edit: (String, String) -
         }
         d.endpointHint?.let { Text(it, fontSize = 12.sp, color = C.muted) }
     }
+    if ((d.regions?.size ?: 0) > 1) {
+        Text(t("web-mobile.profiles.region"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+            d.regions.orEmpty().forEach { r -> PickRow(r.label, checked = r.id == d.region) { edit("region", r.id) } }
+        }
+    }
     if (d.protocols.size > 1) {
         Text(t("web-mobile.profiles.protocol"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {

@@ -408,6 +408,7 @@
   "web-mobile.profiles.pasteKey": "Paste key",
   "web-mobile.profiles.pick": "Choose a provider",
   "web-mobile.profiles.protocol": "Protocol",
+  "web-mobile.profiles.region": "Region",
   "web-mobile.profiles.quota": "Quota",
   "web-mobile.profiles.quotaChecked": "Checked {ago}",
   "web-mobile.profiles.quotaFailed": "Couldn't refresh quota: {error}",

@@ -1232,6 +1232,11 @@ pub struct ProfileFlowView {
     /// Asked only when there are more than one.
     pub protocols: Vec<FlowOption>,
     pub protocol: Option<String>,
+    /// Asked only for a provider that runs in more than one region (international and China).
+    #[serde(default)]
+    pub regions: Vec<FlowOption>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
     pub show_key: bool,
     pub key: String,
     pub key_label: String,

@@ -672,6 +672,14 @@ function ConnectForm({ d, edit, busy, onSubmit }: { d: ProfileFlowView; edit(inp
           {d.endpointHint && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.endpointHint}</p>}
         </>
       )}
+      {(d.regions?.length ?? 0) > 1 && (
+        <>
+          <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.region")}</b>
+          <ListCard>
+            {(d.regions ?? []).map((r) => <PickRow key={r.id} label={r.label} checked={r.id === d.region} onClick={() => edit({ region: r.id })} />)}
+          </ListCard>
+        </>
+      )}
       {d.protocols.length > 1 && (
         <>
           <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.protocol")}</b>

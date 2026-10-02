@@ -133,6 +133,8 @@
   "core-views.flow.protocol.anthropic": "Anthropic Messages",
   "core-views.flow.protocol.chat_completions": "Chat Completions",
   "core-views.flow.protocol.responses": "Responses",
+  "core-views.flow.region.china": "中国",
+  "core-views.flow.region.global": "国际",
   "core-views.flow.unknown_provider": "不认识这个服务商",
   "core-views.flow.uses": "添加后可用于：{uses}",
   "core-views.flow.uses_none": "这样添加后不能用于任何地方",

@@ -3,9 +3,9 @@ import { vars } from "../styles/tokens.css.ts";
 
 /** A group of providers under its small heading (Cue's order: labs, china, gateways, cloud, inference, local). */
 export const group = style({ marginBottom: "28px" });
-export const groupHead = style({ margin: "0 0 8px 12px", fontSize: vars.textXs, fontWeight: "500", color: vars.muted });
+export const groupHead = style({ margin: "0 0 8px", fontSize: vars.textXs, fontWeight: "500", color: vars.muted });
 export const tiles = style({
-  display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "4px",
+  display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "4px", margin: "0 -12px",
   "@media": { "(max-width: 700px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
 });
 /** A provider: its mark and its name, nothing else; flat, a ground on hover. */

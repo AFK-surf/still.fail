@@ -160,6 +160,8 @@
   "core-views.flow.protocol.anthropic": "Anthropic Messages",
   "core-views.flow.protocol.chat_completions": "Chat Completions",
   "core-views.flow.protocol.responses": "Responses",
+  "core-views.flow.region.china": "China",
+  "core-views.flow.region.global": "International",
   "core-views.flow.unknown_provider": "Unknown provider",
   "core-views.flow.uses": "Usable once added for: {uses}",
   "core-views.flow.uses_none": "Added like this it can't be used anywhere",

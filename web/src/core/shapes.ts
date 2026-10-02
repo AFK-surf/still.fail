@@ -2536,6 +2536,9 @@ export interface ProfileFlowView {
 	/** Asked only when there are more than one. */
 	protocols: FlowOption[];
 	protocol?: string;
+	/** Asked only for a provider that runs in more than one region (international and China). */
+	regions?: FlowOption[];
+	region?: string;
 	showKey: boolean;
 	key: string;
 	keyLabel: string;

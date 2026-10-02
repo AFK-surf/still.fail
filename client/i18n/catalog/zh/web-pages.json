@@ -5,6 +5,7 @@
   "web-pages.addProfile.openAction": "打开添加页面",
   "web-pages.addProfile.pick": "选择服务商",
   "web-pages.addProfile.protocol": "协议",
+  "web-pages.addProfile.region": "区域",
   "web-pages.addProfile.station": "添加到哪台 station",
   "web-pages.admin.backToList": "返回列表",
   "web-pages.admin.changeFailed": "没能更改：{error}",

@@ -78,6 +78,9 @@ fn tile_of(source: &providers::Source, has_key: bool, has_plan: bool) -> Value {
         "endpointRequired": source.endpoint_required, "endpointExample": providers::example(source.id),
         "protocols": source.protocols.iter().map(|p| p.id()).collect::<Vec<_>>(),
         "keyOptional": source.key_optional, "uses": uses, "usesText": uses_text(&uses),
+        "regions": providers::china_of(source.id).map(|cn| json!([
+            { "id": source.id, "label": t!("core-views.flow.region.global") }, { "id": cn, "label": t!("core-views.flow.region.china") },
+        ])).unwrap_or_else(|| json!([])),
     })
 }
 
@@ -90,7 +93,7 @@ pub fn groups(supported: Option<&[String]>) -> Vec<Value> {
     for group in GROUPS {
         let mut tiles: Vec<Value> = SOURCES
             .iter()
-            .filter(|s| s.group == group)
+            .filter(|s| s.group == group && !providers::is_china_variant(s.id))
             .filter_map(|s| {
                 let has_key = s.legacy.is_some() || listed(s.id);
                 let has_plan = matches!(s.id, "openai" | "anthropic");
@@ -131,7 +134,7 @@ fn view(station: &str, draft: &Value, overview: &Value) -> Value {
     let mut out = json!({
         "step": "pick", "station": station, "title": t!("core-views.flow.pick"), "hint": t!("core-views.flow.pick_hint"),
         "groups": groups, "tile": tile, "method": method, "choices": [], "showEndpoint": false, "endpoint": draft["endpoint"],
-        "protocols": [], "showKey": false, "key": draft["key"], "keyLabel": "", "canSubmit": false, "pending": draft["pending"] == true,
+        "protocols": [], "regions": [], "region": null, "showKey": false, "key": draft["key"], "keyLabel": "", "canSubmit": false, "pending": draft["pending"] == true,
         "submitLabel": "", "usesLine": "", "error": draft["error"],
     });
     let Some(tile) = tile else { return out };
@@ -163,6 +166,14 @@ fn view(station: &str, draft: &Value, overview: &Value) -> Value {
         out["submitLabel"] = json!(t!("core-views.flow.add"));
         return out;
     }
+    // A provider in two regions: which one, the international source unless the China one is chosen.
+    let regions: Vec<String> = tile["regions"].as_array().into_iter().flatten().filter_map(|r| r["id"].as_str().map(String::from)).collect();
+    let region = (!regions.is_empty()).then(|| draft["region"].as_str().filter(|r| regions.iter().any(|x| x == r)).unwrap_or(&regions[0]).to_string());
+    if let Some(region) = &region {
+        out["regions"] = tile["regions"].clone();
+        out["region"] = json!(region);
+    }
+    let source_id = region.clone().unwrap_or_else(|| tile["id"].as_str().unwrap_or("").to_string());
     let own = tile["endpointRequired"] == true;
     let protocols: Vec<&str> = tile["protocols"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
     let protocol = own.then(|| draft["protocol"].as_str().filter(|p| protocols.contains(p)).or(protocols.first().copied())).flatten();
@@ -181,7 +192,7 @@ fn view(station: &str, draft: &Value, overview: &Value) -> Value {
     let endpoint_ok = !own || providers::clean_endpoint(endpoint).is_some();
     out["canSubmit"] = json!(draft["pending"] != true && key_ok && endpoint_ok);
     out["submitLabel"] = json!(t!("core-views.flow.verify_add"));
-    let uses = providers::find(&tile["id"].as_str().unwrap_or("").to_string()).map(|s| uses_of(s, (!endpoint.is_empty()).then_some(endpoint), protocol)).unwrap_or_default();
+    let uses = providers::find(&source_id).map(|s| uses_of(s, (!endpoint.is_empty()).then_some(endpoint), protocol)).unwrap_or_default();
     out["usesLine"] = json!(if uses.is_empty() { t!("core-views.flow.uses_none") } else { t!("core-views.flow.uses", uses = uses_text(&uses)) });
     out
 }
@@ -225,7 +236,7 @@ impl Flows {
                     }
                 }),
             );
-            let value = json!({ "provider": "", "method": "", "endpoint": "", "protocol": "", "key": "", "error": null, "pending": false });
+            let value = json!({ "provider": "", "method": "", "endpoint": "", "protocol": "", "region": "", "key": "", "error": null, "pending": false });
             drafts.insert(topic.clone(), Draft { owner, value, pending: false, _watch: watch });
         }
         let draft = drafts.get_mut(topic).unwrap();
@@ -238,7 +249,7 @@ impl Flows {
             let Some(patch) = patch.as_object() else { return Ok(Value::Null) };
             if let Some(provider) = patch.get("provider").and_then(Value::as_str) {
                 if provider.is_empty() {
-                    draft.value = json!({ "provider": "", "method": "", "endpoint": "", "protocol": "", "key": "", "error": null, "pending": false });
+                    draft.value = json!({ "provider": "", "method": "", "endpoint": "", "protocol": "", "region": "", "key": "", "error": null, "pending": false });
                 } else {
                     let tile = find(&groups, provider).ok_or_else(|| CoreError::invalid(t!("core-views.flow.unknown_provider")))?;
                     // What it can be connected with: both asks which, one goes straight on.
@@ -247,7 +258,7 @@ impl Flows {
                         (false, true) => "plan",
                         _ => "key",
                     };
-                    draft.value = json!({ "provider": provider, "method": method, "endpoint": "", "protocol": "", "key": "", "error": null, "pending": false });
+                    draft.value = json!({ "provider": provider, "method": method, "endpoint": "", "protocol": "", "region": "", "key": "", "error": null, "pending": false });
                 }
             }
             if let Some(method) = patch.get("method").and_then(Value::as_str) {
@@ -262,10 +273,10 @@ impl Flows {
                 if both && draft.value["method"].as_str().is_some_and(|m| !m.is_empty()) {
                     draft.value["method"] = json!("");
                 } else {
-                    draft.value = json!({ "provider": "", "method": "", "endpoint": "", "protocol": "", "key": "", "error": null, "pending": false });
+                    draft.value = json!({ "provider": "", "method": "", "endpoint": "", "protocol": "", "region": "", "key": "", "error": null, "pending": false });
                 }
             }
-            for field in ["endpoint", "protocol", "key"] {
+            for field in ["endpoint", "protocol", "region", "key"] {
                 if let Some(v) = patch.get(field).and_then(Value::as_str) {
                     draft.value[field] = json!(v);
                     draft.value["error"] = Value::Null;
@@ -299,7 +310,7 @@ impl Flows {
                 access["key"] = json!(key);
             }
             if kind == "api-provider" {
-                access["provider"] = tile["id"].clone();
+                access["provider"] = shown["region"].as_str().map(Value::from).unwrap_or_else(|| tile["id"].clone());
                 if shown["showEndpoint"] == true {
                     access["endpoint"] = json!(draft.value["endpoint"].as_str().unwrap_or("").trim());
                     if let Some(protocol) = shown["protocol"].as_str() {
@@ -396,6 +407,30 @@ mod tests {
             assert_eq!(flows.value(&topic).unwrap()["error"], "DeepSeek 拒绝了这个 key（401）");
             flows.change(&topic, 1, "edit", &json!({ "key": "sk-2" })).unwrap();
             assert!(flows.value(&topic).unwrap()["error"].is_null(), "typing again clears it");
+        });
+    }
+
+    #[test]
+    fn a_provider_in_two_regions_is_one_tile_and_the_region_is_asked_on_its_page() {
+        crate::testing::run(async {
+            let (store, flows, topic) = flow();
+            flows.change(&topic, 1, "open", &json!({})).unwrap();
+            store.set(&Topic::Overview { station: "ws/st".into() }, Ok(json!({ "apiProviders": [{"id": "qwen"}, {"id": "qwen-cn"}, {"id": "moonshotai"}, {"id": "moonshotai-cn"}, {"id": "deepseek"}] })));
+            let view = flows.value(&topic).unwrap();
+            let china: Vec<&str> = view["groups"].as_array().unwrap().iter().find(|g| g["id"] == "china").unwrap()["providers"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect();
+            assert_eq!(china, ["deepseek", "qwen", "moonshotai"], "the China sources are not tiles of their own");
+            flows.change(&topic, 1, "edit", &json!({ "provider": "qwen" })).unwrap();
+            let view = flows.value(&topic).unwrap();
+            serde_json::from_value::<stillfail_shapes::ProfileFlowView>(view.clone()).unwrap();
+            assert_eq!((view["regions"][0]["id"].as_str(), view["regions"][1]["id"].as_str(), view["region"].as_str()), (Some("qwen"), Some("qwen-cn"), Some("qwen")));
+            flows.change(&topic, 1, "edit", &json!({ "region": "qwen-cn", "key": "k" })).unwrap();
+            assert_eq!(flows.value(&topic).unwrap()["region"], "qwen-cn");
+            let input = flows.begin(&topic, 1).unwrap();
+            assert_eq!(input["access"]["provider"], "qwen-cn");
+            // A provider in one region asks nothing.
+            flows.finish(&topic, 1, &Ok(Value::Null));
+            flows.change(&topic, 1, "edit", &json!({ "provider": "deepseek" })).unwrap();
+            assert!(flows.value(&topic).unwrap()["regions"].as_array().unwrap().is_empty());
         });
     }
 
