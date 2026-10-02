@@ -264,7 +264,7 @@ fun DecisionsScreen(current: WorkspaceEntry) {
                 Idle(view, Modifier.weight(1f))
                 return@Column
             }
-            val note = if (view == null) topic.error?.message ?: "正在读取…" else "正在读取…"
+            val note = if (view == null) topic.error?.message ?: t("android-misc.reading") else t("android-misc.reading")
             Box(Modifier.weight(1f).fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(note, fontSize = 15.sp, color = if (view == null && topic.error != null) C.red else C.muted, textAlign = TextAlign.Center)
             }
@@ -288,24 +288,24 @@ private fun Idle(view: DecisionsView, modifier: Modifier) {
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp)) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Image(painterResource(if (C.dark) R.drawable.buddy_idle_dark else R.drawable.buddy_idle), null, Modifier.size(72.dp))
-            Text("奏折都批完了", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.padding(top = 8.dp))
-            Text("有新的会直接出现在这里", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+            Text(t("android-misc.decisions.idle.title"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.padding(top = 8.dp))
+            Text(t("android-misc.decisions.idle.note"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
             if (today != null) {
                 Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    Figure(today.count.toString(), "今天批了")
-                    today.waited?.let { Figure(it, "平均等你") }
-                    Figure(today.working.toString(), "正在办")
+                    Figure(today.count.toString(), t("android-misc.decisions.idle.answered"))
+                    today.waited?.let { Figure(it, t("android-misc.decisions.idle.waited")) }
+                    Figure(today.working.toString(), t("android-misc.decisions.idle.working"))
                 }
             }
         }
         if (working.isNotEmpty()) {
-            IdleTitle("正在办 · 下一封可能从这里来")
+            IdleTitle(t("android-misc.decisions.idle.workingTitle"))
             working.forEach { w ->
                 IdleRow(w.title, w.line, w.time?.get("lastActiveAt")?.ago.orEmpty(), busy = true) { app.push(Screen.Chat(w.station, ChatOf.Session(w.session))) }
             }
         }
         if (answered.isNotEmpty()) {
-            IdleTitle("今天批过的")
+            IdleTitle(t("android-misc.decisions.idle.answeredTitle"))
             answered.forEach { a ->
                 IdleRow(a.text, "${a.title} · ${a.answer}", a.clock, busy = false) { app.push(Screen.Chat(a.station, ChatOf.Session(a.session))) }
             }

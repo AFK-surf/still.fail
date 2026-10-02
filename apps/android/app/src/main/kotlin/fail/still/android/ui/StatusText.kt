@@ -15,6 +15,9 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/** The core's done lead in either language (client/core present.rs: 做完了, 做完了：<why>; Done, Done: <why>). */
+val doneLead = Regex("^(?:做完了(?:：|$)|Done(?:: |$))")
+
 /** Same compact completed label as web StatusText; the explanation and accessible name stay intact. */
 @Composable
 fun StatusText(
@@ -27,11 +30,12 @@ fun StatusText(
     style: TextStyle = TextStyle.Default,
     lineHeight: TextUnit = TextUnit.Unspecified,
 ) {
-    val done = text == "做完了" || text.startsWith("做完了：")
+    val lead = doneLead.find(text)
+    val done = lead != null
     val label = buildAnnotatedString {
-        if (done) {
-            appendInlineContent("done", "做完了")
-            val reason = text.removePrefix("做完了").removePrefix("：")
+        if (lead != null) {
+            appendInlineContent("done", t("android-misc.status.done"))
+            val reason = text.substring(lead.value.length)
             if (reason.isNotEmpty()) { append(" "); append(reason) }
         } else append(text)
     }

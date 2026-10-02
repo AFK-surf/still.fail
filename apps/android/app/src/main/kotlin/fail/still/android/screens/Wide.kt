@@ -140,15 +140,15 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                     contentAlignment = Alignment.Center,
                 ) { IconIn(Icons.Edit, 17.dp, Color.White) }
             }
-            if (view == null) Text(chats.error?.message ?: "正在读取会话…", fontSize = 14.sp, color = if (chats.error != null) C.red else C.muted, modifier = Modifier.padding(18.dp))
+            if (view == null) Text(chats.error?.message ?: t("android-misc.wide.loading"), fontSize = 14.sp, color = if (chats.error != null) C.red else C.muted, modifier = Modifier.padding(18.dp))
             // No rows: what the list says in their place (the core's `note`), as the home list does.
             else if (view.days.isEmpty()) {
                 val note = view.note
                 val failing = note?.failing?.firstOrNull()?.text
                 val said = when {
-                    note?.reading == true -> "正在读取会话…"
+                    note?.reading == true -> t("android-misc.wide.loading")
                     failing != null -> failing
-                    else -> "还没有会话"
+                    else -> t("android-misc.wide.empty")
                 }
                 Text(said, fontSize = 14.sp, color = if (failing != null && note?.reading != true) C.red else C.muted, modifier = Modifier.padding(18.dp))
             }

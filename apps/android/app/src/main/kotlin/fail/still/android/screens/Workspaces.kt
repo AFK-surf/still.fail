@@ -252,10 +252,10 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     // What each of the others has waiting, as the core counts it.
     val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(app.workspace.orEmpty()))
     SheetGrab()
-    SheetHead("切换 workspace")
+    SheetHead(t("android-misc.workspace.sheet.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         if (current != null) {
-            Label("当前使用")
+            Label(t("android-misc.workspace.current"))
             Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(RoundedCornerShape(16.dp)).background(C.bg)) {
                 PickRow(current.name, sub = currentOf.account.email, checked = true) { app.sheet = null }
             }
@@ -278,14 +278,14 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
             }
             respond.error?.let { Box(Modifier.padding(horizontal = 20.dp)) { Error(it.message) } }
         }
-        if (others.isNotEmpty()) Label("其它 workspace")
+        if (others.isNotEmpty()) Label(t("android-misc.workspace.others"))
         others.forEach { (account, w) ->
             WorkspaceRow(w.name, account.email, marks.value?.workspaces?.get(w.id)) { app.pickWorkspace(w.id); app.home() }
         }
     }
     Column(Modifier.padding(top = 8.dp, bottom = 16.dp)) {
-        PickRow("登录其它账号", sub = "保留已登录账号，添加另一个 Google 账号", busy = app.isDoing("auth.begin"), leading = { IconIn(Icons.LogIn, 20.dp) }) { scope.launch { signIn(app, context) } }
-        PickRow("新建 workspace", leading = { IconIn(Icons.Plus, 20.dp) }) { openNewWorkspace(app) }
+        PickRow(t("android-misc.workspace.addAccount"), sub = t("android-misc.workspace.addAccount.sub"), busy = app.isDoing("auth.begin"), leading = { IconIn(Icons.LogIn, 20.dp) }) { scope.launch { signIn(app, context) } }
+        PickRow(t("android-misc.workspace.new"), leading = { IconIn(Icons.Plus, 20.dp) }) { openNewWorkspace(app) }
     }
 }
 

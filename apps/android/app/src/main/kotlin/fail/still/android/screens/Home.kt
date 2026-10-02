@@ -265,14 +265,14 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
         item(key = "changelog-news") { ChangelogNews() }
         if (view == null) {
             // Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (Loading.kt).
-            item(key = "wait") { LoadingPill(chats.error?.message ?: "正在读取会话", error = chats.error != null) }
+            item(key = "wait") { LoadingPill(chats.error?.message ?: t("android-chat.home.loading"), error = chats.error != null) }
             item(key = "placeholders") { PlaceholderRows(7, still = chats.error != null) }
         } else {
             val stations = view.stations
             // A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
             // `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones.
             val note = view.note
-            if (note?.reading == true) item(key = "loading") { LoadingPill(note.text ?: "正在读取会话") }
+            if (note?.reading == true) item(key = "loading") { LoadingPill(note.text ?: t("android-chat.home.loading")) }
             note?.failing?.forEach { s -> item(key = "e/${s.station}") { LoadingPill(s.text, error = true) } }
             val waiting = note?.reading == true
             if (waiting || note?.failing?.isNotEmpty() == true) item(key = "placeholders") { PlaceholderRows(if (waiting) 7 else 4, still = !waiting) }
@@ -685,7 +685,7 @@ internal fun MarkCounts(mark: fail.still.android.data.WorkspaceMark) {
  */
 @Composable
 private fun StateLine(state: String, modifier: Modifier = Modifier) {
-    if (state == "做完了" || state.startsWith("做完了：")) {
+    if (fail.still.android.ui.doneLead.containsMatchIn(state)) {
         fail.still.android.ui.StatusText(
             state, modifier, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
@@ -694,7 +694,8 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
         )
         return
     }
-    val decide = state.startsWith("奏")
+    // The core's lead in either language: 奏 · …, Decision · ….
+    val lead = listOf("奏", "Decision").firstOrNull { state == it || state.startsWith("$it · ") }
     val text = androidx.compose.ui.text.buildAnnotatedString {
         if (lead != null) { pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append(lead); pop(); append(state.substring(lead.length)) }
         else append(state)

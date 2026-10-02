@@ -250,7 +250,7 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     if (view == null) {
         // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in
         // place instead of replacing another page. Its composer is there, not sending yet.
-        host.spec = ComposerSpec(station, null, draft, "发消息", onPlus = {}, onSend = {})
+        host.spec = ComposerSpec(station, null, draft, t("android-chat.chat.placeholder"), onPlus = {}, onSend = {})
         // What the composer's glass frosts, as the messages are once read: with nothing under it, it would blur what is
         // outside any source and smear it into the capsule (Glass.kt floatingStill).
         Column(Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg)) {
@@ -265,7 +265,7 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
             val error = chat.error
             // Read from its station meanwhile, over the messages to come (Loading.kt); what is wrong in red, over faded ones.
             Column(Modifier.weight(1f).fillMaxWidth()) {
-                LoadingPill(if (error != null) "读不到这个对话：${error.message}" else "正在从 ${rememberStationName(station)} 读取对话", error = error != null)
+                LoadingPill(if (error != null) t("android-chat.chat.unreadable", "error" to error.message) else t("android-chat.chat.loadingFrom", "name" to rememberStationName(station)), error = error != null)
                 PlaceholderMessages(still = error != null)
             }
         }

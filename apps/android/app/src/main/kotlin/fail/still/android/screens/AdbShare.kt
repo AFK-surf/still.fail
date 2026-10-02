@@ -50,6 +50,7 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.t
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -99,27 +100,27 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
         else AdbShare.start(context, address, name)
     }
     Column(Modifier.fillMaxSize()) {
-        NavBar("Station", app::pop, "共享调试", sub = { Text(name, fontSize = 11.sp, color = C.muted, maxLines = 1) })
+        NavBar("Station", app::pop, t("android-misc.adb.title"), sub = { Text(name, fontSize = 11.sp, color = C.muted, maxLines = 1) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             Text(
-                "把这台手机的 adb 借给「$name」上的 agent：它们在那台机器上用 adb 操作这台手机，像插着线一样。数据只走你和 station 之间已有的连接，一小时后自动停止。",
+                t("android-misc.adb.about", "name" to name),
                 fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 10.dp),
             )
             if (!AdbShare.supported) {
-                ListCard { ListRow { Text("需要 Android 11 及以上：这台手机没有无线调试。", fontSize = 15.sp, color = C.muted) } }
+                ListCard { ListRow { Text(t("android-misc.adb.unsupported"), fontSize = 15.sp, color = C.muted) } }
                 return@Column
             }
             ListCard {
                 // Lent or not, as settings' switches are; what it is doing under the title.
-                ListRow(onClick = { if (here) app.act("停止共享") { app.core.call("adb.stop") } else start() }) {
+                ListRow(onClick = { if (here) app.act(t("android-misc.adb.stopWhat")) { app.core.call("adb.stop") } else start() }) {
                     Column(Modifier.weight(1f)) {
-                        Text("共享调试", fontSize = 15.sp, color = C.ink)
+                        Text(t("android-misc.adb.title"), fontSize = 15.sp, color = C.ink)
                         val sub = when {
                             here -> state(view!!, now)
-                            elsewhere -> "正在共享给另一台 station，打开会换到这台"
+                            elsewhere -> t("android-misc.adb.elsewhere")
                             // Why it stopped by itself (its hour up, the station too old).
                             view?.sharing == false && view.message != null -> view.message
-                            else -> "一小时后自动停止"
+                            else -> t("android-misc.adb.hour")
                         }
                         Text(sub, fontSize = 13.sp, color = if (here && view!!.adb in setOf("missing", "failed")) C.red else C.muted)
                     }
@@ -128,7 +129,7 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                 if (here) {
                     view!!.serial?.takeIf { view.adb == "connected" }?.let { serial ->
                         ListRow {
-                            Text("agent 用", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                            Text(t("android-misc.adb.agentsUse"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                             SelectionContainer { Text("adb -s $serial", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = C.muted) }
                         }
                     }
@@ -138,31 +139,31 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                     }
                 }
             }
-            SectionHeader("手机上", start = 24.dp)
+            SectionHeader(t("android-misc.adb.phone"), start = 24.dp)
             ListCard {
-                Need("开发者选项", phone.developer, if (phone.developer) "已打开" else "设置 › 关于手机，连点「版本号」7 次")
-                Need("WLAN", phone.wifi, if (phone.wifi) "已连接" else "无线调试要连着 WLAN")
+                Need(t("android-misc.adb.developer"), phone.developer, if (phone.developer) t("android-misc.adb.on") else t("android-misc.adb.developer.how"))
+                Need(t("android-misc.adb.wifi"), phone.wifi, if (phone.wifi) t("android-misc.adb.wifi.on") else t("android-misc.adb.wifi.needed"))
                 ListRow(onClick = {
                     if (!phone.wireless && AdbShare.switchOn(context)) phone = phone.copy(wireless = true) else AdbShare.openWireless(context)
                 }) {
-                    Text("无线调试", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                    Text(if (phone.wireless) "已打开" else if (phone.canSwitch) "点这里打开" else "去设置里打开", fontSize = 14.sp, color = if (phone.wireless) C.muted else C.accent)
+                    Text(t("android-misc.adb.wireless"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                    Text(if (phone.wireless) t("android-misc.adb.on") else if (phone.canSwitch) t("android-misc.adb.wireless.turnOn") else t("android-misc.adb.wireless.settings"), fontSize = 14.sp, color = if (phone.wireless) C.muted else C.accent)
                 }
             }
             if (here && view!!.adb == "unpaired") Pairing(view)
             if (here && view!!.adb == "connected" && !phone.canSwitch) {
                 val busy = app.isDoing("adb.grant")
-                SectionHeader("以后", start = 24.dp)
+                SectionHeader(t("android-misc.adb.later"), start = 24.dp)
                 ListCard {
                     ListRow(onClick = if (busy) null else ({
-                        app.act("授权", "以后 app 会自己打开无线调试") {
+                        app.act(t("android-misc.adb.grantWhat"), t("android-misc.adb.granted")) {
                             app.core.call("adb.grant")
                             phone = phone.copy(canSwitch = AdbShare.canSwitch(context))
                         }
                     })) {
                         Column(Modifier.weight(1f)) {
-                            Text("让 app 自己打开无线调试", fontSize = 15.sp, color = C.ink)
-                            Text("不用每次去设置里开。由 station 的 adb 给 app 授权（WRITE_SECURE_SETTINGS），卸载 app 后失效", fontSize = 13.sp, color = C.muted)
+                            Text(t("android-misc.adb.grant.title"), fontSize = 15.sp, color = C.ink)
+                            Text(t("android-misc.adb.grant.note"), fontSize = 13.sp, color = C.muted)
                         }
                         DoingMark(busy, app.failedOf("adb.grant"), 14.dp)
                         Switch(false)
@@ -170,7 +171,7 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                 }
             }
             Text(
-                "共享期间，这台 station 上的所有 agent 都能通过 adb 操作这台手机：装 app、截屏、读应用数据。用完可以在开发者选项里「撤销 USB 调试授权」。",
+                t("android-misc.adb.warning"),
                 fontSize = 12.sp, color = C.subtle, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp),
             )
             Spacer(Modifier.height(30.dp))
@@ -193,25 +194,25 @@ private fun Pairing(view: AdbShareView) {
     val app = LocalApp.current
     val context = LocalContext.current
     val busy = app.isDoing("adb.pair")
-    SectionHeader("配对（每台 station 一次）", start = 24.dp)
+    SectionHeader(t("android-misc.adb.pair.title"), start = 24.dp)
     ListCard {
         ListRow(onClick = { AdbShare.openWireless(context) }) {
             Column(Modifier.weight(1f)) {
-                Text("打开配对窗口", fontSize = 15.sp, color = C.ink)
-                Text("在无线调试里点「使用配对码配对设备」，别离开那个窗口：下拉通知，在「共享调试」里填上 6 位码", fontSize = 13.sp, color = C.muted)
+                Text(t("android-misc.adb.pair.open"), fontSize = 15.sp, color = C.ink)
+                Text(t("android-misc.adb.pair.open.note"), fontSize = 13.sp, color = C.muted)
             }
-            Text("去无线调试", fontSize = 14.sp, color = C.accent)
+            Text(t("android-misc.adb.pair.go"), fontSize = 14.sp, color = C.accent)
         }
         // Split screen: the code typed here instead.
         ListRow(onClick = if (view.pairPort == null || busy) null else ({
-            ask(app, "配对码", "", "6 位配对码", "配对", hint = "无线调试里「使用配对码配对设备」显示的 6 位数字") { code ->
+            ask(app, t("android-misc.adb.pair.ask"), "", t("android-misc.adb.code"), t("android-misc.adb.pair.action"), hint = t("android-misc.adb.pair.hint")) { code ->
                 app.core.call("adb.pair", buildJsonObject { put("code", code.filter(Char::isDigit)) })
-                app.toast = "配对好了"
+                app.toast = t("android-misc.adb.paired")
             }
         })) {
             Column(Modifier.weight(1f)) {
-                Text("在这里填配对码", fontSize = 15.sp, color = if (view.pairPort == null) C.subtle else C.ink)
-                Text(if (view.pairPort == null) "配对窗口打开后才能填" else "分屏时用", fontSize = 13.sp, color = C.muted)
+                Text(t("android-misc.adb.pair.here"), fontSize = 15.sp, color = if (view.pairPort == null) C.subtle else C.ink)
+                Text(if (view.pairPort == null) t("android-misc.adb.pair.here.wait") else t("android-misc.adb.pair.here.split"), fontSize = 13.sp, color = C.muted)
             }
             DoingMark(busy, app.failedOf("adb.pair"), 14.dp)
         }
@@ -220,12 +221,12 @@ private fun Pairing(view: AdbShareView) {
 
 /** How the lending stands, in a line. */
 private fun state(view: AdbShareView, now: Long): String = when {
-    view.phase != "offered" -> view.message?.let { "正在连接 station：$it" } ?: "正在连接 station…"
-    view.adb == "connected" -> "agent 可以用 adb 了" + (view.until?.let { " · 还剩 ${((it - now) / 60_000).coerceAtLeast(0)} 分钟" } ?: "")
-    view.adb == "unpaired" -> "这台 station 还没和手机配对"
-    view.adb == "unauthorized" -> "手机上弹出了「允许 USB 调试吗？」，点允许"
-    view.adb == "off" -> "手机上的无线调试没开"
-    view.adb == "missing" -> "station 上没有 adb"
-    view.adb == "failed" -> "adb 没连上"
-    else -> "正在接上 adb…"
+    view.phase != "offered" -> view.message?.let { t("android-misc.adb.connecting.why", "why" to it) } ?: t("android-misc.adb.connecting")
+    view.adb == "connected" -> view.until?.let { t("android-misc.adb.connected.left", "n" to ((it - now) / 60_000).coerceAtLeast(0)) } ?: t("android-misc.adb.connected")
+    view.adb == "unpaired" -> t("android-misc.adb.unpaired")
+    view.adb == "unauthorized" -> t("android-misc.adb.unauthorized")
+    view.adb == "off" -> t("android-misc.adb.off")
+    view.adb == "missing" -> t("android-misc.adb.missing")
+    view.adb == "failed" -> t("android-misc.adb.failed")
+    else -> t("android-misc.adb.attaching")
 }

@@ -175,11 +175,11 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 // What runs on it is in settings' lists, every station's together; here, how much of it there is.
                 SectionHeader(t("android-settings.stations.onIt"), start = 24.dp)
                 ListCard {
-                    GoRow("连接", "${overview.connects.size} 个") { app.push(Screen.Connects(address)) }
-                    GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles(address)) }
-                    GoRow("记忆") { app.push(Screen.Memory(address)) }
+                    GoRow(t("android-settings.connects.title"), t("android-settings.count", "n" to overview.connects.size)) { app.push(Screen.Connects(address)) }
+                    GoRow("Profile", t("android-settings.count", "n" to overview.profiles.size)) { app.push(Screen.Profiles(address)) }
+                    GoRow(t("android-settings.memory")) { app.push(Screen.Memory(address)) }
                     // This phone's adb, lent to its agents (AdbShare.kt).
-                    GoRow("共享调试", if (shared.value?.let { it.sharing && it.station == address } == true) "共享中" else null) { app.push(Screen.AdbShare(address)) }
+                    GoRow(t("android-misc.adb.title"), if (shared.value?.let { it.sharing && it.station == address } == true) t("android-misc.adb.sharing") else null) { app.push(Screen.AdbShare(address)) }
                 }
                 if (s.online) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             }

@@ -30,6 +30,7 @@ import fail.still.android.data.decode
 import fail.still.android.data.errorText
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
+import fail.still.android.ui.t
 import java.net.InetAddress
 import java.net.NetworkInterface
 import kotlinx.coroutines.Job
@@ -84,36 +85,36 @@ object AdbShare {
 
     internal fun notification(context: Context, view: AdbShareView?, name: String, said: String?): Notification {
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "共享调试", NotificationManager.IMPORTANCE_LOW))
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, t("android-misc.adb.title"), NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(context, 1, Intent(context, AdbShareService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
         val text = said ?: line(view)
         val builder = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(0xFFE5704A.toInt())
-            .setContentTitle("正在把调试共享给 $name")
+            .setContentTitle(t("android-misc.adb.notify.title", "name" to name))
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
-            .addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, "停止", stop).build())
+            .addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, t("android-misc.adb.stop"), stop).build())
         // The pairing dialog is open (its port is announced): its code is typed here, Settings staying where it is.
         if (view?.pairPort != null && view.adb != "connected") {
             val pair = PendingIntent.getService(context, 2, Intent(context, AdbShareService::class.java).setAction(PAIR), PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            val input = RemoteInput.Builder(CODE).setLabel("6 位配对码").build()
-            builder.addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, "填配对码", pair).addRemoteInput(input).build())
+            val input = RemoteInput.Builder(CODE).setLabel(t("android-misc.adb.code")).build()
+            builder.addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, t("android-misc.adb.enterCode"), pair).addRemoteInput(input).build())
         }
         return builder.build()
     }
 
     /** How it stands, in a line. */
     fun line(view: AdbShareView?): String = when {
-        view == null || view.phase == "connecting" -> view?.message ?: "正在连接 station…"
-        view.adb == "connected" -> "agent 可以用 adb 了" + (view.until?.let { " · 还剩 ${minutesLeft(it)} 分钟" } ?: "")
-        view.adb == "unpaired" -> if (view.pairPort != null) "在这里填配对窗口里的 6 位码" else "还没配对：在无线调试里点「使用配对码配对设备」"
-        view.adb == "off" -> "手机上的无线调试没开"
-        else -> view.message ?: "正在接上 adb…"
+        view == null || view.phase == "connecting" -> view?.message ?: t("android-misc.adb.connecting")
+        view.adb == "connected" -> view.until?.let { t("android-misc.adb.connected.left", "n" to minutesLeft(it)) } ?: t("android-misc.adb.connected")
+        view.adb == "unpaired" -> if (view.pairPort != null) t("android-misc.adb.typeCode") else t("android-misc.adb.notPaired")
+        view.adb == "off" -> t("android-misc.adb.off")
+        else -> view.message ?: t("android-misc.adb.attaching")
     }
 
     fun minutesLeft(until: Long) = ((until - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
@@ -150,14 +151,14 @@ class AdbShareService : Service() {
             }
             AdbShare.PAIR -> {
                 val code = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(AdbShare.CODE)?.toString().orEmpty()
-                note = "正在配对…"
+                note = t("android-misc.adb.pairing")
                 say()
                 scope.launch {
                     note = try {
                         core().call("adb.pair", buildJsonObject { put("code", code) })
                         null
                     } catch (e: CoreException) {
-                        "没配上：${errorText(e)}"
+                        t("android-misc.adb.pairFailed", "error" to errorText(e))
                     }
                     say()
                 }
@@ -194,7 +195,7 @@ class AdbShareService : Service() {
                             put("package", packageName)
                         })
                     } catch (e: CoreException) {
-                        note = "没能共享：${errorText(e)}"
+                        note = t("android-misc.adb.shareFailed", "error" to errorText(e))
                         say()
                         stopSelf()
                     }

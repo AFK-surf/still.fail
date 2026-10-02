@@ -200,7 +200,7 @@ fun ConnectScreen(station: String, id: String) {
     val connect = item.connect
     val c = connect.connection
     Column(Modifier.fillMaxSize()) {
-        NavBar("连接", app::pop, connect.name, sub = { PresenceDot(connect.presence); fail.still.android.ui.StatusText(connect.statusText, fontSize = 11.sp, color = C.muted) },
+        NavBar(t("android-settings.connects.title"), app::pop, connect.name, sub = { PresenceDot(connect.presence); fail.still.android.ui.StatusText(connect.statusText, fontSize = 11.sp, color = C.muted) },
             trailing = { NavButton(Icons.More, { openConnectMenu(app, station, connect) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             // Who it is in Slack: its bot's picture, its Slack workspace, whose it is.

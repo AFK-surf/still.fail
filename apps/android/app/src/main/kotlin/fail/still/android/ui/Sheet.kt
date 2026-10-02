@@ -287,6 +287,7 @@ fun MenuHost(app: AppState) {
  * station.rs): said as not known, whatever the page put before it ("没能固定：不确定做没做成：…" → "固定：不确定做没做成：…").
  */
 fun said(message: String): String = Regex("^没能([^：]*)：(不确定做没做成：)").replace(message, "$1：$2")
+    .replace(Regex("^Couldn't ([^:]*): (Unsure if it went through: )"), "$1: $2")
 
 @Composable
 fun ToastHost(app: AppState) {
