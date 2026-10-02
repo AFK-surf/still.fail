@@ -99,17 +99,19 @@ jobs:
 
   done:
     needs: [plan, android, desktop, web, station]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, mini1]
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
-        with: { ref: '${{ needs.plan.outputs.sha }}' }
+        with: { persist-credentials: false, ref: '${{ needs.plan.outputs.sha }}' }
       - name: Record the fully published stable revision
         env:
           RELEASE_REVISION: ${{ needs.plan.outputs.sha }}
           RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           git tag -f deployed/stable "$RELEASE_REVISION"
-          git push --no-verify -f origin refs/tags/deployed/stable
+          # As mini1's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
+          # workflow (no `workflows` permission), and a tag stuck behind such a commit stays stuck (2026-10-02, e3ae7c10).
+          git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/stable
           echo "Published stable 0.1.$RELEASE_VERSION from $RELEASE_REVISION" >> "$GITHUB_STEP_SUMMARY"

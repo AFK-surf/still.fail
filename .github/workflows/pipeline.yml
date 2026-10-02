@@ -280,14 +280,17 @@ jobs:
   done:
     needs: [plan, check, api, static, station, android, desktop]
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, mini1]
     permissions:
       contents: write # only this job updates the tag deployed/beta
     steps:
       - uses: actions/checkout@v5
+        with: { persist-credentials: false }
       - run: |
           git tag -f deployed/beta "$GITHUB_SHA"
           # Not the repository's pre-push check (the runner's checkout has the hooks on): this run checked it all.
-          git push --no-verify -f origin refs/tags/deployed/beta
+          # As mini1's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
+          # workflow (no `workflows` permission), and a tag stuck behind such a commit stays stuck (2026-10-02, e3ae7c10).
+          git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/beta
       - if: needs.plan.outputs.relay == 'true'
         run: echo "::warning::the relay changed and is not deployed here, as that drops every connection. Run ~/bin/ember-deploy on studio."
