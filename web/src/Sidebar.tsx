@@ -101,7 +101,7 @@ export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
   if (n <= 0) return null;
   return (
     <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={t("web-main.decisions.entry", { n })}>
-      <span className={decisionsCss.sideEntryLead}><Zou size={20} /></span>
+      <span className={decisionsCss.sideEntryLead}><Zou size={22} /></span>
       <span className={decisionsCss.sideEntryCount}>{t("web-main.decisions.count", { n })}</span>
     </NavLink>
   );

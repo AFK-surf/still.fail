@@ -49,14 +49,14 @@ export const mDecisions = style({
   borderRadius: "999px", color: "var(--m-ink)", cursor: "pointer", pointerEvents: "auto",
 });
 export const mHomeCapsule = style({
-  display: "flex", alignItems: "center", gap: "6px", padding: "6px", borderRadius: "999px", pointerEvents: "auto",
+  display: "flex", alignItems: "center", gap: "6px", borderRadius: "999px", pointerEvents: "auto",
 });
 /** The list's filter in the head: the accent while it narrows the list (over root.css.ts's `button { color: inherit }`). */
 export const mFilter = style({});
 globalStyle(`${mHomeBar} button${mFilter}[data-on]`, { color: "var(--m-accent)" });
 export const mNewChat = style({
-  display: "grid", placeItems: "center", flex: "none", width: "44px", height: "44px", padding: "0", border: "0",
-  borderRadius: "50%", background: "var(--m-accent)", color: "#fff !important", cursor: "pointer",
+  display: "grid", placeItems: "center", flex: "none", width: "56px", height: "56px", padding: "0", border: "0",
+  borderRadius: "50%", background: "var(--m-accent)", color: "#fff !important", cursor: "pointer", boxShadow: "0 1px 3px rgb(0 0 0 / .08)",
 });
 export const mEmpty = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", padding: "20px 30px",

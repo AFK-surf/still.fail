@@ -736,7 +736,7 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
             .semantics(mergeDescendants = true) { contentDescription = t("android-chat.home.decisions", "n" to n) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        IconIn(Icons.Zou, 24.dp, C.ink)
+        IconIn(Icons.Zou, 28.dp, C.ink)
         Text("$n", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = C.ink)
     }
 }
@@ -744,7 +744,7 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
 @Composable
 private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Modifier) {
     // Floating over the list at the bottom right: 奏 N while decisions wait, and the new-chat button, a disc in the
-    // accent in a glass ring.
+    // accent, no ring.
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
@@ -752,9 +752,9 @@ private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Mo
     ) {
         if (decisions > 0) DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
         Box(
-            Modifier.floating(haze, CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
+            Modifier.size(56.dp).clip(CircleShape).background(C.accent)
                 .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Ling, 26.dp, Color.White) }
+        ) { IconIn(Icons.Ling, 32.dp, Color.White) }
     }
 }

@@ -71,16 +71,16 @@ export function Home() {
         {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
         <StationButton view={all.value} />
       </header>
-      {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent in a glass ring. */}
+      {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent. */}
       {!none && <div className={css.mHomeToolbar}>
         {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, only while there are some. */}
         {decisions > 0 && (
           <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
-            <Zou size={24} /><span>{decisions}</span>
+            <Zou size={28} /><span>{decisions}</span>
           </button>
         )}
-        <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
-          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={26} /></button>
+        <div className={css.mHomeCapsule}>
+          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={32} /></button>
         </div>
       </div>}
     </div>
@@ -100,7 +100,7 @@ export function Recent() {
     <>
       <div className={css.mRecentHead}>
         <b>{t("web-mobile.app.recent")}</b>
-        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={22} /></button>
+        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={24} /></button>
       </div>
       <div className={css.mRecentRows}>
         {!view ? <Note text={chats.error?.message ?? t("web-mobile.home.reading")} error={!!chats.error} />

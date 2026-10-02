@@ -98,17 +98,17 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
 }
 
 /**
- * The new-chat button: a disc in the accent in a ring (Home.kt's Toolbar). Not frosted over the pages (app.haze): drawn
+ * The new-chat button: a disc in the accent, no ring (Home.kt's Toolbar). Not frosted over the pages (app.haze): drawn
  * inside what that blurs, a frosted ring there shows the blur's own edges.
  */
 @Composable
 fun NewChatDisc() {
     val app = LocalApp.current
     Box(
-        Modifier.floatingStill(CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
+        Modifier.size(56.dp).clip(CircleShape).background(C.accent)
             .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-misc.wide.newChat") },
         contentAlignment = Alignment.Center,
-    ) { IconIn(Icons.Ling, 26.dp, Color.White) }
+    ) { IconIn(Icons.Ling, 32.dp, Color.White) }
 }
 
 /**
@@ -138,7 +138,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                     Modifier.size(32.dp).clip(CircleShape).background(C.accent).clickable { open = false; app.open(Screen.NewChat) }
                         .semantics { contentDescription = t("android-misc.wide.newChat") },
                     contentAlignment = Alignment.Center,
-                ) { IconIn(Icons.Ling, 22.dp, Color.White) }
+                ) { IconIn(Icons.Ling, 24.dp, Color.White) }
             }
             if (view == null) Text(chats.error?.message ?: t("android-misc.wide.loading"), fontSize = 14.sp, color = if (chats.error != null) C.red else C.muted, modifier = Modifier.padding(18.dp))
             // No rows: what the list says in their place (the core's `note`), as the home list does.
