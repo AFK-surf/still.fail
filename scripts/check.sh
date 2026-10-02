@@ -10,6 +10,10 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
+# STILLFAIL_CHECK_PART=ts|station|core|android runs only that part of it (CI runs the four side by side): ts the
+# icons, bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud); station mesh/'s Rust;
+# core client/'s Rust and the shapes; android the app. Unset: all of them.
+#
 # STILLFAIL_SKIP_CHECKS=1 (or EMBER_SKIP_CHECKS=1) skips it all (git's --no-verify does too); say why when you do.
 set -eu
 cd "$(dirname "$0")/.."
@@ -27,6 +31,8 @@ case "$mode" in
 esac
 [ -n "$changed" ] || exit 0
 touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
+# Whether this run does a part (STILLFAIL_CHECK_PART): any when it says none.
+part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || [ "$STILLFAIL_CHECK_PART" = "$1" ]; }
 
 failed=""
 step() {
@@ -69,59 +75,62 @@ TS
   : > "$pkg/.stand-in"
 }
 
-if touches '^client/core/src/(ops|doing)\.rs$|^scripts/operations\.py$|^web/src/core/operations\.ts$|/data/Operations\.kt$'; then
-  step "operation bindings" python3 scripts/operations.py --check
-fi
+if part ts; then
+  if touches '^client/core/src/(ops|doing)\.rs$|^scripts/operations\.py$|^web/src/core/operations\.ts$|/data/Operations\.kt$'; then
+    step "operation bindings" python3 scripts/operations.py --check
+  fi
 
-ts_root='^(scripts|test|spike)/.*\.ts$|^(tsconfig\.json|package\.json|pnpm-lock\.yaml)$'
-ts_web='^web/|^client/shapes/'
-ts_cloud='^cloud/'
-ts_desktop='^apps/desktop/'
+  ts_root='^(scripts|test|spike)/.*\.ts$|^(tsconfig\.json|package\.json|pnpm-lock\.yaml)$'
+  ts_web='^web/|^client/shapes/'
+  ts_cloud='^cloud/'
+  ts_desktop='^apps/desktop/'
 
-if touches '^design/icons/|^scripts/icons\.py$|^web/src/icons\.tsx$|/ui/Icons\.kt$'; then
-  step icons python3 scripts/icons.py --check
+  if touches '^design/icons/|^scripts/icons\.py$|^web/src/icons\.tsx$|/ui/Icons\.kt$'; then
+    step icons python3 scripts/icons.py --check
+  fi
+  # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done (client/core/src/
+  # ops.rs), and the core, which knows what it changes, brings every topic that shows it up to date.
+  if touches '^(web/src|apps/desktop/src|apps/android)/'; then
+    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'
+  fi
+  # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
+  # their JS dependencies and the real wasm package even when no TS file changed.
+  core_tests=0
+  if [ $full = 1 ] && touches '^(test|client|web/src/core)/|^package\.json$'; then core_tests=1; fi
+  if touches "$ts_root" || touches "$ts_web" || touches "$ts_cloud" || touches "$ts_desktop" || [ $core_tests = 1 ]; then deps .; fi
+  if touches "$ts_root" || touches "$ts_web" || [ $core_tests = 1 ]; then wasm_pkg; fi
+  # The stable channel's release notes (docs/changelog.md): each one read as CI will.
+  if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
+  if touches "$ts_root"; then step "typecheck: scripts and tests" pnpm exec tsgo -p tsconfig.json; fi
+  if touches "$ts_web"; then
+    step "typecheck: web" pnpm exec tsgo -p web/tsconfig.json
+    [ -f web/src/core/pkg/.stand-in ] && later "web against the real wasm core"
+  fi
+  if touches "$ts_cloud"; then
+    deps cloud
+    [ -f cloud/worker-configuration.d.ts ] || (cd cloud && pnpm run types > /dev/null 2>&1)
+    step "typecheck: cloud" sh -c 'cd cloud && pnpm run check'
+  fi
+  if touches "$ts_desktop"; then deps apps/desktop; step "typecheck: desktop" sh -c 'cd apps/desktop && pnpm run typecheck'; fi
+
 fi
-# The UIs never make a request of a station or still.fail cloud themselves: they name what they want done (client/core/src/
-# ops.rs), and the core, which knows what it changes, brings every topic that shows it up to date.
-if touches '^(web/src|apps/desktop/src|apps/android)/'; then
-  step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'
-fi
-# Core tests also run for Rust-only client changes. A fresh CI checkout needs both
-# their JS dependencies and the real wasm package even when no TS file changed.
-core_tests=0
-if [ $full = 1 ] && touches '^(test|client|web/src/core)/|^package\.json$'; then core_tests=1; fi
-if touches "$ts_root" || touches "$ts_web" || touches "$ts_cloud" || touches "$ts_desktop" || [ $core_tests = 1 ]; then deps .; fi
-if touches "$ts_root" || touches "$ts_web" || [ $core_tests = 1 ]; then wasm_pkg; fi
-# The stable channel's release notes (docs/changelog.md): each one read as CI will.
-if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
-if touches "$ts_root"; then step "typecheck: scripts and tests" pnpm exec tsgo -p tsconfig.json; fi
-if touches "$ts_web"; then
-  step "typecheck: web" pnpm exec tsgo -p web/tsconfig.json
-  [ -f web/src/core/pkg/.stand-in ] && later "web against the real wasm core"
-fi
-if touches "$ts_cloud"; then
-  deps cloud
-  [ -f cloud/worker-configuration.d.ts ] || (cd cloud && pnpm run types > /dev/null 2>&1)
-  step "typecheck: cloud" sh -c 'cd cloud && pnpm run check'
-fi
-if touches "$ts_desktop"; then deps apps/desktop; step "typecheck: desktop" sh -c 'cd apps/desktop && pnpm run typecheck'; fi
 
 if [ $full = 1 ]; then
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
-  if [ $core_tests = 1 ]; then
+  if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/pkg/.stand-in ] || [ ! -f web/src/core/pkg/built.js ]; then later "tests (need the wasm core)"; else step "tests" pnpm test; fi
   fi
-  if touches "$ts_cloud"; then step "tests: cloud" sh -c 'cd cloud && pnpm test'; fi
-  if touches '^client/shapes/|^web/src/core/shapes\.ts$|/data/Shapes\.kt$'; then
+  if part ts && touches "$ts_cloud"; then step "tests: cloud" sh -c 'cd cloud && pnpm test'; fi
+  if part core && touches '^client/shapes/|^web/src/core/shapes\.ts$|/data/Shapes\.kt$'; then
     if has cargo; then step "shapes" sh scripts/shapes.sh --check; else later "shapes"; fi
   fi
-  if touches '^(mesh|vendor)/'; then
+  if part station && touches '^(mesh|vendor)/'; then
     if has cargo; then step "Rust: station" sh -c 'cd mesh && cargo test --workspace -q'; else later "Rust: station"; fi
   fi
-  if touches '^client/'; then
+  if part core && touches '^client/'; then
     if has cargo; then step "Rust: client core" sh -c 'cd client && cargo test --workspace --exclude stillfail-core-wasm -q'; else later "Rust: client core"; fi
   fi
-  if touches '^(apps/android|client)/'; then
+  if part android && touches '^(apps/android|client)/'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if has cargo && [ -d "$sdk/ndk/28.2.13676358" ]; then
       step "Android" python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest

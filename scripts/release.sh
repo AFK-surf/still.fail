@@ -21,13 +21,24 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 
+# r2 <get|put> <key> <wrangler's other arguments>: the bucket's object, tried again twice when Cloudflare's API fails on
+# the way (a 502, "fetch failed": three releases stopped on one on 2026-10-02); putting or getting it again is harmless.
+r2() {
+  verb=$1 key=$2; shift 2
+  for try in 1 2 3; do
+    (cd "$root/cloud" && pnpm exec wrangler r2 object "$verb" "stillfail-releases/$key" "$@" --remote >/dev/null) && return 0
+    [ $try = 3 ] || { echo "r2 $verb $key failed (try $try), trying again" >&2; sleep 15; }
+  done
+  return 1
+}
+
 # copy <name in the bucket> <new name> <content type>: within the bucket (or RELEASE_DIR).
 copy() {
   if [ -n "${RELEASE_DIR:-}" ]; then
     mkdir -p "$RELEASE_DIR/$(dirname "$2")" && cp "$RELEASE_DIR/$1" "$RELEASE_DIR/$2" && echo "copied $1 to $2 in $RELEASE_DIR"
   else
-    (cd "$root/cloud" && pnpm exec wrangler r2 object get "stillfail-releases/$1" --file "$out/copy" --remote >/dev/null)
-    (cd "$root/cloud" && pnpm exec wrangler r2 object put "stillfail-releases/$2" --file "$out/copy" --content-type "$3" --remote >/dev/null)
+    r2 get "$1" --file "$out/copy"
+    r2 put "$2" --file "$out/copy" --content-type "$3"
     rm -f "$out/copy"
     echo "copied $1 to $2"
   fi
@@ -62,7 +73,7 @@ put() {
   if [ -n "${RELEASE_DIR:-}" ]; then
     mkdir -p "$RELEASE_DIR/$(dirname "$2")" && cp "$1" "$RELEASE_DIR/$2" && echo "put $2 in $RELEASE_DIR"
   else
-    (cd "$root/cloud" && pnpm exec wrangler r2 object put "stillfail-releases/$2" --file "$1" --content-type "$3" --remote >/dev/null)
+    r2 put "$2" --file "$1" --content-type "$3"
     echo "uploaded $2 ($(du -h "$1" | cut -f1))"
   fi
 }

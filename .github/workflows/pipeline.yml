@@ -90,27 +90,37 @@ jobs:
             echo 'Existing still.fail signing identity needs provisioning'
           fi
 
+  # The full check, in four parts side by side on mini1's runners (scripts/check.sh, STILLFAIL_CHECK_PART): each part
+  # untouched by the range is over in seconds. Each part keeps its own Cargo target on mini1, shared by the runners
+  # (Cargo's lock lets one build at a time), so a check builds only what changed.
   check:
     needs: plan
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: [self-hosted, mini1]
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [ts, station, core, android]
+    name: check (${{ matrix.part }})
+    env:
+      STILLFAIL_CHECK_PART: ${{ matrix.part }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-        with:
-          native: 'true'
-          android: 'true'
-      - name: Full check
+      - uses: ./.github/actions/setup-mac
+      - name: A Cargo target for this part
+        run: echo "CARGO_TARGET_DIR=$HOME/stillfail-ci/check-${{ matrix.part }}" >> "$GITHUB_ENV"
+      - name: Full check (${{ matrix.part }})
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
       - name: Stable release selection guards
+        if: matrix.part == 'ts'
         run: python3 -m unittest discover -s .github -p 'test_stable_plan.py'
       # A branch takes back nothing merged into main meanwhile (a squash onto a main that moved: scripts/undone.sh).
       - name: Undoes nothing on main
-        if: github.ref != 'refs/heads/main'
+        if: matrix.part == 'ts' && github.ref != 'refs/heads/main'
         run: sh scripts/undone.sh "$(git merge-base HEAD origin/main)" HEAD
 
   # A branch: what main would deploy, built and bundled; nothing sent, no secrets.
@@ -257,7 +267,11 @@ jobs:
           node scripts/changelog.ts --stable > "$RUNNER_TEMP/changelog-stable.json"
           cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null
           for name in changelog changelog-stable; do
-            pnpm exec wrangler r2 object put "stillfail-releases/$name.json" --file "$RUNNER_TEMP/$name.json" --content-type application/json --remote > /dev/null
+            # Cloudflare's API fails now and then on the way: put again, twice at most.
+            for try in 1 2 3; do
+              pnpm exec wrangler r2 object put "stillfail-releases/$name.json" --file "$RUNNER_TEMP/$name.json" --content-type application/json --remote > /dev/null && break
+              [ $try = 3 ] && exit 1; sleep 15
+            done
             echo "$name: $(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).length)' "$RUNNER_TEMP/$name.json") entries"
           done
 

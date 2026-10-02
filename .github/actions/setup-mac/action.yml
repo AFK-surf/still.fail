@@ -1,5 +1,6 @@
-# What every job on mini1's runners starts with: the toolchains on PATH, and a Cargo target of this runner's own, kept
-# between runs (outside the checkout, which is cleaned; one per runner, as runners build side by side).
+# What every job on mini1's runners starts with: the toolchains on PATH, and a Cargo target kept between runs (outside
+# the checkout, which is cleaned). One for all the runners: Cargo's lock has them build in it one at a time, and one
+# per runner held three copies of every build (54G of mini1's disk on 2026-10-02). The check sets its own, a part each.
 name: setup
 description: Toolchains and caches on mini1's runners
 runs:
@@ -12,6 +13,6 @@ runs:
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
         echo "JAVA_HOME=/opt/homebrew/opt/openjdk@17" >> "$GITHUB_ENV"
-        echo "CARGO_TARGET_DIR=$HOME/stillfail-ci/target-$RUNNER_NAME" >> "$GITHUB_ENV"
+        echo "CARGO_TARGET_DIR=$HOME/stillfail-ci/target" >> "$GITHUB_ENV"
         # Rust's tests a few at a time: three runners share the machine, and the core's timing tests fail under load.
         echo "RUST_TEST_THREADS=4" >> "$GITHUB_ENV"

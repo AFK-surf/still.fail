@@ -19,6 +19,7 @@
 
 ## 待部署
 
+- 完整检查回到 mini1、拆成四个并行 job（ci-check-mini1）：只改了 CI 和脚本（`scripts/check.sh` 加 `STILLFAIL_CHECK_PART`，`scripts/release.sh`、`.github/release-desktop.py` 和 changelog 的 R2 上传失败重试两次，Mac 任务共用一个 Cargo target）。合并后 main 下一次运行就用新布局，第一次各 part 冷编；之后 mini1 上的旧目录 `~/stillfail-ci/target-mini1`、`linux-mini1` 可以删（-2、-3 已删）。上线后验：main 的运行里有 check (ts/station/core/android) 四个 job，有缓存时最慢的那个几分钟内跑完。
 - PC 侧栏的奏变成第 4 个列表（decisions-sidebar-pane）：只发 web（含 web 里的 core），station、安卓不用动。prefs 新增可选字段 `onlyDecisions`（与 onlyMine/onlyWatching 三选一），手机 web 和安卓读到时按「全部」。上线后验：桌面端筛选菜单在 全部/我参与的/监控中/奏 之间切换都会横滑；在奏里点新建对话，侧栏停在奏；从左下角「奏 N 件」进入时各行从入口飞出、不横滑。
 
 - 免费版套餐（free-plan）：只发 api（cloud）和 web/admin（文案、后台「标准版」开关），station 和客户端代码不用动。cloud 起来时跑一次迁移（`migrations` 表记 `free-plan`）：改版前建过 workspace、但没有邀请码/后台开通/早期成员身份的账号补成 `granted`（标准版），不会有人被降级。之后任何人不用邀请码就能建 1 个 workspace（只有自己 1 人、2 台 station），再建才要邀请码；邀请码或后台开通 = 标准版（5 个 workspace，每个 6 人、64 台）。旧客户端不用更新：建第一个直接成功，建第二个照旧收到 `invite_code_required` 弹出邀请码框（旧文案还写着「只对受邀的人开放」，发新版后换成免费版说法）。上线验：后台用户列表里原有建过 workspace 的人都显示「标准版」；用一个新 Google 账号登录直接能建 workspace，邀请成员提示「成员到上限了」，第三台 station 加不进去。

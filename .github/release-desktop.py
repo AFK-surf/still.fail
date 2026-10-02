@@ -9,6 +9,7 @@ import secrets
 import shlex
 import subprocess
 import tempfile
+import time
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--stable', action='store_true', help='Publish the stable channel; defaults to beta')
@@ -69,7 +70,15 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
         for name, mime in ((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')):
             path = Path(env['RELEASE_DIR']) / 'desktop' / name
             if not path.is_file(): raise SystemExit('Expected desktop artifact missing: ' + name)
-            run(['pnpm', 'exec', 'wrangler', 'r2', 'object', 'put', 'stillfail-releases/desktop/' + name, '--file', str(path), '--content-type', mime, '--remote'], cwd=root / 'cloud', env=env)
+            put = ['pnpm', 'exec', 'wrangler', 'r2', 'object', 'put', 'stillfail-releases/desktop/' + name, '--file', str(path), '--content-type', mime, '--remote']
+            # Cloudflare's API fails now and then on the way (a 502, "fetch failed"): put again, twice at most.
+            for attempt in range(3):
+                if subprocess.run(put, cwd=root / 'cloud', env=env).returncode == 0:
+                    break
+                if attempt == 2:
+                    raise SystemExit('Desktop release step failed: uploading ' + name)
+                print(f'uploading {name} failed (try {attempt + 1}), trying again', flush=True)
+                time.sleep(15)
     finally:
         if imported:
             subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', *previous], stdout=subprocess.DEVNULL)
