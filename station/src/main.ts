@@ -20,7 +20,7 @@ import { ConfigFile } from "./ops/config.ts";
 import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { version } from "./ops/version.ts";
-import { AdminApi, AdminHost, Cloud, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, Cloud, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
 
 const args = process.argv.slice(2);
 const data = dataDir(args);
@@ -101,6 +101,7 @@ function run() {
     Layer.provideMerge(AgentsLive(control)),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
+    Layer.provideMerge(AdbShares.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {
@@ -151,6 +152,14 @@ switch (command) {
   case "id":
     id(data);
     break;
+  // The channel the station is updated on (`stillfail update`): set when one is named, then said.
+  case "channel": {
+    const { channelCommand } = await import("./updates/channel.ts");
+    const code = await channelCommand(args, data);
+    if (code === 2) usage();
+    process.exitCode = code;
+    break;
+  }
   default:
     usage();
 }
