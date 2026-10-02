@@ -110,10 +110,14 @@ globalStyle(`${reply} > ${composerWrap}`, { paddingLeft: "0", paddingRight: "0" 
 export const footColumn = style({ maxWidth: "760px", margin: "0 auto" });
 // Only what is drawn takes the pointer: the room kept over the composer passes it to the messages under it.
 globalStyle(`${footColumn} > :not(${reply}), ${reply} > *`, { pointerEvents: "auto" });
-/** ← 待定　不再提醒 →: what a swipe does (the phone), or the two as words to press (the wide screen). */
+/**
+ * ← 待定　不再提醒 →: what a swipe does (the phone). Over the messages as the composer is, on the composer's glass, so
+ * they never show through it.
+ */
 export const hint = style({
-  display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", height: "20px", marginTop: "10px",
-  color: vars.subtle, fontSize: vars.textXs, lineHeight: "20px",
+  display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", width: "fit-content", height: "24px",
+  margin: "8px auto 0", padding: "0 12px", borderRadius: "12px", color: vars.subtle, fontSize: vars.textXs, lineHeight: "24px",
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
 });
 export const hintButton = style({
   height: "20px", padding: "0 4px", border: "0", borderRadius: "6px", background: "none", color: vars.subtle,
