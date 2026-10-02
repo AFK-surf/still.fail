@@ -17,6 +17,7 @@ import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/prev
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { LocalStation, type Place } from "./station";
 import { moveUserData } from "./moves.mts";
+import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
 
 const CLOUD_ORIGIN = (process.env.STILLFAIL_CLOUD_ORIGIN ?? process.env.EMBER_CLOUD_ORIGIN ?? "https://app.still.fail").replace(/\/+$/, "");
 /**
@@ -24,8 +25,8 @@ const CLOUD_ORIGIN = (process.env.STILLFAIL_CLOUD_ORIGIN ?? process.env.EMBER_CL
  * `--dev-url=<a Vite dev server>` (dev.sh HMR=1), that server, so changes to the page show as they are saved.
  */
 const DEV_URL = process.argv.find((arg) => arg.startsWith("--dev-url="))?.slice("--dev-url=".length).replace(/\/+$/, "") ?? null;
-// app://ember keeps its name from before the rename: the page's storage (localStorage, IndexedDB) is the origin's.
-const APP_ORIGIN = DEV_URL ? new URL(DEV_URL).origin : "app://ember";
+// The native core keeps its data in userData/core. Renderer storage is copied before opening the new origin.
+let APP_ORIGIN = DEV_URL ? new URL(DEV_URL).origin : "app://stillfail";
 // The dev server is plain http on the LAN: taken as secure, as app://ember is, so the page has what a secure page has
 // (the clipboard among it) and behaves as the packed one does.
 if (DEV_URL) app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", APP_ORIGIN);
@@ -78,9 +79,32 @@ protocol.registerSchemesAsPrivileged([
 
 /** A file of the web app, or for any other path (a client-side route) its index.html, as the cloud serves it (cloud/src/index.ts). */
 async function serve(request: Request): Promise<Response> {
+  if (new URL(request.url).pathname === "/__stillfail_storage_migration__") return new Response("<!doctype html><title>Storage migration</title>", { headers: { "content-type": "text/html" } });
   const file = join(web, normalize(decodeURIComponent(new URL(request.url).pathname)));
   const found = await stat(file).then((s) => s.isFile(), () => false);
   return net.fetch(pathToFileURL(found ? file : join(web, "index.html")).toString());
+}
+
+/** Copy origin-bound settings and the former browser core before loading application code. On failure use the old
+ * origin for this launch, retaining login/history, and retry next time. Both windows have no preload or Node access. */
+async function migrateOrigin(): Promise<void> {
+  if (DEV_URL) return;
+  const target = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  let source: BrowserWindow | null = null;
+  try {
+    await target.loadURL("app://stillfail/__stillfail_storage_migration__");
+    if (await target.webContents.executeJavaScript('localStorage.getItem("stillfail.origin-migration.v1")')) return;
+    source = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+    await source.loadURL("app://ember/__stillfail_storage_migration__");
+    const snapshot: OriginSnapshot = await source.webContents.executeJavaScript(`(${exportOriginStorage.toString()})()`);
+    await target.webContents.executeJavaScript(`(${importOriginStorage.toString()})(${JSON.stringify(snapshot)})`);
+  } catch (error) {
+    APP_ORIGIN = "app://ember";
+    console.error("Renderer storage migration failed; using the original data and retrying next launch", error);
+  } finally {
+    source?.destroy();
+    target.destroy();
+  }
 }
 
 let core: UtilityProcess | null = null;
@@ -728,6 +752,8 @@ function openPath(path: string): void {
 }
 
 let stationStopped = false;
+let started = false;
+let startup: Promise<void>;
 
 /** Stops the station (and its runtimes) before the app quits: after it, quitting goes ahead without waiting again. */
 async function stopStation(): Promise<void> {
@@ -748,17 +774,19 @@ if (!app.requestSingleInstanceLock()) {
   // macOS hands the app its URLs here (possibly before it is ready); elsewhere they start a second instance.
   app.on("open-url", (event, url) => {
     event.preventDefault();
-    void app.whenReady().then(() => arrived(url));
+    void app.whenReady().then(() => startup).then(() => arrived(url));
   });
   app.on("second-instance", (_event, argv) => {
     const url = argv.find((arg) => SCHEMES.some((scheme) => arg.startsWith(`${scheme}://`)));
-    if (url) arrived(url);
+    if (url) void startup.then(() => arrived(url));
     else BrowserWindow.getAllWindows()[0]?.focus();
   });
-  void app.whenReady().then(() => {
+  startup = app.whenReady().then(async () => {
     protocol.handle("app", serve);
+    await migrateOrigin();
     protocol.handle("stillfail-preview", preview);
     setMenu();
+    started = true;
     open();
     station.start();
     keepUpdated();
@@ -774,10 +802,10 @@ if (!app.requestSingleInstanceLock()) {
     void stopStation().then(() => app.quit());
   });
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) open();
+    if (started && BrowserWindow.getAllWindows().length === 0) open();
   });
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+    if (started && process.platform !== "darwin") app.quit();
   });
 }
 
