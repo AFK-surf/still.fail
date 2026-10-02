@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 /// A tool's name without its MCP prefix.
 pub fn tool_name(tool: &str) -> &str {
-    ["mcp__ember__", "ember__", "ember."].iter().find_map(|p| tool.strip_prefix(p)).unwrap_or(tool)
+    ["mcp__stillfail__", "stillfail__", "stillfail.", "mcp__ember__", "ember__", "ember."].iter().find_map(|p| tool.strip_prefix(p)).unwrap_or(tool)
 }
 
 /// What kind of thing a tool does, for its icon and its verb.
@@ -181,6 +181,7 @@ mod tests {
         assert_eq!(now(json!({"steps": steps, "phase": {"phase": "working"}})), ("s2".into(), "运行 cargo test --workspace".into()));
         // Writing its reply (chat_post's input streaming in); chat_state says nothing of its own.
         assert_eq!(now(json!({"steps": [{"id": "p", "step": "tool", "tool": "mcp__ember__chat_post", "input": "{\"to"}]})), ("reply".into(), "正在回复".into()));
+        assert_eq!(now(json!({"steps": [{"id": "p", "step": "tool", "tool": "mcp__stillfail__chat_post", "input": "{\"to"}]})), ("reply".into(), "正在回复".into()));
         assert_eq!(now(json!({"steps": [{"id": "t", "step": "thinking"}], "rate": 30})), ("think".into(), "思考中 · ≈ 30 token/s".into()));
         // Where the turn stands; the rate changes the words, not the thing.
         assert_eq!(now(json!({"phase": {"phase": "requesting"}})), ("requesting".into(), "请求中".into()));

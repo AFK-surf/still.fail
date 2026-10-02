@@ -5,10 +5,10 @@ import { announceAppearance } from "../theme.ts";
 import * as css from "./site.css.ts";
 
 export type SiteTheme = "system" | "light" | "dark";
-const KEY = "ember.site.theme";
+const KEY = "stillfail.site.theme";
 
 function read(): SiteTheme {
-  const saved = localStorage.getItem(KEY);
+  const saved = localStorage.getItem(KEY) ?? localStorage.getItem("ember.site.theme");
   return saved === "system" || saved === "light" ? saved : "dark";
 }
 

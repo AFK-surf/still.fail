@@ -173,3 +173,10 @@ fn iso_round_trips() {
         assert_eq!(iso(parse_iso(at).unwrap()), at);
     }
 }
+
+#[test]
+fn posting_names_survive_the_namespace_migration() {
+    assert!(super::is_posting("mcp__stillfail__chat_post"));
+    assert!(super::is_posting("mcp__ember__chat_post"));
+    assert!(!super::is_posting("mcp__stillfail__chat_history"));
+}

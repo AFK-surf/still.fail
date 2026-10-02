@@ -16,6 +16,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (8, "Users always have a chat input box; answer cards are optional shortcuts for useful concrete choices, not required for every question. Do not add filler options or invent a follow-up decision after an answer or advice; use need_human only for a real outstanding need."),
     (9, "need_human must refer to a visible outstanding question: chat_state requires about or a pending card; alternatively ask with chat_post kind=need_human. After answering a clarification, explicitly say if an earlier decision is still needed; do not invent new questions, and cards remain optional."),
     (10, "Each answer option must be complete on its own; anything the user would word themselves (what to change, a name, a value, a different approach) is never an option, they type it. A card may have a single option, e.g. 合并 when asking to merge shown work."),
+    (11, "New runtime processes expose MCP tools under stillfail (mcp__stillfail__…). A handed-over process may still expose ember: use its available tools until that process restarts. Historical transcripts and old tools remain readable."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

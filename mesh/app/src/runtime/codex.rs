@@ -438,8 +438,8 @@ impl AgentDriver for CodexDriver {
         let model = options.model.clone().or_else(|| options.profile.model.clone());
         let skills_off = host_skills_off(&self.host_skills);
         let mut config = json!({
-            "mcp_servers.ember.url": options.mcp_url,
-            "mcp_servers.ember.http_headers": { "Authorization": format!("Bearer {}", options.mcp_token) },
+            "mcp_servers.stillfail.url": options.mcp_url,
+            "mcp_servers.stillfail.http_headers": { "Authorization": format!("Bearer {}", options.mcp_token) },
         });
         if let Some(effort) = &options.effort {
             config["model_reasoning_effort"] = json!(effort);
