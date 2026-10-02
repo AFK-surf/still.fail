@@ -9,6 +9,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./sheets.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
+import { t } from "../i18n.ts";
 
 /** Asks before something that cannot be undone; the sheet stays, with what went wrong, until it is done. */
 export function confirm(app: MobileApp, spec: { title: string; text: ReactNode; action: string; danger?: boolean; run: () => Promise<unknown> }) {
@@ -28,7 +29,7 @@ function Confirm({ title, text, action, danger = false, run }: { title: string; 
         <p className={partsCss.mMuted}>{text}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
         <div className={sheetsCss.mFormActions}>
-          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
           <span data-danger={danger || undefined} className={css.mDangerButton}>
             <Button label={action} primary busy={busy} onClick={() => {
               void operation.run();
@@ -65,7 +66,7 @@ function Ask({ title, value: first, placeholder, action, hint, secret = false, e
         {hint && <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{hint}</p>}
         {error && <p className={partsCss.mError}>{error}</p>}
         <div className={sheetsCss.mFormActions}>
-          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
           <Button label={action} primary busy={busy} enabled={(empty || !!value.trim()) && value.trim() !== first} onClick={go} />
         </div>
       </div>
@@ -80,7 +81,7 @@ export function CommandBox({ text }: { text: string }) {
   return (
     <div className={css.mCommand}>
       <code>{text}</code>
-      <button type="button" aria-label={copied ? "已复制" : "复制"} onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, () => app.toast("没能复制，长按命令自己复制"))}>
+      <button type="button" aria-label={copied ? t("common.copied") : t("common.copy")} onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, () => app.toast(t("web-mobile.sheets.copyFailed")))}>
         {copied ? <Check size={16} /> : <Copy size={16} />}
       </button>
     </div>

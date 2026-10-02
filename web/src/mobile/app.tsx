@@ -21,6 +21,7 @@ import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
 import { follower, type Follower } from "../motion.ts";
 import { useInWorkspace } from "../notify.ts";
+import { t } from "../i18n.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
@@ -230,7 +231,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
           {/* The latest chats, from the screen's bottom left, level with the composer; over the page, rising from the button. */}
           {wide && !home_ && <>
             <button type="button" className={`${pagesCss.mFloating} ${css.mRecentButton}`} data-open={drawer || undefined}
-              onClick={() => setDrawer((open) => !open)} aria-label="最近的会话" aria-expanded={drawer}><Chats size={22} /></button>
+              onClick={() => setDrawer((open) => !open)} aria-label={t("web-mobile.app.recent")} aria-expanded={drawer}><Chats size={22} /></button>
             <div className={css.mRecentLayer} data-open={drawer || undefined} inert={!drawer}>
               <div className={css.mRecentCatch} onClick={() => setDrawer(false)} />
               <div className={css.mRecent}>{drawer && recent()}</div>
@@ -438,7 +439,7 @@ function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => voi
   if (!shown) return null;
   return (
     <div className={css.mReader} data-open={open || undefined}>
-      <div className={css.mReaderBar}><NavBack label="执行历史" onClick={close} /></div>
+      <div className={css.mReaderBar}><NavBack label={t("web-mobile.app.runHistory")} onClick={close} /></div>
       <div className={css.mReaderBody}>
         <div className={css.mReaderLabel}>{shown.label}</div>
         {shown.content}

@@ -10,6 +10,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Me.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
+import { t } from "../i18n.ts";
 
 export function MeScreen() {
   const app = useApp();
@@ -19,12 +20,12 @@ export function MeScreen() {
   const [signingIn, setSigningIn] = useState(false);
   const another = () => {
     setSigningIn(true);
-    signIn().catch((e: unknown) => { setSigningIn(false); app.toast(`没能登录：${e instanceof Error ? e.message : String(e)}`); });
+    signIn().catch((e: unknown) => { setSigningIn(false); app.toast(t("web-mobile.me.signInFailed", { error: e instanceof Error ? e.message : String(e) })); });
   };
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} />
-      <LargeTitle small="" big="账号" />
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+      <LargeTitle small="" big={t("web-mobile.me.title")} />
       <Card>
         <span className={css.mMe}>
           <Avatar id={me.email} name={me.name || me.email} size={46} picture={me.picture} />
@@ -32,14 +33,14 @@ export function MeScreen() {
         </span>
       </Card>
       {/* Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added. */}
-      <SectionHeader title="这台设备上的账号" start={24} />
+      <SectionHeader title={t("web-mobile.me.accounts")} start={24} />
       <ListCard>
         {accounts.map((a) => <AccountRow key={a.sub} a={a} only={accounts.length === 1} />)}
         <ListRow onClick={signingIn ? undefined : another}>
-          <span className={`${partsCss.mAccent} ${listsCss.mRowTitle} ${partsCss.mGrow}`}>＋ 登录另一个 Google 账号</span>{signingIn && <Spinner size={14} />}
+          <span className={`${partsCss.mAccent} ${listsCss.mRowTitle} ${partsCss.mGrow}`}>{t("web-mobile.me.addAccount")}</span>{signingIn && <Spinner size={14} />}
         </ListRow>
       </ListCard>
-      <SectionHeader title="登录的地方" start={24} />
+      <SectionHeader title={t("web-mobile.me.devices")} start={24} />
       <Devices />
       <div style={{ height: 30 }} />
     </div>
@@ -54,8 +55,8 @@ function AccountRow({ a, only }: { a: Account; only: boolean }) {
     <ListRow>
       <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{a.email}</span>
       <button type="button" className={css.mSignOut} disabled={out} aria-busy={out || undefined} onClick={() => {
-        signOut(a.sub).then(() => { if (!only) app.toast(`已退出 ${a.email}`); app.home(); }, (e: unknown) => app.toast(`没能退出：${e instanceof Error ? e.message : String(e)}`));
-      }}>{out && <Spinner size={13} />}{only ? "退出登录" : "退出"}</button>
+        signOut(a.sub).then(() => { if (!only) app.toast(t("web-mobile.me.signedOut", { email: a.email })); app.home(); }, (e: unknown) => app.toast(t("web-mobile.me.signOutFailed", { error: e instanceof Error ? e.message : String(e) })));
+      }}>{out && <Spinner size={13} />}{only ? t("web-mobile.me.signOut") : t("web-mobile.me.signOutOne")}</button>
     </ListRow>
   );
 }

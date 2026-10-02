@@ -13,7 +13,7 @@ import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
 import { useAct } from "../toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -29,6 +29,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 function useApi() {
   const station = useStation();
   const call = useStationCall(station.address);
@@ -50,18 +51,18 @@ export function ProfilesScreen() {
   const online = stations?.filter((s) => s.online) ?? [];
   const add = () => online.length === 1
     ? app.push(app.at(`/s/${online[0]!.id}/profiles/new`))
-    : app.sheet({ height: 0.5, content: () => <PickStation title="添加 Profile" stations={online} to={(s) => `/s/${s.id}/profiles/new`} /> });
+    : app.sheet({ height: 0.5, content: () => <PickStation title={t("web-mobile.newChat.addProfile")} stations={online} to={(s) => `/s/${s.id}/profiles/new`} /> });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={one?.name ?? "设置"} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加 Profile" onClick={add} /> : undefined} />
-      <LargeTitle small={one ? `${one.name} 上的` : ""} big="Profile" />
-      <p className={settingsCss.mPageNote}>agent 跑模型用的账号。需查看的账号排在各 station 前面，点进去查看原因和处理办法。</p>
-      {!stations ? <Loading text="正在读取 station…" /> : stations.map((s) => (
+      <TopBack label={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.newChat.addProfile")} onClick={add} /> : undefined} />
+      <LargeTitle small={one ? t("web-mobile.connects.on", { station: one.name }) : ""} big="Profile" />
+      <p className={settingsCss.mPageNote}>{t("web-mobile.profiles.note")}</p>
+      {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-          {!one && <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />}
+          {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
           <ListCard>
-            {!s.overview ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.online ? "正在读取…" : "station 离线，读不到它的 Profile"}</span></ListRow>
-              : s.overview.profiles.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>这台机器还没有 Profile</span></ListRow>
+            {!s.overview ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.online ? t("web-mobile.reading") : t("web-mobile.profiles.offline")}</span></ListRow>
+              : s.overview.profiles.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>
               : s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
           </ListCard>
           {/* The machine's own logins not used yet, each offered as a profile. */}
@@ -81,7 +82,7 @@ export function PickStation({ title, stations, to }: { title: string; stations: 
       <SheetGrab />
       <SheetHead title={title} />
       <div className={sheetsCss.mSheetScroll}>
-        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>加在哪台 station 上</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-mobile.profiles.whichStation")}</p>
         {stations.map((s) => <PickRow key={s.id} label={s.name} onClick={() => { app.sheet(null); app.push(app.at(to(s))); }} />)}
       </div>
     </>
@@ -102,7 +103,7 @@ export function ProfileRow({ station, p }: { station: StationView; p: Profile })
         <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
         {p.trouble ? <>
           <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}><b>{p.trouble.title}</b> · {p.trouble.detail}</span>
-          <span className={`${listsCss.mRowNote} ${partsCss.mLink}`}>查看处理办法</span>
+          <span className={`${listsCss.mRowNote} ${partsCss.mLink}`}>{t("web-mobile.profiles.seeFix")}</span>
         </> : trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
       </span>
       <QuotaRings quota={p.quota} />
@@ -118,12 +119,12 @@ export function toneDot(tone: Tone | string): string {
 
 /** Why an allowance could not be read (an account its provider refuses, a sign-in gone stale), when that is so. */
 export function quotaTrouble(quota: Quota | null | undefined): string | null {
-  return quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail ?? (quota.state === "blocked" ? "这个账号被服务商停用了。" : "查不到额度。") : null;
+  return quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail ?? (quota.state === "blocked" ? t("web-mobile.profiles.blockedText") : t("web-mobile.profiles.noQuotaText")) : null;
 }
 
 /** What a profile is, in a word: the machine's own login, or its kind of access. */
 export function accessLabel(p: Profile): string {
-  return p.machine ? "本机登录" : ACCESS[p.access.kind].label;
+  return p.machine ? t("web-mobile.profiles.machineLogin") : ACCESS[p.access.kind].label;
 }
 
 /** A profile of the station in context, by the page's :id. */
@@ -133,7 +134,7 @@ export function ProfileScreen() {
   const { id = "" } = useParams();
   const overview = useOverview(station.address);
   const p = overview.value?.profiles.find((x) => x.id === id);
-  if (!p) return <div className={pagesCss.mScreen}><NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" /><Loading text={overview.error?.message ?? (overview.value ? "没有这个 Profile。" : "正在读取…")} /></div>;
+  if (!p) return <div className={pagesCss.mScreen}><NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" /><Loading text={overview.error?.message ?? (overview.value ? t("web-mobile.profiles.notFound") : t("web-mobile.reading"))} /></div>;
   return <ProfilePage p={p} />;
 }
 
@@ -153,59 +154,59 @@ function ProfilePage({ p }: { p: Profile }) {
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
-        trailing={<NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
+        trailing={<NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
           <ProviderMark runtime={p.runtime} kind={p.access.kind} size={26} />
           <span className={partsCss.mGrow}>
             <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
-            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}{p.check?.time?.checkedAt ? ` · ${p.check.time.checkedAt.ago}检查` : ""}</span>
-            {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner size={12} />{checking ? "正在检查…" : "正在刷新额度…"}</span>}
-            {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />没能检查：{checkFailed}</span>}
-            {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />没能刷新额度：{quotaFailed}</span>}
+            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked")}{p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : ""}</span>
+            {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner size={12} />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
+            {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
+            {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
           </span>
         </div>
         {p.trouble && <ProfileRecovery p={p} />}
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
-        {p.fast != null && <><SectionHeader title="运行" start={24} /><ListCard><FastRow p={p} /></ListCard></>}
+        {p.fast != null && <><SectionHeader title={t("web-mobile.profiles.run")} start={24} /><ListCard><FastRow p={p} /></ListCard></>}
         <Models p={p} put={(models) => api.putProfile(p.id, { models })} />
         {/* A station older than the setting says nothing of it. */}
         {p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
           <>
-            <SectionHeader title="运行" start={24} />
+            <SectionHeader title={t("web-mobile.profiles.run")} start={24} />
             <ListCard>
               <BackgroundRow p={p} put={(on) => api.putProfile(p.id, { backgroundOnMessage: on })} />
             </ListCard>
           </>
         )}
-        <SectionHeader title="使用它的连接" start={24} />
+        <SectionHeader title={t("web-mobile.profiles.usedBy")} start={24} />
         <ListCard>
-          {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>还没有连接使用这个 Profile。</span></ListRow>}
+          {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.unused")}</span></ListRow>}
           {users.map((c) => (
             <ListRow key={c.id} onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(c.id)}`)}>
-              <SlackMark size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : "默认模型")}</span>
+              <SlackMark size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : t("web-mobile.profiles.defaultModel"))}</span>
             </ListRow>
           ))}
         </ListCard>
         {keyed && (
           <>
-            <SectionHeader title="账号" start={24} />
+            <SectionHeader title={t("web-mobile.history.account")} start={24} />
             <ListCard>
-              <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? "新的 OpenCode Go key" : "新的 API key", value: "", placeholder: "粘贴 key", action: "保存", secret: true,
-                hint: "保存后会重新检查。", run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast("已保存，正在检查")) })}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || "没有保存"}</span></span>
-                <span className={partsCss.mLink}>更换</span>
+              <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true,
+                hint: t("web-mobile.profiles.recheckHintFull"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
+                <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
               </ListRow>
             </ListCard>
           </>
         )}
         {p.access.kind === "env" && (
           <>
-            <SectionHeader title="环境变量" start={24} />
+            <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
             <ListCard>
               {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>编辑变量</span></ListRow>
+              <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
             </ListCard>
           </>
         )}
@@ -227,23 +228,23 @@ function ProfileRecovery({ p }: { p: Profile }) {
   const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
   const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
   const run = () => {
-    if (issue.action === "key") ask(app, { title: "新的 key", value: "", placeholder: "粘贴 key", action: "保存", secret: true,
-      hint: "保存后会重新检查", run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }) });
+    if (issue.action === "key") ask(app, { title: t("web-mobile.profiles.newKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true,
+      hint: t("web-mobile.profiles.recheckHint"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }) });
     else if (issue.action === "env") app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
-    else if (issue.action === "quota") act(api.refreshQuota(p.id), "查询额度", "已更新额度");
-    else act(api.checkProfile(p.id), "检查账号", "已检查");
+    else if (issue.action === "quota") act(api.refreshQuota(p.id), t("web-mobile.profiles.what.quota"), t("web-mobile.profiles.quotaUpdated"));
+    else act(api.checkProfile(p.id), t("web-mobile.profiles.what.check"), t("web-mobile.profiles.checked"));
   };
   return <>
     <SectionHeader title={issue.title} start={24} />
     <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
       <p className={`${partsCss.mSmall} ${settingsCss.mWrap}`}>{issue.detail}</p>
       <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{issue.next}</p>
-      {!station.online && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{station.name} 已离线，恢复连接后才能操作</p>}
+      {!station.online && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.stationOffline", { station: station.name })}</p>}
       {issue.action === "command" && <CommandBox text={p.loginCommand} />}
       {issue.action !== "login" && <LinkButton label={issue.label} enabled={station.online}
         busy={checking || refreshing} failed={issue.action === "quota" ? quotaFailed : checkFailed} onClick={run} />}
-      {["key", "env"].includes(issue.action) && <LinkButton label="重新检查" enabled={station.online} busy={checking} failed={checkFailed}
-        onClick={() => act(api.checkProfile(p.id), "检查账号", "已检查")} />}
+      {["key", "env"].includes(issue.action) && <LinkButton label={t("web-mobile.profiles.recheck")} enabled={station.online} busy={checking} failed={checkFailed}
+        onClick={() => act(api.checkProfile(p.id), t("web-mobile.profiles.what.check"), t("web-mobile.profiles.checked"))} />}
     </div>
   </>;
 }
@@ -253,7 +254,7 @@ function ProfileMenu({ p }: { p: Profile }) {
   const app = useApp();
   const api = useApi();
   const station = useStation().address;
-  const failed = (what: string) => (e: Error) => app.toast(`没能${what}：${e.message}`);
+  const failed = (key: string) => (e: Error) => app.toast(t(key, { error: e.message }));
   // The sheet closes at once; the profile's card says it is under way (ProfilePage), and these rows if opened again.
   const checking = useDoing("profile.check", { station, id: p.id });
   const refreshing = useDoing("profile.quota", { station, id: p.id });
@@ -264,15 +265,15 @@ function ProfileMenu({ p }: { p: Profile }) {
       <SheetGrab />
       <SheetHead title={p.name} />
       <div className={sheetsCss.mSheetScroll}>
-        {!p.machine && <PickRow label="改名" onClick={() => ask(app, { title: "Profile 的名字", value: p.name, placeholder: "名字", action: "保存", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast("已改名")) })} />}
-        <PickRow label="重新检查" busy={checking} failed={checkFailed} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed("检查")); }} />
-        <PickRow label="刷新额度" busy={refreshing} failed={quotaFailed} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed("刷新额度")); }} />
-        <PickRow label={`${p.machine ? "停用" : "删除 Profile"}${p.usedBy.length ? "（还有连接在用）" : ""}`} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
-          title: `停用「${p.name}」？`, text: `${NAME} 不再用这台机器上的这份登录；机器上的登录不受影响，之后可以再用。`, action: "停用", danger: true,
-          run: () => api.deleteProfile(p.id).then(() => { app.toast("已停用"); app.pop(); }),
+        {!p.machine && <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.profiles.renameTitle"), value: p.name, placeholder: t("web-mobile.workspaces.name"), action: t("common.save"), run: (name) => api.putProfile(p.id, { name }).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />}
+        <PickRow label={t("web-mobile.profiles.recheck")} busy={checking} failed={checkFailed} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast(t("web-mobile.profiles.checked")), failed("web-mobile.profiles.checkFailed")); }} />
+        <PickRow label={t("web-mobile.profiles.refreshQuota")} busy={refreshing} failed={quotaFailed} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast(t("web-mobile.profiles.quotaRefreshed")), failed("web-mobile.profiles.quotaFailed")); }} />
+        <PickRow label={p.usedBy.length ? t("web-mobile.profiles.inUse", { action: p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete") }) : p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete")} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
+          title: t("web-mobile.profiles.disableAsk", { name: p.name }), text: t("web-mobile.profiles.disableText", { name: NAME }), action: t("web-mobile.connects.disable"), danger: true,
+          run: () => api.deleteProfile(p.id).then(() => { app.toast(t("web-mobile.profiles.disabled")); app.pop(); }),
         } : {
-          title: `删除「${p.name}」？`, text: `只从 ${NAME} 的配置里移除；配置目录和里面的登录状态不会删除。`, action: "删除 Profile", danger: true,
-          run: () => api.deleteProfile(p.id).then(() => { app.toast("已删除 Profile"); app.pop(); }),
+          title: t("web-mobile.archive.deleteAsk", { title: p.name }), text: t("web-mobile.profiles.deleteText", { name: NAME }), action: t("web-mobile.profiles.delete"), danger: true,
+          run: () => api.deleteProfile(p.id).then(() => { app.toast(t("web-mobile.profiles.deleted")); app.pop(); }),
         })} />
       </div>
     </>
@@ -286,9 +287,9 @@ function FastRow({ p }: { p: Profile }) {
   const act = useAct();
   const busy = useDoing("profile.put", { station: station.address, id: p.id });
   const error = useDoingFailed("profile.put", { station: station.address, id: p.id });
-  return <ListRow onClick={busy ? undefined : () => act(api.putProfile(p.id, { fast: !p.fast }), "保存 Fast", p.fast ? "已关闭默认 Fast" : "已打开默认 Fast")}>
-    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>默认 Fast</span>
-      <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>跟随订阅的会话使用此设置；Fast 消耗更多额度或积分</span></span>
+  return <ListRow onClick={busy ? undefined : () => act(api.putProfile(p.id, { fast: !p.fast }), t("web-mobile.profiles.what.fast"), p.fast ? t("web-mobile.profiles.fastOff") : t("web-mobile.profiles.fastOn"))}>
+    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("web-mobile.profiles.fast")}</span>
+      <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t("web-mobile.profiles.fastNote")}</span></span>
     {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
     <span className={connectsCss.mSwitch} data-on={p.fast || undefined} />
   </ListRow>;
@@ -305,11 +306,11 @@ function Quota({ p }: { p: Profile }) {
   if (trouble) {
     return (
       <>
-        <SectionHeader title="额度" trailing={p.quota?.time?.checkedAt ? `${p.quota.time.checkedAt.ago}查询` : undefined} start={24} />
+        <SectionHeader title={t("web-mobile.profiles.quota")} trailing={p.quota?.time?.checkedAt ? t("web-mobile.profiles.quotaChecked", { ago: p.quota.time.checkedAt.ago }) : undefined} start={24} />
         <ListCard>
           <ListRow>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-              <span className={listsCss.mRowTitle}><Presence state={p.quota?.state === "blocked" ? "error" : "offline"} /> {p.quota?.state === "blocked" ? "被停用" : "查不到额度"}</span>
+              <span className={listsCss.mRowTitle}><Presence state={p.quota?.state === "blocked" ? "error" : "offline"} /> {p.quota?.state === "blocked" ? t("web-mobile.history.blocked") : t("web-mobile.profiles.noQuota")}</span>
               <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>
             </span>
           </ListRow>
@@ -320,17 +321,17 @@ function Quota({ p }: { p: Profile }) {
   if (!windows.length && !p.quota?.creditsText && p.quota?.resetCount == null) return null;
   return (
     <>
-      <SectionHeader title="额度" trailing={p.quota?.time?.checkedAt ? `${p.quota.time.checkedAt.ago}查询` : undefined} start={24} />
+      <SectionHeader title={t("web-mobile.profiles.quota")} trailing={p.quota?.time?.checkedAt ? t("web-mobile.profiles.quotaChecked", { ago: p.quota.time.checkedAt.ago }) : undefined} start={24} />
       <ListCard>
         {!!windows.length && <div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div>}
-        {p.quota?.creditsText && <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>积分余额</span><span className={listsCss.mRowNote}>{p.quota.creditsText}</span></ListRow>}
+        {p.quota?.creditsText && <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.credits")}</span><span className={listsCss.mRowNote}>{p.quota.creditsText}</span></ListRow>}
         {p.quota?.resetCount != null && <ListRow onClick={p.quota.resetCount > 0 && !busy ? () => confirm(app, {
-          title: "重置额度？", text: `将使用「${p.name}」的 1 次额度重置，${p.quota?.resetText}`, action: "使用一次重置",
-          run: () => api.resetQuota(p.id).then(() => app.toast("已重置额度")),
+          title: t("web-mobile.profiles.resetAsk"), text: t("web-mobile.profiles.resetText", { name: p.name, reset: p.quota?.resetText ?? "" }), action: t("web-mobile.profiles.resetAction"),
+          run: () => api.resetQuota(p.id).then(() => app.toast(t("web-mobile.profiles.resetDone"))),
         }) : undefined}>
-          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>额度重置</span><span className={listsCss.mRowNote}>{p.quota.resetText}</span></span>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("web-mobile.profiles.resets")}</span><span className={listsCss.mRowNote}>{p.quota.resetText}</span></span>
           {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
-          <span className={p.quota.resetCount > 0 ? partsCss.mLink : partsCss.mMuted}>重置额度</span>
+          <span className={p.quota.resetCount > 0 ? partsCss.mLink : partsCss.mMuted}>{t("web-mobile.profiles.reset")}</span>
         </ListRow>}
       </ListCard>
     </>
@@ -342,7 +343,7 @@ function Quota({ p }: { p: Profile }) {
  * builds on the one before, not on what the station said last; one at a time goes, the latest asked waiting for it, so
  * two quick taps both count. Failing, it goes back to how it is (and the toast says why).
  */
-function useAsked<T>(id: string, real: T, put: (value: T) => Promise<unknown>, what: string): { value: T; busy: boolean; ask: (value: T) => void } {
+function useAsked<T>(id: string, real: T, put: (value: T) => Promise<unknown>, failed: string): { value: T; busy: boolean; ask: (value: T) => void } {
   const app = useApp();
   const [asked, setAsked] = useState<{ value: T; done: boolean } | null>(null);
   const busy = useDoing("profile.put", { station: useStation().address, id });
@@ -356,7 +357,7 @@ function useAsked<T>(id: string, real: T, put: (value: T) => Promise<unknown>, w
     going.current = true;
     put(value).then(
       () => { if (!next.current) setAsked(JSON.stringify(latest.current) === JSON.stringify(value) ? null : { value, done: true }); },
-      (e: unknown) => { app.toast(`没能${what}：${e instanceof Error ? e.message : String(e)}`); if (!next.current) setAsked(null); },
+      (e: unknown) => { app.toast(t(failed, { error: e instanceof Error ? e.message : String(e) })); if (!next.current) setAsked(null); },
     ).finally(() => {
       const waiting = next.current;
       next.current = null;
@@ -374,12 +375,12 @@ function useAsked<T>(id: string, real: T, put: (value: T) => Promise<unknown>, w
 
 /** Whether a new message sends what runs to the background: the switch goes over at once, a spinner by it till saved. */
 function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<unknown> }) {
-  const { value: on, busy, ask } = useAsked(p.id, !!p.backgroundOnMessage, put, "保存");
+  const { value: on, busy, ask } = useAsked(p.id, !!p.backgroundOnMessage, put, "web-mobile.profiles.saveFailed");
   return (
     <ListRow onClick={() => ask(!on)}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-        <span className={listsCss.mRowTitle}>新消息到来时，把正在执行的命令转到后台</span>
-        <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{on ? "命令和 subagent 转到后台继续跑，agent 马上读到消息。" : "新消息要等正在执行的命令或 subagent 结束后才会读到。"}</span>
+        <span className={listsCss.mRowTitle}>{t("web-mobile.profiles.background")}</span>
+        <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{on ? t("web-mobile.profiles.backgroundOn") : t("web-mobile.profiles.backgroundOff")}</span>
       </span>
       {busy && <Spinner size={14} />}
       <span className={connectsCss.mSwitch} data-on={on || undefined} />
@@ -400,24 +401,24 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
   // Ticked at once; each tick builds on the last asked (useAsked), not on the station's list from before it.
   const models = p.models;
   const busy = p.modelsSaving != null;
-  const ask = (models: string[]) => act(put(models), "保存模型");
+  const ask = (models: string[]) => act(put(models), t("web-mobile.profiles.what.models"));
   const save = (next: string[]) => ask([...new Set(next)].sort());
-  const suffix = filter.trim() ? "筛选结果" : "";
+  const filtered = !!filter.trim();
   return (
     <>
-      <SectionHeader title={`模型 · 启用 ${models.length} / ${all.length}${busy ? " · 正在保存…" : ""}`} start={24} />
-      <p className={css.mProfileNote}>{all.length === 0 ? "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" : "只有勾选的模型能在新对话和连接里选。"}</p>
+      <SectionHeader title={t(busy ? "web-mobile.profiles.modelsSaving" : "web-mobile.profiles.models", { on: models.length, n: all.length })} start={24} />
+      <p className={css.mProfileNote}>{all.length === 0 ? t("web-mobile.profiles.modelsEmpty") : t("web-mobile.profiles.modelsNote")}</p>
       <div className={settingsCss.mProfileTools}>
-        <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), "刷新模型", "检查完成")}>
-          {checking ? <Spinner size={12} /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? "正在刷新…" : "刷新模型"}
+        <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), t("web-mobile.profiles.what.refreshModels"), t("web-mobile.profiles.checkDone"))}>
+          {checking ? <Spinner size={12} /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? t("web-mobile.profiles.refreshing") : t("web-mobile.profiles.refreshModels")}
         </button>
         <span className={partsCss.mGrow} />
         {all.length > 0 && <>
-          <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => save([...models, ...shown])}>全选{suffix}</button>
-          <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => save(models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
+          <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => save([...models, ...shown])}>{filtered ? t("web-mobile.profiles.selectAllFiltered") : t("web-mobile.annotate.selectAll")}</button>
+          <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => save(models.filter((m) => !shown.includes(m)))}>{filtered ? t("web-mobile.profiles.selectNoneFiltered") : t("web-mobile.workspace.selectNone")}</button>
         </>}
       </div>
-      {all.length > 10 && <div className={settingsCss.mProfileTools}><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></div>}
+      {all.length > 10 && <div className={settingsCss.mProfileTools}><Field value={filter} onChange={setFilter} placeholder={t("web-mobile.profiles.filterModels")} /></div>}
       {/* By series, newest first (the core's). */}
       {p.series.map((s) => {
         const list = s.models.filter((m) => shown.includes(m));
@@ -455,25 +456,25 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
   const previous = useRef(job?.state);
   useEffect(() => {
-    if (job?.state === "done" && previous.current && previous.current !== "done") app.toast("登录成功");
+    if (job?.state === "done" && previous.current && previous.current !== "done") app.toast(t("web-mobile.profiles.signedIn"));
     previous.current = job?.state;
   }, [job?.state]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <SectionHeader title={active ? `正在登录 ${provider}` : needed ? `还没登录 ${provider} 账号` : `${provider} 订阅`} start={24} />
+      <SectionHeader title={active ? t("web-mobile.profiles.loginActive", { provider }) : needed ? t("web-mobile.profiles.loginNeeded", { provider }) : t("web-mobile.profiles.subscription", { provider })} start={24} />
       <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
         {active ? (
           <>
             <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} />
-            <Button label="取消登录" primary={false} busy={cancelling}
-              onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(`没能取消登录：${e.message}`)); }} />
+            <Button label={t("web-mobile.profiles.cancelLogin")} primary={false} busy={cancelling}
+              onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.cancelLoginFailed", { error: e.message }))); }} />
           </>
         ) : (
           <>
-            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : `登录在运行 ${NAME} 的机器上完成，你只需要在浏览器里授权。`}</p>
-            <Button label={job?.state === "done" || !needed ? "重新登录" : "登录"} primary={needed} busy={busy}
-              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(`没能开始登录：${e.message}`)); }} />
-            <details className={css.mDetails}><summary>也可以在那台机器上手动登录</summary><CommandBox text={p.loginCommand} /></details>
+            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? t("web-mobile.profiles.loginFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-mobile.profiles.loginDone") : t("web-mobile.profiles.loginWhere", { name: NAME })}</p>
+            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed} busy={busy}
+              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
+            <details className={css.mDetails}><summary>{t("web-mobile.profiles.manualLogin")}</summary><CommandBox text={p.loginCommand} /></details>
           </>
         )}
       </div>
@@ -489,27 +490,27 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   const busy = operation.busy;
   const error = operation.error?.message;
   const [copied, setCopied] = useState(false);
-  if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在生成 {provider} 的登录链接…</p>;
-  if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在完成登录…</p>;
-  if (job.state === "done") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />已登录，正在添加…</p>;
+  if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.loginLink", { provider })}</p>;
+  if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.finishing")}</p>;
+  if (job.state === "done") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.adding")}</p>;
   if (job.state === "needs_approval" && job.url && job.userCode) {
     return (
       <>
         <span className={css.mDeviceCode}>{job.userCode}</span>
-        <Button label={copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"} primary
-          onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast("没能复制代码，照着上面抄一下")).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>在打开的 OpenAI 页面用要给 {NAME} 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
+        <Button label={copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
+          onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.codexNote", { name: NAME })}</p>
       </>
     );
   }
   if (job.state === "needs_code" && job.url) {
     return (
       <>
-        <p className={partsCss.mSmall}>1. <a href={job.url} target="_blank" rel="noopener">打开授权页面</a>，用要给 {NAME} 使用的 Claude 账号登录并同意。</p>
-        <p className={partsCss.mSmall}>2. 同意后页面上会显示一段授权码，复制过来：</p>
-        <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder="粘贴授权码" onChange={(e) => setCode(e.target.value)} />
+        <p className={partsCss.mSmall}>{tNodes("web-mobile.profiles.claudeStep1", { link: <a href={job.url} target="_blank" rel="noopener">{t("web-mobile.profiles.openAuth")}</a> }, { name: NAME })}</p>
+        <p className={partsCss.mSmall}>{t("web-mobile.profiles.claudeStep2")}</p>
+        <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder={t("web-mobile.profiles.pasteCode")} onChange={(e) => setCode(e.target.value)} />
         {error && <p className={partsCss.mError}>{error}</p>}
-        <Button label="完成登录" primary busy={busy} enabled={!!code.trim()}
+        <Button label={t("web-mobile.profiles.finishLogin")} primary busy={busy} enabled={!!code.trim()}
           onClick={() => { void operation.run(code.trim()); }} />
       </>
     );
@@ -543,21 +544,21 @@ function EnvSheet({ p }: { p: Profile }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="环境变量" />
+      <SheetHead title={t("web-mobile.profiles.env")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>运行时启动时带上这些变量，用来接到你的模型服务。值里的 {"{route}"} 会换成会话的路由 ID。</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.envNote", { route: "{route}" })}</p>
         {rows.map((r) => (
           <div key={r.row} className={css.mEnvRow}>
             <input className={listsCss.mField} data-mono spellCheck={false} value={r.key} placeholder="NAME" onChange={(e) => update(r.row, { key: e.target.value })} />
             <input className={listsCss.mField} data-mono spellCheck={false} autoComplete="off" type={r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key) ? "password" : "text"}
-              value={r.value} placeholder={r.masked !== null ? `已保存 ${r.masked}，留空不变` : "值"} onChange={(e) => update(r.row, { value: e.target.value })} />
-            <button type="button" className={partsCss.mLink} onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>删除</button>
+              value={r.value} placeholder={r.masked !== null ? t("web-mobile.connects.savedToken", { token: r.masked }) : t("web-mobile.profiles.value")} onChange={(e) => update(r.row, { value: e.target.value })} />
+            <button type="button" className={partsCss.mLink} onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>{t("common.delete")}</button>
           </div>
         ))}
-        <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setRows([...rows, { row: next.current++, key: "", value: "", masked: null, original: null }])}>＋ 添加变量</button>
+        <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setRows([...rows, { row: next.current++, key: "", value: "", masked: null, original: null }])}>{t("web-mobile.profiles.addEnv")}</button>
         <div className={sheetsCss.mFormActions}>
-          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label="保存" primary busy={busy} onClick={() => { api.putProfile(p.id, { env: patch() }).then(() => { app.toast("已保存"); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={t("common.save")} primary busy={busy} onClick={() => { api.putProfile(p.id, { env: patch() }).then(() => { app.toast(t("web-mobile.profiles.saved")); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
         </div>
       </div>
     </>
@@ -586,21 +587,21 @@ export function NewProfileScreen() {
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
   const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
   // The sign-in made its profile: on to it.
-  useEffect(() => { if (pending?.created) go(pending.created, "已登录，添加了 Profile"); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pending?.created) go(pending.created, t("web-mobile.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
   // Leaving before a sign-in made its profile leaves nothing behind.
-  const dropped = (e: Error) => app.toast(`没能丢掉没完成的登录：${e.message}`);
+  const dropped = (e: Error) => app.toast(t("web-mobile.profiles.dropFailed", { error: e.message }));
   const leave = () => { if (login && !pending?.created) api.dropLogin(login).catch(dropped); app.pop(); };
   const provider = runtime === "claude" ? "Claude" : "ChatGPT";
   const job = pending?.job ?? null;
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="取消" onBack={leave} title="添加 Profile" sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      <NavBar back={t("common.cancel")} onBack={leave} title={t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {login ? (
           pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
             <>
-              <p className={partsCss.mError}>{pending?.error ?? job?.error ?? "登录没有完成。"}</p>
-              <Button label="重新开始" primary={false} onClick={() => { api.dropLogin(login).catch(dropped); setLogin(null); }} />
+              <p className={partsCss.mError}>{pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
+              <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { api.dropLogin(login).catch(dropped); setLogin(null); }} />
             </>
           ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login, code)} />
         ) : (
@@ -609,7 +610,7 @@ export function NewProfileScreen() {
               <MachineLoginOffers inForm logins={overview.machineLogins}
                 onSignIn={(c) => { setChoice(c); setError(null); api.newLogin(CHOICES[c].runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
             )}
-            {overview && machineOffers(overview.machineLogins).length > 0 && <b className={sheetsCss.mFormLabel}>或者添加一个新的</b>}
+            {overview && machineOffers(overview.machineLogins).length > 0 && <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.orNew")}</b>}
             <ListCard>
               {(Object.keys(CHOICES) as Choice[]).map((c) => (
                 <PickRow key={c} label={CHOICES[c].title} sub={CHOICES[c].description} checked={choice === c} onClick={() => setChoice(c)}
@@ -619,15 +620,15 @@ export function NewProfileScreen() {
             {KEYED.has(kind) && (
               <>
                 <b className={sheetsCss.mFormLabel}>{kind === "opencode-go" ? "OpenCode Go key" : "API key"}</b>
-                <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={key} placeholder="先验证能用，再添加" onChange={(e) => setKey(e.target.value.trim())} />
+                <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={key} placeholder={t("web-mobile.profiles.keyPlaceholder")} onChange={(e) => setKey(e.target.value.trim())} />
               </>
             )}
-            {kind === "subscription" && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>登录在运行 {NAME} 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
+            {kind === "subscription" && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginWhereAdd", { name: NAME })}</p>}
             {error && <p className={partsCss.mError}>{error}</p>}
             {kind === "subscription"
-              ? <Button label={`登录 ${provider}`} primary busy={busy} onClick={() => { setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
-              : <Button label={KEYED.has(kind) ? "验证并添加" : "添加"} primary busy={busy} enabled={!KEYED.has(kind) || !!key}
-                  onClick={() => { setError(null); api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }).then(({ id }) => go(id, "已验证并添加 Profile"), (e: Error) => setError(e.message)); }} />}
+              ? <Button label={t("web-mobile.profiles.loginTo", { provider })} primary busy={busy} onClick={() => { setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
+              : <Button label={KEYED.has(kind) ? t("web-mobile.profiles.verifyAdd") : t("web-mobile.workspace.addOne")} primary busy={busy} enabled={!KEYED.has(kind) || !!key}
+                  onClick={() => { setError(null); api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }).then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), (e: Error) => setError(e.message)); }} />}
           </>
         )}
         <div style={{ height: 30 }} />
@@ -661,13 +662,13 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
   if (!offers.length) return null;
   const use = (l: MachineLogin) => {
     api.useMachineLogin(l.runtime).then(({ id }) => {
-      app.toast("已添加 Profile，用的是这台机器的登录");
+      app.toast(t("web-mobile.profiles.addedMachine"));
       app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`);
-    }, (e: Error) => app.toast(`没能添加 Profile：${e.message}`));
+    }, (e: Error) => app.toast(t("web-mobile.profiles.addFailed", { error: e.message })));
   };
   return (
     <>
-      {inForm ? <b className={sheetsCss.mFormLabel}>这台机器上已经登录了</b> : <SectionHeader title="这台机器上已经登录了" start={24} />}
+      {inForm ? <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.machineLogins")}</b> : <SectionHeader title={t("web-mobile.profiles.machineLogins")} start={24} />}
       <ListCard>
         {offers.map((l) => {
           const blocked = l.quota?.state === "blocked";
@@ -678,19 +679,19 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
               <ProviderMark runtime={l.runtime} kind="subscription" size={18} />
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
                 <span className={listsCss.mRowTitle}><Presence state={blocked ? "error" : "online"} /> {MACHINE_RUNTIME[l.runtime]}{plan && <span className={settingsCss.mRowAside}> · {plan}</span>}</span>
-                <span className={listsCss.mRowNote}>{blocked ? "被停用" : "本机已登录"}{l.email ? ` · ${l.email}` : ""}</span>
+                <span className={listsCss.mRowNote}>{blocked ? t("web-mobile.history.blocked") : t("web-mobile.profiles.machineSignedIn")}{l.email ? ` · ${l.email}` : ""}</span>
                 {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
               </span>
               <QuotaRings quota={l.quota} />
               {blocked ? null : l.usable
-                ? <LinkButton label="用这个账号" busy={doing.some((d) => d.params.runtime === l.runtime)}
+                ? <LinkButton label={t("web-mobile.profiles.useThis")} busy={doing.some((d) => d.params.runtime === l.runtime)}
                   failed={failedIn(list, "profile.useMachineLogin", { station: station.address, runtime: l.runtime })} enabled={doing.length === 0} onClick={() => use(l)} />
-                : <button type="button" className={partsCss.mLink} onClick={() => onSignIn(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</button>}
+                : <button type="button" className={partsCss.mLink} onClick={() => onSignIn(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>{t("web-mobile.workspaces.signIn")}</button>}
             </ListRow>
           );
         })}
       </ListCard>
-      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；station 读不到的登录（Codex 存在钥匙串里的，或者钥匙串没解锁）不能直接用，要为 {NAME} 单独登录一次，原来的登录不受影响。</p>
+      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>{t("web-mobile.profiles.machineNote", { name: NAME })}</p>
     </>
   );
 }

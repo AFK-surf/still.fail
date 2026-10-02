@@ -12,6 +12,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Preview.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as homeCss from "./styles/home.css.ts";
+import { t } from "../i18n.ts";
 
 export function PreviewScreen() {
   const app = useApp();
@@ -27,16 +28,16 @@ export function PreviewScreen() {
   if (file) {
     return (
       <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
-        <NavBar back="对话" onBack={app.pop} title={file.name} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+        <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={file.name} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
         <StationPreview station={station.address} file={file} name={file.name} service={service} alone restarting={null} draftKey={draftKeyOf(station.address, chat)} />
       </div>
     );
   }
   return (
     <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
-      <NavBar back="对话" onBack={app.pop} title={job?.name ?? "服务"} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
-      {error && !job && <p className={homeCss.mNote}>找不到这个服务：{error}</p>}
-      {job && !up && <p className={homeCss.mNote}>「{job.name}」已经停了。</p>}
+      <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={job?.name ?? t("web-mobile.preview.service")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      {error && !job && <p className={homeCss.mNote}>{t("web-mobile.preview.notFound", { error })}</p>}
+      {job && !up && <p className={homeCss.mNote}>{t("web-mobile.preview.stopped", { name: job.name })}</p>}
       {job && up && (
         <StationPreview station={station.address} port={job.port!} name={job.name} service={service} alone
           restarting={job.state === "exited" ? { restarts: job.restarts ?? 0 } : null} draftKey={draftKeyOf(station.address, chat)} />

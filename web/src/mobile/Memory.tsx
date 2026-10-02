@@ -16,6 +16,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
+import { t } from "../i18n.ts";
 
 export function MemoryScreen() {
   const app = useApp();
@@ -25,19 +26,19 @@ export function MemoryScreen() {
   const others = memory?.skills.filter((k) => !k.project) ?? [];
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={station.name} onBack={app.pop} title="记忆" sub={<span className={barsCss.mNavbarNote}>所有会话共用，由 agent 自己维护</span>} />
-      {!memory ? <Loading text={error ? MEMORY_TEXT.failed(error) : "正在读取…"} /> : (
+      <NavBar back={station.name} onBack={app.pop} title={t("web-mobile.settings.memory")} sub={<span className={barsCss.mNavbarNote}>{t("web-mobile.memory.sub")}</span>} />
+      {!memory ? <Loading text={error ? MEMORY_TEXT.failed(error) : t("web-mobile.reading")} /> : (
         <div className={pagesCss.mScroll} style={{ paddingTop: 4 }}>
-          <SectionHeader title="全局记忆" start={24} />
+          <SectionHeader title={t("web-mobile.memory.global")} start={24} />
           <p className={css.mMemoryNote}>{MEMORY_TEXT.global}</p>
-          <Card><div className={`${rootCss.wide} ${conversationCss.markdown} ${css.mMemoryDoc}`}><Prose>{memory.global.text.trim() || "（空的）"}</Prose></div></Card>
-          <SectionHeader title="项目记忆" start={24} />
+          <Card><div className={`${rootCss.wide} ${conversationCss.markdown} ${css.mMemoryDoc}`}><Prose>{memory.global.text.trim() || t("web-mobile.memory.empty")}</Prose></div></Card>
+          <SectionHeader title={t("web-mobile.memory.projects")} start={24} />
           <p className={css.mMemoryNote}>{MEMORY_TEXT.projects}</p>
           {projects.length === 0 ? <p className={css.mMemoryNote}>{MEMORY_TEXT.none}</p>
             : <ListCard><div className={`${rootCss.wide} ${css.mMemorySkills}`}>{projects.map((k) => <SkillRow key={k.name} skill={k} />)}</div></ListCard>}
           {others.length > 0 && (
             <>
-              <SectionHeader title="其他 skill" start={24} />
+              <SectionHeader title={t("web-mobile.memory.others")} start={24} />
               <p className={css.mMemoryNote}>{MEMORY_TEXT.others}</p>
               <ListCard><div className={`${rootCss.wide} ${css.mMemorySkills}`}>{others.map((k) => <SkillRow key={k.name} skill={k} />)}</div></ListCard>
             </>
@@ -58,14 +59,14 @@ export function MemoriesScreen() {
   const stations = useStations(app.entry.id).value;
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} />
-      <LargeTitle small="" big="记忆" />
-      <p className={settingsCss.mPageNote}>每台 station 上所有会话共用的记忆，由 agent 自己维护，各台 station 之间不同步。</p>
-      {!stations ? <Loading text="正在读取 station…" /> : (
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+      <LargeTitle small="" big={t("web-mobile.settings.memory")} />
+      <p className={settingsCss.mPageNote}>{t("web-mobile.memory.note")}</p>
+      {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : (
         <ListCard>
           {stations.map((s) => s.online
-            ? <GoRow key={s.id} title={s.name} value="全局记忆 · 项目记忆" onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
-            : <ListRow key={s.id}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{s.name}</span><span className={listsCss.mRowNote}>离线，读不到它的记忆</span></span></ListRow>)}
+            ? <GoRow key={s.id} title={s.name} value={t("web-mobile.memory.both")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
+            : <ListRow key={s.id}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{s.name}</span><span className={listsCss.mRowNote}>{t("web-mobile.memory.offline")}</span></span></ListRow>)}
         </ListCard>
       )}
       <div style={{ height: 30 }} />

@@ -28,6 +28,7 @@ import * as chatCss from "./styles/chat.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 const BASE = import.meta.env.BASE_URL;
 
 /** The buddy's face for a station: at work, idle, or asleep. */
@@ -46,16 +47,16 @@ export function StationsScreen() {
   if (list && list.length === 0) {
     return (
       <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-        <TopBack label="会话" onBack={app.pop} />
+        <TopBack label={t("web-mobile.nav.chats")} onBack={app.pop} />
         <FirstStation />
       </div>
     );
   }
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} trailing={manager && list ? <NavButton icon={Plus} iconSize={20} label="添加 station" onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })} /> : undefined} />
-      <LargeTitle small={list ? `${app.entry.name} · ${list.filter((s) => s.online).length}/${list.length} 在线` : app.entry.name} big="Station" />
-      {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? "正在读取 station…"}</p> : list.map((s) => (
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} trailing={manager && list ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.stations.add")} onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })} /> : undefined} />
+      <LargeTitle small={list ? t("web-mobile.stations.small", { workspace: app.entry.name, online: list.filter((s) => s.online).length, n: list.length }) : app.entry.name} big="Station" />
+      {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? t("web-mobile.memory.readingStations")}</p> : list.map((s) => (
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />
@@ -68,7 +69,7 @@ export function StationsScreen() {
               {s.net && <Net net={s.net} stacked />}
             </>
           ) : !s.online ? (
-            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 {NAME} 了</span></span>
+            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.longGone", { name: NAME })}</span></span>
           ) : null}
         </Card>
       ))}
@@ -93,17 +94,17 @@ function AddStationSheet({ known }: { known: string[] }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="添加 station" />
+      <SheetHead title={t("web-mobile.stations.add")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         {!made ? (
           <>
-            <p className={partsCss.mMuted}>station 是一台运行 {NAME} 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 {NAME} 并加入。</p>
-            <b className={sheetsCss.mFormLabel}>名字</b>
-            <Field value={name} onChange={setName} placeholder="比如机器名：studio、mac-mini" />
+            <p className={partsCss.mMuted}>{t("web-mobile.stations.addNote", { name: NAME })}</p>
+            <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
+            <Field value={name} onChange={setName} placeholder={t("web-mobile.stations.namePlaceholder")} />
             {error && <p className={partsCss.mError}>{error}</p>}
             <div className={sheetsCss.mFormActions}>
-              <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-              <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
+              <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+              <Button label={t("web-mobile.stations.makeCommand")} primary busy={busy} enabled={!!name.trim()} onClick={() => {
                 setError(null);
                 cloud.enroll(me.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
               }} />
@@ -111,8 +112,8 @@ function AddStationSheet({ known }: { known: string[] }) {
           </>
         ) : joined ? (
           <>
-            <p>「{joined.name}」已加入，现在可以打开它了。</p>
-            <div className={sheetsCss.mFormActions}><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
+            <p>{t("web-mobile.stations.joined", { name: joined.name })}</p>
+            <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
           </>
         ) : <EnrollSteps install={made.install} />}
       </div>
@@ -128,9 +129,9 @@ export function StationScreen() {
   const manager = useManager();
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s ? <span className={barsCss.mNavbarNote}>{s.host?.cpuModel || (s.online ? "在线" : "离线")}</span> : undefined}
-        trailing={s && manager ? <NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
-      {!s ? <Loading text={stations.error?.message ?? "正在读取…"} /> : (
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s ? <span className={barsCss.mNavbarNote}>{s.host?.cpuModel || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))}</span> : undefined}
+        trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
+      {!s ? <Loading text={stations.error?.message ?? t("web-mobile.reading")} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
           {s.online && s.host ? (
             <Card>
@@ -140,16 +141,16 @@ export function StationScreen() {
               {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (
-            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 {NAME} 就会重新连上</span><RetryPill /></span></Card>
+            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill /></span></Card>
           ) : null}
           {/* What runs on it is in settings' lists, every station's together; here, how much of it there is, and its versions. */}
           {s.overview && (
             <>
-              <SectionHeader title="在这台上" start={24} />
+              <SectionHeader title={t("web-mobile.stations.onThis")} start={24} />
               <ListCard>
-                <GoRow title="连接" value={`${s.overview.connects.length} 个`} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
-                <GoRow title="Profile" value={`${s.overview.profiles.length} 个`} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
-                <GoRow title="记忆" onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
+                <GoRow title={t("web-mobile.settings.connects")} value={t("web-mobile.settings.connectsCount", { n: s.overview.connects.length })} onClick={() => app.push(app.at(`/settings/connects?station=${s.id}`))} />
+                <GoRow title="Profile" value={t("web-mobile.settings.profilesCount", { n: s.overview.profiles.length })} onClick={() => app.push(app.at(`/settings/profiles?station=${s.id}`))} />
+                <GoRow title={t("web-mobile.settings.memory")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
               </ListCard>
               {s.online && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
             </>
@@ -165,10 +166,10 @@ export function StationScreen() {
 function EnrollSteps({ install }: { install: string }) {
   return (
     <>
-      <p>在那台机器的终端里执行：</p>
+      <p>{t("web-mobile.stations.runThis")}</p>
       <CommandBox text={install} />
-      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>macOS（Apple 芯片）和 Linux 都行；装过 {NAME} 的机器也用这条命令。它会装好 {NAME}、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
-      <p className={`${partsCss.mMuted} ${partsCss.mSmall} ${chatCss.mWaiting}`}><Spinner size={10} />等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效</p>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.stations.runNote", { name: NAME })}</p>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall} ${chatCss.mWaiting}`}><Spinner size={10} />{t("web-mobile.stations.waiting")}</p>
     </>
   );
 }
@@ -193,18 +194,18 @@ export function FirstStation() {
   return (
     <div className={newChatCss.mNewNone}>
       <img className={partsCss.mIllus} src={illustrationUrl("no-station")} alt="" width={240} />
-      <b>添加第一台 station</b>
-      <p>agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
+      <b>{t("web-mobile.stations.first")}</b>
+      <p>{t("web-mobile.stations.firstNote")}</p>
       <div className={`${sheetsCss.mForm} ${settingsCss.mSteps}`} style={{ alignSelf: "stretch", padding: 0, textAlign: "left" }}>
-        {!view ? <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在读取 workspace…</p>
-          : !manager ? <p className={settingsCss.mCallout}>这个 workspace 还没有 station，等管理员添加。</p>
+        {!view ? <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.workspace.reading")}</p>
+          : !manager ? <p className={settingsCss.mCallout}>{t("web-mobile.stations.waitAdmin")}</p>
           : made ? <EnrollSteps install={made.install} />
           : (
             <>
-              <b className={sheetsCss.mFormLabel}>给这台机器起个名字</b>
-              <Field value={name} onChange={setName} placeholder="比如 studio、mac-mini" />
+              <b className={sheetsCss.mFormLabel}>{t("web-mobile.stations.nameIt")}</b>
+              <Field value={name} onChange={setName} placeholder={t("web-mobile.stations.namePlaceholderShort")} />
               {error && <p className={partsCss.mError}>{error}</p>}
-              <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
+              <Button label={t("web-mobile.stations.makeCommand")} primary busy={busy} enabled={!!name.trim()} onClick={() => {
                 setError(null);
                 cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
               }} />
@@ -230,12 +231,12 @@ function StationMenu({ s }: { s: StationView }) {
       <SheetGrab />
       <SheetHead title={s.name} />
       <div className={sheetsCss.mSheetScroll}>
-        <PickRow label="改名" onClick={() => ask(app, { title: "station 的名字", value: s.name, placeholder: "比如机器名：studio", action: "保存",
-          run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast("已改名")) })} />
-        <PickRow label="从 workspace 移除" accent onClick={() => confirm(app, {
-          title: `移除「${s.name}」？`, action: "移除 station", danger: true,
-          text: `它会断开与 ${NAME} cloud 的连接，成员不能再从这里访问它。那台机器上的 ${NAME} 和数据不受影响，之后可以重新添加。`,
-          run: () => cloud.removeStation(me.sub, app.entry.id, s.id).then(() => { app.toast("已移除 station"); app.pop(); }),
+        <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.stations.renameTitle"), value: s.name, placeholder: t("web-mobile.stations.renamePlaceholder"), action: t("common.save"),
+          run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />
+        <PickRow label={t("web-mobile.stations.remove")} accent onClick={() => confirm(app, {
+          title: t("web-mobile.stations.removeAsk", { name: s.name }), action: t("web-mobile.stations.removeAction"), danger: true,
+          text: t("web-mobile.stations.removeText", { name: NAME }),
+          run: () => cloud.removeStation(me.sub, app.entry.id, s.id).then(() => { app.toast(t("web-mobile.stations.removed")); app.pop(); }),
         })} />
       </div>
     </>

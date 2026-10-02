@@ -9,6 +9,7 @@ import { useApp } from "./app.tsx";
 import { LargeTitle, ListCard, SectionHeader, Spinner, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Changelog.css.ts";
+import { t } from "../i18n.ts";
 
 export function ChangelogScreen() {
   const app = useApp();
@@ -20,11 +21,11 @@ export function ChangelogScreen() {
   }, [news, seen]);
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} />
-      <LargeTitle small={view?.build != null ? `这个 app 是 0.1.${view.build}` : ""} big="更新日志" />
-      {!view || view.loading ? <p className={css.mNote}><Spinner size={13} />正在读取…</p>
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+      <LargeTitle small={view?.build != null ? t("web-mobile.changelog.build", { version: `0.1.${view.build}` }) : ""} big={t("web-mobile.settings.changelog")} />
+      {!view || view.loading ? <p className={css.mNote}><Spinner size={13} />{t("web-mobile.reading")}</p>
         : view.error ? <p className={css.mNote} data-error>{view.error}</p>
-        : view.days.length === 0 ? <p className={css.mNote}>还没有更新记录</p>
+        : view.days.length === 0 ? <p className={css.mNote}>{t("web-mobile.changelog.empty")}</p>
         : view.days.map((day) => (
           <section key={day.label}>
             <SectionHeader title={day.label} start={24} />
@@ -56,11 +57,11 @@ export function ChangelogNews() {
   return (
     <div className={css.mNews}>
       <button type="button" className={css.mNewsBody} onClick={() => app.push(app.at("/settings/changelog"))}>
-        <span className={css.mNewsHead}><Sparks size={16} />已更新{news.build ? `到 ${news.build}` : ""}</span>
+        <span className={css.mNewsHead}><Sparks size={16} />{news.build ? t("web-mobile.changelog.updatedTo", { build: news.build }) : t("web-mobile.changelog.updated")}</span>
         {lines.slice(0, 3).map((line, i) => <span key={i} className={css.mNewsLine}>{line}</span>)}
-        {lines.length > 3 && <span className={css.mNewsLine}>还有 {lines.length - 3} 项</span>}
+        {lines.length > 3 && <span className={css.mNewsLine}>{t("web-mobile.changelog.more", { n: lines.length - 3 })}</span>}
       </button>
-      <button type="button" className={css.mNewsClose} aria-label="知道了" onClick={seen}><Close size={16} /></button>
+      <button type="button" className={css.mNewsClose} aria-label={t("web-mobile.changelog.dismiss")} onClick={seen}><Close size={16} /></button>
     </div>
   );
 }

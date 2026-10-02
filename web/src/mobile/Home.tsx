@@ -28,6 +28,7 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { Tip } from "../ui.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
+import { t } from "../i18n.ts";
 
 export function Home() {
   const app = useApp();
@@ -55,14 +56,14 @@ export function Home() {
       )}
       {/* The lists run under both bars, which are frosted glass over them. */}
       <header className={`${css.mHomeBar} ${pagesCss.mGlass}`}>
-        <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label="设置">
+        <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
           <Settings size={22} />
         </button>
         <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
           <b>{app.entry.name}</b>
           {marks?.others
             ? <span className={chatMarkCss.chatMarkInline} data-tone={marks.others} role="img" aria-label={marks.othersLabel ?? ""} />
-            : invited && <span className={css.mDot} aria-label="有邀请" />}
+            : invited && <span className={css.mDot} aria-label={t("web-mobile.home.invited")} />}
           <ChevronDown size={16} />
         </button>
         {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
@@ -74,12 +75,12 @@ export function Home() {
       {!none && <div className={css.mHomeToolbar}>
         {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, only while there are some. */}
         {decisions > 0 && (
-          <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={`奏：${decisions} 件等你决定`}>
-            <b>奏</b><span>{decisions}</span>
+          <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
+            <b>{t("web-mobile.decisions.title")}</b><span>{decisions}</span>
           </button>
         )}
         <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
-          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
+          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Edit size={20} /></button>
         </div>
       </div>}
     </div>
@@ -98,8 +99,8 @@ export function Recent() {
   return (
     <>
       <div className={css.mRecentHead}>
-        <b>最近的会话</b>
-        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label="新建对话"><Edit size={17} /></button>
+        <b>{t("web-mobile.app.recent")}</b>
+        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Edit size={17} /></button>
       </div>
       <div className={css.mRecentRows}>
         {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} />
@@ -107,7 +108,7 @@ export function Recent() {
           : !items.length ? <Note text={view.note?.reading ? view.note.text ?? "正在读取会话" : view.note?.failing[0]?.text ?? "还没有会话"} error={!view.note?.reading && !!view.note?.failing.length} />
           : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
       </div>
-      <button type="button" className={css.mRecentAll} onClick={app.home}>全部会话<ChevronRight size={16} /></button>
+      <button type="button" className={css.mRecentAll} onClick={app.home}>{t("web-mobile.home.allChats")}<ChevronRight size={16} /></button>
     </>
   );
 }
@@ -118,15 +119,15 @@ function FilterButton({ filter, setFilter }: { filter: ChatFilter; setFilter: (v
   const mark = (on: boolean) => on ? <Check size={16} /> : <span style={{ width: 16 }} />;
   return (
     <button type="button" className={`${barsCss.mNavButton} ${css.mFilter}`} data-on={filter !== "all" || undefined}
-      aria-label={`筛选会话：${filter === "mine" ? "我参与的" : filter === "watching" ? "监控中" : "全部"}`}
+      aria-label={t("web-mobile.home.filterLabel", { filter: filter === "mine" ? t("web-mobile.home.filterMine") : filter === "watching" ? t("web-mobile.home.filterWatching") : t("web-mobile.home.filterAll") })}
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
         // The menu is 180 wide (app.tsx MenuHost): its right edge under the button's.
         app.menu({ anchor: new DOMRect(r.right - 180, r.top, 0, r.height), items: [
-          { label: "全部", icon: mark(filter === "all"), action: () => setFilter("all") },
-          { label: "我参与的", icon: mark(filter === "mine"), action: () => setFilter("mine") },
-          { label: "监控中", icon: mark(filter === "watching"), action: () => setFilter("watching") },
-          { label: "已归档", icon: <Archive size={16} />, action: () => app.push(app.at("/archive")) },
+          { label: t("web-mobile.home.filterAll"), icon: mark(filter === "all"), action: () => setFilter("all") },
+          { label: t("web-mobile.home.filterMine"), icon: mark(filter === "mine"), action: () => setFilter("mine") },
+          { label: t("web-mobile.home.filterWatching"), icon: mark(filter === "watching"), action: () => setFilter("watching") },
+          { label: t("web-mobile.archive.title"), icon: <Archive size={16} />, action: () => app.push(app.at("/archive")) },
         ] });
       }}>
       <Filter size={20} />
@@ -141,7 +142,7 @@ function StationButton({ view }: { view: ChatsView | undefined }) {
   const counts = glyphCounts(view, status?.state === "trouble");
   // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
   const said = counts.asleep ? status?.text ?? "" : view?.glyph?.label ?? "";
-  const label = view?.trouble ? `Station：${said}（${view.trouble.text}）` : `Station：${said}`;
+  const label = view?.trouble ? t("web-mobile.home.stationTrouble", { said, trouble: view.trouble.text }) : t("web-mobile.home.station", { said });
   return (
     <button type="button" className={barsCss.mNavButton} onClick={() => app.push(app.at("/settings/stations"))} aria-label={label}>
       <StationGlyph counts={counts} />
@@ -191,10 +192,10 @@ function Empty({ view, filter }: { view: ChatsView; filter: ChatFilter }) {
   return (
     <div className={css.mEmpty}>
       <Illustration name={any ? "new-chat" : "station-offline"} width={240} />
-      {filter === "mine" ? <p>没有你参与的会话。</p>
-        : filter === "watching" ? <p>没有在监控的会话。</p>
-        : any ? <><p>还没有会话。在 Slack 里 @ {view.stations.length > 1 ? "它们" : "它"}，或者</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/new"))}>新建对话</button></>
-        : <><p>还没有 station。</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/settings/stations"))}>看看 Station</button></>}
+      {filter === "mine" ? <p>{t("web-mobile.home.emptyMine")}</p>
+        : filter === "watching" ? <p>{t("web-mobile.home.emptyWatching")}</p>
+        : any ? <><p>{view.stations.length > 1 ? t("web-mobile.home.emptyMany") : t("web-mobile.home.emptyOne")}</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/new"))}>{t("web-mobile.home.newChat")}</button></>
+        : <><p>{t("web-mobile.home.noStations")}</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/settings/stations"))}>{t("web-mobile.home.seeStations")}</button></>}
     </div>
   );
 }
@@ -255,7 +256,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         <ChatMark item={item} inline />
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
-        {busy ? <span className={css.mChatMark} aria-label="正在处理"><Spinner size={12} /></span>
+        {busy ? <span className={css.mChatMark} aria-label={t("web-mobile.home.busy")}><Spinner size={12} /></span>
           : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>
           // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
           : item.offline || item.reconnecting ? <Tip label={item.offline ?? item.reconnecting}><span className={css.mChatMark} aria-label={item.offline ?? item.reconnecting}><Unplug size={14} /></span></Tip>
@@ -366,9 +367,9 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
       }}
       onPointerUp={(e) => end(e, false)} onPointerCancel={(e) => end(e, true)}
       onClickCapture={(e) => { if (swiped.current) { swiped.current = false; e.preventDefault(); e.stopPropagation(); } }}>
-      <div ref={under} className={css.mSwipeUnder} aria-hidden="true"><span>归档</span></div>
+      <div ref={under} className={css.mSwipeUnder} aria-hidden="true"><span>{t("web-mobile.home.archive")}</span></div>
       <div ref={slide} className={css.mSwipeSlide}>
-        <button type="button" className={css.mRowArchive} aria-label={`归档「${item.title}」`} disabled={busy} onClick={() => archive()}>归档</button>
+        <button type="button" className={css.mRowArchive} aria-label={t("web-mobile.home.archiveTitle", { title: item.title })} disabled={busy} onClick={() => archive()}>{t("web-mobile.home.archive")}</button>
         {children}
       </div>
     </div>
@@ -382,16 +383,16 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
 function useRowArchive(item: ChatItem) {
   const app = useApp();
   const api = stationApi(useStationCall(item.station));
-  const go = () => api.archive(item, true).then(() => app.toast("已归档"));
+  const go = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));
   return (leave?: () => Promise<void>, stay?: () => void) => {
     if (item.watch) {
       stay?.();
-      confirm(app, { title: `归档「${item.title}」？`, text: item.watch.ask, action: "归档", run: go });
+      confirm(app, { title: t("web-mobile.home.archiveAsk", { title: item.title }), text: item.watch.ask, action: t("web-mobile.home.archive"), run: go });
       return;
     }
     void (leave ? leave() : Promise.resolve()).then(go).catch((error: unknown) => {
       stay?.();
-      app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
+      app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     });
   };
 }
@@ -405,20 +406,20 @@ function useRowMenu(item: ChatItem, busy: boolean) {
   const api = stationApi(useStationCall(item.station));
   // One thing at a time: while one asked of it is under way, its menu waits.
   if (item.offline || item.pending || busy) return null;
-  const failed = (what: string) => (error: unknown) => app.toast(`没能${what}：${error instanceof Error ? error.message : String(error)}`);
+  const failed = (key: string) => (error: unknown) => app.toast(t(key, { error: error instanceof Error ? error.message : String(error) }));
   return (anchor: DOMRect, onDismiss: () => void) => app.menu({ anchor, onDismiss, items: [
     // A station from before pins says nothing of them: its chats are not pinned from here.
-    ...(item.pinned == null ? [] : [{ label: item.pinned ? "取消固定" : "固定", icon: <Pin size={16} />, action: () => { api.pin(item, !item.pinned).catch(failed(item.pinned ? "取消固定" : "固定")); } }]),
-    { label: "重命名", icon: <Edit size={16} />, action: () => ask(app, {
-      title: "重命名对话", value: item.title, placeholder: "对话名称", action: "保存", empty: true, hint: "留空则用第一句话作名字",
+    ...(item.pinned == null ? [] : [{ label: item.pinned ? t("web-mobile.home.unpin") : t("web-mobile.home.pin"), icon: <Pin size={16} />, action: () => { api.pin(item, !item.pinned).catch(failed(item.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed")); } }]),
+    { label: t("web-mobile.home.rename"), icon: <Edit size={16} />, action: () => ask(app, {
+      title: t("web-mobile.home.renameTitle"), value: item.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"),
       run: (title) => api.rename(item, title),
     }) },
     // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
-    { label: "归档", icon: <Archive size={16} />, action: () => {
-      const archive = () => api.archive(item, true).then(() => app.toast("已归档"));
+    { label: t("web-mobile.home.archive"), icon: <Archive size={16} />, action: () => {
+      const archive = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));
       // Asked first, its sheet says what went wrong and stays; else the toast does.
-      if (item.watch) confirm(app, { title: `归档「${item.title}」？`, text: item.watch.ask, action: "归档", run: archive });
-      else archive().catch(failed("归档"));
+      if (item.watch) confirm(app, { title: t("web-mobile.home.archiveAsk", { title: item.title }), text: item.watch.ask, action: t("web-mobile.home.archive"), run: archive });
+      else archive().catch(failed("web-mobile.home.archiveFailed"));
     } },
   ] });
 }

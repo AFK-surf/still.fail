@@ -17,7 +17,7 @@ import { useSlackTokens, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
-import { Button, Field, GroupLabel, LargeTitle, LinkButton, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, SectionHeader, Seg, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import { Button, Field, GroupLabel, LargeTitle, LinkButton, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, SectionHeader, Seg, SlackMark, Spinner, tNodes, TopBack } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
@@ -33,6 +33,7 @@ import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
+import { t } from "../i18n.ts";
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
 export function Presence({ state }: { state: string }) {
   return <span className={settingsCss.mPresence} data-state={state} />;
@@ -59,7 +60,7 @@ export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick:
 
 /** Where a Slack app made and not connected yet stands, in words. */
 function waitingText(made: MadeSlackApp): string {
-  return made.installed ? `已装进「${made.installedTeam ?? made.team ?? "工作区"}」，还差 App-Level Token` : made.install ? "还没安装到工作区" : "还差 token";
+  return made.installed ? t("web-mobile.connects.waiting.installed", { team: made.installedTeam ?? made.team ?? t("web-mobile.connects.slackWorkspace") }) : made.install ? t("web-mobile.connects.waiting.install") : t("web-mobile.connects.waiting.token");
 }
 
 /**
@@ -75,7 +76,7 @@ export function WaitingAppRow({ made, online }: { made: MadeSlackApp; online: bo
         <span className={listsCss.mRowTitle}>{made.name}{made.team && <span className={settingsCss.mRowAside}> · {made.team}</span>}</span>
         <span className={listsCss.mRowNote}>{waitingText(made)}</span>
       </span>
-      {online ? <span className={partsCss.mLink}>继续</span> : <span className={listsCss.mRowNote}>station 离线</span>}
+      {online ? <span className={partsCss.mLink}>{t("web-mobile.connects.continue")}</span> : <span className={listsCss.mRowNote}>{t("web-mobile.connects.stationOffline")}</span>}
     </ListRow>
   );
 }
@@ -89,13 +90,13 @@ function WaitingAppSheet({ made, online }: { made: MadeSlackApp; online: boolean
       <SheetGrab />
       <SheetHead title={made.name} />
       <div className={sheetsCss.mSheetScroll}>
-        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{waitingText(made)}。</p>
-        <PickRow label={made.installed ? "填 App-Level Token" : made.install ? "继续安装" : "填 token"} enabled={online} sub={online ? undefined : "station 离线，等它上线再继续"}
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-mobile.connects.sentence", { text: waitingText(made) })}</p>
+        <PickRow label={made.installed ? t("web-mobile.connects.fillAppToken") : made.install ? t("web-mobile.connects.continueInstall") : t("web-mobile.connects.fillToken")} enabled={online} sub={online ? undefined : t("web-mobile.connects.offlineWait")}
           onClick={() => { app.sheet(null); app.push(`${stationBase(station.address)}/connects/new?resume=${encodeURIComponent(made.appId)}`); }} />
-        <PickRow label="从这里移除" accent onClick={() => confirm(app, {
-          title: `移除「${made.name}」？`, action: "移除", danger: true,
-          text: `只从 ${NAME} 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。`,
-          run: () => api.dropSlackApp(made.appId).then(() => app.toast("已移除")),
+        <PickRow label={t("web-mobile.connects.drop")} accent onClick={() => confirm(app, {
+          title: t("web-mobile.stations.removeAsk", { name: made.name }), action: t("web-mobile.workspace.remove"), danger: true,
+          text: t("web-mobile.connects.dropText", { name: NAME }),
+          run: () => api.dropSlackApp(made.appId).then(() => app.toast(t("web-mobile.workspace.removed"))),
         })} />
       </div>
     </>
@@ -136,23 +137,23 @@ export function ConnectsScreen() {
   const items = connects.value?.items ?? [];
   const add = () => online.length === 1
     ? app.push(app.at(`/s/${online[0]!.id}/connects/new`))
-    : app.sheet({ height: 0.5, content: () => <PickStation title="添加连接" stations={online} to={(s) => `/s/${s.id}/connects/new`} /> });
+    : app.sheet({ height: 0.5, content: () => <PickStation title={t("web-mobile.connects.add")} stations={online} to={(s) => `/s/${s.id}/connects/new`} /> });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={one?.name ?? "设置"} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label="添加连接" onClick={add} /> : undefined} />
-      <LargeTitle small={one ? `${one.name} 上的` : ""} big="连接" />
-      <p className={settingsCss.mPageNote}>连接是人找到 {NAME} 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</p>
-      <div className={css.mListSeg}><Seg options={["全部", "我建的"]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>
-      {!stations || !connects.value ? <Loading text={connects.error?.message ?? "正在读取连接…"} /> : stations.map((s) => {
+      <TopBack label={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.connects.add")} onClick={add} /> : undefined} />
+      <LargeTitle small={one ? t("web-mobile.connects.on", { station: one.name }) : ""} big={t("web-mobile.settings.connects")} />
+      <p className={settingsCss.mPageNote}>{t("web-mobile.connects.note", { name: NAME })}</p>
+      <div className={css.mListSeg}><Seg options={[t("web-mobile.home.filterAll"), t("web-mobile.connects.mine")]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>
+      {!stations || !connects.value ? <Loading text={connects.error?.message ?? t("web-mobile.connects.reading")} /> : stations.map((s) => {
         const here = items.filter((i) => i.station === s.station);
         const waiting = s.overview?.slackApps ?? [];
         if (s.online && here.length === 0 && waiting.length === 0 && mine && !one) return null;
         return (
           <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-            {!one && <SectionHeader title={s.online ? s.name : `${s.name} · 离线`} start={24} />}
+            {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
             <ListCard>
-              {!s.online && here.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>station 离线，读不到它的连接</span></ListRow>
-                : here.length === 0 && waiting.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? "这台机器上还没有连接" : "正在读取…"}</span></ListRow>
+              {!s.online && here.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.connects.offlineList")}</span></ListRow>
+                : here.length === 0 && waiting.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? t("web-mobile.connects.none") : t("web-mobile.reading")}</span></ListRow>
                 : null}
               {here.map((i) => <ConnectRow key={i.connect.id} connect={i.connect} onClick={() => app.push(`${stationBase(i.station)}/connects/${encodeURIComponent(i.connect.id)}`)} />)}
               {/* The Slack apps made here that no connect has taken yet: to be finished any time. */}
@@ -170,7 +171,7 @@ export function ConnectScreen() {
   const app = useApp();
   const { item, loading, error } = useItem();
   if (!item) {
-    return <div className={pagesCss.mScreen}><NavBar back="连接" onBack={app.pop} title="连接" /><Loading text={error?.message ?? (loading ? "正在读取连接…" : "没有这个连接。")} /></div>;
+    return <div className={pagesCss.mScreen}><NavBar back={t("web-mobile.settings.connects")} onBack={app.pop} title={t("web-mobile.settings.connects")} /><Loading text={error?.message ?? (loading ? t("web-mobile.connects.reading") : t("web-mobile.connects.notFound"))} /></div>;
   }
   return <ConnectPage item={item} />;
 }
@@ -182,50 +183,50 @@ function ConnectPage({ item }: { item: ConnectItem }) {
   const c = connect.connection;
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="连接" onBack={app.pop} title={connect.name} sub={<span className={barsCss.mNavbarNote}><Presence state={connect.presence} /> {connect.statusText}</span>}
-        trailing={<NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.6, content: () => <ConnectMenu connect={connect} /> })} />} />
+      <NavBar back={t("web-mobile.settings.connects")} onBack={app.pop} title={connect.name} sub={<span className={barsCss.mNavbarNote}><Presence state={connect.presence} /> {connect.statusText}</span>}
+        trailing={<NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.6, content: () => <ConnectMenu connect={connect} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         {/* Who it is in Slack: its bot's picture, its Slack workspace, whose it is. */}
         <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
           <ConnectAvatar connect={connect} size={44} />
           <span className={partsCss.mGrow}>
             <span className={listsCss.mRowTitle}>{connect.team ?? "Slack"}</span>
-            <span className={listsCss.mRowNote}>{station.name}{connect.createdBy ? ` · 所属 ${connect.createdBy.shown?.display ?? connect.createdBy.name}` : ""}</span>
+            <span className={listsCss.mRowNote}>{station.name}{connect.createdBy ? t("web-mobile.connects.owner", { owner: connect.createdBy.shown?.display ?? connect.createdBy.name }) : ""}</span>
           </span>
         </div>
         {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (
           <div className={settingsCss.mCallout}>
-            {c.state === "no_tokens" ? <>这个连接还没接上 Slack。<button type="button" className={partsCss.mLink} onClick={() => openTokens(app, connect)}>填 token</button></>
-              : c.state === "error" ? c.error : `正在重连：${c.lastError}`}
+            {c.state === "no_tokens" ? <>{t("web-mobile.connects.noTokens")}<button type="button" className={partsCss.mLink} onClick={() => openTokens(app, connect)}>{t("web-mobile.connects.fillToken")}</button></>
+              : c.state === "error" ? c.error : t("web-mobile.connects.reconnecting", { error: c.lastError ?? "" })}
           </div>
         )}
-        <SectionHeader title="怎么跑" start={24} />
+        <SectionHeader title={t("web-mobile.connects.howRuns")} start={24} />
         <ListCard>
           <ListRow onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(connect.id)}/run`)}>
-            <span className={historyCss.mRunLabel}>模型</span>
-            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{connect.bind.model ? connect.modelName ?? connect.bind.model : "选模型"}<span className={partsCss.mMuted}> · {connect.bind.effort || "默认深度"} · {connect.bind.profile ? "固定账号" : "自动分配"}</span></span>
+            <span className={historyCss.mRunLabel}>{t("web-mobile.history.model")}</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{connect.bind.model ? connect.modelName ?? connect.bind.model : t("web-mobile.history.pickModel")}<span className={partsCss.mMuted}> · {connect.bind.effort || t("web-mobile.newChat.effortDefault")} · {connect.bind.profile ? t("web-mobile.connects.pinnedAccount") : t("web-mobile.history.auto")}</span></span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
           <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <ModeSheet item={item} /> })}>
-            <span className={historyCss.mRunLabel}>会话</span>
+            <span className={historyCss.mRunLabel}>{t("web-mobile.connects.session")}</span>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
               <span className={listsCss.mRowTitle}>{MODE[connect.mode].label}</span>
-              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? "只在被 @ 时唤醒。" : "它能看到的每条消息都会送进会话。")}</span>
+              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-mobile.connects.mentionOnly") : t("web-mobile.connects.everyMessage"))}</span>
             </span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
           {connect.mode === "single-session" && (
             <ListRow onClick={() => app.sheet({ height: 0.7, draggable: true, content: () => <SessionSheet item={item} /> })}>
-              <span className={historyCss.mRunLabel}>当前</span>
-              <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{bound ? bound.titleText : <span className={partsCss.mMuted}>还没有会话；下一条消息会开始一个新的。</span>}</span>
+              <span className={historyCss.mRunLabel}>{t("web-mobile.connects.current")}</span>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{bound ? bound.titleText : <span className={partsCss.mMuted}>{t("web-mobile.connects.noSession")}</span>}</span>
               <ChevronRight size={14} className={partsCss.mSubtle} />
             </ListRow>
           )}
         </ListCard>
-        <p className={settingsCss.mPageNote}>跑在 {connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
-        <SectionHeader title="最近的会话" start={24} />
+        <p className={settingsCss.mPageNote}>{t("web-mobile.connects.runtimeNote", { runtime: connect.runtimeText })}</p>
+        <SectionHeader title={t("web-mobile.app.recent")} start={24} />
         <ListCard>
-          {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>还没有会话。在 Slack 里 @{connect.name} 就会开始。</span></ListRow>}
+          {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.connects.noSessions", { name: connect.name })}</span></ListRow>}
           {sessions.map((s) => (
             <ListRow key={s.key} onClick={() => app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(s.key)}`)}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.titleText}</span>
@@ -255,23 +256,23 @@ function ConnectMenu({ connect }: { connect: Connect }) {
   const deleteFailed = useDoingFailed("connect.delete", { station, id: connect.id });
   const busy = reconnecting || putting || deleting;
   const done = (text: string) => () => { app.toast(text); app.sheet(null); };
-  const failed = (what: string) => (e: Error) => app.toast(`没能${what}：${e.message}`);
+  const failed = (key: string) => (e: Error) => app.toast(t(key, { error: e.message }));
   return (
     <>
       <SheetGrab />
       <SheetHead title={connect.name} />
       <div className={sheetsCss.mSheetScroll}>
-        <PickRow label="重新连接" busy={reconnecting} failed={reconnectFailed} enabled={!busy} onClick={() => { api.reconnect(connect.id).then(done("已重新连接"), failed("重新连接")); }} />
-        <PickRow label="更换 token" onClick={() => openTokens(app, connect)} />
-        {workspace?.url && <PickRow label="打开 Slack" onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
+        <PickRow label={t("web-mobile.connects.reconnect")} busy={reconnecting} failed={reconnectFailed} enabled={!busy} onClick={() => { api.reconnect(connect.id).then(done(t("web-mobile.connects.reconnected")), failed("web-mobile.connects.reconnectFailed")); }} />
+        <PickRow label={t("web-mobile.connects.changeToken")} onClick={() => openTokens(app, connect)} />
+        {workspace?.url && <PickRow label={t("web-mobile.connects.openSlack")} onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
         {connect.enabled
-          ? <PickRow label="停用" sub="Slack 连接会断开" busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: false }).then(done("已停用，Slack 连接已断开"), failed("停用")); }} />
-          : <PickRow label="启用" busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: true }).then(done("已启用"), failed("启用")); }} />}
-        <PickRow label="更改所属用户" sub={connect.createdBy?.shown?.display ?? connect.createdBy?.name} enabled={!busy} onClick={() => app.sheet({ height: 0.6, content: () => <OwnerSheet connect={connect} /> })} />
-        <PickRow label="删除连接" accent busy={deleting} failed={deleteFailed} enabled={!busy} onClick={() => confirm(app, {
-          title: `删除「${connect.name}」？`, action: "删除连接", danger: true,
-          text: `Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`,
-          run: () => api.deleteConnect(connect.id).then(() => { app.toast("已删除连接"); app.pop(); }),
+          ? <PickRow label={t("web-mobile.connects.disable")} sub={t("web-mobile.connects.disableNote")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: false }).then(done(t("web-mobile.connects.disabled")), failed("web-mobile.connects.disableFailed")); }} />
+          : <PickRow label={t("web-mobile.connects.enable")} busy={putting} failed={putFailed} enabled={!busy} onClick={() => { api.putConnect(connect.id, { enabled: true }).then(done(t("web-mobile.connects.enabled")), failed("web-mobile.connects.enableFailed")); }} />}
+        <PickRow label={t("web-mobile.connects.changeOwner")} sub={connect.createdBy?.shown?.display ?? connect.createdBy?.name} enabled={!busy} onClick={() => app.sheet({ height: 0.6, content: () => <OwnerSheet connect={connect} /> })} />
+        <PickRow label={t("web-mobile.connects.delete")} accent busy={deleting} failed={deleteFailed} enabled={!busy} onClick={() => confirm(app, {
+          title: t("web-mobile.archive.deleteAsk", { title: connect.name }), action: t("web-mobile.connects.delete"), danger: true,
+          text: connect.sessions ? t("web-mobile.connects.deleteTextSessions", { n: connect.sessions }) : t("web-mobile.connects.deleteText"),
+          run: () => api.deleteConnect(connect.id).then(() => { app.toast(t("web-mobile.connects.deleted")); app.pop(); }),
         })} />
       </div>
     </>
@@ -292,16 +293,16 @@ function OwnerSheet({ connect }: { connect: Connect }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="更改所属用户" />
+      <SheetHead title={t("web-mobile.connects.changeOwner")} />
       <div className={sheetsCss.mSheetScroll}>
-        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>连接属于谁，决定它出现在谁的「我添加的」里。</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-mobile.connects.ownerNote")}</p>
         {members.map((m) => (
           <PickRow key={m.sub} label={m.name || m.email} sub={m.email} checked={m.email.toLowerCase() === connect.createdBy?.id.toLowerCase()}
             busy={asked === m.email} failed={picked === m.email ? putFailed : undefined} enabled={!putting}
             onClick={() => {
               setPicked(m.email);
               api.putConnect(connect.id, { owner: { id: m.email, name: m.name || m.email } })
-                .then(() => { app.toast("已更改所属用户"); app.sheet(null); }, (e: Error) => app.toast(`没能更改所属用户：${e.message}`));
+                .then(() => { app.toast(t("web-mobile.connects.ownerChanged")); app.sheet(null); }, (e: Error) => app.toast(t("web-mobile.connects.ownerFailed", { error: e.message })));
             }} />
         ))}
       </div>
@@ -321,14 +322,14 @@ function ModeSheet({ item }: { item: ConnectItem }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="会话方式" />
+      <SheetHead title={t("web-mobile.connects.mode")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         <ModeChoices value={next} onChange={setNext} />
-        {effects.length > 0 && <div className={settingsCss.mCallout}><b>更改之后</b><ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul></div>}
+        {effects.length > 0 && <div className={settingsCss.mCallout}><b>{t("web-mobile.connects.afterChange")}</b><ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul></div>}
         <div className={sheetsCss.mFormActions}>
-          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label={next.mode === connect.mode ? "确认更改" : `改为${next.mode === "single-session" ? "单会话" : "多会话"}`} primary busy={busy} enabled={changed}
-            onClick={() => { api.putConnect(connect.id, next).then(() => { app.toast("已更改会话方式"); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={next.mode === connect.mode ? t("web-mobile.connects.confirmChange") : next.mode === "single-session" ? t("web-mobile.connects.toSingle") : t("web-mobile.connects.toMulti")} primary busy={busy} enabled={changed}
+            onClick={() => { api.putConnect(connect.id, next).then(() => { app.toast(t("web-mobile.connects.modeChanged")); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
         </div>
       </div>
     </>
@@ -346,7 +347,7 @@ function ModeChoices({ value, onChange }: { value: { mode: ConnectMode; requireM
       ))}
       {value.mode === "single-session" && (
         <button type="button" className={css.mSwitchRow} onClick={() => onChange({ ...value, requireMention: !value.requireMention })}>
-          <span className={partsCss.mGrow}><b>只在被 @ 时唤醒</b><span>{value.requireMention ? "被 @ 的 thread 之后的回复不用再 @。" : "频道里它能看到的每条消息都会送进会话。"}</span></span>
+          <span className={partsCss.mGrow}><b>{t("web-mobile.connects.mentionTitle")}</b><span>{value.requireMention ? t("web-mobile.connects.mentionOn") : t("web-mobile.connects.mentionOff")}</span></span>
           <span className={css.mSwitch} data-on={value.requireMention || undefined} />
         </button>
       )}
@@ -365,16 +366,16 @@ function SessionSheet({ item }: { item: ConnectItem }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="选择会话" />
+      <SheetHead title={t("web-mobile.connects.pickSession")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>之后「{connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。</p>
-        <PickRow label="新建会话" sub="从空白上下文开始" checked={choice === "new"} onClick={() => setChoice("new")} />
-        {choice === "new" && <Field value={title} onChange={setTitle} placeholder="给它起个名字（可选），例如：值班" />}
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.connects.pickSessionNote", { name: connect.name })}</p>
+        <PickRow label={t("web-mobile.connects.newSession")} sub={t("web-mobile.connects.newSessionNote")} checked={choice === "new"} onClick={() => setChoice("new")} />
+        {choice === "new" && <Field value={title} onChange={setTitle} placeholder={t("web-mobile.connects.sessionPlaceholder")} />}
         {candidates.map((s) => <PickRow key={s.key} label={s.titleText} sub={s.description} checked={choice === s.key} onClick={() => setChoice(s.key)} />)}
         <div className={sheetsCss.mFormActions}>
-          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label={choice === "new" ? "新建并使用" : "使用这个会话"} primary busy={busy} enabled={choice !== connect.session}
-            onClick={() => { api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => { app.toast(choice === "new" ? "已新建会话" : "已换成这个会话"); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={choice === "new" ? t("web-mobile.connects.createUse") : t("web-mobile.connects.useThis")} primary busy={busy} enabled={choice !== connect.session}
+            onClick={() => { api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => { app.toast(choice === "new" ? t("web-mobile.connects.sessionCreated") : t("web-mobile.connects.sessionSwitched")); app.sheet(null); }, (e: Error) => app.toast(e.message)); }} />
         </div>
       </div>
     </>
@@ -400,12 +401,12 @@ function TokensSheet({ connect }: { connect: Connect }) {
       <SheetGrab />
       <SheetHead title="Slack token" />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>只换其中一个也可以，另一个留空会沿用已保存的。</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.connects.tokensNote")}</p>
         <TokenFields value={tokens} onChange={setTokens} masked={connect.slack} check={check} />
         <div className={sheetsCss.mFormActions}>
-          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label="保存并连接" primary busy={busy || check.busy} enabled={check.ready}
-            onClick={() => check.then(() => { api.putConnect(connect.id, { slack: { appToken: tokens.appToken, botToken: tokens.botToken } }).then(() => { app.toast("已保存 token，正在连接"); app.sheet(null); }, (e: Error) => app.toast(e.message)); })} />
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={t("web-mobile.connects.saveConnect")} primary busy={busy || check.busy} enabled={check.ready}
+            onClick={() => check.then(() => { api.putConnect(connect.id, { slack: { appToken: tokens.appToken, botToken: tokens.botToken } }).then(() => { app.toast(t("web-mobile.connects.tokensSaved")); app.sheet(null); }, (e: Error) => app.toast(e.message)); })} />
         </div>
       </div>
     </>
@@ -422,15 +423,15 @@ function TokenFields({ value, onChange, masked, install, check }: { value: Token
     <div className={settingsCss.mFormGroup}>
       <b className={sheetsCss.mFormLabel}>App-Level Token</b>
       <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={value.appToken} onChange={(e) => edit({ appToken: e.target.value.trim() })}
-        placeholder={masked?.appToken ? `已保存 ${masked.appToken}，留空不变` : "xapp-…"} />
+        placeholder={masked?.appToken ? t("web-mobile.connects.savedToken", { token: masked.appToken }) : "xapp-…"} />
       {!install && (
         <>
           <b className={sheetsCss.mFormLabel}>Bot Token</b>
           <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={value.botToken} onChange={(e) => edit({ botToken: e.target.value.trim() })}
-            placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空不变` : "xoxb-…"} />
+            placeholder={masked?.botToken ? t("web-mobile.connects.savedToken", { token: masked.botToken }) : "xoxb-…"} />
         </>
       )}
-      {value.verified && <span className={`${css.mGreen} ${partsCss.mSmall}`}>连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
+      {value.verified && <span className={`${css.mGreen} ${partsCss.mSmall}`}>{t("web-mobile.connects.verified", { team: value.verified.team, bot: value.verified.botName })}</span>}
       {[...check.errors, ...(check.error ? [check.error] : [])].map((e) => <p key={e} className={partsCss.mError}>{e}</p>)}
     </div>
   );
@@ -449,9 +450,9 @@ export function ConnectRunScreen() {
   useEffect(() => { if (item) pickSet({ open: true }); }, [item?.connect.id, pickSet]);
   const [list, setList] = useState<"model" | "account" | null>(null);
   const busy = pick.saving;
-  const title = list === "model" ? "选模型" : list === "account" ? "选账号" : "换模型";
-  const bar = <NavBar back={list ? "换模型" : "返回"} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!item || !v) return <div className={pagesCss.mScreen}>{bar}<Loading text="正在读取连接…" /></div>;
+  const title = list === "model" ? t("web-mobile.history.pickModel") : list === "account" ? t("web-mobile.history.pickAccount") : t("web-mobile.history.changeModel");
+  const bar = <NavBar back={list ? t("web-mobile.history.changeModel") : t("common.back")} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
+  if (!item || !v) return <div className={pagesCss.mScreen}>{bar}<Loading text={t("web-mobile.connects.reading")} /></div>;
   const { connect } = item;
   const runtime = connect.bind.runtime;
   const models = v.options;
@@ -468,24 +469,24 @@ export function ConnectRunScreen() {
     <div className={pagesCss.mScreen}>
       {bar}
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
-        {models.length === 0 && <p className={settingsCss.mCallout}>{connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p>}
-        <GroupLabel>模型</GroupLabel>
+        {models.length === 0 && <p className={settingsCss.mCallout}>{t("web-mobile.connects.noModels", { runtime: connect.runtimeText })}</p>}
+        <GroupLabel>{t("web-mobile.history.model")}</GroupLabel>
         <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={runtime} size={18} />}><span className={historyCss.mSettingMain}>{v.modelText}</span></SettingRow>
-        <GroupLabel>思考深度</GroupLabel>
+        <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
         <div className={historyCss.mChips}>
-          {["", ...efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || "默认"}</button>)}
+          {["", ...efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || t("web-mobile.newChat.default")}</button>)}
         </div>
-        <GroupLabel>账号</GroupLabel>
+        <GroupLabel>{t("web-mobile.history.account")}</GroupLabel>
         <SettingRow onClick={() => setList("account")}>
           <span className={historyCss.mSettingMain}>{v.accountText}</span>
           <small className={partsCss.mMuted}>{v.accountNote}</small>
         </SettingRow>
-        <p className={`${partsCss.mSmall} ${partsCss.mSubtle} ${historyCss.mEffortNote}`}>新开的会话会用新的设置；进行中的会话继续用开始时的。</p>
+        <p className={`${partsCss.mSmall} ${partsCss.mSubtle} ${historyCss.mEffortNote}`}>{t("web-mobile.connects.runNote")}</p>
       </div>
       <button type="button" className={historyCss.mRunGo} data-changed={changed || undefined} disabled={busy || (changed && !model)}
         onClick={() => {
           if (!changed) return app.pop();
-          pick.save().then(() => { app.toast("已保存，新会话会用新的设置"); app.pop(); }, (e: Error) => app.toast(e.message));
+          pick.save().then(() => { app.toast(t("web-mobile.connects.runSaved")); app.pop(); }, (e: Error) => app.toast(e.message));
         }}>
         {busy && <Spinner size={14} />}{v.saveText}
       </button>
@@ -513,7 +514,7 @@ export function NewConnectScreen() {
   const [settingsEcho, setSettingsEcho] = useState<SlackAppSettings | null>(null);
   const [configEcho, setConfigEcho] = useState("");
   const view = flow.view;
-  if (!view) return <div className={pagesCss.mScreen}><NavBar back="取消" onBack={app.pop} title="添加连接" />正在读取…</div>;
+  if (!view) return <div className={pagesCss.mScreen}><NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.connects.add")} />{t("web-mobile.reading")}</div>;
   const { step, teams, chosen, made, noProfile } = view;
   const models = view.pick?.options ?? [];
   const entry = view.pick?.valueOption;
@@ -538,108 +539,108 @@ export function NewConnectScreen() {
   const check = { ...tokenCheck, busy, then: (_go: () => void) => flow.act("verify") };
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={view.back === "close" ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className={barsCss.mNavbarNote}>{view.title} · {view.number} / {view.total}</span>} />
+      <NavBar back={view.back === "close" ? t("common.cancel") : t("web-mobile.connects.previous")} onBack={back} title={t("web-mobile.connects.add")} sub={<span className={barsCss.mNavbarNote}>{view.title} · {view.number} / {view.total}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {step === "team" && noProfile ? (
           <div className={newChatCss.mNewNone}>
             <img className={partsCss.mIllus} src={illustrationUrl("no-profile")} alt="" width={240} />
-            <b>先添加一个 Profile</b>
-            <p>连接要用 Profile 来跑模型。先添加一个，再来加连接。</p>
-            <Button label="去添加 Profile" primary onClick={() => app.replace(`${stationBase(station.address)}/profiles/new`)} />
+            <b>{t("web-mobile.connects.profileFirst")}</b>
+            <p>{t("web-mobile.connects.profileFirstNote")}</p>
+            <Button label={t("web-mobile.connects.goAddProfile")} primary onClick={() => app.replace(`${stationBase(station.address)}/profiles/new`)} />
           </div>
         ) : step === "team" && (teams.length === 0 ? (
           <>
-            <p className={partsCss.mMuted}>有了 Slack 的配置 token，{NAME} 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
-            <Button label="添加配置 token" primary onClick={() => setStep("token")} />
-            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</button>
+            <p className={partsCss.mMuted}>{t("web-mobile.connects.configNote", { name: NAME })}</p>
+            <Button label={t("web-mobile.connects.addConfig")} primary onClick={() => setStep("token")} />
+            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>{t("web-mobile.connects.manualLong")}</button>
           </>
         ) : (
           <>
-            <p className={partsCss.mMuted}>用哪个 Slack 工作区的配置 token 建 app。</p>
+            <p className={partsCss.mMuted}>{t("web-mobile.connects.pickTeam")}</p>
             <ListCard>{teams.map((t) => <PickRow key={t.teamId} label={t.name} sub={t.owner ? `${t.owner.user}${t.owner.teamDomain ? ` · ${t.owner.teamDomain}.slack.com` : ""}` : undefined} checked={chosen?.teamId === t.teamId} onClick={() => setTeam(t.teamId)} />)}</ListCard>
-            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("token")}>＋ 添加工作区的配置 token</button>
-            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>不用配置 token，自己建 app</button>
-            <Button label="下一步" primary enabled={!!chosen} onClick={() => setStep("app")} />
+            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("token")}>{t("web-mobile.connects.addTeamConfig")}</button>
+            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>{t("web-mobile.connects.manualShort")}</button>
+            <Button label={t("web-mobile.connects.next")} primary enabled={!!chosen} onClick={() => setStep("app")} />
           </>
         ))}
         {step === "token" && (
           <>
             <ol className={css.mStepsList}>
-              <li>打开 <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a>，用要放 bot 的那个 Slack 工作区的账号登录。</li>
-              <li>拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</li>
-              <li>把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。{NAME} 会自己续期，以后不用再管。</li>
+              <li>{tNodes("web-mobile.connects.config.step1", { link: <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a> })}</li>
+              <li>{t("web-mobile.connects.config.step2")}</li>
+              <li>{t("web-mobile.connects.config.step3", { name: NAME })}</li>
             </ol>
             <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={config} placeholder="xoxe-1-…" onChange={(e) => setConfig(e.target.value.trim())} />
             {view.configError && <p className={partsCss.mError}>{view.configError}</p>}
-            <Button label="加上" primary busy={busy} enabled={view.configReady}
+            <Button label={t("web-mobile.connects.addIt")} primary busy={busy} enabled={view.configReady}
               onClick={() => flow.act("config", () => setConfigEcho(""))} />
           </>
         )}
         {step === "app" && (
           <>
-            <b className={sheetsCss.mFormLabel}>名字</b>
+            <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
             <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder={NAME} />
-            <b className={sheetsCss.mFormLabel}>描述</b>
+            <b className={sheetsCss.mFormLabel}>{t("web-mobile.connects.description")}</b>
             <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder="Coding agent in your threads" />
             <AppLook settings={appSettings} onChange={setAppSettings} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
             {iconError && <p className={partsCss.mError}>{iconError}</p>}
-            <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>权限用默认的（全部打开）；建好以后可以在电脑上改。</p>
-            <Button label="创建 app" primary busy={busy} enabled={view.canMake}
+            <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{t("web-mobile.connects.scopesNote")}</p>
+            <Button label={t("web-mobile.connects.createApp")} primary busy={busy} enabled={view.canMake}
               onClick={() => flow.act("make")} />
           </>
         )}
-        {step === "install" && !made && <p className={partsCss.mMuted}>{view ? "这个 app 已经不在这台 station 上了：可能已经连上，或者被移除了。" : "正在读取…"}</p>}
+        {step === "install" && !made && <p className={partsCss.mMuted}>{view ? t("web-mobile.connects.appGone") : t("web-mobile.reading")}</p>}
         {step === "install" && made && (
           <>
-            {iconError && <p className={partsCss.mError}>图标没传上：{iconError}</p>}
+            {iconError && <p className={partsCss.mError}>{t("web-mobile.connects.iconFailed", { error: iconError })}</p>}
             <ol className={css.mStepsList}>
               {made.install ? (
-                <li>{made.installed ? `已装进「${made.installedTeam ?? made.team ?? "工作区"}」。` : <>app 已经建好。<a href={made.install} target="_blank" rel="noopener">安装到工作区</a>：在 Slack 里点「允许」，bot token 会自动交给 station。</>}</li>
+                <li>{made.installed ? t("web-mobile.connects.installedIn", { team: made.installedTeam ?? made.team ?? t("web-mobile.connects.slackWorkspace") }) : tNodes("web-mobile.connects.install.oauth", { link: <a href={made.install} target="_blank" rel="noopener">{t("web-mobile.connects.installLink")}</a> })}</li>
               ) : (
-                <li>app 已经建好。<a href={made.links.install} target="_blank" rel="noopener">安装到工作区</a>，然后在 <a href={made.links.oauth} target="_blank" rel="noopener">OAuth 页</a> 复制 Bot User OAuth Token（xoxb- 开头）。</li>
+                <li>{tNodes("web-mobile.connects.install.manual", { link: <a href={made.links.install} target="_blank" rel="noopener">{t("web-mobile.connects.installLink")}</a>, oauth: <a href={made.links.oauth} target="_blank" rel="noopener">{t("web-mobile.connects.oauthLink")}</a> })}</li>
               )}
-              <li>在 <a href={made.links.appToken} target="_blank" rel="noopener">Socket Mode</a> 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。</li>
-              <li>{made.install ? "把 App-Level Token 填在下面。" : "把两个 token 填在下面。"}</li>
+              <li>{tNodes("web-mobile.connects.install.socket", { link: <a href={made.links.appToken} target="_blank" rel="noopener">Socket Mode</a> })}</li>
+              <li>{made.install ? t("web-mobile.connects.install.fillApp") : t("web-mobile.connects.install.fillBoth")}</li>
             </ol>
             <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} check={check} />
-            <Button label="下一步" primary busy={check.busy} enabled={check.ready} onClick={() => check.then(() => setStep("bind"))} />
+            <Button label={t("web-mobile.connects.next")} primary busy={check.busy} enabled={check.ready} onClick={() => check.then(() => setStep("bind"))} />
           </>
         )}
         {step === "manual" && (
           <>
             <ol className={css.mStepsList}>
-              <li><LinkButton busy={busy} label={`用 ${NAME} 的配置在 Slack 新建一个 app`} onClick={() => {
+              <li><LinkButton busy={busy} label={t("web-mobile.connects.manual.create", { name: NAME })} onClick={() => {
                 // The page opens now, while the tap still counts (one opened once the station answers is blocked), and goes
                 // to Slack once its address is here; with no page to open, this one goes there.
                 const page = window.open("", "_blank");
                 if (page) page.opener = null;
                 void api.createAppUrl(NAME).then(({ url }) => { if (page) page.location.href = url; else window.location.assign(url); }, (e: unknown) => { page?.close(); app.toast(e instanceof Error ? e.message : String(e)); });
-              }} />。</li>
-              <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
-              <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
-              <li>把两个 token 填在下面。</li>
+              }} />{t("web-mobile.connects.manual.end")}</li>
+              <li>{t("web-mobile.connects.manual.socket")}</li>
+              <li>{t("web-mobile.connects.manual.install")}</li>
+              <li>{t("web-mobile.connects.install.fillBoth")}</li>
             </ol>
             <TokenFields value={tokens} onChange={setTokens} check={check} />
-            <Button label="下一步" primary busy={check.busy} enabled={check.ready} onClick={() => check.then(() => setStep("bind"))} />
+            <Button label={t("web-mobile.connects.next")} primary busy={check.busy} enabled={check.ready} onClick={() => check.then(() => setStep("bind"))} />
           </>
         )}
         {step === "bind" && (
           <>
-            <GroupLabel>模型</GroupLabel>
-            {models.length === 0 ? <p className={settingsCss.mCallout}>这台 station 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p> : (
+            <GroupLabel>{t("web-mobile.history.model")}</GroupLabel>
+            {models.length === 0 ? <p className={settingsCss.mCallout}>{t("web-mobile.connects.noModelsHere")}</p> : (
               <ListCard>{models.map((m) => <PickRow key={m.model} label={m.name} sub={m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · ")} checked={entry?.model === m.model}
                 leading={<MakerIcon maker={m.maker} runtime={m.runtimes[0]} size={18} />} onClick={() => setModel(m)} />)}</ListCard>
             )}
             {entry && entry.runtimes.length > 1 && (
               <>
-                <GroupLabel>运行时（创建后不能换）</GroupLabel>
+                <GroupLabel>{t("web-mobile.connects.runtimeFixed")}</GroupLabel>
                 <Seg options={entry.runtimes.map((r) => RUNTIME_LABEL[r] ?? r)} selected={Math.max(0, entry.runtimes.indexOf(rt))} onSelect={(i) => setRuntime(entry.runtimes[i]!)} height={36} fill />
               </>
             )}
-            <GroupLabel>会话方式</GroupLabel>
+            <GroupLabel>{t("web-mobile.connects.mode")}</GroupLabel>
             <ModeChoices value={mode} onChange={setMode} />
-            <Button label="添加并连接" primary busy={busy} enabled={!!entry}
-              onClick={() => flow.act("create", ({ id }) => { app.toast("已添加连接，正在连接 Slack"); app.replace(`${stationBase(station.address)}/connects/${encodeURIComponent(String(id))}`); })} />
+            <Button label={t("web-mobile.connects.addConnect")} primary busy={busy} enabled={!!entry}
+              onClick={() => flow.act("create", ({ id }) => { app.toast(t("web-mobile.connects.added")); app.replace(`${stationBase(station.address)}/connects/${encodeURIComponent(String(id))}`); })} />
           </>
         )}
         {error && <p className={partsCss.mError}>{error}</p>}
@@ -663,7 +664,7 @@ function AppLook({ settings, onChange, icon, onIcon }: {
   const [colourSet, setColourSet] = useState(false);
   const recommended = picked ? ("upload" in picked ? picked.bg : picked.avatar.bg) : null;
   const draw = (p: typeof picked, bg: string) => {
-    if (p && !("upload" in p)) void renderAvatar(p.avatar, bg, p.maker).then((i) => onIcon(i, null), () => onIcon(null, "画不出这个头像"));
+    if (p && !("upload" in p)) void renderAvatar(p.avatar, bg, p.maker).then((i) => onIcon(i, null), () => onIcon(null, t("web-mobile.connects.avatarFailed")));
   };
   const pick = (avatar: Avatar, maker: boolean) => {
     const p = { avatar, maker };
@@ -695,15 +696,15 @@ function AppLook({ settings, onChange, icon, onIcon }: {
   const hex = /^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e";
   return (
     <>
-      <b className={sheetsCss.mFormLabel}>头像</b>
+      <b className={sheetsCss.mFormLabel}>{t("web-mobile.connects.avatar")}</b>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <button type="button" aria-label="上传图片" onClick={() => file.current?.click()}
+        <button type="button" aria-label={t("web-mobile.connects.upload")} onClick={() => file.current?.click()}
           style={{ flex: "none", width: 72, height: 72, padding: 0, border: 0, borderRadius: 18, overflow: "hidden", background: settings.backgroundColor || undefined, cursor: "pointer" }}>
-          {icon ? <img src={icon} alt="头像" width={72} height={72} style={{ display: "block" }} /> : <span className={`${partsCss.mSmall} ${partsCss.mMuted}`}>上传</span>}
+          {icon ? <img src={icon} alt={t("web-mobile.connects.avatar")} width={72} height={72} style={{ display: "block" }} /> : <span className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{t("web-mobile.connects.uploadShort")}</span>}
         </button>
         <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-          <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>在下面挑一个，或者上传一张图片。</span>
-          <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => file.current?.click()}>上传图片</button>
+          <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t("web-mobile.connects.avatarNote")}</span>
+          <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => file.current?.click()}>{t("web-mobile.connects.upload")}</button>
         </span>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
           const f = e.target.files?.[0];
@@ -713,20 +714,20 @@ function AppLook({ settings, onChange, icon, onIcon }: {
             setPicked({ upload: true, bg });
             onIcon(i, null);
             if (!colourSet) onChange({ ...settings, backgroundColor: bg });
-          }).catch(() => onIcon(null, "读不了这张图片"));
+          }).catch(() => onIcon(null, t("web-mobile.connects.imageFailed")));
         }} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(48px, 1fr))", gap: 10 }} aria-label="头像">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(48px, 1fr))", gap: 10 }} aria-label={t("web-mobile.connects.avatar")}>
         {(buddies ?? []).map((a) => tile(a, false))}
         {MAKERS.map((a) => tile(a, true))}
       </div>
-      <b className={sheetsCss.mFormLabel}>底色</b>
+      <b className={sheetsCss.mFormLabel}>{t("web-mobile.connects.background")}</b>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <input type="color" aria-label="底色" value={hex} onChange={(e) => colour(e.target.value.toUpperCase(), true)}
+        <input type="color" aria-label={t("web-mobile.connects.background")} value={hex} onChange={(e) => colour(e.target.value.toUpperCase(), true)}
           style={{ flex: "none", width: 44, height: 44, padding: 0, border: 0, borderRadius: 12, background: "none", cursor: "pointer" }} />
-        <input className={listsCss.mField} data-mono aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
+        <input className={listsCss.mField} data-mono aria-label={t("web-mobile.connects.backgroundValue")} spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
         {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
-          <button type="button" className={partsCss.mLink} style={{ flex: "none" }} onClick={() => colour(recommended, false)}>用推荐色</button>
+          <button type="button" className={partsCss.mLink} style={{ flex: "none" }} onClick={() => colour(recommended, false)}>{t("web-mobile.connects.recommended")}</button>
         )}
       </div>
     </>

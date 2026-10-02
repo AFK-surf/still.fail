@@ -19,9 +19,10 @@ import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
-import { AppearanceScreen, SettingsScreen } from "./Settings.tsx";
+import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
+import { t } from "../i18n.ts";
 
 export function MobileWorkspace({ entry }: { entry: Entry }) {
   const found = useStations(entry.id);
@@ -39,6 +40,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings" element={<SettingsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
       <Route path="settings/appearance" element={<AppearanceScreen />} />
+      <Route path="settings/language" element={<LanguageScreen />} />
       <Route path="settings/changelog" element={<ChangelogScreen />} />
       <Route path="settings/workspace" element={<WorkspaceScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
@@ -73,8 +75,8 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
 /** A station's page: its station in context, once the workspace's stations are known. */
 function InStation({ stations, children }: { stations: Station[] | undefined; children: React.ReactNode }) {
   const { station: id } = useParams();
-  if (!stations) return <Loading text="正在读取…" />;
+  if (!stations) return <Loading text={t("web-mobile.reading")} />;
   const station = stations.find((s) => s.id === id);
-  if (!station) return <Loading text="这个 workspace 里没有这台 station。" />;
+  if (!station) return <Loading text={t("web-mobile.noStation")} />;
   return <StationContext.Provider value={station}>{children}</StationContext.Provider>;
 }

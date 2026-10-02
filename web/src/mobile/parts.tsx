@@ -1,7 +1,7 @@
 // The narrow screen's small parts, as the Android app draws them (apps/android/…/ui/Parts.kt): model marks with their
 // state badge, people's avatars, rings, segmented choices, navigation bars and list cards. Sizes are Android's, a dp
 // or an sp a pixel here.
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
 import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
@@ -15,8 +15,17 @@ import * as waitingCss from "../styles/waiting.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
+import { t } from "../i18n.ts";
 
 const BASE = import.meta.env.BASE_URL;
+
+/** The words for `key` with things drawn put in for their `{name}`s (a name in bold, a place), as `t` puts in text. */
+export function tNodes(key: string, nodes: Record<string, ReactNode>, args?: Record<string, string | number>): ReactNode {
+  return t(key, args).split(/(\{\w+\})/).map((part, i) => {
+    const name = /^\{(\w+)\}$/.exec(part)?.[1];
+    return name !== undefined && name in nodes ? <Fragment key={i}>{nodes[name]}</Fragment> : part;
+  });
+}
 
 export type Icon = (props: IconProps) => ReactNode;
 
@@ -162,7 +171,7 @@ export function Spinner({ size, color }: { size: number; color?: string }) {
 export function FailedMark({ error, size = 14 }: { error: string; size?: number }) {
   const app = useApp();
   return (
-    <span role="img" className={css.mFailed} style={{ width: size, height: size, fontSize: size - 4 }} aria-label={`失败了：${error}`} title={error}
+    <span role="img" className={css.mFailed} style={{ width: size, height: size, fontSize: size - 4 }} aria-label={t("web-mobile.parts.failedWhy", { error })} title={error}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); app.toast(error); }}>!</span>
   );
 }
@@ -171,7 +180,7 @@ export function FailedMark({ error, size = 14 }: { error: string; size?: number 
  *  rows); undefined when none did. As useDoingFailed. */
 export function failedIn(doing: readonly DoingItem[], calls: string | readonly string[], on: Parameters<typeof doingMatches>[2]): string | undefined {
   const item = doing.findLast((d) => itFailed(d) && doingMatches(d, calls, on));
-  return item ? (item.error ?? "失败了") : undefined;
+  return item ? (item.error ?? t("web-mobile.parts.failed")) : undefined;
 }
 
 /** Where `calls` about what `on` names stand on this device (../doing.ts): a spinner while under way, the failure mark a few

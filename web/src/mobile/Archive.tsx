@@ -11,14 +11,15 @@ import { FailedMark, LargeTitle, SectionHeader, Spinner, TopBack } from "./parts
 import { confirm } from "./sheets.tsx";
 import * as css from "./Archive.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
+import { t } from "../i18n.ts";
 
 export function ArchiveScreen() {
   const app = useApp();
   const { days, errors, note, restore, remove } = useArchive(app.entry.id, app.toast);
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="会话" onBack={app.pop} />
-      <LargeTitle small={app.entry.name} big="已归档" />
+      <TopBack label={t("web-mobile.nav.chats")} onBack={app.pop} />
+      <LargeTitle small={app.entry.name} big={t("web-mobile.archive.title")} />
       <p className={css.mArchiveAbout}>{ABOUT}</p>
       {errors.map((e) => <p key={e.station} className={css.mArchiveNote} data-error>{e.text}</p>)}
       {note && <p className={css.mArchiveNote}>{note}</p>}
@@ -52,12 +53,12 @@ function Row({ item, restore, remove }: { item: ArchiveItem; restore: (item: Arc
         <span className={css.mArchiveActions}>
           {!busy && failed !== undefined && <FailedMark error={failed} />}
           {/* restore says how it went itself (../pages/Archive.tsx useArchive) */}
-          <button type="button" className={css.mArchiveAction} aria-label={`恢复「${item.title}」`} disabled={busy} aria-busy={restoring || undefined} onClick={() => void restore(item)}>
+          <button type="button" className={css.mArchiveAction} aria-label={t("web-mobile.archive.restore", { title: item.title })} disabled={busy} aria-busy={restoring || undefined} onClick={() => void restore(item)}>
             {restoring ? <Spinner size={16} /> : <Retry size={16} />}
           </button>
           {item.deletable && (
-            <button type="button" className={css.mArchiveAction} aria-label={`删除「${item.title}」`} disabled={busy} aria-busy={deleting || undefined}
-              onClick={() => confirm(app, { title: `删除「${item.title}」？`, text: DELETE_TEXT, action: "删除", danger: true, run: () => remove(item) })}>
+            <button type="button" className={css.mArchiveAction} aria-label={t("web-mobile.archive.delete", { title: item.title })} disabled={busy} aria-busy={deleting || undefined}
+              onClick={() => confirm(app, { title: t("web-mobile.archive.deleteAsk", { title: item.title }), text: DELETE_TEXT, action: t("common.delete"), danger: true, run: () => remove(item) })}>
               {deleting ? <Spinner size={16} /> : <Trash size={16} />}
             </button>
           )}

@@ -7,6 +7,7 @@ import { useApp } from "./app.tsx";
 import { LargeTitle, Loading, Seg, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
+import { t } from "../i18n.ts";
 
 export function UsageScreen() {
   const app = useApp();
@@ -17,13 +18,13 @@ export function UsageScreen() {
   const list = view?.lists[shown] ?? view?.lists[0];
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} trailing={<Seg options={DAYS.map((d) => d.label)} selected={DAYS.findIndex((d) => d.value === days)} onSelect={(i) => setDays(DAYS[i]!.value)} />} />
-      <LargeTitle small="" big="用量" />
-      <p className={settingsCss.mPageNote}>agent 调用模型用了多少 token，按 API 价折算成钱</p>
-      {!view ? <Loading text={usage.error ? `读不到用量：${usage.error.message}` : "正在读取…"} /> : (
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} trailing={<Seg options={DAYS.map((d) => d.label)} selected={DAYS.findIndex((d) => d.value === days)} onSelect={(i) => setDays(DAYS[i]!.value)} />} />
+      <LargeTitle small="" big={t("web-mobile.settings.usage")} />
+      <p className={settingsCss.mPageNote}>{t("web-mobile.usage.note")}</p>
+      {!view ? <Loading text={usage.error ? t("web-mobile.usage.failed", { error: usage.error.message }) : t("web-mobile.reading")} /> : (
         <div className={`${css.usage} ${css.mobile}`}>
           <Tiles view={view} pricesPath={`/w/${app.entry.id}/settings/usage/prices?days=${days}`} />
-          {view.empty ? <p className={css.empty}>{view.loading ? "正在读取…" : "这段时间没有用量"}</p> : (
+          {view.empty ? <p className={css.empty}>{view.loading ? t("web-mobile.reading") : t("web-mobile.usage.empty")}</p> : (
             <>
               <div className={css.card}><DaysChart view={view} /></div>
               {list && (
@@ -49,11 +50,11 @@ export function UsagePricesScreen() {
   const [params] = useSearchParams();
   const usage = useUsage(app.entry.id, params.get("days") === "30" ? "30" : "7");
   return <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-    <TopBack label="用量" onBack={app.pop} />
-    <LargeTitle small="" big="价目表" />
-    <p className={settingsCss.mPageNote}>当前各台 station 用于折算费用的单价</p>
+    <TopBack label={t("web-mobile.settings.usage")} onBack={app.pop} />
+    <LargeTitle small="" big={t("web-mobile.usage.prices")} />
+    <p className={settingsCss.mPageNote}>{t("web-mobile.usage.pricesNote")}</p>
     <div className={`${css.usage} ${css.mobile}`}>
-      {usage.value ? <PriceTables view={usage.value} /> : <Loading text={usage.error ? `读不到价目：${usage.error.message}` : "正在读取…"} />}
+      {usage.value ? <PriceTables view={usage.value} /> : <Loading text={usage.error ? t("web-mobile.usage.pricesFailed", { error: usage.error.message }) : t("web-mobile.reading")} />}
     </div>
   </div>;
 }

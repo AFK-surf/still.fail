@@ -11,6 +11,8 @@ import { ChevronRight } from "../icons.tsx";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { useApp } from "./app.tsx";
+import { t } from "../i18n.ts";
+import { setPrefs, usePrefs } from "../prefs.ts";
 import { useChangelog } from "../changelog.ts";
 import { Presence } from "./Connects.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
@@ -20,7 +22,14 @@ import * as listsCss from "./styles/lists.css.ts";
 import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Settings.css.ts";
 
-export const THEMES: [Appearance, string][] = [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]];
+export function themes(): [Appearance, string][] {
+  return [["system", t("web-mobile.settings.appearance.system")], ["light", t("web-mobile.settings.appearance.light")], ["dark", t("web-mobile.settings.appearance.dark")]];
+}
+
+/** The languages to choose from: as the device is (null), or one. */
+export function languages(): ["zh" | "en" | null, string][] {
+  return [[null, t("common.language.system")], ["zh", t("common.language.zh")], ["en", t("common.language.en")]];
+}
 
 /** A row that opens a page: its name, how things stand (`bad` in red), a chevron. */
 export function GoRow({ title, value, bad = false, lead, onClick }: { title: string; value?: ReactNode; bad?: boolean; lead?: ReactNode; onClick: () => void }) {
@@ -49,11 +58,12 @@ export function SettingsScreen() {
   const failing = connects?.items.filter((i) => i.connect.presence === "error").length ?? 0;
   const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
   const short = profiles.filter((p) => p.trouble != null).length;
+  const language = usePrefs().language ?? null;
   const at = (path: string) => () => app.push(app.at(path));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="会话" onBack={app.pop} />
-      <LargeTitle small="" big="设置" />
+      <TopBack label={t("web-mobile.nav.chats")} onBack={app.pop} />
+      <LargeTitle small="" big={t("web-mobile.settings.title")} />
       <Card onClick={at("/settings/account")}>
         <span className={css.mMe}>
           <Avatar id={me.email} name={me.name || me.email} size={46} picture={me.picture} />
@@ -61,20 +71,21 @@ export function SettingsScreen() {
           <ChevronRight size={14} className={partsCss.mSubtle} />
         </span>
       </Card>
-      <SectionHeader title={view ? `${view.name} · 你是${ROLE_LABEL[view.role]}` : app.entry.name} start={24} />
+      <SectionHeader title={view ? t("web-mobile.settings.workspaceRole", { workspace: view.name, role: ROLE_LABEL[view.role] }) : app.entry.name} start={24} />
       <ListCard>
-        <GoRow title="Workspace" value={view ? `${view.members.length} 人${manager && waiting ? ` · ${waiting} 人待加入` : ""}` : undefined} onClick={at("/settings/workspace")} />
-        <GoRow title="Station" value={stations ? <>{troubled && <Presence state="error" />}{online}/{stations.length} 在线</> : undefined} onClick={at("/settings/stations")} />
-        <GoRow title="连接" bad={failing > 0} value={connects ? (failing ? `${failing} 个出错` : `${connects.items.length} 个`) : undefined} onClick={at("/settings/connects")} />
-        <GoRow title="Profile" bad={short > 0} value={stations ? (short ? `${short} 个需查看` : `${profiles.length} 个`) : undefined} onClick={at("/settings/profiles")} />
-        <GoRow title="记忆" onClick={at("/settings/memory")} />
-        <GoRow title="用量" onClick={at("/settings/usage")} />
+        <GoRow title="Workspace" value={view ? (manager && waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })) : undefined} onClick={at("/settings/workspace")} />
+        <GoRow title="Station" value={stations ? <>{troubled && <Presence state="error" />}{t("web-mobile.settings.stationsOnline", { online, n: stations.length })}</> : undefined} onClick={at("/settings/stations")} />
+        <GoRow title={t("web-mobile.settings.connects")} bad={failing > 0} value={connects ? (failing ? t("web-mobile.settings.connectsFailing", { n: failing }) : t("web-mobile.settings.connectsCount", { n: connects.items.length })) : undefined} onClick={at("/settings/connects")} />
+        <GoRow title="Profile" bad={short > 0} value={stations ? (short ? t("web-mobile.settings.profilesShort", { n: short }) : t("web-mobile.settings.profilesCount", { n: profiles.length })) : undefined} onClick={at("/settings/profiles")} />
+        <GoRow title={t("web-mobile.settings.memory")} onClick={at("/settings/memory")} />
+        <GoRow title={t("web-mobile.settings.usage")} onClick={at("/settings/usage")} />
       </ListCard>
-      <SectionHeader title="这台设备" start={24} />
+      <SectionHeader title={t("web-mobile.settings.device")} start={24} />
       <ListCard>
-        <GoRow title="外观" value={THEMES.find(([v]) => v === appearance)?.[1]} onClick={at("/settings/appearance")} />
+        <GoRow title={t("web-mobile.settings.appearance.title")} value={themes().find(([v]) => v === appearance)?.[1]} onClick={at("/settings/appearance")} />
+        <GoRow title={t("common.language")} value={languages().find(([v]) => v === language)?.[1]} onClick={at("/settings/language")} />
         <Notify />
-        <GoRow title="更新日志" value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/changelog")} />
+        <GoRow title={t("web-mobile.settings.changelog")} value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/changelog")} />
       </ListCard>
       <div style={{ height: 30 }} />
     </div>
@@ -92,19 +103,19 @@ function Notify() {
   if (!CAN_NOTIFY) return null;
   const busy = asked !== null || setting;
   const on = asked ?? state === "on";
-  const note = state === "denied" ? "浏览器拦下了通知，要在浏览器的网站设置里打开" : "做完、要处理、出错、有人说话时提醒你";
+  const note = state === "denied" ? t("web-mobile.settings.notify.denied") : t("web-mobile.settings.notify.note");
   return (
     <ListRow onClick={busy ? undefined : () => {
       if (state === "denied" || state === "unsupported") return;
       const want = state !== "on";
       setAsked(want);
       setNotify(want).then((now) => {
-        if (now === "denied") app.toast("浏览器没有允许通知");
-        else if ((now === "on") !== want) app.toast(`没能${want ? "打开" : "关掉"}通知`);
-      }, (e: unknown) => app.toast(`没能${want ? "打开" : "关掉"}通知：${e instanceof Error ? e.message : String(e)}`)).finally(() => setAsked(null));
+        if (now === "denied") app.toast(t("web-mobile.settings.notify.notAllowed"));
+        else if ((now === "on") !== want) app.toast(t(want ? "web-mobile.settings.notify.onFailed" : "web-mobile.settings.notify.offFailed"));
+      }, (e: unknown) => app.toast(t(want ? "web-mobile.settings.notify.onFailedWhy" : "web-mobile.settings.notify.offFailedWhy", { error: e instanceof Error ? e.message : String(e) }))).finally(() => setAsked(null));
     }}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-        <span className={listsCss.mRowTitle}>通知</span>
+        <span className={listsCss.mRowTitle}>{t("web-mobile.settings.notify.title")}</span>
         <span className={listsCss.mRowNote}>{note}</span>
       </span>
       {busy && <Spinner size={14} />}
@@ -119,12 +130,30 @@ export function AppearanceScreen() {
   const [appearance, setAppearance] = useAppearance();
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label="设置" onBack={app.pop} />
-      <LargeTitle small="" big="外观" />
-      <SectionHeader title="主题" start={24} />
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+      <LargeTitle small="" big={t("web-mobile.settings.appearance.title")} />
+      <SectionHeader title={t("web-mobile.settings.appearance.theme")} start={24} />
       <div style={{ padding: "0 12px" }}>
-        <Seg options={THEMES.map(([, label]) => label)} selected={Math.max(0, THEMES.findIndex(([v]) => v === appearance))}
-          onSelect={(i) => setAppearance(THEMES[i]![0])} height={34} fill />
+        <Seg options={themes().map(([, label]) => label)} selected={Math.max(0, themes().findIndex(([v]) => v === appearance))}
+          onSelect={(i) => setAppearance(themes()[i]![0])} height={34} fill />
+      </div>
+      <div style={{ height: 30 }} />
+    </div>
+  );
+}
+
+/** Which language still.fail speaks on this device: as the device does, or one chosen (prefs `language`). */
+export function LanguageScreen() {
+  const app = useApp();
+  const language = usePrefs().language ?? null;
+  const options = languages();
+  return (
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+      <LargeTitle small="" big={t("common.language")} />
+      <div style={{ padding: "0 12px" }}>
+        <Seg options={options.map(([, label]) => label)} selected={Math.max(0, options.findIndex(([v]) => v === language))}
+          onSelect={(i) => setPrefs({ language: options[i]![0] })} height={34} fill />
       </div>
       <div style={{ height: 30 }} />
     </div>

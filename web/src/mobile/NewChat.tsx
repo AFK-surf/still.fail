@@ -29,6 +29,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 export function NewChatScreen() {
   const app = useApp();
   // The station last started on (or picked) in this workspace and what it runs there, on either screen (../pick.ts).
@@ -37,14 +38,14 @@ export function NewChatScreen() {
   const view = choice?.station;
   return (
     <div className={`${pagesCss.mScreen} ${css.mNewchatScreen}`}>
-      <NavBar back="取消" onBack={app.pop} title="新对话" />
-      {!choice?.stations ? <Loading text={choice?.error ?? chat.error?.message ?? "正在读取 station…"} />
+      <NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.newChat.title")} />
+      {!choice?.stations ? <Loading text={choice?.error ?? chat.error?.message ?? t("web-mobile.memory.readingStations")} />
         : !view ? (
           !choice.any ? <FirstStation /> : (
             <div className={newChatCss.mNewNone}>
               <Illustration name="station-offline" width={240} />
-              <b>没有在线的 station</b>
-              <p>在一台机器上打开 {NAME}，它就会连上这个 workspace。</p>
+              <b>{t("web-mobile.newChat.noneOnline")}</b>
+              <p>{t("web-mobile.newChat.noneOnlineNote", { name: NAME })}</p>
             </div>
           )
         )
@@ -72,7 +73,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
   const ensureChat = useEnsureChat(view.station, create);
   const opened = useRef(false);
   const send = (draft: Draft) => {
-    if (!model || !runtime) return draft.setError("先在 Profile 里启用模型");
+    if (!model || !runtime) return draft.setError(t("web-mobile.newChat.enableModel"));
     // Its words stay where they were in the composer until the chat's page takes them (../madeChat.ts).
     const host = scene.current?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
     const field = host?.querySelector<HTMLElement>(`[data-made-composer] textarea:not([aria-hidden])`);
@@ -87,14 +88,14 @@ function NewChatOn({ choice, view, stations, pick, create }: {
       });
     });
   };
-  useLayoutEffect(() => use({ station: view.station, placeholder: "做任何事", offline: false, send }));
+  useLayoutEffect(() => use({ station: view.station, placeholder: t("web-mobile.newChat.placeholder"), offline: false, send }));
   const scene = useRef<HTMLDivElement>(null);
   return (
     <>
       <div className={css.mNewBody} ref={scene} data-made-leave="up">
         <Illustration name="new-chat" width={230} />
-        <h2>想让 agent 做什么？</h2>
-        <p className={partsCss.mMuted}>说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
+        <h2>{t("web-mobile.newChat.ask")}</h2>
+        <p className={partsCss.mMuted}>{t("web-mobile.newChat.askNote", { station: view.name })}</p>
         <FrequentCombos items={choice.frequent} onPick={pick} />
         {problem && <p className={css.mNewProblem} data-wait={choice.waiting || undefined}>{problem}</p>}
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
@@ -108,7 +109,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
           <Chooser leading={<Server size={14} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
           {!runtime || !model ? (
             // Nothing to choose from: the chooser leads to where models are enabled.
-            <Chooser label="没有可用模型 · 去勾选" onClick={() => app.push(app.at("/settings/profiles"))} />
+            <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
           ) : (
             <>
               <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
@@ -116,10 +117,10 @@ function NewChatOn({ choice, view, stations, pick, create }: {
               {/* The runtime only when the model runs on more than one. */}
               {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
                 onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
-              <Chooser label={effort || "默认深度"} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
-              {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? "跟随订阅" : choice.fast ? "Fast" : "标准"} onClick={() => app.sheet({ height: 0.36, content: () => <>
-                <SheetGrab /><SheetHead title="速度" />
-                <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? "跟随订阅" : fast ? "Fast" : "标准"} sub={fast ? "响应更快，消耗更多额度或积分" : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
+              <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
+              {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? t("web-mobile.newChat.fastPlan") : choice.fast ? "Fast" : t("web-mobile.newChat.fastStandard")} onClick={() => app.sheet({ height: 0.36, content: () => <>
+                <SheetGrab /><SheetHead title={t("web-mobile.newChat.speed")} />
+                <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")} sub={fast ? t("web-mobile.newChat.fastNote") : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
               </> })} />}
             </>
           )}
@@ -137,7 +138,7 @@ function Chooser({ leading, label, onClick }: { leading?: ReactNode; label: stri
 function pickStation(app: MobileApp, stations: StationView[], current: string, onPick: (s: string) => void) {
   app.sheet({ height: 0.5, content: () => (
     <>
-      <SheetGrab /><SheetHead title="在哪台 station 上跑" />
+      <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickStation")} />
       <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
     </>
   ) });
@@ -146,7 +147,7 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
 function pickModel(app: MobileApp, view: StationView, current: string, onPick: (m: ModelOption) => void) {
   app.sheet({ height: 0.5, content: () => (
     <>
-      <SheetGrab /><SheetHead title="用哪个模型" />
+      <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickModel")} />
       <div className={sheetsCss.mSheetScroll}>
         {view.models.map((m) => (
           <PickRow key={m.model} label={m.name} sub={[m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · "), m.spent?.text].filter(Boolean).join(" · ")}
@@ -160,7 +161,7 @@ function pickModel(app: MobileApp, view: StationView, current: string, onPick: (
 function pickRuntime(app: MobileApp, runtimes: string[], current: string, onPick: (r: string) => void) {
   app.sheet({ height: 0.36, content: () => (
     <>
-      <SheetGrab /><SheetHead title="用哪个运行时" />
+      <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickRuntime")} />
       <div className={sheetsCss.mSheetScroll}>{runtimes.map((rt) => <PickRow key={rt} label={RUNTIME_LABEL[rt as RuntimeKind] ?? rt} checked={rt === current} leading={<ModelMark runtime={rt as RuntimeKind} size={36} />} onClick={() => { onPick(rt); app.sheet(null); }} />)}</div>
     </>
   ) });
@@ -169,9 +170,9 @@ function pickRuntime(app: MobileApp, runtimes: string[], current: string, onPick
 function pickEffort(app: MobileApp, efforts: string[], current: string, onPick: (e: string) => void) {
   app.sheet({ height: 0.48, content: () => (
     <>
-      <SheetGrab /><SheetHead title="思考深度" />
+      <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickEffort")} />
       <div className={sheetsCss.mSheetScroll}>
-        <PickRow label="默认" checked={current === ""} onClick={() => { onPick(""); app.sheet(null); }} />
+        <PickRow label={t("web-mobile.newChat.default")} checked={current === ""} onClick={() => { onPick(""); app.sheet(null); }} />
         {efforts.map((e) => <PickRow key={e} label={e} checked={current === e} onClick={() => { onPick(e); app.sheet(null); }} />)}
       </div>
     </>
@@ -184,8 +185,8 @@ function NoProfile({ view }: { view: StationView }) {
   const station: Station = { id: view.id, name: view.name, online: view.online, address: view.station, base: stationBase(view.station), settings: `/w/${app.entry.id}/settings` };
   return (
     <StationContext.Provider value={station}>
-      <p className={css.mNewProblem} data-wait>给 {view.name} 添加一个 Profile。agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。</p>
-      <Button label="添加 Profile" primary onClick={() => app.push(app.at(`/s/${view.id}/profiles/new`))} />
+      <p className={css.mNewProblem} data-wait>{t("web-mobile.newChat.noProfile", { station: view.name })}</p>
+      <Button label={t("web-mobile.newChat.addProfile")} primary onClick={() => app.push(app.at(`/s/${view.id}/profiles/new`))} />
       <div className={`${sheetsCss.mForm} ${settingsCss.mSteps}`} style={{ alignSelf: "stretch", marginTop: 12, padding: 0, textAlign: "left" }}>
         <MachineLoginOffers inForm logins={view.overview?.machineLogins}
           onSignIn={(kind) => app.push(app.at(`/s/${view.id}/profiles/new?kind=${kind}`))} />

@@ -5,6 +5,7 @@ import { useApp } from "./app.tsx";
 import { NavBar } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
+import { t } from "../i18n.ts";
 
 export function DecisionsScreen() {
   const app = useApp();

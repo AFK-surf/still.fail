@@ -14,7 +14,7 @@ import { useStickToBottom } from "../scroll.ts";
 import { useOlderOnScroll, Waited } from "../Chat.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { useApp, type MobileApp } from "./app.tsx";
-import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, type Icon } from "./parts.tsx";
+import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, tNodes, type Icon } from "./parts.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./History.css.ts";
 import { ToolCall, ToolResult } from "../ToolStep.tsx";
@@ -31,6 +31,7 @@ import { MeterChips, QuotaRing } from "../components.tsx";
 import * as chatPageCss from "../pages/ChatPage.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 /** Opens an agent's execution history over the item's page it belongs to; `entry`: the transcript entry to open at. */
 export function openHistory(app: MobileApp, station: string, chat: string, key: string, entry?: number) {
   app.sheet(null);
@@ -44,12 +45,12 @@ export function HistoryScreen() {
   const [search] = useSearchParams();
   const raw = search.get("entry");
   const entry = raw !== null && /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : undefined;
-  const bar = <NavBar back="返回" onBack={app.pop} title="执行历史" />;
+  const bar = <NavBar back={t("common.back")} onBack={app.pop} title={t("web-mobile.app.runHistory")} />;
   const view = useChat(station, { session: chat });
   const history = useHistory(station, agentKey).value;
   const [tab, setTab] = useState(0);
   const agent = view.value?.agents.find((a) => a.session.key === agentKey);
-  if (!agent) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? "正在读取…"}</p></div>;
+  if (!agent) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? t("web-mobile.reading")}</p></div>;
   const s = agent.session;
   return (
     <div className={pagesCss.mScreen}>
@@ -58,7 +59,7 @@ export function HistoryScreen() {
         <ModelMark maker={s.maker} runtime={s.runtime} size={20} state={stateOf(agent.badge)} />
         <b>{s.agentText}</b>
         <Actions station={station} agent={agent} />
-        <Seg options={["步骤", "详情"]} selected={tab} onSelect={setTab} />
+        <Seg options={[t("web-mobile.history.steps"), t("web-mobile.history.details")]} selected={tab} onSelect={setTab} />
       </div>
       <Summary agent={agent} />
       <div className={css.mHBody}>
@@ -75,8 +76,8 @@ function Actions({ station, agent }: { station: string; agent: ChatAgent }) {
   const s = agent.session;
   return (
     <>
-      {(agent.status === "running" || agent.status === "queued") && <Act icon={Stop} label="停止" run={() => api.stop(s.key).then(() => app.toast("已请求停止"))} />}
-      {s.process === "warm" && <Act icon={Unplug} label="释放进程" run={() => api.evict(s.key).then(() => app.toast("已释放进程"))} />}
+      {(agent.status === "running" || agent.status === "queued") && <Act icon={Stop} label={t("web-mobile.history.stop")} run={() => api.stop(s.key).then(() => app.toast(t("web-mobile.history.stopAsked")))} />}
+      {s.process === "warm" && <Act icon={Unplug} label={t("web-mobile.history.evict")} run={() => api.evict(s.key).then(() => app.toast(t("web-mobile.history.evicted")))} />}
     </>
   );
 }
@@ -139,7 +140,7 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
     const timer = setTimeout(() => setMarked(null), 1600);
     return () => clearTimeout(timer);
   }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!history) return <Edge text="正在读取执行历史…" />;
+  if (!history) return <Edge text={t("web-mobile.history.reading")} />;
   if (history.empty) return <Edge text={history.edge} />;
   return (
     <div className={css.mHSteps} ref={list}>
@@ -166,10 +167,10 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "received":
       return (
         <div className={css.mHReceived}>
-          {body.content.note && <Message icon={Received} label={<>收到来自 <b>{NAME}</b> 的提醒</>} text={body.content.note} full={<p className={chatCss.mPlain}>{body.content.note}</p>} />}
+          {body.content.note && <Message icon={Received} label={tNodes("web-mobile.history.reminder", { name: <b>{NAME}</b> })} text={body.content.note} full={<p className={chatCss.mPlain}>{body.content.note}</p>} />}
           {body.content.messages.map((m) => (
             <Message key={m.key} icon={Received}
-              label={<>收到来自 <b>{m.from.name}</b> 的消息{m.place && <> · <PlaceMark station={station} chat={chat} place={m.place} /></>}</>}
+              label={<>{tNodes("web-mobile.history.message", { name: <b>{m.from.name}</b> })}{m.place && <> · <PlaceMark station={station} chat={chat} place={m.place} /></>}</>}
               text={m.text} full={<p className={chatCss.mPlain}>{m.text}</p>} />
           ))}
         </div>
@@ -177,21 +178,21 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "post":
       return (
         <Message icon={Send}
-          label={<>发送到 {body.content.place ? <PlaceMark station={station} chat={chat} place={body.content.place} /> : <span className={css.mHPlace}><SlackMark size={12} /><b> Slack</b></span>}
-            {body.content.block && <Pill text="Block" tone="blue" />}{body.content.failed && <Pill text="发送失败" tone="red" />}</>}
+          label={<>{tNodes("web-mobile.history.sentTo", { place: body.content.place ? <PlaceMark station={station} chat={chat} place={body.content.place} /> : <span className={css.mHPlace}><SlackMark size={12} /><b> Slack</b></span> })}
+            {body.content.block && <Pill text="Block" tone="blue" />}{body.content.failed && <Pill text={t("web-mobile.history.sendFailed")} tone="red" />}</>}
           text={body.content.text} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></div>} />
       );
     case "mark":
       return (
         <p className={css.mHMark}>
           {body.content.wait && <Hourglass size={14} />}
-          {body.content.wait && body.content.wait.until == null ? <span>等待中 <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}
+          {body.content.wait && body.content.wait.until == null ? <span>{t("web-mobile.history.waiting")} <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}
         </p>
       );
     case "text":
       return (
         <div className={body.content.subagent ? css.mHSub : undefined}>
-          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{agent.session.agentText} 写道</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></div> })} />
+          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{t("web-mobile.history.wrote", { agent: agent.session.agentText })}</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></div> })} />
         </div>
       );
     case "group":
@@ -249,14 +250,14 @@ function Group({ g }: { g: HistoryGroup }) {
       <button type="button" className={css.mHGroupHead} onClick={() => setOpen(!open)}>
         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         <span data-failed={g.failures > 0 || undefined} data-open={open || undefined}>{g.summary}</span>
-        {g.failures > 0 && <Pill text={`${g.failures} 项失败`} tone="red" />}
-        {g.pending > 0 && <Pill text={`${g.pending} 项进行中`} tone="accent" />}
+        {g.failures > 0 && <Pill text={t("web-mobile.history.failures", { n: g.failures })} tone="red" />}
+        {g.pending > 0 && <Pill text={t("web-mobile.history.pending", { n: g.pending })} tone="accent" />}
       </button>
       {open && (
         <div className={css.mHGroupBody}>
-          {g.thinking.map((t, i) => g.steps.length === 0
-            ? <p key={i} className={css.mHThought}>{t.text}</p>
-            : <Folding key={i} name="思考" hint={t.first} meta={null} failed={false}><p className={css.mHThought}>{t.text}</p></Folding>)}
+          {g.thinking.map((th, i) => g.steps.length === 0
+            ? <p key={i} className={css.mHThought}>{th.text}</p>
+            : <Folding key={i} name={t("web-mobile.history.thinking")} hint={th.first} meta={null} failed={false}><p className={css.mHThought}>{th.text}</p></Folding>)}
           {g.steps.map((step, i) => <StepRow key={i} step={step} />)}
         </div>
       )}
@@ -311,14 +312,14 @@ function Details({ station, chat, agent, history }: { station: string; chat: str
       {/* Changing how it runs is a screen of its own. */}
       <RunRow agent={agent} onOpen={() => app.push(`${stationBase(station)}/chats/${encodeURIComponent(chat)}/run/${encodeURIComponent(s.key)}`)} />
       <div className={css.mHFacts}>
-        <Detail label="运行时" value={s.runtimeText} />
-        {s.processText && <Detail label="进程" value={s.processText} />}
+        <Detail label={t("web-mobile.history.runtime")} value={s.runtimeText} />
+        {s.processText && <Detail label={t("web-mobile.history.process")} value={s.processText} />}
         {history?.usage?.map((u) => <Detail key={u.label} label={u.label} value={u.value} />)}
       </div>
       <GroupLabel>Station</GroupLabel>
       <div className={css.mHFacts}>
-        <Detail label="名字" value={name} />
-        {host && <Detail label="机器" value={`${host.hostname} · ${host.summary}`} />}
+        <Detail label={t("web-mobile.workspaces.name")} value={name} />
+        {host && <Detail label={t("web-mobile.history.machine")} value={`${host.hostname} · ${host.summary}`} />}
       </div>
       {host && <div className={css.mHRings}><MeterChips meters={host.meters} /></div>}
     </div>
@@ -343,8 +344,8 @@ function RunRow({ agent, onOpen }: { agent: ChatAgent; onOpen: () => void }) {
   return (
     <button type="button" className={css.mRunRow} onClick={onOpen}>
       <MakerIcon maker={s.maker} runtime={s.runtime} size={15} />
-      <b>{s.model ? s.modelName ?? s.model : "选模型"}</b>
-      <span>{` · ${s.effort ?? "默认深度"} · ${s.profilePinned ? name : `自动 · ${name}`}`}</span>
+      <b>{s.model ? s.modelName ?? s.model : t("web-mobile.history.pickModel")}</b>
+      <span>{` · ${s.effort ?? t("web-mobile.newChat.effortDefault")} · ${s.profilePinned ? name : t("web-mobile.history.autoAccount", { name })}`}</span>
       <ChevronDown size={14} />
     </button>
   );
@@ -373,9 +374,9 @@ export function RunSettingsScreen() {
   // A long list (the models, the accounts) is a list of its own, picked from and back.
   const [list, setList] = useState<"model" | "account" | null>(null);
   const busy = pick.saving;
-  const title = list === "model" ? "选模型" : list === "account" ? "选账号" : "换模型";
-  const bar = <NavBar back={list ? "换模型" : "返回"} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? "正在读取…"}</p></div>;
+  const title = list === "model" ? t("web-mobile.history.pickModel") : list === "account" ? t("web-mobile.history.pickAccount") : t("web-mobile.history.changeModel");
+  const bar = <NavBar back={list ? t("web-mobile.history.changeModel") : t("common.back")} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
+  if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? t("web-mobile.reading")}</p></div>;
   const s = agent.session;
   const chosen = v.draft.profile ?? null;
   if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={v.options} runtime={s.runtime} picked={v.option ?? null} onPick={(m) => { pick.set({ model: m }); setList(null); }} /></div>;
@@ -383,7 +384,7 @@ export function RunSettingsScreen() {
   const save = () => {
     if (!v.changed || !v.option) return app.pop();
     pick.save()
-      .then(() => { app.toast("已改，下一轮起生效"); app.pop(); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)));
+      .then(() => { app.toast(t("web-mobile.history.changed")); app.pop(); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)));
   };
   const effort = v.draft.effort ?? null;
   return (
@@ -392,7 +393,7 @@ export function RunSettingsScreen() {
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
         {/* Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why. */}
         <div className={css.mRunSummary}>
-          {["模型", "深度", "账号", ...(v.fastAvailable ? ["速度"] : [])].map((label, i) => {
+          {[t("web-mobile.history.model"), t("web-mobile.history.effort"), t("web-mobile.history.account"), ...(v.fastAvailable ? [t("web-mobile.newChat.speed")] : [])].map((label, i) => {
             const moved = v.becomes[i] !== v.was[i];
             return (
               <div key={label} className={css.mRunLine}>
@@ -403,29 +404,29 @@ export function RunSettingsScreen() {
             );
           })}
           {v.force && <p className={`${css.mWarn} ${partsCss.mSmall}`}>{v.force}</p>}
-          <p className={`${partsCss.mSubtle} ${partsCss.mSmall}`}>改了以后从下一轮开始生效。</p>
+          <p className={`${partsCss.mSubtle} ${partsCss.mSmall}`}>{t("web-mobile.history.changeNote")}</p>
         </div>
-        <GroupLabel>模型</GroupLabel>
+        <GroupLabel>{t("web-mobile.history.model")}</GroupLabel>
         <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={s.runtime} size={18} />}>
           <span className={historyCss.mSettingMain}>{v.modelText}</span>
         </SettingRow>
-        <GroupLabel>思考深度</GroupLabel>
-        <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>想得越深越慢，也越费额度。</p>
+        <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
+        <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>{t("web-mobile.history.effortNote")}</p>
         <div className={historyCss.mChips}>
-          {[null, ...v.efforts].map((e) => <button key={e ?? "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => pick.set({ effort: e })}>{e ?? "默认"}</button>)}
+          {[null, ...v.efforts].map((e) => <button key={e ?? "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => pick.set({ effort: e })}>{e ?? t("web-mobile.newChat.default")}</button>)}
         </div>
         {v.fastAvailable && <>
-          <GroupLabel>速度</GroupLabel>
-          <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>Fast 响应更快，消耗更多额度或积分。</p>
+          <GroupLabel>{t("web-mobile.newChat.speed")}</GroupLabel>
+          <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>{t("web-mobile.history.fastNote")}</p>
           <div className={historyCss.mChips}>
-            {([null, false, true] as const).map((fast) => <button key={String(fast)} type="button" className={historyCss.mChip} data-on={(v.draft.fast ?? null) === fast || undefined} onClick={() => pick.set({ fast })}>{fast === null ? "跟随订阅" : fast ? "Fast" : "标准"}</button>)}
+            {([null, false, true] as const).map((fast) => <button key={String(fast)} type="button" className={historyCss.mChip} data-on={(v.draft.fast ?? null) === fast || undefined} onClick={() => pick.set({ fast })}>{fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")}</button>)}
           </div>
         </>}
-        <GroupLabel>账号</GroupLabel>
+        <GroupLabel>{t("web-mobile.history.account")}</GroupLabel>
         <SettingRow onClick={() => setList("account")} leading={(() => { const p = v.accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? s.runtime} kind={p.kind} size={18} /> : null; })()}>
           <span className={historyCss.mSettingMain}>{v.accountText}</span>
           <small className={partsCss.mMuted}>{v.accountNote}</small>
-          {v.accountWarn && <small className={css.mWarn}>这个模型要换账号</small>}
+          {v.accountWarn && <small className={css.mWarn}>{t("web-mobile.history.accountWarn")}</small>}
         </SettingRow>
         <div style={{ height: 16 }} />
       </div>
@@ -456,18 +457,19 @@ export function ModelList({ models, runtime, picked, onPick }: { models: ModelOp
   const on = optionOf(models, picked);
   // By series, in the core's order.
   const groups = new Map<string, ModelOption[]>();
-  for (const m of shown) groups.set(m.family ?? "其他", [...(groups.get(m.family ?? "其他") ?? []), m]);
+  const other = t("web-mobile.history.otherModels");
+  for (const m of shown) groups.set(m.family ?? other, [...(groups.get(m.family ?? other) ?? []), m]);
   const names = [...groups.keys()];
   return (
     <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
-      {models.length > 8 && <input className={`${listsCss.mField} ${css.mFilter}`} value={filter} placeholder="搜索模型" onChange={(e) => setFilter(e.target.value)} />}
+      {models.length > 8 && <input className={`${listsCss.mField} ${css.mFilter}`} value={filter} placeholder={t("web-mobile.history.search")} onChange={(e) => setFilter(e.target.value)} />}
       {names.map((who) => (
         <div key={who}>
           {names.length > 1 && <GroupLabel>{who}</GroupLabel>}
           {groups.get(who)!.map((m) => <PickLine key={m.model} label={m.name} checked={m === on} onClick={() => onPick(m.model)} leading={<MakerIcon maker={m.maker} runtime={runtime} size={18} />} />)}
         </div>
       ))}
-      {shown.length === 0 && <p className={partsCss.mMuted}>没有叫这个的模型</p>}
+      {shown.length === 0 && <p className={partsCss.mMuted}>{t("web-mobile.history.noMatch")}</p>}
     </div>
   );
 }
@@ -476,13 +478,13 @@ export function ModelList({ models, runtime, picked, onPick }: { models: ModelOp
 export function AccountList({ accounts, runtime, picked, onPick }: { accounts: RunnableProfile[]; runtime: string; picked: string | null; onPick: (p: string | null) => void }) {
   return (
     <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
-      <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${css.mAccountNote}`}>自动分配时，额度用完或登录失效会换一个；指定了就一直用它。</p>
-      <PickLine label="自动分配" checked={picked === null} onClick={() => onPick(null)} />
+      <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${css.mAccountNote}`}>{t("web-mobile.history.accountNote")}</p>
+      <PickLine label={t("web-mobile.history.auto")} checked={picked === null} onClick={() => onPick(null)} />
       {/* An account its provider refuses says so (a red dot, 被停用) where its allowance would be. */}
       {accounts.map((p) => (
         <PickLine key={p.id} label={p.name} checked={picked === p.id} onClick={() => onPick(p.id)}
           leading={<ProviderMark runtime={p.runtime ?? runtime} kind={p.kind} size={18} />}
-          trailing={p.quota?.state === "blocked" ? <Tip label={p.quota.detail}><span className={settingsCss.mRowStatus}><span className={settingsCss.mPresence} data-state="error" />被停用</span></Tip> : <QuotaRings quota={p.quota} />} />
+          trailing={p.quota?.state === "blocked" ? <Tip label={p.quota.detail}><span className={settingsCss.mRowStatus}><span className={settingsCss.mPresence} data-state="error" />{t("web-mobile.history.blocked")}</span></Tip> : <QuotaRings quota={p.quota} />} />
       ))}
     </div>
   );

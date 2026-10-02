@@ -14,6 +14,7 @@ import * as partsCss from "./styles/parts.css.ts";
 
 import { LogIn, Plus } from "../icons.tsx";
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 export function openWorkspaces(app: MobileApp) {
   app.sheet({ height: 0.7, draggable: true, content: () => <WorkspacesSheet /> });
 }
@@ -33,11 +34,11 @@ function WorkspacesSheet() {
   const respond = useAction(async ({ account, invite, join }: { account: Account; invite: PendingInvitation; join: boolean }) => {
     if (join) {
       const w = await cloud.acceptInvitationById(account.sub, invite.id);
-      app.toast(`已加入「${invite.name}」`);
+      app.toast(t("web-mobile.workspaces.joined", { name: invite.name }));
       app.replace(`/w/${w.id}`);
     } else {
       await cloud.declineInvitation(account.sub, invite.id);
-      app.toast("已忽略邀请");
+      app.toast(t("web-mobile.workspaces.declined"));
     }
   });
   return (
@@ -53,12 +54,12 @@ function WorkspacesSheet() {
         </>}
         {pending.length > 0 && (
           <>
-            <div className={css.mSheetLabel}>邀请</div>
+            <div className={css.mSheetLabel}>{t("web-mobile.workspaces.invitations")}</div>
             {pending.map(({ account, invite }) => (
               <div key={invite.id} className={css.mInvite}>
-                <span className={partsCss.mGrow}><span>{invite.inviter || "有人"}邀请你加入「{invite.name}」</span><small>{account.email}</small></span>
-                <Button label="加入" primary busy={respond.busy && respond.arg?.invite.id === invite.id && respond.arg.join} onClick={() => respond.run({ account, invite, join: true })} />
-                <Button label="忽略" primary={false} busy={respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.join} onClick={() => respond.run({ account, invite, join: false })} />
+                <span className={partsCss.mGrow}><span>{invite.inviter ? t("web-mobile.workspaces.invitedBy", { inviter: invite.inviter, name: invite.name }) : t("web-mobile.workspaces.invited", { name: invite.name })}</span><small>{account.email}</small></span>
+                <Button label={t("web-mobile.workspaces.join")} primary busy={respond.busy && respond.arg?.invite.id === invite.id && respond.arg.join} onClick={() => respond.run({ account, invite, join: true })} />
+                <Button label={t("web-mobile.workspaces.decline")} primary={false} busy={respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.join} onClick={() => respond.run({ account, invite, join: false })} />
               </div>
             ))}
             {respond.error && <p className={`${partsCss.mError} ${partsCss.mPad}`}>{errorText(respond.error)}</p>}
@@ -97,37 +98,37 @@ function NewWorkspaceSheet() {
   const [signInError, setSignInError] = useState<string | null>(null);
   const signInHere = () => {
     setSigningIn(true); setSignInError(null);
-    signIn().catch((e: unknown) => { setSigningIn(false); setSignInError(`没能登录：${e instanceof Error ? e.message : String(e)}`); });
+    signIn().catch((e: unknown) => { setSigningIn(false); setSignInError(t("web-mobile.me.signInFailed", { error: e instanceof Error ? e.message : String(e) })); });
   };
   return (
     <>
       <SheetGrab />
-      <SheetHead title="新建 workspace" />
+      <SheetHead title={t("web-mobile.workspaces.new")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        <p className={partsCss.mMuted}>workspace 是一组人和他们共用的 station。你会成为它的 owner。</p>
-        <b className={sheetsCss.mFormLabel}>名字</b>
-        <Field value={name} onChange={setName} placeholder="例如：产品团队" />
+        <p className={partsCss.mMuted}>{t("web-mobile.workspaces.newNote")}</p>
+        <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
+        <Field value={name} onChange={setName} placeholder={t("web-mobile.workspaces.namePlaceholder")} />
         {accounts.length > 1 && (
           <>
-            <b className={sheetsCss.mFormLabel}>属于哪个账号</b>
+            <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.account")}</b>
             {accounts.map((a) => <PickRow key={a.sub} label={a.email} checked={a.sub === sub} onClick={() => setOwner(a.sub)} />)}
           </>
         )}
         {asked && (
           <>
-            <b className={sheetsCss.mFormLabel}>邀请码</b>
+            <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.code")}</b>
             <Field value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" mono />
             {create.error && code.trim()
               ? <p className={partsCss.mError}>{errorText(create.error)}</p>
-              : <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{NAME} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。</p>}
+              : <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{t("web-mobile.workspaces.codeNote", { name: NAME })}</p>}
           </>
         )}
         {create.error && !asked && <p className={partsCss.mError}>{errorText(create.error)}</p>}
         <div className={sheetsCss.mFormActions}>
-          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label="新建" primary busy={create.busy} enabled={!!name.trim() && !!sub} onClick={() => create.run()} />
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={t("web-mobile.workspaces.create")} primary busy={create.busy} enabled={!!name.trim() && !!sub} onClick={() => create.run()} />
         </div>
-        {accounts.length === 0 && <Button label="登录" primary={false} busy={signingIn} onClick={signInHere} />}
+        {accounts.length === 0 && <Button label={t("web-mobile.workspaces.signIn")} primary={false} busy={signingIn} onClick={signInHere} />}
         {signInError && <p className={partsCss.mError}>{signInError}</p>}
       </div>
     </>

@@ -18,6 +18,7 @@ import * as css from "./ChatHost.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
+import { t } from "../i18n.ts";
 
 /** What the composer writes to, as the page above it says. */
 export interface HostComposer {
@@ -72,7 +73,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const writesTo = stations?.find((s) => s.address === shown?.station) ?? station;
   // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
   // page writes to (its composer says which).
-  const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error("没有 station")));
+  const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error(t("web-mobile.chat.noStationUpload"))));
   const draftKey = chat === undefined || station === undefined ? undefined : draftKeyOf(station.address, chat);
   const shared = useDraft({ key: draftKey, station: shown?.station ?? station?.address, upload: (file) => upload.current(file) });
   const [focus, setFocus] = useState(0);
@@ -81,8 +82,8 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   now.current = draft;
   const root = useRef<HTMLDivElement>(null);
   const body = id === undefined ? <NewChatScreen />
-    : !stations ? <Loading text="正在读取…" />
-    : !station ? <Loading text="这个 workspace 里没有这台 station。" />
+    : !stations ? <Loading text={t("web-mobile.reading")} />
+    : !station ? <Loading text={t("web-mobile.noStation")} />
     : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>;
   const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
   return (
@@ -134,7 +135,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) e.preventDefault(); }}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
-        {shown.offline && <p className={css.mComposerOffline}>这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
+        {shown.offline && <p className={css.mComposerOffline}>{t("web-mobile.chat.offline")}</p>}
         <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus} />
         {bar}
         {draft.error && <p className={`${partsCss.mError} ${css.mComposerError}`}>{draft.error}</p>}

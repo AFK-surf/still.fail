@@ -4,6 +4,7 @@ import { signIn } from "../cloud/accounts.ts";
 import { Illustration } from "./parts.tsx";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./SignIn.css.ts";
+import { t } from "../i18n.ts";
 
 export function MobileSignIn() {
   const [busy, setBusy] = useState(false);
@@ -11,18 +12,18 @@ export function MobileSignIn() {
   // On its way the page leaves for Google's: the button waits till then; if it cannot, it says why.
   const go = () => {
     setBusy(true); setError(null);
-    signIn().catch((e: unknown) => { setBusy(false); setError(`没能打开登录：${e instanceof Error ? e.message : String(e)}`); });
+    signIn().catch((e: unknown) => { setBusy(false); setError(t("web-mobile.signIn.failed", { error: e instanceof Error ? e.message : String(e) })); });
   };
   return (
     <div className={`${rootCss.m} ${css.mSignIn}`}>
       <Illustration name="sign-in" width={300} />
-      <h1>让 agent 一直在干活</h1>
-      <p>登录后，你所在 workspace 的所有 station 和会话都会出现在这里。</p>
+      <h1>{t("web-mobile.signIn.title")}</h1>
+      <p>{t("web-mobile.signIn.text")}</p>
       <button type="button" className={css.mGoogle} disabled={busy} onClick={go}>
-        <GoogleDot />{busy ? "正在打开…" : "用 Google 登录"}
+        <GoogleDot />{busy ? t("web-mobile.signIn.opening") : t("web-mobile.signIn.google")}
       </button>
       {error && <p className={css.mSignInError} role="alert">{error}</p>}
-      <small>多个账号可以都登录，随时切换 workspace。</small>
+      <small>{t("web-mobile.signIn.many")}</small>
     </div>
   );
 }

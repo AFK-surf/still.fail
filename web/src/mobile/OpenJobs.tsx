@@ -11,6 +11,7 @@ import { doingMatches, failed, useDoingList } from "../doing.ts";
 import { useApp } from "./app.tsx";
 import { FailedMark, failedIn, Spinner } from "./parts.tsx";
 import * as css from "./OpenJobs.css.ts";
+import { t } from "../i18n.ts";
 
 export function OpenJobs({ scope }: { scope: string }) {
   const app = useApp();
@@ -29,7 +30,7 @@ export function OpenJobs({ scope }: { scope: string }) {
     if (job.service) app.push(`${path}/services/${encodeURIComponent(job.id)}`);
   };
   return (
-    <section className={css.mOpenJobs} aria-label="开了很久的服务和任务">
+    <section className={css.mOpenJobs} aria-label={t("web-mobile.openJobs.label")}>
       {groups.map(({ key, head, jobs: list }) => {
         const shown = all[key] || list.length <= SHOWN + 1 ? list : list.slice(0, SHOWN);
         return (
@@ -43,13 +44,13 @@ export function OpenJobs({ scope }: { scope: string }) {
                   <span className={css.mOpenWhere}>{job.whereText} · {job.age}</span>
                 </span>
                 {!stopping(job) && stopFailed(job) !== undefined && <FailedMark error={stopFailed(job)!} />}
-                <button type="button" className={css.mOpenStop} aria-label={`停止「${job.name}」`} disabled={stopping(job)} aria-busy={stopping(job) || undefined}
+                <button type="button" className={css.mOpenStop} aria-label={t("web-mobile.openJobs.stop", { name: job.name })} disabled={stopping(job)} aria-busy={stopping(job) || undefined}
                   onClick={(e) => { e.stopPropagation(); stop(job); }}>
                   {stopping(job) ? <Spinner size={15} /> : <Stop size={15} />}
                 </button>
               </div>
             ))}
-            {shown.length < list.length && <button type="button" className={css.mOpenMore} onClick={() => setAll({ ...all, [key]: true })}>还有 {list.length - shown.length} 个</button>}
+            {shown.length < list.length && <button type="button" className={css.mOpenMore} onClick={() => setAll({ ...all, [key]: true })}>{t("web-mobile.openJobs.more", { n: list.length - shown.length })}</button>}
           </div>
         );
       })}

@@ -17,6 +17,7 @@ import * as css from "./Annotate.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as homeCss from "./styles/home.css.ts";
+import { t } from "../i18n.ts";
 
 /** A message's page, from the chat `key`'s list. */
 export function annotatePath(station: string, key: string, ts: string): string {
@@ -35,12 +36,12 @@ export function AnnotateScreen() {
   const { chat = "", ts = "" } = useParams();
   const view = useChat(station.address, { session: chat }).value;
   const m = view?.messages.find((x) => x.ts === ts);
-  const author = m ? (m.mine ? "你" : m.by.name) : "";
+  const author = m ? (m.mine ? t("web-mobile.annotate.you") : m.by.name) : "";
   return (
     <div className={`${pagesCss.mScreen} ${css.mAnnotate}`}>
-      <NavBar back="对话" onBack={app.pop} title="批注" sub={m && <span className={barsCss.mNavbarNote}>{author}</span>} />
-      {!view ? <p className={homeCss.mNote}>正在读取…</p>
-        : !m ? <p className={homeCss.mNote}>找不到这条消息</p>
+      <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={t("web-mobile.annotate.title")} sub={m && <span className={barsCss.mNavbarNote}>{author}</span>} />
+      {!view ? <p className={homeCss.mNote}>{t("web-mobile.reading")}</p>
+        : !m ? <p className={homeCss.mNote}>{t("web-mobile.annotate.notFound")}</p>
         : <Annotating message={m} author={author} draftKey={draftKeyOf(station.address, chat)} />}
     </div>
   );
@@ -83,7 +84,7 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
   usePicking(words, { picked, setPicked, setDragging, notes, onNote: (n) => { setPicked(null); setEditing(n); }, onTapAway: () => { setPicked(null); setEditing(null); } });
 
   const copy = (text: string) => {
-    void navigator.clipboard.writeText(text).then(() => app.toast("已拷贝"), () => app.toast("没能拷贝"));
+    void navigator.clipboard.writeText(text).then(() => app.toast(t("web-mobile.annotate.copied")), () => app.toast(t("web-mobile.annotate.copyFailed")));
   };
   const note = () => {
     if (!picked || !words.current) return;
@@ -116,7 +117,7 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
     const quotes = notes.length
       ? [...notes].sort((a, b) => a.start - b.start || a.n - b.n).map((x) => quote(x.text, x.comment.trim(), x.n))
       : [quote(plain(m.text), "", 0)];
-    if (!offerToDraft(draftKey, { files: [], quotes })) { app.toast("这个对话现在不能发消息"); return; }
+    if (!offerToDraft(draftKey, { files: [], quotes })) { app.toast(t("web-mobile.annotate.cannotSend")); return; }
     app.pop();
   };
 
@@ -141,9 +142,9 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
     const x = Math.min(Math.max(pickedRects.length > 1 ? width / 2 : first.left + first.width / 2, 110), width - 110);
     bar = (
       <div className={`${css.mPickBar} ${pagesCss.mFloating}`} style={{ left: x, top }} onPointerDown={(e) => e.stopPropagation()}>
-        <button type="button" onClick={note}><Edit size={15} />批注</button>
-        <button type="button" onClick={() => { copy(root ? rangeOf(root, picked).toString() : ""); setPicked(null); }}><Copy size={15} />复制</button>
-        {!everything && <button type="button" onClick={() => setPicked({ start: 0, end: all().length })}>全选</button>}
+        <button type="button" onClick={note}><Edit size={15} />{t("web-mobile.annotate.title")}</button>
+        <button type="button" onClick={() => { copy(root ? rangeOf(root, picked).toString() : ""); setPicked(null); }}><Copy size={15} />{t("common.copy")}</button>
+        {!everything && <button type="button" onClick={() => setPicked({ start: 0, end: all().length })}>{t("web-mobile.annotate.selectAll")}</button>}
       </div>
     );
   }
@@ -160,7 +161,7 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
             // In the margin, beside the passage's first line: never over the words.
             const first = rectsOf(x)[0];
             return first && <button key={x.n} type="button" className={css.mPin} data-open={x.n === editing || undefined} style={{ top: whole(first.top + first.height / 2) - 14 }}
-              aria-label={`批注 ${x.n}`} onClick={() => { setPicked(null); setEditing(x.n === editing ? null : x.n); }}>{x.n}</button>;
+              aria-label={t("web-mobile.notes.label", { n: x.n })} onClick={() => { setPicked(null); setEditing(x.n === editing ? null : x.n); }}>{x.n}</button>;
           })}
           {open && openRects.length > 0 && (
             <NoteBox key={open.n} note={open} style={{ top: openRects[openRects.length - 1]!.bottom + 10 }}
@@ -182,9 +183,9 @@ function Annotating({ message: m, author, draftKey }: { message: ChatMessage; au
           </ol>
         )}
         <div className={css.mFootRow}>
-          <button type="button" className={`${css.mFootBtn} ${pagesCss.mFloating}`} onClick={() => copy(m.text)}><Copy size={16} />复制全文</button>
+          <button type="button" className={`${css.mFootBtn} ${pagesCss.mFloating}`} onClick={() => copy(m.text)}><Copy size={16} />{t("web-mobile.annotate.copyAll")}</button>
           <button type="button" className={`${css.mFootSend} ${pagesCss.mFloating}`} onClick={send}>
-            {notes.length ? <><Send size={15} />放进对话 · {notes.length}</> : <><QuoteIcon size={15} />引用全文</>}
+            {notes.length ? <><Send size={15} />{t("web-mobile.annotate.toChat", { n: notes.length })}</> : <><QuoteIcon size={15} />{t("web-mobile.annotate.quoteAll")}</>}
           </button>
         </div>
       </div>

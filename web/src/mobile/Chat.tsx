@@ -44,6 +44,7 @@ import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 
 import { NAME } from "../channel.ts";
+import { t } from "../i18n.ts";
 export function ChatScreen() {
   const { chat: address = "" } = useParams();
   // A chat made here keeps the key the core gave it when its address becomes its station's (below).
@@ -126,7 +127,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
       </>}>
       <PeopleStack people={view.people} max={5} />
       {view.agents.map((a) => (
-        <button key={a.session.key} type="button" className={css.mBarAgent} onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={`${a.session.agentText} 的执行历史`}>
+        <button key={a.session.key} type="button" className={css.mBarAgent} onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={t("web-mobile.chat.agentHistory", { agent: a.session.agentText })}>
           <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={22} />
         </button>
       ))}
@@ -139,10 +140,10 @@ export function BarFrame({ title, more, onMore, trailing, children }: { title: s
   const app = useApp();
   return (
     <header className={`${css.mChatBar} ${pagesCss.mGlass}`}>
-      <button type="button" className={css.mChatBack} onClick={app.pop} aria-label="返回"><ChevronLeft size={22} /></button>
+      <button type="button" className={css.mChatBack} onClick={app.pop} aria-label={t("common.back")}><ChevronLeft size={22} /></button>
       <span className={css.mChatBarTitle}><b>{title}</b>{children}</span>
       {trailing}
-      {more && onMore && <NavButton icon={More} label="对话信息" onClick={onMore} />}
+      {more && onMore && <NavButton icon={More} label={t("web-mobile.chat.info")} onClick={onMore} />}
     </header>
   );
 }
@@ -212,7 +213,7 @@ function Messages({ view, lives, list, floor, draft, here, stationName }: {
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
       {/* Short of the chat's end (a window of it), with how many new messages wait there. */}
       <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} data-count={rows.waiting > 0 || undefined}
-        aria-label="跳到最新" onClick={rows.toEnd}><ArrowDown size={18} />{rows.waiting > 0 && <span>{rows.waiting} 条新消息</span>}</button>
+        aria-label={t("web-mobile.chat.toLatest")} onClick={rows.toEnd}><ArrowDown size={18} />{rows.waiting > 0 && <span>{t("web-mobile.chat.newMessages", { n: rows.waiting })}</span>}</button>
     </OpenFile.Provider>
   );
 }
@@ -289,9 +290,9 @@ export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) 
     content: () => (
       <>
         <SheetGrab />
-        <SheetHead title="添加到消息" />
+        <SheetHead title={t("web-mobile.chat.attach")} />
         <div className={css.mAttach}>
-          {([["拍照", <Camera key="c" size={24} />, () => pick("image/*", true)], ["照片", <Photo key="p" size={24} />, () => pick("image/*", false)], ["文件", <File key="f" size={24} />, () => pick("*/*", false)]] as const).map(([label, icon, go]) => (
+          {([[t("web-mobile.chat.camera"), <Camera key="c" size={24} />, () => pick("image/*", true)], [t("web-mobile.chat.photos"), <Photo key="p" size={24} />, () => pick("image/*", false)], [t("web-mobile.chat.files"), <File key="f" size={24} />, () => pick("*/*", false)]] as const).map(([label, icon, go]) => (
             <button key={label} type="button" onClick={() => { app.sheet(null); go(); }}>{icon}<span>{label}</span></button>
           ))}
         </div>
@@ -324,7 +325,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
       <button type="button" className={css.mPlus} onClick={onPlus} disabled={locked} aria-label="添加文件"><Plus size={18} /></button>
       {field}
-      <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label="发送">
+      <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
         {draft.starting ? <Spinner size={16} color="var(--m-surface)" /> : <ArrowUp size={18} />}
       </button>
     </div>
@@ -356,7 +357,7 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
     void sendDraft(draft, to, async () => ({ thread: (await stationApi(call).chatFor(here.key)).id }));
   };
   useLayoutEffect(() => use({
-    station: here.station, session: keeper, placeholder: view.archived ? "还原对话后才能发送" : "发消息", offline: view.offline, archived: !!view.archived, send,
+    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, archived: !!view.archived, send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
@@ -374,7 +375,7 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
 function JobsButton({ here, alarm }: { here: Here; alarm: string | undefined }) {
   const app = useApp();
   return (
-    <button type="button" className={`${barsCss.mNavButton} ${css.mJobsTrigger}`} aria-label="服务和后台任务" onClick={() => openJobs(app, here)}>
+    <button type="button" className={`${barsCss.mNavButton} ${css.mJobsTrigger}`} aria-label={t("web-mobile.chat.jobs")} onClick={() => openJobs(app, here)}>
       <Web size={18} />
       {alarm && <span className={css.mJobsAlarm} data-alarm={alarm} aria-hidden="true" />}
     </button>
@@ -397,14 +398,14 @@ function JobsNow({ here }: { here: Here }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="服务和后台任务" />
+      <SheetHead title={t("web-mobile.chat.jobs")} />
       <div className={`${sheetsCss.mSheetScroll} ${partsCss.mPad18}`}>
-        {jobs.length === 0 && <div className={css.mJobsEmpty}><b>还没有服务或后台任务</b><span>agent 开网页、或挂上长期盯着的任务时，会列在这里。</span></div>}
-        {jobs.length > 0 && shown.length === 0 && <p className={homeCss.mNote}>眼下没有在跑的服务或任务。</p>}
+        {jobs.length === 0 && <div className={css.mJobsEmpty}><b>{t("web-mobile.chat.jobsNone")}</b><span>{t("web-mobile.chat.jobsNoneNote")}</span></div>}
+        {jobs.length > 0 && shown.length === 0 && <p className={homeCss.mNote}>{t("web-mobile.chat.jobsIdle")}</p>}
         <JobGroups here={here} view={view} jobs={shown} notes />
         {jobs.length > view.current && (
           <button type="button" className={css.mJobsAll} onClick={() => setAll(!all)}>
-            {all ? "只看眼下的" : <>{view.allText}<span>{view.hiddenText}</span></>}
+            {all ? t("web-mobile.chat.jobsCurrent") : <>{view.allText}<span>{view.hiddenText}</span></>}
           </button>
         )}
         {view.ended > 0 && (
@@ -430,7 +431,7 @@ function JobGroups({ here, view, jobs, notes = false }: { here: Here; view: Chat
     <>
       {services.length > 0 && (
         <>
-          <GroupLabel>服务{notes && view.servicesNote ? ` · ${view.servicesNote}` : ""}</GroupLabel>
+          <GroupLabel>{t("web-mobile.chat.services")}{notes && view.servicesNote ? ` · ${view.servicesNote}` : ""}</GroupLabel>
           <InfoList>
             {services.map((j) => {
               const up = j.tone === "up" || j.tone === "restart";
@@ -441,7 +442,7 @@ function JobGroups({ here, view, jobs, notes = false }: { here: Here; view: Chat
       )}
       {plain.length > 0 && (
         <>
-          <GroupLabel>后台任务{notes && view.jobsNote ? ` · ${view.jobsNote}` : ""}</GroupLabel>
+          <GroupLabel>{t("web-mobile.chat.backgroundJobs")}{notes && view.jobsNote ? ` · ${view.jobsNote}` : ""}</GroupLabel>
           <InfoList>
             {plain.map((j) => <JobInfoRow key={j.id} job={j} onClick={() => details(j)} />)}
           </InfoList>
@@ -481,7 +482,7 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
   const stopFailed = useDoingFailed("job.stop", { station, id: jobId });
   // Its last line, as it grows.
   const last = useJobLog(station, job && tab === 0 ? job.id : null, 1);
-  if (!job) return <><SheetGrab /><SheetHead title="任务" />{jobs.value && <p className={homeCss.mNote}>这个任务已经不在了。</p>}</>;
+  if (!job) return <><SheetGrab /><SheetHead title={t("web-mobile.chat.job")} />{jobs.value && <p className={homeCss.mNote}>{t("web-mobile.chat.jobGone")}</p>}</>;
   const said = last ? last.said : job.outputSaid;
   return (
     <>
@@ -492,18 +493,18 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
       </div>
       <div className={`${partsCss.mPad18} ${css.mJobBody}`}>
         {job.command && <div className={css.mJobCommand}>{job.command}</div>}
-        {!service && <Seg options={["通知", "输出"]} selected={tab} onSelect={setTab} fill height={34} />}
+        {!service && <Seg options={[t("web-mobile.chat.notices"), t("web-mobile.chat.output")]} selected={tab} onSelect={setTab} fill height={34} />}
         {tab === 0
           ? (
             <div className={css.mJobNotices}>
-              {(job.notices ?? []).length === 0 && <p className={homeCss.mNote}>还没有通知。</p>}
+              {(job.notices ?? []).length === 0 && <p className={homeCss.mNote}>{t("web-mobile.chat.noNotices")}</p>}
               {(job.notices ?? []).map((n, i) => <p key={`${n.at}-${i}`}><time>{n.clock}</time><span>{n.text}</span></p>)}
             </div>
           )
           : <JobOutput station={station} job={job} />}
         {tab === 0 && said && <div className={css.mJobLast}><span>{said}</span>{last?.last && <code>{last.last}</code>}</div>}
-        {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner size={16} color="var(--m-red)" /> : <Stop size={16} />}{stopping ? "正在停止…" : "停止"}</button>}
-        {running && !stopping && stopFailed !== undefined && <p className={partsCss.mError}>没能停止：{stopFailed}</p>}
+        {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner size={16} color="var(--m-red)" /> : <Stop size={16} />}{stopping ? t("web-mobile.chat.stopping") : t("web-mobile.history.stop")}</button>}
+        {running && !stopping && stopFailed !== undefined && <p className={partsCss.mError}>{t("web-mobile.chat.stopFailed", { error: stopFailed })}</p>}
       </div>
     </>
   );
@@ -520,7 +521,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
   }, [log?.text]);
   return (
     <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-      {log === null ? "正在读取…" : log.text || "（还没有输出）"}
+      {log === null ? t("web-mobile.reading") : log.text || t("web-mobile.chat.noOutput")}
     </pre>
   );
 }
@@ -543,42 +544,42 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="对话信息" />
+      <SheetHead title={t("web-mobile.chat.info")} />
       <div className={`${sheetsCss.mSheetScroll} ${partsCss.mPad18}`}>
         {!view.archived && !view.offline && (
           <InfoList>
             <InfoRow onClick={() => ask(app, {
-              title: "重命名对话", value: view.title, placeholder: "对话名称", action: "保存", empty: true, hint: "留空则用第一句话作名字",
+              title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"),
               run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
             })}>
-              <span className={css.mInfoLabel}>名称</span><span className={`${partsCss.mGrow} ${css.mInfoName}`}>{view.title}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+              <span className={css.mInfoLabel}>{t("web-mobile.chat.name")}</span><span className={`${partsCss.mGrow} ${css.mInfoName}`}>{view.title}</span><ChevronRight size={14} className={partsCss.mSubtle} />
             </InfoRow>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {view.pinned != null && (
               <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
-                .catch((error) => app.toast(`没能${view.pinned ? "取消固定" : "固定"}：${error instanceof Error ? error.message : String(error)}`)); }}>
-                <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? "取消固定" : "固定到列表顶部"}</span>
+                .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
+                <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
               </InfoRow>
             )}
           </InfoList>
         )}
         <InfoList>
-          <InfoDetail label="来自" value={view.place ? `Slack · ${view.place}` : `${NAME} 对话`} />
-          <InfoDetail label="发起" value={thread.creator?.shown?.display ?? "未记录"} />
-          <InfoDetail label="参与" value={`${view.people.length} 人`} extra={<PeopleStack people={view.people} max={8} />} />
-          <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />
-          {thread.lastMessage && <InfoDetail label="最近消息" value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
+          <InfoDetail label={t("web-mobile.chat.from")} value={view.place ? `Slack · ${view.place}` : t("web-mobile.chat.fromApp", { name: NAME })} />
+          <InfoDetail label={t("web-mobile.chat.startedBy")} value={thread.creator?.shown?.display ?? t("web-mobile.chat.unknown")} />
+          <InfoDetail label={t("web-mobile.chat.people")} value={t("web-mobile.chat.peopleCount", { n: view.people.length })} extra={<PeopleStack people={view.people} max={8} />} />
+          <InfoDetail label={t("web-mobile.chat.created")} value={thread.time?.createdAt?.ago ?? ""} />
+          {thread.lastMessage && <InfoDetail label={t("web-mobile.chat.lastMessage")} value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
         </InfoList>
         <JobGroups here={here} view={jobs} jobs={jobs.jobs} />
         {view.slackUrl && (
           <>
-            <GroupLabel>在 Slack 里</GroupLabel>
-            <InfoList><a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>在 Slack 中打开</span><ChevronRight size={14} className={partsCss.mSubtle} /></a></InfoList>
+            <GroupLabel>{t("web-mobile.chat.inSlack")}</GroupLabel>
+            <InfoList><a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a></InfoList>
           </>
         )}
         {view.agents.length > 0 && (
           <>
-            <GroupLabel>参与的 agent · 点开看它的执行历史</GroupLabel>
+            <GroupLabel>{t("web-mobile.chat.agents")}</GroupLabel>
             <InfoList>
               {view.agents.map((a) => {
                 const s = a.session;
@@ -616,16 +617,16 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
   const archive = () => {
     app.sheet(null);
     app.pop();
-    api.archive(of, true).then(() => app.toast("已归档"), (error) => app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`));
+    api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived")), (error) => app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) })));
   };
   // Asked first: its sheet waits and says what went wrong; back to the list once it is done.
-  const asked = () => api.archive(of, true).then(() => { app.pop(); app.toast("已归档"); });
+  const asked = () => api.archive(of, true).then(() => { app.pop(); app.toast(t("web-mobile.home.archived")); });
   return (
     <>
-      <GroupLabel>归档</GroupLabel>
+      <GroupLabel>{t("web-mobile.home.archive")}</GroupLabel>
       <InfoList>
         {/* A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words). */}
-        <InfoRow onClick={() => view.watch ? confirm(app, { title: `归档「${view.title}」？`, text: view.watch.ask, action: "归档", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>归档对话</span></InfoRow>
+        <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>
       </InfoList>
     </>
   );
@@ -634,7 +635,7 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
 /** In the bar while nothing is left in the chat: archives it with one tap, back to the list at once (as ArchiveRow). */
 function ArchiveButton({ here, view, thread }: { here: Here; view: ChatView; thread: ChatThread }) {
   const archive = useArchiveChat(here, view, thread);
-  return <NavButton icon={Archive} label="归档" onClick={archive} />;
+  return <NavButton icon={Archive} label={t("web-mobile.home.archive")} onClick={archive} />;
 }
 
 /** Archives the chat and leaves its page (a chat keeping watch once asked): the bar's 归档, and the one in the list. */
@@ -645,11 +646,11 @@ function useArchiveChat(here: Here, view: ChatView, thread: ChatThread | null) {
   const of = { thread: thread?.id ?? null, session: view.agents[0]?.session.key ?? here.key };
   return () => {
     if (view.watch) {
-      confirm(app, { title: `归档「${view.title}」？`, text: view.watch.ask, action: "归档", run: () => api.archive(of, true).then(() => { app.pop(); app.toast("已归档"); }) });
+      confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), run: () => api.archive(of, true).then(() => { app.pop(); app.toast(t("web-mobile.home.archived")); }) });
       return;
     }
     app.pop();
-    api.archive(of, true).then(() => app.toast("已归档"), (error) => app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`));
+    api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived")), (error) => app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) })));
   };
 }
 
