@@ -190,6 +190,7 @@
   "station.slackApi.invalidAuth": "配置 token 无效，请重新填写",
   "station.slackApi.invalidManifest": "manifest 不合法",
   "station.slackApi.invalidRefreshToken": "refresh token 已失效，请重新生成配置 token",
+  "station.slackApi.noConfigToken": "你还没有加 Slack App 配置 token",
   "station.slackApi.noTokenForTeam": "你在这个 Slack 工作区没有配置 token",
   "station.slackApi.notConfigToken": "这不是 App 配置 token",
   "station.slackApi.tokenExpired": "配置 token 过期了，请重新填写",

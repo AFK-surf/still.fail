@@ -193,6 +193,7 @@
   "station.slackApi.invalidAuth": "The configuration token is invalid; enter it again",
   "station.slackApi.invalidManifest": "The manifest is invalid",
   "station.slackApi.invalidRefreshToken": "The refresh token no longer works; generate a new configuration token",
+  "station.slackApi.noConfigToken": "You haven't added a Slack app configuration token yet",
   "station.slackApi.noTokenForTeam": "You have no configuration token for this Slack workspace",
   "station.slackApi.notConfigToken": "This isn't an app configuration token",
   "station.slackApi.tokenExpired": "The configuration token has expired; enter it again",

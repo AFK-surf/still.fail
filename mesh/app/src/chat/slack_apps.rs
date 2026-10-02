@@ -638,7 +638,7 @@ impl SlackApps {
         }
         let tokens: Vec<ConfigToken> = (self.load)().into_iter().filter(|t| t.by == by).collect();
         if tokens.is_empty() {
-            bail!(t!(spoken(); "station.slackApp.noConfigToken"));
+            bail!(t!(spoken(); "station.slackApi.noConfigToken"));
         }
         let mut last = None;
         for token in tokens {
