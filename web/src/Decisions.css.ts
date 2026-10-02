@@ -96,6 +96,12 @@ export const foot = style({
   flex: "none", padding: "8px 32px 16px",
   "@media": { "(max-width: 700px)": { padding: "8px 16px calc(12px + var(--m-foot, 0px))" } },
 });
+/** Keep one expanded line ready: focus changes the capsule, never the messages or answer buttons above it. */
+export const reply = style({
+  display: "flex", flexDirection: "column", justifyContent: "flex-end",
+  minHeight: `calc(${vars.textBody} * 1.5 + 102px)`,
+  selectors: { '&[data-mobile]': { minHeight: "100px" } },
+});
 export const footColumn = style({ maxWidth: "760px", margin: "0 auto" });
 globalStyle(`${footColumn} ${options}`, { marginTop: "0" });
 /** ← 待定　不再提醒 →: what a swipe does (the phone), or the two as words to press (the wide screen). */

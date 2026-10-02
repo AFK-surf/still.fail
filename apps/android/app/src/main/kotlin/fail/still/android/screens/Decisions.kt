@@ -50,6 +50,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -602,5 +604,10 @@ private fun DecisionComposer(item: DecisionItem, placeholder: String?, onField: 
         station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: "发消息",
         onPlus = { openAttach(app, launchers) }, onSend = onReply,
     )
-    HostComposer(host, Modifier.onGloballyPositioned(onField), overContent = false)
+    host.density = LocalDensity.current
+    HostComposer(host, Modifier.onGloballyPositioned(onField).layout { measurable, constraints ->
+        val composer = measurable.measure(constraints)
+        val height = constraints.constrainHeight(maxOf(composer.height, host.roomForList()))
+        layout(composer.width, height) { composer.place(0, height - composer.height) }
+    }, overContent = false)
 }

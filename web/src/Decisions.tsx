@@ -106,7 +106,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
   now.current = draft;
   const root = useRef<HTMLDivElement>(null);
   return (
-    <div ref={root} onPointerDown={(e) => e.stopPropagation()}>
+    <div ref={root} className={css.reply} data-mobile={mobile || undefined} onPointerDown={(e) => e.stopPropagation()}>
       {mobile
         ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} inline />
         : <ComposerView draft={draft} thread={thread} sessionKey={session} draftKey={draftKey} submitDraft={send}
