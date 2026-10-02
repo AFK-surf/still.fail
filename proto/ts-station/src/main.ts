@@ -53,7 +53,10 @@ for (let conn = await endpoint.accept(); conn; conn = await endpoint.accept()) {
 
 class Reader {
   carry = Buffer.alloc(0);
-  constructor(readonly stream: Stream) {}
+  stream: Stream;
+  constructor(stream: Stream) {
+    this.stream = stream;
+  }
 
   async line(): Promise<any | null> {
     for (;;) {
