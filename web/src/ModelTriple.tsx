@@ -148,9 +148,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
               {v.fastAvailable && <>
                 <h4>{t("web-main.model.speed")}</h4>
                 {([null, false, true] as const).map((fast) => (
-                  <button key={String(fast)} type="button" className={css2.runPickerOption} aria-pressed={(draft.fast ?? null) === fast} onClick={() => pick.set({ fast })}>{fast === null ? t("web-main.model.fastSubscription") : fast ? "Fast" : t("web-main.model.standard")}</button>
+                  <Tip key={String(fast)} label={fast === true ? t("web-main.model.fastNote") : null}><button type="button" className={css2.runPickerOption} aria-pressed={(draft.fast ?? null) === fast} onClick={() => pick.set({ fast })}>{fast === null ? t("web-main.model.fastSubscription") : fast ? "Fast" : t("web-main.model.standard")}</button></Tip>
                 ))}
-                <small>{t("web-main.model.fastNote")}</small>
               </>}
             </div>
           </div>
