@@ -169,7 +169,14 @@ impl AdminApi {
                     "machine": p.machine,
                     "backgroundOnMessage": p.background_on_message,
                     "fast": (p.runtime == RuntimeKind::Codex && p.access_kind == AccessKind::Subscription).then_some(p.fast),
-                    "check": checks.get(&p.id),
+                    "check": checks.get(&p.id).map(|check| {
+                        let mut view = serde_json::to_value(check).unwrap_or(Value::Null);
+                        if let Some(decision) = view.get_mut("decision").and_then(Value::as_object_mut) { decision.remove("fingerprint"); }
+                        if check.decision.as_ref().is_some_and(|d| d.fingerprint != crate::decision::profiles::fingerprint(p)) {
+                            view["decision"] = json!({"state":"pending","detail":"Profile 已修改，等待自动检查"});
+                        }
+                        view
+                    }),
                     "login": self.deps.logins.get(&p.id),
                     "quota": quotas.get(&p.id),
                 })

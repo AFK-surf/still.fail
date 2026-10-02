@@ -445,8 +445,18 @@ data class EnvVar (
 	val value: String
 )
 
+/// Discovered on the existing profile; credentials and transport settings never enter this view.
+@Serializable
+data class DecisionCapability (
+	val state: String,
+	val detail: String,
+	val model: String? = null,
+	val provider: String? = null
+)
+
 @Serializable
 data class ProfileCheck (
+	val decision: DecisionCapability? = null,
 	/// Runtime → model → supported reasoning levels; absent on older stations.
 	val modelEfforts: Map<String, Map<String, List<String>>>? = null,
 	/// ok | login | failed | unknown

@@ -1644,7 +1644,20 @@ impl Hub {
     /// Review before any post, attachment or ending mutation, including legacy `final`.
     async fn review_completion(&self, key: &str, args: &Map<String, Value>) -> Result<()> {
         use crate::decision::{Mode, completion_question, decide};
-        let Some(config) = self.config().decision.clone() else { return Ok(()); };
+        let profiles = self.config().profiles.clone();
+        let mut candidates = Vec::new();
+        for profile in &profiles {
+            let health = self.health_of(&profile.id);
+            if !usable(&health) { continue; }
+            if let Some(config) = health.check.as_ref().and_then(|c| c.decision.as_ref())
+                .and_then(|c| crate::decision::profiles::resolved(profile, c)) {
+                candidates.push((profile.id.clone(), config));
+            }
+        }
+        // Profiles without a verified probability interface retain the existing completion behavior.
+        if candidates.is_empty() { return Ok(()); }
+        let mut selected = 0;
+        let config = candidates[0].1.clone();
         let started = std::time::Instant::now();
         let mut versions = Vec::new();
         let reviewed: Result<crate::decision::ChoiceResult> = async {
@@ -1667,7 +1680,13 @@ impl Hub {
             let state = json!({"agent":key,"conversations":conversations,
                 "proposedPost":args.get("text"),"done":args.get("done"),"hasNewCard":args.get("card").is_some(),
                 "attachmentContentsAvailable":false});
-            let result = decide(&config, &completion_question(), &state).await?;
+            let mut answer = Err(anyhow!("no decision profile available"));
+            for (i, (_, candidate)) in candidates.iter().enumerate() {
+                selected = i;
+                answer = decide(candidate, &completion_question(), &state).await;
+                if answer.is_ok() { break; }
+            }
+            let result = answer?;
             for (id, version) in &versions {
                 if self.store.last_entry(*id)? != *version { bail!("conversation changed during completion review; read the new messages and try again"); }
             }
@@ -1676,7 +1695,7 @@ impl Hub {
         let accepted = reviewed.as_ref().is_ok_and(|r| r.accepts_completion(config.threshold));
         let error = reviewed.as_ref().err().map(ToString::to_string);
         self.store.record_decision(key, &json!({"purpose":"completion","version":1,
-            "mode":config.mode,"provider":config.provider,"model":config.model,"threshold":config.threshold,
+            "mode":config.mode,"profile":candidates[selected].0,"provider":candidates[selected].1.provider,"model":candidates[selected].1.model,"threshold":config.threshold,
             "elapsedMs":started.elapsed().as_millis(),"threads":versions,"accepted":accepted,
             "result":reviewed.as_ref().ok(),"error":error}))?;
         if config.mode == Mode::Enforce && !accepted {

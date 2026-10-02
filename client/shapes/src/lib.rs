@@ -755,6 +755,7 @@ pub struct Access {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileCheck {
+    pub decision: Option<DecisionCapability>,
     /// Runtime → model → supported reasoning levels; absent on older stations.
     pub model_efforts: Option<HashMap<String, HashMap<String, Vec<String>>>>,
     /// ok | login | failed | unknown
@@ -765,6 +766,18 @@ pub struct ProfileCheck {
     pub checked_at: i64,
     /// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
     pub time: Option<HashMap<String, Stamp>>,
+}
+
+/// Discovered on the existing profile; credentials and transport settings never enter this view.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionCapability {
+    pub state: String,
+    pub detail: String,
+    pub model: Option<String>,
+    pub provider: Option<String>,
 }
 
 /// A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words.

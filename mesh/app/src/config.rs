@@ -52,8 +52,6 @@ pub struct RawConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_nudges: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub decision: Option<crate::decision::DecisionConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub warm_minutes: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_warm_claude: Option<u32>,
@@ -373,7 +371,6 @@ pub struct Config {
     pub profiles: Vec<Profile>,
     /// How many times a turn that ended without final/block is nudged before giving up.
     pub max_nudges: u32,
-    pub decision: Option<crate::decision::DecisionConfig>,
     /// Idle claude processes kept alive at most this long before they may be evicted.
     pub warm_ms: u64,
     /// Idle claude processes beyond this count are evicted, oldest first, once past warm_ms.
@@ -415,7 +412,6 @@ fn under(data_dir: &Path, path: &str) -> PathBuf {
 }
 
 pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
-    if let Some(decision) = &raw.decision { decision.validate()?; }
     let mut profiles = Vec::new();
     for p in raw.profiles.iter().flatten() {
         if !id_ok(&p.id) {
@@ -538,7 +534,6 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
         connects,
         profiles,
         max_nudges: raw.max_nudges.unwrap_or(2),
-        decision: raw.decision.clone(),
         warm_ms: (raw.warm_minutes.unwrap_or(30.0) * 60_000.0) as u64,
         max_warm_claude: raw.max_warm_claude.unwrap_or(4),
         auto_archive_ms: (raw.auto_archive_days.unwrap_or(1.0).max(0.0) * 86_400_000.0) as u64,

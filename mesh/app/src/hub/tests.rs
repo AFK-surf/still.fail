@@ -2471,14 +2471,13 @@ async fn completion_provider(complete: bool) -> (String, tokio::task::JoinHandle
 
 #[tokio::test]
 async fn completion_review_precedes_posts_and_states_and_covers_legacy_final() {
-    use crate::decision::{DecisionConfig, Provider, Mode};
     let r = setup();
     let m = say("<@UBOT> ship the requested fix");
     r.accept(&m).await; settle().await;
     let key = format!("cl:C1:{}",m.thread_ts);
     let to = format!("C1/{}",m.thread_ts);
     let (endpoint, server) = completion_provider(false).await;
-    r.edit(|c| c.decision = Some(DecisionConfig { provider:Provider::Jev, endpoint, model:"test".into(), key_env:None, mode:Mode::Enforce, threshold:0.85 }));
+    install_decision_profile(&r, &endpoint);
     let before = r.chat.texts().len();
     for tool in ["chat_post", "chat_state"] {
         for kind in ["all_done", "final"] {
@@ -2488,27 +2487,40 @@ async fn completion_review_precedes_posts_and_states_and_covers_legacy_final() {
     }
     assert_eq!(r.chat.texts().len(),before,"rejected completion must not post");
     assert_ne!(r.store.last_turn(&key).unwrap().unwrap().ending.as_deref(),Some("all_done"));
-    // Observe-only rollout records judgments without changing historical behavior.
-    r.edit(|c| c.decision.as_mut().unwrap().mode=Mode::Shadow);
-    r.call(&key,"chat_post",json!({"to":to,"text":"Answer given","kind":"all_done","done":"The factual question was answered"})).await.unwrap();
-    assert_eq!(r.chat.texts().len(),before+1);
     server.abort();
 }
 
 #[tokio::test]
 async fn completion_review_allows_answers_and_does_not_turn_outages_into_done() {
-    use crate::decision::{DecisionConfig, Provider, Mode};
     let r=setup(); let m=say("<@UBOT> what does this setting do?");
     r.accept(&m).await; settle().await;
     let key=format!("cl:C1:{}",m.thread_ts); let to=format!("C1/{}",m.thread_ts);
     let (endpoint, server)=completion_provider(true).await;
-    r.edit(|c| c.decision=Some(DecisionConfig {provider:Provider::Jev,endpoint,model:"test".into(),key_env:None,mode:Mode::Enforce,threshold:0.85}));
+    install_decision_profile(&r, &endpoint);
     r.call(&key,"chat_post",json!({"to":to,"text":"This setting controls retention.","kind":"all_done","done":"Explained the setting and its effect"})).await.unwrap();
     server.abort();
-    r.edit(|c| c.decision.as_mut().unwrap().endpoint="http://127.0.0.1:1".into());
+    install_decision_profile(&r, "http://127.0.0.1:1/systemone");
     let before=r.chat.texts().len();
     assert!(r.call(&key,"chat_post",json!({"to":to,"text":"done","kind":"all_done","done":"The release has been confirmed"})).await.unwrap_err().to_string().contains("request failed"));
     assert_eq!(r.chat.texts().len(),before);
     // An outage must not stop progress or a real request for human help.
     r.call(&key,"chat_post",json!({"to":to,"text":"Which retention period do you want?","kind":"need_human","need":"Choose the retention period"})).await.unwrap();
+}
+
+fn install_decision_profile(r: &Rig, endpoint: &str) {
+    use crate::decision::{Provider, profiles::{Capability, fingerprint}};
+    r.edit(|config| {
+        let profile = &mut config.profiles[0];
+        profile.envs.entry("codex").or_default().extend([
+            ("TYPESAFE_API_KEY".into(), "profile-test-key".into()),
+            ("TYPESAFE_BASE_URL".into(), endpoint.trim_end_matches("/systemone").into()),
+        ]);
+    });
+    let profile = r.config.lock().unwrap().profiles[0].clone();
+    let capability = Capability { state:"ready".into(), detail:"test".into(), model:Some("test-jev".into()), provider:Some(Provider::Jev), fingerprint:fingerprint(&profile) };
+    r.hub.set_profile_health(Arc::new(move |id| crate::pool::ProfileHealth {
+        check: (id == profile.id).then(|| crate::profiles::ProfileCheck {
+            decision:Some(capability.clone()), model_efforts:None,state:"ok".into(),detail:String::new(),models:None,checked_at:0,
+        }), ..Default::default()
+    }));
 }

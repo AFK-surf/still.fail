@@ -101,6 +101,7 @@ export function ProfileRow({ station, p }: { station: StationView; p: Profile })
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
         <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
+        {p.check?.decision && <span className={listsCss.mRowNote}>{p.check.decision.detail}</span>}
         {p.trouble ? <>
           <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}><b>{p.trouble.title}</b> · {p.trouble.detail}</span>
           <span className={`${listsCss.mRowNote} ${partsCss.mLink}`}>{t("web-mobile.profiles.seeFix")}</span>

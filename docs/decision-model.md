@@ -1,59 +1,13 @@
-# Station decision models
+# 决策模型
 
-`decision` in station `config.json` configures a reusable typed-choice client. Its first caller reviews both `chat_post all_done` and `chat_state all_done` (including legacy `final`) before posting, attaching files or changing state. Absent configuration preserves older station behavior.
+决策能力属于现有 Profile，没有独立的地址、key、模型选择表单。station 启动、Profile 修改或重新检查时，使用 Profile 已有的连接、凭据和模型目录自动识别决策模型。Profile 页显示识别结果，旧客户端忽略可选的 `check.decision` 字段。
 
-```json
-{
-  "decision": {
-    "provider": "jev",
-    "endpoint": "https://api.typesafe.ai/v1/systemone",
-    "model": "jev-latest",
-    "keyEnv": "TYPESAFE_API_KEY",
-    "mode": "shadow",
-    "threshold": 0.85
-  }
-}
-```
+识别使用合成题，不发送聊天内容。原生 Jev 调用 `systemone`；普通模型使用关闭 reasoning 的单 token Chat Completions logprobs。模型目录和名称仅用于候选排序（Jev、Luna、小模型优先），必须通过完整概率分布验证才进入决策池。探测最多八个候选、25 秒，失败显示未验证，可用现有的 Profile 重新检查按钮重试。
 
-The named credential environment variable must be available to the **station**, not just an agent subprocess. Keys are never included in configuration or audit records. Endpoint redirects are disabled; HTTPS is required except for loopback development services. No provider is enabled automatically and no existing runtime login is reused.
+连接来自 OpenCode Go Profile，或 Codex Profile 的已有环境变量、`config.toml` provider 和 API-key 登录。Jev 使用 Profile 内的 `TYPESAFE_API_KEY` / `JEV_API_KEY` 与可选 `TYPESAFE_BASE_URL`。普通 API 使用既有 provider 的 `base_url`、`env_key`，或 `OPENAI_BASE_URL` / `OPENAI_API_KEY`。不把 ChatGPT/Claude 的订阅 OAuth token 当作 API key；没有概率接口的账号明确显示未支持，不假称可用。未实现的自定义 headers / 独立供应商协议也不会仅凭模型名启用。
 
-For a model supporting Chat Completions logprobs, set `provider` to `chat_logprobs`, the full endpoint (for example `https://api.openai.com/v1/chat/completions`), a model such as `gpt-6-luna`, and `keyEnv` to `OPENAI_API_KEY`. The request uses `reasoning_effort: none`, one completion token and `top_logprobs: 20`. Compatibility must be checked against the selected endpoint; an unsupported parameter is a failed check, never a generated confidence fallback. Raw logits are not exposed by this adapter: it uses token log probabilities. These are not calibrated task correctness probabilities.
+每次 `chat_post` 或 `chat_state` 请求 all_done（包括旧 final），自动选通过验证且账号健康的 Profile。连接临时失败时换下一个候选。任何一次有效判断指出仍需工作、等人或证据不足，均在发帖、上传附件、修改结束状态之前拒绝。无任何已验证 Profile 时保持既有行为，不要求人另配一套账号。
 
-A question supplies instructions and 2–20 named criteria. Jev returns native choice probabilities. The chat adapter maps choices to letters, requires every letter in the returned top-logprobs, rejects retained mass below 95%, then normalizes that mass. Missing choices, invalid numbers, malformed distributions, timeouts (12 seconds) and excessive inputs/responses fail explicitly. No conversation evidence is silently truncated.
+检查覆盖该 session 的所有会话、现有待决定卡片及拟发文字和 done 理由。超过 200 条消息或 96 KB 不静默截断；等待期间会话有新消息时拒绝过期结果。概率分布是模型分数，不是校准后的正确率。结果和所用 Profile/model 写入 decision_checks，密钥及聊天正文不写入审计。
 
-## Completion review
-
-Inputs contain up to 200 complete messages per session conversation, their author/role, pending cards, the proposed post and completion evidence. All session threads are checked because endings belong to the session. Attachments are marked as present; their contents and private runtime/tool transcripts are **not** read. This checks consistency of visible claims, not whether a claimed commit actually exists. More than 200 messages or a request larger than 96 KB abstains; future retrieval must preserve unresolved obligations before extending this limit.
-
-The four choices are `complete`, `agent_work`, `human_needed`, `uncertain`. Factual answers need no invented follow-up approval. Already resolved questions must stay resolved. The model sees conversation text as untrusted evidence. A concurrent conversation update invalidates the result.
-
-- `shadow` (default): run and record the check without changing the agent's ending. Use this to evaluate false positives on representative cases before enabling enforcement.
-- `enforce`: accept only `complete` at or above the threshold. Other outcomes return a tool error before side effects; the agent must reconcile the evidence and continue or ask a real outstanding question. A provider outage/uncertainty is not proof that work remains. Existing bounded missing-state nudges apply; no automatic human question or model retry loop is added.
-
-SQLite `decision_checks` stores session, timestamp, mode, provider, model, input thread revisions, latency, probabilities, retained mass and errors. It does not store conversation text or secrets. `accepted` records the review outcome, including in shadow mode; it is not a claim that a post landed. The table is additive (`IF NOT EXISTS`), without a schema-version bump. Read examples:
-
-```sql
-SELECT session, created_at, json_extract(result, '$.accepted'), result
-FROM decision_checks ORDER BY id DESC LIMIT 50;
-```
-
-The 0.85 threshold is an initial policy setting, **not** calibrated on still.fail conversations. Integration tests use a loopback deterministic provider and verify blocking, allowing, legacy compatibility, provider errors and shadow behavior; they do not establish model accuracy. Do not enable enforce fleet-wide without evaluating real representative labeled cases.
-
-## References
-
-- Studio reference: `router-decision-dataset/general-eval/sources/jevbench/jevbench/adapters/typesafe.py` (native choice transport), and `decisionbench` (non-generative decisions).
-- [TypeSafe API](https://api.typesafe.ai/redoc)
-- [OpenAI GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)
-
-No independent Luna typed-decision endpoint was verified; Luna uses the Chat Completions adapter above.
-
-## Repeatable provider smoke evaluation
-
-Run the same ten synthetic cases against each provider on studio. These include factual answers, advice without extra scope, unresolved merge approval, running checks, requested deployment/verification, missing evidence, an injected completion claim and an already resolved approval. They are smoke cases, not a production accuracy benchmark.
-
-```sh
-cd mesh
-cargo run -p stillfail-app --example decision_eval -- /path/to/decision-config.json app/tests/fixtures/completion-decisions.jsonl
-```
-
-The config file contains the `decision` object alone (not the station config). Set its named key environment variable before running. Output contains each predicted distribution, latency and a summary of label accuracy/errors/false completion. No real conversations are sent by this command. Missing results or false completion cause a nonzero exit; a zero exit is not proof of calibration or overall production readiness.
+验证：studio 上 `cargo test -p stillfail-app decision` 与 `cargo test -p stillfail-app completion_review`。合成集在 `tests/fixtures/completion-decisions.jsonl`，`cargo run -p stillfail-app --example decision_eval -- <station-config.json> <cases.jsonl>` 自动从该测试 station 的 Profile 发现模型；失败不宣称语义准确率已验证。
