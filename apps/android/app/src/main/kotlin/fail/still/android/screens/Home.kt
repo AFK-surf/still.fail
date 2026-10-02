@@ -693,6 +693,21 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
         )
         return
     }
+    // An agent needing the viewer (要你帮忙：…, Needs you: …): a bell in its words' place, then what it needs, in ink
+    // (web: ChatMark.tsx WaitingText compactNeed).
+    needLead.find(state)?.let { need ->
+        val rest = state.substring(need.value.length)
+        Row(modifier.semantics(mergeDescendants = true) { contentDescription = state }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconIn(Icons.Bell, 14.dp, C.ink)
+            if (rest.isNotEmpty()) Text(
+                rest, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                    androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+                )),
+            )
+        }
+        return
+    }
     // The core's lead in either language: 奏 · …, Decision · ….
     val lead = listOf("奏", "Decision").firstOrNull { state == it || state.startsWith("$it · ") }
     val text = androidx.compose.ui.text.buildAnnotatedString {
@@ -706,6 +721,9 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
         )),
     )
 }
+
+/** The core's words for an agent needing the viewer, in either language, with what follows them. */
+private val needLead = Regex("^(?:要你帮忙|Needs you)(?:[：:]\\s*|$)")
 
 /** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */
 @Composable
