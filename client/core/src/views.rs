@@ -813,11 +813,11 @@ impl Views {
                     }
                     // The card it waits on as the viewer sees it, its mark (decisions.rs).
                     crate::decisions::present(&mut row);
-                    // Nothing left in it: faded, below the rest of its day, one tap from the archive; and where it
-                    // stands in words.
-                    if crate::present::settled(&row) && !crate::present::pinned(&row) {
+                    // Nothing left in it: faded, below the rest of its day, one tap from the archive, unless the
+                    // viewer chose to keep it. Its completed state still appears in words.
+                    if crate::present::settled(&row) && !crate::present::pinned(&row) && row["archiveReminderDismissed"] != true {
                         row["settled"] = json!(true);
-                        if row["archiveReminderDismissed"] != true { row["archivable"] = json!(true); }
+                        row["archivable"] = json!(true);
                     }
                     if let Some((text, about)) = crate::present::row_state_line(&row) {
                         row["stateText"] = json!(text);
@@ -2403,6 +2403,35 @@ mod tests {
             assert_eq!(v["days"][1]["at"], json!(midnight - 1000.0));
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             assert_eq!(v["stations"], json!([{"station": "ws/st", "id": "st", "name": "studio", "state": "online"}]));
+        });
+    }
+
+    #[test]
+    fn dismissing_archive_reminders_restores_the_rows_color_and_order() {
+        run(async {
+            let t = setup();
+            let now = t.host.now_ms();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
+            t.set(workspace(), one_station());
+            t.host.settle().await;
+            let mut done = row("done", now);
+            done["agents"] = json!([{
+                "key": "k", "process": "warm", "pending": 0,
+                "lastTurn": { "declared": "final", "ending": "all_done", "outcome": "completed" }
+            }]);
+            let active = row("active", now - 1.0);
+            for dismissed in [false, true] {
+                done["archiveReminderDismissed"] = json!(dismissed);
+                t.set(rows("ws/st"), json!([done.clone(), active.clone()]));
+                t.read(&mut ui, 1).await;
+                let v = ui.value.as_ref().unwrap();
+                assert_eq!(ids(v), if dismissed { ["done", "active"] } else { ["active", "done"] });
+                let shown = v["days"][0]["items"].as_array().unwrap().iter().find(|r| r["id"] == "done").unwrap();
+                assert_eq!(shown.get("settled"), (!dismissed).then_some(&Value::Bool(true)));
+                assert_eq!(shown.get("archivable"), (!dismissed).then_some(&Value::Bool(true)));
+                assert_eq!(shown["stateText"], "做完了");
+            }
         });
     }
 
