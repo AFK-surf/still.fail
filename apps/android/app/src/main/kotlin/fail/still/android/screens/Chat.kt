@@ -935,7 +935,7 @@ fun Spinner(size: androidx.compose.ui.unit.Dp) = CircularProgressIndicator(Modif
 private fun MessageAvatar(m: ChatMessage) {
     when (m.authorKind) {
         "agent" -> AgentAvatar(m.by.maker, m.by.runtime)
-        "ember" -> AgentAvatar(null, null)
+        "ember", "stillfail" -> AgentAvatar(null, null)
         else -> Avatar(m.author, m.by.name, 18.dp, picture = m.by.picture)
     }
 }

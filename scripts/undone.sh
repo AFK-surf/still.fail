@@ -26,6 +26,7 @@ files=$(git diff --name-only --no-renames "$base" "$tree")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 GIT_INDEX_FILE="$work/index" git read-tree "$tree"
+GIT_INDEX_FILE="$work/base-index" git read-tree "$base"
 
 undone=""
 # A branch lives hours, a day or two: what main took in before that is not this one's to undo.
@@ -36,6 +37,10 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
   if printf '%s\n' "$messages" | grep -qiE "(reverts|undoes) ${short}"; then continue; fi
   git diff --binary --no-renames "$m^" "$m" -- $files > "$work/patch" 2>/dev/null || continue
   [ -s "$work/patch" ] || continue
+  # Main may already have removed or superseded this old patch. Only reject
+  # a loss introduced by this branch; don't blame it for the base tree's state.
+  if ! GIT_INDEX_FILE="$work/base-index" git apply --cached --check -R "$work/patch" 2>/dev/null &&
+     GIT_INDEX_FILE="$work/base-index" git apply --cached --check "$work/patch" 2>/dev/null; then continue; fi
   # Still there, or changed again since on main (then neither way applies): fine.
   GIT_INDEX_FILE="$work/index" git apply --cached --check -R "$work/patch" 2>/dev/null && continue
   GIT_INDEX_FILE="$work/index" git apply --cached --check "$work/patch" 2>/dev/null || continue

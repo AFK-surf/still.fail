@@ -238,7 +238,7 @@ function PlaceMark({ station, chat, place }: { station: string; chat: string; pl
     : place.session ? () => { if (place.session !== chat) app.push(`${stationBase(station)}/chats/${encodeURIComponent(place.session!)}`); else app.pop(); } : undefined;
   return (
     <button type="button" className={css.mHPlace} data-link={open ? true : undefined} disabled={!open} onClick={open}>
-      {place.surface === "ember" ? <Mark size={12} /> : <SlackMark size={12} />}<b>{place.name}</b>
+      {(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <SlackMark size={12} />}<b>{place.name}</b>
     </button>
   );
 }

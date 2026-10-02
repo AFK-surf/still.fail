@@ -302,7 +302,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
                     let known = thread.and_then(|t| threads.get(t.to_string()));
                     let title = known.and_then(|t| t.get("title")).and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| t!("core-views.usage.deleted_chat"));
                     let archived = known.and_then(|t| t.get("archived")).and_then(Value::as_bool) == Some(true);
-                    let slack = known.and_then(|t| t.get("surface")).and_then(Value::as_str).is_some_and(|s| s != "ember");
+                    let slack = known.and_then(|t| t.get("surface")).and_then(Value::as_str).is_some_and(|s| !matches!(s, "ember" | "stillfail"));
                     let sub: Vec<String> = place.iter().cloned().chain(slack.then(|| "Slack".to_string())).chain(archived.then(|| t!("core-views.usage.archived"))).collect();
                     // Its page: a still.fail chat by its thread; a Slack thread by its agent's own chat.
                     let page = match (known, slack) {

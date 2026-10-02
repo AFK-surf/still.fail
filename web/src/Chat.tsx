@@ -986,7 +986,7 @@ export function MessageName({ children }: { children: ReactNode }) {
 
 function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
   if (message.authorKind === "agent") return <AgentAvatar maker={message.by.maker} runtime={message.by.runtime} />;
-  if (message.authorKind === "ember") return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
+  if ((message.authorKind === "ember" || message.authorKind === "stillfail")) return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
   const picture = message.by.picture;
   return picture
     ? <img className={chatCss2.msgAvatar} src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />

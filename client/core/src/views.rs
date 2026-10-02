@@ -718,7 +718,7 @@ impl Views {
         });
         from_rows.or_else(|| {
             self.ok(Topic::Threads { station: station.to_string() })?.as_array()?.iter().find(|t| {
-                t.get("surface").and_then(Value::as_str) == Some("ember") && members(t).first().map(String::as_str) == Some(key)
+                matches!(t.get("surface").and_then(Value::as_str), Some("ember" | "stillfail")) && members(t).first().map(String::as_str) == Some(key)
             })?.get("id")?.as_u64()
         })
     }
@@ -1139,7 +1139,7 @@ impl Views {
         }
         // Where a Slack chat is, in words, and the way to it in Slack (while its connect is signed in there).
         let str_of = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-        let slack = str_of(&thread, "surface") != "ember";
+        let slack = !matches!(str_of(&thread, "surface").as_str(), "ember" | "stillfail");
         let channel = str_of(&thread, "channel");
         let place = slack.then(|| if channel.starts_with('D') { t!("core-views.direct_message") } else {
             format!("#{}", thread.get("channelName").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(&channel))
@@ -1222,7 +1222,7 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
     let said_name = m.get("authorName").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
     m["mine"] = json!(kind == "person" && crate::present::is_viewer(viewer, &author, slack_users));
     // What still.fail itself says in a chat (a limit hit, a failure): a notice, not someone's message.
-    m["system"] = json!(kind == "ember");
+    m["system"] = json!(matches!(kind.as_str(), "ember" | "stillfail"));
     // Who said it, as its line shows them: an agent by its label and mark, a person by name and picture.
     m["by"] = match kind.as_str() {
         "agent" => {
@@ -1238,7 +1238,7 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
                 "runtime": session.and_then(|s| s.get("runtime")),
             })
         }
-        "ember" => json!({ "name": crate::brand::name() }),
+        "ember" | "stillfail" => json!({ "name": crate::brand::name() }),
         _ => {
             let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
             let name = crate::present::member_name(members, &author).map(str::to_string).or(said_name)
@@ -1541,7 +1541,7 @@ pub fn chat_title(thread: &Value) -> String {
     if let Some(channel) = text("channelName") {
         return format!("#{channel}");
     }
-    if thread.get("surface").and_then(Value::as_str) != Some("ember") && text("channel").is_some_and(|c| c.starts_with('D')) {
+    if !matches!(thread.get("surface").and_then(Value::as_str), Some("ember" | "stillfail")) && text("channel").is_some_and(|c| c.starts_with('D')) {
         return t!("core-views.direct_message");
     }
     t!("core-views.no_messages")
@@ -1844,6 +1844,19 @@ fn spent_until(profile: &Value) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_and_legacy_station_notices_have_the_same_presentation() {
+        let mut presentations = Vec::new();
+        for kind in ["ember", "stillfail"] {
+            let mut message = json!({ "authorKind": kind, "author": kind, "text": "notice" });
+            shown_message(&mut message, &[], &Value::Null, &[], &[], &[]);
+            assert_eq!(message["system"], true);
+            assert_eq!(message["mine"], false);
+            presentations.push(message["by"].clone());
+        }
+        assert_eq!(presentations[0], presentations[1]);
+    }
 
     #[test]
     fn historical_messages_do_not_follow_the_current_model() {

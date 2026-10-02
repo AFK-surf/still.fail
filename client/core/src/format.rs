@@ -259,7 +259,7 @@ pub fn thread_name(threads: &[Value], channel: &str, thread_ts: &str, offset_min
     let when = t!("core-logic.format.date_time", date = month_day(current(), month, day), time = clock(started, offset_min));
     let thread = threads.iter().find(|t| t.get("channel").and_then(Value::as_str) == Some(channel) && t.get("threadTs").and_then(Value::as_str) == Some(thread_ts));
     let text = |k: &str| thread.and_then(|t| t.get(k)).and_then(Value::as_str).unwrap_or("");
-    let where_ = if channel == "EMBER" {
+    let where_ = if matches!(channel, "EMBER" | "STILLFAIL") {
         let title = text("title");
         if !title.is_empty() {
             title.to_string()
@@ -300,7 +300,7 @@ pub fn place(threads: &[Value], address: &str, offset_min: i32, workspaces: &Has
     let (name, _) = thread_name(threads, channel, ts, offset_min);
     let thread = threads.iter().find(|t| t.get("channel").and_then(Value::as_str) == Some(channel) && t.get("threadTs").and_then(Value::as_str) == Some(ts));
     let session = thread.and_then(|t| t.get("sessions")?.as_array()?.first()?.get("session")?.as_str().map(str::to_string));
-    if channel == "EMBER" {
+    if matches!(channel, "EMBER" | "STILLFAIL") {
         return json!({ "name": name, "surface": "ember", "session": session });
     }
     // Its workspace, by the thread's surface ("slack:<team id>").

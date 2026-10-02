@@ -40,7 +40,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   // A place as its platform's mark and its name; a still.fail chat opens its agent's page.
   const where = (place: Place | null): ReactNode => {
     if (!place) return null;
-    const inner = <>{place.surface === "ember" ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
+    const inner = <>{(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
     // A Slack thread opens in Slack; a still.fail chat, its agent's page.
     if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a>;
     return place.session

@@ -332,7 +332,7 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
                 "state": agent.and_then(mark_of),
             })
         }
-        "ember" => json!({ "kind": "ember", "name": crate::brand::name(), "mine": false }),
+        "ember" | "stillfail" => json!({ "kind": "ember", "name": crate::brand::name(), "mine": false }),
         _ => {
             let mine = is_viewer(me, author, slack_users);
             let member = members.iter().find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(author)));
