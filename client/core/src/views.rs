@@ -1422,11 +1422,8 @@ impl Views {
             let rows = match self.store.value(&Topic::ChatRows { station: s.address.clone() }) {
                 Some(Ok(rows)) => rows,
                 Some(Err(_)) => continue,
-                // Never read on this device: still to come only while its link is being made or is up (its rows on
-                // their way). One refused or failing, or being tried again after that, says nothing soon: the page
-                // shows what the others have rather than waiting on it.
                 None => {
-                    loading |= s.online && matches!(self.link(&s.address)["state"].as_str(), Some("connecting" | "online"));
+                    loading |= s.online;
                     continue;
                 }
             };
@@ -2326,40 +2323,6 @@ mod tests {
             r["decision"]["dismissed"] = json!(true);
         }
         r
-    }
-
-    #[test]
-    fn the_decisions_page_waits_only_on_stations_whose_rows_are_on_their_way() {
-        run(async {
-            let t = setup();
-            let mut ui = Ui::default();
-            t.subscribe(1, Topic::Decisions { workspace: "ws".into() });
-            t.read(&mut ui, 1).await;
-            t.set(workspace(), json!({"id": "ws", "stations": [
-                {"id": "st", "name": "studio", "last_seen": null, "version": null},
-                {"id": "st2", "name": "mini", "last_seen": null, "version": null},
-            ]}));
-            t.set(Topic::Prefs, json!({}));
-            t.read(&mut ui, 1).await;
-            t.set(link("ws/st"), json!({"state": "online"}));
-            t.set(rows("ws/st"), json!([row("10", t.host.now_ms())]));
-            let loading = |ui: &Ui| ui.value.as_ref().unwrap()["loading"].clone();
-            // The other one first connecting: its rows are on their way.
-            t.set(link("ws/st2"), json!({"state": "connecting"}));
-            t.read(&mut ui, 1).await;
-            assert_eq!(loading(&ui), json!(true));
-            // Refused, failing, or tried again after that (a UI back from away): nothing is on its way, and the page
-            // says what the others have (none waiting) instead of 读取中 for as long as it stays so.
-            for state in ["error", "reconnecting"] {
-                t.set(link("ws/st2"), json!({"state": state, "message": "Station refused"}));
-                t.read(&mut ui, 1).await;
-                assert_eq!(loading(&ui), json!(false), "{state}");
-            }
-            // Up, its rows not read yet: on their way again.
-            t.set(link("ws/st2"), json!({"state": "online"}));
-            t.read(&mut ui, 1).await;
-            assert_eq!(loading(&ui), json!(true));
-        });
     }
 
     #[test]
