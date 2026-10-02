@@ -48,6 +48,15 @@ step() {
 # What this machine has no toolchain for: fine for the quick check, a failure in the full one.
 later() { if [ $full = 1 ]; then failed="$failed $1(no toolchain)"; fi; }
 has() { command -v "$1" > /dev/null 2>&1; }
+# Rust's tests: with cargo-nextest where it is installed (every test binary at once, not one after another), else
+# cargo test. There are no doctests for nextest to miss.
+#   rust_test <workspace dir> <cargo test's arguments>
+rust_test() (
+  cd "$1" && shift
+  if cargo nextest --version > /dev/null 2>&1; then
+    cargo nextest run --no-fail-fast --hide-progress-bar --status-level fail --final-status-level fail "$@"
+  else cargo test -q "$@"; fi
+)
 
 # node_modules as the lockfile says: a fresh worktree has none, an old checkout may miss what was added since.
 # pnpm links from its store, and does nothing when all is there: quick either way.
@@ -128,10 +137,10 @@ if [ $full = 1 ]; then
     if has cargo; then step "shapes" sh scripts/shapes.sh --check; else later "shapes"; fi
   fi
   if part station && touches '^(mesh|vendor)/'; then
-    if has cargo; then step "Rust: station" sh -c 'cd mesh && cargo test --workspace -q'; else later "Rust: station"; fi
+    if has cargo; then step "Rust: station" rust_test mesh --workspace; else later "Rust: station"; fi
   fi
   if part core && touches '^client/'; then
-    if has cargo; then step "Rust: client core" sh -c 'cd client && cargo test --workspace --exclude stillfail-core-wasm -q'; else later "Rust: client core"; fi
+    if has cargo; then step "Rust: client core" rust_test client --workspace --exclude stillfail-core-wasm; else later "Rust: client core"; fi
   fi
   if part android && touches '^(apps/android|client)/'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
