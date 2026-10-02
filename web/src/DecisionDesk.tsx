@@ -7,7 +7,7 @@
 // moved back there first). Answered, the decision is drawn in and pulled up and the next is under it (flyOff, as on the
 // phone), its row closing over the one gone (listMotion.ts); set aside, it goes left and its row down to 待定; dismissed,
 // it goes right.
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router";
 import { animate } from "motion";
 import type { DecisionItem } from "./core/shapes.ts";
@@ -36,7 +36,7 @@ export function openedAt(el: HTMLElement): void {
 /** The question a decision asks: its post's first line (its line without 奏 · , or Decision · in English). */
 const question = (d: DecisionItem) => d.text.replace(/^(?:奏|Decision) · /, "") || d.title;
 
-export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; back: string; onOpen: (path: string) => void }) {
+export function DecisionDesk({ workspace, back, onOpen, footer }: { workspace: string; back: string; onOpen: (path: string) => void; footer?: ReactNode }) {
   const queue = useDecisionQueue(workspace);
   const { view, items, replying, setReplying } = queue;
   // The one picked, by key; once it is gone, the one now where it was.
@@ -110,7 +110,7 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-main.sidebar.resize")} />
         <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
         <div className={css.backRow}>
-          <NavLink className={`${nav.navRow} ${css.back}`} to={back} end><ChevronLeft {...ICON} />{t("web-main.decisions.back")}</NavLink>
+          <NavLink className={css.back} to={back} end><ChevronLeft {...ICON} />{t("web-main.decisions.back")}</NavLink>
         </div>
         <div className={css.title}>
           <span className={css.titleWord}>{t("web-main.decisions.title")}</span>
@@ -130,8 +130,9 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
               </button>
             </div>
           ))}
-          {view.value && !view.value.loading && items.length === 0 && <div className={css.group}>{t("web-main.decisions.empty")}</div>}
+          {view.value && !view.value.loading && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
         </div>
+        {footer}
       </nav>
       <main className={shellCss.main}>
         <div className={css.page}>

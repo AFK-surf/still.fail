@@ -96,7 +96,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
 
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
         {decisions
-          ? <DecisionDesk workspace={entry.id} back={`/w/${entry.id}`} onOpen={(to) => navigate(to)} />
+          ? <DecisionDesk workspace={entry.id} back={`/w/${entry.id}`} onOpen={(to) => navigate(to)} footer={<WorkspaceSidebarFooter entry={entry} decisions />} />
           : <>
           {settings
             ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
@@ -211,18 +211,25 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
       <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
+      <WorkspaceSidebarFooter entry={entry} />
+    </nav>
+  );
+}
+
+/** Shared by the chat and decision lists: workspace controls never disappear. */
+function WorkspaceSidebarFooter({ entry, decisions = false }: { entry: WorkspaceEntry; decisions?: boolean }) {
+  return (
       <div className={nav.navFoot}>
         <WebUpdate />
         <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
-        <DecisionsEntry scope={entry.id} to={`/w/${entry.id}/decisions`} />
+        {!decisions && <DecisionsEntry scope={entry.id} to={`/w/${entry.id}/decisions`} />}
         <WorkspaceOpenJobs scope={entry.id} />
         <div className={nav.navFootRow}>
           <WorkspaceSwitcher current={entry} />
           <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
         </div>
       </div>
-    </nav>
   );
 }
 
