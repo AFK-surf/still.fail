@@ -104,7 +104,9 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
         `SELECT ts.thread, ts.session FROM thread_sessions ts JOIN threads t ON t.id = ts.thread JOIN sessions s ON s.key = ts.session
          WHERE t.archived_at IS NULL AND t.hidden_at IS NULL AND s.archived_at IS NULL ORDER BY t.id DESC LIMIT 1`,
       )
-      .get() as any;
+      .get() as any ??
+      // A station whose chats are all in the archive: any thread with a session (writing brings it back).
+      (store.db.prepare(`SELECT thread, session FROM thread_sessions ORDER BY thread DESC LIMIT 1`).get() as any);
     assert.ok(live, "a thread to write in");
     {
       const last = store.lastEntry(live.thread);
