@@ -277,8 +277,15 @@ impl App {
         let (tokens, homes_of) = (store.clone(), store.clone());
         let mut tools = hub.tools();
         tools.extend(remote.tools());
-        // Phones lent to the agents (adb.rs).
-        tools.extend(crate::adb::tools());
+        // Phones lent to the agents (adb.rs), and the link to this station's 共享调试 to ask for one with.
+        let shares = mesh.clone();
+        tools.extend(crate::adb::tools(Arc::new(move || {
+            let status = shares.status();
+            match (status.origin, status.station, status.workspace_id) {
+                (Some(origin), Some(station), Some(workspace)) => Some(format!("{origin}/w/{workspace}/s/{station}/adb")),
+                _ => None,
+            }
+        })));
         tools.extend(jobs.tools(Arc::new(move |key| homes_of.get_session(key).ok().flatten().map(|row| PathBuf::from(row.workspace)))));
         if feedback {
             let pages = mesh.clone();

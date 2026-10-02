@@ -59,15 +59,18 @@
                 <data android:scheme="https" android:host="app.still.fail" android:pathPrefix="/o/" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
             </intent-filter>
-            <!-- An invitation's link (/invite#<token>) and a chat's link as chats refer to each other (/w/<ws>/s/<station>/chats/<key>). -->
+            <!-- An invitation's link (/invite#<token>), a chat's link as chats refer to each other (/w/<ws>/s/<station>/chats/<key>),
+                 and a station's 共享调试 an agent asks for (/w/<ws>/s/<station>/adb; AdbShare.kt). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="app.still.fail" android:path="/invite" />
                 <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/chats/.*" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/adb" />
                 <data android:scheme="https" android:host="ember.3720.org" android:path="/invite" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/chats/.*" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/adb" />
             </intent-filter>
         </activity>
         <!-- What the installer says of an update (Updates.kt). -->

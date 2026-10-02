@@ -424,6 +424,15 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
                     }
                 }
             }
+            // A station's 共享调试, as its agent asks for it (adb_devices): the page, sharing only once its person taps.
+            "adbShare" -> {
+                if (station.isEmpty()) return false
+                val address = "$ws/$station"
+                if (stack.last() == Screen.AdbShare(address)) return true
+                if (ws != workspace) pickWorkspace(ws)
+                sheet = null; menu = null; forward = true
+                stack = (if (outside || ws != workspace) listOf(Screen.Home) else stack) + Screen.AdbShare(address)
+            }
             else -> return false
         }
         return true

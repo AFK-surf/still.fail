@@ -147,6 +147,8 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
       <Routes>
         <Route path="chats/:chat?" element={<ChatPage />} />
         <Route path="connects/:id" element={<ConnectPage />} />
+        {/* A station's 共享调试 is the Android app's (its agent links here: mesh/app/src/adb.rs). */}
+        <Route path="adb" element={<Empty><p>共享调试要在安卓 app 里打开：在手机上点这个链接，或者在 app 里这台 station 的页面点「共享调试」。</p></Empty>} />
         {/* One Profile page for the workspace: a station's own list is it. */}
         <Route path="settings/accounts" element={<Navigate to={profilesPage(station)} replace />} />
         <Route path="settings/accounts/:id" element={<AccountPage />} />

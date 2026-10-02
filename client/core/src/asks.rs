@@ -235,6 +235,8 @@ pub fn link_target(url: &str, origin: &str) -> Value {
     match s.as_slice() {
         ["invite"] if !u.fragment.is_empty() => json!({ "opens": "invite", "token": u.fragment }),
         ["w", workspace, "s", station, "chats", chat] => json!({ "opens": "chat", "workspace": workspace, "station": station, "chat": chat }),
+        // A station's 共享调试 (adb.rs), as its agent links to it.
+        ["w", workspace, "s", station, "adb"] => json!({ "opens": "adbShare", "workspace": workspace, "station": station }),
         ["o", workspace, station, session] => {
             let service = u.query.split('&').filter_map(|kv| kv.split_once('=')).find(|(k, _)| *k == "service").map(|(_, v)| decode(&v.replace('+', " "))).filter(|v| !v.is_empty());
             json!({ "opens": "item", "workspace": workspace, "station": station, "session": session, "service": service })
@@ -256,6 +258,7 @@ mod tests {
         assert_eq!(link_target("https://app.still.fail/o/ws1/st1/ds:C1:1.0?service=web", cloud),
             json!({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "ds:C1:1.0", "service": "web" }));
         assert_eq!(link_target("https://app.still.fail/o/ws1/st1/k/", cloud)["service"], Value::Null);
+        assert_eq!(link_target("https://app.still.fail/w/ws1/s/st1/adb", cloud), json!({ "opens": "adbShare", "workspace": "ws1", "station": "st1" }));
         // Another site, the cloud on a port, a path it does not open: the system's.
         assert_eq!(link_target("https://example.com/o/ws1/st1/k", cloud), Value::Null);
         assert_eq!(link_target("https://app.still.fail:8443/o/ws1/st1/k", cloud), Value::Null);

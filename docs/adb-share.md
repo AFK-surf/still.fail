@@ -63,7 +63,11 @@ same port for the same phone when it is free, 37000–37999), `adb connect` to i
 as the offer comes, `adb disconnect` as it goes. adb is the station machine's
 (`PATH`, `$ANDROID_HOME`, the SDK's usual places); without it the offer says
 `missing`. Agents see the phones shared with them with the `adb_devices` tool
-(mesh/app/src/adb.rs): each one's serial, model, owner and state.
+(mesh/app/src/adb.rs): each one's serial, model, owner and state, and the link
+to ask a person for theirs: `<cloud>/w/<workspace>/s/<station>/adb` opens the
+station's 共享调试 in the Android app (an App Link; in a chat the app opens it
+itself, `link.parse` → `adbShare`). Sharing starts only once its person taps
+开始共享 there; the web shows where to open it.
 
 Every agent on the station can use a phone shared with it, as with anything on
 that machine: that is what the person agrees to as they share it.
