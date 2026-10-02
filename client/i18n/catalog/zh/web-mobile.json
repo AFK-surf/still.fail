@@ -341,6 +341,7 @@
   "web-mobile.profiles.copyCodeFailed": "没能复制代码，照着上面抄一下",
   "web-mobile.profiles.copyOpen": "复制代码并打开登录页",
   "web-mobile.profiles.credits": "积分余额",
+  "web-mobile.profiles.decisionModels": "自动决策模型",
   "web-mobile.profiles.defaultModel": "默认模型",
   "web-mobile.profiles.delete": "删除 Profile",
   "web-mobile.profiles.deleteText": "只从 {name} 的配置里移除；配置目录和里面的登录状态不会删除。",

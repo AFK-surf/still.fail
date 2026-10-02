@@ -486,6 +486,13 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
     val shown = all.filter { m -> listOf(m, p.names[m] ?: m).any { it.contains(filter.trim(), ignoreCase = true) } }
     val save = { models: List<String> -> onSave(models.distinct().sorted()) }
     val filtered = filter.isNotBlank()
+    // A provider that answers the automatic decisions alone: the models its probe found, as they are.
+    if (p.decisionOnly == true) {
+        SectionHeader(t("web-mobile.profiles.decisionModels"), start = 24.dp)
+        p.decisionModels.orEmpty().forEach { m -> Text(m, fontSize = 15.sp, color = C.ink, modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp)) }
+        p.decisionText?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp)) }
+        return
+    }
     SectionHeader(t(if (saving) "android-settings.models.headerSaving" else "android-settings.models.header", "on" to models.size, "n" to all.size), start = 24.dp)
     Text(
         if (all.isEmpty()) t("android-settings.models.empty") else t("android-settings.models.note"),

@@ -777,6 +777,11 @@ export interface Profile {
 	providerMark?: string;
 	/** A model can be named by hand (a key on a listed provider: not every one lists its models). */
 	canAddModel?: boolean;
+	/** A provider that only answers the automatic decisions (Jev): its models are the ones its decision probe found. */
+	decisionOnly?: boolean;
+	decisionModels?: string[];
+	/** Where the decision probe is, in words (what it found, or why it found none). */
+	decisionText?: string;
 }
 
 export interface TurnRecord {

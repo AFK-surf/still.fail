@@ -788,7 +788,12 @@ data class Profile (
 	val providerName: String? = null,
 	val providerMark: String? = null,
 	/// A model can be named by hand (a key on a listed provider: not every one lists its models).
-	val canAddModel: Boolean? = null
+	val canAddModel: Boolean? = null,
+	/// A provider that only answers the automatic decisions (Jev): its models are the ones its decision probe found.
+	val decisionOnly: Boolean? = null,
+	val decisionModels: List<String>? = null,
+	/// Where the decision probe is, in words (what it found, or why it found none).
+	val decisionText: String? = null
 )
 
 @Serializable

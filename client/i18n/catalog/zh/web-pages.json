@@ -410,6 +410,7 @@
   "web-pages.profiles.copyFailed": "没能复制代码，请照着输入",
   "web-pages.profiles.copyOpen": "复制代码并打开登录页",
   "web-pages.profiles.credits": "积分余额 {credits}",
+  "web-pages.profiles.decisionModels": "自动决策模型",
   "web-pages.profiles.defaultModel": "默认模型",
   "web-pages.profiles.delete": "删除 Profile",
   "web-pages.profiles.deleteBody": "只从 {name} 的配置里移除；配置目录和里面的登录状态不会删除。",

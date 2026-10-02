@@ -184,6 +184,7 @@
   "core-views.present.processes.none": "没有运行中的 agent 进程",
   "core-views.present.processes.running": "{n} 个 agent 进程 {size}",
   "core-views.present.profile.blocked": "被停用",
+  "core-views.present.profile.decision_pending": "正在识别决策模型…",
   "core-views.present.profile.models": "已启用 {enabled} / {n} 个模型",
   "core-views.present.profile.no_models": "还没有列出模型",
   "core-views.present.resets_left": "剩余 {n} 次",

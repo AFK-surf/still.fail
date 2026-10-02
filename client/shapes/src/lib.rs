@@ -926,6 +926,13 @@ pub struct Profile {
     /// A model can be named by hand (a key on a listed provider: not every one lists its models).
     #[serde(default)]
     pub can_add_model: bool,
+    /// A provider that only answers the automatic decisions (Jev): its models are the ones its decision probe found.
+    #[serde(default)]
+    pub decision_only: bool,
+    #[serde(default)]
+    pub decision_models: Vec<String>,
+    /// Where the decision probe is, in words (what it found, or why it found none).
+    pub decision_text: Option<String>,
 }
 
 #[typeshare]

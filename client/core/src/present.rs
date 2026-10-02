@@ -573,6 +573,13 @@ pub fn profile(p: &mut Value) {
     let decision_only = p["access"]["provider"].as_str().and_then(stillfail_shapes::providers::find)
         .is_some_and(|s| s.decision.is_some() && s.chat.is_none() && s.responses.is_none() && s.anthropic.is_none());
     p["canAddModel"] = json!(p["access"]["kind"] == "api-provider" && !decision_only);
+    if decision_only {
+        // Its models are what the decision probe verified: listed as they are, with where the probe is.
+        let found = p.get("check").and_then(|c| c.get("decision")).cloned().unwrap_or(Value::Null);
+        p["decisionOnly"] = json!(true);
+        p["decisionModels"] = if found["state"] == "ready" { found.get("models").cloned().unwrap_or_else(|| json!([])) } else { json!([]) };
+        p["decisionText"] = json!(found["detail"].as_str().filter(|d| !d.is_empty()).map(String::from).unwrap_or_else(|| t!("core-views.present.profile.decision_pending")));
+    }
     p["uses"] = json!(uses);
     // Said where it is not plain from the runtime marks: a key on a provider, or what the automatic decisions can use.
     let plain = matches!(p["access"]["kind"].as_str(), Some("subscription" | "env")) && !uses.contains(&"decision");
@@ -1012,6 +1019,12 @@ mod tests {
         // Jev answers the decisions alone: no runtime, and no model to name by hand; one that lists nothing still can.
         let can_name = |provider: &str| { let mut p = json!({"runtimes": [], "access": {"kind": "env", "provider": provider}}); profile(&mut p); p["canAddModel"] == true };
         assert!(!can_name("jev") && can_name("minimax") && can_name("deepseek"));
+        let mut jev = json!({"runtimes": [], "access": {"kind": "env", "provider": "jev"}, "check": {"state": "ok", "decision": {"state": "ready", "detail": "已识别 1 个决策模型", "models": ["jev-latest"]}}});
+        profile(&mut jev);
+        assert_eq!((jev["decisionOnly"].as_bool(), jev["decisionModels"].clone(), jev["decisionText"].as_str()), (Some(true), json!(["jev-latest"]), Some("已识别 1 个决策模型")));
+        let mut waiting = json!({"runtimes": [], "access": {"kind": "env", "provider": "jev"}, "check": {"state": "ok"}});
+        profile(&mut waiting);
+        assert_eq!((waiting["decisionModels"].clone(), waiting["decisionText"].as_str()), (json!([]), Some("正在识别决策模型…")));
         let mut p = json!({"runtimes": [], "access": {"kind": "env", "provider": "xiaomi"}, "check": {"state": "failed"}});
         profile(&mut p);
         assert_eq!((p["providerName"].as_str(), p["trouble"]["action"].as_str()), (Some("Xiaomi MiMo"), Some("key")));

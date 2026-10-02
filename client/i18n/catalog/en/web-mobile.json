@@ -353,6 +353,7 @@
   "web-mobile.profiles.copyCodeFailed": "Couldn't copy; copy the code above by hand",
   "web-mobile.profiles.copyOpen": "Copy code, open sign-in",
   "web-mobile.profiles.credits": "Credits",
+  "web-mobile.profiles.decisionModels": "Decision models",
   "web-mobile.profiles.defaultModel": "Default model",
   "web-mobile.profiles.delete": "Delete profile",
   "web-mobile.profiles.deleteText": "Removes it from {name}'s config only; the config folder and its sign-in are kept.",

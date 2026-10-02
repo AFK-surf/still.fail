@@ -415,6 +415,16 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
   const [typed, setTyped] = useState("");
   const adding = useDoing("profile.addModel", { station: station.address, id: p.id });
   const addTyped = () => { if (typed.trim() && !adding) { act(api.addModel(p.id, typed.trim()), t("web-mobile.profiles.what.models")); setTyped(""); } };
+  // A provider that answers the automatic decisions alone: the models its probe found, as they are.
+  if (p.decisionOnly) {
+    return (
+      <>
+        <SectionHeader title={t("web-mobile.profiles.decisionModels")} start={24} />
+        {(p.decisionModels ?? []).length > 0 && <ListCard>{(p.decisionModels ?? []).map((m) => <ListRow key={m}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{m}</span></span></ListRow>)}</ListCard>}
+        {p.decisionText && <p className={css.mProfileNote}>{p.decisionText}</p>}
+      </>
+    );
+  }
   return (
     <>
       <SectionHeader title={t(busy ? "web-mobile.profiles.modelsSaving" : "web-mobile.profiles.models", { on: models.length, n: all.length })} start={24} />

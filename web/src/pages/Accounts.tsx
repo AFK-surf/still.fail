@@ -465,6 +465,17 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
     ...((other?.models.length ?? 0) + loose.length ? [{ name: other?.name ?? t("web-pages.profiles.otherSeries"), models: [...(other?.models ?? []), ...loose] }] : [])];
   const ordered = series.flatMap((s) => s.models);
   const on = [...enabled].sort((a, b) => ordered.indexOf(a) - ordered.indexOf(b));
+  // A provider that answers the automatic decisions alone: the models its probe found, as they are.
+  if (profile.decisionOnly) {
+    return (
+      <Section title={t("web-pages.profiles.decisionModels")}>
+        {(profile.decisionModels ?? []).length > 0 ? (
+          <ul className={css.modelChips}>{(profile.decisionModels ?? []).map((m) => <li key={m} className={css.modelChip}><span>{m}</span></li>)}</ul>
+        ) : null}
+        {profile.decisionText && <p className={shellCss.muted}>{profile.decisionText}</p>}
+      </Section>
+    );
+  }
   return (
     <Section title={<>{t("web-pages.profiles.models")}<About>{all.length ? t("web-pages.profiles.modelsAbout") : t("web-pages.profiles.modelsAboutNone")}</About></>}
       actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? t("web-pages.profiles.collapse") : t("web-pages.profiles.chooseModels", { on: enabled.size, all: all.length })}</Button>}>

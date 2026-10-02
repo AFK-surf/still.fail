@@ -431,6 +431,7 @@
   "web-pages.profiles.copyFailed": "Couldn't copy. Type the code in",
   "web-pages.profiles.copyOpen": "Copy code and open sign-in",
   "web-pages.profiles.credits": "Credits {credits}",
+  "web-pages.profiles.decisionModels": "Decision models",
   "web-pages.profiles.defaultModel": "Default model",
   "web-pages.profiles.delete": "Delete profile",
   "web-pages.profiles.deleteBody": "Removes it from {name} only. The config folder and its sign-in stay.",
