@@ -321,7 +321,7 @@ fn row(list: &str, v: &Value, now: f64) -> Value {
             json!({
                 "id": str_of(v, "id"),
                 "title": str_of(v, "name"),
-                "line": [t!("core-views.admin.created_by", name = creator), t!("core-views.admin.people", n = items(v, "members").len()), t!("core-views.admin.stations", n = stations.len())].join(" · "),
+                "line": ([t!("core-views.admin.created_by", name = creator), t!("core-views.admin.people", n = items(v, "members").len()), t!("core-views.admin.stations", n = stations.len())].join(" · ")),
                 "marks": marks,
                 // When a station of it last came to still.fail cloud, and how that stands.
                 "last_seen": latest,
@@ -439,7 +439,7 @@ pub fn user(id: &str, users: &Value, workspaces: &Value, codes: Option<&Value>, 
             "id": str_of(m, "id"),
             "name": str_of(m, "name"),
             "role": role_label(str_of(m, "role")),
-            "line": [role_label(str_of(m, "role")), t!("core-views.admin.people", n = people), t!("core-views.admin.stations", n = stations)].join(" · "),
+            "line": ([role_label(str_of(m, "role")), t!("core-views.admin.people", n = people), t!("core-views.admin.stations", n = stations)].join(" · ")),
         })
     }).collect();
     let admission = u.get("admission").and_then(Value::as_str);
