@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- The app installs its own newer builds (Updates.kt). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- This phone's adb lent to a station's agents (AdbShare.kt): held up meanwhile, saying so. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Turning Wireless debugging on itself, once the station's adb granted it (adb.grant): pm grant takes only what is asked for here. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- Notices of the chats one takes part in (Notices.kt). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -67,6 +72,9 @@
         </activity>
         <!-- What the installer says of an update (Updates.kt). -->
         <receiver android:name=".InstallResult" android:exported="false" />
+        <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Lends this phone's own adb (Wireless debugging) to the user's coding agents over the app's connection, while the user shares it." />
+        </service>
         <!-- FCM's pushes (Push.kt). Firebase is set up by hand from BuildConfig (no google-services.json): its own
              start-up provider is taken out, and no token is made before Push.sync asks for one. -->
         <service android:name=".PushService" android:exported="false">

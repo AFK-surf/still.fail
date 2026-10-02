@@ -1078,7 +1078,7 @@ impl Control {
 }
 
 /// Reads one newline-terminated line; whatever followed stays in `carry`.
-async fn read_line(recv: &mut RecvStream, carry: &mut Vec<u8>) -> Result<Option<String>> {
+pub(crate) async fn read_line(recv: &mut RecvStream, carry: &mut Vec<u8>) -> Result<Option<String>> {
     loop {
         if let Some(i) = carry.iter().position(|&b| b == b'\n') {
             let line: Vec<u8> = carry.drain(..=i).collect();
@@ -1162,6 +1162,32 @@ impl Link {
             _ => Vec::new(),
         };
         Ok((Reply { status, headers, recv, carry, done: false }, SocketSend(send)))
+    }
+
+    /// This phone's adb offered to the station, or asked about (adb.rs; mesh/station's adb.rs): the head line says
+    /// `"adb": ask`, and the send side finishes with it. Answers the station's reply: an offer's body is a line each
+    /// time the station's adb holds the phone otherwise, for as long as it is read; dropping it ends the offer.
+    pub async fn adb(&self, head: RequestHead, ask: Value) -> Result<Reply> {
+        let sent = |e: &dyn std::fmt::Display| mesh_error(format!("请求没送到 station：{e}"));
+        let (mut send, mut recv) = self.conn.open_bi().await.map_err(|e| sent(&e))?;
+        let headers: serde_json::Map<String, Value> = head.headers.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+        let line = format!("{}\n", json!({ "method": head.method, "path": head.path, "headers": headers, "adb": ask }));
+        send.write_all(line.as_bytes()).await.map_err(|e| sent(&e))?;
+        send.finish().map_err(|e| sent(&e))?;
+        let mut carry = Vec::new();
+        let line = read_line(&mut recv, &mut carry).await?.ok_or_else(|| mesh_error("station 没有回应".into()))?;
+        let reply: Value = serde_json::from_str(&line).map_err(|e| mesh_error(format!("station 的回复看不懂：{e}")))?;
+        let status = reply["status"].as_u64().and_then(|s| u16::try_from(s).ok()).ok_or_else(|| mesh_error("station 的回复没有状态码".into()))?;
+        let headers = match &reply["headers"] {
+            Value::Object(map) => map.iter().map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))).collect(),
+            _ => Vec::new(),
+        };
+        Ok(Reply { status, headers, recv, carry, done: false })
+    }
+
+    /// The next stream the station opens on the link: a tunnel to this phone's adb (adb.rs). None once the link closed.
+    pub async fn accept(&self) -> Option<(SendStream, RecvStream)> {
+        self.conn.accept_bi().await.ok()
     }
 
     /// Why the link closed, if it did.

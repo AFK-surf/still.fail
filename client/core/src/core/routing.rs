@@ -4,7 +4,7 @@ use super::*;
 impl Source for Router {
     fn start(&self, topic: &Topic) {
         // Always kept (status.rs): only computed while shown.
-        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::PreviewLoad { .. } | Topic::Doing | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. }) {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::PreviewLoad { .. } | Topic::Doing | Topic::AdbShare | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. }) {
             if let Some(core) = self.core.upgrade() {
                 core.store.invalidate(topic);
             }
@@ -65,7 +65,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs | Topic::PreviewLoad { .. } | Topic::Doing | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. }) {
+        if matches!(topic, Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs | Topic::PreviewLoad { .. } | Topic::Doing | Topic::AdbShare | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. }) {
             return;
         }
         if let Topic::Connection { .. } = topic {
@@ -115,6 +115,9 @@ impl Source for Router {
         }
         if let Topic::PreviewLoad { station, .. } = topic {
             return Some(Ok(self.workspaces.of_station(station).preview_load.value(topic)));
+        }
+        if *topic == Topic::AdbShare {
+            return self.core.upgrade().map(|core| Ok(core.adb.value()));
         }
         if *topic == Topic::Doing {
             // A write on a station that went quiet is being asked again (station.rs): it says so.

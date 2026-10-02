@@ -97,6 +97,8 @@ pub(crate) fn counts(call: &Call, name: &str) -> bool {
         Call::Choose { name, .. } => name == "pick.save",
         Call::Attend(_) => name == "notify.set",
         Call::Ask(_) => name == "dev.signIn",
+        // A pairing, a grant: the station's adb takes a few seconds.
+        Call::Adb(crate::adb::Call::Pair { .. } | crate::adb::Call::Grant) => true,
         _ => false,
     }
 }

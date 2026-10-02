@@ -120,6 +120,8 @@ sealed interface Screen {
     data object NewChat : Screen { override val id = "new" }
     data object Stations : Screen { override val id = "stations" }
     data class Station(val address: String) : Screen { override val id = "station/$address" }
+    /** This phone's adb lent to a station's agents (screens/AdbShare.kt). */
+    data class AdbShare(val address: String) : Screen { override val id = "adb/$address" }
     /** An agent’s execution history, opened as a page over its chat. */
     data class History(val station: String, val of: ChatOf, val key: String, val entry: Long? = null) : Screen { override val id = "history/${Chat(station, of).id}/$key/$entry" }
     /** How an agent runs, changed: its model, how hard it thinks, who runs it. */
@@ -648,6 +650,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
                     Screen.Stations -> StationsScreen(current)
                     is Screen.Station -> StationScreen(current, screen.address)
+                    is Screen.AdbShare -> fail.still.android.screens.AdbShareScreen(current, screen.address)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
                     is Screen.History -> fail.still.android.screens.HistoryScreen(screen.station, screen.of, screen.key, screen.entry)
                     is Screen.RunSettings -> fail.still.android.screens.RunSettingsScreen(screen.station, screen.of, screen.key)

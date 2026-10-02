@@ -735,7 +735,7 @@ pub fn net(raw: &Value, relay_name: &dyn Fn(&str) -> Option<String>) -> Option<V
 
 /// Whether what goes out of a topic shows times in words (sent again each minute).
 pub fn ticks(topic: &Topic) -> bool {
-    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Net { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Connection { .. } | Topic::Draft { .. } | Topic::Prefs | Topic::Doing | Topic::SlackTokens { .. })
+    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. } | Topic::Net { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Connection { .. } | Topic::Draft { .. } | Topic::Prefs | Topic::Doing | Topic::AdbShare | Topic::SlackTokens { .. })
 }
 
 /// A topic's value through the shape the clients are generated from (client/shapes): what it does not declare is
@@ -775,6 +775,7 @@ pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
         Topic::ConnectFlow { .. } => s::conform::<s::ConnectFlowView>(value),
         Topic::SlackTokens { .. } => s::conform::<s::SlackTokensView>(value),
         Topic::Doing => s::conform::<s::DoingView>(value),
+        Topic::AdbShare => s::conform::<s::AdbShareView>(value),
         Topic::WorkspaceMarks { .. } => s::conform::<s::WorkspaceMarksView>(value),
         Topic::Decisions { .. } => s::conform::<s::DecisionsView>(value),
         _ => Ok(value),

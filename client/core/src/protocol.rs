@@ -181,6 +181,8 @@ pub enum Topic {
     /// What people set going on this device and the core has not finished (doing.rs): each call that changes
     /// something, from when it is asked until it answers, with its plain params; the pages show it where it is.
     Doing,
+    /// This phone's adb as lent to a station's agents (adb.rs): whether it is, to which, how the station's adb holds it.
+    AdbShare,
     /// Requests of this station service, observed by the local core.
     PreviewLoad { station: String, port: u16 },
     /// A form owned by one UI, kept only in memory.
@@ -209,7 +211,7 @@ impl Topic {
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } | Topic::JobLog { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status { .. } | Topic::Notices { .. } | Topic::Notify { .. } | Topic::Draft { .. } | Topic::Prefs => None,
             // The core's own (pill.rs, changelog.rs).
-            Topic::PreviewLoad { .. } | Topic::Changelog | Topic::Doing | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. } => None,
+            Topic::PreviewLoad { .. } | Topic::Changelog | Topic::Doing | Topic::AdbShare | Topic::SlackTokens { .. } | Topic::ConnectFlow { .. } => None,
             Topic::Connection { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } | Topic::ChatSearch { .. } | Topic::Archive { .. } | Topic::WorkspaceMarks { .. } | Topic::Usage { .. } | Topic::Decisions { .. } => None,
             Topic::AdminList { .. } | Topic::AdminItem { .. } | Topic::AdminOverview { .. } => None,

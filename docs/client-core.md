@@ -151,6 +151,7 @@ notices are only of the workspace the viewer is in (attend.rs).
 | `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.rs): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. No page shows it any more (the phones dropped the pill over a chat); kept for apps from before |
 | `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's |
 | `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
+| `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.rs; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
 
 ```jsonc
 // live
@@ -396,6 +397,10 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `newChat.create` | `station` | `{ key, runtime, model, effort? }`: `chat.create` with what is picked on that station; the scope's next new chat starts there |
 | `newChat.migrate` | `choices` (by station id), `last?`, `lastIn?` | — ; what a client kept before the core did, taken where the core keeps nothing |
 | `pick.set` / `pick.save` | `station`, `of` (`new`, `session:<key>`, `connect:<id>`, `connect-new`), and for `set` any of `model`, `runtime`, `effort`, `profile`, `open`, `clear` | a model control's picks until saved (the `pick` topic); `save` makes them what it runs on (`session.settings`, `connect.put`, the new chat's choice), `{ saved }` |
+| `adb.share` | `station`, `connect?`, `pair?` (adbd's ports, as the app found them), `device`, `android`, `package`, `minutes?` (60) | — ; lends this phone's adb to the station's agents (native cores only), or the offer as it is now; another station's in place of one before (docs/adb-share.md) |
+| `adb.stop` | — | — ; lent no longer |
+| `adb.pair` | `code` | `{ message }`: the station's adb pairs with the phone through its pairing port |
+| `adb.grant` | — | `{ message }`: the station's adb grants the app `WRITE_SECURE_SETTINGS`, to turn Wireless debugging on itself |
 
 A UI never makes a request of a station or still.fail cloud itself (no method, no
 path): it names what it wants done, and the core knows the request that does it
@@ -467,6 +472,7 @@ client/
 - `notices.rs` — what a person hears about while the client runs (the `notices` topic), from how the chat rows change, each workspace's apart.
 - `attend.rs` — where each UI's attention is (`client.focus`): chats' unread lines and what is read, notifications' settings and which notices show (the `notify` topic).
 - `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down; each workspace's waits, and the device's.
+- `adb.rs` — this phone's adb lent to a station's agents (the `adbShare` topic, `adb.*`): the offer on the station's link, tunnels the station opens to adbd (docs/adb-share.md).
 - `pill.rs` — what a chat says of its connection (the `connection` topic), and when.
 - `activity.rs`, `history.rs`, `present.rs`, `format.rs` — what the clients show (an agent's current activity, its execution history, sessions' and rows' state, words and times), decided once for every client.
 - `error.rs` — the one error type calls and topics report.

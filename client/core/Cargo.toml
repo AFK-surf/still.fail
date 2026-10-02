@@ -31,6 +31,8 @@ tokio = { version = "1", features = ["rt", "macros", "time", "net", "io-util"], 
 [features]
 # The fake host for tests (this crate's and its bindings').
 testing = ["dep:tokio"]
+# Tunnels to this device's adbd (adb.rs): native cores, on tokio's sockets.
+tunnels = ["dep:tokio"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time"] }

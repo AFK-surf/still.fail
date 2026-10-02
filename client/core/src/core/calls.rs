@@ -90,6 +90,8 @@ pub(crate) enum Call {
     ChangelogSeen,
     /// A link's target, a newer app, a picture, the buddies, a dev sign-in (asks.rs).
     Ask(crate::asks::Ask),
+    /// This phone's adb lent to a station's agents, or no longer; its pairing, its grant (adb.rs).
+    Adb(crate::adb::Call),
 }
 
 impl Call {
@@ -117,6 +119,8 @@ impl Call {
             Call::Choose { params, .. } => params.get("station").and_then(Value::as_str),
             Call::PrefsSet { .. } | Call::ClientDevice { .. } | Call::ChangelogSeen => None,
             Call::Ask(_) => None,
+            Call::Adb(crate::adb::Call::Share(offer)) => Some(&offer.station),
+            Call::Adb(_) => None,
             Call::ConnectFlow { topic, .. } => match topic { Topic::ConnectFlow { station, .. } => Some(station), _ => None },
             Call::SlackTokens { topic, .. } => match topic { Topic::SlackTokens { station, .. } => Some(station), _ => None },
         }
@@ -536,6 +540,9 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         _ => {
             let params = params_or_empty(params);
+            if let Some(call) = crate::adb::parse(name, &params) {
+                return Ok(Call::Adb(call?));
+            }
             match (crate::asks::parse(name, &params), crate::ops::request(name, &params)) {
                 (Some(ask), _) => Call::Ask(ask?),
                 (None, Some(op)) => Call::Op(op?),

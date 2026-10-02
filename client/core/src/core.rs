@@ -145,6 +145,8 @@ struct Inner {
     doing: crate::doing::Doing,
     connect_flow: crate::connect_flow::Flows,
     slack_tokens: crate::slack_tokens::Tokens,
+    /// This phone's adb, while it is lent to a station's agents (adb.rs).
+    adb: Rc<crate::adb::Adb>,
 }
 
 struct Socket {
@@ -264,6 +266,7 @@ impl Core {
                 })
             });
             Inner {
+                adb: crate::adb::Adb::new(host.clone(), store.clone(), mesh_source(me.clone()), credentials(me.clone())),
                 connect_flow: crate::connect_flow::Flows::new(store.clone(), choose.clone()),
                 sync,
                 views,

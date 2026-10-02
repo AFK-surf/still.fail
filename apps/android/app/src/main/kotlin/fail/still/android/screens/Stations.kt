@@ -144,6 +144,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
     val app = LocalApp.current
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val s = stations.value?.firstOrNull { it.station == address }
+    val shared by rememberTopic<fail.still.android.data.AdbShareView>(app.core, Topics.adbShare)
     Column(Modifier.fillMaxSize()) {
         val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
@@ -176,6 +177,8 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     GoRow("连接", "${overview.connects.size} 个") { app.push(Screen.Connects(address)) }
                     GoRow("Profile", "${overview.profiles.size} 个") { app.push(Screen.Profiles(address)) }
                     GoRow("记忆") { app.push(Screen.Memory(address)) }
+                    // This phone's adb, lent to its agents (AdbShare.kt).
+                    GoRow("共享调试", if (shared.value?.let { it.sharing && it.station == address } == true) "共享中" else null) { app.push(Screen.AdbShare(address)) }
                 }
                 if (s.online) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             }

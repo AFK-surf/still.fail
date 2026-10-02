@@ -277,6 +277,8 @@ impl App {
         let (tokens, homes_of) = (store.clone(), store.clone());
         let mut tools = hub.tools();
         tools.extend(remote.tools());
+        // Phones lent to the agents (adb.rs).
+        tools.extend(crate::adb::tools());
         tools.extend(jobs.tools(Arc::new(move |key| homes_of.get_session(key).ok().flatten().map(|row| PathBuf::from(row.workspace)))));
         if feedback {
             let pages = mesh.clone();

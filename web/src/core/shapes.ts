@@ -25,6 +25,26 @@ export interface Activity {
 	now: ActivityNow;
 }
 
+/**
+ * This phone's adb as lent to a station's agents (the `adbShare` topic; client/core/src/adb.rs, docs/adb-share.md).
+ * `phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;
+ * `adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,
+ * `off` (Wireless debugging is), `missing` (no adb there) or `failed`, `message` saying more. Stopped by itself (its hour up, a station too old), it
+ * is off with why in `message`. `serial`: what the agents reach it at on the station; `until`: when it stops.
+ */
+export interface AdbShareView {
+	sharing: boolean;
+	station?: string;
+	phase: string;
+	serial?: string;
+	adb?: string;
+	message?: string;
+	until?: number;
+	tunnels: number;
+	connectPort?: number;
+	pairPort?: number;
+}
+
 /** A runtime. */
 export type RuntimeKind = "claude" | "codex";
 

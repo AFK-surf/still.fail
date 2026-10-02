@@ -18,7 +18,8 @@ required-features = ["bindgen"]
 bindgen = ["uniffi/cli"]
 
 [dependencies]
-stillfail-core = { path = "../core" }
+# Its tunnels to the phone's adbd (adb.rs) too.
+stillfail-core = { path = "../core", features = ["tunnels"] }
 uniffi = "=0.31.0"
 tokio = { version = "1", features = ["rt", "time", "sync", "macros"] }
 futures = "0.3"

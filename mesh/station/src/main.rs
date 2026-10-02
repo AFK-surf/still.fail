@@ -22,6 +22,7 @@
 //! answered by a JSON head line `{"status","headers"}` and the response body.
 //! A request's `traceparent` header is passed on to the admin API (see telemetry.rs).
 
+mod adb;
 mod errors;
 mod feedback;
 mod keep;
@@ -308,6 +309,8 @@ struct Station {
     backend: local::Backend,
     ready: watch::Receiver<bool>,
     telemetry: Arc<Telemetry>,
+    /// Phones lent to its agents now (adb.rs).
+    adb: adb::Shares,
 }
 
 impl Station {
@@ -706,7 +709,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
         .await?;
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "mesh listening");
     let traces = telemetry.enabled();
-    let station = Arc::new(Station { data, state: Mutex::new(state), peers_current: std::sync::atomic::AtomicBool::new(false), backend, ready, telemetry: telemetry.clone() });
+    let station = Arc::new(Station { data, state: Mutex::new(state), peers_current: std::sync::atomic::AtomicBool::new(false), backend, ready, telemetry: telemetry.clone(), adb: adb::Shares::default() });
     // Online at still.fail cloud only once the relay can reach us: a device that saw "online" and connected before
     // our relay link was up had its first packets dropped and waited out QUIC's retransmits (~3 s).
     if tokio::time::timeout(std::time::Duration::from_secs(15), endpoint.online()).await.is_err() {
@@ -718,6 +721,8 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     tokio::spawn(notify::forward(station.clone(), endpoint.secret_key().clone()));
     // Bug reports its agents send the still.fail team (stillfail_app::feedback).
     feedback::register(station.clone(), endpoint.secret_key().clone());
+    // Phones lent to its agents, for them to see (adb.rs).
+    adb::register(&station);
     if traces {
         tokio::spawn(telemetry.export(station.clone(), endpoint.secret_key().clone()));
     }
@@ -1098,9 +1103,9 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
             return Ok(());
         }
         let viewer = admitted.viewer;
-        let station = station.clone();
+        let (station, conn) = (station.clone(), conn.clone());
         tokio::spawn(async move {
-            if let Err(error) = relay_request(&station, &viewer, (accepted, via), send, recv).await {
+            if let Err(error) = relay_request(&station, &conn, &viewer, (accepted, via), send, recv).await {
                 info!(%error, "request failed");
             }
         });
@@ -1154,7 +1159,7 @@ impl Traced<'_> {
 
 /// One request stream: to the local admin API, with the verified viewer attached, and back. A span of the caller's
 /// trace when it records one: from the stream's acceptance to its answer's last byte (an event stream's: to its head).
-async fn relay_request(station: &Station, viewer: &Viewer, accepted: Accepted, mut send: SendStream, mut recv: RecvStream) -> Result<()> {
+async fn relay_request(station: &Arc<Station>, conn: &Connection, viewer: &Viewer, accepted: Accepted, mut send: SendStream, mut recv: RecvStream) -> Result<()> {
     let mut carry = Vec::new();
     let head = read_line(&mut recv, &mut carry).await?.ok_or_else(|| anyhow!("empty request"))?;
     let method = head["method"].as_str().unwrap_or("GET").to_uppercase();
@@ -1165,14 +1170,15 @@ async fn relay_request(station: &Station, viewer: &Viewer, accepted: Accepted, m
     let traceparent = span.as_ref().map(|s| s.traceparent()).or(theirs.map(str::to_string));
     let mut traced = Traced { station, span, method: &method, path: &path, via: accepted.1 };
     let mut outcome = Outcome::default();
-    let result = answer(station, viewer, &head, traceparent, carry, &mut send, &mut recv, &mut outcome, &mut traced).await;
+    let result = answer(station, conn, viewer, &head, traceparent, carry, &mut send, &mut recv, &mut outcome, &mut traced).await;
     traced.end(&outcome, false, result.as_ref().err());
     result
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn answer(
-    station: &Station,
+    station: &Arc<Station>,
+    conn: &Connection,
     viewer: &Viewer,
     head: &Value,
     traceparent: Option<String>,
@@ -1189,6 +1195,10 @@ async fn answer(
         send.write_all(br#"{"error":"only the admin API is reachable over the mesh"}"#).await?;
         send.finish()?;
         return Ok(());
+    }
+    // A phone lent to the agents, or asked about (adb.rs): its send side came finished, what it hears goes down the stream.
+    if head["adb"].is_object() {
+        return adb::answer(station, conn, viewer, head, send, outcome, traced).await;
     }
     // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
     if head["socket"].as_bool() == Some(true) {
@@ -1499,7 +1509,7 @@ mod tests {
     fn enrolled(dir: &Path) -> Station {
         let state: CloudState = serde_json::from_value(json!({ "origin": "https://app.still.fail", "station": "abcdef0123456789", "workspace": "w", "workspace_name": "Dev", "name": "mac", "relay_url": "https://app.still.fail", "grant_keys": {} })).unwrap();
         save_state(dir, &state).unwrap();
-        Station { data: dir.to_path_buf(), state: Mutex::new(state), peers_current: std::sync::atomic::AtomicBool::new(false), backend: local::Backend::default(), ready: watch::channel(true).1, telemetry: Telemetry::new(false) }
+        Station { data: dir.to_path_buf(), state: Mutex::new(state), peers_current: std::sync::atomic::AtomicBool::new(false), backend: local::Backend::default(), ready: watch::channel(true).1, telemetry: Telemetry::new(false), adb: adb::Shares::default() }
     }
 
     #[test]

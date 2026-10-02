@@ -4,6 +4,7 @@
 //! `Rc<RefCell<…>>`. The platform comes in through [`host::Host`].
 
 pub mod accounts;
+pub mod adb;
 pub mod activity;
 pub mod asks;
 pub mod attend;

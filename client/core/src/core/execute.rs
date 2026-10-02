@@ -490,6 +490,7 @@ impl Inner {
                 }
             }
             Call::Ask(ask) => self.asks.run(ask, &self.accounts).await,
+            Call::Adb(call) => self.adb.run(call).await,
             Call::Migrate { accounts, device } => {
                 if let Some(accounts) = accounts {
                     self.accounts.migrate(accounts).await?;

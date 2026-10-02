@@ -2070,5 +2070,24 @@ fn speed_summary_only_shows_effective_fast_and_ignores_unsaved_drafts() {
                 }
             }
         }
+fn lends_the_phone_s_adb_through_its_calls_and_topic() {
+    run(async {
+        let (host, core) = station_core(0.0).await;
+        let ui = core.connect();
+        core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::AdbShare });
+        host.settle().await;
+        let mut values = HashMap::new();
+        apply(&host, &mut values);
+        assert_eq!((values[&1]["sharing"].clone(), values[&1]["phase"].clone()), (json!(false), json!("off")));
+        core.receive(ui, ClientMessage::Call { id: 2, call: "adb.share".into(), params: json!({ "station": "ws1/st1", "connect": 41234, "device": "Pixel" }) });
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!((values[&1]["sharing"].clone(), values[&1]["station"].clone(), values[&1]["connectPort"].clone()), (json!(true), json!("ws1/st1"), json!(41234)));
+        assert!(values[&1]["until"].is_number());
+        core.receive(ui, ClientMessage::Call { id: 3, call: "adb.stop".into(), params: json!({}) });
+        host.settle().await;
+        apply(&host, &mut values);
+        // Off again, every field of the offer gone (the clients' shape takes their absence).
+        assert_eq!(values[&1], json!({ "sharing": false, "phase": "off", "tunnels": 0 }));
     });
 }

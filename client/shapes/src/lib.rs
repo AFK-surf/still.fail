@@ -1706,6 +1706,29 @@ pub struct DoingItem {
     pub note: Option<String>,
 }
 
+/// This phone's adb as lent to a station's agents (the `adbShare` topic; client/core/src/adb.rs, docs/adb-share.md).
+/// `phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;
+/// `adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,
+/// `off` (Wireless debugging is), `missing` (no adb there) or `failed`, `message` saying more. Stopped by itself (its hour up, a station too old), it
+/// is off with why in `message`. `serial`: what the agents reach it at on the station; `until`: when it stops.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AdbShareView {
+    pub sharing: bool,
+    pub station: Option<String>,
+    pub phase: String,
+    pub serial: Option<String>,
+    pub adb: Option<String>,
+    pub message: Option<String>,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub until: Option<i64>,
+    pub tunnels: u32,
+    pub connect_port: Option<u32>,
+    pub pair_port: Option<u32>,
+}
+
 /// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.
 #[typeshare]
 #[skip_serializing_none]

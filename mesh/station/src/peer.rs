@@ -177,6 +177,7 @@ mod tests {
             backend,
             ready: watch::channel(true).1,
             telemetry: Telemetry::new(false),
+            adb: adb::Shares::default(),
         });
         let accepted = target.clone();
         let serving = station.clone();
