@@ -4,6 +4,8 @@
 //! mesh/cloud.json with a grant key of our own (its private half in <data>/grant.key), so that credentials this tool
 //! signs are a member's. The rest of cloud.json (relays, origin) is the caller's to fill in.
 //! `station-load ask <data> <station id> <ip:port,…> <path>`: one request, its answer's head on stderr, its body on stdout.
+//! With CREDENTIAL_URL (a dev cloud's `/__dev/credential`), the credential is the cloud's for this device instead of
+//! one signed with <data>/grant.key; a station id with no addresses (`-`) is reached through relays and discovery.
 //! `station-load load <data> <station id> <ip:port,…> <seconds> <concurrency> <path>…`: requests on one connection,
 //! `concurrency` at a time, round-robin over the paths, for `seconds`; how they went.
 
@@ -58,8 +60,11 @@ fn setup(data: &Path) -> Result<()> {
     Ok(())
 }
 
-/// A member's credential for this device, as still.fail cloud signs one.
+/// A member's credential for this device: the dev cloud's (CREDENTIAL_URL), else one signed as still.fail cloud signs.
 fn credential(data: &Path, device: &str) -> Result<String> {
+    if let Ok(url) = std::env::var("CREDENTIAL_URL") {
+        return dev_credential(&url, device);
+    }
     let bytes: [u8; 32] = std::fs::read(data.join("grant.key"))?.try_into().map_err(|_| anyhow::anyhow!("grant.key"))?;
     let grant = SigningKey::from_bytes(&bytes);
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
@@ -73,13 +78,33 @@ fn credential(data: &Path, device: &str) -> Result<String> {
     Ok(format!("{head}.{body}.{sig}"))
 }
 
+/// GET <url>?device=<hex> over plain HTTP (a dev cloud on this machine): `{credential}`.
+fn dev_credential(url: &str, device: &str) -> Result<String> {
+    use std::io::{Read, Write};
+    let rest = url.strip_prefix("http://").context("CREDENTIAL_URL: http only")?;
+    let (host, path) = rest.split_once('/').map(|(h, p)| (h, format!("/{p}"))).unwrap_or((rest, "/".into()));
+    let mut tcp = std::net::TcpStream::connect(host)?;
+    write!(tcp, "GET {path}?device={device} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")?;
+    let mut answer = String::new();
+    tcp.read_to_string(&mut answer)?;
+    let body = answer.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("");
+    let value: Value = serde_json::from_str(body.trim()).with_context(|| format!("credential answer: {body}"))?;
+    value["credential"].as_str().map(str::to_string).with_context(|| format!("no credential in {value}"))
+}
+
 async fn connect(data: &Path, id: &str, addrs: &str) -> Result<Connection> {
     let bytes: [u8; 32] = hex::decode(id)?.try_into().map_err(|_| anyhow::anyhow!("station id"))?;
     let mut addr = EndpointAddr::new(PublicKey::from_bytes(&bytes)?);
-    for a in addrs.split(',').filter(|a| !a.is_empty()) {
+    for a in addrs.split(',').filter(|a| !a.is_empty() && *a != "-") {
         addr = addr.with_ip_addr(a.parse::<SocketAddr>()?);
     }
-    let endpoint = Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).bind().await?;
+    // Relays (RELAYS, comma-separated) when given: reached as a device far away would.
+    let relays: Vec<iroh::RelayUrl> = std::env::var("RELAYS").ok().into_iter().flat_map(|r| r.split(',').filter(|u| !u.is_empty()).map(|u| u.parse()).collect::<Vec<_>>()).collect::<Result<_, _>>()?;
+    for relay in &relays {
+        addr = addr.with_relay_url(relay.clone());
+    }
+    let mode = if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays)) };
+    let endpoint = Endpoint::builder(Minimal).relay_mode(mode).bind().await?;
     let conn = endpoint.connect(addr, ALPN).await?;
     let (mut send, mut recv) = conn.open_bi().await?;
     let device = hex::encode(endpoint.id().as_bytes());
