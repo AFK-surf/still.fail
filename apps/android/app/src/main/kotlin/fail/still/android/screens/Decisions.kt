@@ -12,6 +12,14 @@
 // of a type this app does not know is answered in its chat. In a chat only an options card has anything under it.
 package fail.still.android.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.ripple
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -106,15 +114,23 @@ import kotlinx.coroutines.launch
  */
 @Composable
 internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, failed: String? = null, onPick: (DecisionOption) -> Unit) {
+    val still = reducedMotion()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { o ->
             val strong = o.recommended == true
             val ink = if (strong) C.bg else C.ink
             val free = enabled && busy == null
+            val touch = remember(o.label) { MutableInteractionSource() }
+            val pressed by touch.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                if (pressed && !still) 0.97f else 1f,
+                tween(if (still) 0 else if (pressed) 80 else 180, easing = Ease.Out), label = "decision press",
+            )
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (strong) C.ink else C.chip)
+                Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
+                    .clip(RoundedCornerShape(12.dp)).background(if (strong) C.ink else C.chip)
                     .alpha(if (enabled) 1f else 0.5f)
-                    .clickable(enabled = free) { onPick(o) }
+                    .clickable(enabled = free, interactionSource = touch, indication = ripple(color = ink)) { onPick(o) }
                     .padding(horizontal = 14.dp, vertical = 10.dp)
                     .semantics(mergeDescendants = true) {},
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -141,18 +157,37 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
     // Buttons only for an options card (a core before cards: `options` alone); a text card is answered on the 奏 page.
     val options = if (card != null) card.options.takeIf { card.type == "options" } else m.options
     val decision = m.decision
-    if (decision?.resolved == true || decision?.dismissed == true) {
-        decision.text?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
+    val resolved = decision?.resolved == true || decision?.dismissed == true
+    if (options.isNullOrEmpty()) {
+        val label = if (resolved) decision?.text else card?.assigneeText
+        label?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
         return
     }
-    card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
-    if (options.isNullOrEmpty()) return
     val app = LocalApp.current
     val station = ctx.station
+    val still = reducedMotion()
     val busy = options.firstOrNull { app.isDoing("decision.answer", "station" to station, "thread" to m.thread, "seq" to m.seq, "option" to it.label) }?.label
-    DecisionOptions(
-        options, Modifier.padding(top = 6.dp), enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
-    ) { o -> app.act("回答") { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
+    Column {
+        // Keep the actual buttons until their height reaches zero; topic updates used to remove them in one frame.
+        AnimatedVisibility(
+            visible = !resolved, enter = EnterTransition.None,
+            exit = shrinkVertically(tween(if (still) 0 else 240, easing = Ease.Out), shrinkTowards = Alignment.Top),
+        ) {
+            Column {
+                card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
+            DecisionOptions(
+                options, Modifier.padding(top = 6.dp),
+                enabled = !resolved && !ctx.view.offline && ctx.view.archived != true, busy = busy,
+            ) { o -> app.act("回答") { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
+            }
+        }
+        AnimatedVisibility(
+            visible = resolved && decision?.text != null,
+            enter = expandVertically(tween(if (still) 0 else 240, easing = Ease.Out), expandFrom = Alignment.Top),
+        ) {
+            Text(decision?.text.orEmpty(), fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp))
+        }
+    }
 }
 
 // ── the page ───────────────────────────────────────────────────────────

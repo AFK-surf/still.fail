@@ -442,6 +442,29 @@ class DecisionsTest {
         rule.onNodeWithText("加粗").assertDoesNotExist()
     }
 
+    private fun answerMotion(dark: Boolean) {
+        val h = chat(dark)
+        val p = option(both).center
+        val rec = h.record("decision-answer-${if (dark) "dark" else "light"}")
+        press(p)
+        rec.frames(8)
+        send(MotionEvent.ACTION_UP, p)
+        rec.frames(8)
+        assertOneCall(h, "decision.answer", gap.copy(seq = 5))
+        h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(
+            chatTalk.map { if (it.seq == 5L) it.copy(decision = MessageDecision(resolved = true, text = "左子健 选了「两处一起改」")) else it },
+            title = "侧栏和设置的几处间距",
+        ))
+        h.deliver()
+        rec.frames(32)
+        rec.end()
+        rule.onNodeWithText(both.label, substring = false).assertDoesNotExist()
+        rule.onNodeWithText("左子健 选了「两处一起改」").assertExists()
+    }
+
+    @Test fun answerMotionLight() { answerMotion(false) }
+    @Test fun answerMotionDark() { answerMotion(true) }
+
     // ── pictures ──
 
     private fun shot(name: String) {
