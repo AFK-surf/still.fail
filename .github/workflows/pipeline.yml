@@ -92,8 +92,8 @@ jobs:
           fi
 
   # The full check, in four parts side by side on mini1's runners (scripts/check.sh, STILLFAIL_CHECK_PART): each part
-  # untouched by the range is over in seconds. Each part keeps its own Cargo target on mini1, shared by the runners
-  # (Cargo's lock lets one build at a time), so a check builds only what changed.
+  # untouched by the range is over in seconds. Each part keeps its own Cargo target on mini1 for each set of
+  # dependencies (setup-mac's STILLFAIL_CI_KEY), shared by the runners, so a check builds only what changed.
   check:
     needs: plan
     runs-on: [self-hosted, mini1]
@@ -110,7 +110,10 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
       - name: A Cargo target for this part
-        run: echo "CARGO_TARGET_DIR=$HOME/stillfail-ci/check-${{ matrix.part }}" >> "$GITHUB_ENV"
+        run: |
+          dir="$HOME/stillfail-ci/check-${{ matrix.part }}-$STILLFAIL_CI_KEY"
+          mkdir -p "$dir" && touch "$dir"
+          echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
       - name: Full check (${{ matrix.part }})
         run: |
           range='${{ needs.plan.outputs.range }}'

@@ -23,7 +23,7 @@ case "${1:?usage: release.sh station|android}" in
     (cd mesh && cargo build --release -p stillfail-station)
     mkdir -p mesh/target/release
     cp "$CARGO_TARGET_DIR/release/stillfail-station" mesh/target/release/
-    export LINUX_TARGET_DIR="$HOME/stillfail-ci/linux"
+    export LINUX_TARGET_DIR="${LINUX_TARGET_DIR:-$HOME/stillfail-ci/linux}"
     sh scripts/release.sh ${beta:+$beta}
     ;;
   android)
