@@ -98,7 +98,7 @@ const LIST_WAIT_MS: u64 = 3_000;
 
 const EVENT_STREAM: &str = "text/event-stream";
 /// How a stream ends whose link was replaced by another (it is opened again on it at once).
-fn replaced() -> String {
+fn replaced_words() -> String {
     t!("station.core.replaced")
 }
 /// A write's key (mesh/app/src/admin/once.rs).

@@ -50,17 +50,18 @@ pub fn of_core<'a>(mut headers: impl Iterator<Item = (&'a str, &'a str)>) -> Lan
 }
 
 /// The language a browser asks in: as a core's, else its Accept-Language (the first named; `*` names none).
-pub fn of_browser<'a>(headers: impl Iterator<Item = (&'a str, &'a str)> + Clone) -> Lang {
-    if let Some((_, v)) = headers.clone().find(|(k, _)| k.eq_ignore_ascii_case(HEADER)) {
+pub fn of_browser<'a>(headers: impl Iterator<Item = (&'a str, &'a str)>) -> Lang {
+    let headers: Vec<(&str, &str)> = headers.collect();
+    if let Some((_, v)) = headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(HEADER)) {
         return Lang::from_locale(v);
     }
-    let accepted = headers.into_iter().find(|(k, _)| k.eq_ignore_ascii_case("accept-language")).map(|(_, v)| v).unwrap_or("");
+    let accepted = headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("accept-language")).map(|(_, v)| *v).unwrap_or("");
     let first = accepted.split([',', ';']).next().unwrap_or("").trim();
     Lang::from_locale(if first == "*" { "" } else { first })
 }
 
 /// A hyper request's headers, as `of_core` and `of_browser` read them.
-pub fn headers(map: &hyper::HeaderMap) -> impl Iterator<Item = (&str, &str)> + Clone {
+pub fn headers(map: &hyper::HeaderMap) -> impl Iterator<Item = (&str, &str)> {
     map.iter().filter_map(|(k, v)| v.to_str().ok().map(|v| (k.as_str(), v)))
 }
 

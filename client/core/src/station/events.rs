@@ -200,7 +200,7 @@ impl Stations {
                                 break;
                             }
                             Either::Right((Either::Right(_), _)) => {
-                                why = replaced();
+                                why = replaced_words();
                                 break;
                             }
                         };
@@ -218,7 +218,7 @@ impl Stations {
                             }
                         }
                     }
-                    let woke = why == wake::GONE || why == wake::NETWORK || why == replaced();
+                    let woke = why == wake::GONE || why == wake::NETWORK || why == replaced_words();
                     if !self.is_current(&station, generation) {
                         return;
                     }
