@@ -1013,7 +1013,8 @@ fn add_client_column(db: &Connection) -> Result<()> {
     db.execute_batch("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL")?;
     // What people said lately is looked for on every list of chats (the cards they answered: `answers_since`).
     db.execute_batch("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'")?;
-    if !has("merged", "client")? {
+    // A prior upgrade may have added the table column without rebuilding this view.
+    if !has("merged", "client")? || !has("merged", "agent_identity")? {
         db.execute_batch(&format!("BEGIN; DROP VIEW IF EXISTS merged; {MERGED} COMMIT;"))?;
     }
     Ok(())

@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 消息模型数据库迁移修复：发布并更新 station 即可。旧库的 merged 视图已有 client 但缺 agent_identity 时也必须重建；已被上一版加过表字段的库会在重开时自动修复视图，不回填或改动历史消息。上线检查旧聊天可正常读取、新消息可发送。
+
 - 服务显示名称迁移：API `/healthz`、relay `/ping` 和新 cloud traces 使用 stillfail-cloud / stillfail-relay。API 由 CI 发布；relay 仍需单独部署（连接会重连）。历史 traces 查询同时匹配旧新名称，JWT issuer 兼容不变。
 
 - 历史消息模型：station 仅给新消息保存模型/effort 快照，不记录 runtime，不恢复或回填旧消息。需要更新 station 和客户端 core（web/桌面/安卓）；先发 station 再发客户端。没有快照的消息沿用当前会话模型的原显示逻辑；旧客户端连新 station 仍保持旧显示。上线验证：用模型 A 发消息，切到 B 再发，重开聊天/归档恢复后第一条仍显示 A。

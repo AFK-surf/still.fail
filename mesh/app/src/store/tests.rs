@@ -518,3 +518,42 @@ fn a_message_keeps_its_model_after_switching_editing_and_archiving() {
     store.set_archived("a", false, MANUAL).unwrap();
     check();
 }
+
+
+#[test]
+fn an_existing_client_view_gains_model_identity_even_after_a_partial_upgrade() {
+    for already_added in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ember.db");
+        {
+            let db = Connection::open(&path).unwrap();
+            db.execute_batch(SCHEMA).unwrap();
+            // The immediately previous release already had client, but no model snapshot.
+            db.execute_batch(&MERGED.replace("m.agent_identity, ", "")).unwrap();
+            if already_added {
+                // The broken upgrade added the column while leaving this old view in place.
+                db.execute_batch("ALTER TABLE entries ADD COLUMN agent_identity TEXT").unwrap();
+            }
+            db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}")).unwrap();
+            db.execute(
+                "INSERT INTO entries (thread, n, kind, ts, author_kind, author, text, client, at)
+                 VALUES (1, 1, 'message', '1.1', 'person', 'local', 'kept', 'android old', 100)", [],
+            ).unwrap();
+            db.execute(
+                "INSERT INTO entries (thread, n, kind, target, author_kind, author, text, at)
+                 VALUES (1, 2, 'edit', 1, 'person', 'local', 'edited', 200)", [],
+            ).unwrap();
+        }
+        // Both the first upgrade and subsequent opens must keep existing data readable.
+        for _ in 0..2 {
+            let store = Store::open(path.to_str().unwrap(), None).unwrap();
+            let message = store.message_at(1, "1.1").unwrap().unwrap();
+            assert_eq!(message.text, "edited");
+            assert_eq!(message.client.as_deref(), Some("android old"));
+            assert_eq!(message.edited_at, Some(200));
+            assert!(message.agent_identity.is_none(), "do not backfill old messages");
+            assert_eq!(store.messages_before(1, None, 10).unwrap(), vec![message.clone()]);
+            assert_eq!(store.last_message(1).unwrap(), Some(message));
+        }
+    }
+}
