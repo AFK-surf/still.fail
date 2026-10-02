@@ -355,15 +355,6 @@ pub struct PendingMessage {
 pub struct ThreadSummary {
     pub thread: ThreadRow,
     pub sessions: Vec<Membership>,
-    /// Audit metadata only: no conversation text or API credentials.
-    pub fn record_decision(&self, session: &str, result: &Value) -> Result<()> {
-        self.with(|i, _| {
-            i.db.execute("INSERT INTO decision_checks(session, created_at, result) VALUES (?, ?, ?)",
-                params![session, now_ms(), result.to_string()])?;
-            Ok(())
-        })
-    }
-
     /// The thread's last entry number, 0 before anything is said.
     pub last: i64,
     /// The latest message as merged, for lists.
@@ -1733,6 +1724,15 @@ impl Store {
                 changes,
             )?;
             Ok(Some(message.thread))
+        })
+    }
+
+    /// Audit metadata only: no conversation text or API credentials.
+    pub fn record_decision(&self, session: &str, result: &Value) -> Result<()> {
+        self.with(|i, _| {
+            i.db.execute("INSERT INTO decision_checks(session, created_at, result) VALUES (?, ?, ?)",
+                params![session, now_ms(), result.to_string()])?;
+            Ok(())
         })
     }
 
