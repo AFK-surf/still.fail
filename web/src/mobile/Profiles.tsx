@@ -724,7 +724,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
   };
   return (
     <>
-      {inForm ? <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.machineLogins")}</b> : <SectionHeader title={t("web-mobile.profiles.machineLogins")} start={24} />}
+      <SectionHeader title={t("web-mobile.profiles.machineLogins")} start={inForm ? 6 : 24} />
       <ListCard>
         {offers.map((l) => {
           const blocked = l.quota?.state === "blocked";
