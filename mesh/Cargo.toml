@@ -14,6 +14,15 @@ iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../vendor/noq-udp" }
 iroh = { path = "../vendor/iroh" }
 
+# Dev and test builds (cargo test in scripts/check.sh, in a worktree each): line numbers for our own code and
+# no debug info for dependencies keep target/ several times smaller and linking quicker; backtraces still
+# name file and line.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 # Symbols stay out of the release (the station package carries this binary).
 strip = true
