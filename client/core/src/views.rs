@@ -2087,7 +2087,12 @@ mod tests {
             assert_eq!(sorted(t.started()), sorted(vec![workspace(), Topic::Prefs, link("ws/st"), rows("ws/st"), overview("ws/st")]));
             t.set(link("ws/st"), json!({"state": "online"}));
             let now = t.host.now_ms();
-            t.set(rows("ws/st"), json!([deciding("k1", 7, 5, now - 1000.0, false), deciding("k2", 8, 3, now - 5000.0, false), deciding("k3", 9, 4, now - 9000.0, true), row("10", now)]));
+            let mut others = deciding("other", 11, 7, now - 12000.0, false);
+            others["mine"] = json!(true); // A helper participates but is not the assignee.
+            others["decision"]["card"]["assignee"] = json!("other@x.com");
+            let mut legacy = deciding("legacy", 12, 7, now - 14000.0, false);
+            legacy["decision"]["card"].as_object_mut().unwrap().remove("assignee");
+            t.set(rows("ws/st"), json!([deciding("k1", 7, 5, now - 1000.0, false), deciding("k2", 8, 3, now - 5000.0, false), deciding("k3", 9, 4, now - 9000.0, true), others, legacy, row("10", now)]));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             let order = |v: &Value| v["items"].as_array().unwrap().iter().map(|i| i["session"].as_str().unwrap().to_string()).collect::<Vec<_>>();
@@ -2097,6 +2102,7 @@ mod tests {
             assert_eq!((it["station"].as_str(), it["stationName"].as_str(), it["thread"].as_u64(), it["seq"].as_u64(), it["title"].as_str()), (Some("ws/st"), Some("studio"), Some(8), Some(3), Some("k2 的标题")));
             assert_eq!(it["text"], "奏 · k2 要合吗？");
             assert_eq!(it["options"], json!([{ "label": "先不改", "detail": "留到下周" }, { "label": "合", "recommended": true }]), "the recommended one last");
+            assert_eq!(it["card"]["assigneeText"], "需要你决策");
             assert_eq!(it["message"]["options"], it["options"]);
             assert_eq!(it["message"]["decision"], json!({ "resolved": false }));
             assert_eq!(it["message"]["by"]["agent"], "k2", "its agent, as the chat names it");
@@ -2127,7 +2133,9 @@ mod tests {
             let mut blocked = deciding("k1", 7, 5, now - 1000.0, false);
             blocked["agents"][0]["lastTurn"] = json!({ "kind": "message", "declared": "block", "ending": "need_decision", "outcome": "completed", "startedAt": 1, "endedAt": 1 });
             blocked["mine"] = json!(true);
-            t.set(rows("ws/st"), json!([blocked, deciding("k2", 8, 3, now - 2000.0, true), deciding("k3", 9, 4, now - 3000.0, false)]));
+            let mut others = deciding("other", 11, 7, now - 4000.0, false);
+            others["decision"]["card"]["assignee"] = json!("other@x.com");
+            t.set(rows("ws/st"), json!([blocked, deciding("k2", 8, 3, now - 2000.0, true), deciding("k3", 9, 4, now - 3000.0, false), others]));
             t.read_all(&mut [(&mut chats, 1), (&mut marks, 2)]).await;
             let v = chats.value.clone().unwrap();
             let all: Vec<Value> = v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().clone()).collect();

@@ -836,7 +836,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
-      {options && m.options && <MessageDecision message={m} thread={thread} />}
+      {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
       {archive && <ArchiveOption thread={m.thread} onArchive={archive} />}
     </OthersMessage>
   );
