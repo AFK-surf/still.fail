@@ -318,7 +318,8 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
             if (!still) {
                 drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
             }
-            local.arriving = true
+            // The next card is already laid out underneath the departing one.
+            local.arriving = n == 1
             val alone = n == 1
             then()
             busy = false
@@ -418,6 +419,11 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                 contentAlignment = if (x > 0) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
                 Text(if (x > 0) "不再提醒" else "待定", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
+            }
+            if (busy && n > 1) {
+                Column(Modifier.fillMaxSize().background(C.bg)) {
+                    Face(shown[1], onPick = {}, onReply = {}, onField = {})
+                }
             }
             Column(
                 Modifier.fillMaxSize().graphicsLayer {
