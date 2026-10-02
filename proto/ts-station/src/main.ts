@@ -45,9 +45,6 @@ const endpoint = await native.bind({
 writeFileSync(join(data, "ts-station.json"), JSON.stringify({ id: endpoint.id(), sockets: endpoint.sockets(), pid: process.pid }));
 console.error(`ts-station: ${endpoint.id()} on ${endpoint.sockets().join(", ")}`);
 
-for (let conn = await endpoint.accept(); conn; conn = await endpoint.accept()) {
-  serve(conn).catch((error) => console.error(`ts-station: connection ended: ${error.message}`));
-}
 
 // ---- the wire: one JSON line, then bytes (mesh/station/src/main.rs `read_line`, `write_line`) ----
 
@@ -187,4 +184,10 @@ async function request(stream: Stream, viewer: Admitted["viewer"]) {
   } catch (error) {
     return answer(error instanceof HttpError ? error.status : 500, { error: (error as Error).message });
   }
+}
+
+// ---- connections, as they come ----
+
+for (let conn = await endpoint.accept(); conn; conn = await endpoint.accept()) {
+  serve(conn).catch((error) => console.error(`ts-station: connection ended: ${error.message}`));
 }
