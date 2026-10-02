@@ -27,12 +27,14 @@ import { MachineSessions } from "./MachineSessions.tsx";
 import { composerText } from "./Chat.css.ts";
 import { notSent, sendingFirst } from "./madeChat.ts";
 import { OVER_DOCK } from "./Chat.tsx";
+import { LOCAL_MS } from "./motion.ts";
 import { t } from "./i18n.ts";
 
 /** A new chat in a workspace; `onCreated` gets the station's address and the new item's session (its address). */
 export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, session: string): void }) {
-  // What the core keeps of it (../pick.ts): held back a moment for its first value, so the page comes as it will be.
-  useReady({ topic: "newChat", scope }, 250);
+  // What the core keeps of it (../pick.ts): held back a moment for its first value from the device (LOCAL_MS, not for
+  // the network), so the page comes as it will be.
+  useReady({ topic: "newChat", scope }, LOCAL_MS);
   const chat = useNewChat(scope);
   const choice = chat.value;
   const onStation = (id: string) => chat.pick({ station: id });

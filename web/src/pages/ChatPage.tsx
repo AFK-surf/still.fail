@@ -21,7 +21,7 @@ import { ChatPanel, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
-import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
+import { animate, EASE_OUT, LOCAL_MS, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady } from "../core/react.ts";
@@ -61,8 +61,6 @@ export function ChatPage() {
   return <ChatScreen key={opened} of={{ session: opened }} />;
 }
 
-const READY_MS = 250;
-
 /** Chats made here, by the key their station gave them: the core's key their page was opened with. */
 const renamed = new Map<string, string>();
 
@@ -84,9 +82,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const link = useLink();
   const navigate = useNavigate();
   const call = useStationCall(station.address);
-  // Coming from another page, that page stays until this chat is read (from the device, mostly at once), rather than
-  // an empty one showing between; past READY_MS this one shows, waiting.
-  useReady({ topic: "chat", station: station.address, ...of }, READY_MS);
+  // Coming from another page, that page stays until this chat is read from the device, rather than an empty one
+  // showing between; not for one that has to come from its station: past LOCAL_MS this one shows, waiting.
+  useReady({ topic: "chat", station: station.address, ...of }, LOCAL_MS);
   const chatView = useChat(station.address, of);
   useChatOpened(chatView.value);
   // A chat made here (`chat.create`) goes by the core's key until its station has made it: sent to by it meanwhile, and

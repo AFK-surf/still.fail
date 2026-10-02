@@ -18,6 +18,7 @@ import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, M
 import { stationBase, useStation } from "../station.tsx";
 import { LoadingPill, PlaceholderMessages } from "./Loading.tsx";
 import { PENDING } from "../lastChat.ts";
+import { LOCAL_MS } from "../motion.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
@@ -58,8 +59,9 @@ export function ChatScreen() {
     if (asked) app.push(servicePath(station.address, key, asked));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
-  // The page slides in once its chat is read (from the device, mostly at once; 250 ms at most), not empty.
-  useReady({ topic: "chat", station: station.address, session: key }, 250);
+  // The page slides in once its chat is read from the device (LOCAL_MS at most), not empty; one that has to come from
+  // its station is not waited for: the page slides in, showing it coming.
+  useReady({ topic: "chat", station: station.address, session: key }, LOCAL_MS);
   const chat = useChat(station.address, { session: key });
   const view = chat.value;
   const navigate = useNavigate();

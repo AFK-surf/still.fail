@@ -304,7 +304,9 @@ private fun ViewerLayer(open: ViewerOpen) {
     LaunchedEffect(Unit) {
         focus.clearFocus(); keyboard?.hide()
         val thumb = thumbOf(open.opened)
-        val known = thumb != null && withTimeoutOrNull(400) {
+        // Its size waited for only as long as what is here takes (sent with it, its thumbnail's or still's, laid out):
+        // one that has to come over the network (at no time known) is not waited for; the viewer fades in, showing it come.
+        val known = thumb != null && withTimeoutOrNull(100) {
             flight.phase = ViewerFlight.Phase.Waiting
             snapshotFlow { flight.target() }.first { it != null }
         } != null
