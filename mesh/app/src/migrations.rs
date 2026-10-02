@@ -15,7 +15,7 @@ pub const NOTES: &[(i64, &str)] = &[
     (7, "chat_post now accepts only to + withdraw (your question’s message ts) to remove your own resolved or obsolete answer card. It preserves the post and does not mark work complete; continue and record the appropriate ending state."),
     (8, "Users always have a chat input box; answer cards are optional shortcuts for useful concrete choices, not required for every question. Do not add filler options or invent a follow-up decision after an answer or advice; use need_human only for a real outstanding need."),
     (9, "need_human must refer to a visible outstanding question: chat_state requires about or a pending card; alternatively ask with chat_post kind=need_human. After answering a clarification, explicitly say if an earlier decision is still needed; do not invent new questions, and cards remain optional."),
-    (10, "Never make an option for anything the user would specify in their own words (changes, custom values); they type it. Asking approval for shown work (e.g. merging a branch) offers a card with one option for that action (e.g. 合并)."),
+    (10, "Each answer option must be complete on its own; anything the user would word themselves (what to change, a name, a value, a different approach) is never an option, they type it. A card may have a single option, e.g. 合并 when asking to merge shown work."),
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
