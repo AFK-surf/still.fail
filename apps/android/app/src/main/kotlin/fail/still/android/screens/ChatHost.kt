@@ -68,7 +68,6 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -318,11 +317,11 @@ fun Modifier.flying(host: Host, f: Flight?): Modifier = if (f == null) this else
 /** Existing rows also use FLIP: lay out once at their destination, undo that displacement in drawing. */
 @Composable
 internal fun Modifier.sendReflow(host: Host, id: String): Modifier {
-    val coords = remember(id) { arrayOfNulls<LayoutCoordinates>(1) }
-    return onPlaced { coords[0] = it }.drawWithContent {
+    var laidOutY by remember(id) { mutableStateOf<Float?>(null) }
+    return onGloballyPositioned { laidOutY = host.overlayY(it) }.drawWithContent {
         val f = host.flight
         val from = f?.beforePositions?.get(id)
-        val to = host.overlayY(coords[0])
+        val to = laidOutY
         val shift = if (f != null && !f.carried && from != null && to != null) (from - to) * (1f - f.up()) else 0f
         if (to != null) host.rowPositions[id] = to + shift
         // A draw transform cannot feed back into the layout coordinates used to calculate it.
