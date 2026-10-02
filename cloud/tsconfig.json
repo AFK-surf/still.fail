@@ -11,5 +11,5 @@
     "lib": ["ES2022"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "worker-configuration.d.ts"]
+  "include": ["src/**/*.ts", "migrations/**/*.ts", "test/**/*.ts", "worker-configuration.d.ts"]
 }
