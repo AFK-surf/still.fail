@@ -4,6 +4,7 @@
 // corner, not the column's.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -105,7 +106,7 @@ fun NewChatDisc() {
     val app = LocalApp.current
     Box(
         Modifier.floatingStill(CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
-            .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = "新建对话" },
+            .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-misc.wide.newChat") },
         contentAlignment = Alignment.Center,
     ) { IconIn(Icons.Edit, 20.dp, Color.White) }
 }
@@ -132,10 +133,10 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
         val shape = RoundedCornerShape(22.dp)
         Column(Modifier.width(340.dp).heightIn(max = 560.dp).shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f)).floatingStill(shape)) {
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("最近的会话", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.weight(1f))
+                Text(t("android-misc.wide.recent"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.weight(1f))
                 Box(
                     Modifier.size(32.dp).clip(CircleShape).background(C.accent).clickable { open = false; app.open(Screen.NewChat) }
-                        .semantics { contentDescription = "新建对话" },
+                        .semantics { contentDescription = t("android-misc.wide.newChat") },
                     contentAlignment = Alignment.Center,
                 ) { IconIn(Icons.Edit, 17.dp, Color.White) }
             }
@@ -166,7 +167,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                 Modifier.fillMaxWidth().clickable { open = false; app.home() }.padding(start = 18.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("全部会话", fontSize = 14.sp, color = C.accentInk, modifier = Modifier.weight(1f))
+                Text(t("android-misc.wide.all"), fontSize = 14.sp, color = C.accentInk, modifier = Modifier.weight(1f))
                 IconIn(Icons.ChevronRight, 16.dp, C.accentInk)
             }
         }
@@ -174,7 +175,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
     Box(
         Modifier.align(Alignment.BottomStart).then(foot).padding(start = 10.dp, bottom = 10.dp).size(52.dp)
             .then(if (open) Modifier.shadow(1.dp, CircleShape).clip(CircleShape).background(C.ink) else Modifier.floatingStill(CircleShape))
-            .clickable { open = !open }.semantics { contentDescription = "最近的会话" },
+            .clickable { open = !open }.semantics { contentDescription = t("android-misc.wide.recent") },
         contentAlignment = Alignment.Center,
     ) { IconIn(Icons.Chats, 22.dp, if (open) C.bg else C.ink) }
 }

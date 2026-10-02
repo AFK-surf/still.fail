@@ -1,6 +1,7 @@
 // 重试 for a connection down (the web's Connection.tsx): the connections tried again at once.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,11 +32,11 @@ fun RetryPill(modifier: Modifier = Modifier) {
     Row(
         modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !trying) {
             // A person's retry (client/core/src/wake.rs): `network` for a core from before `retry`.
-            app.act("重新连接") { app.core.call("client.wake", buildJsonObject { put("away", 0); put("network", true); put("retry", true) }) }
+            app.act(t("android-misc.connection.reconnect")) { app.core.call("client.wake", buildJsonObject { put("away", 0); put("network", true); put("retry", true) }) }
         }.padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         if (trying) Spinner(10.dp)
-        Text("重试", color = C.ink, fontSize = 13.sp)
+        Text(t("common.retry"), color = C.ink, fontSize = 13.sp)
     }
 }

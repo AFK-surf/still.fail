@@ -5,6 +5,7 @@
 // and a new one.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -107,7 +108,7 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
     val create = remember { Write(app) }
     val accept = remember { Write(app) }
     val pending = workspaces.flatMap { a -> a.invitations.map { a.account to it } }
-    val make = { code: String -> app.run(create, code) { app.pickWorkspace(Cloud(app.core, first.sub).createWorkspace("${first.name.ifEmpty { first.email.substringBefore('@') }} 的 workspace", code)) } }
+    val make = { code: String -> app.run(create, code) { app.pickWorkspace(Cloud(app.core, first.sub).createWorkspace(t("android-misc.workspace.defaultName", "name" to first.name.ifEmpty { first.email.substringBefore('@') }), code)) } }
     // Once asked for a code, the form stays while a code is tried, rather than flicking to "creating…".
     var asked by remember { mutableStateOf(false) }
     if (needsInviteCode(create.error)) asked = true
@@ -119,7 +120,7 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
         Illustration(R.drawable.illus_sign_in, R.drawable.illus_sign_in_dark, 260.dp)
         when {
             pending.isNotEmpty() -> {
-                Title("你收到了邀请")
+                Title(t("android-misc.invite.received"))
                 pending.forEach { (account, invite) ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -127,28 +128,28 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(invite.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                            Text("${invite.inviter.ifEmpty { "有人" }}邀请 ${account.email} 以${ROLE_LABEL[invite.role] ?: invite.role}身份加入", fontSize = 13.sp, color = C.muted)
+                            Text(t("android-misc.invite.invitedAs", "inviter" to invite.inviter.ifEmpty { t("android-misc.invite.someone") }, "email" to account.email, "role" to (ROLE_LABEL[invite.role] ?: invite.role)), fontSize = 13.sp, color = C.muted)
                         }
-                        Button("加入", primary = true, busy = accept.busy && accept.arg == invite.id) { app.run(accept, invite.id) { app.join(account, invite) } }
+                        Button(t("android-misc.invite.join"), primary = true, busy = accept.busy && accept.arg == invite.id) { app.run(accept, invite.id) { app.join(account, invite) } }
                     }
                 }
                 accept.error?.let { Error(it.message) }
                 if (asking) InviteCodeForm(create, make)
-                else Button("不加入，建一个自己的 workspace", primary = false, busy = create.busy) { make("") }
+                else Button(t("android-misc.invite.declineCreate"), primary = false, busy = create.busy) { make("") }
             }
             asking -> {
-                Title("${BuildConfig.APP_NAME} 目前只对受邀的人开放")
-                Lead("有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 ${BuildConfig.APP_NAME} 的人把 ${first.email} 邀请进他们的 workspace。")
+                Title(t("android-misc.invite.onlyInvited", "app" to BuildConfig.APP_NAME))
+                Lead(t("android-misc.invite.codeLead", "app" to BuildConfig.APP_NAME, "email" to first.email))
                 InviteCodeForm(create, make)
-                Button("换一个账号", primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+                Button(t("android-misc.account.switch"), primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
             }
             else -> {
-                Title("你还不在任何 workspace 里")
-                Lead("可以请已经在用 ${BuildConfig.APP_NAME} 的人把 ${first.email} 邀请进他们的 workspace，也可以自己建一个。")
-                Button("建一个 workspace", primary = true, busy = create.busy) { make("") }
+                Title(t("android-misc.workspace.none"))
+                Lead(t("android-misc.workspace.none.lead", "app" to BuildConfig.APP_NAME, "email" to first.email))
+                Button(t("android-misc.workspace.createOne"), primary = true, busy = create.busy) { make("") }
                 create.error?.let { Error(errorText(it)) }
-                Button("用邀请链接加入", primary = false) { openInviteLink(app) }
-                Button("换一个账号", primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+                Button(t("android-misc.invite.byLink"), primary = false) { openInviteLink(app) }
+                Button(t("android-misc.account.switch"), primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
             }
         }
     }
@@ -168,9 +169,9 @@ fun Blocked(entry: AccountWorkspaces) {
         Illustration(R.drawable.illus_sign_in, R.drawable.illus_sign_in_dark, 260.dp)
         Title(entry.blocked ?: "")
         Lead(entry.account.email)
-        Button("退出这个账号", primary = true, busy = out.busy) { app.run(out, entry.account.sub) { Auth.signOut(app.core, entry.account.sub) } }
+        Button(t("android-misc.account.signOut"), primary = true, busy = out.busy) { app.run(out, entry.account.sub) { Auth.signOut(app.core, entry.account.sub) } }
         out.error?.let { Error(it.message) }
-        Button("换一个账号", primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+        Button(t("android-misc.account.switch"), primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
     }
 }
 
@@ -217,7 +218,7 @@ private fun InviteCodeForm(create: Write, make: (String) -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field(code, { code = it }, "XXXX-XXXX-XXXX", mono = true, modifier = Modifier.weight(1f))
-            Button("建 workspace", primary = true, busy = create.busy, enabled = code.isNotBlank()) { make(code.trim()) }
+            Button(t("android-misc.workspace.create"), primary = true, busy = create.busy, enabled = code.isNotBlank()) { make(code.trim()) }
         }
         // Nothing was wrong with a code nobody had typed yet.
         val error = create.error
@@ -260,18 +261,18 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
             }
         }
         if (pending.isNotEmpty()) {
-            Label("邀请")
+            Label(t("android-misc.invite.label"))
             pending.forEach { (account, invite) ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
-                        Text("${invite.inviter.ifEmpty { "有人" }}邀请你加入「${invite.name}」", fontSize = 15.sp, color = C.ink)
+                        Text(t("android-misc.invite.invitedYou", "inviter" to invite.inviter.ifEmpty { t("android-misc.invite.someone") }, "name" to invite.name), fontSize = 15.sp, color = C.ink)
                         Text(account.email, fontSize = 12.sp, color = C.muted)
                     }
-                    Button("加入", primary = true, busy = respond.busy && respond.arg == "+${invite.id}") {
-                        app.run(respond, "+${invite.id}") { app.join(account, invite); app.toast = "已加入「${invite.name}」" }
+                    Button(t("android-misc.invite.join"), primary = true, busy = respond.busy && respond.arg == "+${invite.id}") {
+                        app.run(respond, "+${invite.id}") { app.join(account, invite); app.toast = t("android-misc.invite.joined", "name" to invite.name) }
                     }
-                    Button("忽略", primary = false, busy = respond.busy && respond.arg == "-${invite.id}") {
-                        app.run(respond, "-${invite.id}") { Cloud(app.core, account.sub).declineInvitation(invite.id); app.toast = "已忽略邀请" }
+                    Button(t("android-misc.invite.ignore"), primary = false, busy = respond.busy && respond.arg == "-${invite.id}") {
+                        app.run(respond, "-${invite.id}") { Cloud(app.core, account.sub).declineInvitation(invite.id); app.toast = t("android-misc.invite.ignored") }
                     }
                 }
             }
@@ -330,26 +331,26 @@ private fun ColumnScope.NewWorkspaceSheet(app: AppState) {
         }
     }
     SheetGrab()
-    SheetHead("新建 workspace")
+    SheetHead(t("android-misc.workspace.new"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("workspace 是一组人和他们共用的 station。你会成为它的 owner。", fontSize = 14.sp, color = C.muted)
-        Label0("名字")
-        Field(name, { name = it }, "例如：产品团队")
+        Text(t("android-misc.workspace.new.text"), fontSize = 14.sp, color = C.muted)
+        Label0(t("android-misc.workspace.name"))
+        Field(name, { name = it }, t("android-misc.workspace.name.placeholder"))
         if (list.size > 1) {
-            Label0("属于哪个账号")
+            Label0(t("android-misc.workspace.account"))
             list.forEach { a -> PickRow(a.email, checked = a.sub == sub) { owner = a.sub } }
         }
         if (asked) {
-            Label0("邀请码")
+            Label0(t("android-misc.invite.code"))
             Field(code, { code = it }, "XXXX-XXXX-XXXX", mono = true)
             val error = create.error
             if (error != null && needsInviteCode(error) && code.isNotBlank()) Error(errorText(error))
-            else Text("${BuildConfig.APP_NAME} 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。", fontSize = 12.sp, color = C.muted)
+            else Text(t("android-misc.invite.codeNeeded", "app" to BuildConfig.APP_NAME), fontSize = 12.sp, color = C.muted)
         }
         create.error?.takeIf { !needsInviteCode(it) }?.let { Error(it.message) }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Button("取消", primary = false) { app.sheet = null }
-            Button("新建", primary = true, busy = create.busy, enabled = name.isNotBlank()) { go() }
+            Button(t("common.cancel"), primary = false) { app.sheet = null }
+            Button(t("android-misc.workspace.createButton"), primary = true, busy = create.busy, enabled = name.isNotBlank()) { go() }
         }
     }
 }
@@ -407,50 +408,50 @@ private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
     if (accounts.value != null && list.isEmpty()) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
-        SheetHead("登录 ${BuildConfig.APP_NAME}")
+        SheetHead(t("android-misc.signIn.title", "app" to BuildConfig.APP_NAME))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("你收到了一个 ${BuildConfig.APP_NAME} workspace 的邀请。先用 Google 账号登录，再决定是否加入。", fontSize = 14.sp, color = C.muted)
+            Text(t("android-misc.signIn.invited", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button("取消", primary = false) { app.sheet = null }
-                Button("使用 Google 账号登录", primary = true, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
+                Button(t("android-misc.signIn.google"), primary = true, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
             }
         }
         return
     }
     val p = preview
-    SheetHead(if (token == null) "用邀请链接加入" else if (p != null) "加入「${p.name}」" else if (failed != null) "邀请不能用" else "正在读取邀请…")
+    SheetHead(if (token == null) t("android-misc.invite.byLink") else if (p != null) t("android-misc.invite.joinNamed", "name" to p.name) else if (failed != null) t("android-misc.invite.unusable") else t("android-misc.invite.loading"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        val t = token
+        val link = token
         when {
-            t == null -> {
-                Text("把收到的 ${BuildConfig.APP_NAME} 邀请链接粘贴在下面，先看看是哪个 workspace，再决定是否加入。", fontSize = 14.sp, color = C.muted)
+            link == null -> {
+                Text(t("android-misc.invite.pasteLink", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
                 Field(text, { text = it }, "https://app.still.fail/invite#…", lines = 2)
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    Button("取消", primary = false) { app.sheet = null }
-                    Button("查看邀请", primary = true, enabled = invitationToken(text) != null) { token = invitationToken(text) }
+                    Button(t("common.cancel"), primary = false) { app.sheet = null }
+                    Button(t("android-misc.invite.view"), primary = true, enabled = invitationToken(text) != null) { token = invitationToken(text) }
                 }
             }
             failed != null -> {
                 Text(failed ?: "", fontSize = 14.sp, color = C.muted)
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    if (given == null) Button("换一个链接", primary = false) { token = null }
-                    Button("关闭", primary = true) { app.sheet = null }
+                    if (given == null) Button(t("android-misc.invite.otherLink"), primary = false) { token = null }
+                    Button(t("common.close"), primary = true) { app.sheet = null }
                 }
             }
-            p == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Text("正在读取…", fontSize = 14.sp, color = C.muted) }
+            p == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Text(t("android-misc.reading"), fontSize = 14.sp, color = C.muted) }
             else -> {
-                Text("${p.inviter.ifEmpty { "有人" }}邀请你以${ROLE_LABEL[p.role] ?: p.role}身份加入。" + (p.email?.let { "这个邀请只能由 $it 接受。" } ?: ""), fontSize = 14.sp, color = C.muted)
+                Text(t(if (p.email != null) "android-misc.invite.invitedYouAsOnly" else "android-misc.invite.invitedYouAs", "inviter" to p.inviter.ifEmpty { t("android-misc.invite.someone") }, "role" to (ROLE_LABEL[p.role] ?: p.role), "email" to p.email), fontSize = 14.sp, color = C.muted)
                 if (list.size > 1) {
-                    Label0("用哪个账号加入")
+                    Label0(t("android-misc.invite.whichAccount"))
                     Column { list.forEach { a -> PickRow(a.email, checked = a.sub == sub) { chosen = a.sub } } }
                 }
                 accept.error?.let { Error(it.message) }
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    Button("取消", primary = false) { app.sheet = null }
-                    Button("以 ${list.firstOrNull { it.sub == sub }?.email ?: ""} 加入", primary = true, busy = accept.busy, enabled = sub != null) {
+                    Button(t("common.cancel"), primary = false) { app.sheet = null }
+                    Button(t("android-misc.invite.joinAs", "email" to (list.firstOrNull { it.sub == sub }?.email ?: "")), primary = true, busy = accept.busy, enabled = sub != null) {
                         app.run(accept) {
-                            val id = Cloud(app.core, sub!!).acceptInvitationToken(t)
-                            app.pickWorkspace(id); app.home(); app.toast = "已加入「${p.name}」"
+                            val id = Cloud(app.core, sub!!).acceptInvitationToken(link)
+                            app.pickWorkspace(id); app.home(); app.toast = t("android-misc.invite.joined", "name" to p.name)
                         }
                     }
                 }

@@ -4,6 +4,7 @@
 // models spent the most. Everything shown is the core's; the page only picks the days and the list.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,7 +60,7 @@ import fail.still.android.ui.Markdown
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.Seg
 
-private val DAYS = listOf(7 to "7 天", 30 to "30 天")
+private val DAYS get() = listOf(7 to t("android-misc.usage.days", "n" to 7), 30 to t("android-misc.usage.days", "n" to 30))
 
 // The people a day's bar is split by, as the web draws them (web/src/Usage.css.ts): checked for colour-blind readers
 // on both grounds; the first is still.fail's accent, stepped down in dark.
@@ -77,17 +78,17 @@ fun UsageScreen(current: WorkspaceEntry) {
     val topic by rememberTopic<UsageView>(app.core, Topics.usage(current.workspace.id, days))
     val view = topic.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop) {
+        TopBack(t("android-misc.settings"), app::pop) {
             Seg(DAYS.map { it.second }, DAYS.indexOfFirst { it.first == days }.coerceAtLeast(0), { days = DAYS[it].first })
         }
-        LargeTitle("", "用量")
-        PageNote("agent 调用模型用了多少 token，按 API 价折算成钱")
+        LargeTitle("", t("android-misc.usage.title"))
+        PageNote(t("android-misc.usage.note"))
         if (view == null) {
-            Text(topic.error?.let { "读不到用量：${it.message}" } ?: "正在读取…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
+            Text(topic.error?.let { t("android-misc.usage.loadFailed", "error" to it.message) } ?: t("android-misc.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
         } else {
             Tiles(view) { app.push(Screen.UsagePrices(days)) }
             if (view.empty) {
-                Text(if (view.loading) "正在读取…" else "这段时间没有用量", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
+                Text(if (view.loading) t("android-misc.reading") else t("android-misc.usage.none"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
             } else {
                 Card { Days(view) }
                 Lists(view) { item ->
@@ -110,11 +111,11 @@ private fun Tiles(view: UsageView, openPrices: () -> Unit) {
     Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         view.tiles.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                pair.forEach { t ->
-                    Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(C.surface).then(if (t == view.tiles.firstOrNull()) Modifier.clickable(onClick = openPrices) else Modifier).padding(horizontal = 16.dp, vertical = 14.dp)) {
-                        Text(t.label, fontSize = 12.sp, color = C.muted)
-                        Text(t.value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1)
-                        Text(if (t == view.tiles.firstOrNull()) "查看价目表 →" else t.sub, fontSize = 12.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                pair.forEach { tile ->
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(C.surface).then(if (tile == view.tiles.firstOrNull()) Modifier.clickable(onClick = openPrices) else Modifier).padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        Text(tile.label, fontSize = 12.sp, color = C.muted)
+                        Text(tile.value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1)
+                        Text(if (tile == view.tiles.firstOrNull()) t("android-misc.usage.seePrices") else tile.sub, fontSize = 12.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -151,12 +152,12 @@ private fun Days(view: UsageView) {
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(if (many) 3.dp else 6.dp)) {
         view.daily.forEachIndexed { i, d ->
             val shown = !many || d.today || (view.daily.size - 1 - i) % 7 == 0
-            Text(if (!shown) "" else if (d.today) "今天" else d.label, fontSize = 11.sp, color = if (d.today) C.ink else C.subtle, maxLines = 1, softWrap = false,
+            Text(if (!shown) "" else if (d.today) t("android-misc.usage.today") else d.label, fontSize = 11.sp, color = if (d.today) C.ink else C.subtle, maxLines = 1, softWrap = false,
                 textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
         }
     }
     if (day != null) Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text("${if (day.today) "今天" else day.label} · ${day.costText} · ${day.callsText}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink)
+        Text("${if (day.today) t("android-misc.usage.today") else day.label} · ${day.costText} · ${day.callsText}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink)
         if (several && day.cost > 0) view.series.forEachIndexed { i, s ->
             if ((day.parts.getOrNull(i) ?: 0.0) > 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(seriesColor(view.series, i)))
@@ -191,7 +192,7 @@ private fun Lists(view: UsageView, open: (UsageItem) -> Unit) {
         Spacer(Modifier.height(6.dp))
         val items = if (all) list.items else list.items.take(8)
         items.forEachIndexed { i, item -> ItemRow(item, i + 1, list.key, open) }
-        if (list.items.size > 8) Text(if (all) "收起" else "显示全部 ${list.items.size} 个", fontSize = 14.sp, color = C.muted,
+        if (list.items.size > 8) Text(if (all) t("android-misc.usage.collapse") else t("android-misc.usage.showAll", "n" to list.items.size), fontSize = 14.sp, color = C.muted,
             modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { all = !all }.padding(horizontal = 4.dp, vertical = 10.dp))
     }
 }
@@ -226,18 +227,18 @@ fun UsagePricesScreen(current: WorkspaceEntry, days: Int) {
     val topic by rememberTopic<UsageView>(app.core, Topics.usage(current.workspace.id, days))
     val view = topic.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("用量", app::pop)
-        LargeTitle("", "价目表")
-        PageNote("当前各台 station 用于折算费用的单价")
-        if (view == null) PageNote(topic.error?.let { "读不到价目：${it.message}" } ?: "正在读取…")
+        TopBack(t("android-misc.usage.title"), app::pop)
+        LargeTitle("", t("android-misc.usage.prices"))
+        PageNote(t("android-misc.usage.prices.note"))
+        if (view == null) PageNote(topic.error?.let { t("android-misc.usage.prices.loadFailed", "error" to it.message) } ?: t("android-misc.reading"))
         else {
             val tables = view.prices.orEmpty()
-            if (tables.isEmpty()) PageNote("暂时没有价目表")
+            if (tables.isEmpty()) PageNote(t("android-misc.usage.prices.none"))
             tables.forEach { table ->
                 Card {
                     Text(table.station, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                     Text(table.note, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp))
-                    if (table.rows.isEmpty()) Text("这段时间没有模型用量", fontSize = 12.sp, color = C.muted)
+                    if (table.rows.isEmpty()) Text(t("android-misc.usage.prices.noModels"), fontSize = 12.sp, color = C.muted)
                     else {
                         // Serialize already-formatted cells for the app's existing Markdown table renderer.
                         fun cell(value: String) = buildString {
@@ -247,7 +248,7 @@ fun UsagePricesScreen(current: WorkspaceEntry, days: Int) {
                             }
                         }
                         fun line(cells: List<String>) = cells.joinToString(" | ", "| ", " |", transform = ::cell)
-                        val header = listOf("模型") + table.rows.first().rates.map { it.label }
+                        val header = listOf(t("android-misc.usage.prices.model")) + table.rows.first().rates.map { it.label }
                         val markdown = (listOf(line(header), line(header.map { "---" })) +
                             table.rows.map { row -> line(listOf(row.model) + row.rates.map { it.value }) }).joinToString("\n")
                         Markdown(markdown, modifier = Modifier.padding(top = 8.dp), fillTables = true)

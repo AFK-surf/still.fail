@@ -4,6 +4,7 @@
 // name and a word on the line under it; a service opens its page (Preview.kt), a job its sheet.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -121,7 +122,7 @@ fun rememberJobLog(station: String, id: String?, lines: Int): JobLogView? {
 
 /** Stops a job from the app; a failure is said in a toast. */
 fun AppState.stopJob(station: String, job: Job) {
-    if (!stopping(station, job)) act("停下「${job.name}」") { api(station).stopJob(job.id) }
+    if (!stopping(station, job)) act(t("android-misc.jobs.stopWhat", "name" to job.name)) { api(station).stopJob(job.id) }
 }
 
 /** Whether a job's stop was asked and not answered yet: its 停止 shows a spinner, not pressed again. */
@@ -132,7 +133,7 @@ fun AppState.stopFailed(station: String, job: Job): String? = failedOf("job.stop
 
 /** Clears a chat's jobs that are over (each session's, as the station keeps them: `clear`); a failure in a toast. */
 fun AppState.clearEnded(station: String, sessions: List<String>) {
-    if (!clearing(station)) act("清掉已结束的任务") { sessions.forEach { api(station).clearEndedJobs(it) } }
+    if (!clearing(station)) act(t("android-misc.jobs.clearWhat")) { sessions.forEach { api(station).clearEndedJobs(it) } }
 }
 
 fun AppState.clearing(station: String): Boolean = isDoing("job.clearEnded", "station" to station)
@@ -162,7 +163,7 @@ fun JobGroups(app: AppState, station: String, of: ChatOf, view: ChatJobsView, jo
     val services = jobs.filter { it.service == true }
     val plain = jobs.filter { it.service != true }
     if (services.isNotEmpty()) {
-        GroupLabel("服务" + if (notes && view.servicesNote.isNotEmpty()) " · ${view.servicesNote}" else "")
+        GroupLabel(t("android-misc.jobs.services") + if (notes && view.servicesNote.isNotEmpty()) " · ${view.servicesNote}" else "")
         InfoList {
             services.forEach { j ->
                 val up = j.dot == Tone.Up || j.dot == Tone.Restart
@@ -171,7 +172,7 @@ fun JobGroups(app: AppState, station: String, of: ChatOf, view: ChatJobsView, jo
         }
     }
     if (plain.isNotEmpty()) {
-        GroupLabel("后台任务" + if (notes && view.jobsNote.isNotEmpty()) " · ${view.jobsNote}" else "")
+        GroupLabel(t("android-misc.jobs.jobs") + if (notes && view.jobsNote.isNotEmpty()) " · ${view.jobsNote}" else "")
         InfoList { plain.forEach { j -> JobInfoRow(j) { openJob(app, station, of, j.id) } } }
     }
 }
@@ -185,16 +186,16 @@ fun openJobs(app: AppState, station: String, of: ChatOf) {
         var all by remember { mutableStateOf(false) }
         val shown = if (all) jobs else jobs.filter { it.current == true }
         SheetGrab()
-        SheetHead("服务和后台任务")
+        SheetHead(t("android-misc.jobs.title"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
             if (topic.value != null && jobs.isEmpty()) Column(Modifier.padding(horizontal = 2.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("还没有服务或后台任务", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text("agent 开网页、或挂上长期盯着的任务时，会列在这里。", fontSize = 13.sp, color = C.muted)
+                Text(t("android-misc.jobs.none"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text(t("android-misc.jobs.none.text"), fontSize = 13.sp, color = C.muted)
             }
-            if (jobs.isNotEmpty() && shown.isEmpty()) Text("眼下没有在跑的服务或任务。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            if (jobs.isNotEmpty() && shown.isEmpty()) Text(t("android-misc.jobs.noneNow"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             JobGroups(app, station, of, view, shown, notes = true)
             if (jobs.size > view.current) SheetLink({ all = !all }) {
-                if (all) Text("只看眼下的", fontSize = 14.sp, color = C.accent)
+                if (all) Text(t("android-misc.jobs.onlyNow"), fontSize = 14.sp, color = C.accent)
                 else {
                     Text(view.allText, fontSize = 14.sp, color = C.accent)
                     Text(view.hiddenText, fontSize = 12.sp, color = C.muted)
@@ -230,8 +231,8 @@ fun openJob(app: AppState, station: String, of: ChatOf, id: String) {
         val last = rememberJobLog(station, if (job != null && tab == 0) id else null, 1)
         SheetGrab()
         if (job == null) {
-            SheetHead("任务")
-            if (topic.value != null) Text("这个任务已经不在了。", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 18.dp))
+            SheetHead(t("android-misc.jobs.job"))
+            if (topic.value != null) Text(t("android-misc.jobs.gone"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 18.dp))
         } else JobBody(app, station, job, tab, { picked = it }, log, last)
     }
 }
@@ -250,11 +251,11 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
     Column(Modifier.weight(1f).padding(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         job.command?.takeIf { it.isNotBlank() }?.let { Text(it, style = Mono, fontSize = 11.5.sp, lineHeight = 17.sp, color = C.muted) }
         // A service has only its output to show.
-        if (job.service != true) Seg(listOf("通知", "输出"), tab, onTab, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
+        if (job.service != true) Seg(listOf(t("android-misc.jobs.notices"), t("android-misc.jobs.output")), tab, onTab, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
         if (tab == 0) {
             val notices = job.notices ?: emptyList()
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (notices.isEmpty()) Text("还没有通知。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                if (notices.isEmpty()) Text(t("android-misc.jobs.noNotices"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                 notices.forEach { n ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(n.clock ?: "", fontSize = 14.sp, color = C.subtle, modifier = Modifier.width(48.dp))
@@ -281,7 +282,7 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
                 Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(min = 120.dp).clip(RoundedCornerShape(16.dp)).background(C.ink.copy(alpha = 0.05f))
                     .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                Text(if (log == null) "正在读取…" else text?.ifEmpty { "（还没有输出）" } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = FontFamily.Monospace)
+                Text(if (log == null) t("android-misc.reading") else text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = FontFamily.Monospace)
             }
         }
         if (running) Row(
@@ -290,7 +291,7 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
         ) {
             val stopFailed = app.stopFailed(station, job)
             if (app.stopping(station, job) || stopFailed != null) DoingMark(app.stopping(station, job), stopFailed, 16.dp) else IconIn(Icons.Stop, 16.dp, C.red)
-            Text("停止", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.red)
+            Text(t("android-misc.jobs.stop"), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.red)
         }
     }
 }

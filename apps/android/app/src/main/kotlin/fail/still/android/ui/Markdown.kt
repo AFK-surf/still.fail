@@ -227,7 +227,7 @@ fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placin
     val doc = ready?.takeIf { it.first == text }?.second
     val blocks = remember(doc, size, placing, fillTables) { doc?.let { pieces(it.children(), Ctx(size, placing, fillTables), tight = false) } }
     Box(modifier) {
-        if (blocks == null) Text("正在排版…", color = webSubtle, fontSize = size.sp)
+        if (blocks == null) Text(t("android-misc.markdown.laying"), color = webSubtle, fontSize = size.sp)
         else Stack(blocks)
     }
 }
@@ -436,7 +436,7 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 IconIn(if (copied) Icons.Check else Icons.Copy, 12.dp, webMuted)
-                Text(if (copied) "已复制" else "复制", fontSize = 11.sp, color = webMuted)
+                Text(if (copied) t("common.copied") else t("common.copy"), fontSize = 11.sp, color = webMuted)
             }
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {

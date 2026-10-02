@@ -3,6 +3,7 @@
 // and brings the topics it touches up to date before it answers; nothing here keeps a cache.
 package fail.still.android.data
 
+import fail.still.android.ui.t
 import android.util.Base64
 import fail.still.android.BuildConfig
 import fail.still.core.CoreException
@@ -414,21 +415,21 @@ class Enrollment(val install: String, val command: String)
 /** The permission groups a new Slack app is made with (web/src/pages/SlackApp.tsx → GROUPS), all on. */
 private val SLACK_GROUPS = listOf("base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras", "canvases", "lists", "topics", "usergroups", "search", "connect", "more")
 
-// still.fail cloud's invite-code errors in Chinese; the core passes their codes through.
-private val INVITE_ERRORS = mapOf(
-    "invite_code_required" to "新建 workspace 要有邀请码，被邀请加入别人的 workspace 不用",
-    "invite_code_invalid" to "这个邀请码不对，检查一下有没有输错",
-    "invite_code_used" to "这个邀请码已经被用过了",
-    "invite_code_expired" to "这个邀请码已经过期了",
+// still.fail cloud's invite-code errors in words; the core passes their codes through.
+private val INVITE_ERRORS get() = mapOf(
+    "invite_code_required" to t("android-misc.invite.codeRequired"),
+    "invite_code_invalid" to t("android-misc.invite.codeInvalid"),
+    "invite_code_used" to t("android-misc.invite.codeUsed"),
+    "invite_code_expired" to t("android-misc.invite.codeExpired"),
 )
 
 /** Whether creating a workspace failed for want of a (good) invite code. */
 fun needsInviteCode(e: CoreException?): Boolean = e != null && e.code in INVITE_ERRORS
 
 // Its limits: what an account may create, and how many a workspace holds (web/src/cloud/api.ts LIMIT_ERRORS).
-private val LIMIT_ERRORS = mapOf(
-    "too_many_workspaces" to "一个账号最多新建 5 个 workspace",
-    "too_many_members" to "一个 workspace 最多邀请 5 个人",
+private val LIMIT_ERRORS get() = mapOf(
+    "too_many_workspaces" to t("android-misc.limit.workspaces"),
+    "too_many_members" to t("android-misc.limit.members"),
 )
 
 fun errorText(e: CoreException): String = INVITE_ERRORS[e.code] ?: LIMIT_ERRORS[e.code] ?: e.message

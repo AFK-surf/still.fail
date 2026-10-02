@@ -31,6 +31,7 @@ import fail.still.android.Screen
 import fail.still.android.StillFailApp
 import fail.still.android.Updates
 import fail.still.android.data.Topics
+import fail.still.android.ui.I18n
 import fail.still.android.ui.StillFailTheme
 import java.io.File
 import java.io.FileOutputStream
@@ -43,6 +44,12 @@ class Harness(val rule: MotionRule) {
     val fake = FakeCore()
     lateinit var app: AppState
         private set
+
+    init {
+        // The words as the tests expect them: in Chinese, whatever the emulator's language (en-US).
+        I18n.load(InstrumentationRegistry.getInstrumentation().targetContext)
+        I18n.lang = "zh"
+    }
 
     /**
      * Shows the app signed in to Fixtures' workspace, with the pages of `stack` over its list (the last on top), in the

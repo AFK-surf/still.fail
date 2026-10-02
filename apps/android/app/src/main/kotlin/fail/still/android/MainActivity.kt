@@ -1,5 +1,6 @@
 package fail.still.android
 
+import fail.still.android.ui.t
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -114,6 +115,7 @@ class MainActivity : ComponentActivity() {
             Prefs.moveIn(core, shared)
             val first = Prefs.first(core)
             fail.still.android.ui.I18n.follow(first.lang)
+            Notifier.keepLang(shared, first.lang)
             val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN, core), first)
             // The notification settings the app kept, into the core before anything goes by them.
             made.moveNotify()
@@ -149,7 +151,7 @@ class MainActivity : ComponentActivity() {
                 window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable((if (dark) fail.still.android.ui.Dark else fail.still.android.ui.Light).bg.toArgb()))
             }
             StillFailTheme(dark) {
-                if (current == null) Loading("正在启动…")
+                if (current == null) Loading(t("android-misc.starting"))
                 else CompositionLocalProvider(LocalApp provides current) { StillFailApp(current) }
             }
         }
@@ -185,7 +187,7 @@ class MainActivity : ComponentActivity() {
                 Auth.complete(app.core, "?" + (uri.encodedQuery ?: ""))
                 app.home()
             } catch (e: CoreException) {
-                app.toast = "登录没有完成：${e.message}"
+                app.toast = t("android-misc.signIn.unfinished", "error" to e.message)
             }
         }
     }

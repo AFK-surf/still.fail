@@ -5,6 +5,7 @@
 // the person agrees.
 package fail.still.android
 
+import fail.still.android.ui.t
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -54,9 +55,9 @@ class Updates(context: Context, private val origin: String, private val core: St
         if (checking || progress != null) return null
         checking = true
         return try {
-            if (ask(true) == null) "已是最新" else null
+            if (ask(true) == null) t("android-misc.updates.latest") else null
         } catch (e: CoreException) {
-            "没能检查更新：${e.message}"
+            t("android-misc.updates.checkFailed", "error" to e.message)
         } finally {
             checking = false
         }
@@ -72,18 +73,18 @@ class Updates(context: Context, private val origin: String, private val core: St
             context.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
-            return "允许 ${BuildConfig.APP_NAME} 安装应用后，再点一次更新"
+            return t("android-misc.updates.allowInstall", "app" to BuildConfig.APP_NAME)
         }
         return try {
-            progress = "正在检查最新版本"
-            val release = ask(true) ?: return "已是最新"
-            progress = "下载中"
+            progress = t("android-misc.updates.checking")
+            val release = ask(true) ?: return t("android-misc.updates.latest")
+            progress = t("android-misc.updates.downloading")
             val apk = download(release)
-            progress = "正在安装"
+            progress = t("android-misc.updates.installing")
             withContext(Dispatchers.IO) { commit(apk) }
             null
         } catch (e: Exception) {
-            "没能更新：${e.message ?: e.javaClass.simpleName}"
+            t("android-misc.updates.failed", "error" to (e.message ?: e.javaClass.simpleName))
         } finally {
             progress = null
         }
@@ -98,7 +99,7 @@ class Updates(context: Context, private val origin: String, private val core: St
         connection.connectTimeout = 15_000
         connection.readTimeout = 30_000
         try {
-            if (connection.responseCode != 200) error("下载返回了 ${connection.responseCode}")
+            if (connection.responseCode != 200) error(t("android-misc.updates.httpStatus", "status" to connection.responseCode))
             connection.inputStream.use { input ->
                 apk.outputStream().use { output ->
                     val buffer = ByteArray(64 * 1024)
@@ -113,7 +114,7 @@ class Updates(context: Context, private val origin: String, private val core: St
                         val percent = if (release.size > 0) done * 100 / release.size else -1
                         if (percent != shown) {
                             shown = percent
-                            withContext(Dispatchers.Main) { progress = if (percent >= 0) "下载中 $percent%" else "下载中" }
+                            withContext(Dispatchers.Main) { progress = if (percent >= 0) t("android-misc.updates.downloadingPercent", "percent" to percent) else t("android-misc.updates.downloading") }
                         }
                     }
                 }
@@ -124,7 +125,7 @@ class Updates(context: Context, private val origin: String, private val core: St
         val sum = digest.digest().joinToString("") { "%02x".format(it) }
         if (!sum.equals(release.sha256, ignoreCase = true)) {
             apk.delete()
-            error("下载的文件不完整，请重试")
+            error(t("android-misc.updates.incomplete"))
         }
         apk
     }
@@ -163,8 +164,9 @@ class InstallResult : BroadcastReceiver() {
             PackageInstaller.STATUS_SUCCESS -> Unit
             PackageInstaller.STATUS_FAILURE_ABORTED -> Unit
             else -> {
-                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "安装失败"
-                Toast.makeText(context, "没能更新：$message", Toast.LENGTH_LONG).show()
+                Notifier.words(context)
+                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: t("android-misc.updates.installFailed")
+                Toast.makeText(context, t("android-misc.updates.failed", "error" to message), Toast.LENGTH_LONG).show()
             }
         }
     }

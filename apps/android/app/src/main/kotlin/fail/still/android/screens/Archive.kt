@@ -5,6 +5,7 @@
 // last message the whole line under it. No lines between.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,23 +50,23 @@ fun ArchiveScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     // Every station's archive as the core puts it together, and takes a chat out of once restored or deleted.
     val archive by rememberTopic<ArchiveView>(app.core, Topics.archive(current.workspace.id))
-    val restore = { item: ArchiveItem -> app.act("恢复", "已恢复到列表") { app.api(item.station).setArchived(item.thread, item.session, false) } }
+    val restore = { item: ArchiveItem -> app.act(t("android-misc.archive.restoreWhat"), t("android-misc.archive.restored")) { app.api(item.station).setArchived(item.thread, item.session, false) } }
     val delete = { item: ArchiveItem ->
-        confirm(app, "删除「${item.title}」？", "它的会话、对话记录和 workspace 目录都会删掉，不能恢复。", "删除", danger = true) {
+        confirm(app, t("android-misc.archive.deleteTitle", "title" to item.title), t("android-misc.archive.deleteText"), t("common.delete"), danger = true) {
             app.api(item.station).deleteSession(item.session)
-            app.toast = "已删除"
+            app.toast = t("android-misc.archive.deleted")
         }
     }
     val view = archive.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp)) {
-        TopBack("会话", app::pop)
-        LargeTitle(current.workspace.name, "已归档")
+        TopBack(t("android-misc.chats"), app::pop)
+        LargeTitle(current.workspace.name, t("android-misc.archive.title"))
         // No hover to explain it on a phone: said at the top instead.
         Text(
-            "手动归档的对话，和空闲超过一天、已经做完的对话（没在跑、没停在 block、没有未读）。对话里有新消息时会自动回到列表。",
+            t("android-misc.archive.note"),
             fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        val note = if (view != null) view.note else archive.error?.message ?: "正在读取 station…"
+        val note = if (view != null) view.note else archive.error?.message ?: t("android-misc.stations.loading")
         view?.errors?.forEach { Text(it.text, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
         if (note != null) Text(note, fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
         view?.days?.forEach { day ->
@@ -96,8 +97,8 @@ private fun ArchiveRow(item: ArchiveItem, busy: Boolean, failed: String?, onRest
             if (busy) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
             else Row(verticalAlignment = Alignment.CenterVertically) {
                 if (failed != null) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { DoingMark(false, failed) }
-                Action(Icons.Retry, "恢复「${item.title}」", onRestore)
-                if (item.deletable) Action(Icons.Trash, "删除「${item.title}」", onDelete)
+                Action(Icons.Retry, t("android-misc.archive.restoreNamed", "title" to item.title), onRestore)
+                if (item.deletable) Action(Icons.Trash, t("android-misc.archive.deleteNamed", "title" to item.title), onDelete)
             }
         }
         Text(

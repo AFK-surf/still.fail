@@ -3,6 +3,7 @@
 // Accounts.kt), so a changed shape is fixed in one place.
 package fail.still.android.data
 
+import fail.still.android.ui.t
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.DisposableEffect
@@ -56,7 +57,7 @@ private fun whole(json: JsonElement): JsonElement = when (json) {
 fun <T> decode(serializer: KSerializer<T>, json: JsonElement): T = try {
     StillFailJson.decodeFromJsonElement(serializer, whole(json))
 } catch (e: IllegalArgumentException) {
-    throw CoreException("decode", "读不懂 core 给的数据：${e.message?.take(200)}", null)
+    throw CoreException("decode", t("android-misc.decodeFailed", "error" to e.message?.take(200)), null)
 }
 
 /** A topic's states, decoded: what both ways of following one below read. */

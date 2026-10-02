@@ -64,7 +64,7 @@ internal fun CodeInk(code: String, language: String?, dark: Boolean) {
     val result = prepared?.takeIf { it.key == key }?.layout
     if (result == null) {
         // No synchronous fallback: even a plain 20 MB string is not safe to shape on Main.
-        Text("正在排版…", fontSize = 12.5.sp, color = webSubtle, modifier = Modifier.height(with(density) { 20.sp.toDp() }))
+        Text(t("android-misc.markdown.laying"), fontSize = 12.5.sp, color = webSubtle, modifier = Modifier.height(with(density) { 20.sp.toDp() }))
     } else {
         Canvas(Modifier.size(with(density) { result.size.width.toDp() }, with(density) { result.size.height.toDp() })
             .semantics { text = AnnotatedString(code); getTextLayoutResult { it.add(result); true } }) {

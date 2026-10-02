@@ -2,6 +2,7 @@
 // workspaces each account reaches (web/src/cloud/accounts.ts, web/src/cloud/api.ts).
 package fail.still.android.data
 
+import fail.still.android.ui.t
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -27,14 +28,14 @@ import kotlinx.serialization.json.JsonElement
 
 @Serializable data class PendingInvitation(val id: String, val workspace: String = "", val name: String = "", val role: String = "member", val inviter: String = "")
 
-val ROLE_LABEL = mapOf("owner" to "Owner", "admin" to "管理员", "member" to "成员")
+val ROLE_LABEL get() = mapOf("owner" to "Owner", "admin" to t("android-misc.role.admin"), "member" to t("android-misc.role.member"))
 
 /** A workspace with the account it is reached through. */
 data class WorkspaceEntry(val workspace: WorkspaceSummary, val account: Account)
 
 fun List<AccountWorkspaces>.entries(): List<WorkspaceEntry> = flatMap { a -> a.workspaces.map { WorkspaceEntry(it, a.account) } }.distinctBy { it.workspace.id }
 
-val ROLE_HINT = mapOf("owner" to "管理一切，包括成员角色和删除 workspace", "admin" to "邀请成员、添加和移除 station", "member" to "使用 workspace 里的 station")
+val ROLE_HINT get() = mapOf("owner" to t("android-misc.role.owner.hint"), "admin" to t("android-misc.role.admin.hint"), "member" to t("android-misc.role.member.hint"))
 
 @Serializable data class Member(val email: String, val name: String = "", val sub: String = "", val picture: String? = null, val role: String = "member")
 

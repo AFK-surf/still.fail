@@ -5,6 +5,7 @@
 // `longJobs` view, from each station's `jobs`, current with its events).
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,7 +66,7 @@ private fun OpenGroup(group: LongJobsGroup, all: MutableMap<String, Boolean>) {
         Text(group.head, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
         shown.forEach { OpenRow(it) }
         if (shown.size < list.size) Text(
-            "还有 ${list.size - shown.size} 个", fontSize = 12.sp, color = C.muted,
+            t("android-misc.openJobs.more", "n" to list.size - shown.size), fontSize = 12.sp, color = C.muted,
             modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all[group.key] = true }.padding(horizontal = 10.dp, vertical = 3.dp),
         )
     }
@@ -95,7 +96,7 @@ private fun OpenRow(job: Job) {
         val stopping = app.stopping(station, job)
         val stopFailed = app.stopFailed(station, job)
         Box(
-            Modifier.size(32.dp).clip(CircleShape).clickable(enabled = !stopping) { app.stopJob(station, job) }.semantics { contentDescription = "停止「${job.name}」" },
+            Modifier.size(32.dp).clip(CircleShape).clickable(enabled = !stopping) { app.stopJob(station, job) }.semantics { contentDescription = t("android-misc.jobs.stopNamed", "name" to job.name) },
             contentAlignment = Alignment.Center,
         ) { if (stopping || stopFailed != null) DoingMark(stopping, stopFailed) else IconIn(Icons.Stop, 15.dp, C.muted) }
     }

@@ -3,6 +3,7 @@
 // bar), or a sheet from the bottom.
 package fail.still.android
 
+import fail.still.android.ui.t
 import fail.still.android.ui.Splash
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -192,7 +193,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
         kept = shown
         sending++
         scope.launch {
-            try { core.call("prefs.set", patch) } catch (e: CoreException) { refused = true; toast = "没能保存设置：${errorText(e)}" }
+            try { core.call("prefs.set", patch) } catch (e: CoreException) { refused = true; toast = t("android-misc.prefs.saveFailed", "error" to errorText(e)) }
             if (--sending == 0) {
                 kept = waiting ?: if (refused) known else kept
                 waiting = null; refused = false
@@ -207,6 +208,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
             known = value
             if (sending > 0) waiting = value else kept = value
             fail.still.android.ui.I18n.follow(value.lang)
+            Notifier.keepLang(prefs, value.lang)
         }
     }
 
@@ -231,7 +233,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
 
     /** Why one of `calls` about what `on` names failed a moment ago (the core shows it a few seconds); null when none did. */
     fun failedOf(calls: Set<String>, vararg on: Pair<String, Any?>): String? =
-        doing.lastOrNull { item -> item.stage == "failed" && item.matches(calls, on) }?.let { it.error ?: "失败了" }
+        doing.lastOrNull { item -> item.stage == "failed" && item.matches(calls, on) }?.let { it.error ?: t("android-misc.failed") }
     fun failedOf(call: String, vararg on: Pair<String, Any?>): String? = failedOf(setOf(call), *on)
 
     private fun DoingItem.matches(calls: Set<String>, on: Array<out Pair<String, Any?>>): Boolean =
@@ -247,7 +249,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
                 run()
                 done?.let { toast = it }
             } catch (e: CoreException) {
-                toast = "没能$what：${errorText(e)}"
+                toast = t(if (e.code == "unconfirmed") "android-misc.act.unconfirmed" else "android-misc.act.failed", "what" to what, "error" to errorText(e))
                 failed?.invoke()
             }
         }
@@ -260,6 +262,14 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
     /** 外观: "system" (the default), "light" or "dark". */
     val theme: String get() = kept.appearance ?: "system"
     fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
+
+    /** 语言: "zh" or "en" as chosen; null follows the phone. The words change at once, then as the core says (its `lang`). */
+    val language: String? get() = kept.language
+    fun setLanguage(value: String?) {
+        val shown = kept.copy(language = value, lang = value ?: fail.still.android.ui.I18n.langOf(java.util.Locale.getDefault().toLanguageTag()))
+        fail.still.android.ui.I18n.follow(shown.lang)
+        setPrefs(shown, buildJsonObject { put("language", value) })
+    }
 
     val onlyMine: Boolean get() = kept.onlyMine ?: false
 
@@ -301,7 +311,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
         } catch (e: Exception) {
             // Refused (or not understood): as it was, and said.
             notify = was
-            toast = "没能${if (on) "打开" else "关掉"}通知：${(e as? CoreException)?.let(::errorText) ?: e.message.orEmpty()}"
+            toast = t(if (on) "android-misc.notify.onFailed" else "android-misc.notify.offFailed", "error" to ((e as? CoreException)?.let(::errorText) ?: e.message.orEmpty()))
             was
         }
     }
@@ -497,7 +507,7 @@ private fun AppContent(app: AppState) {
     val system = LocalUriHandler.current
     // Nothing on the phone opens it (a bare file name, an unknown scheme): said, not a crash.
     val links = remember(system) { object : UriHandler { override fun openUri(uri: String) { app.openLink(uri) {
-        try { system.openUri(uri) } catch (_: Exception) { app.toast = "打不开这个链接" }
+        try { system.openUri(uri) } catch (_: Exception) { app.toast = t("android-misc.link.cantOpen") }
     } } } }
     CompositionLocalProvider(LocalUriHandler provides links) { Box(Modifier.fillMaxSize().background(C.bg)) {
         val signedIn = accounts.value
@@ -519,10 +529,10 @@ private fun AppContent(app: AppState) {
                 if (current == null && blocked != null) fail.still.android.screens.Blocked(blocked)
                 else if (current == null) {
                     if (entries == null || all == null || !all.all { it.loaded }) {
-                        val failed = workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { "没能读取你的 workspace" }
+                        val failed = workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { t("android-misc.workspaces.loadFailed") }
                         // What the core has been waiting on for a while, under it (the core's `status`), as the web's splash says.
                         val status by rememberTopic<fail.still.android.data.StatusView>(app.core, Topics.status())
-                        Splash(failed ?: listOfNotNull("正在读取你的 workspace…", status.value?.text).joinToString("\n"), now = failed != null)
+                        Splash(failed ?: listOfNotNull(t("android-misc.workspaces.loading"), status.value?.text).joinToString("\n"), now = failed != null)
                     }
                     else Landing(signedIn, all)
                 } else {

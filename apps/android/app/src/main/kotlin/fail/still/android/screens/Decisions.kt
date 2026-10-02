@@ -12,6 +12,7 @@
 // of a type this app does not know is answered in its chat. In a chat only an options card has anything under it.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.animation.AnimatedVisibility
 import fail.still.android.ui.AgentStateMark
 import fail.still.android.data.ChatState
@@ -195,7 +196,7 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
             DecisionOptions(
                 options, Modifier.padding(top = 6.dp),
                 enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
-            ) { o -> if (!resolved) app.act("回答") { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
+            ) { o -> if (!resolved) app.act(t("android-misc.decisions.answerWhat")) { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
             }
         }
         AnimatedVisibility(
@@ -257,7 +258,7 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     val shown = local.shown(items)
     // With none left the page stays, for the next to come.
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
-        TopBack("会话", app::pop)
+        TopBack(t("android-misc.chats"), app::pop)
         if (shown.isEmpty()) {
             if (view != null && !view.loading) {
                 Idle(view, Modifier.weight(1f))
@@ -380,7 +381,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     /** Says it to the core; refused, the decision is back and why is said. */
     fun call(what: String, run: suspend () -> Unit) {
         app.scope.launch {
-            try { run() } catch (e: CoreException) { local.undo(item.key); app.toast = "没能$what：${errorText(e)}" }
+            try { run() } catch (e: CoreException) { local.undo(item.key); app.toast = t(if (e.code == "unconfirmed") "android-misc.act.unconfirmed" else "android-misc.act.failed", "what" to what, "error" to errorText(e)) }
         }
     }
 
@@ -406,9 +407,9 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
             }
         }
     }
-    val defer = { if (local.replying == null) go(-1) { local.later.remove(item.key); local.later.add(item.key); call("待定") { app.api(item.station).deferDecision(item.thread, item.seq) } } }
-    val dismiss = { if (local.replying == null) go(1) { local.gone.add(item.key); call("不再提醒") { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
-    val answer = { o: DecisionOption -> if (local.replying == null) go(0) { local.gone.add(item.key); call("回答") { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
+    val defer = { if (local.replying == null) go(-1) { local.later.remove(item.key); local.later.add(item.key); call(t("android-misc.decisions.deferWhat")) { app.api(item.station).deferDecision(item.thread, item.seq) } } }
+    val dismiss = { if (local.replying == null) go(1) { local.gone.add(item.key); call(t("android-misc.decisions.dismissWhat")) { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
+    val answer = { o: DecisionOption -> if (local.replying == null) go(0) { local.gone.add(item.key); call(t("android-misc.decisions.answerWhat")) { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
     // A text card's reply: it stays (a spinner on its send) until the core has it, then goes as an answer does; refused,
     // what was written stays and why is said.
     val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
@@ -424,7 +425,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                     app.api(item.station).replyDecision(item.thread, item.seq, text, files, quotes)
                     replyDraft.take()
                     go(0) { local.gone.add(item.key); local.replying = null }
-                } catch (e: CoreException) { local.replying = null; app.toast = "没能回复：${errorText(e)}" }
+                } catch (e: CoreException) { local.replying = null; app.toast = t("android-misc.decisions.replyFailed", "error" to errorText(e)) }
                 finally { replyDraft.starting = false }
             }
         }
@@ -482,8 +483,8 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                 }
                 .semantics {
                     customActions = listOf(
-                        CustomAccessibilityAction("待定") { defer(); true },
-                        CustomAccessibilityAction("不再提醒") { dismiss(); true },
+                        CustomAccessibilityAction(t("android-misc.decisions.defer")) { defer(); true },
+                        CustomAccessibilityAction(t("android-misc.decisions.dismiss")) { dismiss(); true },
                     )
                 },
         ) {
@@ -493,7 +494,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                 Modifier.matchParentSize().padding(horizontal = 24.dp).graphicsLayer { alpha = (abs(drag.value) / (width * 0.12f)).coerceIn(0f, 1f) },
                 contentAlignment = if (x > 0) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
-                Text(if (x > 0) "不再提醒" else "待定", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
+                Text(if (x > 0) t("android-misc.decisions.dismiss") else t("android-misc.decisions.defer"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
             }
             if (busy && n > 1) {
                 Column(Modifier.fillMaxSize().background(C.bg)) {
@@ -520,7 +521,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("← 待定　不再提醒 →", fontSize = 12.sp, color = C.subtle, maxLines = 1, modifier = Modifier.weight(1f))
+            Text(t("android-misc.decisions.hint"), fontSize = 12.sp, color = C.subtle, maxLines = 1, modifier = Modifier.weight(1f))
             Text("1 / $n", fontSize = 12.sp, color = C.subtle, maxLines = 1)
         }
     }
@@ -547,7 +548,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
     val ctx = remember(item) { Here(item.station, of, view, emptyList(), orOwner = item.message.by.agent ?: item.session) }
     Row(
         Modifier.fillMaxWidth().clickable { app.push(Screen.Chat(item.station, of)) }.padding(horizontal = 16.dp, vertical = 8.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "打开对话「${item.title}」" },
+            .semantics(mergeDescendants = true) { contentDescription = t("android-misc.decisions.openChat", "title" to item.title) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(item.title, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -583,12 +584,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
         "text" -> DecisionComposer(item, card?.placeholder, onField, onReply)
         // A card this app does not know: answered in its chat, at the post.
         else -> Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("这张卡片要在 chat 里回", fontSize = 13.sp, color = C.muted)
+            Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)
             Box(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink)
                     .clickable { app.push(Screen.Chat(item.station, of, at = item.seq)) }.padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text("去 chat 里回", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }
+            ) { Text(t("android-misc.decisions.goReply"), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }
         }
     }
 }
@@ -601,7 +602,7 @@ private fun DecisionComposer(item: DecisionItem, placeholder: String?, onField: 
     val host = remember(item.key) { Host() }
     val launchers = AttachLaunchers { picked -> app.upload(draft, item.station, picked, app.scope) }
     host.spec = ComposerSpec(
-        station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: "发消息",
+        station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: t("android-misc.decisions.placeholder"),
         onPlus = { openAttach(app, launchers) }, onSend = onReply,
     )
     HostComposer(host, Modifier.onGloballyPositioned(onField).layout { measurable, constraints ->

@@ -323,7 +323,7 @@ fun ReaderHost(app: AppState) {
             Modifier.fillMaxSize().background(C.bg).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                 .windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars),
         ) {
-            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) { NavBack("执行历史") { app.reader = null } }
+            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) { NavBack(t("android-misc.reader.back")) { app.reader = null } }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { current.label(this) }
                 current.content()

@@ -4,6 +4,7 @@
 // station's other skills are listed too. Read only.
 package fail.still.android.screens
 
+import fail.still.android.ui.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,22 +72,22 @@ fun MemoryScreen(current: WorkspaceEntry, address: String) {
         catch (e: IllegalArgumentException) { error = e.message }
     }
     Column(Modifier.fillMaxSize()) {
-        NavBar(s?.name ?: stationName(address), app::pop, "记忆", sub = { Text("所有会话共用，由 agent 自己维护", fontSize = 11.sp, color = C.muted, maxLines = 1) })
+        NavBar(s?.name ?: stationName(address), app::pop, t("android-misc.memory.title"), sub = { Text(t("android-misc.memory.sub"), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         val m = memory
-        if (m == null) return Loading(error?.let { "读不到这台 station 的记忆：$it。更早的 station 还没有这一页，更新后就有。" } ?: "正在读取…")
+        if (m == null) return Loading(error?.let { t("android-misc.memory.loadFailed", "error" to it) } ?: t("android-misc.reading"))
         val projects = m.skills.filter { it.project }
         val others = m.skills.filter { !it.project }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 4.dp)) {
-            SectionHeader("全局记忆", start = 24.dp)
-            Note("每个会话开始时都会读。只放跨项目都适用的：团队怎么协作、怎么回复。")
-            Card { Markdown(m.global.text.trim().ifEmpty { "（空的）" }, size = 14) }
-            SectionHeader("项目记忆", start = 24.dp)
-            Note("每个项目一份，是一个 skill：会话开始时只读「什么时候用」那句，做到相关的事才读全文。项目不一定是代码仓库。")
-            if (projects.isEmpty()) Note("还没有项目记忆。agent 学到只跟某个项目有关的东西时，会自己建一个。")
+            SectionHeader(t("android-misc.memory.global"), start = 24.dp)
+            Note(t("android-misc.memory.global.note"))
+            Card { Markdown(m.global.text.trim().ifEmpty { t("android-misc.memory.empty") }, size = 14) }
+            SectionHeader(t("android-misc.memory.projects"), start = 24.dp)
+            Note(t("android-misc.memory.projects.note"))
+            if (projects.isEmpty()) Note(t("android-misc.memory.projects.none"))
             else ListCard { projects.forEach { SkillRow(it) } }
             if (others.isNotEmpty()) {
-                SectionHeader("其他 skill", start = 24.dp)
-                Note("团队共用的技能说明，agent 做到相关的事时读。")
+                SectionHeader(t("android-misc.memory.skills"), start = 24.dp)
+                Note(t("android-misc.memory.skills.note"))
                 ListCard { others.forEach { SkillRow(it) } }
             }
             Spacer(Modifier.height(30.dp))
@@ -104,17 +105,17 @@ fun MemoriesScreen(current: WorkspaceEntry) {
     val topic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val stations = topic.value
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("设置", app::pop)
-        LargeTitle("", "记忆")
-        PageNote("每台 station 上所有会话共用的记忆，由 agent 自己维护，各台 station 之间不同步。")
-        if (stations == null) Text(topic.error?.message ?: "正在读取 station…", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        TopBack(t("android-misc.settings"), app::pop)
+        LargeTitle("", t("android-misc.memory.title"))
+        PageNote(t("android-misc.memory.note"))
+        if (stations == null) Text(topic.error?.message ?: t("android-misc.stations.loading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else ListCard {
             stations.forEach { s ->
-                if (s.online) GoRow(s.name, "全局记忆 · 项目记忆") { app.push(Screen.Memory(s.station)) }
+                if (s.online) GoRow(s.name, t("android-misc.memory.row")) { app.push(Screen.Memory(s.station)) }
                 else ListRow {
                     Column(Modifier.weight(1f)) {
                         Text(s.name, fontSize = 15.sp, color = C.ink)
-                        Text("离线，读不到它的记忆", fontSize = 13.sp, color = C.muted)
+                        Text(t("android-misc.memory.offline"), fontSize = 13.sp, color = C.muted)
                     }
                 }
             }
@@ -143,11 +144,11 @@ private fun SkillRow(skill: SkillFile) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(skill.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.ink)
-                    if (skill.builtin) Text("station 自带", fontSize = 12.sp, color = C.subtle)
+                    if (skill.builtin) Text(t("android-misc.memory.builtin"), fontSize = 12.sp, color = C.subtle)
                 }
-                Text(about.ifEmpty { "（没写什么时候用）" }, fontSize = 13.sp, color = C.muted)
+                Text(about.ifEmpty { t("android-misc.memory.noWhen") }, fontSize = 13.sp, color = C.muted)
             }
         }
-        if (open) Markdown((skill.body ?: skill.text).ifEmpty { "（空的）" }, Modifier.padding(start = 38.dp, end = 12.dp, top = 12.dp, bottom = 18.dp), size = 14)
+        if (open) Markdown((skill.body ?: skill.text).ifEmpty { t("android-misc.memory.empty") }, Modifier.padding(start = 38.dp, end = 12.dp, top = 12.dp, bottom = 18.dp), size = 14)
     }
 }

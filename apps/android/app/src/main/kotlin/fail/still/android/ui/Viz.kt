@@ -241,7 +241,7 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
                     override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                         val url = request.url.toString()
                         if (request.isForMainFrame && (url.startsWith("http://") || url.startsWith("https://"))) {
-                            view.post { app.openLink(url) { try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url)) } catch (_: Exception) { app.toast = "打不开这个链接" } } }
+                            view.post { app.openLink(url) { try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url)) } catch (_: Exception) { app.toast = t("android-misc.link.cantOpen") } } }
                         }
                         return true
                     }
@@ -259,7 +259,7 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
                                 "state" -> { val s = m["state"] ?: JsonNull; if (s.toString().length <= MAX_STATE) keep?.invoke(s) }
                                 "failed" -> (m["message"] as? JsonPrimitive)?.content?.let { failed?.invoke(it) }
                                 "followup" -> (m["prompt"] as? JsonPrimitive)?.content?.trim()?.takeIf { it.isNotEmpty() }?.let { words ->
-                                    app.toast = if (send?.invoke(words.take(4000)) == true) "已放进输入框，确认后发送" else "这个对话现在不能发消息"
+                                    app.toast = if (send?.invoke(words.take(4000)) == true) t("android-misc.viz.followupDrafted") else t("android-misc.viz.cantSend")
                                 }
                             }
                         } catch (_: Exception) {
@@ -345,11 +345,11 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
                 VizFrame(l.html, l.state, onState = keep)
                 // Under the page, out of its way: the way to open it on its own, an icon in the chat's grey.
                 Row(Modifier.fillMaxWidth().padding(top = 2.dp).height(22.dp), horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End)) {
-                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = "全屏打开" }.clickable { full = true }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = t("android-misc.viz.fullscreen") }.clickable { full = true }, contentAlignment = Alignment.Center) {
                         IconIn(Icons.Expand, 14.dp, webSubtle)
                     }
                     // 在侧边打开: on a phone, as web mobile has it, the file as a page of its own in the preview.
-                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = "在侧边打开" }.clickable { app.push(fail.still.android.Screen.PreviewFile(station, key, file.path, file.name)) }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).semantics { contentDescription = t("android-misc.viz.openAside") }.clickable { app.push(fail.still.android.Screen.PreviewFile(station, key, file.path, file.name)) }, contentAlignment = Alignment.Center) {
                         IconIn(Icons.PanelOpen, 14.dp, webSubtle)
                     }
                 }
@@ -383,7 +383,7 @@ fun VizOpen(station: String, key: String, file: Attachment, onClose: () -> Unit)
     val scope = rememberCoroutineScope()
     when (val l = rememberViz(station, key, file)) {
         Loaded.Waiting -> Unit
-        Loaded.Failed -> LaunchedEffect(Unit) { app.toast = "读不到这个文件"; onClose() }
+        Loaded.Failed -> LaunchedEffect(Unit) { app.toast = t("android-misc.viz.cantRead"); onClose() }
         is Loaded.Ready -> {
             var kept by remember(l) { mutableStateOf(l.state) }
             VizFull(file.name, l.html, kept, { s -> kept = s; scope.launch { try { app.api(station).setWidgetState(key, file.path, s) } catch (_: CoreException) {} } }, onClose)
@@ -415,7 +415,7 @@ private fun mermaidDocument(code: String): String = """<pre class="mermaid-src" 
   const post = (m) => parent.postMessage({ emberViz: true, ...m }, "*");
   const source = document.querySelector(".mermaid-src").textContent;
   let mermaid;
-  try { mermaid = (await import("$MERMAID")).default; } catch (e) { post({ type: "failed", message: "mermaid 没能加载" }); }
+  try { mermaid = (await import("$MERMAID")).default; } catch (e) { post({ type: "failed", message: "${t("android-misc.viz.mermaidFailed")}" }); }
   const pixel = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = "#000"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return "rgb(" + r + ", " + g + ", " + b + ")"; };
   const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === "--font-sans" ? value : rgb(value); };

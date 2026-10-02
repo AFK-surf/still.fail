@@ -2,27 +2,29 @@
 // core's, client/core/src/present.rs and format.rs). As web/src/format.ts.
 package fail.still.android.data
 
+import fail.still.android.ui.t
+
 val RUNTIME_LABEL = mapOf("claude" to "Claude Code", "codex" to "Codex")
 
 /** How a connect's conversations become sessions, in words (web/src/format.ts → MODE). */
-val MODE_LABEL = mapOf("multi-session" to "每个 thread 一个会话", "single-session" to "所有 thread 共用一个会话")
-val MODE_TEXT = mapOf(
-    "multi-session" to "在 thread 里 @ 它就开一个新会话，thread 里的后续消息都进这个会话。",
-    "single-session" to "它看到的所有 thread 进同一个会话，适合一个长期值守的助手。",
+val MODE_LABEL get() = mapOf("multi-session" to t("android-misc.mode.multi"), "single-session" to t("android-misc.mode.single"))
+val MODE_TEXT get() = mapOf(
+    "multi-session" to t("android-misc.mode.multi.text"),
+    "single-session" to t("android-misc.mode.single.text"),
 )
 
 /** How a profile reaches its model service, in a word (web/src/format.ts → ACCESS). */
-val ACCESS_LABEL = mapOf("subscription" to "订阅账号", "opencode-go" to "OpenCode Go", "anthropic-api" to "Anthropic API", "env" to "自定义环境变量")
+val ACCESS_LABEL get() = mapOf("subscription" to t("android-misc.access.subscription"), "opencode-go" to "OpenCode Go", "anthropic-api" to "Anthropic API", "env" to t("android-misc.access.env"))
 /** The kinds that run on a key (web/src/format.ts → KEYED). */
 val KEYED = setOf("opencode-go", "anthropic-api")
 
 /** A kind of profile to add: how it reaches its service, the runtime it runs (null: any), in words (web/src/pages/Accounts.tsx → CHOICES). */
 class ProfileChoice(val kind: String, val runtime: String?, val title: String, val description: String)
-val PROFILE_CHOICES = listOf(
-    ProfileChoice("subscription", "claude", "Claude 订阅", "Claude Pro / Max，跑 Claude Code。在浏览器里登录一次。"),
-    ProfileChoice("subscription", "codex", "ChatGPT 订阅", "ChatGPT Plus / Pro，跑 Codex。用设备码登录一次。"),
-    ProfileChoice("opencode-go", null, "OpenCode Go", "一个 key，Claude Code 和 Codex 都能用。"),
-    ProfileChoice("anthropic-api", null, "Anthropic API", "Anthropic 的 API key，跑 Claude Code。"),
-    ProfileChoice("env", "claude", "自定义环境变量（Claude Code）", "自己设置接模型服务的环境变量。"),
-    ProfileChoice("env", "codex", "自定义环境变量（Codex）", "自己设置接模型服务的环境变量。"),
+val PROFILE_CHOICES get() = listOf(
+    ProfileChoice("subscription", "claude", t("android-misc.choice.claude"), t("android-misc.choice.claude.text")),
+    ProfileChoice("subscription", "codex", t("android-misc.choice.chatgpt"), t("android-misc.choice.chatgpt.text")),
+    ProfileChoice("opencode-go", null, "OpenCode Go", t("android-misc.choice.opencode.text")),
+    ProfileChoice("anthropic-api", null, "Anthropic API", t("android-misc.choice.anthropic.text")),
+    ProfileChoice("env", "claude", t("android-misc.choice.env", "runtime" to "Claude Code"), t("android-misc.choice.env.text")),
+    ProfileChoice("env", "codex", t("android-misc.choice.env", "runtime" to "Codex"), t("android-misc.choice.env.text")),
 )

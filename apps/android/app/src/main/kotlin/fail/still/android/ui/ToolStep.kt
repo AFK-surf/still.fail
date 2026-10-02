@@ -241,7 +241,7 @@ private fun Plan(items: List<Pair<String, String>>) {
 @Composable
 private fun Fields(a: JsonObject, skip: List<String> = emptyList()) {
     val rows = a.entries.filter { (k, v) -> k !in skip && v !is JsonNull && v.str() != "" }
-    if (rows.isEmpty()) return None("没有参数")
+    if (rows.isEmpty()) return None(t("android-misc.tool.noArgs"))
     Column(Modifier.padding(horizontal = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         rows.forEach { (k, v) ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -296,7 +296,7 @@ fun ToolCall(name: String, call: String, said: Boolean) {
     when {
         command != null -> { Block(command, "sh"); Facts(a, skip + listOf("command", "cmd")) }
         file != null && a["old_string"].str() != null && a["new_string"].str() != null -> {
-            PathLine(file, if ((a["replace_all"] as? JsonPrimitive)?.booleanOrNull == true) "全部替换" else null)
+            PathLine(file, if ((a["replace_all"] as? JsonPrimitive)?.booleanOrNull == true) t("android-misc.tool.replaceAll") else null)
             Diff(a["old_string"].str()!!, a["new_string"].str()!!)
         }
         file != null && edits != null -> {
@@ -313,7 +313,8 @@ fun ToolCall(name: String, call: String, said: Boolean) {
         file != null && a.keys.all { it in listOf("file_path", "path", "notebook_path", "offset", "limit") + skip } -> {
             val from = a["offset"].num()?.toLong()
             val count = a["limit"].num()?.toLong()
-            val range = if (from != null || count != null) (from?.let { "第 $it 行起" } ?: "") + (count?.let { "${if (from != null) "，" else ""}$it 行" } ?: "") else null
+            val range = if (from != null && count != null) t("android-misc.tool.linesFrom", "from" to from, "n" to count)
+                else from?.let { t("android-misc.tool.from", "from" to it) } ?: count?.let { t("android-misc.tool.lines", "n" to it) }
             PathLine(file, range)
         }
         a["pattern"].str() != null || a["query"].str() != null || a["url"].str() != null -> {
@@ -331,7 +332,7 @@ private fun commandOutput(text: String): Pair<List<String>, String>? {
     val wall = m.groups[1]?.value
     val code = m.groups[2]?.value
     if (wall == null && code == null) return null
-    return listOfNotNull(code?.let { "退出码 $it" }, wall?.let { "用时 $it" }) to text.substring(m.range.last + 1)
+    return listOfNotNull(code?.let { t("android-misc.tool.exitCode", "code" to it) }, wall?.let { t("android-misc.tool.took", "time" to it) }) to text.substring(m.range.last + 1)
 }
 
 /** Claude Code's Read: `cat -n` lines (`   12→text` or `   12\ttext`), without their numbers; what follows them is left out. */
@@ -353,7 +354,7 @@ private fun Output(text: String, failed: Boolean) {
 /** What a call gave back. */
 @Composable
 fun ToolResult(name: String, call: String, result: String, failed: Boolean) {
-    if (result.isBlank()) return None("没有输出")
+    if (result.isBlank()) return None(t("android-misc.tool.noOutput"))
     val args = parse(call) as? JsonObject
     val file = args?.let { it["file_path"].str() ?: it["path"].str() }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -363,7 +364,7 @@ fun ToolResult(name: String, call: String, result: String, failed: Boolean) {
         when {
             codex != null -> {
                 if (codex.first.isNotEmpty()) FactRow(codex.first.map { it to null })
-                if (codex.second.isNotBlank()) Output(codex.second, failed) else None("没有输出")
+                if (codex.second.isNotBlank()) Output(codex.second, failed) else None(t("android-misc.tool.noOutput"))
             }
             read != null -> Block(read, languageOf(file))
             parsed is JsonObject -> Fields(parsed)
