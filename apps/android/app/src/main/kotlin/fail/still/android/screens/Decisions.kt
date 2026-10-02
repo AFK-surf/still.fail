@@ -248,13 +248,7 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     val items = view?.items.orEmpty()
     SideEffect { local.caughtUp(items) }
     val shown = local.shown(items)
-    // Only the core can confirm the queue is empty; an optimistic dismissal may still fail.
-    // Covered pages stay composed: never pop the chat opened over this page.
-    val empty = view != null && !view.loading && view.count == 0u && topic.error == null
-    val active = app.stack.lastOrNull() == Screen.Decisions
-    LaunchedEffect(empty, active, local.replying) {
-        if (empty && active && local.replying == null) app.pop()
-    }
+    // With none left the page stays, for the next to come.
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         TopBack("会话", app::pop)
         if (shown.isEmpty()) {

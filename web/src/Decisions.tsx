@@ -10,7 +10,7 @@
 //
 // Everything said goes through the core's calls (decision.answer / reply / defer / dismiss); what is under way shows
 // on its button (doing.ts), what failed in a toast (useAct).
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { useApi, useStations } from "./api.ts";
@@ -137,12 +137,10 @@ export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
  * The decisions waiting for the viewer in a workspace (the core's `decisions` view: those set aside last), as both
  * pages go through them: one answered or dismissed here goes at once, before the core's list says so (back if the call
  * failed); one set aside goes to the back at once, as the core will have it; one whose written reply is on its way
- * stays (`replying`). `empty` once the core says nothing remains.
+ * stays (`replying`). The pages stay when none is left, for the next to come.
  */
 export function useDecisionQueue(workspace: string) {
   const view = useTopic<DecisionsView>({ topic: "decisions", workspace });
-  // Let the core confirm that nothing remains: a locally hidden card can still come back on failure.
-  const empty = !!view.value && !view.value.loading && view.value.count === 0 && !view.error;
   const [replying, setReplying] = useState<DecisionItem | null>(null);
   const stations = useStations(workspace).value;
   const call = useCall();
@@ -160,7 +158,7 @@ export function useDecisionQueue(workspace: string) {
   const back = (d: DecisionItem) => setGone((was) => { const now = new Set(was); now.delete(keyOf(d)); return now; });
   const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
   return {
-    view, empty, items, replying, setReplying,
+    view, items, replying, setReplying,
     /** Whether it was set aside (待定), here or by the core. */
     isAside: (d: DecisionItem) => aside.includes(keyOf(d)) || !!d.deferred,
     defer(d: DecisionItem) {
@@ -186,10 +184,9 @@ export function useDecisionQueue(workspace: string) {
 /**
  * A decision on its way off (answered: up; set aside: left; dismissed: right): a copy of `el` flies from where it is
  * now over what `place` shows next, then goes. Answered, it draws in to about 88% and is pulled up, faster and faster.
- * `done` once the copy is gone.
  */
-export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right" | "up", scroller: string, done?: () => void): void {
-  if (reducedMotion()) { done?.(); return; }
+export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right" | "up", scroller: string): void {
+  if (reducedMotion()) return;
   const ghost = el.cloneNode(true) as HTMLElement;
   ghost.classList.add(css.ghost);
   ghost.classList.remove(css.arriving);
@@ -209,7 +206,7 @@ export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right"
     { transform: `${end} scale(.88)`, offset: 1 },
   ] : [{ transform: start }, { transform: end }];
   if (to === "up") ghost.style.transformOrigin = "50% 0%";
-  const finish = () => { ghost.remove(); done?.(); };
+  const finish = () => ghost.remove();
   void ghost.animate(frames, { duration: to === "up" ? 360 : 260, easing: to === "up" ? "cubic-bezier(.55, 0, .85, .35)" : "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
     .finished.then(finish, finish);
 }
@@ -218,19 +215,11 @@ export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right"
  * The decisions waiting for the viewer in a workspace, one at a time (the phone's 奏): left 待定, right 不再提醒, by
  * swiping. `inline`: the messages' avatars in line with their names. `onOpen` opens the decision's chat.
  */
-export function DecisionDeck({ workspace, inline, onOpen, onEmpty, className }: {
-  workspace: string; inline: boolean; onOpen: (path: string) => void; onEmpty?: (() => void) | undefined; className?: string;
+export function DecisionDeck({ workspace, inline, onOpen, className }: {
+  workspace: string; inline: boolean; onOpen: (path: string) => void; className?: string;
 }) {
   const queue = useDecisionQueue(workspace);
-  const { view, empty, items, replying, setReplying } = queue;
-  const returned = useRef(false);
-  const [leaving, setLeaving] = useState(0);
-  useEffect(() => {
-    if (empty && !leaving && !replying && onEmpty && !returned.current) {
-      returned.current = true;
-      onEmpty();
-    }
-  }, [empty, leaving, replying, onEmpty]);
+  const { view, items, replying, setReplying } = queue;
   const front = items[0];
   // Each time one leaves another comes, even the same again (set aside, the only one).
   const [turn, setTurn] = useState(0);
@@ -251,10 +240,7 @@ export function DecisionDeck({ workspace, inline, onOpen, onEmpty, className }: 
     const el = card.current;
     const place = host.current;
     if (under.current) delete under.current.dataset.side;
-    if (el && place && !reducedMotion()) {
-      setLeaving((n) => n + 1);
-      flyOff(el, place, to, `.${css.scroll}`, () => setLeaving((n) => n - 1));
-    }
+    if (el && place) flyOff(el, place, to, `.${css.scroll}`);
     if (el) { el.style.transform = ""; delete el.dataset.dragging; }
     setArriving(to !== "up");
     setTurn((t) => t + 1);

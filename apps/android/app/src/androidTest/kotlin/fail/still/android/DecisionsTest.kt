@@ -183,24 +183,12 @@ class DecisionsTest {
 
     // ── the decisions page ──
 
-    @Test fun emptyQueueReturnsToPreviousPage() {
+    // With none left the page stays, for the next to come.
+    @Test fun emptyQueueStays() {
         val h = page()
-        val recording = h.record("decisions-empty-back")
-        recording.frames(30)
-        recording.frame { h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false)) }
-        recording.frames(40)
-        recording.end()
-        rule.runOnIdle { assertEquals(listOf(Screen.Home), h.app.stack) }
-    }
-
-    @Test fun loadingEmptyQueueStaysUntilLoaded() {
-        val h = Harness(rule)
-        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = true))
-        h.launch(listOf(Screen.Home, Screen.Settings, Screen.Decisions))
-        rule.runOnIdle { assertEquals(Screen.Decisions, h.app.stack.last()) }
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false))
         h.settle()
-        rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Settings), h.app.stack) }
+        rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Decisions), h.app.stack) }
     }
 
     @Test fun emptyQueueDoesNotPopPageAboveIt() {
@@ -212,7 +200,7 @@ class DecisionsTest {
         rule.runOnIdle { assertEquals(Screen.Appearance, h.app.stack.last()) }
         rule.runOnUiThread { h.app.pop() }
         h.settle()
-        rule.runOnIdle { assertEquals(listOf(Screen.Home), h.app.stack) }
+        rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Decisions), h.app.stack) }
     }
 
     @Test fun swipeLeftSetsItAside() {
@@ -289,11 +277,12 @@ class DecisionsTest {
         assertOneCall(h, "decision.dismiss", gap)
     }
 
-    @Test fun initiallyEmptyPageReturns() {
+    @Test fun initiallyEmptyPageStays() {
         val h = Harness(rule)
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false))
         h.launch(listOf(Screen.Home, Screen.Decisions))
-        rule.runOnIdle { assertEquals(listOf(Screen.Home), h.app.stack) }
+        h.settle()
+        rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Decisions), h.app.stack) }
     }
 
     // ── a text card ──

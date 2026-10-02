@@ -110,7 +110,7 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
         <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
         <div className={css.backRow}>
-          <NavLink className={`${nav.navRow} ${css.back}`} to={back}><ChevronLeft {...ICON} />对话</NavLink>
+          <NavLink className={`${nav.navRow} ${css.back}`} to={back} end><ChevronLeft {...ICON} />对话</NavLink>
         </div>
         <div className={css.title}>
           <span className={css.titleWord}>奏</span>
