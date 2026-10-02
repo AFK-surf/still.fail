@@ -192,8 +192,8 @@
   },
   "core-views.present.profile.blocked": "Suspended",
   "core-views.present.profile.models": {
-    "one": "{enabled} of 1 model enabled",
-    "other": "{enabled} of {n} models enabled"
+    "one": "{enabled}/1 model on",
+    "other": "{enabled}/{n} models on"
   },
   "core-views.present.profile.no_models": "No models listed yet",
   "core-views.present.resets_left": "{n} left",

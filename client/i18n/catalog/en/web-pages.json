@@ -138,7 +138,7 @@
   "web-pages.chat.info": "Chat info",
   "web-pages.chat.info.created": "Created",
   "web-pages.chat.info.from": "From",
-  "web-pages.chat.info.lastMessage": "Last message",
+  "web-pages.chat.info.lastMessage": "Latest",
   "web-pages.chat.info.native": "{name} chat",
   "web-pages.chat.info.people": "People",
   "web-pages.chat.info.started": "Started",
@@ -649,7 +649,7 @@
   "web-pages.settings.workspace.nameLabel": "Workspace name",
   "web-pages.settings.workspace.renameFailed": "Couldn't rename: {error}",
   "web-pages.settings.workspace.renamed": "Renamed",
-  "web-pages.settings.workspace.youAre": "You're {role} here, through {email}.",
+  "web-pages.settings.workspace.youAre": "Your role here: {role}, via {email}.",
   "web-pages.signIn.again": "Sign in again",
   "web-pages.signIn.failed": "Sign-in failed",
   "web-pages.signIn.google": "Sign in with Google",
@@ -808,5 +808,5 @@
     "other": "{n} stations"
   },
   "web-pages.workspace.switchTo": "Switch to",
-  "web-pages.workspace.youAre": "You're {role}"
+  "web-pages.workspace.youAre": "{role}"
 }

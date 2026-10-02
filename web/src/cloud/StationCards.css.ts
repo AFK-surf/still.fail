@@ -48,7 +48,7 @@ export const netStacked = style({ marginLeft: "0", paddingTop: "10px", fontSize:
 export const netPart = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: "0", flex: "0 1 14em", selectors: { [`${netStacked} &`]: { flex: "1 1 0" } } });
 export const netLine = style({ display: "flex", gap: "8px", minWidth: "0" });
 globalStyle(`${netLine} > *:last-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
-export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5ch 7.5ch", columnGap: "5px", rowGap: "2px", alignItems: "baseline", flex: "none" });
+export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5ch minmax(7.5ch, auto)", columnGap: "5px", rowGap: "2px", alignItems: "baseline", flex: "none" });
 
 export const details = style({ display: "grid", gap: "24px" });
 export const detailSection = style({ display: "grid", gap: "10px", fontSize: vars.textSm, color: vars.muted, overflowWrap: "anywhere" });

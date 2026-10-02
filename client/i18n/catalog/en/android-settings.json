@@ -248,7 +248,7 @@
   "android-settings.models.header": "Models · {on} of {n} on",
   "android-settings.models.headerSaving": "Models · {on} of {n} on · Saving…",
   "android-settings.models.noneFiltered": "Clear filtered",
-  "android-settings.models.note": "Only ticked models show up in new chats and connects.",
+  "android-settings.models.note": "Only ticked models show up in chats and connects.",
   "android-settings.models.refresh": "Refresh",
   "android-settings.models.refreshWhat": "refresh models",
   "android-settings.models.refreshed": "Checked",
