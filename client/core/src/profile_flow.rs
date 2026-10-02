@@ -191,7 +191,9 @@ fn view(station: &str, draft: &Value, overview: &Value) -> Value {
     let key_ok = key_optional || !draft["key"].as_str().unwrap_or("").trim().is_empty();
     let endpoint_ok = !own || providers::clean_endpoint(endpoint).is_some();
     out["canSubmit"] = json!(draft["pending"] != true && key_ok && endpoint_ok);
-    out["submitLabel"] = json!(t!("core-views.flow.verify_add"));
+    // A provider with no model list to read cannot have its key tried when it is added (Jev): say only "add".
+    let untried = providers::find(&source_id).is_some_and(|s| s.decision.is_some() && s.chat.is_none() && s.responses.is_none() && s.anthropic.is_none());
+    out["submitLabel"] = json!(if untried { t!("core-views.flow.add") } else { t!("core-views.flow.verify_add") });
     let uses = providers::find(&source_id).map(|s| uses_of(s, (!endpoint.is_empty()).then_some(endpoint), protocol)).unwrap_or_default();
     out["usesLine"] = json!(if uses.is_empty() { t!("core-views.flow.uses_none") } else { t!("core-views.flow.uses", uses = uses_text(&uses)) });
     out
@@ -406,6 +408,20 @@ mod tests {
             assert_eq!(flows.value(&topic).unwrap()["error"], "DeepSeek 拒绝了这个 key（401）");
             flows.change(&topic, 1, "edit", &json!({ "key": "sk-2" })).unwrap();
             assert!(flows.value(&topic).unwrap()["error"].is_null(), "typing again clears it");
+        });
+    }
+
+    #[test]
+    fn jev_is_added_for_the_decisions_alone_and_its_key_is_not_tried_on_adding() {
+        crate::testing::run(async {
+            let (store, flows, topic) = flow();
+            flows.change(&topic, 1, "open", &json!({})).unwrap();
+            store.set(&Topic::Overview { station: "ws/st".into() }, Ok(json!({ "apiProviders": [{"id": "jev"}, {"id": "deepseek"}] })));
+            flows.change(&topic, 1, "edit", &json!({ "provider": "jev", "key": "k" })).unwrap();
+            let view = flows.value(&topic).unwrap();
+            assert_eq!((view["usesLine"].as_str(), view["submitLabel"].as_str(), view["canSubmit"].as_bool()), (Some("添加后可用于：自动决策"), Some("添加"), Some(true)));
+            flows.change(&topic, 1, "edit", &json!({ "provider": "deepseek", "key": "k" })).unwrap();
+            assert_eq!(flows.value(&topic).unwrap()["submitLabel"], "验证并添加");
         });
     }
 
