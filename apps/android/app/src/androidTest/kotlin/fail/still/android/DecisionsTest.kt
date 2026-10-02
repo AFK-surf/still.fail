@@ -450,7 +450,7 @@ class DecisionsTest {
         val p = option(both).center
         val rec = h.record("decision-answer-${if (dark) "dark" else "light"}")
         press(p)
-        rec.frames(8)
+        rec.frames(18)
         send(MotionEvent.ACTION_UP, p)
         rec.frames(8)
         h.deliver()
