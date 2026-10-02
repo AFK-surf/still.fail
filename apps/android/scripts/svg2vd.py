@@ -20,7 +20,7 @@ INHERITED = ("fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoi
 # Asset file → drawable name. The model makers' marks are `maker_*`; the buddy's states `buddy_*`.
 NAMES = {
     "mark": "stillfail_mark", "lockup": "stillfail_lockup", "slack": "slack",
-    "anthropic": "maker_anthropic", "openai": "maker_openai", "deepseek": "maker_deepseek", "zhipu": "maker_zhipu",
+    "anthropic": "maker_anthropic", "openai": "maker_openai", "deepseek": "maker_deepseek", "zhipu": "maker_zhipu", "mistral": "maker_mistral", "xiaomi": "maker_xiaomi", "ant-ling": "maker_ant_ling", "openrouter": "maker_openrouter", "vercel": "maker_vercel", "cloudflare": "maker_cloudflare", "azure": "maker_azure", "groq": "maker_groq", "together": "maker_together", "fireworks": "maker_fireworks", "cerebras": "maker_cerebras", "huggingface": "maker_huggingface", "nvidia": "maker_nvidia", "baseten": "maker_baseten",
     "idle": "buddy_idle", "working": "buddy_working", "blocked": "buddy_blocked", "done": "buddy_done", "offline": "buddy_offline",
     "illus-sign-in": "illus_sign_in", "illus-new-chat": "illus_new_chat", "illus-station-offline": "illus_station_offline",
 }

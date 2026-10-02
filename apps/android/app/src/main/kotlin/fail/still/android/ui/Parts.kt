@@ -90,10 +90,24 @@ private val MAKER_MARKS = mapOf(
     "anthropic" to R.drawable.maker_anthropic, "openai" to R.drawable.maker_openai, "deepseek" to R.drawable.maker_deepseek,
     "qwen" to R.drawable.maker_qwen, "zhipu" to R.drawable.maker_zhipu, "gemini" to R.drawable.maker_gemini,
     "kimi" to R.drawable.maker_kimi, "minimax" to R.drawable.maker_minimax, "xai" to R.drawable.maker_xai,
+    "mistral" to R.drawable.maker_mistral,
+    "xiaomi" to R.drawable.maker_xiaomi,
+    "ant-ling" to R.drawable.maker_ant_ling,
+    "openrouter" to R.drawable.maker_openrouter,
+    "vercel" to R.drawable.maker_vercel,
+    "cloudflare" to R.drawable.maker_cloudflare,
+    "azure" to R.drawable.maker_azure,
+    "groq" to R.drawable.maker_groq,
+    "together" to R.drawable.maker_together,
+    "fireworks" to R.drawable.maker_fireworks,
+    "cerebras" to R.drawable.maker_cerebras,
+    "huggingface" to R.drawable.maker_huggingface,
+    "nvidia" to R.drawable.maker_nvidia,
+    "baseten" to R.drawable.maker_baseten,
 )
 
 /** Marks of one colour, drawn in the page's ink. */
-private val MONO = setOf("anthropic", "openai", "kimi", "xai")
+private val MONO = setOf("anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten")
 
 /** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's. */
 @Composable

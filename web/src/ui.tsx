@@ -563,7 +563,7 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
 }
 
 /** Makers whose marks are one colour (drawn in the text's). Marks from Zork's provider set and lobehub icons (MIT). */
-const MONO = new Set(["anthropic", "openai", "kimi", "xai"]);
+const MONO = new Set(["anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten"]);
 
 /**
  * The mark of the company that made a model (the core says which); the runtime's mark when it does not know. No tip of
