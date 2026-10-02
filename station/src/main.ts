@@ -27,26 +27,6 @@ try {
   setStationLang(JSON.parse(readFileSync(config, "utf8")).language);
 } catch {}
 
-switch (command) {
-  case "run":
-    run();
-    break;
-  case "enroll": {
-    const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1] === "--data"));
-    if (!origin || !token) usage();
-    await enroll(data, origin.replace(/\/+$/, ""), token);
-    break;
-  }
-  case "status":
-    console.log(status(data));
-    break;
-  case "id":
-    id(data);
-    break;
-  default:
-    usage();
-}
-
 function usage(): never {
   console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> | status | id");
   process.exit(2);
@@ -108,4 +88,24 @@ function run() {
       process.exit(1);
     }
   });
+}
+
+switch (command) {
+  case "run":
+    run();
+    break;
+  case "enroll": {
+    const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1] === "--data"));
+    if (!origin || !token) usage();
+    await enroll(data, origin.replace(/\/+$/, ""), token);
+    break;
+  }
+  case "status":
+    console.log(status(data));
+    break;
+  case "id":
+    id(data);
+    break;
+  default:
+    usage();
 }
