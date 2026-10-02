@@ -21,7 +21,7 @@ case "${1:?usage: release.sh station|android}" in
     (cd mesh && cargo build --release -p stillfail-station)
     mkdir -p mesh/target/release
     cp "$CARGO_TARGET_DIR/release/stillfail-station" mesh/target/release/
-    export LINUX_TARGET_DIR="$HOME/stillfail-ci/linux-${RUNNER_NAME:-local}"
+    export LINUX_TARGET_DIR="$CARGO_TARGET_DIR/linux"
     sh scripts/release.sh --beta
     ;;
   android)
@@ -33,7 +33,7 @@ case "${1:?usage: release.sh station|android}" in
     sh scripts/release.sh --beta android
     apk=apps/android/app/build/outputs/apk/release/app-release.apk
     # The certificate it was signed with: the same SHA-256 every time (studio's key).
-    "$HOME/Library/Android/sdk/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | grep -i "SHA-256" || true
+    "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | grep -i "SHA-256" || true
     ;;
   *) echo "no such release: $1"; exit 2 ;;
 esac

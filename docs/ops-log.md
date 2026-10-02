@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- GitHub-hosted CI：普通检查、云部署、station/Android 构建迁至 AFK-surf 的 GitHub runner；桌面签名和 Studio 更新保留本地收尾。首次运行需下载工具链和冷构建缓存；检查实际 hosted workflow 成功后合并。正式 web 转正改用 scripts/promote-web.py 下载与在线 beta revision 一致的 artifact，外部 ember-promote 包装脚本同步更新；不再依赖 mini1 构建目录。
+
 - 空奏页显示今天的情况（zou-empty-page）：station 的 chat 列表行多了可选字段 `answered`（看的人最近 36 小时答过的卡片），core 的 `decisions` 视图多了可选的 `answered`/`working`/`today`；web 和安卓的空奏页读它们。station 新加一个部分索引 `entries_people_at`（IF NOT EXISTS，无迁移）。新旧混跑：旧 station 不给 `answered` 时页面只缺「今天批过的」和平均等待，正在办照常；旧客户端忽略新字段。web、station、安卓都要发。上线后验：批完所有奏后停在奏页，看到今天批了几件、平均等你多久，「今天批过的」里有刚批的那件。
 - 发布桶与静态 Worker 改名：189 个对象约 10.76 GB 已复制并校验到 stillfail-releases；切换前保存完整基线报告，切换后用 migrate-releases.py --reconcile --baseline <基线> --report <新报告> 补旧上传器晚到的对象，新桶有更改或删除则保留新值。停止旧上传器后再做最后一轮，旧桶留回退期，不再日常使用。API 的 RELEASES、release.sh、changelog 和 web build 元数据上传同时换新桶。静态 Worker 换 stillfail-*，自定义域名随部署转移；正式 web 必须用已上线的原构建迁移，不顺带转正 beta。
 
