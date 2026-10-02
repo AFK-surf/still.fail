@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- PC 侧栏的奏变成第 4 个列表（decisions-sidebar-pane）：只发 web（含 web 里的 core），station、安卓不用动。prefs 新增可选字段 `onlyDecisions`（与 onlyMine/onlyWatching 三选一），手机 web 和安卓读到时按「全部」。上线后验：桌面端筛选菜单在 全部/我参与的/监控中/奏 之间切换都会横滑；在奏里点新建对话，侧栏停在奏；从左下角「奏 N 件」进入时各行从入口飞出、不横滑。
+
 - 操作和动效不等网络（motion-network-independent）：只需发 web（含 web 里的 core）、桌面、Android 和官网，station 不用动，无数据迁移，新旧 station 都兼容（给还没 chat 的 agent 发第一条仍用已有的 chat.forSession，只是挪到 core 后台做）。上线后验：把网络调慢（或断开 station）时，(1) 给没有 chat 的 agent 发第一条，消息立刻进 outbox 显示「发送中」，建不成显示「未发送」可重发；(2) 改名、置顶、点决策选项后列表和 chat 页立刻变，失败会变回并弹提示；(3) 设置里删 profile、改 connect 模式等弹窗立刻关，那一行转圈；(4) 官网 JS 加载慢时按钮等标题落定才升起。
 
 - 远程执行按 session 分目录（remote-session-dir）：只发 station。同一个来源 session 的 `station_task` 共用目标 station 上的 `remote/sessions/<id>/work`；来源 chat 归档或删除时，来源 station 发 `session.close`，目标停掉还在跑的 task 并删掉目录（目标离线就每分钟重试，最多 30 天）；目标自己也会删 14 天没用过的 session 目录和改版前的单 task 目录。新旧混跑：旧目标不认 `session.close`，回绝后来源就不再问；旧来源不发，靠目标 14 天兜底；改版前已准备的 task 继续用自己的目录。老会话靠迁移说明 15。要让 agent 在 studio 上编译，studio 的 config.json 里 `remoteTasks.allow` 要加上来源 station 的公钥。上线验：从一台 station 的 chat 在 studio 上跑两个 task（先 clone 后 build），studio 的 `~/.stillfail/remote/sessions/` 下出现一个目录；归档这个 chat，一分钟内目录消失。
