@@ -566,6 +566,14 @@ impl Choose {
         let shown = kept.as_deref()
             .and_then(|p| value_option.and_then(|o| o["accounts"][value["runtime"].as_str().unwrap_or("")].as_array()?.iter().find(|a| a["id"] == p).cloned()))
             .or_else(|| current.clone());
+        // The summary describes the saved choice, never an unsaved panel draft. An automatic new
+        // chat has no assigned account yet, so only an explicit Fast choice can be known there.
+        let effective_fast = value["runtime"] == "codex" && matches!(o, Of::New | Of::Session(_))
+            && value["fast"].as_bool().unwrap_or_else(|| {
+                let id = kept.as_deref().or_else(|| current.as_ref().and_then(|c| c["id"].as_str()));
+                overview.as_ref().is_some_and(|v| list(&v["profiles"]).iter()
+                    .any(|p| id.is_some_and(|id| p["id"] == id) && p["fast"] == true))
+            });
         let low = shown.as_ref().and_then(|s| quota_line(s.get("quota")).get("level").cloned());
         let names = !quiet || kept.is_some() || low.is_some();
         let account_view = names.then(|| {
@@ -619,7 +627,7 @@ impl Choose {
         let save_text = if changed && fast_available { format!("{save_text} · {}", speed_text(fast)) } else { save_text };
         Some(Ok(json!({
             "fastAvailable": fast_available,
-            "fastText": fast_available.then(|| speed_text(value["fast"].as_bool())),
+            "fastText": effective_fast.then_some("Fast"),
             "options": options.clone(),
             "runtimeFixed": fixed,
             "value": value,

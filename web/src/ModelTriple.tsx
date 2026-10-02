@@ -55,7 +55,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
   // Shown within the room it has: the most it can say that fits, dropping what matters least first.
   const fit = useRef<HTMLSpanElement>(null);
   const [drop, setDrop] = useState(0);
-  const label = `${value?.model}|${value?.runtime}|${value?.effort}|${value?.fast}|${value?.profile}|${account?.text ?? ""}`;
+  const label = `${value?.model}|${value?.runtime}|${value?.effort}|${value?.fast}|${v?.fastText}|${value?.profile}|${account?.text ?? ""}`;
   useLayoutEffect(() => {
     const room = fit.current;
     const trigger = room?.firstElementChild as HTMLElement | null;
