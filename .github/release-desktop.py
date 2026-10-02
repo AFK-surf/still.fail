@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build and sign on the organization's Mac runner; never publish an unsigned update."""
+import argparse
 import base64
 import json
 import os
@@ -9,6 +10,10 @@ import shlex
 import subprocess
 import tempfile
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--stable', action='store_true', help='Publish the stable channel; defaults to beta')
+args = parser.parse_args()
+suffix = '' if args.stable else '-beta'
 root = Path(__file__).resolve().parents[1]
 identity = json.loads((root / 'apps/desktop/package.json').read_text())['build']['mac']['identity']
 
@@ -57,11 +62,11 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
             posthog.chmod(0o600)
             env['STILLFAIL_POSTHOG'] = str(posthog)
         env['RELEASE_DIR'] = str(Path(directory) / 'releases')
-        run(['sh', 'scripts/release.sh', '--beta', 'desktop'], cwd=root, env=env)
-        run(['codesign', '--verify', '--deep', '--strict', str(root / 'apps/desktop/out/mac-arm64/youdid.wtf.app')])
+        run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop'], cwd=root, env=env)
+        run(['codesign', '--verify', '--deep', '--strict', str(root / 'apps/desktop/out/mac-arm64' / ('still.fail.app' if args.stable else 'youdid.wtf.app'))])
         version = subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], cwd=root, text=True).strip()
-        archive = f'stillfail-beta-0.1.{version}-arm64-mac.zip'
-        for name, mime in ((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), ('stillfail-beta-mac.yml', 'text/yaml; charset=utf-8')):
+        archive = f'stillfail{suffix}-0.1.{version}-arm64-mac.zip'
+        for name, mime in ((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')):
             path = Path(env['RELEASE_DIR']) / 'desktop' / name
             if not path.is_file(): raise SystemExit('Expected desktop artifact missing: ' + name)
             run(['pnpm', 'exec', 'wrangler', 'r2', 'object', 'put', 'stillfail-releases/desktop/' + name, '--file', str(path), '--content-type', mime, '--remote'], cwd=root / 'cloud', env=env)

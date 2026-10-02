@@ -6,8 +6,7 @@
 #             its station release (then studio's station updates to it), its Android app and its desktop app (built
 #             and signed on the organization Mac runner with the existing certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
-# Not here: the relay (deploying it drops every connection), the stable channel and its apps: ~/bin/ember-deploy and
-# ~/bin/ember-promote on studio, scripts/release.sh.
+# Stable: the manual Publish stable workflow. Relay remains manual (deploying it drops every connection).
 name: pipeline
 on:
   push:
@@ -47,7 +46,9 @@ jobs:
           has() { printf '%s\n' "$changed" | grep -qE "$1"; }
           # Part by part, as ~/bin/ember-deploy decided them.
           static=()
-          if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc)$)'; then static+=(web-beta); fi
+          # A reviewed stable release gets a fresh, pinned web artifact even when only its notes changed.
+          if has '^docs/releases/'; then static+=(web-beta); fi
+          if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc)$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
           if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
           if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
           if has '^(web/src/site/|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
@@ -105,6 +106,8 @@ jobs:
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+      - name: Stable release selection guards
+        run: python3 -m unittest discover -s .github -p 'test_stable_plan.py'
       # A branch takes back nothing merged into main meanwhile (a squash onto a main that moved: scripts/undone.sh).
       - name: Undoes nothing on main
         if: github.ref != 'refs/heads/main'
