@@ -187,6 +187,20 @@ async function request(m: Members, stream: Stream, viewer: Admitted["viewer"], _
   });
   await writeLine(stream, { status: response.status, headers: response.headers });
   if (Buffer.isBuffer(response.body)) await stream.write(response.body);
-  else for await (const chunk of response.body) await stream.write(chunk);
+  else {
+    // A stream (GET /events) ends when the caller stops reading or goes, even while nothing is being written to it.
+    const chunks = response.body[Symbol.asyncIterator]();
+    const end = () => void chunks.return?.();
+    stream.stopped().then(end, end);
+    try {
+      for (;;) {
+        const next = await chunks.next();
+        if (next.done) break;
+        await stream.write(next.value);
+      }
+    } finally {
+      end();
+    }
+  }
   await stream.finish();
 }

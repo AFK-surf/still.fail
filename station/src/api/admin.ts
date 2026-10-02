@@ -7,6 +7,9 @@ import { type Answer, type Request, error, json } from "./request.ts";
 import { routes as chats } from "./routes/chats.ts";
 import { routes as usage } from "./routes/usage.ts";
 import { routes as sessions } from "./routes/sessions.ts";
+import { routes as events } from "./routes/events.ts";
+import type { Events } from "./events.ts";
+import { Host } from "./host.ts";
 
 export type Handler = (r: Request, args: string[]) => Promise<Answer>;
 export type Route = { method: string; pattern: RegExp; handle: Handler };
@@ -14,14 +17,26 @@ export type Route = { method: string; pattern: RegExp; handle: Handler };
 export type Tools = {
   /// A read in a reader thread (src/read/ops.ts), answered as JSON; its error as `{error}` with its status.
   read(r: Request, op: string, args: unknown): Promise<Answer>;
+  /// The machine's state, shared by GET /host and the events.
+  host: Host;
+  /// The event streams, once the station's store is open (the write side).
+  events?: Events;
+  /// Whether that session is there.
+  sessionExists(key: string): boolean;
 };
+
+/// What the admin API answers with besides the readers: the write side, once there.
+export type AdminDeps = { events?: Events; sessionExists?: (key: string) => boolean };
 
 export class Admin {
   private routes: Route[];
   private readers: Readers;
 
-  constructor(readers: Readers) {
+  readonly host: Host;
+
+  constructor(readers: Readers, deps: AdminDeps = {}) {
     this.readers = readers;
+    this.host = new Host(readers);
     const tools: Tools = {
       read: async (r, op, args) => {
         try {
@@ -30,8 +45,11 @@ export class Admin {
           return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
         }
       },
+      host: this.host,
+      events: deps.events,
+      sessionExists: deps.sessionExists ?? (() => false),
     };
-    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools)];
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools)];
   }
 
   async handle(r: Request): Promise<Answer> {
