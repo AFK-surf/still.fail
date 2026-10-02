@@ -1,9 +1,11 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { session, sessionFile, sessions, thread, threads, timeline, widgetState } from "./sessions.ts";
+import { session, sessionFile, sessions, summary, thread, threads, timeline, widgetState } from "./sessions.ts";
 
 export const sessionOps: Record<string, ReadOp> = {
+  /// One session as lists and events have it (views.rs `summary`).
+  summary: (s, a) => summary(s, a.key),
   sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang),
   session: (s, a) => session(s, a.key, a.viewer, a.lang),
   timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang),

@@ -277,11 +277,15 @@ export type Store = {
   archived: [number, EntryRow[]][];
   /// People's names by email, as their credentials say them (the admin API's `deps.names`, filled as members ask).
   names: Map<string, string>;
+  /// What only the hub knows, as it was when the read was asked: each session's process state (`process_state`;
+  /// "cold" for one not listed) and the client keys sessions were made with (`client_key`).
+  processes: Map<string, string>;
+  clientKeys: Map<string, string>;
 };
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, archiveDir: join(dataDir, "archive"), archived: [], names: new Map() };
+  return { db, dataDir, archiveDir: join(dataDir, "archive"), archived: [], names: new Map(), processes: new Map(), clientKeys: new Map() };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.

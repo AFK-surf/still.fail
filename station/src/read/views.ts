@@ -340,7 +340,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     const x = all.get(key)!;
     const stat = stats.get(key);
     const v: Json = {
-      key, runtime: x.runtime, model: x.model, effort: x.effort, process: "cold",
+      key, runtime: x.runtime, model: x.model, effort: x.effort, process: s.processes.get(x.key) ?? "cold",
       pending: stat?.pending ?? 0, lastTurn: stat?.lastTurn ? turnSummary(stat.lastTurn) : null,
     };
     const watch = watches.get(key);
@@ -412,7 +412,9 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
       people: people_,
     };
     row.archiveReminderDismissed = kept.has(t.thread.id);
-    // No client keys (hub): no `clientKey`.
+    // The client key it was made with, while the hub remembers it.
+    const clientKey = s.clientKeys.get(String(key));
+    if (clientKey !== undefined) row.clientKey = clientKey;
     // The card it waits on, if any, and whether the viewer dismissed it; an options card is its `decision` too.
     const card = archived ? null : cardView(api, t.thread.id, dismissed, names);
     if (card !== null) {

@@ -142,8 +142,8 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
   const row = sessionRow(s, key);
   const v = sessionJson(row);
   v.boundTo = l.bindings.get(key) ?? [];
-  // No runtime process here (the hub's): cold.
-  v.process = "cold";
+  // The hub's, as given with the read.
+  v.process = s.processes.get(key) ?? "cold";
   const stat = l.stats.get(key);
   v.turns = stat?.turns ?? 0;
   v.pending = stat?.pending ?? 0;
@@ -158,7 +158,7 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
 }
 
 /// views.rs `summary`: one session's.
-function summary(s: Store, key: string): Json {
+export function summary(s: Store, key: string): Json {
   return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s) });
 }
 
