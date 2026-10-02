@@ -14,17 +14,17 @@ import { HttpError } from "./views.ts";
 type Runtime = "claude" | "codex";
 
 /// Where the machine's runtimes keep their sessions (MachineRoots): Claude Code's projects/, Codex's sessions/.
-type Roots = { claude: string; codex: string };
+export type Roots = { claude: string; codex: string };
 
 /// MachineRoots::of the station's environment: $HOME/.claude/projects, and $CODEX_HOME (else $HOME/.codex)/sessions.
-function roots(): Roots {
+export function roots(): Roots {
   const home = process.env.HOME ?? ".";
   const codex = process.env.CODEX_HOME ? process.env.CODEX_HOME : join(home, ".codex");
   return { claude: join(home, ".claude", "projects"), codex: join(codex, "sessions") };
 }
 
 /// A session of the machine's, as the pages list it (MachineSession; `path` is not written).
-type MachineSession = {
+export type MachineSession = {
   runtime: Runtime; id: string; cwd: string; title: string | null; first: string | null; model: string | null;
   updatedAt: number; size: number; session: string | null; path: string;
 };
@@ -318,7 +318,7 @@ function stamp(path: string): [number, number] | null {
 }
 
 /// rollouts_in: Codex's rollout-*.jsonl files under a directory, at any depth.
-function rolloutsIn(dir: string, out: string[]) {
+export function rolloutsIn(dir: string, out: string[]) {
   for (const entry of readDir(dir)) {
     const path = join(dir, entry.name);
     if (isDir(path)) rolloutsIn(path, out);
@@ -327,7 +327,7 @@ function rolloutsIn(dir: string, out: string[]) {
 }
 
 /// rollout_of: a rollout file of a thread: rollout-<time>-<id>.jsonl, or rollout-<time>-<id>_<more>.jsonl.
-function rolloutOf(path: string, id: string): boolean {
+export function rolloutOf(path: string, id: string): boolean {
   const name = basename(path);
   return name.endsWith(`-${id}.jsonl`) || name.includes(`-${id}_`);
 }
@@ -475,7 +475,7 @@ function list(r: Roots, limit: number): MachineSession[] {
 }
 
 /// find: one of the machine's sessions, by its runtime and id.
-function find(r: Roots, runtime: Runtime, id: string): MachineSession | null {
+export function find(r: Roots, runtime: Runtime, id: string): MachineSession | null {
   if (id === "" || !/^[A-Za-z0-9-]+$/.test(id)) return null;
   let path: string | undefined;
   if (runtime === "claude") {

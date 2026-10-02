@@ -88,6 +88,8 @@ export type SessionDeps = {
   idle(key: string): void;
   archiveIsCold(key: string): boolean;
   restoreArchive(key: string): void;
+  /// An archived session's process is gone: its files may go to cold storage now (session.rs `clean_archive`).
+  cleanArchive?(key: string): void | Promise<void>;
   /// Turns are held (the station is about to stop or hand over): none starts, messages stay pending.
   held(): boolean;
   /// Stopped while it waits: ends the session's jobs that would bring it back.
@@ -179,6 +181,19 @@ export class SessionActor {
   /// No task queued or running.
   settled(): boolean {
     return this.queued === 0;
+  }
+
+  /// Resolves once every task queued before it has run (a handover waits on it, then looks at `settled`).
+  flushed(): Promise<void> {
+    return this.enqueue(async () => {});
+  }
+
+  /// Archived and idle: its files go to cold storage, in turn with the rest (session.rs `clean_archive`).
+  cleanArchive(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.agent || this.turn) return;
+      await this.deps.cleanArchive?.(this.key);
+    });
   }
 
   // ── what the hub asks ────────────────────────────────────────────────────────────────────────────────────────
@@ -357,9 +372,9 @@ export class SessionActor {
     return snap;
   }
 
-  /// Takes up a session the previous station left (its snapshot), on its runtime session when the driver took that up.
+  /// Takes up a session the previous station left (its snapshot), on its runtime session when the driver took that up:
+  /// as the generation the caller opened it as (`nextGeneration`, whose `listener` the driver was given).
   adopt(snap: Snapshot, agent: AgentSession | null) {
-    this.generation++;
     this.agent = agent ? { generation: this.generation, session: agent } : null;
     this.turn = snap.turn && {
       id: snap.turn.id,
@@ -602,20 +617,7 @@ export class SessionActor {
     if (!row) throw new Error(`session ${this.key} disappeared`);
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
-    // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
-    const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
-    const base: OpenOptions = {
-      key: this.key,
-      profile,
-      cwd: row.cwd ?? row.workspace,
-      model,
-      effort: row.effort ?? undefined,
-      // A session continued from a terminal keeps the system prompt it began with (its cache holds).
-      instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, this.deps.reposDir(), this.deps.memoryPath()),
-      mcpToken: row.token,
-      mcpUrl: this.deps.mcpUrl(),
-      route: row.key,
-    };
+    const base = openOptions(row, profile, this.deps);
     const generation = this.nextGeneration();
     let agent: AgentSession;
     if (row.runtimeSessionId) {
@@ -814,6 +816,25 @@ export class SessionActor {
       log.warn("session", "notice failed", { session: this.key, error: (error as Error).message });
     }
   }
+}
+
+/// How a session's runtime session is opened (or taken up) on `profile`: its directory, model as the profile spells it,
+/// effort, instructions and MCP token.
+export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">): OpenOptions {
+  // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
+  const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
+  return {
+    key: row.key,
+    profile,
+    cwd: row.cwd ?? row.workspace,
+    model,
+    effort: row.effort ?? undefined,
+    // A session continued from a terminal keeps the system prompt it began with (its cache holds).
+    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath()),
+    mcpToken: row.token,
+    mcpUrl: deps.mcpUrl(),
+    route: row.key,
+  };
 }
 
 function failureNotice(outcome: TurnOutcome): string {

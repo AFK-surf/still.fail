@@ -106,7 +106,14 @@ function toText(v: Json): string {
 export const isPosting = (tool: string) => tool === "mcp__stillfail__chat_post" || tool === "mcp__ember__chat_post";
 
 /// What reading keeps between lines: the calls left out (their results follow later), and calls taken out of a script.
-type ReadState = { skip: Set<string>; inner: Map<string, number> };
+export type ReadState = { skip: Set<string>; inner: Map<string, number> };
+
+/// A record's timeline entries, read on from `state` (what TranscriptTail keeps between reads): for a reader that takes
+/// a transcript a piece at a time as it grows (src/sessions/live.ts).
+export function timelineOf(runtime: "claude" | "codex", record: Json, state: ReadState, out: TimelineEntry[]): void {
+  if (runtime === "claude") claudeTimeline(record, state, out);
+  else codexTimeline(record, state, out);
+}
 
 function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
   const kind = stringOf(get(r, "type")) ?? "";
