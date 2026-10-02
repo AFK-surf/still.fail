@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 奏折收录（android-decisions-open-at-zero）：station 和客户端 core（web/桌面/安卓）都要发，先发 station。没指定 assignee 的卡片归 chat 发起人（core 按行的 creator 判断，只发客户端就生效）；没带卡片的 need_human 要新 station 在 chat 行里给 `need`（agent 那条提问消息，划掉沿用 `/threads/:id/dismissed`，现在也接受 agent 的普通消息）才会进奏折。新旧混跑：旧 station 不给 `need`，新客户端只是看不到这类；旧客户端忽略 `need`。首页「奏」0 也显示（只有字没数字）。老会话靠迁移说明 14。上线验：让 agent 不带卡片结束 need_human，发起人的奏折出现这条、能在奏折里回复，回复后消失；别人的奏折里没有。
+
 - 消息模型数据库迁移修复：发布并更新 station 即可。旧库的 merged 视图已有 client 但缺 agent_identity 时也必须重建；已被上一版加过表字段的库会在重开时自动修复视图，不回填或改动历史消息。上线检查旧聊天可正常读取、新消息可发送。
 
 - 服务显示名称迁移：API `/healthz`、relay `/ping` 和新 cloud traces 使用 stillfail-cloud / stillfail-relay。API 由 CI 发布；relay 仍需单独部署（连接会重连）。历史 traces 查询同时匹配旧新名称，JWT issuer 兼容不变。

@@ -82,20 +82,46 @@ pub fn card_shown(card: &Value) -> Value {
     v
 }
 
-/// The pending card explicitly assigned to this viewer. Participation is not ownership.
-pub fn for_viewer(row: &Value, me: &Value) -> Option<Value> {
-    pending(row).filter(|d| d["card"]["assignee"].as_str()
-        .is_some_and(|email| crate::present::is_viewer(me, email, &[])))
+/// Who decides a card: whom its agent assigned it to, else whoever started its chat (`creator`, as its row or thread
+/// has them: an email, else their id). Participation is not ownership.
+pub fn decider<'a>(card: &'a Value, creator: Option<&'a Value>) -> Option<&'a str> {
+    let nonempty = |v: Option<&'a Value>| v.and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+    nonempty(card.get("assignee"))
+        .or_else(|| nonempty(creator.and_then(|c| c.get("email"))))
+        .or_else(|| nonempty(creator.and_then(|c| c.get("id"))))
 }
 
-/// The assignment in words is shared by web and Android, in both the chat and 奏.
-pub fn label_assignee(card: &mut Value, me: &Value, members: &[Value]) {
-    let text = match card.get("assignee").and_then(Value::as_str) {
-        Some(email) => {
-            if crate::present::is_viewer(me, email, &[]) {
+/// What a row asks of the viewer, for the 奏 page: its pending card, else what an agent needs without one (`need`),
+/// when the viewer decides it and has not dismissed it.
+pub fn for_viewer(row: &Value, me: &Value) -> Option<Value> {
+    asked(row).filter(|d| !dismissed(d) && decider(&d["card"], row.get("creator"))
+        .is_some_and(|who| crate::present::is_viewer(me, who, &[])))
+}
+
+/// What a row asks people, dismissed or not: its pending card, else what one of its agents needs said without a card
+/// (the station's `need`: `{seq, message, before, dismissed?}`, from a station since needs went on the 奏 page) as a
+/// text card, answered in words.
+pub fn asked(row: &Value) -> Option<Value> {
+    of_row(row).or_else(|| {
+        let need = row.get("need").filter(|n| n.get("seq").and_then(Value::as_u64).is_some() && n.get("message").is_some_and(Value::is_object))?;
+        let mut v = need.clone();
+        v["card"] = json!({ "type": "text" });
+        Some(v)
+    })
+}
+
+/// The assignment in words is shared by web and Android, in both the chat and 奏: a card no one was assigned is its
+/// chat's starter's (`creator`).
+pub fn label_assignee(card: &mut Value, me: &Value, members: &[Value], creator: Option<&Value>) {
+    let text = match decider(card, creator).map(str::to_string) {
+        Some(who) => {
+            if crate::present::is_viewer(me, &who, &[]) {
                 t!("core-logic.decisions.assignee.you")
             } else {
-                t!("core-logic.decisions.assignee", name = crate::present::member_name(members, email).unwrap_or(email))
+                let started = creator.filter(|_| card.get("assignee").and_then(Value::as_str).is_none())
+                    .and_then(|c| c.get("name")).and_then(Value::as_str).filter(|n| !n.is_empty());
+                let name = crate::present::member_name(members, &who).or(started).unwrap_or(&who).to_string();
+                t!("core-logic.decisions.assignee", name = name)
             }
         }
         None => t!("core-logic.decisions.assignee.none"),
@@ -414,13 +440,55 @@ mod tests {
         dismissed["card"]["dismissed"] = json!(true);
         assert!(for_viewer(&dismissed, &json!({"email":"owner@x.com"})).is_none());
         let mut card = d["card"].clone();
-        label_assignee(&mut card, &json!({"email":"helper@x.com"}), &[json!({"email":"owner@x.com","name":"小王"})]);
+        label_assignee(&mut card, &json!({"email":"helper@x.com"}), &[json!({"email":"owner@x.com","name":"小王"})], None);
         assert_eq!(card["assigneeText"], "需要小王决策");
-        label_assignee(&mut card, &json!({"email":"owner@x.com"}), &[]);
+        label_assignee(&mut card, &json!({"email":"owner@x.com"}), &[], None);
         assert_eq!(card_shown(&card)["assigneeText"], "需要你决策");
         let mut old = json!({"type":"text"});
-        label_assignee(&mut old, &Value::Null, &[]);
+        label_assignee(&mut old, &Value::Null, &[], None);
         assert_eq!(old["assigneeText"], "尚未指定决策人");
+    }
+
+    #[test]
+    fn a_card_no_one_was_assigned_is_its_starters() {
+        let starter = json!({ "id": "owner@x.com", "name": "小王", "email": "owner@x.com", "via": "cloud" });
+        let row = json!({ "card": text_card(6), "creator": starter });
+        assert!(for_viewer(&row, &json!({"email":"owner@x.com"})).is_some());
+        assert!(for_viewer(&row, &json!({"email":"helper@x.com"})).is_none());
+        // An assignee wins over the starter.
+        let mut assigned = row.clone();
+        assigned["card"]["card"]["assignee"] = json!("helper@x.com");
+        assert!(for_viewer(&assigned, &json!({"email":"owner@x.com"})).is_none());
+        assert!(for_viewer(&assigned, &json!({"email":"helper@x.com"})).is_some());
+        let mut card = json!({"type":"text"});
+        label_assignee(&mut card, &json!({"email":"helper@x.com"}), &[], Some(&starter));
+        assert_eq!(card["assigneeText"], "需要小王决策");
+        label_assignee(&mut card, &json!({"email":"owner@x.com"}), &[], Some(&starter));
+        assert_eq!(card["assigneeText"], "需要你决策");
+    }
+
+    #[test]
+    fn a_need_without_a_card_is_asked_as_a_text_card() {
+        let starter = json!({ "id": "owner@x.com", "email": "owner@x.com" });
+        let need = json!({ "seq": 8, "message": { "seq": 8, "ts": "9.000008", "text": "要 Stripe 的测试 key", "authorName": "Claude" }, "before": [] });
+        let row = json!({ "need": need, "creator": starter });
+        let asked = for_viewer(&row, &json!({"email":"owner@x.com"})).unwrap();
+        assert_eq!((asked["seq"].clone(), kind(&asked["card"])), (json!(8), "text"));
+        assert!(reply(&asked, "sk_test_1", false).is_some());
+        assert!(for_viewer(&row, &json!({"email":"helper@x.com"})).is_none());
+        // Not on the row's own card: the chat's messages and its line stay as they were.
+        assert!(!waits(&row));
+        // A card waiting comes first.
+        let both = json!({ "need": need, "card": text_card(6), "creator": starter });
+        assert_eq!(asked_seq(&both), Some(6));
+        let mut dismissed = row.clone();
+        dismissed["need"]["dismissed"] = json!(true);
+        assert!(for_viewer(&dismissed, &json!({"email":"owner@x.com"})).is_none());
+        assert!(super::asked(&dismissed).is_some(), "still answered in its chat");
+    }
+
+    fn asked_seq(row: &Value) -> Option<u64> {
+        super::asked(row)?.get("seq")?.as_u64()
     }
 
     #[test]

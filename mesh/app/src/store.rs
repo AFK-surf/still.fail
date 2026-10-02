@@ -2033,6 +2033,44 @@ impl Store {
         })
     }
 
+    /// The message an agent's need without a card asks with, while no person has written after it: the one its turn is
+    /// about (`about`, an entry n), else the agent's latest message during the turn (`during`: from, to, ms); with the two
+    /// messages before it. None in an archived chat, or when that message has a card.
+    pub fn asking_message(&self, thread: i64, about: Option<i64>, during: (i64, i64)) -> Result<Option<(MessageRow, Vec<MessageRow>)>> {
+        let asked = self.with(|i, _| {
+            if i.is_archived(thread)? {
+                return Ok(None);
+            }
+            let n: Option<i64> = match about {
+                Some(n) => Some(n),
+                None => i.db.query_row(
+                    "SELECT max(n) FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?",
+                    params![thread, during.0, during.1],
+                    |r| r.get(0),
+                )?,
+            };
+            let Some(n) = n else { return Ok(None) };
+            let answered = i
+                .db
+                .query_row("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", params![thread, n], |_| Ok(()))
+                .optional()?
+                .is_some();
+            // A post with a card is pending_card's: one no longer pending was answered, closed or withdrawn.
+            let carded = i
+                .db
+                .query_row("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND (card IS NOT NULL OR options IS NOT NULL)", params![thread, n], |_| Ok(()))
+                .optional()?
+                .is_some();
+            Ok((!answered && !carded).then_some(n))
+        })?;
+        let Some(n) = asked else { return Ok(None) };
+        let mut messages = self.messages_before(thread, Some(n + 1), 3)?;
+        match messages.pop() {
+            Some(m) if m.n == n && m.author_kind == AuthorKind::Agent => Ok(Some((m, messages))),
+            _ => Ok(None),
+        }
+    }
+
     /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card (the
     /// thread's latest card then), or a choice that closed it (closed_cards, by a person: not its agent withdrawing it).
     pub fn answers_since(&self, since: i64) -> Result<Vec<CardAnswer>> {

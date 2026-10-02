@@ -887,12 +887,14 @@ impl AdminApi {
                         self.deps.store.keep_chat(&viewer.id(), thread_id)?;
                         return ok(json!({ "kept": true }));
                     }
-                    // A card the viewer will not take up (its post's entry `n`): off their list, on every device of theirs;
+                    // A card (or a need) the viewer will not take up (its post's entry `n`): off their list, on every device of theirs;
                     // still pending for everyone else.
                     (Some("dismissed"), "PUT") => {
                         let input = read_json(body).await?;
                         let n = input.get("n").and_then(Value::as_f64).filter(|n| n.fract() == 0.0 && *n > 0.0).ok_or_else(|| http_error(400, t!(spoken(); "station.admin.badN")))? as i64;
-                        let asked = self.deps.store.entries_between(thread_id, n, n)?.into_iter().next().filter(|e| e.card().is_some());
+                        // A card, or an agent's message asking without one (a need on the 奏 page).
+                        let asked = self.deps.store.entries_between(thread_id, n, n)?.into_iter().next()
+                            .filter(|e| e.card().is_some() || e.author_kind == crate::store::AuthorKind::Agent);
                         if asked.is_none() {
                             return Err(http_error(404, t!(spoken(); "station.admin.nothingWaiting")));
                         }

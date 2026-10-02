@@ -1072,7 +1072,7 @@ impl Views {
         let written: Vec<(u64, String)> = messages.iter().filter(|m| m.get("authorKind").and_then(Value::as_str) == Some("person"))
             .filter_map(|m| Some((m.get("seq").and_then(Value::as_u64)?, m.get("text").and_then(Value::as_str).unwrap_or("").to_string()))).collect();
         for m in messages.iter_mut() {
-            shown_message(m, &agents, &viewer, &slack_users, &members, &bots);
+            shown_message(m, &agents, &viewer, &slack_users, &members, &bots, thread.get("creator"));
             m["waiting"] = json!(m.get("seq").and_then(Value::as_u64).is_some_and(|s| waits.contains(&s)));
         }
         // A sent message leaves the outbox as its own entry (or anything later) arrives. Its entry often comes before the
@@ -1212,9 +1212,9 @@ impl Views {
 /// A message as a chat shows it (`ChatMessage`, but `waiting`): whether it is the viewer's, still.fail's own notice, who said
 /// it (an agent by its label and mark, a person by name and picture), and mentions named. `agents`: the chat's, each
 /// `{session}` as its view has them.
-fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &[String], members: &[Value], bots: &[(String, String)]) {
+fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &[String], members: &[Value], bots: &[(String, String)], creator: Option<&Value>) {
     if let Some(mut card) = crate::decisions::of_message(m) {
-        crate::decisions::label_assignee(&mut card, viewer, members);
+        crate::decisions::label_assignee(&mut card, viewer, members, creator);
         m["card"] = card;
     }
     let kind = m.get("authorKind").and_then(Value::as_str).unwrap_or("").to_string();
@@ -1316,12 +1316,12 @@ impl Views {
                 }).collect();
                 let shown = |m: &Value| {
                     let mut m = m.clone();
-                    shown_message(&mut m, &agents, &me, &slack_users, &members, &[]);
+                    shown_message(&mut m, &agents, &me, &slack_users, &members, &[], row.get("creator"));
                     m["waiting"] = json!(false);
                     m
                 };
                 let mut card = crate::decisions::card_shown(&d["card"]);
-                crate::decisions::label_assignee(&mut card, &me, &members);
+                crate::decisions::label_assignee(&mut card, &me, &members, row.get("creator"));
                 let options = card.get("options").cloned().unwrap_or(json!([]));
                 let mut message = shown(&d["message"]);
                 if crate::decisions::kind(&d["card"]) == "options" {
@@ -1862,11 +1862,11 @@ mod tests {
     fn historical_messages_do_not_follow_the_current_model() {
         let mut message = json!({"authorKind": "agent", "author": "k", "agentIdentity": {"model": "gpt-6-sol", "effort": "high"}});
         let agents = [json!({"session": {"key": "k", "agentText": "GPT-6 Astra", "model": "gpt-6-astra", "runtime": "claude", "maker": {"id": "openai", "name": "OpenAI"}}})];
-        shown_message(&mut message, &agents, &Value::Null, &[], &[], &[]);
+        shown_message(&mut message, &agents, &Value::Null, &[], &[], &[], None);
         assert_eq!(message["by"]["name"], crate::format::agent_label(Some("gpt-6-sol"), Some("high")));
         assert_eq!(message["by"]["runtime"], "claude");
         message.as_object_mut().unwrap().remove("agentIdentity");
-        shown_message(&mut message, &agents, &Value::Null, &[], &[], &[]);
+        shown_message(&mut message, &agents, &Value::Null, &[], &[], &[], None);
         assert_eq!(message["by"]["name"], "GPT-6 Astra");
         assert_eq!(message["by"]["maker"]["id"], "openai");
     }
@@ -2206,6 +2206,43 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(order(&v), ["k1", "k2"]);
             assert_eq!((v["items"][1]["deferred"].clone(), v["items"][0].get("deferred")), (json!(true), None));
+        });
+    }
+
+    #[test]
+    fn the_decisions_page_has_the_starters_unassigned_cards_and_needs_without_one() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Decisions { workspace: "ws".into() });
+            t.set(workspace(), one_station());
+            t.set(Topic::Prefs, json!({}));
+            t.set(link("ws/st"), json!({"state": "online"}));
+            let now = t.host.now_ms();
+            let me = json!({ "id": "me@x.com", "name": "我", "email": "me@x.com", "via": "cloud" });
+            let other = json!({ "id": "other@x.com", "name": "小王", "email": "other@x.com", "via": "cloud" });
+            let mut started = deciding("started", 7, 5, now - 9000.0, false);
+            started["decision"]["card"].as_object_mut().unwrap().remove("assignee");
+            started["creator"] = me.clone();
+            let mut theirs = started.clone();
+            theirs["id"] = json!("theirs");
+            theirs["session"] = json!("theirs");
+            theirs["thread"] = json!(8);
+            theirs["creator"] = other;
+            let mut needs = row("needs", now - 5000.0);
+            needs["thread"] = json!(9);
+            needs["session"] = json!("needs");
+            needs["creator"] = me;
+            needs["need"] = json!({ "seq": 6, "message": said(6, "agent", "needs", "要 Stripe 的测试 key", now - 5000.0), "before": [] });
+            t.set(rows("ws/st"), json!([started, theirs, needs]));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            let order: Vec<&str> = v["items"].as_array().unwrap().iter().map(|i| i["session"].as_str().unwrap()).collect();
+            assert_eq!(order, ["started", "needs"], "the starter's, not another's");
+            assert_eq!(v["items"][0]["card"]["assigneeText"], "需要你决策");
+            let need = &v["items"][1];
+            assert_eq!((need["seq"].clone(), need["card"].clone(), need["options"].clone()), (json!(6), json!({ "type": "text", "assigneeText": "需要你决策" }), json!([])));
+            assert_eq!(need["text"], "奏 · 要 Stripe 的测试 key");
         });
     }
 

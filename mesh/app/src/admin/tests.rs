@@ -1275,7 +1275,7 @@ async fn a_pending_decision_is_on_its_chats_row_and_each_viewer_dismisses_it_for
     assert_eq!(t.call("PUT", &dismiss, Some(json!({ "n": n }))).await, (200, json!({ "dismissed": { "thread": thread, "n": n } })));
     assert_eq!(decision(t.get("/chats").await)["dismissed"], json!(true));
     assert_eq!(decision(t.call_as("GET", "/chats", None, dev()).await.1).get("dismissed"), None);
-    assert_eq!(t.call("PUT", &dismiss, Some(json!({ "n": n - 1 }))).await.0, 404, "a message that asks nothing");
+    assert_eq!(t.call("PUT", &dismiss, Some(json!({ "n": n - 2 }))).await.0, 404, "a message that asks nothing: a person's");
     assert_eq!(t.call("PUT", &dismiss, Some(json!({ "n": "x" }))).await.0, 400);
     // A person answers it: gone from every row.
     t.call_as("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "先不改", "quotes": [{ "author": "agent", "text": "改成按今天累计吗？", "ts": "9.000002", "role": "agent" }] })), dev()).await;
@@ -1335,6 +1335,43 @@ async fn a_pending_card_is_on_its_chats_row_an_options_card_as_its_decision_too(
     assert_eq!((last["card"].clone(), last.get("options")), (text.clone(), None));
     assert_eq!(t.call("PUT", &format!("/threads/{thread}/dismissed"), Some(json!({ "n": n }))).await.0, 200);
     assert_eq!(row(t.get("/chats").await)["card"]["dismissed"], json!(true));
+}
+
+#[tokio::test]
+async fn a_need_without_a_card_is_on_its_chats_row_until_someone_writes() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let thread = made["thread"]["id"].as_i64().unwrap();
+    t.call("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "接 Stripe" }))).await;
+    let need = |rows: Value| rows.as_array().unwrap().iter().find(|r| r["id"] == key).map(|r| r.get("need").cloned().unwrap_or(Value::Null)).unwrap();
+    // A turn that ends need_help, asking in words: the message it is about.
+    t.store.start_turn("ask", &key, "message").unwrap();
+    t.store.insert_message(NewMessage::new(thread, "9.000001", AuthorKind::Agent, &key, "先看看")).unwrap();
+    let (n, _) = t.store.insert_message(NewMessage::new(thread, "9.000002", AuthorKind::Agent, &key, "要 Stripe 的测试 key")).unwrap();
+    assert_eq!(need(t.get("/chats").await), Value::Null, "at work: nothing asked yet");
+    t.store.set_about("ask", Some((thread, n, "9.000002"))).unwrap();
+    t.store.end_turn("ask", "completed", None, Some("block"), None).unwrap();
+    let d = need(t.get("/chats").await);
+    assert_eq!((d["seq"].clone(), d["message"]["text"].clone(), d.get("dismissed")), (json!(n), json!("要 Stripe 的测试 key"), None));
+    let before: Vec<Value> = d["before"].as_array().unwrap().iter().map(|m| m["text"].clone()).collect();
+    assert_eq!(before, vec![json!("接 Stripe"), json!("先看看")]);
+    // Dismissed by one viewer, as a card is.
+    assert_eq!(t.call("PUT", &format!("/threads/{thread}/dismissed"), Some(json!({ "n": n }))).await.0, 200);
+    assert_eq!(need(t.get("/chats").await)["dismissed"], json!(true));
+    assert_eq!(need(t.call_as("GET", "/chats", None, dev()).await.1).get("dismissed"), None);
+    // Someone writes: answered.
+    t.call_as("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "sk_test_1" })), dev()).await;
+    assert_eq!(need(t.get("/chats").await), Value::Null);
+    // Asked with a card: the card's, not a need.
+    t.store.start_turn("card", &key, "message").unwrap();
+    let (c, _) = t.store.insert_message(NewMessage { card: Some(json!({ "type": "text" })), ..NewMessage::new(thread, "9.000004", AuthorKind::Agent, &key, "key？") }).unwrap();
+    t.store.set_about("card", Some((thread, c, "9.000004"))).unwrap();
+    t.store.end_turn("card", "completed", None, Some("block"), None).unwrap();
+    let rows = t.get("/chats").await;
+    assert_eq!(need(rows.clone()), Value::Null);
+    assert!(t.store.withdraw_card(&key, thread, "9.000004").unwrap());
+    assert_eq!(need(t.get("/chats").await), Value::Null, "nor once its card is gone");
 }
 
 #[tokio::test]

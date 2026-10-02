@@ -6,7 +6,7 @@ impl Inner {
     fn pending_card(&self, station: &str, thread: u64, seq: u64) -> Result<Value> {
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok).unwrap_or(Value::Null);
         let row = rows.as_array().into_iter().flatten().find(|r| r.get("thread").and_then(Value::as_u64) == Some(thread));
-        row.and_then(crate::decisions::of_row).filter(|d| d.get("seq").and_then(Value::as_u64) == Some(seq))
+        row.and_then(crate::decisions::asked).filter(|d| d.get("seq").and_then(Value::as_u64) == Some(seq))
             .ok_or_else(|| CoreError::invalid(t!("core-misc.call.already_answered")))
     }
 

@@ -530,6 +530,10 @@ impl AdminApi {
                     row["decision"] = decision;
                 }
                 row["card"] = card;
+            } else if !archived && let Some(need) = self.need_view(t.thread.id, &agents, &dismissed, &mut names) {
+                // With no card waiting: what an agent needs a person for all the same (its turn ended need_help), the
+                // message that asks, for the 奏 page to answer in words (`need`, as `card` without one).
+                row["need"] = need;
             }
             if let Some(list) = answered.remove(&t.thread.id) {
                 row["answered"] = json!(list);
@@ -600,6 +604,26 @@ impl AdminApi {
         message["card"] = card.clone();
         let before: Vec<Value> = store.messages_before(thread, Some(m.n), 2).unwrap_or_default().iter().map(|b| message_view(b, names)).collect();
         let mut v = json!({ "seq": m.n, "card": card, "message": message, "before": before });
+        if dismissed.contains(&(thread, m.n)) {
+            v["dismissed"] = json!(true);
+        }
+        Some(v)
+    }
+
+    /// What one of a chat's agents needs a person for without a card (its last turn ended need_help: `agents` as its row
+    /// has them), while no one has written since: `seq` (the message that asks: the one its turn is about, else the
+    /// agent's last in this chat during the turn), `message`, the two messages before it (`before`) and `dismissed` when the
+    /// viewer will not take it up, as `card_view` gives a card.
+    fn need_view(&self, thread: i64, agents: &[Value], dismissed: &HashSet<(i64, i64)>, names: &mut impl FnMut(AuthorKind, &str) -> Option<String>) -> Option<Value> {
+        let turn = agents.iter().map(|a| &a["lastTurn"]).find(|t| match t["ending"].as_str() {
+            Some(ending) => matches!(ending, "need_help" | "need_decision"),
+            None => t["declared"] == "block",
+        })?;
+        let about = turn["about"].as_object().filter(|a| a.get("thread").and_then(Value::as_i64) == Some(thread)).and_then(|a| a.get("seq")?.as_i64());
+        let during = (turn["startedAt"].as_i64().unwrap_or(0), turn["endedAt"].as_i64().unwrap_or(i64::MAX));
+        let (m, before) = self.deps.store.asking_message(thread, about, during).ok().flatten()?;
+        let before: Vec<Value> = before.iter().map(|b| message_view(b, names)).collect();
+        let mut v = json!({ "seq": m.n, "message": message_view(&m, names), "before": before });
         if dismissed.contains(&(thread, m.n)) {
             v["dismissed"] = json!(true);
         }

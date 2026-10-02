@@ -1429,7 +1429,7 @@ impl Hub {
                                         "additionalProperties": false,
                                     },
                                 },
-                                "assignee": { "type": "string", "description": "The email of the person who must decide, chosen explicitly by you from the conversation. Only their 奏 list includes this card; others can still answer in the chat. Always set it for new cards. Omitted on legacy cards: unassigned, chat only." },
+                                "assignee": { "type": "string", "description": "The email of the person who must decide, chosen explicitly by you from the conversation. Only their 奏 list includes this card; others can still answer in the chat. Always set it for new cards. Omitted: whoever started the chat decides." },
                                 "placeholder": { "type": "string", "description": "For a text card: a hint shown in the empty field (e.g. sk_test_…)." },
                             },
                             "required": ["type"],
