@@ -753,7 +753,7 @@ private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Mo
     ) {
         if (decisions > 0) DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
         Box(
-            Modifier.size(56.dp).shadow(1.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f)).clip(CircleShape).background(C.accent)
+            Modifier.size(56.dp).shadow(4.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f)).clip(CircleShape).background(C.accent)
                 .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Ling, 44.dp, Color.White) }
