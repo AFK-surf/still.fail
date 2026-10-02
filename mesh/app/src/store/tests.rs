@@ -472,3 +472,21 @@ fn session_fast_migrates_old_databases_and_survives_restart() {
     let store = Store::open(path, None).unwrap();
     assert_eq!(store.get_session("old").unwrap().unwrap().fast, Some(false));
 }
+
+#[test]
+fn the_latest_turn_is_the_last_inserted_when_start_times_tie() {
+    let store = memory();
+    session(&store, "same-ms");
+    store.start_turn("first", "same-ms", "input").unwrap();
+    store.end_turn("first", "failed", Some("rate_limit: quota"), None, None).unwrap();
+    store.start_turn("second", "same-ms", "resume").unwrap();
+    store.end_turn("second", "completed", None, None, None).unwrap();
+    store.with(|inner, _| {
+        inner.db.execute("UPDATE turns SET started_at = 123 WHERE session_key = 'same-ms'", [])?;
+        Ok(())
+    }).unwrap();
+    let latest = store.last_turn("same-ms").unwrap().unwrap();
+    assert_eq!(latest.kind, "resume");
+    assert_eq!(latest.outcome.as_deref(), Some("completed"));
+    assert_eq!(latest.detail, None);
+}
