@@ -10,6 +10,7 @@ async-trait = "0.1"
 base64 = "0.22"
 bytes = "1"
 stillfail-shapes = { path = "../../client/shapes" }
+stillfail-i18n = { path = "../../client/i18n" }
 futures-util = "0.3"
 getrandom = "0.3"
 hex = "0.4"

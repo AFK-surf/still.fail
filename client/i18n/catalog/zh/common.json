@@ -1,0 +1,19 @@
+{
+  "common.cancel": "取消",
+  "common.save": "保存",
+  "common.close": "关闭",
+  "common.delete": "删除",
+  "common.retry": "重试",
+  "common.copy": "复制",
+  "common.copied": "已复制",
+  "common.done": "完成",
+  "common.loading": "加载中…",
+  "common.confirm": "确定",
+  "common.back": "返回",
+  "common.edit": "编辑",
+  "common.more": "更多",
+  "common.language": "语言",
+  "common.language.system": "跟随系统",
+  "common.language.zh": "中文",
+  "common.language.en": "English"
+}

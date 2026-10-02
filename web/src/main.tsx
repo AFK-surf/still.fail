@@ -4,6 +4,7 @@ import { followAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { I18nRoot } from "./i18n.ts";
 import "@fontsource-variable/inter";
 import { CloudApp } from "./cloud/CloudApp.tsx";
 import { nameTitle } from "./cloud/beta.tsx";
@@ -19,4 +20,4 @@ startScrollbars();
 // station serves no page of its own.
 startTelemetry("cloud");
 nameTitle();
-createRoot(document.getElementById("app")!).render(<StrictMode><CloudApp /></StrictMode>);
+createRoot(document.getElementById("app")!).render(<StrictMode><I18nRoot><CloudApp /></I18nRoot></StrictMode>);

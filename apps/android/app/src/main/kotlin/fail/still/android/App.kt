@@ -206,6 +206,7 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
             val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(PrefsView.serializer(), it) }.getOrNull() } ?: return@collect
             known = value
             if (sending > 0) waiting = value else kept = value
+            fail.still.android.ui.I18n.follow(value.lang)
         }
     }
 

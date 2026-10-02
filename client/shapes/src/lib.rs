@@ -1620,6 +1620,9 @@ pub struct DeviceView {
     /// An item's link from outside is offered to the desktop app first (a computer's browser).
     #[serde(default)]
     pub handoff: bool,
+    /// The device's language as its host says (`zh-CN`, `en-US`, …); none until told.
+    #[serde(default)]
+    pub locale: Option<String>,
 }
 
 /// What changed in still.fail, as this app shows it (the `changelog` topic; client/core/src/changelog.rs): `app`
@@ -1748,6 +1751,13 @@ pub struct PrefsView {
     /// Times are shown as dates rather than "3 分钟前".
     #[serde(default)]
     pub absolute_time: bool,
+    /// The language chosen: `zh`, `en`, or none to follow the device's (its `locale`).
+    #[serde(default)]
+    pub language: Option<String>,
+    /// The language things are said in, as chosen or else as the device is: `zh` or `en` (the core's; none from a core
+    /// before languages, when the clients go by the device themselves).
+    #[serde(default)]
+    pub lang: Option<String>,
     /// Keys changed for an action (the desktop app's), by action.
     #[serde(default)]
     pub keys: HashMap<String, Vec<String>>,

@@ -1,0 +1,9 @@
+[package]
+name = "stillfail-i18n"
+description = "The words people read, in each language, kept once (catalog/<lang>/*.json): the core and the station take them from here, the web app imports the same files and the Android app has them as assets."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde_json = "1"

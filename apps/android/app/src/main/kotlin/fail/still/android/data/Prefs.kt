@@ -41,7 +41,7 @@ object Prefs {
     /** Tells the core what this device is, once at start: it decides what follows (the name it signs in as, the app a message is sent from). */
     suspend fun tellDevice(core: StillFailCore) {
         try {
-            core.call("client.device", buildJsonObject { put("app", "android"); put("build", BuildConfig.VERSION_NAME); put("model", "${Build.MANUFACTURER} ${Build.MODEL}") })
+            core.call("client.device", buildJsonObject { put("app", "android"); put("build", BuildConfig.VERSION_NAME); put("model", "${Build.MANUFACTURER} ${Build.MODEL}"); put("locale", java.util.Locale.getDefault().toLanguageTag()) })
         } catch (_: CoreException) {
         }
     }

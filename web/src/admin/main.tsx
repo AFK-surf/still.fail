@@ -9,6 +9,7 @@ import { startScrollbars } from "../scrollbars.ts";
 import { Tooltip } from "radix-ui";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { I18nRoot } from "../i18n.ts";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "@fontsource-variable/inter";
 import { Illustration } from "../brand.tsx";
@@ -62,4 +63,4 @@ function NoPermission() {
 
 followAppearance();
 startScrollbars();
-createRoot(document.getElementById("app")!).render(<StrictMode><AdminApp /></StrictMode>);
+createRoot(document.getElementById("app")!).render(<StrictMode><I18nRoot><AdminApp /></I18nRoot></StrictMode>);

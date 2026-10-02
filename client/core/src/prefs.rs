@@ -12,7 +12,7 @@ use crate::error::{CoreError, Result};
 use crate::protocol::Topic;
 
 /// The fields `prefs.set` takes; the rest of a patch is refused.
-const FIELDS: &[&str] = &["onlyMine", "onlyWatching", "appearance", "rowPicture", "absoluteTime", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
+const FIELDS: &[&str] = &["onlyMine", "onlyWatching", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
 /// Fields that are maps: a patch changes them entry by entry.
 const MAPS: &[&str] = &["keys", "lastChat", "chatTabs", "resume"];
 /// How many chats keep their tabs: the latest used.
@@ -84,6 +84,10 @@ pub fn set(data: &Data, patch: Value, fill: bool, now: f64) -> Result<()> {
             tabs.remove(&key);
         }
     }
+    if prefs.get("language").is_some_and(|l| !matches!(l.as_str(), Some("zh" | "en"))) {
+        return Err(CoreError::invalid("参数不对：language 要是 zh 或 en"));
+    }
+    with_lang(&mut prefs);
     let prefs = Value::Object(prefs);
     stillfail_shapes::conform::<stillfail_shapes::PrefsView>(prefs.clone()).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))?;
     data.set(&Topic::Prefs, prefs);
@@ -170,9 +174,31 @@ pub fn device(data: &Data, facts: &Value) -> Result<()> {
         _ => format!("{app}{build}"),
     };
     let mut prefs = kept(data);
-    prefs.insert("device".into(), json!({ "app": app, "phone": phone, "handoff": app == "web" && !phone, "name": name, "sentFrom": from }));
+    let mut told = json!({ "app": app, "phone": phone, "handoff": app == "web" && !phone, "name": name, "sentFrom": from });
+    let locale = said("locale");
+    if !locale.is_empty() {
+        told["locale"] = json!(locale);
+    }
+    prefs.insert("device".into(), told);
+    with_lang(&mut prefs);
     data.set(&Topic::Prefs, Value::Object(prefs));
     Ok(())
+}
+
+/// The language things are said in (`lang`): as chosen, else as the device is; the core says its own words in it from now on.
+fn with_lang(prefs: &mut Map<String, Value>) {
+    let chosen = prefs.get("language").and_then(Value::as_str);
+    let device = prefs.get("device").and_then(|d| d.get("locale")).and_then(Value::as_str);
+    let lang = stillfail_i18n::Lang::from_locale(chosen.or(device).unwrap_or(""));
+    prefs.insert("lang".into(), json!(lang.code()));
+    stillfail_i18n::set_current(lang);
+}
+
+/// The core says its words in the language kept (at start, before anything is said).
+pub fn follow_lang(data: &Data) {
+    if let Some(lang) = kept(data).get("lang").and_then(Value::as_str) {
+        stillfail_i18n::set_current(stillfail_i18n::Lang::from_locale(lang));
+    }
 }
 
 fn device_said(data: &Data, field: &str) -> Option<String> {

@@ -19,7 +19,7 @@ export function core(): CoreClient {
     // What this device is, said once: the core decides what follows from it (phone or computer, the name it signs in
     // as, the app a message is sent from). A core from before it has the page say those itself.
     const app = typeof window !== "undefined" && window.stillfailDesktop ? "desktop" : "web";
-    client.call("client.device", { app, build: typeof __BUILD__ === "string" ? __BUILD__ : "", userAgent: navigator.userAgent }).catch(() => undefined);
+    client.call("client.device", { app, build: typeof __BUILD__ === "string" ? __BUILD__ : "", userAgent: navigator.userAgent, locale: navigator.language ?? "" }).catch(() => undefined);
   }
   return client;
 }

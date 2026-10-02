@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
         // composition is laid out inside the system bars and moves when they are taken away.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        fail.still.android.ui.I18n.load(applicationContext)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
             val shared = getSharedPreferences("stillfail", Context.MODE_PRIVATE)
@@ -111,7 +112,9 @@ class MainActivity : ComponentActivity() {
             // drawn with them (the theme among them), not with defaults first.
             Prefs.tellDevice(core)
             Prefs.moveIn(core, shared)
-            val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN, core), Prefs.first(core))
+            val first = Prefs.first(core)
+            fail.still.android.ui.I18n.follow(first.lang)
+            val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN, core), first)
             // The notification settings the app kept, into the core before anything goes by them.
             made.moveNotify()
             made.inFront = Notifier.inFront

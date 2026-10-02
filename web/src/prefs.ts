@@ -15,7 +15,7 @@ const COPY = "stillfail.prefs";
 const APPEARANCE = "stillfail.appearance";
 
 /** The prefs with what the core fills in when nothing was chosen (its shape leaves them optional). */
-export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device">> & Pick<PrefsView, "workspace" | "invite"> & { device: Required<DeviceView> };
+export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" | "language" | "lang">> & Pick<PrefsView, "workspace" | "invite" | "language" | "lang"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
 /** What `prefs.set` takes: a field, or a map's entries (null: gone). */
 export type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> extends Record<string, infer V> ? Record<string, V | null> : Prefs[K] | null };
 

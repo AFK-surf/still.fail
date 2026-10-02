@@ -196,6 +196,7 @@ impl Core {
         // What was last known is there before any UI asks.
         let data = Data::new(host.clone());
         data.load().await;
+        crate::prefs::follow_lang(&data);
         let attend = Attend::load(host.clone()).await;
         let workspaces = Workspaces::new(host.clone());
         let inner = Rc::new_cyclic(|me: &Weak<Inner>| {

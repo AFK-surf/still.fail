@@ -1549,6 +1549,8 @@ export interface DeviceView {
 	phone?: boolean;
 	/** An item's link from outside is offered to the desktop app first (a computer's browser). */
 	handoff?: boolean;
+	/** The device's language as its host says (`zh-CN`, `en-US`, …); none until told. */
+	locale?: string;
 }
 
 export interface Disk {
@@ -2327,6 +2329,13 @@ export interface PrefsView {
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */
 	absoluteTime?: boolean;
+	/** The language chosen: `zh`, `en`, or none to follow the device's (its `locale`). */
+	language?: string;
+	/**
+	 * The language things are said in, as chosen or else as the device is: `zh` or `en` (the core's; none from a core
+	 * before languages, when the clients go by the device themselves).
+	 */
+	lang?: string;
 	/** Keys changed for an action (the desktop app's), by action. */
 	keys?: Record<string, string[]>;
 	/** The workspace last open (the Android app's). */

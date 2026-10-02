@@ -72,6 +72,8 @@ android {
     buildFeatures { compose = true; buildConfig = true; resValues = true }
     // An inline visualization's page is the web's: its stylesheet and bridge, from web/src/viz (ui/Viz.kt).
     sourceSets["main"].assets.srcDir(rootProject.file("../../web/src/viz"))
+    // The words, in each language: the catalog the core and the web read too (client/i18n, ui/I18n.kt).
+    sourceSets["main"].assets.srcDir(rootProject.file("../../client/i18n/catalog"))
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
