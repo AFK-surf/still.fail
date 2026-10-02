@@ -5,7 +5,7 @@ import json, sys
 
 def load(p):
     try:
-        head = json.loads(open(p + ".head").read() or "{}")
+        head = json.loads(open(p + ".head").read().strip().splitlines()[-1])
     except Exception as e:
         head = {"unreadable": str(e)}
     try:
@@ -16,6 +16,10 @@ def load(p):
 
 (sa, a), (sb, b) = load(sys.argv[1]), load(sys.argv[2])
 out = []
+# An answer that is not there is no answer to compare: the asking failed.
+for name, status in (("rust", sa), ("ts", sb)):
+    if not isinstance(status, int):
+        out.append("no answer from %s" % name)
 if sa != sb:
     out.append("status %s vs %s" % (sa, sb))
 
