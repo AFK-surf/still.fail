@@ -240,7 +240,7 @@
   "android-misc.usage.title": "Usage",
   "android-misc.usage.today": "Today",
   "android-misc.versions.auto": "Auto-update",
-  "android-misc.versions.auto.text": "Station updates itself when a new version is out; agents keep running",
+  "android-misc.versions.auto.text": "Updates itself; agents keep running",
   "android-misc.versions.backToStable": "Back to stable",
   "android-misc.versions.beta": "Beta",
   "android-misc.versions.beta.text": "Gets new versions first; may be unstable",

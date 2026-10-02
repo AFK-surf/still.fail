@@ -247,7 +247,7 @@
   },
   "core-views.station.unreachable": "Can't reach {name}",
   "core-views.usage.archived": "Archived",
-  "core-views.usage.basis": "Subscriptions aren't billed per token. Cost is estimated at standard API prices, without surcharges like long context or service tier",
+  "core-views.usage.basis": "Subscriptions aren't billed per token; cost is estimated at standard API prices, without surcharges",
   "core-views.usage.by.chats": "By chat",
   "core-views.usage.by.models": "By model",
   "core-views.usage.by.people": "By person",

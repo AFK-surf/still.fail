@@ -350,7 +350,7 @@
   "web-pages.errors.tooManyWorkspaces": "An account can create up to 5 workspaces",
   "web-pages.notifications.denied": "Blocked by the browser. Allow them in site settings",
   "web-pages.notifications.notAllowed": "Notifications not allowed",
-  "web-pages.notifications.noteBrowser": "Alerts you when an agent in your chats finishes, needs you or fails, or someone speaks. Not for the open chat. This browser only",
+  "web-pages.notifications.noteBrowser": "When an agent in your chats finishes, needs you or fails, or someone speaks. Not the open chat; this browser only",
   "web-pages.notifications.noteDevice": "Alerts you when an agent in your chats finishes, needs you or fails, or someone speaks. Not for the open chat. This device only (also allow {name} in System Settings)",
   "web-pages.notifications.offFailed": "Couldn't turn off: {error}",
   "web-pages.notifications.onFailed": "Couldn't turn on: {error}",
