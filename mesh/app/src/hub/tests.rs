@@ -1988,6 +1988,28 @@ async fn a_post_carries_a_card_kept_with_it_and_checked() {
 }
 
 #[tokio::test]
+async fn answering_a_clarification_cannot_silently_restore_need_human() {
+    let r = setup();
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    r.hub.say(thread.id, "ada@x.com", "改一下", vec![], vec![], None).unwrap();
+    settle().await;
+    let to = format!("EMBER/{}", thread.thread_ts);
+    r.call(&web, "chat_post", json!({ "to": to, "text": "可以合并吗？", "card": { "type": "options", "options": [{ "label": "合并" }] } })).await.unwrap();
+    assert_eq!(r.call(&web, "chat_state", json!({ "kind": "need_human", "need": "确认合并" })).await.unwrap(), "Recorded state need_human.");
+    r.claude.last().complete();
+    settle().await;
+    r.hub.say(thread.id, "ada@x.com", "跟随订阅就是标准吧", vec![], vec![], None).unwrap();
+    settle().await;
+    let person = r.said(thread.id).last().unwrap().ts.clone();
+    r.call(&web, "chat_post", json!({ "to": to, "text": "默认情况下是标准。" })).await.unwrap();
+    let refused = r.call(&web, "chat_state", json!({ "kind": "need_human", "need": "等待确认是否合并" })).await.unwrap_err();
+    assert!(refused.to_string().contains("requires a visible question"), "{refused}");
+    assert!(r.call(&web, "chat_state", json!({ "kind": "need_human", "need": "确认合并", "about": person })).await.unwrap_err().to_string().contains("your visible question"));
+    // A visible plain-text request works without forcing a new card.
+    r.call(&web, "chat_post", json!({ "to": to, "text": "还需要你确认：这版可以合并吗？", "kind": "need_human", "need": "确认合并" })).await.unwrap();
+}
+
+#[tokio::test]
 async fn a_state_says_which_message_it_is_about_the_pending_card_by_default() {
     let r = setup();
     let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
@@ -2118,7 +2140,11 @@ async fn a_turn_ends_all_done_needing_a_decision_or_help_or_waiting_and_the_word
     assert!(r.call(&key, "chat_state", json!({ "kind": "need_decision" })).await.unwrap_err().to_string().contains("posted with chat_post"));
     assert!(r.call(&key, "chat_state", json!({ "kind": "need_help" })).await.unwrap_err().to_string().contains("need is required"));
     assert!(r.call(&key, "chat_state", json!({ "kind": "done" })).await.unwrap_err().to_string().contains("all_done"));
-    assert_eq!(r.call(&key, "chat_state", json!({ "kind": "need_help", "need": "确认一下要不要上线" })).await.unwrap(), "Recorded state need_human.");
+    let hidden = r.call(&key, "chat_state", json!({ "kind": "need_help", "need": "确认一下要不要上线" })).await.unwrap_err();
+    assert!(hidden.to_string().contains("requires a visible question"));
+    r.call(&key, "chat_post", json!({ "to": to, "text": "确认一下要不要上线？" })).await.unwrap();
+    let question = r.said(r.store.session_threads(&key).unwrap()[0].thread.id).last().unwrap().ts.clone();
+    assert_eq!(r.call(&key, "chat_state", json!({ "kind": "need_help", "need": "确认一下要不要上线", "about": question })).await.unwrap(), "Recorded state need_human.");
     r.claude.last().complete();
     settle().await;
     assert_eq!((last().ending.as_deref(), last().need.as_deref()), (Some("need_help"), Some("确认一下要不要上线")));

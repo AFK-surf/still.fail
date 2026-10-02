@@ -1304,7 +1304,7 @@ impl Hub {
                         "kind": { "type": "string", "enum": ["all_done", "need_human"], "description": "Omit for a progress update. all_done: the chat has nothing unfinished at all (no branch left unmerged, no open question, nothing waiting for a yes); give done. need_human: a person has to give, do or decide something, or answer an open question (a card you posted included); give need. (need_decision, from before cards, is still taken: options, the turn ends need_human.)" },
                         "need": { "type": "string", "description": "For need_human (required): what the person has to give, do or decide, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key, 选统计口径); to verify something, where, how and what to look at; work of yours still running, after the ask (e.g. 选统计口径；CI 还在跑)." },
                         "about": { "type": "string", "description": "With kind, optional: the ts of the message in this conversation the state is about (all_done: the one with the result; need_human: the one that asks, by default the card still waiting there, this post's own when it carries one). People's lists jump to it." },
-                        "done": { "type": "string", "description": "Advice, recommendations and proposed options awaiting the user’s decision require need_human, not all_done. For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused." },
+                        "done": { "type": "string", "description": "Only a real unresolved need requires need_human; a factual answer alone needs no follow-up decision. For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused." },
                         "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they are uploaded below the text). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                         "title": { "type": "string", "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first post that ends a turn in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
                         "card": {
@@ -1381,14 +1381,14 @@ impl Hub {
             },
             Tool {
                 name: "chat_state".into(),
-                description: "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished: done says why, with the evidence), need_human (a person has to give, do or decide something, a card you posted included: need says what) or waiting (only for work you started that brings you back on its own, such as CI, a build, a job: for says what; waiting on a person is need_human).".into(),
+                description: "Record how this turn ends without posting another message: all_done (nothing in the chat is left unfinished: done says why, with the evidence), need_human (requires about pointing to your visible question, or a pending answer card; need alone is not visible in the chat) or waiting (only for work you started that brings you back on its own, such as CI, a build, a job: for says what; waiting on a person is need_human).".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "kind": { "type": "string", "enum": ["all_done", "need_human", "waiting"] },
                         "need": { "type": "string", "description": "For need_human (required): what the person has to give, do or decide, in one sentence in the language people use there (e.g. 要 Stripe 的测试 key, 选统计口径); to verify something, where, how and what to look at; work of yours still running, after the ask (e.g. 选统计口径；CI 还在跑)." },
-                        "about": { "type": "string", "description": "Optional: the ts of the message in your conversation the state is about (all_done: the one with the result; need_human: the one that asks, by default the card still waiting; waiting: the one saying what you started). People's lists jump to it." },
-                        "done": { "type": "string", "description": "Advice, recommendations and proposed options awaiting the user’s decision require need_human, not all_done. For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused." },
+                        "about": { "type": "string", "description": "Optional: the ts of the message in your conversation the state is about (all_done: the one with the result; need_human: required unless a card is pending, the message where you visibly ask what is still needed; waiting: the one saying what you started). People's lists jump to it." },
+                        "done": { "type": "string", "description": "Only a real unresolved need requires need_human; a factual answer alone needs no follow-up decision. For all_done (required): why nothing in the chat is left, so people can trust it, in the language they use there: what was finished and where it landed or how it was confirmed, naming the evidence (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以. Not just 做完了 or done: that is refused." },
                         "seconds": { "type": "integer", "minimum": MIN_WAIT_SECONDS, "maximum": MAX_WAIT_SECONDS, "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch)." },
                         "for": { "type": "string", "description": "For waiting (required): what you wait for, in a few words people read under your name, in the language they use there (e.g. 安卓滑动测试在模拟器上跑完)." },
                     },
@@ -1413,6 +1413,9 @@ impl Hub {
                             },
                         };
                         let about = hub.state_about(&key, kind, &args)?;
+                        if kind == DeclaredState::NeedHelp && about.is_none() && args.get("kind").and_then(Value::as_str) != Some("block") {
+                            bail!("need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person");
+                        }
                         match (kind, &words) {
                             (DeclaredState::Waiting(_), Some(what)) => hub.wait_for(&key, what),
                             (_, Some(need)) => hub.need(&key, need),
@@ -1517,6 +1520,9 @@ impl Hub {
         if let Some(ts) = about_ts(args)? {
             for t in &threads {
                 if let Some(m) = self.store.message_at(t.thread.id, &ts)? {
+                    if kind == DeclaredState::NeedHelp && (m.author_kind != AuthorKind::Agent || m.author != key || m.text.trim().is_empty()) {
+                        bail!("need_human about must point to your visible question, not a person's message or another agent's post");
+                    }
                     return Ok(Some((m.thread, m.n, m.ts)));
                 }
             }
