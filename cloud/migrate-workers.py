@@ -28,6 +28,17 @@ def transfer_config(template, part, account):
     return config
 
 
+def without_containers(config):
+    return {k: v for k, v in config.items() if k != 'containers'}
+
+
+def relay_container(applications, namespaces):
+    matches = [a for a in applications if a.get('durable_objects', {}).get('namespace_id') == namespaces['Relay']]
+    if len(matches) != 1:
+        raise RuntimeError('expected exactly one existing relay container application; no replacement will be created')
+    return {k: matches[0][k] for k in ('id', 'name')}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('part', choices=CLASSES)
@@ -48,12 +59,14 @@ def main():
     namespaces = get('workers/durable_objects/namespaces')
     source = {n['class']: n['id'] for n in namespaces if n['script'] == old}
     target = {n['class']: n['id'] for n in namespaces if n['script'] == new}
+    saved = json.loads(args.report.read_text()) if args.report.exists() else None
     if target:
         if not args.report.exists(): raise RuntimeError('target namespaces already exist without this migration report; refusing to guess')
-        saved = json.loads(args.report.read_text())
         if target != saved['namespaces']: raise RuntimeError('target namespace IDs differ from the recorded source')
-        print('already transferred and verified', new)
-        return
+        if saved.get('prepared'):
+            print('already transferred and verified', new)
+            return
+        source = target  # Resume container attachment after a successful transfer.
     if set(source) != set(CLASSES[args.part]): raise RuntimeError('unexpected source namespace inventory; no changes made')
     if not deploy.KEYS.exists(): raise RuntimeError('existing deployment keys are required; never generate new keys for a migration')
     secrets = deploy.keys()
@@ -67,7 +80,12 @@ def main():
         with urllib.request.urlopen(req, timeout=30) as response: deployed_keys = json.load(response)['keys']
         if not any(k.get('x') == jwk['x'] for k in deployed_keys): raise RuntimeError('local grant signing key differs from the live key')
     else: secrets = {'ADMIN_TOKEN': secrets['ADMIN_TOKEN']}
+    containers = get('containers/applications') if args.part == 'relay' else []
+    container = relay_container(containers, source) if args.part == 'relay' else None
+    if container:
+        config['containers'] = [{**c, 'name': container['name']} for c in config['containers']]
     report = {'source': old, 'target': new, 'namespaces': source, 'prepared': False, 'routesChanged': False}
+    if container: report['container'] = container
     if not args.apply:
         print(json.dumps({'target': new, 'transferClasses': sorted(source), 'routes': [], 'signingKeys': 'existing'}, indent=2))
         return
@@ -87,11 +105,21 @@ def main():
         real_config = root / 'transfer.json'
         deploy.write_private(real_config, config)
         if args.part == 'relay':
+            # Cloudflare validates container storage before applying transferred_classes.
+            # Transfer first, then attach the SAME application to its unchanged namespace.
+            if not target:
+                deploy.write_private(real_config, without_containers(config))
+                deploy.wrangler('deploy', '--config', str(real_config), capture=True)
+                moved = {n['class']: n['id'] for n in get('workers/durable_objects/namespaces') if n['script'] == new}
+                if moved != source: raise RuntimeError('relay transfer IDs differ; refusing container attachment')
+            deploy.write_private(real_config, config)
             with deploy.docker_env() as env:
                 deploy.wrangler('deploy', '--config', str(real_config), '--containers-rollout', 'immediate', env=env, capture=True)
         else: deploy.wrangler('deploy', '--config', str(real_config), capture=True)
     after = {n['class']: n['id'] for n in get('workers/durable_objects/namespaces') if n['script'] == new}
     if after != source: raise RuntimeError('namespace verification failed; routes have not been changed')
+    if container and relay_container(get('containers/applications'), source) != container:
+        raise RuntimeError('container application identity changed; routes have not been changed')
     report['prepared'] = True
     deploy.write_private(args.report, report)
     print('prepared', new, 'with', len(after), 'unchanged namespace IDs; routes unchanged')
