@@ -346,7 +346,7 @@ impl AdminApi {
         }
         let reset = self.deps.reset_quota.as_ref().ok_or_else(|| http_error(503, "此 station 不支持重置额度"))?;
         let result = reset(profile, key.to_string()).await?;
-        self.refresh_quota(id).await?;
+        self.read_quota(id, true).await?;
         match result.get("outcome").and_then(Value::as_str) {
             Some("reset" | "alreadyRedeemed") => Ok(result),
             Some("nothingToReset") => Err(http_error(409, "当前没有可重置的额度")),
@@ -357,13 +357,21 @@ impl AdminApi {
 
     /// A profile's allowance, asked again (unless a question is on its way already).
     pub(super) async fn refresh_quota(&self, id: &str) -> Result<Option<ProfileQuota>> {
+        self.read_quota(id, false).await
+    }
+
+    async fn read_quota(&self, id: &str, after_reset: bool) -> Result<Option<ProfileQuota>> {
+        let pending = self.quota_pending.lock().unwrap().entry(id.to_string()).or_default().clone();
+        // A reset must read after any older refresh, so an in-flight pre-reset snapshot cannot win.
+        let _guard = if after_reset { pending.lock().await } else {
+            match pending.try_lock() {
+                Ok(guard) => guard,
+                Err(_) => return Ok(self.quotas.lock().unwrap().get(id).cloned()),
+            }
+        };
         let profile = self.config().profiles.iter().find(|p| p.id == id).cloned().ok_or_else(|| http_error(404, format!("unknown profile {id}")))?;
         let Some(quota) = self.deps.quota.clone() else { return Ok(self.quotas.lock().unwrap().get(id).cloned()) };
-        if !self.quota_pending.lock().unwrap().insert(id.to_string()) {
-            return Ok(self.quotas.lock().unwrap().get(id).cloned());
-        }
         let read = quota(profile).await;
-        self.quota_pending.lock().unwrap().remove(id);
         self.quotas.lock().unwrap().insert(id.to_string(), read.clone());
         self.deps.store.set_profile_quota(id, &serde_json::to_value(&read)?)?;
         self.events.overview_changed();

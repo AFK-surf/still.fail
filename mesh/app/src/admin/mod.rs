@@ -202,7 +202,7 @@ pub struct AdminApi {
     apps: Arc<dyn SlackService>,
     checks: Arc<Mutex<HashMap<String, ProfileCheck>>>,
     quotas: Arc<Mutex<HashMap<String, ProfileQuota>>>,
-    quota_pending: Mutex<HashSet<String>>,
+    quota_pending: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     app_ids: Mutex<HashMap<String, String>>,
     pending: Mutex<HashMap<String, Pending>>,
     events: Arc<Events>,

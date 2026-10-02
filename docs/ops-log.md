@@ -32,6 +32,7 @@
 - Android 发送落点（fix/android-flight-landing）：需发布 Android；纯视图变换，无接口或数据迁移，无 station/cloud 更新顺序要求。列表先按最终输入框高度和真实滚动边界完成布局，再把消息变换回输入框播放归位。上线后检查短对话、满屏历史、超过输入框的长消息、快速确认；末帧不得跳位，旧消息开头不得回跳。
 
 - 安卓通知落点（notification-memorial）：需发 Android；点本地通知或 FCM 推送进入该 workspace 的「奏」页，返回到会话列表。普通聊天链接保持原行为。沿用现有通知 URL，无 cloud/station 接口变更；更新前已经显示的通知仍可能打开聊天。上线后验：新通知分别从应用关闭和后台状态点入，确认 workspace、奏页及返回路径。
+- OpenAI 订阅控制（openai-subscription-controls）：发 station、web/桌面与 Android（含新版 core）。Fast 在下一轮请求读取 Profile 设置，正在运行的轮次不变；额度重置依赖 Codex app-server 的 `account/rateLimitResetCredit/consume`，需运行支持该接口的 Codex。新字段均可缺省，旧 station 不显示 Fast/重置，旧客户端忽略新增字段。上线后核对积分余额与官方用量页一致、Fast 切换后的下一轮请求；重置会消耗账号的一次重置机会，只由用户确认后操作，断线重试沿用幂等键。
 
 - Preview 资源加载圆环：发 web（含新版 wasm core）、桌面和 Android；无 station/cloud 协议改动。统计在各客户端 core，旧客户端维持原样，新 UI 遇到旧 core 不显示圆环。上线后打开服务预览，刷新并 hover 圆环（手机点开），核对加载中、完成和 404 明细；百分比按已发现的服务请求完成数，外部 CDN 请求不在统计内。
 - 奏折按 agent 指定的 `card.assignee`（邮箱）筛选：先发 station，再发 web/桌面和 Android 的新 core/UI。旧 station 会丢弃归属字段，新 core 将其视为未指定；旧客户端仍可能显示所有人的卡片。历史未指定卡片保留在 chat，显示「尚未指定决策人」，由 agent 重发带负责人卡片后进入对应人的奏折。上线用两账号检查各自奏折列表/计数和对方 chat 代答；迁移说明 6 提醒老 agent。
