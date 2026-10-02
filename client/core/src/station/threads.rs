@@ -164,7 +164,19 @@ impl Stations {
                 Some(h) => format!("/threads/{id}/entries?after={}", h.last),
                 None => format!("/threads/{id}/entries?limit={PAGE}"),
             };
-            if let Ok(answer) = self.call(addr, "GET", &path, Vec::new(), Vec::new()).await {
+            let answer = match self.call(addr, "GET", &path, Vec::new(), Vec::new()).await {
+                Ok(answer) => answer,
+                Err(error) => {
+                    // An old link can point at a removed or inaccessible thread. Tell the chat instead of
+                    // leaving its first load pending forever; transient failures can still reconnect.
+                    let topic = Topic::Thread { station: station.into(), thread: id };
+                    if self.is_live(&topic) && self.sink.get(&topic).is_none() && error.status.is_some_and(|s| (400..500).contains(&s)) {
+                        self.sink.set(&topic, Err(error));
+                    }
+                    return None;
+                }
+            };
+            {
                 let mut entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
                 let last = answer.get("last").and_then(Value::as_u64).unwrap_or(0);
                 if let Some(h) = near {
@@ -181,7 +193,6 @@ impl Stations {
                 }
                 return Some((thread_value(first, entries, thread, title, true), true));
             }
-            return None;
         }
         // Offline: its latest page kept, as it was.
         let (held, entries) = self.kept.open(&log, PAGE).await?;

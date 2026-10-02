@@ -598,6 +598,8 @@ impl Views {
                 if let Some(key) = session {
                     topics.insert(Topic::Session { station: station.clone(), key: key.clone() });
                 }
+                // Old notification links can name archived chats, absent from ChatRows. Threads still includes them.
+                topics.insert(Topic::Threads { station: station.clone() });
                 topics.insert(Topic::ChatRows { station: station.clone() });
                 topics.insert(Topic::Sessions { station: station.clone() });
                 topics.insert(Topic::Overview { station: station.clone() });
@@ -1426,6 +1428,14 @@ impl Views {
         // Its title is the station's: the page waits for its items.
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() })?.ok();
         let row = rows.as_ref().and_then(Value::as_array).and_then(|rows| rows.iter().find(|r| r.get("id").and_then(Value::as_str) == Some(key)));
+        // Without an active row, first resolve the link against all threads (including archived ones).
+        // Otherwise an old notification briefly, or forever, looks like an agent with no messages.
+        if row.is_none() {
+            match self.store.value(&Topic::Threads { station: station.to_string() })? {
+                Ok(_) => {},
+                Err(error) => return Some(Err(error)),
+            }
+        }
         let title = row.and_then(|r| r.get("title").cloned()).unwrap_or_else(|| json!("（还没有消息）"));
         let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
         Some(Ok(json!({
@@ -2824,6 +2834,32 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(v["thread"]["id"], 7);
             assert_eq!(v["messages"].as_array().unwrap().len(), 1);
+        });
+    }
+
+    #[test]
+    fn an_old_notification_resolves_an_archived_chat_without_an_active_row() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, agent_page("ws/a", "k"));
+            t.read(&mut ui, 1).await;
+            assert!(t.started().contains(&threads("ws/a")), "a cold link must load archived threads too");
+            t.set(sessions("ws/a"), json!([full_session("k", json!({"connect": "ember", "archivedAt": 42}))]));
+            t.set(rows("ws/a"), json!([]));
+            t.read(&mut ui, 1).await;
+            assert!(ui.value.is_none(), "must not show an empty agent while resolving the chat");
+            let mut archived = thread(7, &["k"], t.host.now_ms());
+            archived["hiddenAt"] = json!(42);
+            t.set(threads("ws/a"), json!([archived.clone()]));
+            t.read(&mut ui, 1).await;
+            assert!(t.started().contains(&page_of("ws/a", 7)));
+            t.set(page_of("ws/a", 7), page(1, &["原来的消息"], archived));
+            t.read(&mut ui, 1).await;
+            let view = ui.value.unwrap();
+            assert_eq!(view["thread"]["id"], 7);
+            assert_eq!(view["archived"], true);
+            assert_eq!(view["messages"].as_array().unwrap().len(), 1);
         });
     }
 

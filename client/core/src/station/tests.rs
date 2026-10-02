@@ -1392,3 +1392,19 @@ fn a_batch_waits_for_a_runtime_to_finish_before_starting_station() {
         assert_eq!(wire.count("POST", "/admin/api/updates"), 2);
     });
 }
+
+#[test]
+fn an_old_notification_to_a_missing_or_forbidden_thread_reports_the_failure() {
+    run(async {
+        for status in [403, 404, 410] {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7", status, json!({"error": "对话已不可用"}));
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", status, json!({"error": "对话已不可用"}));
+            stations.start(&thread(7));
+            host.settle().await;
+            let values = sink.values.borrow();
+            let error = values.get(&thread(7)).expect("the load must finish with a visible error").as_ref().unwrap_err();
+            assert_eq!(error.status, Some(status));
+        }
+    });
+}
