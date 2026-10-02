@@ -73,7 +73,7 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = !chat.thread || chat.thread.surface === "ember" ? "ember" : "slack";
+    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);

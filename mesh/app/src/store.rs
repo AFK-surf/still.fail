@@ -190,7 +190,7 @@ pub enum AuthorKind {
     Person,
     Agent,
     /// The station itself (named, stored and sent as before the rename).
-    #[serde(rename = "ember")]
+    #[serde(rename = "ember", alias = "stillfail")]
     StillFail,
 }
 
@@ -205,7 +205,7 @@ impl AuthorKind {
     fn parse(s: &str) -> AuthorKind {
         match s {
             "agent" => AuthorKind::Agent,
-            "ember" => AuthorKind::StillFail,
+            "ember" | "stillfail" => AuthorKind::StillFail,
             _ => AuthorKind::Person,
         }
     }

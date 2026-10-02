@@ -392,7 +392,7 @@ private fun Place(station: String, of: ChatOf, place: fail.still.android.data.Pl
         Modifier.clip(RoundedCornerShape(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        if (place.surface == "ember") Mark(12.dp) else SlackMark(12.dp)
+        if (place.surface in setOf("ember", "stillfail")) Mark(12.dp) else SlackMark(12.dp)
         Text(place.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (open != null) C.accentInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

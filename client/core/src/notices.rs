@@ -195,7 +195,7 @@ fn noticed(row: &Value, then: Option<&Seen>, me: &Value, slack_users: &[String],
     let kind = by.as_ref().and_then(|b| b.get("kind")).and_then(Value::as_str);
     // Something went wrong: the station says so in the chat (⚠️ first), for a turn that failed and for an agent that
     // could not start alike.
-    if fresh && kind == Some("ember") && let Some(said) = text.strip_prefix("⚠️") {
+    if fresh && matches!(kind, Some("ember" | "stillfail")) && let Some(said) = text.strip_prefix("⚠️") {
         return Some(("failed", body("failed", "", said.trim())));
     }
     // Something new to read, said by someone else, with nobody at work.
