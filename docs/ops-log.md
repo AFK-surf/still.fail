@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 选项须是完整回答（merge-confirm-single-option）：发布并更新 station；无需客户端、cloud 或数据迁移。指令要求每个选项点了就是完整回答，要用户自己说的（改什么、名字、数值、换方案）不做成选项；可以只有一个选项（如确认合并只给「合并」）。旧会话通过迁移说明 10 获知。上线后看 agent 请求合并时卡片只有「合并」。
+
 - 开源跟进与旧品牌清理（open-source-followup）：根包名、MCP initialize 服务显示名称、官网内部命名及当前文档/注释统一 still.fail / stillfail；旧数据、协议、MCP 配置 namespace、桌面存储 origin 与云资源名保持兼容，不做数据迁移。wasm 构建按 LLVM_BIN/Homebrew/PATH 寻找 LLVM 并提前校验 wasm32；桌面 stable/beta 均支持 UNSIGNED=1（正式发布默认签名不变）。本地开发文档构建时指定本地 preview origin。MCP 名称需 station 更新后生效；官网注释/内部事件与颜色常量改名无视觉变化，按正常 site 发版即可。
 
 - 奏折回答离场（decision-card-swipe-exit）：更新 web 和 Android，卡片回答后收拢并以先慢后快的速度向上抽走，下一张保持原位；左右滑仍为待定和不再提醒。纯视图改动，无 core、station 或数据迁移依赖，可独立更新。上线检查选项回答、文字回复和最后一张返回；减少动态效果时跳过动画。
