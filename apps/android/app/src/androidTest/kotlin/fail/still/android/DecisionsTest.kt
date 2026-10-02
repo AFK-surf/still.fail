@@ -257,12 +257,12 @@ class DecisionsTest {
     private fun answeredCardSlides(dark: Boolean) {
         val h = page(dark)
         val before = postAt()
-        val recording = h.record(if (dark) "answer-gather-dark" else "answer-gather-light")
+        val recording = h.record(if (dark) "answer-up-dark" else "answer-up-light")
         recording.frames(10)
         recording.frame { rule.onNodeWithText(both.label, substring = false).performClick() }
         recording.frames(5)
         val moving = postAt()
-        assertTrue("answered card must move down", moving.top > before.top + 10f)
+        assertTrue("answered card must move up", moving.top < before.top - 10f)
         assertTrue("answered card gathers toward its centre", moving.left > before.left)
         assertTrue("card must not disappear before sliding", moving.width > 0f)
         recording.frames(45)

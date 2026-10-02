@@ -287,7 +287,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     // The front one's way across (px), its coming in (0 → 1) and its departure as it is answered: its own, new with
     // another in front, so what went is not snapped back a frame before the next takes its place.
     val drag = remember(item.key) { Animatable(0f) }
-    val down = remember(item.key) { Animatable(0f) }
+    val lift = remember(item.key) { Animatable(0f) }
     val arrive = remember(item.key) { Animatable(if (local.arriving && !still) 0f else 1f) }
     LaunchedEffect(item.key) {
         local.arriving = false
@@ -312,13 +312,13 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         }
     }
 
-    /** The front one goes (`dir` its side, 0 down after answering), `then` is done, and the next comes in. */
+    /** The front one goes (`dir` its side, 0 up after answering), `then` is done, and the next comes in. */
     fun go(dir: Int, then: () -> Unit) {
         if (busy) return
         busy = true
         scope.launch {
             if (!still) {
-                if (dir == 0) down.animateTo(height.toFloat(), tween(320, easing = Ease.Standard))
+                if (dir == 0) lift.animateTo(height.toFloat(), tween(360, easing = androidx.compose.animation.core.CubicBezierEasing(0.55f, 0f, 0.85f, 0.35f)))
                 else drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
             }
             // The next card is already laid out underneath the departing one.
@@ -431,13 +431,13 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
             Column(
                 Modifier.fillMaxSize().graphicsLayer {
                     val a = arrive.value
-                    val progress = (down.value / height).coerceIn(0f, 1f)
+                    val progress = (lift.value / height).coerceIn(0f, 1f)
                     val gathered = (progress / 0.4f).coerceIn(0f, 1f)
                     val s = lerp(0.94f, 1f, a) * lerp(1f, 0.88f, gathered)
                     scaleX = s; scaleY = s
                     translationX = drag.value
-                    translationY = down.value
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                    translationY = -lift.value
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
                     rotationZ = drag.value / width * 4f
                     alpha = a
                 }.background(C.bg),

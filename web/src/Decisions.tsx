@@ -183,7 +183,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   }, [front && keyOf(front), turn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The decision in view goes (a copy of it flies off that way, from where it is now), the next one rising in its place. */
-  const leave = (to: "left" | "right" | "down") => {
+  const leave = (to: "left" | "right" | "up") => {
     const el = card.current;
     const place = host.current;
     if (under.current) delete under.current.dataset.side;
@@ -200,19 +200,19 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
       if (from && copy) copy.scrollTop = from.scrollTop;
       const start = el.style.transform || "translateX(0px)";
       const w = place.offsetWidth;
-      const end = to === "down" ? `translateY(${place.offsetHeight}px)` : `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
+      const end = to === "up" ? `translateY(${-place.offsetHeight}px)` : `translateX(${to === "right" ? w + 24 : -(w + 24)}px)`;
       setLeaving((n) => n + 1);
-      const frames = to === "down" ? [
+      const frames = to === "up" ? [
         { transform: "translateY(0px) scale(1)", offset: 0 },
-        { transform: `translateY(${place.offsetHeight * 0.4}px) scale(.88)`, offset: 0.4 },
+        { transform: `translateY(${-place.offsetHeight * 0.4}px) scale(.88)`, offset: 0.4 },
         { transform: `${end} scale(.88)`, offset: 1 },
       ] : [{ transform: start }, { transform: end }];
-      if (to === "down") ghost.style.transformOrigin = "50% 100%";
-      void ghost.animate(frames, { duration: to === "down" ? 320 : 260, easing: "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
+      if (to === "up") ghost.style.transformOrigin = "50% 0%";
+      void ghost.animate(frames, { duration: to === "up" ? 360 : 260, easing: to === "up" ? "cubic-bezier(.55, 0, .85, .35)" : "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
         .finished.then(() => { ghost.remove(); setLeaving((n) => n - 1); }, () => { ghost.remove(); setLeaving((n) => n - 1); });
     }
     if (el) { el.style.transform = ""; delete el.dataset.dragging; }
-    setArriving(to !== "down");
+    setArriving(to !== "up");
     setTurn((t) => t + 1);
   };
 
@@ -234,7 +234,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
     drop(d);
     act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), "不再提醒");
   };
-  const answered = (d: DecisionItem) => { leave("down"); drop(d); };
+  const answered = (d: DecisionItem) => { leave("up"); drop(d); };
 
   // The wide screen's keys: ← 待定, → 不再提醒 (not while writing somewhere).
   const latest = useRef({ defer, dismiss });
