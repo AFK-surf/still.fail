@@ -6,6 +6,7 @@ import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
+import { Bell } from "./icons.tsx";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 
@@ -76,7 +77,7 @@ export function WaitingText({ text, className, compactNeed = false }: { text: st
   return (
     <span className={className} data-turn={turn || undefined} data-state-line="">
       {need ? <><Tip label={t("web-main.chatMark.alert")}><span className={css.needMark} role="img" aria-label={t("web-main.chatMark.alert")}>
-        <span aria-hidden="true">?</span>
+        <Bell size={14} />
       </span></Tip>{text.slice(need[0].length) && <> {text.slice(need[0].length)}</>}</>
         : <>{lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} /></>}
     </span>
