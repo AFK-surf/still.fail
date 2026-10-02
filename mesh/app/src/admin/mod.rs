@@ -13,7 +13,7 @@ mod slack;
 mod footprint;
 mod views;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, Weak};
 
