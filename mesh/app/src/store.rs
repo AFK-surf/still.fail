@@ -328,6 +328,17 @@ pub struct MessageRow {
     pub edited_at: Option<i64>,
 }
 
+/// A card someone answered (`answers_since`): the post that asked and its card, who answered and when, and with what:
+/// their message, or none when a choice closed it (an option with action close).
+#[derive(Debug, Clone)]
+pub struct CardAnswer {
+    pub question: MessageRow,
+    pub card: Value,
+    pub by: String,
+    pub at: i64,
+    pub answer: Option<MessageRow>,
+}
+
 /// A message a session has yet to read, with where it was said and how the session hears that thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingMessage {
@@ -993,6 +1004,8 @@ fn add_client_column(db: &Connection) -> Result<()> {
     // A chat's latest card is looked for on every list of chats: only its posts with one are read.
     db.execute_batch("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL")?;
     db.execute_batch("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL")?;
+    // What people said lately is looked for on every list of chats (the cards they answered: `answers_since`).
+    db.execute_batch("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'")?;
     if !has("merged", "client")? {
         db.execute_batch(&format!("BEGIN; DROP VIEW IF EXISTS merged; {MERGED} COMMIT;"))?;
     }
@@ -2004,6 +2017,54 @@ impl Store {
             let Some(card) = card_of(card, options) else { return Ok(None) };
             let message = i.db.query_row("SELECT * FROM merged WHERE thread = ? AND n = ?", params![thread, n], to_message).optional()?;
             Ok(message.map(|m| (m, card)))
+        })
+    }
+
+    /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card (the
+    /// thread's latest card then), or a choice that closed it (closed_cards, by a person: not its agent withdrawing it).
+    pub fn answers_since(&self, since: i64) -> Result<Vec<CardAnswer>> {
+        self.with(|i, _| {
+            let mut out = Vec::new();
+            let said: Vec<(i64, i64)> = {
+                let mut stmt = i.db.prepare("SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?")?;
+                stmt.query_map([since], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?
+            };
+            let asked_before = |thread: i64, n: i64| -> Result<Option<i64>> {
+                let card: Option<i64> = i.db.query_row("SELECT max(n) FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL", params![thread, n], |r| r.get(0))?;
+                let options: Option<i64> = i.db.query_row("SELECT max(n) FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL", params![thread, n], |r| r.get(0))?;
+                Ok(card.max(options))
+            };
+            let card_at = |thread: i64, n: i64| -> Result<Option<(MessageRow, Value)>> {
+                let row: Option<(Option<String>, Option<String>)> = i.db.query_row("SELECT card, options FROM entries WHERE thread = ? AND n = ?", params![thread, n], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+                let Some(card) = row.and_then(|(card, options)| card_of(card, options)) else { return Ok(None) };
+                let message = i.db.query_row("SELECT * FROM merged WHERE thread = ? AND n = ?", params![thread, n], to_message).optional()?;
+                Ok(message.map(|m| (m, card)))
+            };
+            for (thread, n) in said {
+                let Some(asked) = asked_before(thread, n)? else { continue };
+                // Only the first word after it answers it; one closed (by a choice or withdrawn) was answered then.
+                let earlier = i.db.query_row("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", params![thread, asked, n], |_| Ok(())).optional()?.is_some();
+                let closed = i.db.query_row("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", params![thread, asked], |_| Ok(())).optional()?.is_some();
+                if earlier || closed {
+                    continue;
+                }
+                let Some((question, card)) = card_at(thread, asked)? else { continue };
+                let Some(answer) = i.db.query_row("SELECT * FROM merged WHERE thread = ? AND n = ?", params![thread, n], to_message).optional()? else { continue };
+                out.push(CardAnswer { question, card, by: answer.author.clone(), at: answer.created_at, answer: Some(answer) });
+            }
+            let closed: Vec<(i64, i64, String, i64)> = {
+                let mut stmt = i.db.prepare("SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?")?;
+                stmt.query_map([since], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?
+            };
+            for (thread, n, by, at) in closed {
+                let Some((question, card)) = card_at(thread, n)? else { continue };
+                // Withdrawn by its own agent: no one answered it.
+                if question.author == by {
+                    continue;
+                }
+                out.push(CardAnswer { question, card, by, at, answer: None });
+            }
+            Ok(out)
         })
     }
 

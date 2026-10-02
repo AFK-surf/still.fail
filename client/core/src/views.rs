@@ -1242,6 +1242,10 @@ impl Views {
         let prefs = self.ok(Topic::Prefs).unwrap_or(Value::Null);
         let mut loading = false;
         let mut items: Vec<(Value, f64, Option<f64>)> = Vec::new();
+        // For the page with none left: the cards the viewer answered lately (the day's are counted when shown:
+        // present.rs), and the chats of theirs where an agent is at work or waiting, newest first.
+        let mut answered: Vec<Value> = Vec::new();
+        let mut working: Vec<Value> = Vec::new();
         for s in &stations {
             let rows = match self.store.value(&Topic::ChatRows { station: s.address.clone() }) {
                 Some(Ok(rows)) => rows,
@@ -1255,6 +1259,29 @@ impl Views {
                 .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
                 .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
             for row in rows.as_array().into_iter().flatten().filter(|r| !self.being_archived(&s.address, r)) {
+                let place = || json!({
+                    "station": s.address, "stationName": s.name, "session": row.get("id").cloned().unwrap_or(Value::Null),
+                    "thread": row.get("thread").cloned().unwrap_or(Value::Null), "title": row.get("title").cloned().unwrap_or(json!("")),
+                });
+                for a in row.get("answered").and_then(Value::as_array).into_iter().flatten() {
+                    let (Some(seq), Some(at)) = (a.get("seq").and_then(Value::as_u64), a.get("answeredAt").and_then(Value::as_f64)) else { continue };
+                    let mut item = place();
+                    item["seq"] = json!(seq);
+                    item["text"] = json!(crate::decisions::question(a.get("text").and_then(Value::as_str).unwrap_or("")));
+                    item["answer"] = json!(crate::decisions::answer_text(a));
+                    item["answeredAt"] = json!(at);
+                    item["askedAt"] = a.get("askedAt").cloned().unwrap_or(json!(at));
+                    answered.push(item);
+                }
+                if row.get("thread").is_some_and(Value::is_u64) && row.get("mine").and_then(Value::as_bool) == Some(true)
+                    && !crate::decisions::waits(row)
+                    && let Some(line) = crate::present::working_line(row)
+                {
+                    let mut item = place();
+                    item["line"] = json!(line);
+                    item["lastActiveAt"] = row.get("lastActiveAt").cloned().unwrap_or(Value::Null);
+                    working.push(item);
+                }
                 let Some(d) = crate::decisions::for_viewer(row, &me) else { continue };
                 let (Some(thread), Some(seq)) = (row.get("thread").and_then(Value::as_u64), d.get("seq").and_then(Value::as_u64)) else { continue };
                 let agents: Vec<Value> = row.get("agents").and_then(Value::as_array).into_iter().flatten().map(|a| {
@@ -1295,7 +1322,13 @@ impl Views {
         }
         crate::decisions::order(&mut items);
         let count = items.len();
-        Some(Ok(json!({ "items": items.into_iter().map(|i| i.0).collect::<Vec<_>>(), "count": count, "loading": loading })))
+        let at = |v: &Value, k: &str| v.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+        answered.sort_by(|a, b| at(b, "answeredAt").total_cmp(&at(a, "answeredAt")));
+        working.sort_by(|a, b| at(b, "lastActiveAt").total_cmp(&at(a, "lastActiveAt")));
+        Some(Ok(json!({
+            "items": items.into_iter().map(|i| i.0).collect::<Vec<_>>(), "count": count, "loading": loading,
+            "answered": answered, "working": working,
+        })))
     }
 
     /// An agent's execution history (history.rs): its transcript read with its threads, its connect's bot, and the
@@ -2123,6 +2156,44 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(order(&v), ["k1", "k2"]);
             assert_eq!((v["items"][1]["deferred"].clone(), v["items"][0].get("deferred")), (json!(true), None));
+        });
+    }
+
+    #[test]
+    fn the_decisions_page_says_what_was_answered_today_and_where_agents_are_at_work() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Decisions { workspace: "ws".into() });
+            t.read(&mut ui, 1).await;
+            t.set(workspace(), one_station());
+            t.set(Topic::Prefs, json!({}));
+            t.set(link("ws/st"), json!({"state": "online"}));
+            let now = t.host.now_ms();
+            let options = json!([{ "label": "先发测试版" }, { "label": "不需要部署", "action": "close" }]);
+            let mut done = row("7", now - 60_000.0);
+            done["answered"] = json!([
+                { "seq": 3, "text": "**0.1.1570** 先发测试版吗？\n细节", "askedAt": now - 20.0 * 60_000.0, "answeredAt": now - 10.0 * 60_000.0,
+                  "card": { "type": "options", "options": options }, "reply": "先发测试版", "quoted": true },
+                { "seq": 5, "text": "要部署吗？", "askedAt": now - 4.0 * 60_000.0, "answeredAt": now - 2.0 * 60_000.0,
+                  "card": { "type": "options", "options": options }, "closed": true },
+                { "seq": 1, "text": "昨天的", "askedAt": now - 30.0 * 3600_000.0, "answeredAt": now - 26.0 * 3600_000.0,
+                  "card": { "type": "text" }, "reply": "随便" },
+            ]);
+            let mut busy = row("8", now - 1000.0);
+            busy["mine"] = json!(true);
+            busy["agents"][0]["process"] = json!("running");
+            busy["last"] = json!({ "text": "截三种首屏\n第二行" });
+            let mut others = row("9", now - 500.0);
+            others["agents"][0]["process"] = json!("running");
+            t.set(rows("ws/st"), json!([done, busy, others]));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            let answered = v["answered"].as_array().unwrap();
+            assert_eq!(answered.iter().map(|a| a["answer"].as_str().unwrap()).collect::<Vec<_>>(), ["选了「不需要部署」", "选了「先发测试版」"], "today's only, newest first");
+            assert_eq!((answered[1]["text"].as_str(), answered[1]["title"].as_str(), answered[1]["seq"].as_u64()), (Some("0.1.1570 先发测试版吗？"), Some("7 的标题"), Some(3)));
+            assert_eq!(v["today"], json!({ "count": 2, "waited": "6 分钟", "working": 1 }));
+            assert_eq!((v["working"][0]["line"].as_str(), v["working"].as_array().unwrap().len()), (Some("在做 · 截三种首屏"), 1), "the viewer's chats only");
         });
     }
 

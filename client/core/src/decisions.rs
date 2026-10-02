@@ -110,6 +110,75 @@ pub fn line(text: &str) -> String {
     if cut.is_empty() { "奏".to_string() } else { format!("奏 · {cut}") }
 }
 
+/// What a card asks, for a list: its post's first line, as its line has it, without 奏 · .
+pub fn question(text: &str) -> String {
+    let line = line(text);
+    line.strip_prefix("奏 · ").map(str::to_string).unwrap_or(line)
+}
+
+/// How the viewer answered a card (a row's `answered`, the station's): the option they picked (their words are an
+/// option's label, quoting the post), the one a choice that closed it was (its only option that closes), else what
+/// they wrote, cut short.
+pub fn answer_text(a: &Value) -> String {
+    let card = &a["card"];
+    let labels = || card.get("options").and_then(Value::as_array).into_iter().flatten();
+    if a.get("closed").and_then(Value::as_bool) == Some(true) {
+        let closing: Vec<&str> = labels().filter(|o| o["action"] == "close").filter_map(|o| o["label"].as_str()).collect();
+        return match closing.as_slice() {
+            [one] => format!("选了「{}」", one.trim()),
+            _ => "已处理".to_string(),
+        };
+    }
+    let reply = a.get("reply").and_then(Value::as_str).unwrap_or("").trim();
+    if a.get("quoted").and_then(Value::as_bool) == Some(true)
+        && let Some(label) = labels().filter_map(|o| o["label"].as_str()).find(|l| l.trim() == reply)
+    {
+        return format!("选了「{}」", label.trim());
+    }
+    let first = crate::format::clean_text(reply.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""));
+    let cut: String = first.chars().take(LINE_CHARS / 2).collect();
+    if cut.is_empty() { "回复了".to_string() }
+    else if first.chars().count() > LINE_CHARS / 2 { format!("回复：{}…", cut.trim_end()) }
+    else { format!("回复：{cut}") }
+}
+
+/// The 奏 page's day, as the viewer's clock has it: of the cards answered lately (`answered`), only today's, each
+/// with when (14:05: `when`), newest first; and `today`: how many, how long they waited for the viewer on average
+/// (`waited`, in words), how many chats have an agent at work or waiting (`working`).
+pub fn today(view: &mut Value, c: crate::present::Clock) {
+    if !view.is_object() {
+        return;
+    }
+    let day = crate::format::local_day(c.now, c.offset_min);
+    let at = |v: &Value, k: &str| v.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    let mut answered: Vec<Value> = view.get("answered").and_then(Value::as_array).cloned().unwrap_or_default().into_iter()
+        .filter(|a| crate::format::local_day(at(a, "answeredAt"), c.offset_min) == day).collect();
+    for a in &mut answered {
+        a["when"] = json!(crate::format::clock(at(a, "answeredAt"), c.offset_min));
+    }
+    let waits: Vec<f64> = answered.iter().map(|a| (at(a, "answeredAt") - at(a, "askedAt")).max(0.0)).collect();
+    let mut today = json!({
+        "count": answered.len(),
+        "working": view.get("working").and_then(Value::as_array).map(Vec::len).unwrap_or(0),
+    });
+    if !waits.is_empty() {
+        today["waited"] = json!(waited_text(waits.iter().sum::<f64>() / waits.len() as f64));
+    }
+    view["answered"] = json!(answered);
+    view["today"] = today;
+}
+
+/// How long a card waited, roughly: 不到 1 分钟, 11 分钟, 2 小时 5 分, 3 天.
+pub fn waited_text(ms: f64) -> String {
+    let minutes = (ms / 60_000.0).round() as i64;
+    match minutes {
+        m if m < 1 => "不到 1 分钟".to_string(),
+        m if m < 60 => format!("{m} 分钟"),
+        m if m < 24 * 60 => if m % 60 == 0 { format!("{} 小时", m / 60) } else { format!("{} 小时 {} 分", m / 60, m % 60) },
+        m => format!("{} 天", m / (24 * 60)),
+    }
+}
+
 /// The card a row waits on, as its station gives it: `{seq, card, dismissed?, message, before}`. From its `card`; else
 /// its `decision` (a station from before cards; or a row the core has put together already), whose options are an
 /// options card.

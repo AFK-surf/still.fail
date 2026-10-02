@@ -460,6 +460,16 @@ impl AdminApi {
         // The decisions the viewer said they will not take up.
         let dismissed = store.dismissed(&viewer.id())?;
         let kept = store.kept_chats(Some(&viewer.id()))?;
+        // The cards the viewer answered lately, by chat: the 奏 page counts and lists the day's.
+        let mut answered: HashMap<i64, Vec<Value>> = HashMap::new();
+        if !archived {
+            for a in store.answers_since(crate::store::now_ms() - ANSWERED_WITHIN)? {
+                if !is_mine(self.creator(Some(&a.by)).as_ref()) {
+                    continue;
+                }
+                answered.entry(a.question.thread).or_default().push(answered_view(&a));
+            }
+        }
         for t in threads.iter().filter(|t| t.thread.surface == STILLFAIL_SURFACE && listed(t) && !in_chat(t).is_empty()) {
             let from = t.sessions.iter().find_map(|m| origins.get(&m.session).copied());
             let agents: Vec<Value> = in_chat(t).iter().map(|key| agent(key)).collect();
@@ -516,6 +526,9 @@ impl AdminApi {
                     row["decision"] = decision;
                 }
                 row["card"] = card;
+            }
+            if let Some(list) = answered.remove(&t.thread.id) {
+                row["answered"] = json!(list);
             }
             if archived {
                 row["archived"] = match t.thread.home.as_ref().and_then(|home| all.get(home)) {
@@ -743,4 +756,24 @@ fn declared_view(v: &mut Value, declared: Option<&str>) {
 #[allow(dead_code)]
 fn runtime_label(runtime: stillfail_shapes::RuntimeKind) -> &'static str {
     runtime_name(runtime)
+}
+
+/// How far back a row says which cards the viewer answered in it: a day and a half, whatever the viewer's day is.
+const ANSWERED_WITHIN: i64 = 36 * 3600 * 1000;
+
+/// A card the viewer answered, for its chat's row (`answered`): the post that asked (`seq`, `text`, when: `askedAt`),
+/// its card, when it was answered (`answeredAt`), and with what: their words (`reply`) and whether they quoted the post
+/// (`quoted`: an option picked is its label, quoting it), or nothing when a choice closed it (`closed`).
+fn answered_view(a: &crate::store::CardAnswer) -> Value {
+    let mut v = json!({
+        "seq": a.question.n, "text": a.question.text, "askedAt": a.question.created_at, "answeredAt": a.at, "card": a.card,
+    });
+    match &a.answer {
+        Some(m) => {
+            v["reply"] = json!(m.text);
+            v["quoted"] = json!(m.quotes.iter().any(|q| q.ts.as_deref() == Some(a.question.ts.as_str())));
+        }
+        None => v["closed"] = json!(true),
+    }
+    v
 }

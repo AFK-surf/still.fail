@@ -1284,6 +1284,32 @@ async fn a_pending_decision_is_on_its_chats_row_and_each_viewer_dismisses_it_for
 }
 
 #[tokio::test]
+async fn a_chats_row_says_which_cards_its_viewer_answered_lately() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let thread = made["thread"]["id"].as_i64().unwrap();
+    t.call("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "发版" }))).await;
+    let answered = |rows: Value| rows.as_array().unwrap().iter().find(|r| r["id"] == key).map(|r| r.get("answered").cloned().unwrap_or(Value::Null)).unwrap();
+    let card = json!({ "type": "options", "options": [{ "label": "先发测试版" }, { "label": "直接发" }] });
+    let (n, _) = t.store.insert_message(NewMessage { card: Some(card.clone()), ..NewMessage::new(thread, "9.000001", AuthorKind::Agent, &key, "先发测试版吗？") }).unwrap();
+    assert_eq!(answered(t.get("/chats").await), Value::Null, "not answered yet");
+    t.call("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "先发测试版", "quotes": [{ "author": "agent", "text": "先发测试版吗？", "ts": "9.000001", "role": "agent" }] }))).await;
+    // Said again after: the first answer only.
+    t.call("POST", &format!("/threads/{thread}/messages"), Some(json!({ "text": "记得看录屏" }))).await;
+    let a = answered(t.get("/chats").await);
+    assert_eq!(a.as_array().map(Vec::len), Some(1));
+    assert_eq!((a[0]["seq"].clone(), a[0]["text"].clone(), a[0]["card"].clone(), a[0]["reply"].clone(), a[0]["quoted"].clone()), (json!(n), json!("先发测试版吗？"), card, json!("先发测试版"), json!(true)));
+    assert!(a[0]["answeredAt"].as_i64().unwrap() >= a[0]["askedAt"].as_i64().unwrap());
+    // Someone else's rows: they answered nothing.
+    assert_eq!(answered(t.call_as("GET", "/chats", None, dev()).await.1), Value::Null);
+    // A card its agent withdrew was answered by no one.
+    let (_, _) = t.store.insert_message(NewMessage { card: Some(json!({ "type": "text" })), ..NewMessage::new(thread, "9.000005", AuthorKind::Agent, &key, "标语？") }).unwrap();
+    assert!(t.store.withdraw_card(&key, thread, "9.000005").unwrap());
+    assert_eq!(answered(t.get("/chats").await).as_array().map(Vec::len), Some(1));
+}
+
+#[tokio::test]
 async fn a_pending_card_is_on_its_chats_row_an_options_card_as_its_decision_too() {
     let t = setup().await;
     let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;

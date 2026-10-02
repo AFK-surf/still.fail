@@ -187,6 +187,19 @@ pub fn row_state_line(row: &Value) -> Option<(String, Option<u64>)> {
     })
 }
 
+/// What a chat's agents are doing, for the 奏 page's 正在办 (while no card waits there): 在做 · what was said last,
+/// while one is at work; what one waits for (在等：…), while one does. None otherwise.
+pub fn working_line(row: &Value) -> Option<String> {
+    let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+    let at_work = agents.iter().any(|a| matches!(shown_status(a), "queued") || (shown_status(a) == "running" && waiting(a).is_null()));
+    if at_work {
+        let last = crate::format::clean_text(row.get("last").and_then(|l| l.get("text")).and_then(Value::as_str).unwrap_or(""));
+        let last = last.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").to_string();
+        return Some(if last.is_empty() { "在做".to_string() } else { format!("在做 · {last}") });
+    }
+    agents.iter().map(waiting).find(|w| !w.is_null()).and_then(|w| w.get("text").and_then(Value::as_str).map(str::to_string))
+}
+
 /// Where a chat stands, in words (`row_state_line`'s words).
 pub fn row_state_text(row: &Value) -> Option<String> {
     row_state_line(row).map(|(text, _)| text)
@@ -823,6 +836,7 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
                 jobs.iter_mut().for_each(|j| *j = crate::jobs::shown(j, c));
             }
         }
+        Topic::Decisions { .. } => crate::decisions::today(value, c),
         Topic::Job { .. } => *value = crate::jobs::shown(value, c),
         Topic::JobLog { .. } => crate::jobs::log(value, c),
         _ => {}

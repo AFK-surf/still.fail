@@ -519,6 +519,61 @@ pub struct DecisionsView {
     pub count: u32,
     /// Some station's chats are still being read: more may come.
     pub loading: bool,
+    /// The cards the viewer answered today, newest first. A core before them says none.
+    pub answered: Option<Vec<DecisionAnswered>>,
+    /// The viewer's chats where an agent is at work or waiting (正在办), newest first: where the next may come from.
+    pub working: Option<Vec<DecisionWorking>>,
+    /// The day in numbers.
+    pub today: Option<DecisionsToday>,
+}
+
+/// A card the viewer answered today: where it is, what it asked (`text`, its post's first line), how they answered it
+/// (`answer`: 选了「…」, 回复：…), and when (`when`, 14:05).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionAnswered {
+    pub station: String,
+    pub station_name: String,
+    pub session: String,
+    #[typeshare(serialized_as = "I54")]
+    pub thread: i64,
+    pub title: String,
+    #[typeshare(serialized_as = "I54")]
+    pub seq: i64,
+    pub text: String,
+    pub answer: String,
+    pub when: String,
+}
+
+/// A chat of the viewer's where an agent is at work or waiting: where it is, and what it is doing (`line`: 在做 · …,
+/// 在等：…), and since when (`time.lastActiveAt`).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionWorking {
+    pub station: String,
+    pub station_name: String,
+    pub session: String,
+    #[typeshare(serialized_as = "I54")]
+    pub thread: i64,
+    pub title: String,
+    pub line: String,
+    pub time: Option<HashMap<String, Stamp>>,
+}
+
+/// The 奏 page's day: how many cards the viewer answered today, how long they waited on average (in words; none with
+/// none answered), and how many of their chats have an agent at work or waiting.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionsToday {
+    pub count: u32,
+    pub waited: Option<String>,
+    pub working: u32,
 }
 
 /// One card on the 奏 page: where it is, the post that asks (as a chat shows messages, with its card) and the messages
