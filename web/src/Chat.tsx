@@ -1307,7 +1307,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
     if (ready) void send();
   };
   const multiline = roomy || focused || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
-  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder: hint ?? placeholder, className: css.composerText, minLines: multiline ? 3 : 1, onType: warm, onSubmit: submit });
+  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder: hint ?? placeholder, className: css.composerText, layout: multiline, onType: warm, onSubmit: submit });
   // Capsule ⇄ box, in one motion (morph.ts); laid out for another page (a new chat's roomy box ⇄ a chat's foot), the
   // dock moves it (dock.tsx).
   const box = useRef<HTMLFormElement>(null);
@@ -1384,9 +1384,9 @@ export function sendDraft(draft: Draft, to: ChatTo | null, ensureChat: (() => Pr
  * starts a line); with nothing typed, ↑ / ↓ go to the chat above or below. What a preview's marks offer the draft
  * `draftKey` comes in. Answers the box and the menu of chats (put over the composer), for the composer to place.
  */
-export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines = 3, minLines = 1, enterSends = true, onType, onSubmit }: {
+export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines = 3, layout, enterSends = true, onType, onSubmit }: {
   draft: Draft; input: RefObject<HTMLTextAreaElement | null>; draftKey: string | undefined; sessionKey: string | null; locked: boolean;
-  placeholder: string; className: string; lines?: number; minLines?: number; enterSends?: boolean; onType(): void; onSubmit(): void;
+  placeholder: string; className: string; lines?: number; layout?: unknown; enterSends?: boolean; onType(): void; onSubmit(): void;
 }): { menu: ReactNode; field: ReactNode } {
   const { text, setText, add } = draft;
   const toast = useToast();
@@ -1459,8 +1459,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
       probe.style.width = `${el.clientWidth}px`;
       probe.placeholder = el.placeholder;
       probe.value = el.value;
-      const minimum = minLines * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-      const height = `${Math.min(Math.max(probe.scrollHeight, minimum), limit)}px`;
+      const height = `${Math.min(probe.scrollHeight, limit)}px`;
       const overflow = probe.scrollHeight > limit + 1 ? "auto" : "hidden";
       if (el.style.height !== height) el.style.height = height;
       if (el.style.overflowY !== overflow) el.style.overflowY = overflow;
@@ -1492,7 +1491,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
     return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); probe.remove(); };
-  }, [text, lines, minLines]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [text, lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
   const menu = reference && !locked && (
     <div className={refCss.refAnchor}>
       <ChatRefMenu query={reference.query} here={sessionKey} active={active} onPick={pickReference} found={(items) => { refItems.current = items; }} />
