@@ -736,7 +736,7 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
             .semantics(mergeDescendants = true) { contentDescription = t("android-chat.home.decisions", "n" to n) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("奏", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
+        Text(t("android-chat.home.decisionsMark"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
         Text("$n", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = C.ink)
     }
 }
