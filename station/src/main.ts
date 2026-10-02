@@ -87,6 +87,13 @@ function run() {
     yield* SubscriptionRef.set(yield* Up, true);
     control.ready(version());
     log.info("station", "station up", { version: version(), data });
+    // STILLFAIL_MEMLOG: where the memory goes, now and then (for measuring).
+    if (process.env.STILLFAIL_MEMLOG) {
+      setInterval(() => {
+        const m = process.memoryUsage();
+        log.info("memory", "now", Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v / 1048576)])));
+      }, 10_000).unref();
+    }
     return yield* Effect.never;
   }).pipe(Effect.provide(station));
   const fiber = Effect.runFork(main);

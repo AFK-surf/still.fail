@@ -286,7 +286,7 @@ export function makeStore(db: DatabaseSync, dataDir: string): Store {
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.
 export function openStore(dataDir: string): Store {
-  return makeStore(new DatabaseSync(join(dataDir, "stillfail.db"), { readOnly: true }), dataDir);
+  return makeStore(new DatabaseSync(join(dataDir, "stillfail.db"), { readOnly: true, timeout: 5000 }), dataDir);
 }
 
 const one = (s: Store, sql: string, ...args: Json[]): Json | undefined => s.db.prepare(sql).get(...args);
