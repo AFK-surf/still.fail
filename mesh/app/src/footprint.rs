@@ -22,7 +22,12 @@ impl Room {
 /// else none (a workspace that is a person's project is not the station's to measure or clean).
 pub fn room_of(data_dir: &Path, workspace: &str) -> Option<PathBuf> {
     let sessions = data_dir.join("sessions").canonicalize().ok()?;
-    let workspace = Path::new(workspace).canonicalize().ok()?;
+    let workspace = Path::new(workspace);
+    let workspace = match workspace.canonicalize() {
+        Ok(path) => path,
+        Err(_) if workspace.file_name()? == "workspace" => workspace.parent()?.canonicalize().ok()?.join("workspace"),
+        Err(_) => return None,
+    };
     let relative = workspace.strip_prefix(&sessions).ok()?;
     // Only the station layout sessions/<connect>/<session>/workspace, never an arbitrary nested project.
     if relative.components().count() != 3 || workspace.file_name()? != "workspace" {

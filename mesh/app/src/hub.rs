@@ -36,7 +36,7 @@ use crate::runtime::AgentDriver;
 use crate::session::{DeclaredState, HandedSession, SessionActor, SessionDeps};
 use crate::store::{
     AUTO, Attachment, AuthorKind, STILLFAIL_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
-    slack_surface, write_compressed,
+    slack_surface,
 };
 use crate::transcript::{TimelineEntry, iso, transcript_path};
 
@@ -686,11 +686,11 @@ impl Hub {
     }
 
     /// Hides a session from lists, or shows it again (see Store::set_archived); `by` is MANUAL or AUTO. Archiving also
-    /// keeps a copy of its transcript, written like an archived thread (the runtime's own file in the profile's home
-    /// stays as it is), ends its process if idle, and then cleans what can be made again from its directory
-    /// (clean_rebuildable).
+    /// ends its idle process, removes rebuildable files, and compresses the remaining workspace and owned transcripts.
+    /// They are restored before the next runtime starts; active jobs postpone compression until the next sweep.
     pub fn archive_by(&self, key: &str, archived: bool, by: &str) -> Result<()> {
         let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
+        if !archived { self.restore_archive(key)?; }
         self.store.set_archived(key, archived, by)?;
         let copy = self.transcript_copy(key);
         if !archived {
@@ -704,15 +704,6 @@ impl Hub {
                 actor.clean_archive().await;
             });
         }
-        let config = self.config();
-        let profile = config.profiles.iter().find(|p| p.id == row.profile);
-        let path = match (runtime_named(&row.runtime), &row.runtime_session_id, profile) {
-            (Some(runtime), Some(id), Some(profile)) => transcript_path(runtime, &profile.home, id),
-            _ => None,
-        };
-        if let Some(path) = path.filter(|p| p.exists()) {
-            write_compressed(&copy, &std::fs::read_to_string(path)?)?;
-        }
         Ok(())
     }
 
@@ -720,20 +711,23 @@ impl Hub {
     /// archived session's own directory: it may come back, and is built again then. Left as it is while the session is
     /// back in the lists or at work, or a session/job still uses its directory. Returns removed allocated file bytes
     /// (shared filesystem blocks mean this is not necessarily the disk's net free-space increase).
-    fn clean_rebuildable(&self, key: &str) -> u64 {
-        let Ok(Some(row)) = self.store.get_session(key) else { return 0 };
-        let Some(dir) = crate::footprint::room_of(&self.config().data_dir, &row.workspace) else { return 0 };
+    fn archive_room(&self, key: &str) -> Option<PathBuf> {
+        let row = self.store.get_session(key).ok()??;
+        let dir = crate::footprint::room_of(&self.config().data_dir, &row.workspace)?;
         if row.archived_at.is_none() || row.running || self.process_state(key) == "running" {
-            return 0;
+            return None;
         }
-        let Ok(sessions) = self.store.list_sessions() else { return 0 };
+        let sessions = self.store.list_sessions().ok()?;
         let shared = sessions.into_iter().any(|s| {
             s.key != key && (s.archived_at.is_none() || s.running) && [s.workspace.as_str(), s.cwd.as_deref().unwrap_or(&s.workspace)]
                 .into_iter().any(|path| Path::new(path).canonicalize().is_ok_and(|cwd| cwd.starts_with(&dir)))
         });
-        if shared || self.archive_has_jobs(key, &dir) {
-            return 0;
-        }
+        if shared || self.archive_has_jobs(key, &dir) { return None; }
+        Some(dir)
+    }
+
+    fn clean_rebuildable(&self, key: &str) -> u64 {
+        let Some(dir) = self.archive_room(key) else { return 0 };
         let mut freed = 0;
         for (path, bytes) in crate::footprint::measure_room(&dir).rebuild {
             // Restoring a chat updates the store before its next message reaches the actor queue.
@@ -754,6 +748,62 @@ impl Hub {
             info!(session = key, freed, "rebuildable files of an archived session cleaned");
         }
         freed
+    }
+
+    fn pack_archive(&self, key: &str) -> Result<()> {
+        let Some(room) = self.archive_room(key) else { return Ok(()) };
+        let _lock = crate::archive::lock(&room)?;
+        if self.archive_room(key).is_none() { return Ok(()) }
+        self.clean_rebuildable(key);
+        if self.archive_room(key).is_none() { return Ok(()) }
+        std::fs::write(room.join("cold"), b"workspace and history may be compressed\n")?;
+        crate::archive::pack_workspace_if(&room, || self.archive_room(key).is_some())?;
+        if self.archive_room(key).is_none() { return Ok(()) }
+        let files = self.archive_history_files(key, true)?;
+        for path in &files {
+            crate::archive::pack_file_if(path, || self.archive_room(key).is_some()
+                && self.archive_history_files(key, true).is_ok_and(|files| !files.is_empty()))?;
+        }
+        if !files.is_empty() && files.iter().all(|path| !path.exists() && crate::archive::packed(path).exists()) {
+            let copy = self.transcript_copy(key);
+            if copy.exists() { std::fs::remove_file(copy)?; }
+        }
+        Ok(())
+    }
+
+    /// Runtime-owned files outside station storage are never removed. A shared runtime session is left hot while
+    /// another chat can still use it. The main transcript and Claude's subagent files are compressed together.
+    fn archive_history_files(&self, key: &str, packing: bool) -> Result<Vec<PathBuf>> {
+        let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
+        let Some(id) = row.runtime_session_id.as_deref() else { return Ok(vec![]) };
+        if packing && self.store.list_sessions()?.iter().any(|s| s.key != key && s.runtime == row.runtime
+            && s.runtime_session_id.as_deref() == Some(id) && (s.archived_at.is_none() || s.running)) {
+            return Ok(vec![]);
+        }
+        let config = self.config();
+        let Some(profile) = config.profiles.iter().find(|p| p.id == row.profile) else { return Ok(vec![]) };
+        let Some(runtime) = runtime_named(&row.runtime) else { return Ok(vec![]) };
+        let Some(path) = transcript_path(runtime, &profile.home, id) else { return Ok(vec![]) };
+        let root = config.data_dir.canonicalize()?;
+        let parent = path.parent().unwrap().canonicalize()?;
+        if !parent.starts_with(root) { return Ok(vec![]) }
+        let path = parent.join(path.file_name().unwrap());
+        let mut files = vec![path];
+        if runtime == RuntimeKind::Claude {
+            crate::archive::jsonl_files(&parent.join(id), &mut files)?;
+        }
+        Ok(files)
+    }
+
+    fn restore_archive(&self, key: &str) -> Result<()> {
+        let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
+        let Some(room) = crate::footprint::room_of(&self.config().data_dir, &row.workspace) else { return Ok(()) };
+        let _lock = crate::archive::lock(&room)?;
+        crate::archive::restore_workspace(&room)?;
+        // Restoration must work even after Store::bring_back has already marked this chat as active.
+        for path in self.archive_history_files(key, false)? { crate::archive::restore_file(&path)?; }
+        if room.join("cold").exists() { std::fs::remove_file(room.join("cold"))?; }
+        Ok(())
     }
 
     fn archive_has_jobs(&self, key: &str, dir: &Path) -> bool {
@@ -879,7 +929,13 @@ impl Hub {
         let workspace = Path::new(&row.workspace);
         let own = workspace.file_name().is_some_and(|n| n == "workspace") && workspace.starts_with(self.config().data_dir.join("sessions"));
         let home = if own { workspace.parent().unwrap_or(workspace) } else { workspace };
-        let _ = std::fs::remove_dir_all(home);
+        if let Some(room) = crate::footprint::room_of(&self.config().data_dir, &row.workspace) {
+            let _lock = crate::archive::lock(&room)?;
+            crate::archive::unlock_worktrees(&room)?;
+            std::fs::remove_dir_all(home)?;
+        } else {
+            let _ = std::fs::remove_dir_all(home);
+        }
         info!(session = key, "session deleted");
         Ok(())
     }
@@ -1961,8 +2017,16 @@ impl SessionDeps for Hub {
         self.idle_now(key);
     }
     fn clean_archive(&self, key: &str) -> Result<()> {
-        self.clean_rebuildable(key);
-        Ok(())
+        self.pack_archive(key)
+    }
+    fn archive_is_cold(&self, key: &str) -> bool {
+        self.store.get_session(key).ok().flatten()
+            .and_then(|row| crate::footprint::room_of(&self.config().data_dir, &row.workspace))
+            .is_some_and(|room| room.join("cold").exists() || crate::archive::workspace_archive(&room).exists() || room.join("workspace-locks.json").exists())
+            || self.archive_history_files(key, false).is_ok_and(|files| files.iter().any(|path| !path.exists() && crate::archive::packed(path).exists()))
+    }
+    fn restore_archive(&self, key: &str) -> Result<()> {
+        Hub::restore_archive(self, key)
     }
     fn held(&self) -> bool {
         !self.holds.lock().unwrap().is_empty()

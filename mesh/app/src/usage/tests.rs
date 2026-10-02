@@ -223,3 +223,23 @@ fn days_are_the_askers_own() {
     assert_eq!(r.usage.summary(0, i64::MAX, 480).unwrap()[0].day, "2026-10-02");
     assert!(r.usage.summary(at + 1, i64::MAX, 0).unwrap().is_empty());
 }
+
+#[test]
+fn compressed_history_keeps_usage_offsets_and_subagent_discovery() {
+    let root = tempfile::tempdir().unwrap();
+    let main = root.path().join("session.jsonl");
+    let sub = root.path().join("session/subagents/agent.jsonl");
+    std::fs::create_dir_all(sub.parent().unwrap()).unwrap();
+    std::fs::write(&main, b"first\nsecond\n").unwrap();
+    std::fs::write(&sub, b"child\n").unwrap();
+    crate::archive::pack_file(&main).unwrap();
+    crate::archive::pack_file(&sub).unwrap();
+    assert_eq!(read_from(&main, 6), Some(("second\n".into(), 13)));
+    assert_eq!(read_from(&main, 13), None);
+    let files = claude_files(root.path(), Some("session"));
+    assert!(files.contains(&(main.clone(), false)));
+    assert!(files.contains(&(sub, true)));
+    crate::archive::restore_file(&main).unwrap();
+    writeln!(std::fs::OpenOptions::new().append(true).open(&main).unwrap(), "third").unwrap();
+    assert_eq!(read_from(&main, 13), Some(("third\n".into(), 19)));
+}

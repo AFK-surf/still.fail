@@ -177,6 +177,14 @@ fn calls_of(runtime: RuntimeKind, text: &str, subagent: bool, model: &mut Option
 /// What a file holds past `offset`, up to its last whole line, and where that ends. A file now shorter than `offset`
 /// was written anew: it is read from its start (calls already recorded stay once).
 fn read_from(path: &Path, offset: u64) -> Option<(String, u64)> {
+    if !path.exists() && crate::archive::packed(path).exists() {
+        let mut bytes = vec![];
+        crate::archive::reader(path).ok()?.read_to_end(&mut bytes).ok()?;
+        let offset = if offset > bytes.len() as u64 { 0 } else { offset as usize };
+        let tail = &bytes[offset..];
+        let cut = tail.iter().rposition(|b| *b == b'\n').map(|i| i + 1)?;
+        return Some((String::from_utf8_lossy(&tail[..cut]).into_owned(), (offset + cut) as u64));
+    }
     let size = std::fs::metadata(path).ok()?.len();
     let offset = if size < offset { 0 } else { offset };
     if size == offset {
@@ -192,7 +200,12 @@ fn read_from(path: &Path, offset: u64) -> Option<(String, u64)> {
 }
 
 fn jsonl_in(dir: &Path) -> Vec<PathBuf> {
-    std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "jsonl") && p.is_file()).collect()
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path())
+        .filter(|p| p.is_file()).map(|p| if p.extension().is_some_and(|e| e == "zst") { p.with_extension("") } else { p })
+        .filter(|p| p.extension().is_some_and(|e| e == "jsonl")).collect();
+    paths.sort();
+    paths.dedup();
+    paths
 }
 
 /// A Claude Code session's transcripts in a project directory: its own, and its sub-agents' beside it
@@ -200,7 +213,7 @@ fn jsonl_in(dir: &Path) -> Vec<PathBuf> {
 /// directory with the terminal's own).
 fn claude_files(dir: &Path, only: Option<&str>) -> Vec<(PathBuf, bool)> {
     let mut out: Vec<(PathBuf, bool)> = match only {
-        Some(id) => vec![dir.join(format!("{id}.jsonl"))].into_iter().filter(|p| p.is_file()).map(|p| (p, false)).collect(),
+        Some(id) => vec![dir.join(format!("{id}.jsonl"))].into_iter().filter(|p| crate::archive::storage(p).is_file()).map(|p| (p, false)).collect(),
         None => jsonl_in(dir).into_iter().map(|p| (p, false)).collect(),
     };
     let ids: Vec<String> = out.iter().filter_map(|(p, _)| Some(p.file_stem()?.to_string_lossy().into_owned())).collect();
@@ -213,6 +226,7 @@ fn claude_files(dir: &Path, only: Option<&str>) -> Vec<(PathBuf, bool)> {
 fn rollouts_in(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let path = entry.path();
+        let path = if path.extension().is_some_and(|e| e == "zst") { path.with_extension("") } else { path };
         if path.is_dir() {
             rollouts_in(&path, out);
         } else if entry.file_name().to_string_lossy().starts_with("rollout-") && path.extension().is_some_and(|x| x == "jsonl") {
@@ -224,7 +238,7 @@ fn rollouts_in(dir: &Path, out: &mut Vec<PathBuf>) {
 /// A Codex transcript's session id and the directory it ran in, from its first line.
 fn codex_meta(path: &Path) -> Option<(String, String)> {
     let mut first = String::new();
-    std::io::BufRead::read_line(&mut std::io::BufReader::new(std::fs::File::open(path).ok()?), &mut first).ok()?;
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(crate::archive::reader(path).ok()?), &mut first).ok()?;
     let r: Value = serde_json::from_str(&first).ok()?;
     let p = r.get("payload")?;
     Some((p.get("id")?.as_str()?.to_string(), p.get("cwd")?.as_str()?.to_string()))

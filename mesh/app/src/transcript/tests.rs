@@ -180,3 +180,21 @@ fn posting_names_survive_the_namespace_migration() {
     assert!(super::is_posting("mcp__ember__chat_post"));
     assert!(!super::is_posting("mcp__stillfail__chat_history"));
 }
+
+#[test]
+fn compressed_transcript_stays_discoverable_and_continues_after_restore() {
+    let home = tempfile::tempdir().unwrap();
+    let path = home.path().join("projects/x/archive-test.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let line = |text: &str| format!("{}\n", serde_json::json!({"type":"user", "message":{"content":text}}));
+    std::fs::write(&path, line("before")).unwrap();
+    crate::archive::pack_file(&path).unwrap();
+    assert_eq!(transcript_path(RuntimeKind::Claude, home.path(), "archive-test"), Some(path.clone()));
+    let mut tail = TranscriptTail::new(RuntimeKind::Claude, path.clone());
+    assert_eq!(tail.read().1[0].text, "before");
+    assert!(tail.read().1.is_empty());
+    crate::archive::restore_file(&path).unwrap();
+    std::fs::write(&path, format!("{}{}", line("before"), line("after"))).unwrap();
+    assert_eq!(tail.read().1[0].text, "after");
+    assert_eq!(tail.entries.len(), 2);
+}

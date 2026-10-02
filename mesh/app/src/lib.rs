@@ -3,6 +3,7 @@
 //! (docs/station-rust.md).
 
 pub mod access;
+mod archive;
 pub mod admin;
 pub mod agent_home;
 pub mod chat;

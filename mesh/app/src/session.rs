@@ -94,6 +94,12 @@ pub trait SessionDeps: Send + Sync {
     fn clean_archive(&self, _key: &str) -> Result<()> {
         Ok(())
     }
+    fn archive_is_cold(&self, _key: &str) -> bool {
+        false
+    }
+    fn restore_archive(&self, _key: &str) -> Result<()> {
+        Ok(())
+    }
     /// Turns are held (the station is about to restart or hand over to its next binary): none starts, and messages
     /// stay pending, until it is released.
     fn held(&self) -> bool {
@@ -911,6 +917,11 @@ impl SessionActor {
     async fn ensure_agent(self: &Arc<Self>, deps: &Arc<dyn SessionDeps>) -> Result<Arc<dyn AgentSession>> {
         if let Some(agent) = self.agent() {
             return Ok(agent);
+        }
+        if deps.archive_is_cold(&self.key) {
+            let restoring = deps.clone();
+            let key = self.key.clone();
+            tokio::task::spawn_blocking(move || restoring.restore_archive(&key)).await??;
         }
         let store = deps.store();
         let row = store.get_session(&self.key)?.ok_or_else(|| anyhow!("session {} disappeared", self.key))?;

@@ -719,7 +719,8 @@ impl AdminApi {
             }
             (Some("sessions"), Some(key), Some("archive"), "POST" | "DELETE") => {
                 self.session_row(key)?;
-                self.deps.hub.archive(key, method == "POST")?;
+                let (hub, archive_key, archived) = (self.deps.hub.clone(), key.to_string(), method == "POST");
+                tokio::task::spawn_blocking(move || hub.archive(&archive_key, archived)).await??;
                 return ok(self.summary(key)?);
             }
             // A chat kept at the top of the viewer's list (PUT), or let go: by its item's id, its session's key.
@@ -903,7 +904,9 @@ impl AdminApi {
                     }
                     // A chat archived or shown again: with its session when it is that session's own (Hub::archive_chat).
                     (Some("archive"), "POST" | "DELETE") => {
-                        self.deps.hub.archive_chat(thread_id, method == "POST").map_err(|e| http_error(400, e.to_string()))?;
+                        let (hub, archived) = (self.deps.hub.clone(), method == "POST");
+                        tokio::task::spawn_blocking(move || hub.archive_chat(thread_id, archived)).await?
+                            .map_err(|e| http_error(400, e.to_string()))?;
                         return ok(self.thread(thread_id, viewer)?);
                     }
                     _ => {}

@@ -2045,3 +2045,21 @@ async fn openai_fast_defaults_off_survives_other_edits_and_can_be_disabled() {
     assert!(!profile().fast);
     assert_eq!(t.call("PUT", "/profiles/cx", Some(json!({"fast": "yes"}))).await.0, 400);
 }
+
+#[tokio::test]
+async fn archived_attachments_remain_readable_without_expanding_the_workspace() {
+    let t = setup().await;
+    let (key, _) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None,
+        effort: None, fast: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
+    let workspace = PathBuf::from(t.store.get_session(&key).unwrap().unwrap().workspace);
+    std::fs::create_dir_all(workspace.join("uploads")).unwrap();
+    std::fs::write(workspace.join("uploads/evidence.txt"), b"original evidence").unwrap();
+    t.hub.archive(&key, true).unwrap();
+    t.hub.clean_archives().await.unwrap();
+    assert!(!workspace.join("uploads/evidence.txt").exists());
+    assert_eq!(t.text("GET", &format!("/sessions/{}/files?name=evidence.txt", enc(&key)), "").await,
+        (200, "original evidence".to_string()));
+    assert!(!workspace.join("uploads/evidence.txt").exists(), "viewing does not unpack the workspace");
+    assert_eq!(t.call("DELETE", &format!("/sessions/{}/archive", enc(&key)), None).await.0, 200);
+    assert_eq!(std::fs::read(workspace.join("uploads/evidence.txt")).unwrap(), b"original evidence");
+}

@@ -164,11 +164,22 @@ impl AdminApi {
     /// thumbnail (the image itself when it has none).
     pub(super) async fn session_file(&self, key: &str, name: &str, thumb: bool) -> Result<Response<Body>> {
         let row = self.deps.store.get_session(key)?.ok_or_else(|| http_error(404, format!("unknown session {key}")))?;
+        let room = crate::footprint::room_of(&self.config().data_dir, &row.workspace);
+        let _archive_lock = if let Some(room) = room.clone() {
+            Some(tokio::task::spawn_blocking(move || crate::archive::lock(&room)).await??)
+        } else { None };
         let uploads = clean(&Path::new(&row.workspace).join("uploads"));
         let base = name.rsplit(['/', '\\']).next().unwrap_or("");
         let path = clean(&uploads.join(base));
-        if base.is_empty() || !path.starts_with(&uploads) || path == uploads || !path.is_file() {
+        if base.is_empty() || !path.starts_with(&uploads) || path == uploads {
             return Err(http_error(404, "没有这个文件"));
+        }
+        if !path.is_file() {
+            let room = room.ok_or_else(|| http_error(404, "没有这个文件"))?;
+            let relative = Path::new("uploads").join(base);
+            let bytes = tokio::task::spawn_blocking(move || crate::archive::workspace_file(&room, &relative)).await??.ok_or_else(|| http_error(404, "没有这个文件"))?;
+            return Ok(Response::builder().status(200).header("content-type", mime(&path))
+                .header("cache-control", "private, max-age=3600").body(super::full(bytes))?);
         }
         let small = if thumb {
             let (image, dir) = (path.clone(), crate::thumbs::dir(&self.config().data_dir));
@@ -208,6 +219,18 @@ impl AdminApi {
                         std::fs::rename(&path, &into)?;
                     }
                     path = into;
+                }
+                if !path.exists() {
+                    if let Some(uploads) = dirs.iter().find(|d| path.starts_with(d) && path != **d) {
+                        let workspace = uploads.parent().unwrap();
+                        if let Some(room) = crate::footprint::room_of(&self.config().data_dir, &workspace.to_string_lossy()) {
+                            let _lock = crate::archive::lock(&room)?;
+                            if let Some(bytes) = crate::archive::workspace_file(&room, path.strip_prefix(workspace)?)? {
+                                std::fs::create_dir_all(uploads)?;
+                                std::fs::write(&path, bytes)?;
+                            }
+                        }
+                    }
                 }
                 let uploads = dirs.iter().find(|d| path.starts_with(d) && path != **d).filter(|_| path.exists()).ok_or_else(|| http_error(400, "附件不在上传目录里"))?;
                 let dimension = |k: &str| a.get(k).and_then(Value::as_f64).filter(|v| v.fract() == 0.0 && *v > 0.0 && *v < 100_000.0).map(|v| v as u32);

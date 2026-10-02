@@ -46,7 +46,7 @@ pub fn transcript_path(runtime: RuntimeKind, home: &Path, runtime_session_id: &s
     if runtime == RuntimeKind::Claude {
         for dir in std::fs::read_dir(home.join("projects")).ok()?.flatten() {
             let path = dir.path().join(format!("{runtime_session_id}.jsonl"));
-            if path.exists() {
+            if crate::archive::storage(&path).is_file() {
                 return Some(path);
             }
         }
@@ -62,6 +62,8 @@ pub fn transcript_path(runtime: RuntimeKind, home: &Path, runtime_session_id: &s
                 }
             } else if name.starts_with("rollout-") && name.ends_with(&format!("{id}.jsonl")) {
                 return Some(path);
+            } else if name.starts_with("rollout-") && name.ends_with(&format!("{id}.jsonl.zst")) {
+                return Some(path.with_extension(""));
             }
         }
         None
@@ -571,6 +573,7 @@ pub struct TranscriptTail {
     pub runtime: RuntimeKind,
     pub path: PathBuf,
     offset: u64,
+    packed_stamp: Option<(u64, std::time::SystemTime)>,
     partial: Vec<u8>,
     /// Timeline entries read so far.
     pub entries: Vec<TimelineEntry>,
@@ -581,13 +584,25 @@ pub struct TranscriptTail {
 
 impl TranscriptTail {
     pub fn new(runtime: RuntimeKind, path: PathBuf) -> TranscriptTail {
-        TranscriptTail { runtime, path, offset: 0, partial: vec![], entries: vec![], usage: TranscriptUsage::default(), seen: HashSet::new(), state: ReadState::default() }
+        TranscriptTail { runtime, path, offset: 0, packed_stamp: None, partial: vec![], entries: vec![], usage: TranscriptUsage::default(), seen: HashSet::new(), state: ReadState::default() }
     }
 
     /// New entries since the last read, with the index of the first.
     pub fn read(&mut self) -> (usize, Vec<TimelineEntry>) {
         let start = self.entries.len();
-        let Ok(size) = std::fs::metadata(&self.path).map(|m| m.len()) else { return (start, vec![]) };
+        let disk = crate::archive::storage(&self.path);
+        let Ok(meta) = std::fs::metadata(&disk) else { return (start, vec![]) };
+        let stamp = (meta.len(), meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH));
+        let compressed = disk != self.path;
+        if compressed && self.packed_stamp == Some(stamp) { return (start, vec![]) }
+        let unpacked = if compressed {
+            let Ok(mut input) = crate::archive::reader(&self.path) else { return (start, vec![]) };
+            let mut bytes = vec![];
+            if input.read_to_end(&mut bytes).is_err() { return (start, vec![]) }
+            Some(bytes)
+        } else { None };
+        let size = unpacked.as_ref().map_or(meta.len(), |bytes| bytes.len() as u64);
+        self.packed_stamp = compressed.then_some(stamp);
         if size < self.offset {
             // Rewritten: start over.
             self.offset = 0;
@@ -599,10 +614,13 @@ impl TranscriptTail {
             return (start, vec![]);
         }
         let mut buffer = vec![0u8; (size - self.offset) as usize];
-        let read = std::fs::File::open(&self.path).and_then(|mut f| {
-            f.seek(SeekFrom::Start(self.offset))?;
-            f.read_exact(&mut buffer)
-        });
+        let read = match unpacked {
+            Some(bytes) => { buffer.copy_from_slice(&bytes[self.offset as usize..]); Ok(()) }
+            None => std::fs::File::open(&self.path).and_then(|mut f| {
+                f.seek(SeekFrom::Start(self.offset))?;
+                f.read_exact(&mut buffer)
+            }),
+        };
         if read.is_err() {
             return (start, vec![]);
         }

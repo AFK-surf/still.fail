@@ -1311,22 +1311,33 @@ async fn deleting_a_session_ends_its_process_and_removes_its_workspace_and_the_t
 }
 
 #[tokio::test]
-async fn archiving_a_session_keeps_a_zstd_copy_of_its_transcript_showing_it_again_or_deleting_it_removes_the_copy() {
+async fn archiving_a_session_compresses_owned_history_and_restores_it_before_resuming() {
     let r = setup();
     let m = message();
     r.accept(&m).await;
     settle().await;
     let key = session_key("cl", "C1", &m.thread_ts);
-    let transcript = transcript_of(&r, &r.session(&key), "{\"type\":\"user\"}\n");
+    r.call(&key, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    let transcript = transcript_of(&r, &r.session(&key), "{\"type\":\"user\",\"message\":{\"content\":\"history\"}}\n");
+    let workspace = PathBuf::from(r.session(&key).workspace);
+    std::fs::write(workspace.join("uncommitted.txt"), b"keep this").unwrap();
     let copy = r.store.archive_dir().join("transcripts").join(format!("{key}.jsonl.zst"));
+    crate::store::write_compressed(&copy, "old redundant copy").unwrap();
     r.hub.archive(&key, true).unwrap();
-    assert_eq!(zstd::decode_all(std::fs::read(&copy).unwrap().as_slice()).unwrap(), b"{\"type\":\"user\"}\n");
-    assert!(transcript.exists(), "the runtime's own file stays as it is");
-    r.hub.archive(&key, false).unwrap();
-    assert!(!copy.exists());
-    r.hub.archive(&key, true).unwrap();
-    r.hub.delete_session(&key).await.unwrap();
-    assert!(!copy.exists());
+    r.hub.clean_archives().await.unwrap();
+    assert!(!transcript.exists(), "compression replaces the original rather than adding another copy");
+    assert!(crate::archive::packed(&transcript).exists());
+    assert!(!copy.exists(), "legacy redundant copy removed only after successful compression");
+    let mut tail = crate::transcript::TranscriptTail::new(RuntimeKind::Claude, transcript.clone());
+    assert_eq!(tail.read().1[0].text, "history");
+    assert!(!workspace.join("uncommitted.txt").exists());
+    r.accept(&InboundMessage { addressed: true, ..reply(&m, "9999.9", "<@UBOT> continue") }).await;
+    r.hub.actor(&r.session(&key)).unwrap().warm().await;
+    assert!(transcript.exists(), "new input restores runtime history before opening the agent");
+    assert_eq!(std::fs::read(workspace.join("uncommitted.txt")).unwrap(), b"keep this");
+    assert!(!crate::archive::workspace_archive(workspace.parent().unwrap()).exists());
 }
 
 #[tokio::test]
@@ -1357,6 +1368,9 @@ async fn archiving_a_session_cleans_what_can_be_made_again_from_its_directory() 
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert!(!workspace.join("app/node_modules").exists(), "cleaned once archived");
+    r.hub.clean_archives().await.unwrap();
+    assert_eq!(crate::archive::workspace_file(workspace.parent().unwrap(), Path::new("notes.md")).unwrap().unwrap(), b"kept");
+    r.hub.archive(&key, false).unwrap();
     assert_eq!(std::fs::read(workspace.join("notes.md")).unwrap(), b"kept");
 }
 
@@ -1399,11 +1413,11 @@ async fn archived_cleanup_backfills_and_retries_after_background_jobs_end() {
     r.store.delete_session("shared_archive_project").unwrap();
     r.hub.clean_archives().await.unwrap();
     assert!(!workspace.join("app/node_modules").exists(), "old archive cleaned after the job stops");
-    assert_eq!(std::fs::read(workspace.join("unfinished.rs")).unwrap(), b"uncommitted work");
+    assert_eq!(crate::archive::workspace_file(workspace.parent().unwrap(), Path::new("unfinished.rs")).unwrap().unwrap(), b"uncommitted work");
     r.hub.clean_archives().await.unwrap();
-    assert!(workspace.join("unfinished.rs").exists(), "safe to retry");
-    std::fs::create_dir_all(workspace.join("app/node_modules")).unwrap();
     r.hub.archive(&key, false).unwrap();
+    assert_eq!(std::fs::read(workspace.join("unfinished.rs")).unwrap(), b"uncommitted work");
+    std::fs::create_dir_all(workspace.join("app/node_modules")).unwrap();
     r.hub.clean_archives().await.unwrap();
     assert!(workspace.join("app/node_modules").exists(), "restored sessions are left alone");
 }

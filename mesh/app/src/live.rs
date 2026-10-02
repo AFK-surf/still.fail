@@ -289,10 +289,10 @@ impl LiveHub {
         let me = Arc::downgrade(self);
         let watched_key = key.to_string();
         let poll = tokio::spawn(async move {
-            let mut size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            let mut size = std::fs::metadata(crate::archive::storage(&path)).map(|m| m.len()).unwrap_or(0);
             loop {
                 tokio::time::sleep(POLL).await;
-                let now = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let now = std::fs::metadata(crate::archive::storage(&path)).map(|m| m.len()).unwrap_or(0);
                 if now != size {
                     size = now;
                     match me.upgrade() {
