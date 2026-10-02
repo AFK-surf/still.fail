@@ -52,6 +52,7 @@ import fail.still.android.ui.SlackMark
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import fail.still.android.ui.QuotaRings
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 /**
@@ -113,6 +114,8 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 InfoList {
                     view.agents.forEach { a ->
                         val s = a.session
+                        // The account it runs on now, with what is left of it (so a glance here saves the trip to settings).
+                        val account = a.account?.let { it.name to it.quota } ?: a.profile?.let { it.name to it.quota }
                         InfoRow(onClick = { openHistory(app, station, of, s.key) }) {
                             ModelMark(s.maker, s.runtime, 36.dp, a.state, around = C.surface2)
                             Column(Modifier.weight(1f)) {
@@ -121,11 +124,12 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     if (a.connect != null) SlackMark(11.dp)
                                     Text(
-                                        listOfNotNull(a.connect?.name, s.processText, s.time?.get("lastActiveAt")?.ago).joinToString(" · "),
+                                        listOfNotNull(a.connect?.name, account?.first, s.processText, s.time?.get("lastActiveAt")?.ago).joinToString(" · "),
                                         fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                             }
+                            QuotaRings(account?.second)
                             IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                         }
                     }

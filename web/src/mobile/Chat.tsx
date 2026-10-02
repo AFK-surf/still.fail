@@ -20,7 +20,7 @@ import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
 import { annotatePath } from "./Annotate.tsx";
-import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
+import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
@@ -576,13 +576,16 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             <InfoList>
               {view.agents.map((a) => {
                 const s = a.session;
+                // The account it runs on now, with what is left of it (so a glance here saves the trip to settings).
+                const account = a.account ?? a.profile;
                 return (
                   <InfoRow key={s.key} onClick={() => openHistory(app, here.station, here.key, s.key)}>
                     <ModelMark maker={s.maker} runtime={s.runtime} size={36} state={stateOf(a.badge)} around="var(--m-surface2)" />
                     <span className={`${partsCss.mGrow} ${css.mInfoAgent}`}>
                       <b>{s.agentText}</b>
-                      <span>{a.connect && <SlackMark size={11} />}{[a.connect?.name, s.processText, s.time?.lastActiveAt?.ago].filter(Boolean).join(" · ")}</span>
+                      <span>{a.connect && <SlackMark size={11} />}{[a.connect?.name, account?.name, s.processText, s.time?.lastActiveAt?.ago].filter(Boolean).join(" · ")}</span>
                     </span>
+                    <QuotaRings quota={account?.quota} />
                     <ChevronRight size={14} className={partsCss.mSubtle} />
                   </InfoRow>
                 );
