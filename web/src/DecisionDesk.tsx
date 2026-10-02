@@ -109,10 +109,6 @@ export function DecisionDesk({ workspace, back, onOpen, footer }: { workspace: s
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-main.sidebar.resize")} />
         <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
         <SidebarActions newChat={`${back}/new`} archive={`${back}/archive`} workspace={back} decisions />
-        <div className={css.title}>
-          <span className={css.titleWord}>奏</span>
-          {items.length > 0 && <span className={css.titleCount}>{items.length} 件等你决定</span>}
-        </div>
         <div ref={list} className={nav.navScroll} role="list">
           {items.map((x, i) => (
             <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem">

@@ -3,13 +3,6 @@ import { vars } from "./styles/tokens.css.ts";
 
 export const emptyList = style({ padding: "20px 10px", fontSize: vars.textXs, lineHeight: "20px", color: vars.subtle });
 
-/** 奏 and how many, over the list. */
-export const title = style({
-  display: "flex", alignItems: "center", gap: 8, padding: "10px 18px 6px", fontSize: vars.textBody, lineHeight: "20px",
-});
-export const titleWord = style({ fontWeight: 600 });
-export const titleCount = style({ fontSize: vars.textXs, color: vars.subtle, fontVariantNumeric: "tabular-nums" });
-
 /** 待定: the ones set aside, under the rest. */
 export const group = style({ padding: "14px 10px 4px", fontSize: vars.textXs, lineHeight: "18px", color: vars.subtle });
 
