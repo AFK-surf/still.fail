@@ -13,7 +13,8 @@ work=$(mktemp -d)
 echo "== build"
 (cd "$here/../shell-ts/shell" && cargo build -q --release)
 (cd "$here" && cargo build -q --release)
-(cd "$here" && CC_aarch64_linux_android="$ndk/aarch64-linux-android26-clang" AR_aarch64_linux_android="$ndk/llvm-ar" \
+(cd "$here" && LIBCLANG_PATH=$(dirname "$(xcrun --find clang)")/../lib \
+  BINDGEN_EXTRA_CLANG_ARGS="--target=aarch64-linux-android26 --sysroot=$ndk/../sysroot" CC_aarch64_linux_android="$ndk/aarch64-linux-android26-clang" AR_aarch64_linux_android="$ndk/llvm-ar" \
   CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ndk/aarch64-linux-android26-clang" cargo build -q --release --target aarch64-linux-android)
 android=$here/target/aarch64-linux-android/release/proto-client-shell
 ls -l "$android" | awk '{print "android binary: " $5 " bytes"}'
