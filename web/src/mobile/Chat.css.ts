@@ -150,3 +150,6 @@ export const mAsks = style({
     "--ask-chip": "var(--m-chip)", "--ask-solid": "var(--m-surface)",
   },
 });
+
+export const mTopBar = style({ position: "absolute", top: 0, left: 0, right: 0, zIndex: 3 });
+globalStyle(`${mTopBar} ${mChatBar}`, { position: "relative" });

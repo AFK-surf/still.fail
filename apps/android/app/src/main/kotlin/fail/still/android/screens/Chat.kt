@@ -284,7 +284,15 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
     Box(Modifier.fillMaxSize().background(C.bg)) {
         Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { host.roomForList().toDp() }, host)
-        ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
+        Column(Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze)) {
+            ChatBar(station, of, view, agents)
+            view.stationUpdate?.let { notice ->
+                Column(Modifier.fillMaxWidth().background(C.bg).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(notice.text, fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
+                    notice.detail?.let { Text(it, fontSize = 12.sp, lineHeight = 18.sp, color = C.muted) }
+                }
+            }
+        }
     }
 }
 

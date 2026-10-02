@@ -31,7 +31,7 @@ export function Versions({ station, updates, manager, beta = false, rows = false
         </label>
       )}
       {manager && autoOn != null && (
-        <Tip label={t("web-main.versions.autoTip")}>
+        <Tip label={updates.find((v) => v.id === "station")?.idleOnly ? "有客户端连接或 agent 工作时不自动更新，连续空闲 5 分钟后更新" : t("web-main.versions.autoTip")}>
           <label className={css.channel}>
             {t("web-main.versions.auto")}
             <Switch small checked={autoOn} disabled={batch || auto.busy} label={t("web-main.versions.auto")} onChange={(next) => void auto.run(next)} />

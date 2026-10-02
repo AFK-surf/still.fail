@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow, bail};
 use stillfail_shapes::SoftwareVersion;
@@ -39,6 +39,8 @@ use crate::store::now_ms;
 /// How often what is out is read again (and the pages' "check" reads it at once).
 const EVERY: Duration = Duration::from_secs(6 * 3600);
 /// How often what is out is read while the station updates itself: a new release reaches it within ten minutes.
+const IDLE_FOR: Duration = Duration::from_secs(5 * 60);
+const IDLE_POLL: Duration = Duration::from_secs(10);
 const AUTO_EVERY: Duration = Duration::from_secs(10 * 60);
 /// How long an update of a runtime may take.
 const RUNTIME_LIMIT: Duration = Duration::from_secs(10 * 60);
@@ -245,6 +247,9 @@ pub struct Updates {
     changes: watch::Sender<u64>,
     /// How many turns run now (the hub's), for what a drain waits on.
     running: OnceLock<Box<dyn Fn() -> usize + Send + Sync>>,
+    /// Connected clients also count as use; a background client conservatively postpones the update.
+    in_use: OnceLock<Box<dyn Fn() -> bool + Send + Sync>>,
+    last_used: Mutex<Instant>,
     /// The version the station's last update in this process went for: updating by itself, not tried again.
     tried: Mutex<Option<String>>,
     /// Told when a runtime was installed or updated here (the machine's logins read again).
@@ -269,7 +274,7 @@ impl Updates {
         let items = Default::default();
         // Read before an update can replace the release.
         let installed = release_channel(&app).unwrap_or_else(|| channel_of(&settings.raw(), &app));
-        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0, running: OnceLock::new(), tried: Mutex::new(None), runtime_changed: OnceLock::new() })
+        Arc::new(Updates { app, data, env, settings, installed, origin, registry, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0, running: OnceLock::new(), in_use: OnceLock::new(), last_used: Mutex::new(Instant::now()), tried: Mutex::new(None), runtime_changed: OnceLock::new() })
     }
 
     /// The channel the station is updated on now.
@@ -331,6 +336,31 @@ impl Updates {
         let _ = self.running.set(Box::new(running));
     }
 
+    pub fn while_in_use(&self, in_use: impl Fn() -> bool + Send + Sync + 'static) {
+        let _ = self.in_use.set(Box::new(in_use));
+    }
+
+    pub fn used(&self) {
+        *self.last_used.lock().unwrap() = Instant::now();
+    }
+
+    fn idle(&self) -> bool {
+        if self.running.get().is_some_and(|f| f() > 0) || self.in_use.get().is_some_and(|f| f()) {
+            self.used();
+            return false;
+        }
+        self.last_used.lock().unwrap().elapsed() >= IDLE_FOR
+    }
+
+    fn auto_update(self: &Arc<Self>) {
+        if let Some(to) = self.to_update_to() {
+            info!(to, "a newer release out and the station idle: updating itself");
+            if let Err(e) = self.update_station() {
+                warn!(error = %e, "the station not updated by itself");
+            }
+        }
+    }
+
     /// What to do when a runtime was installed or updated from here (read the machine's logins again).
     pub fn on_runtime_changed(&self, f: impl Fn() + Send + Sync + 'static) {
         let _ = self.runtime_changed.set(Box::new(f));
@@ -354,12 +384,14 @@ impl Updates {
             let mut last: Option<tokio::time::Instant> = None;
             loop {
                 let Some(updates) = me.upgrade() else { return };
-                if last.is_none_or(|at| updates.auto() || at.elapsed() >= EVERY) {
+                updates.idle();
+                if last.is_none_or(|at| at.elapsed() >= if updates.auto() { AUTO_EVERY } else { EVERY }) {
                     updates.check().await;
                     last = Some(tokio::time::Instant::now());
                 }
+                updates.auto_update();
                 drop(updates);
-                tokio::time::sleep(AUTO_EVERY).await;
+                tokio::time::sleep(IDLE_POLL).await;
             }
         });
     }
@@ -404,6 +436,7 @@ impl Updates {
                     downgrade,
                     // Only where it can be updated from here.
                     channel: (station && item.note.is_none() && item.version.is_some()).then(|| channel.id().to_string()),
+                    idle_only: station.then_some(true),
                     auto: (station && item.note.is_none() && item.version.is_some()).then(|| self.auto()),
                     updatable: item.how.is_some() || (kind == Kind::Station && item.note.is_none() && item.version.is_some()),
                     version: item.version,
@@ -462,7 +495,7 @@ impl Updates {
     /// not updating, and its channel's latest is newer (not an older stable one back from the beta) and not one it
     /// already went for.
     fn to_update_to(&self) -> Option<String> {
-        if !self.auto() {
+        if !self.auto() || !self.idle() {
             return None;
         }
         let item = self.items.lock().unwrap()[Kind::Station as usize].clone();
@@ -1311,6 +1344,8 @@ pub(crate) mod tests {
             Ok(())
         }).unwrap();
         assert_eq!(station_with(&updates, "0.1.1310").auto, Some(true));
+        assert_eq!(updates.to_update_to(), None, "wait for five minutes of quiet");
+        *updates.last_used.lock().unwrap() = Instant::now() - IDLE_FOR;
         assert_eq!(updates.to_update_to().as_deref(), Some("0.1.1310"));
         // Already the latest, or the latest is older: nothing.
         station_with(&updates, "0.1.1300");
@@ -1344,6 +1379,33 @@ pub(crate) mod tests {
         }).unwrap();
         assert!(station_with(&beta, "0.1.1200").downgrade);
         assert_eq!(beta.to_update_to(), None);
+    }
+
+    #[tokio::test]
+    async fn automatic_updates_wait_for_clients_and_turns_then_a_quiet_period() {
+        let dir = tempfile::tempdir().unwrap();
+        let updates = installed(dir.path(), "1300", None, None);
+        updates.settings.update(|raw| { raw.auto_update = Some(true); Ok(()) }).unwrap();
+        station_with(&updates, "0.1.1310");
+        let clients = Arc::new(AtomicBool::new(true));
+        let copy = clients.clone();
+        updates.while_in_use(move || copy.load(Ordering::SeqCst));
+        let running = Arc::new(AtomicBool::new(false));
+        let copy = running.clone();
+        updates.count_running(move || usize::from(copy.load(Ordering::SeqCst)));
+        *updates.last_used.lock().unwrap() = Instant::now() - IDLE_FOR;
+        assert_eq!(updates.to_update_to(), None, "a client is still using it");
+        clients.store(false, Ordering::SeqCst);
+        assert_eq!(updates.to_update_to(), None, "closing the client does not update immediately");
+        *updates.last_used.lock().unwrap() = Instant::now() - IDLE_FOR;
+        running.store(true, Ordering::SeqCst);
+        assert_eq!(updates.to_update_to(), None, "a Slack turn also postpones the update");
+        running.store(false, Ordering::SeqCst);
+        assert_eq!(updates.to_update_to(), None);
+        *updates.last_used.lock().unwrap() = Instant::now() - IDLE_FOR;
+        assert_eq!(updates.to_update_to().as_deref(), Some("0.1.1310"));
+        updates.used();
+        assert_eq!(updates.to_update_to(), None, "a request resets the quiet period");
     }
 
     fn found(real: &str) -> Found {

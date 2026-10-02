@@ -84,6 +84,10 @@ impl Events {
         })
     }
 
+    pub fn in_use(&self) -> bool {
+        self.clients.lock().unwrap().iter().any(|c| !c.out.is_closed())
+    }
+
     pub fn overview_changed(&self) {
         self.dirty.lock().unwrap().overview = true;
         self.wake.notify_one();
@@ -104,6 +108,7 @@ impl Events {
     }
 
     fn session_changed(&self, key: &str) {
+        if let Some(api) = self.api.upgrade() && let Some(updates) = &api.deps.updates { updates.used(); }
         self.dirty.lock().unwrap().sessions.insert(key.to_string());
         self.rows_changed(None);
     }

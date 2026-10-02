@@ -455,6 +455,8 @@ impl Views {
                 if v.get("link").is_some_and(Value::is_object) {
                     v["connection"] = crate::looks::link_shown(&v["link"], &self.station_name(station));
                 }
+                let overview = self.ok(Topic::Overview { station: station.clone() });
+                v["stationUpdate"] = crate::looks::station_update(overview.as_ref(), &v);
                 v
             }));
         }
@@ -580,6 +582,7 @@ impl Views {
             // Its sessions (the recent ones, the one it delivers into) and the chats they were last talked to in.
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station: station.clone() }, Topic::Sessions { station: station.clone() }, Topic::Threads { station }]),
             Topic::Chat { station, thread: None, session: Some(key) } if key.starts_with(PENDING_PREFIX) => {
+                topics.insert(Topic::Overview { station: station.clone() });
                 // Asked for here: the chat its station made, once it has; else whether the station is up.
                 if let Some(Some(thread)) = self.pending_thread(station, key) {
                     return self.sources(&Topic::Chat { station: station.clone(), thread: Some(thread), session: None });

@@ -88,7 +88,7 @@ fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean,
             })) {
                 Column(Modifier.weight(1f)) {
                     Text(t("android-misc.versions.auto"), fontSize = 15.sp, color = C.ink)
-                    Text(t("android-misc.versions.auto.text"), fontSize = 13.sp, color = C.muted)
+                    Text(if (updates.firstOrNull { it.id == "station" }?.idleOnly == true) "有客户端连接或 agent 工作时不自动更新，连续空闲 5 分钟后更新" else t("android-misc.versions.auto.text"), fontSize = 13.sp, color = C.muted)
                 }
                 Switch(on)
             }

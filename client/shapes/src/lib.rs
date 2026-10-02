@@ -1092,6 +1092,8 @@ pub struct SoftwareVersion {
     /// The station's: whether it updates itself when a newer release of its channel is out (自动更新); none where it
     /// cannot be updated from here, and from a station older than it.
     pub auto: Option<bool>,
+    /// Automatic updates wait for clients and running turns to leave, then five quiet minutes.
+    pub idle_only: Option<bool>,
     /// The pages can update it (or install it, when it is not installed).
     pub updatable: bool,
     /// Why it cannot be updated from here (the desktop app's station, a runtime installed another way…).
@@ -2734,6 +2736,8 @@ pub struct ChatView {
     pub failed: Option<String>,
     /// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
     pub connection: Option<LinkShown>,
+    /// Station update availability or progress, including the local outbox while reconnecting.
+    pub station_update: Option<LinkShown>,
     /// The card it waits on, as its row has it. Absent when there is none.
     pub decision: Option<RowDecision>,
     /// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap

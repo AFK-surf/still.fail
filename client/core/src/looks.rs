@@ -192,3 +192,54 @@ mod tests {
         assert_eq!(station_line(true, Some(&json!({ "cpuModel": "" }))), "在线");
     }
 }
+
+/// Kept overview progress survives a handover's disconnected interval. No update is inferred from a disconnect.
+pub fn station_update(overview: Option<&Value>, chat: &Value) -> Value {
+    let Some(update) = overview.and_then(|v| v["updates"].as_array()).and_then(|all| all.iter().find(|v| v["id"] == "station")) else { return Value::Null };
+    let offline = chat["link"]["state"].as_str().is_some_and(|s| s != "online");
+    if update["state"] == "updating" {
+        let sending = chat["outbox"].as_array().is_some_and(|entries| entries.iter().any(|entry| entry["state"] == "sending" && entry["seq"].is_null()));
+        let progress = if offline { "正在等待 station 重新连接" } else { update["progress"].as_str().unwrap_or("正在准备新版本") };
+        let detail = if sending { format!("{progress}；消息仍在发送，连接恢复后自动继续") } else { progress.to_string() };
+        return json!({ "tone": "busy", "text": "station 正在更新", "detail": detail });
+    }
+    if update["state"] == "failed" {
+        return json!({ "tone": "trouble", "text": "station 更新失败", "detail": "可到 station 页查看原因并重试" });
+    }
+    if update["newer"] == true && update["updatable"] == true {
+        let detail = if update["auto"] == true && update["idleOnly"] == true { "使用中不会自动更新，空闲后再更新；也可到 station 页立即更新" } else { "可到 station 页更新" };
+        return json!({ "tone": "notice", "text": "station 有新版本", "detail": detail });
+    }
+    Value::Null
+}
+
+#[cfg(test)]
+mod update_tests {
+    use super::*;
+    #[test]
+    fn update_progress_and_pending_messages_survive_disconnect_and_clear_on_new_overview() {
+        let mut overview = json!({"updates": [{"id":"station", "state":"updating", "progress":"正在下载新版本…"}]});
+        let mut chat = json!({"link":{"state":"online"}, "outbox":[]});
+        assert_eq!(station_update(Some(&overview), &chat)["detail"], "正在下载新版本…");
+        chat["link"]["state"] = json!("reconnecting");
+        chat["outbox"] = json!([{"id":"one", "state":"sending"}]);
+        let notice = station_update(Some(&overview), &chat);
+        assert_eq!(notice["text"], "station 正在更新");
+        assert!(notice["detail"].as_str().unwrap().contains("消息仍在发送"));
+        chat["outbox"][0]["state"] = json!("failed");
+        assert!(!station_update(Some(&overview), &chat)["detail"].as_str().unwrap().contains("消息仍在发送"));
+        chat["outbox"][0]["state"] = json!("sending");
+        chat["outbox"][0]["seq"] = json!(7);
+        assert!(!station_update(Some(&overview), &chat)["detail"].as_str().unwrap().contains("消息仍在发送"));
+        overview["updates"][0] = json!({"id":"station", "state":"idle", "newer":false});
+        assert!(station_update(Some(&overview), &chat).is_null());
+        assert!(station_update(None, &chat).is_null(), "older station or unknown reason: never guess updating");
+    }
+    #[test]
+    fn availability_explains_deferral_only_when_automatic_updates_are_enabled() {
+        let mut overview = json!({"updates": [{"id":"station", "state":"idle", "newer":true, "updatable":true, "auto":true, "idleOnly":true}]});
+        assert!(station_update(Some(&overview), &Value::Null)["detail"].as_str().unwrap().contains("使用中不会自动更新"));
+        overview["updates"][0]["auto"] = json!(false);
+        assert_eq!(station_update(Some(&overview), &Value::Null)["detail"], "可到 station 页更新");
+    }
+}

@@ -1,3 +1,4 @@
+import { StationUpdate } from "../StationUpdate.tsx";
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
 // agent's execution history as a page opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
 // the same rows, avatars, names, quotes, files, activity and list behaviour), with the avatar and name in line with the
@@ -100,6 +101,14 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   const station = useStation();
   const app = useApp();
   const list = useRef<HTMLDivElement>(null);
+  const top = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const bar = top.current;
+    if (!bar) return;
+    const observer = new ResizeObserver(() => bar.parentElement?.style.setProperty("--chat-top", `${bar.offsetHeight}px`));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
   const floor = useRef<HTMLDivElement>(null);
   // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
   const { draft, use } = useHost();
@@ -108,7 +117,10 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   return (
     <div className={chatCss.mChat}>
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
-      <ChatBar view={view} here={here} />
+      <div ref={top} className={css.mTopBar}>
+        <ChatBar view={view} here={here} />
+        <StationUpdate notice={view.stationUpdate} />
+      </div>
     </div>
   );
 }

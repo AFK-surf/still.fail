@@ -1176,6 +1176,8 @@ data class ChatView (
 	val failed: String? = null,
 	/// Its link while it is down or coming back, in words; absent while it is up (and from a core before it).
 	val connection: LinkShown? = null,
+	/// Station update availability or progress, including the local outbox while reconnecting.
+	val stationUpdate: LinkShown? = null,
 	/// The card it waits on, as its row has it. Absent when there is none.
 	val decision: RowDecision? = null,
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
@@ -2143,6 +2145,8 @@ data class SoftwareVersion (
 	/// The station's: whether it updates itself when a newer release of its channel is out (自动更新); none where it
 	/// cannot be updated from here, and from a station older than it.
 	val auto: Boolean? = null,
+	/// Automatic updates wait for clients and running turns to leave, then five quiet minutes.
+	val idleOnly: Boolean? = null,
 	/// The pages can update it (or install it, when it is not installed).
 	val updatable: Boolean,
 	/// Why it cannot be updated from here (the desktop app's station, a runtime installed another way…).

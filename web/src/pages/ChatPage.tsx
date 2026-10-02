@@ -1,3 +1,4 @@
+import { StationUpdate } from "../StationUpdate.tsx";
 // A chat: a thread (a Slack thread or a chat on still.fail's page) with its people
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
@@ -354,6 +355,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
+      <StationUpdate notice={chat.stationUpdate} />
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
       <OpenFile.Provider value={(session, file) => openTab(fileTab(session, file.path, file.name))}>

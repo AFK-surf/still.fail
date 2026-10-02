@@ -334,7 +334,6 @@ impl App {
             let reread = reread.clone();
             tokio::spawn(async move { reread.refresh().await });
         });
-        updates.start();
         // What the agents spent, read from their transcripts as they grow.
         let usage = crate::usage::Usage::new(store.clone(), settings.clone());
         usage.start();
@@ -380,6 +379,7 @@ impl App {
             jobs: Some(jobs.clone()),
             usage: Some(usage),
         });
+        updates.start();
         // What the chats' people hear about while no client of theirs runs (the station process posts it on).
         crate::admin::notify::Notifier::start(&admin);
         let mcp_door = serve_mcp(listener, mcp, jobs.clone());

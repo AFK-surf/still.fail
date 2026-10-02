@@ -384,6 +384,10 @@ impl AdminApi {
                 }
             });
         }
+        if let Some(updates) = &api.deps.updates {
+            let events = Arc::downgrade(&api.events);
+            updates.while_in_use(move || events.upgrade().is_some_and(|events| events.in_use()));
+        }
         api.events.follow();
         if api.deps.check_on_start {
         }
@@ -408,6 +412,7 @@ impl AdminApi {
         B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
         B::Error: std::error::Error + Send + Sync + 'static,
     {
+        if let Some(updates) = &self.deps.updates { updates.used(); }
         let started = std::time::Instant::now();
         let (parts, body) = req.into_parts();
         let path = parts.uri.path().strip_prefix("/admin/api").unwrap_or(parts.uri.path()).to_string();

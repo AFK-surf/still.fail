@@ -1188,6 +1188,8 @@ export interface ChatView {
 	failed?: string;
 	/** Its link while it is down or coming back, in words; absent while it is up (and from a core before it). */
 	connection?: LinkShown;
+	/** Station update availability or progress, including the local outbox while reconnecting. */
+	stationUpdate?: LinkShown;
 	/** The card it waits on, as its row has it. Absent when there is none. */
 	decision?: RowDecision;
 	/**
@@ -2120,6 +2122,8 @@ export interface SoftwareVersion {
 	 * cannot be updated from here, and from a station older than it.
 	 */
 	auto?: boolean;
+	/** Automatic updates wait for clients and running turns to leave, then five quiet minutes. */
+	idleOnly?: boolean;
 	/** The pages can update it (or install it, when it is not installed). */
 	updatable: boolean;
 	/** Why it cannot be updated from here (the desktop app's station, a runtime installed another way…). */
