@@ -87,7 +87,7 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
                 Modifier.align(Alignment.BottomEnd).then(foot).padding(end = 10.dp, bottom = 10.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (decisions > 0) DecisionsCapsule(decisions, Modifier.floatingStill(CircleShape))
+                DecisionsCapsule(decisions, Modifier.floatingStill(CircleShape))
                 NewChatDisc()
             }
         }

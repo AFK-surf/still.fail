@@ -47,6 +47,8 @@ export const mHomeToolbar = style({
 export const mDecisions = style({
   display: "flex", alignItems: "center", gap: "6px", height: "56px", padding: "0 22px 0 10px", marginRight: "10px",
   borderRadius: "999px", color: "var(--m-ink)", cursor: "pointer", pointerEvents: "auto",
+  // 奏 alone (none waiting): as much room on its right as on its left.
+  selectors: { "&[data-alone]": { paddingRight: "10px" } },
 });
 export const mHomeCapsule = style({
   display: "flex", alignItems: "center", gap: "6px", borderRadius: "999px", pointerEvents: "auto",

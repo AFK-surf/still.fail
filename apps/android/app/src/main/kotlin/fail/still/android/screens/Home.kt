@@ -727,31 +727,31 @@ internal fun decisionsWaiting(current: WorkspaceEntry): Int {
     return marks.value?.workspaces?.get(current.workspace.id)?.decisions?.toInt() ?: 0
 }
 
-/** 奏 N: the decisions page's way in, a capsule of the new-chat button's glass (`ground`) beside it, as tall. */
+/** 奏 N: the decisions page's way in, there at 0 too (奏 alone then, its padding even), a capsule of the new-chat button's glass (`ground`) beside it, as tall. */
 @Composable
 internal fun DecisionsCapsule(n: Int, ground: Modifier) {
     val app = LocalApp.current
     Row(
-        ground.height(56.dp).clickable { app.push(Screen.Decisions) }.padding(start = 10.dp, end = 20.dp)
+        ground.height(56.dp).clickable { app.push(Screen.Decisions) }.padding(start = 10.dp, end = if (n > 0) 20.dp else 10.dp)
             .semantics(mergeDescendants = true) { contentDescription = t("android-chat.home.decisions", "n" to n) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         IconIn(Icons.Zou, 40.dp, C.ink)
-        // How many, drawn (design/icons num-*): 1 to 9, and + past that.
-        IconIn(if (n in 1..9) listOf(Icons.Num1, Icons.Num2, Icons.Num3, Icons.Num4, Icons.Num5, Icons.Num6, Icons.Num7, Icons.Num8, Icons.Num9)[n - 1] else Icons.NumMore, 24.dp, C.ink)
+        // How many, drawn (design/icons num-*): 1 to 9, and + past that; 奏 alone at 0.
+        if (n > 0) IconIn(if (n in 1..9) listOf(Icons.Num1, Icons.Num2, Icons.Num3, Icons.Num4, Icons.Num5, Icons.Num6, Icons.Num7, Icons.Num8, Icons.Num9)[n - 1] else Icons.NumMore, 24.dp, C.ink)
     }
 }
 
 @Composable
 private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Modifier) {
-    // Floating over the list at the bottom right: 奏 N while decisions wait, and the new-chat button, a disc in the
+    // Floating over the list at the bottom right: 奏 N (奏 alone at 0), and the new-chat button, a disc in the
     // accent, no ring.
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (decisions > 0) DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
+        DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
         Box(
             Modifier.size(56.dp).shadow(4.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f)).clip(CircleShape).background(C.accent)
                 .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },

@@ -73,12 +73,10 @@ export function Home() {
       </header>
       {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent. */}
       {!none && <div className={css.mHomeToolbar}>
-        {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, only while there are some. */}
-        {decisions > 0 && (
-          <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
-            <Zou size={40} /><Count n={decisions} />
-          </button>
-        )}
+        {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, there at 0 too (奏 alone). */}
+        <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} data-alone={decisions > 0 ? undefined : ""} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
+          <Zou size={40} />{decisions > 0 && <Count n={decisions} />}
+        </button>
         <div className={css.mHomeCapsule}>
           <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={44} /></button>
         </div>
