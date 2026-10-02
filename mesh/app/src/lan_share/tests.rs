@@ -183,3 +183,41 @@ async fn a_borrower_runs_what_is_lent_while_on_the_lan_and_keeps_it_unusable_off
 fn read_raw_profiles(dir: &Path) -> Vec<String> {
     crate::config::read_raw(&dir.join("config.json")).unwrap().profiles.unwrap_or_default().into_iter().map(|p| p.id).collect()
 }
+
+/// Every provider there is (stillfail_shapes::providers), lent: the borrower runs it as the lender does, at the same
+/// address, with the same key, the same runtimes and the same environment and Codex settings.
+#[tokio::test]
+async fn every_provider_is_borrowed_as_its_lender_runs_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let profiles: Vec<Value> = stillfail_shapes::providers::SOURCES
+        .iter()
+        .enumerate()
+        .map(|(i, source)| {
+            let endpoint = source.endpoint_required.then_some("https://models.example.internal/v1");
+            json!({"id": format!("p{i}"), "name": source.name, "access": {"kind": "api-provider", "provider": source.id, "key": format!("key-{i}"), "endpoint": endpoint}, "home": format!("homes/p{i}"), "models": ["m"], "env": {"OWN": "lender"}, "shareOnLan": true})
+        })
+        .collect();
+    let lender = settings(dir.path(), json!(profiles));
+    let store = Store::open(dir.path().join("stillfail.db").to_str().unwrap(), None).unwrap();
+    let lent = answer(&lender, &store, true, &json!({"method": ASK_LENT})).await.unwrap();
+    let offers = lent["profiles"].as_array().unwrap();
+    assert_eq!(offers.len(), stillfail_shapes::providers::SOURCES.len(), "every provider is lent");
+    let borrower_dir = tempfile::tempdir().unwrap();
+    let borrower = settings(borrower_dir.path(), json!([]));
+    for (own, offer) in lender.config().profiles.iter().zip(offers) {
+        let p = borrowed(&borrower, STUDIO, "studio", offer).unwrap_or_else(|| panic!("{} not borrowed", own.id));
+        let mut expected = own.envs.clone();
+        for env in expected.values_mut() {
+            env.remove("OWN");
+        }
+        assert_eq!((&p.provider, &p.endpoint, &p.protocol, &p.key), (&own.provider, &own.endpoint, &own.protocol, &own.key), "{}", own.name);
+        assert_eq!(p.runtimes, own.runtimes, "{}", own.name);
+        assert_eq!(p.envs, expected, "{}: the same environment, but not the lender's own variables", own.name);
+        assert_eq!(
+            crate::profiles::codex_overrides(p.access_kind, p.model.as_deref(), p.via()),
+            crate::profiles::codex_overrides(own.access_kind, own.model.as_deref(), own.via()),
+            "{}",
+            own.name
+        );
+    }
+}
