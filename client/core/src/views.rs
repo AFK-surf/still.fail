@@ -3228,6 +3228,22 @@ mod tests {
     }
 
     #[test]
+    fn a_card_answered_from_here_stays_answered_once_its_message_leaves_the_outbox() {
+        run(async {
+            let t = setup();
+            let views = t.router.views();
+            let id = views.outbox_add("ws/st", 7, json!({"text": "好"}));
+            assert!(views.answered("ws/st", 7, 4), "on its way: answered");
+            // Taken by the station with nobody looking: gone from the outbox, the card still answered (seq 5 > 4)…
+            views.outbox_sent("ws/st", 7, &id, 5);
+            assert!(views.outbox_get("ws/st", 7, &id).is_none());
+            assert!(views.answered("ws/st", 7, 4));
+            // …but not a card asked after it.
+            assert!(!views.answered("ws/st", 7, 6));
+        });
+    }
+
+    #[test]
     fn a_chat_renamed_or_pinned_here_shows_so_at_once_and_as_its_station_has_it_once_answered() {
         run(async {
             let t = setup();
