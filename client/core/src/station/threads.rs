@@ -270,7 +270,8 @@ impl Stations {
         entries.extend(waiting);
         entries.sort_by_key(|e| n_of(e).unwrap_or(0));
         entries.dedup_by_key(|e| n_of(e));
-        self.put_entries(station, id, entries, true);
+        // A missing range is history, even when an event revealed it. Do not replay its entrance animations.
+        self.put_entries(station, id, entries, false);
     }
     /// The thread's summary as a live topic lists it.
     pub(super) fn summary(&self, station: &str, id: u64) -> Option<Value> {

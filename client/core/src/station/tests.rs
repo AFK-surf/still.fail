@@ -678,7 +678,7 @@ fn a_gap_is_read_once_and_what_came_meanwhile_waits_for_it() {
         wire.event("thread", json!({"id": 7, "entries": [entry(7, "m7")]}));
         host.settle().await;
         assert_eq!(numbers(&sink, 7), vec![1, 2, 3, 4, 5, 6, 7]);
-        assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 3, "a gap an event showed is part of what was said");
+        assert_eq!(sink.get(&thread(7)).unwrap()["caught"], 7, "a gap is historical loading, including events waiting behind it");
         assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?from=4&to=5"), 1);
         assert_eq!(wire.paths().iter().filter(|p| p.contains("/entries")).count(), 2, "{:?}", wire.paths());
     });

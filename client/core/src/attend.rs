@@ -90,6 +90,9 @@ struct Visit {
     /// The newest message decided on (`said` or not), and those said while it shows.
     top: u64,
     said: HashSet<u64>,
+    /// Animation belongs to a visible visit, not to background delivery or delayed events from before resuming.
+    visible: bool,
+    resumed_at: Option<f64>,
     /// Each agent's status as last seen, and those seen starting while it shows.
     statuses: HashMap<String, String>,
     started: HashSet<String>,
@@ -282,7 +285,16 @@ impl Attend {
     fn end_visits(&self) {
         let focus = self.focus.borrow();
         self.visits.borrow_mut().retain(|(station, thread), v| {
-            focus.values().filter_map(|f| f.chat.as_ref()).any(|c| c.is(station, Some(*thread), v.session.as_deref()))
+            let showing = |f: &&Focus| f.chat.as_ref().is_some_and(|c| c.is(station, Some(*thread), v.session.as_deref()));
+            let visible = focus.values().filter(showing).any(|f| f.visible);
+            if visible != v.visible {
+                v.said.clear();
+                v.started.clear();
+                v.statuses.clear();
+                if visible { v.resumed_at = Some(self.host.now_ms()); }
+                v.visible = visible;
+            }
+            focus.values().filter(showing).next().is_some()
         });
     }
 
@@ -323,7 +335,7 @@ impl Attend {
         let mut visits = self.visits.borrow_mut();
         let newest = messages.last().map(seq).unwrap_or(0);
         let visit = visits.entry((station.to_string(), thread)).or_insert_with(|| Visit {
-            at: now, read: known, session: session.map(str::to_string), top: newest, said: HashSet::new(), statuses: HashMap::new(), started: HashSet::new(),
+            at: now, read: known, session: session.map(str::to_string), top: newest, said: HashSet::new(), visible: shown.iter().any(|f| f.visible), resumed_at: None, statuses: HashMap::new(), started: HashSet::new(),
         });
         let (read, opened) = (visit.read, visit.at);
         // Said while it shows: past what it had when the visit began, and past what was caught up on (station.rs
@@ -331,7 +343,9 @@ impl Attend {
         let caught = value.get("caught").and_then(Value::as_u64).unwrap_or(0);
         for m in &messages {
             let n = seq(m);
-            if n > visit.top && n > caught {
+            if visit.visible && n > visit.top && n > caught
+                && visit.resumed_at.is_none_or(|at| m.get("createdAt").and_then(Value::as_f64).is_some_and(|created| created >= at))
+            {
                 visit.said.insert(n);
             }
         }
@@ -348,7 +362,8 @@ impl Attend {
             let running = status == "running";
             match visit.statuses.insert(key.clone(), status) {
                 _ if !running => { visit.started.remove(&key); }
-                Some(was) if was != "running" => { visit.started.insert(key.clone()); }
+                Some(was) if visit.visible && was != "running"
+                    && visit.resumed_at.is_none_or(|at| a.get("since").and_then(Value::as_f64).is_some_and(|since| since >= at)) => { visit.started.insert(key.clone()); }
                 _ => {}
             }
             if visit.started.contains(&key) {
@@ -538,6 +553,59 @@ mod tests {
             let mut v = at(9, 7, agents("running", "idle"));
             attend.chat("ws/st", None, &mut v);
             assert!(said(&v).is_empty());
+        });
+    }
+
+    #[test]
+    fn background_and_delayed_messages_are_history_but_new_live_messages_still_animate() {
+        run(async {
+            let host = FakeHost::new();
+            let attend = Attend::load(host.clone()).await;
+            let value = |n: u64, created: f64, status: &str| {
+                let mut v = chat(0, false, &(1..=n).map(|seq| (seq, created, false)).collect::<Vec<_>>());
+                v["caught"] = json!(0);
+                v["agents"] = json!([{ "session": { "key": "a" }, "status": status, "since": created }]);
+                v
+            };
+            let quiet = |v: &Value| {
+                assert!(v["messages"].as_array().unwrap().iter().all(|m| m["said"] != true));
+                assert!(v["agents"].as_array().unwrap().iter().all(|a| a["started"] != true));
+            };
+            attend.focus(1, focus(json!({ "visible": true, "chat": { "station": "ws/st", "thread": 7 } })));
+            attend.chat("ws/st", None, &mut value(1, 0.0, "idle"));
+            let mut live = value(2, 0.0, "running");
+            attend.chat("ws/st", None, &mut live);
+            assert_eq!(live["messages"][1]["said"], true);
+            attend.focus(1, focus(json!({ "visible": false })));
+            let mut background = value(1000, 0.0, "running");
+            attend.chat("ws/st", None, &mut background);
+            quiet(&background);
+            attend.focus(1, focus(json!({ "visible": true })));
+            // Events queued while frozen can arrive after visibility changed, even before the catch-up response.
+            let mut delayed = value(2000, 0.0, "running");
+            attend.chat("ws/st", None, &mut delayed);
+            quiet(&delayed);
+            attend.chat("ws/st", None, &mut value(2000, 0.0, "idle"));
+            let mut fresh = value(2001, host.now_ms() + 1.0, "running");
+            attend.chat("ws/st", None, &mut fresh);
+            assert_eq!(fresh["messages"].as_array().unwrap().iter().filter(|m| m["said"] == true).count(), 1);
+            assert_eq!(fresh["agents"][0]["started"], true);
+        });
+    }
+
+    #[test]
+    fn a_hidden_tab_does_not_stop_animation_in_another_visible_tab() {
+        run(async {
+            let host = FakeHost::new();
+            let attend = Attend::load(host).await;
+            for client in [1, 2] {
+                attend.focus(client, focus(json!({ "visible": true, "chat": { "station": "ws/st", "thread": 7 } })));
+            }
+            attend.chat("ws/st", None, &mut chat(0, false, &[(1, 0.0, false)]));
+            attend.focus(1, focus(json!({ "visible": false })));
+            let mut v = chat(0, false, &[(1, 0.0, false), (2, 0.0, false)]);
+            attend.chat("ws/st", None, &mut v);
+            assert_eq!(v["messages"][1]["said"], true);
         });
     }
 
