@@ -170,6 +170,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
   const front = items[0];
   // Each time one leaves another comes, even the same again (set aside, the only one).
   const [turn, setTurn] = useState(0);
+  const [arriving, setArriving] = useState(false);
 
   const host = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
@@ -211,6 +212,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
         .finished.then(() => { ghost.remove(); setLeaving((n) => n - 1); }, () => { ghost.remove(); setLeaving((n) => n - 1); });
     }
     if (el) { el.style.transform = ""; delete el.dataset.dragging; }
+    setArriving(to !== "down");
     setTurn((t) => t + 1);
   };
 
@@ -270,7 +272,7 @@ export function DecisionDeck({ workspace, swipe, inline, onOpen, onEmpty, classN
     const owner = () => d.message.by.agent ?? d.session;
     body = (
       <StationContext.Provider value={station}>
-        <div key={`${keyOf(d)}#${turn}`} ref={card} className={`${css.card} ${turn > 0 ? css.arriving : ""}`} {...(swipe ? drag : {})}>
+        <div key={`${keyOf(d)}#${turn}`} ref={card} className={`${css.card} ${arriving ? css.arriving : ""}`} {...(swipe ? drag : {})}>
           <div className={css.scroll}>
             <div className={css.column}>
               <div className={css.head}>
