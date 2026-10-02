@@ -26,16 +26,18 @@ export const chatToBottom = style({
   animation: `${fadeKeyframes} 160ms ${vars.easeOut}`,
   selectors: {
     "&:hover": { background: vars.hover },
-    // Right over the send button: the composer's box is its width (760px at most, 32px in from each side, 12px in a narrow
-    // pane) and the button 6px in from its right, as big as the send.
+    // Right over the send button, including the curve extending past the message column.
     [`${chat}[data-under-composer] &`]: {
       // (Its pane less what it leaves the small web services in the corner, as its composer does.)
-      right: "calc((100% - var(--avoid-previews, 0px) - min(760px, 100% - var(--avoid-previews, 0px) - 2 * var(--composer-inset))) / 2 + 6px + var(--avoid-previews, 0px))",
+      right: "calc((100% - var(--avoid-previews, 0px) - min(760px + 2 * var(--composer-curve), 100% - var(--avoid-previews, 0px) - 24px, 100% - var(--avoid-previews, 0px) - 2 * var(--composer-inset) + 2 * var(--composer-curve))) / 2 + 6px + var(--avoid-previews, 0px))",
       width: "32px", height: "32px",
       bottom: "calc(12px + var(--composer-room) + var(--asks-height, 0px))", border: "0",
       background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
       backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
-      vars: { "--composer-inset": "32px" },
+      vars: { "--composer-inset": "32px", "--composer-curve": "22px" },
+    },
+    [`body:has(${composerBox}[data-multiline]) ${chat}[data-under-composer] &`]: {
+      vars: { "--composer-curve": `calc(32px * ${vars.cornerScale})` },
     },
     // With how many new messages wait at the end (a window short of it): a pill, growing leftwards from where it sits.
     "&[data-count]": {

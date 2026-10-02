@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { chat } from "./styles/session.css.ts";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { composerBox } from "./styles/composer.css.ts";
+import { vars } from "./styles/tokens.css.ts";
 import { newChatInner } from "./NewChat.css.ts";
 
 /** The chat pages' one composer (dock.tsx) sits over its place on the page, laid out for a new chat or a chat. */
@@ -31,3 +32,18 @@ globalStyle(`${composerDock}[data-variant="new"] ${composerBox}`, { minHeight: "
 globalStyle(`${composerDock}[data-switching] ${composerBox}`, { transition: "none" });
 globalStyle(`${composerDock}[data-variant="chat"] ${composerWrap}`, { pointerEvents: "none" });
 globalStyle(`${composerDock}[data-variant="chat"] ${composerWrap} > *`, { pointerEvents: "auto" });
+
+// Extend the frame past the message column: its straight edge starts at the column edge.
+// Keep 12px clear at the pane edges when a narrow split pane cannot fit the whole curve.
+globalStyle(`${composerDock}[data-variant="chat"] ${composerWrap}`, {
+  paddingLeft: "12px", paddingRight: "12px",
+});
+globalStyle(`${composerDock}[data-variant="chat"] ${composerBox}`, {
+  vars: { "--composer-curve": "22px" },
+  width: "min(100%, calc(100% - 40px + 2 * var(--composer-curve)))",
+  maxWidth: "calc(760px + 2 * var(--composer-curve))",
+  "@media": { "(max-width: 700px)": { width: "100%" } },
+});
+globalStyle(`${composerDock}[data-variant="chat"] ${composerBox}[data-multiline]`, {
+  vars: { "--composer-curve": `calc(32px * ${vars.cornerScale})` },
+});
