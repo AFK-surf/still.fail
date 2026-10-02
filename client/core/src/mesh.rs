@@ -1067,7 +1067,7 @@ impl Control {
     }
 
     async fn send(&mut self, credential: &str) -> Result<()> {
-        let line = format!("{}\n", json!({ "credential": credential }));
+        let line = format!("{}\n", json!({ "credential": credential, "protocol": 2 }));
         self.send.write_all(line.as_bytes()).await.map_err(|e| mesh_error(t!("core-logic.mesh.credential_unsent", error = e)))
     }
 
@@ -1077,6 +1077,9 @@ impl Control {
         let answer: Value = serde_json::from_str(&answer).map_err(|e| mesh_error(t!("core-logic.mesh.credential_unreadable", error = e)))?;
         if let Some(error) = answer.get("error") {
             let reason = error.as_str().map(str::to_string).unwrap_or_else(|| error.to_string());
+            if answer["code"] == "client_upgrade_required" {
+                return Err(CoreError::new("client_upgrade_required", reason));
+            }
             return Err(CoreError::new("credential_refused", t!("core-logic.mesh.credential_refused_why", reason = reason)));
         }
         Ok(answer)
