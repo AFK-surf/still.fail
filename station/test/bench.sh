@@ -36,7 +36,7 @@ measure() { # measure <name> <data dir name> <command…>
   later=$(ps -o rss= -p "$pid"); flater=$(footprint "$pid")
   echo "{\"station\":\"$name\",\"footprint\":{\"idle\":$fidle,\"peak\":$fpeak,\"after\":$fafter,\"later\":$flater},\"rss\":{\"idle\":$((idle/1024)),\"peak\":$((peak/1024)),\"after\":$((after/1024)),\"later\":$((later/1024))},\"load\":$(cat "$work/load-$name.json")}"
 }
-measure rust rust "$rust" run --app "$(dirname "$(dirname "$(dirname "$(dirname "$rust")")")")" --port 4799 --data "$work/rust"
+measure rust rust "$rust" run --app "$(dirname "$(dirname "$(dirname "$(dirname "$rust")")")")" --data "$work/rust"
 # ENTRY=dist/main.js measures the bundle (STILLFAIL_MESH_NATIVE then says where the addon is).
-measure ts ts "$node" $NODE_ARGS "$here/${ENTRY:-src/main.ts}" run --app "$here" --port 4798 --data "$work/ts"
+measure ts ts "$node" $NODE_ARGS "$here/${ENTRY:-src/main.ts}" run --app "$here" --data "$work/ts"
 stop
