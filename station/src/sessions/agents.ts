@@ -179,10 +179,16 @@ export const AgentsLive = (control: Control) =>
         writeFileSync(join(run, "hub.json"), JSON.stringify({ pid: process.pid }) + "\n");
         if (!inWorkspace) hub.hold("unbound");
         await hub.takeUp();
-        const port = Number(config.raw()?.http?.port ?? 4750);
-        door = await openAgentsDoor(control.mcpFd !== undefined ? { fd: control.mcpFd } : { port }, mcp, (authorization, body) =>
-          notifyEndpoint(jobs, authorization, body),
-        );
+        // The launcher's socket; on its own, 4750 or the port config.json names (taken by something else: a free one,
+        // unless it was named, ports.rs).
+        const named = config.raw()?.http?.port;
+        const notified = (authorization: string | undefined, body: Buffer) => notifyEndpoint(jobs, authorization, body);
+        try {
+          door = await openAgentsDoor(control.mcpFd !== undefined ? { fd: control.mcpFd } : { port: Number(named ?? 4750) }, mcp, notified);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE" || named !== undefined) throw error;
+          door = await openAgentsDoor({ port: 0 }, mcp, notified);
+        }
         jobs.setNotifyUrl(door.url.replace(/\/mcp$/, "/jobs/notify"));
         log.info("station", "agents' door open", { url: door.url });
         if (inWorkspace) {
@@ -193,7 +199,7 @@ export const AgentsLive = (control: Control) =>
           await jobs.stopAll("the station was removed from its workspace");
         }
       };
-      yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => log.error("hub", "sessions not taken up", { error: (e as Error).message }))));
+      yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => log.error("hub", "the agents' side did not start", { error: (e as Error).message }))));
 
       // Chats idle long enough go to the archive: looked at now and every hour.
       const archiving = setInterval(() => {
