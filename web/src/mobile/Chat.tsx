@@ -14,7 +14,8 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
-import { stationBase, useStation } from "../station.tsx";
+import { scopeOf, stationBase, useStation } from "../station.tsx";
+import { StatusLine } from "../Status.tsx";
 import { PENDING } from "../lastChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
@@ -72,7 +73,13 @@ export function ChatScreen() {
     return (
       <div className={chatCss.mChat}>
         <BarFrame title="" more={false} />
-        <div className={`${css.mCenter} ${partsCss.mMuted}`}>{chat.error ? `读不到这个对话：${chat.error.message}` : null}</div>
+        {/* Read from its station meanwhile, as the wide screen's page says it (ChatPage.tsx), and what the core waits on. */}
+        <div className={`${css.mCenter} ${partsCss.mMuted}`} role="status" aria-live="polite">{chat.error ? `读不到这个对话：${chat.error.message}` : (
+          <div className={css.mLoading}>
+            <span className={css.mLoadingLine}><Spinner size={14} />{station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"}</span>
+            <StatusLine workspace={scopeOf(station.address)} />
+          </div>
+        )}</div>
       </div>
     );
   }

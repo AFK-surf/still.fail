@@ -140,6 +140,7 @@ import fail.still.android.data.Live
 import fail.still.android.data.ChatMessage
 import fail.still.android.data.Outgoing
 import fail.still.android.data.Quote
+import fail.still.android.data.StatusView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
@@ -233,6 +234,21 @@ private fun MessageTime(stamp: fail.still.android.data.Stamp?, modifier: Modifie
 }
 
 /** A chat's page, above its host's composer (ChatHost.kt), which it says what to write to. */
+/** A chat not read yet: from which station, and under it what the core has been waiting on a while, if anything. */
+@Composable
+private fun ChatReading(station: String) {
+    val app = LocalApp.current
+    val name = rememberStationName(station)
+    val status by rememberTopic<StatusView>(app.core, Topics.status(station.substringBefore('/')))
+    Column(Modifier.padding(32.dp).semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spinner(14.dp)
+            Text("正在从 $name 读取对话…", color = C.muted, fontSize = 14.sp)
+        }
+        status.value?.text?.let { Text(it, color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center) }
+    }
+}
+
 @Composable
 fun ChatScreen(station: String, of: ChatOf, host: Host) {
     val app = LocalApp.current
@@ -255,6 +271,8 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
             val error = chat.error
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (error != null) Text("读不到这个对话：${error.message}", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp))
+                // Read from its station meanwhile, as the web says it (ChatPage.tsx), and what the core waits on (`status`).
+                else ChatReading(station)
             }
         }
         return
