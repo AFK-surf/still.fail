@@ -3,6 +3,8 @@
 //! its library. Built as a plain binary so it runs on the desktop and, cross-built, on an Android device by `adb shell`.
 //!
 //! `proto-client-shell <core.js> "<station id> <ip:port>" <chats> [save chats to file]`
+//! `proto-client-shell <core.js> @<saved chats> <chats>`: no station; the shell answers from a file (a phone that
+//! cannot reach one), so only the core's own work is measured.
 //!
 //! What the core gets, as `host`: now() log(text) emit(topic, json) save(text) connect(addr) → Promise<json>
 //! request(conn, body) → Promise<body>. The network runs on the runtime's worker threads; the JS on this one.
@@ -42,6 +44,10 @@ async fn run(source: String, addr: String, chats: u32, save: Option<String>) -> 
     let runtime = AsyncRuntime::new()?;
     let context = AsyncContext::full(&runtime).await?;
     let conns: Rc<RefCell<Vec<Connection>>> = Rc::default();
+    let offline: Option<Rc<String>> = match addr.strip_prefix('@') {
+        Some(path) => Some(Rc::new(std::fs::read_to_string(path).with_context(|| format!("reading {path}"))?)),
+        None => None,
+    };
     let emitted = Rc::new(Cell::new((0usize, 0usize)));
     let result: Rc<RefCell<Option<String>>> = Rc::default();
 
@@ -63,10 +69,13 @@ async fn run(source: String, addr: String, chats: u32, save: Option<String>) -> 
                     let _ = std::fs::write(path, text);
                 }
             })?)?;
-            let (opened, endpoint) = (conns.clone(), endpoint.clone());
+            let (opened, endpoint, local) = (conns.clone(), endpoint.clone(), offline.is_some());
             host.set("connect", Function::new(ctx.clone(), Async(move |addr: String| {
                 let (opened, endpoint) = (opened.clone(), endpoint.clone());
                 async move {
+                    if local {
+                        return json!({ "id": 0 }).to_string();
+                    }
                     match tokio::spawn(connect(endpoint, addr)).await.map_err(anyhow::Error::from).and_then(|r| r) {
                         Ok(conn) => {
                             opened.borrow_mut().push(conn);
@@ -76,10 +85,14 @@ async fn run(source: String, addr: String, chats: u32, save: Option<String>) -> 
                     }
                 }
             }))?)?;
-            let opened = conns.clone();
+            let (opened, saved) = (conns.clone(), offline.clone());
             host.set("request", Function::new(ctx.clone(), Async(move |id: u32, body: String| {
                 let conn = opened.borrow().get(id as usize).cloned();
+                let saved = saved.clone();
                 async move {
+                    if let Some(saved) = saved {
+                        return if body.contains("\"chats\"") { saved.to_string() } else { json!({ "ok": true }).to_string() };
+                    }
                     let Some(conn) = conn else { return "\0no such connection".to_string() };
                     match tokio::spawn(request(conn, body)).await.map_err(anyhow::Error::from).and_then(|r| r) {
                         Ok(body) => body,
