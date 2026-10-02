@@ -13,7 +13,7 @@ export function SidebarActions({ newChat, archive, workspace, decisions = false,
   const move = useComposerMove();
   return (
     <div className={nav.navNew}>
-      <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Ling {...ICON} />{t("web-main.sidebar.newChat")}</NavLink>
+      <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Ling {...ICON} size={20} style={{ margin: -2 }} />{t("web-main.sidebar.newChat")}</NavLink>
       {showFilter && <MineFilter compact archive={archive} watching
         decisions={{ to: `${workspace}/decisions`, chats: workspace, active: decisions }} />}
     </div>

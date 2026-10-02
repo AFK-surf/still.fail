@@ -76,11 +76,11 @@ export function Home() {
         {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, only while there are some. */}
         {decisions > 0 && (
           <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
-            <Zou size={20} /><span>{decisions}</span>
+            <Zou size={24} /><span>{decisions}</span>
           </button>
         )}
         <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
-          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={20} /></button>
+          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={26} /></button>
         </div>
       </div>}
     </div>
@@ -100,7 +100,7 @@ export function Recent() {
     <>
       <div className={css.mRecentHead}>
         <b>{t("web-mobile.app.recent")}</b>
-        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={17} /></button>
+        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={22} /></button>
       </div>
       <div className={css.mRecentRows}>
         {!view ? <Note text={chats.error?.message ?? t("web-mobile.home.reading")} error={!!chats.error} />

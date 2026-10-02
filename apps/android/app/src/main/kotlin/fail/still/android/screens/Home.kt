@@ -736,7 +736,7 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
             .semantics(mergeDescendants = true) { contentDescription = t("android-chat.home.decisions", "n" to n) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        IconIn(Icons.Zou, 20.dp, C.ink)
+        IconIn(Icons.Zou, 24.dp, C.ink)
         Text("$n", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = C.ink)
     }
 }
@@ -755,6 +755,6 @@ private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Mo
             Modifier.floating(haze, CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
                 .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Ling, 20.dp, Color.White) }
+        ) { IconIn(Icons.Ling, 26.dp, Color.White) }
     }
 }
