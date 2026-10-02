@@ -2265,7 +2265,7 @@ impl Store {
     /// The session's latest turn.
     pub fn last_turn(&self, session: &str) -> Result<Option<TurnSummary>> {
         self.with(|i, _| {
-            let turn = i.db.query_row("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", [session], |r| {
+            let turn = i.db.query_row("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC, rowid DESC LIMIT 1", [session], |r| {
                 Ok(TurnSummary {
                     kind: r.get("kind")?,
                     outcome: r.get("outcome")?,

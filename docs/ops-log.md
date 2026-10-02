@@ -20,6 +20,8 @@
 ## 待部署
 
 - 安卓完成状态对勾（android-done-check）：需发 Android 包；对话列表和连接页将「做完了」显示为对勾并保留完成原因。仅视图变化，无接口、数据迁移或部署顺序要求。上线后验：完成状态分别带说明、不带说明时均显示对勾，浅色和深色正常。
+- CI 暴露同毫秒轮次排序：turns 最新记录查询增加 rowid 次序，避免极快续跑完成后读到前一轮 rate_limit 再误续跑；不改表结构，旧数据直接可读。需更新 station；固定同毫秒的回归测试和完整 station 测试通过后发布。
+
 - GitHub-hosted CI：普通检查、网页与 Android 构建迁至 AFK-surf Blacksmith Linux；station/桌面构建签名迁至组织自有 Mac runner，Studio 更新单独本地收尾。首次运行需下载工具链和冷构建缓存；检查实际 hosted workflow 成功后合并。正式 web 转正改用 scripts/promote-web.py 下载与在线 beta revision 一致的 artifact，外部 ember-promote 包装脚本同步更新；不再依赖 mini1 构建目录。
 
 - 空奏页显示今天的情况（zou-empty-page）：station 的 chat 列表行多了可选字段 `answered`（看的人最近 36 小时答过的卡片），core 的 `decisions` 视图多了可选的 `answered`/`working`/`today`；web 和安卓的空奏页读它们。station 新加一个部分索引 `entries_people_at`（IF NOT EXISTS，无迁移）。新旧混跑：旧 station 不给 `answered` 时页面只缺「今天批过的」和平均等待，正在办照常；旧客户端忽略新字段。web、station、安卓都要发。上线后验：批完所有奏后停在奏页，看到今天批了几件、平均等你多久，「今天批过的」里有刚批的那件。
