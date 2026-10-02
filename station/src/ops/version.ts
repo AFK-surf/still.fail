@@ -19,6 +19,9 @@ export function stationVersion(app: string): string | undefined {
   }
 }
 
+/// The release is the `--app` it is run with when given (a release reached through a link resolves elsewhere).
 export function version(): string {
-  return (read ??= stationVersion(appDir()) ?? "0.1.0");
+  const at = process.argv.indexOf("--app");
+  const app = at >= 0 ? process.argv[at + 1] : undefined;
+  return (read ??= (app ? stationVersion(app) : undefined) ?? stationVersion(appDir()) ?? "0.1.0");
 }

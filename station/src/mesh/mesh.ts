@@ -21,7 +21,9 @@ export const MeshLive = Layer.effectDiscard(
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
       const endpoint = yield* Effect.acquireRelease(
         Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
-        (endpoint) => Effect.promise(() => endpoint.close()),
+        // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
+        // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
+        (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
       );
       log.info("mesh", "mesh listening", { station: endpoint.id(), workspace: cloud.state.state!.workspace_name, sockets: endpoint.sockets() });
       yield* Effect.forkScoped(keepRelays(endpoint));
