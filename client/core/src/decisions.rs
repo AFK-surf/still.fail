@@ -13,9 +13,6 @@
 use serde_json::{Map, Value, json};
 use stillfail_i18n::t;
 
-/// How much of a card's first line its line shows.
-const LINE_CHARS: usize = 40;
-
 /// Where a deferral is kept in the prefs (`decisionsDeferred`): the card's station, chat (thread) and post (seq).
 pub fn deferral_key(station: &str, thread: u64, seq: u64) -> String {
     format!("{station}\t{thread}\t{seq}")
@@ -129,21 +126,15 @@ pub fn label_assignee(card: &mut Value, me: &Value, members: &[Value], creator: 
     card["assigneeText"] = json!(text);
 }
 
-/// A card's line: 奏 · its post's first line, without mentions or markup, cut to about 40 characters.
+/// A card's line: 奏 · its post's first line, without mentions or markup, whole: where it is shown cuts it to its
+/// width.
 pub fn line(text: &str) -> String {
-    let cut = first_line(text);
-    if cut.is_empty() { t!("core-logic.decisions.line.empty") } else { t!("core-logic.decisions.line", text = cut) }
+    let first = first_line(text);
+    if first.is_empty() { t!("core-logic.decisions.line.empty") } else { t!("core-logic.decisions.line", text = first) }
 }
 
-/// A card's post's first line, as its line shows it.
+/// A post's first line, without mentions or markup.
 fn first_line(text: &str) -> String {
-    let clean = whole_first_line(text);
-    let cut: String = clean.chars().take(LINE_CHARS).collect();
-    if clean.chars().count() > LINE_CHARS { format!("{}…", cut.trim_end()) } else { cut }
-}
-
-/// A post's first line, without mentions or markup, uncut.
-fn whole_first_line(text: &str) -> String {
     let first = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
     let clean = crate::format::clean_text(first).replace("**", "").replace("__", "").replace('`', "");
     clean.trim_start_matches(['#', '>', '-', '*', ' ']).trim().to_string()
@@ -159,20 +150,20 @@ pub fn asks(row: &Value, seq: u64, text: &str) -> String {
         .filter(|a| crate::present::state_about(a, thread).is_none_or(|about| about == seq))
         .find_map(|a| a.get("lastTurn")?.get("need")?.as_str().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string));
     need.unwrap_or_else(|| {
-        let first = whole_first_line(text);
+        let first = first_line(text);
         if first.is_empty() { line(text) } else { first }
     })
 }
 
 /// What a card asks, for a list: its post's first line, as its line has it, without 奏 · .
 pub fn question(text: &str) -> String {
-    let cut = first_line(text);
-    if cut.is_empty() { line(text) } else { cut }
+    let first = first_line(text);
+    if first.is_empty() { line(text) } else { first }
 }
 
 /// How the viewer answered a card (a row's `answered`, the station's): the option they picked (their words are an
 /// option's label, quoting the post), the one a choice that closed it was (its only option that closes), else what
-/// they wrote, cut short.
+/// the first line of what they wrote (whole: the list cuts it to its width).
 pub fn answer_text(a: &Value) -> String {
     let card = &a["card"];
     let labels = || card.get("options").and_then(Value::as_array).into_iter().flatten();
@@ -190,10 +181,7 @@ pub fn answer_text(a: &Value) -> String {
         return t!("core-logic.decisions.answer.chose", label = label.trim());
     }
     let first = crate::format::clean_text(reply.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""));
-    let cut: String = first.chars().take(LINE_CHARS / 2).collect();
-    if cut.is_empty() { t!("core-logic.decisions.answer.replied") }
-    else if first.chars().count() > LINE_CHARS / 2 { t!("core-logic.decisions.answer.reply", text = format!("{}…", cut.trim_end())) }
-    else { t!("core-logic.decisions.answer.reply", text = cut) }
+    if first.is_empty() { t!("core-logic.decisions.answer.replied") } else { t!("core-logic.decisions.answer.reply", text = first) }
 }
 
 /// The 奏 page's day, as the viewer's clock has it: of the cards answered lately (`answered`), only today's, each
@@ -537,11 +525,11 @@ mod tests {
     }
 
     #[test]
-    fn a_cards_line_is_its_first_line_cut_short() {
+    fn a_cards_line_is_its_whole_first_line() {
         assert_eq!(line("**「共」改成按今天累计吗？**\n细节"), "奏 · 「共」改成按今天累计吗？");
         assert_eq!(line("\n\n## 选哪个"), "奏 · 选哪个");
         let long = "字".repeat(50);
-        assert_eq!(line(&long), format!("奏 · {}…", "字".repeat(40)));
+        assert_eq!(line(&long), format!("奏 · {long}"), "cut where it is shown, to its width");
         assert_eq!(line(""), "奏");
     }
 
