@@ -2355,6 +2355,9 @@ data class PrefsView (
 	val onlyMine: Boolean? = null,
 	/// The chat list shows only the watching chats (监控中); never with `only_mine`.
 	val onlyWatching: Boolean? = null,
+	/// The wide screen's sidebar shows the decisions waiting for the viewer (奏) in place of the chats; never with
+	/// `only_mine` or `only_watching`.
+	val onlyDecisions: Boolean? = null,
 	val appearance: Appearance? = null,
 	val rowPicture: RowPictureSetting? = null,
 	/// Times are shown as dates rather than "3 分钟前".
