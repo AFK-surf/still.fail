@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 安卓决策按钮动效（android-decision-feedback）：需随 Android 包发布；仅视图变化，无 core/API、数据迁移或 station 顺序要求。选项按压缩小回弹，回答后沿用 chat list 归档的整块缩小淡出和延迟弹簧补位；深浅主题录屏已获确认。上线后在聊天里点击普通及静默结束选项，确认反馈、退场和重复点击保护；系统关闭动画时直接完成。
+
 - 新对话常用搭配（new-chat-combos）：发布 web（含 wasm core）和 Android，桌面随 web 更新；无需更新 station。沿用本地 choice 表，按设备和 workspace 记录更新后创建的新对话组合，最多显示 4 个，仅保留当前 station 可运行的模型/深度。NewChatView.frequent 可选，新旧页面/core 混跑兼容。上线后分别用两组模型/深度开新对话，再返回新对话页，确认常用项、点选同步和重启后保留；切 workspace 不串记录。
 - 安卓下载最新更新（fix-latest-update-download）：需发布 Android（含新版 core）；点击更新先强制检查当前渠道的最新版本，检查失败不回退到缓存版本。沿用 app.update 的 now 参数，无 station/cloud 接口或数据迁移，无部署顺序要求；旧安卓仍保留原行为。上线后验：旧更新提示出现后再发布新版，点更新应下载新发布的版本；断网时提示失败，恢复网络后可重试。
 
