@@ -193,8 +193,8 @@ pub fn working_line(row: &Value) -> Option<String> {
     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
     let at_work = agents.iter().any(|a| matches!(shown_status(a), "queued") || (shown_status(a) == "running" && waiting(a).is_null()));
     if at_work {
-        let last = crate::format::clean_text(row.get("last").and_then(|l| l.get("text")).and_then(Value::as_str).unwrap_or(""));
-        let last = last.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").to_string();
+        let text = row.get("last").and_then(|l| l.get("text")).and_then(Value::as_str).unwrap_or("");
+        let last = crate::format::clean_text(text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""));
         return Some(if last.is_empty() { "在做".to_string() } else { format!("在做 · {last}") });
     }
     agents.iter().map(waiting).find(|w| !w.is_null()).and_then(|w| w.get("text").and_then(Value::as_str).map(str::to_string))
