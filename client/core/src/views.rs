@@ -1850,7 +1850,7 @@ mod tests {
         let mut presentations = Vec::new();
         for kind in ["ember", "stillfail"] {
             let mut message = json!({ "authorKind": kind, "author": kind, "text": "notice" });
-            shown_message(&mut message, &[], &Value::Null, &[], &[], &[]);
+            shown_message(&mut message, &[], &Value::Null, &[], &[], &[], None);
             assert_eq!(message["system"], true);
             assert_eq!(message["mine"], false);
             presentations.push(message["by"].clone());
@@ -2215,8 +2215,10 @@ mod tests {
             let t = setup();
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Decisions { workspace: "ws".into() });
+            t.read(&mut ui, 1).await;
             t.set(workspace(), one_station());
             t.set(Topic::Prefs, json!({}));
+            t.read(&mut ui, 1).await;
             t.set(link("ws/st"), json!({"state": "online"}));
             let now = t.host.now_ms();
             let me = json!({ "id": "me@x.com", "name": "我", "email": "me@x.com", "via": "cloud" });
