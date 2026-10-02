@@ -1,5 +1,5 @@
 import { Archive, Edit, Pin, Unplug } from "./icons.tsx";
-import { stationBase, useChatFilter, type ChatFilter } from "./station.tsx";
+import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
@@ -24,7 +24,7 @@ import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as decisionsCss from "./Decisions.css.ts";
-import { openedAt } from "./DecisionDesk.tsx";
+import { DecisionRows, openedAt, openedRecently } from "./DecisionDesk.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
@@ -32,17 +32,26 @@ import { t } from "./i18n.ts";
 /**
  * The chats of a workspace, newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
- * ones the viewer started, with `newChat` above them and the way to the `archive` in the filter's menu beside it. With no station its empty
- * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
+ * ones the viewer started or the watching ones, or in their place the decisions waiting for the viewer (奏,
+ * DecisionRows: picked, one shows on `decisions`), with `newChat` above them and the way to the `archive` in the
+ * filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
+ * added: nothing is appended to it).
  */
-export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
-  const [filter] = useChatFilter();
+export function ChatList({ scope, newChat, stationsPage, archive, decisions }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string }) {
+  const [mode] = useSidebarMode();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
   // The lists are followed at once, side by side: switching slides from one to another with nothing to wait for.
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
   const watching = useChats(scope, false, true);
+  // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
+  const was = useRef(mode);
+  const instant = useRef(false);
+  if (was.current !== mode) {
+    instant.current = mode === "decisions" && openedRecently();
+    was.current = mode;
+  }
   // The page it was going to is there (or another took its place).
   const path = useLocation().pathname;
   useEffect(() => setGoing(null), [path]);
@@ -51,10 +60,11 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
       <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
         showFilter={!(all.value && !all.value.loading && all.value.stations.length === 0)} />
       <div className={nav.navSlider}>
-        <div className={nav.navTrack} data-filter={filter}>
-          <ChatPane chats={all} scope={scope} filter="all" stationsPage={stationsPage} hidden={filter !== "all"} />
-          <ChatPane chats={mine} scope={scope} filter="mine" stationsPage={stationsPage} hidden={filter !== "mine"} />
-          <ChatPane chats={watching} scope={scope} filter="watching" stationsPage={stationsPage} hidden={filter !== "watching"} />
+        <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined}>
+          <ChatPane chats={all} scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
+          <ChatPane chats={mine} scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
+          <ChatPane chats={watching} scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
+          <DecisionRows active={mode === "decisions"} page={decisions} />
         </div>
       </div>
     </>

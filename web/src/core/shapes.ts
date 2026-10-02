@@ -2346,6 +2346,11 @@ export interface PrefsView {
 	onlyMine?: boolean;
 	/** The chat list shows only the watching chats (监控中); never with `only_mine`. */
 	onlyWatching?: boolean;
+	/**
+	 * The wide screen's sidebar shows the decisions waiting for the viewer (奏) in place of the chats; never with
+	 * `only_mine` or `only_watching`.
+	 */
+	onlyDecisions?: boolean;
 	appearance?: Appearance;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */

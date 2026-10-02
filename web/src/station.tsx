@@ -59,9 +59,17 @@ export function useOnlyMine(): [boolean, (value: boolean) => void] {
 export type ChatFilter = "all" | "mine" | "watching";
 
 export function useChatFilter(): [ChatFilter, (value: ChatFilter) => void] {
+  const [mode, setMode] = useSidebarMode();
+  return [mode === "decisions" ? "all" : mode, setMode];
+}
+
+/** What the wide screen's sidebar shows: one of the chat lists, or the decisions waiting for the viewer (奏). */
+export type SidebarMode = ChatFilter | "decisions";
+
+export function useSidebarMode(): [SidebarMode, (value: SidebarMode) => void] {
   const prefs = usePrefs();
-  const filter: ChatFilter = prefs.onlyWatching ? "watching" : prefs.onlyMine ? "mine" : "all";
-  return [filter, (value) => setPrefs({ onlyMine: value === "mine", onlyWatching: value === "watching" })];
+  const mode: SidebarMode = prefs.onlyDecisions ? "decisions" : prefs.onlyWatching ? "watching" : prefs.onlyMine ? "mine" : "all";
+  return [mode, (value) => setPrefs({ onlyMine: value === "mine", onlyWatching: value === "watching", onlyDecisions: value === "decisions" })];
 }
 
 /** People by email, from still.fail cloud's member list. */

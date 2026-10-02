@@ -3,10 +3,10 @@ import { useAppearance } from "./theme.ts";
 import { useRef, type ComponentProps, type ReactNode } from "react";
 import type { Level, PersonShown, Quota } from "./api.ts";
 import type { Meter } from "./core/shapes.ts";
-import { useChatFilter, useOnlyMine, type ChatFilter } from "./station.tsx";
+import { useOnlyMine, useSidebarMode, type SidebarMode } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { Archive, Check, Filter } from "./icons.tsx";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { DropdownMenu } from "radix-ui";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -21,26 +21,32 @@ import { t } from "./i18n.ts";
  * beside it. `archive`: the archive's page, the menu's last item under a line. Its words are the chats' with `watching`,
  * else the connects' (`label` and `mine`, which named them, are no longer read).
  */
-export function MineFilter({ compact, archive, watching, decisions }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean; decisions?: { to: string; chats: string; active?: boolean } }) {
+export function MineFilter({ compact, archive, watching, decisions }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean; decisions?: { to: string; chats: string } }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
-  const [chatFilter, setChatFilter] = useChatFilter();
-  // Chats: one of three (the core keeps 我参与的 and 监控中 apart); connects: all or mine.
-  const filter: ChatFilter = watching ? chatFilter : onlyMine ? "mine" : "all";
-  const setFilter = (value: ChatFilter) => watching ? setChatFilter(value) : setOnlyMine(value === "mine");
+  const [mode, setMode] = useSidebarMode();
+  // Chats: one of three (the core keeps 我参与的 and 监控中 apart), or 奏 in their place; connects: all or mine.
+  const filter: SidebarMode = watching ? (decisions || mode !== "decisions" ? mode : "all") : onlyMine ? "mine" : "all";
+  const setFilter = (value: SidebarMode) => watching ? setMode(value) : setOnlyMine(value === "mine");
   const of = watching ? "chats" : "connects";
   const mine = t(`web-main.filter.${of}.mine`);
-  const named = decisions?.active ? t("web-main.decisions.title") : filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
+  const named = filter === "decisions" ? t("web-main.decisions.title") : filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
   const navigate = useNavigate();
+  // On the 奏 page, a list of chats in its place goes back to the chats.
+  const onDecisions = useLocation().pathname === decisions?.to;
   // Gone to the archive, the focus is not brought back to the button (it would be ringed there, over the page left).
   const leaving = useRef(false);
-  const item = (value: ChatFilter, text: string) => (
-    <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { setFilter(value); if (decisions?.active) { leaving.current = true; navigate(decisions.chats); } }}>
-      <span className={chatCss.chooserCheck}>{!decisions?.active && filter === value && <Check size={14} />}</span>{text}
+  const item = (value: SidebarMode, text: string) => (
+    <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => {
+      setFilter(value);
+      if (value === "decisions" && decisions && !onDecisions) { leaving.current = true; navigate(decisions.to); }
+      else if (value !== "decisions" && decisions && onDecisions) { leaving.current = true; navigate(decisions.chats); }
+    }}>
+      <span className={chatCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
     </DropdownMenu.Item>
   );
   return (
     <DropdownMenu.Root modal={false}>
-      <Tip label={t(`web-main.filter.${of}`)}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={t(`web-main.filter.${of}.named`, { named })} data-on={decisions?.active || filter !== "all" || undefined}>
+      <Tip label={t(`web-main.filter.${of}`)}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={t(`web-main.filter.${of}.named`, { named })} data-on={filter !== "all" || undefined}>
         <Filter size={16} strokeWidth={1.8} />{!compact && <span>{named}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
@@ -49,9 +55,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
           {item("all", t(`web-main.filter.${of}.all`))}
           {item("mine", mine)}
           {watching && item("watching", t("web-main.filter.watching"))}
-          {decisions && <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(decisions.to); }}>
-            <span className={chatCss.chooserCheck}>{decisions.active && <Check size={14} />}</span>{t("web-main.decisions.title")}
-          </DropdownMenu.Item>}
+          {decisions && item("decisions", t("web-main.decisions.title"))}
           {archive && <>
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(archive); }}>

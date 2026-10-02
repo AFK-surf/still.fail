@@ -1768,6 +1768,10 @@ pub struct PrefsView {
     /// The chat list shows only the watching chats (监控中); never with `only_mine`.
     #[serde(default)]
     pub only_watching: bool,
+    /// The wide screen's sidebar shows the decisions waiting for the viewer (奏) in place of the chats; never with
+    /// `only_mine` or `only_watching`.
+    #[serde(default)]
+    pub only_decisions: bool,
     #[serde(default)]
     pub appearance: Appearance,
     #[serde(default)]

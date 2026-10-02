@@ -45,19 +45,22 @@ export const brandCompact = style({ height: 48, padding: "0 16px" });
 
 // Positioned: the rows moving in it are placed by their offsets in it (listMotion.ts).
 export const navScroll = style({ position: "relative", flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 8px 12px" });
-/** 全部 and 我参与的 side by side on one track; the switch slides it, as its thumb slides. */
+/** 全部, 我参与的, 监控中 and 奏 side by side on one track; switching slides it from one to another. */
 export const navSlider = style({ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" });
 export const navTrack = style({
-  flex: "none", width: "300%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
+  flex: "none", width: "400%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
   selectors: {
-    "&[data-filter=mine]": { transform: "translateX(calc(-100% / 3))" },
-    "&[data-filter=watching]": { transform: "translateX(calc(-200% / 3))" },
+    "&[data-filter=mine]": { transform: "translateX(-25%)" },
+    "&[data-filter=watching]": { transform: "translateX(-50%)" },
+    "&[data-filter=decisions]": { transform: "translateX(-75%)" },
+    // To 奏 from its row in the sidebar's foot: its rows come out of that row instead (DecisionDesk.tsx).
+    "&[data-instant]": { transition: "none" },
   },
   "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 // Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
-// row (the time shown on hover) lays out every row of both lists again, a frame dropped per row passed while scrolling.
-globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "calc(100% / 3)", contain: "strict" });
+// row (the time shown on hover) lays out every row of all the lists again, a frame dropped per row passed while scrolling.
+globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "25%", contain: "strict" });
 
 export const navFoot = style({ padding: 8, borderTop: `1px solid ${vars.line}` });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });

@@ -883,6 +883,15 @@ fn prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over() {
         host.settle().await;
         apply(&host, &mut values);
         assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["onlyWatching"].clone()), (json!(true), json!(false)));
+        // 奏 in the sidebar lets go of both.
+        set(22, json!({ "onlyDecisions": true }));
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!((values[&1]["onlyMine"].clone(), values[&1]["onlyWatching"].clone(), values[&1]["onlyDecisions"].clone()), (json!(false), json!(false), json!(true)));
+        set(23, json!({ "onlyWatching": true }));
+        host.settle().await;
+        apply(&host, &mut values);
+        assert_eq!((values[&1]["onlyWatching"].clone(), values[&1]["onlyDecisions"].clone()), (json!(true), json!(false)));
         // A map by entry: one gone, the other kept.
         set(3, json!({ "lastChat": { "ws": null } }));
         // What a device kept before, moved in: only what is not chosen here yet.

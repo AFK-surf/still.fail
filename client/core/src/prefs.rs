@@ -1,5 +1,5 @@
 //! What this device keeps of how its person likes it (the `prefs` topic): the lists' 只看我的 (the chat list's 监控中,
-//! one or the other), the appearance, whose
+//! the wide screen's 奏: one of them), the appearance, whose
 //! pictures led a row (no longer read; clients from before still set it), times as dates, keys changed, the workspace
 //! and the chat last open (each workspace's, as `client.focus` says: `openChat`), each chat's history tabs, a new connect to go on with, the invite code carried through
 //! signing in. One record in the data center (data.rs, table `prefs`), written by `prefs.set`. With it, what the device
@@ -13,7 +13,7 @@ use crate::error::{CoreError, Result};
 use crate::protocol::Topic;
 
 /// The fields `prefs.set` takes; the rest of a patch is refused.
-const FIELDS: &[&str] = &["onlyMine", "onlyWatching", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
+const FIELDS: &[&str] = &["onlyMine", "onlyWatching", "onlyDecisions", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
 /// Fields that are maps: a patch changes them entry by entry.
 const MAPS: &[&str] = &["keys", "lastChat", "chatTabs", "resume"];
 /// How many chats keep their tabs: the latest used.
@@ -63,14 +63,12 @@ pub fn set(data: &Data, patch: Value, fill: bool, now: f64) -> Result<()> {
                 prefs.remove(&field);
             }
             value => {
-                // The chat list shows one: 我参与的 or 监控中, not both.
-                let other = match field.as_str() {
-                    "onlyMine" => Some("onlyWatching"),
-                    "onlyWatching" => Some("onlyMine"),
-                    _ => None,
-                };
-                if let Some(other) = other.filter(|_| value == Value::Bool(true) && !fill) {
-                    prefs.remove(other);
+                // The sidebar shows one: 我参与的, 监控中 or 奏, never two.
+                const ONE_OF: &[&str] = &["onlyMine", "onlyWatching", "onlyDecisions"];
+                if ONE_OF.contains(&field.as_str()) && value == Value::Bool(true) && !fill {
+                    for other in ONE_OF.iter().filter(|o| **o != field) {
+                        prefs.remove(*other);
+                    }
                 }
                 prefs.insert(field, value);
             }
