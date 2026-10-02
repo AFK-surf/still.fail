@@ -7,7 +7,7 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
-import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Read, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Chart, Check, Info, Key, LogOut, Monitor, Plug, Plus, Read, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate, useSearchParams } from "react-router";
 import { useStations, type Profile, type StationView } from "../api.ts";
@@ -21,8 +21,8 @@ import { StationList } from "./StationCards.tsx";
 import { MemoryView } from "../Memory.tsx";
 import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
-import { useTopic } from "../core/react.ts";
-import { failure, useToast } from "../toast.tsx";
+import { useCall, useTopic } from "../core/react.ts";
+import { failure, useAct, useToast } from "../toast.tsx";
 import { About, BackLink, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
 import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
@@ -645,9 +645,12 @@ export function AutomaticDecisionsSettings({entry}:{entry:WorkspaceEntry}) {
 
 export function AutomaticDecisionCompletionSettings({entry}:{entry:WorkspaceEntry}) {
   const navigate=useNavigate();
+  const call=useCall(); const act=useAct();
+  const stations=useStations(entry.id).value;
   const base=`/w/${entry.id}/settings/automatic-decisions`;
+  const refresh=()=>Promise.all((stations??[]).filter(s=>s.online).map(s=>act(call("automaticDecisions.refresh",{station:s.station}),t("web-pages.automaticDecisions.refreshAction"),t("web-pages.automaticDecisions.refreshed"))));
   return <Page title={t("web-pages.automaticDecisions.completion")} lead={t("web-pages.automaticDecisions.completionNote")} back={base} backLabel={t("web-pages.automaticDecisions.title")}
-    actions={<IconButton label={t("web-pages.automaticDecisions.logs")} icon={Read} onClick={()=>navigate(`${base}/completion/logs`)} />}>
+    actions={<><Button variant="ghost" icon={Refresh} onClick={refresh}>{t("web-pages.automaticDecisions.refresh")}</Button><Button variant="ghost" icon={Read} onClick={()=>navigate(`${base}/completion/logs`)}>{t("web-pages.automaticDecisions.logs")}</Button></>}>
     <AutomaticDecisionCompletion workspace={entry.id} />
   </Page>;
 }

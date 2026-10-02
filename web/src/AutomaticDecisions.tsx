@@ -6,19 +6,22 @@ import { useCall, useTopic } from "./core/react.ts";
 import type { AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
 import { useAct } from "./toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { Button, IconButton, Section, StatusDot, Switch, Time } from "./ui.tsx";
+import { Button, Section, StatusDot, Switch, Time } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import type { Picking } from "./pick.ts";
-import { ChevronRight, Refresh } from "./icons.tsx";
+import { ChevronRight } from "./icons.tsx";
 import { stationBase } from "./station.tsx";
 import * as pages from "./styles/pages.css.ts";
 import * as css from "./AutomaticDecisions.css.ts";
 
 /** Start with the decision point; each point opens the stations that configure it. */
 export function AutomaticDecisions({ workspace }: { workspace: string }) {
+  const stations = useStations(workspace).value;
+  const on = stations?.filter(s => s.overview?.automaticDecisions?.settings.completion?.enabled).length ?? 0;
   return <div className={css.content}><ul className={pages.list}><li>
     <Link className={pages.listRow} to={`/w/${workspace}/settings/automatic-decisions/completion`}>
       <span className={pages.listRowText}><span className={pages.listRowTitle}>{t("web-pages.automaticDecisions.completion")}</span><span className={css.note}>{t("web-pages.automaticDecisions.completionNote")}</span></span>
+      {stations && <span className={css.note}>{on ? t("web-pages.automaticDecisions.stationsOn", {n: on}) : t("web-pages.automaticDecisions.off")}</span>}
       <ChevronRight size={16} className={css.note} />
     </Link>
   </li></ul></div>;
@@ -29,9 +32,9 @@ export function AutomaticDecisionCompletion({ workspace }: { workspace: string }
   return <div className={css.content}>
     {!stations.value && <p className={css.note}>{stations.error?.message ?? t("web-pages.automaticDecisions.reading")}</p>}
     {stations.value?.length === 0 && <p className={css.note}>{t("web-pages.automaticDecisions.addStation")}</p>}
-    {stations.value?.map(s => s.online && s.overview?.automaticDecisions
+    <ul className={pages.list}>{stations.value?.map(s => s.online && s.overview?.automaticDecisions
       ? <AutomaticDecisionPanel key={s.station} station={s.station} name={s.name} view={s.overview.automaticDecisions} />
-      : <Section key={s.station} title={s.name}><p className={css.note}>{!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("web-pages.automaticDecisions.connecting") : t("web-pages.automaticDecisions.upgrade")}</p></Section>)}
+      : <li key={s.station} className={pages.listRow}><StatusDot state={s.online ? "online" : "offline"} /><span className={pages.listRowText}><span className={pages.listRowTitle}>{s.name}</span><span className={css.note}>{!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("web-pages.automaticDecisions.connecting") : t("web-pages.automaticDecisions.upgrade")}</span></span></li>)}</ul>
   </div>;
 }
 
@@ -63,23 +66,29 @@ function DecisionRecords({station,view}:{station:string;view:AutomaticDecisionVi
   </ul>;
 }
 function AutomaticDecisionPanel({ station, name, view }: { station: string; name: string; view: AutomaticDecisionView }) {
-  const {d, state, saving, refreshing, saveFailed, refreshFailed, edit, save, refresh} = useAutomaticDecisionForm(station, view);
-  if (!view.canEdit) return <Section title={name}><p className={css.note}>{t("web-pages.automaticDecisions.adminOnly")}</p></Section>;
-  if (!d) return <Section title={name}><p className={css.note}>{state.error?.message ?? t("web-pages.automaticDecisions.readingConfig")}</p></Section>;
+  const {d, state, saving, saveFailed, edit, save} = useAutomaticDecisionForm(station, view);
+  const status = (text: string) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}>{name}</span><span className={css.note}>{text}</span></span></li>;
+  if (!view.canEdit) return status(t("web-pages.automaticDecisions.adminOnly"));
+  if (!d) return status(state.error?.message ?? t("web-pages.automaticDecisions.readingConfig"));
   const busy = d.pending || saving;
   const chosen = view.models.find(m => m.id === d.model);
-  return <Section title={<span className={css.tools}><StatusDot state="online" label={t("web-pages.automaticDecisions.online")} />{name}</span>} actions={<>
-    {d.pick ? <ModelTriple modelOnly pick={{view:d.pick, saving:busy,
-      set: patch => edit(patch.open ? {pickOpen:true} : {pickModel:patch.model}),
-      save: async () => {await edit({pickConfirm:true});return {saved:true};},
-    } satisfies Picking} onConfirm={() => edit({pickConfirm:true})} />
-      : <span className={css.note}>{chosen?.name ?? t("web-pages.automaticDecisions.noModels")}</span>}
-    <Switch id={`decision-${station}`} label={t("web-pages.automaticDecisions.enableOn",{station:name})} checked={d.enabled} disabled={busy} onChange={enabled => edit({enabled})} />
-    <IconButton label={t("web-pages.automaticDecisions.refresh")} icon={Refresh} busy={refreshing} failed={refreshFailed} onClick={refresh} />
-    {d.dirty && <Button variant="primary" busy={saving} disabled={busy} onClick={save}>{t("web-pages.automaticDecisions.save")}</Button>}
-  </>}>
+  return <li>
+    <div className={pages.listRow}>
+      <StatusDot state="online" label={t("web-pages.automaticDecisions.online")} />
+      <span className={pages.listRowText}>
+        <span className={pages.listRowTitle}>{name}</span>
+        <span className={css.note}>{d.enabled ? t("web-pages.automaticDecisions.enabledWith", {model: chosen?.name ?? t("web-pages.automaticDecisions.noModels")}) : t("web-pages.automaticDecisions.disabled")}</span>
+      </span>
+      {d.pick ? <ModelTriple modelOnly pick={{view:d.pick, saving:busy,
+        set: patch => edit(patch.open ? {pickOpen:true} : {pickModel:patch.model}),
+        save: async () => {await edit({pickConfirm:true});return {saved:true};},
+      } satisfies Picking} onConfirm={() => edit({pickConfirm:true})} />
+        : <span className={css.note}>{chosen?.name ?? t("web-pages.automaticDecisions.noModels")}</span>}
+      <Switch id={`decision-${station}`} label={t("web-pages.automaticDecisions.enableOn",{station:name})} checked={d.enabled} disabled={busy} onChange={enabled => edit({enabled})} />
+      {d.dirty && <Button variant="primary" busy={saving} disabled={busy} onClick={save}>{t("web-pages.automaticDecisions.save")}</Button>}
+    </div>
     {saveFailed && <p className={css.error} role="alert">{saveFailed}</p>}
-  </Section>;
+  </li>;
 }
 
 /** Both layouts render the same core-owned draft and named actions. */
