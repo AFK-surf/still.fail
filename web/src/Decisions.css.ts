@@ -4,9 +4,10 @@ import { vars } from "./styles/tokens.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
-// page. One per line, as wide as the message's column; the recommended one last, in ink. The phone's page colours
+// page. One per line, as wide as the message's column; the recommended one last, in the accent. The phone's page colours
 // (`--m-*`) where they are set, the wide screen's otherwise.
 const ground = `var(--m-bg, ${vars.canvas})`;
+const accent = `var(--m-accent, ${vars.accent})`;
 const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
 
 export const options = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "6px", marginTop: "6px" });
@@ -20,7 +21,7 @@ export const option = style({
   transition: `filter ${vars.dur}, opacity ${vars.dur}`,
   selectors: {
     "&:hover:not(:disabled)": { filter: "brightness(.96)" },
-    "&[data-recommended]": { background: vars.text, color: ground },
+    "&[data-recommended]": { background: accent, color: "#fff" },
     "&[data-recommended]:hover:not(:disabled)": { filter: "none", opacity: ".88" },
     "&:disabled": { cursor: "default" },
     // Another one of them is being sent: the rest step back.
@@ -33,7 +34,7 @@ export const optionLabel = style({
 });
 export const optionDetail = style({
   fontSize: vars.textXs, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere",
-  selectors: { [`${option}[data-recommended] &`]: { color: `color-mix(in srgb, ${ground} 72%, transparent)` } },
+  selectors: { [`${option}[data-recommended] &`]: { color: "rgba(255, 255, 255, .78)" } },
 });
 /** Being sent: a small ring at the button's right. */
 export const optionSpinner = style({ position: "absolute", right: "14px", top: "12px" });

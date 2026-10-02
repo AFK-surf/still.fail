@@ -863,7 +863,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
 
 /**
  * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the
- * message, in ink as a decision's recommended option is. Turns while the archive is under way (doing.ts).
+ * message, in the accent as a decision's recommended option is. Turns while the archive is under way (doing.ts).
  */
 function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () => void }) {
   const station = useStation().address;

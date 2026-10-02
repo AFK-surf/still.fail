@@ -35,6 +35,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -124,7 +125,7 @@ import kotlinx.coroutines.launch
 
 /**
  * A decision's options, one per line, full width: the label (medium) and its detail under it, small and quiet; the
- * recommended one (last, as the core orders them) filled in ink with the page's colour for its words, the others in the
+ * recommended one (last, as the core orders them) filled in the accent with white words, the others in the
  * chip colour. `busy`: the label of the one being sent (a spinner on it, none pressed meanwhile).
  */
 @Composable
@@ -133,7 +134,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { o ->
             val strong = o.recommended == true
-            val ink = if (strong) C.bg else C.ink
+            val ink = if (strong) Color.White else C.ink
             val free = enabled && busy == null
             val touch = remember(o.label) { MutableInteractionSource() }
             val pressed by touch.collectIsPressedAsState()
@@ -143,7 +144,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
             )
             Row(
                 Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
-                    .clip(RoundedCornerShape(12.dp)).background(if (strong) C.ink else C.chip)
+                    .clip(RoundedCornerShape(12.dp)).background(if (strong) C.accent else C.chip)
                     .alpha(if (enabled) 1f else 0.5f)
                     .clickable(enabled = free, interactionSource = touch, indication = ripple(color = ink)) { onPick(o) }
                     .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -152,7 +153,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(o.label, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = ink)
-                    o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = if (strong) C.bg.copy(alpha = 0.7f) else C.muted) }
+                    o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = if (strong) Color.White.copy(alpha = 0.78f) else C.muted) }
                 }
                 if (busy == o.label || failed != null) DoingMark(busy == o.label, failed, 14.dp)
             }
