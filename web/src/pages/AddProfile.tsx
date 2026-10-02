@@ -28,7 +28,7 @@ export function AddProfile({ workspace }: { workspace: string }) {
   const stations = useStations(workspace).value;
   const [params, setParams] = useSearchParams();
   const online = (stations ?? []).filter((s) => s.online);
-  if (!stations) return <div className={pagesCss.page}><Loading label={t("web-pages.settings.reading")} /></div>;
+  if (!stations) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Loading label={t("web-pages.settings.reading")} /></div>;
   const chosen = online.find((s) => s.station === params.get("station")) ?? online[0];
   if (!chosen) return <Navigate to={`/w/${workspace}/settings/profiles`} replace />;
   const station = { id: chosen.id, name: chosen.name, online: chosen.online, address: chosen.station, base: stationBase(chosen.station), settings: `/w/${workspace}/settings` };
@@ -84,10 +84,10 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
 
   const added = () => { toast(t("web-pages.profiles.verifiedAdded")); navigate(list); };
 
-  if (!d) return <div className={pagesCss.page}><Loading label={t("web-pages.settings.reading")} /></div>;
+  if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Loading label={t("web-pages.settings.reading")} /></div>;
   const picking = d.step === "pick";
   return (
-    <div className={pagesCss.page}>
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       {picking ? <BackLink to={list} label="Profile" /> : <BackLink to={here()} label={t("web-pages.addProfile.pick")} />}
       <header className={pagesCss.pageHead}>
         <div>
@@ -104,7 +104,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
               </Field>
             </div>
           )}
-          <MachineLoginOffers logins={overview.value?.machineLogins} onAdd={(c) => navigate(addProfilePath(workspace, address, c === "claude-sub" ? "anthropic" : "openai", "plan"))} />
+          <div className={css.offers}><MachineLoginOffers logins={overview.value?.machineLogins} onAdd={(c) => navigate(addProfilePath(workspace, address, c === "claude-sub" ? "anthropic" : "openai", "plan"))} /></div>
           {d.groups.map((g) => (
             <section key={g.id} className={css.group} aria-label={g.title}>
               <h3 className={css.groupHead}>{g.title}</h3>

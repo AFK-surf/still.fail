@@ -616,7 +616,7 @@ export function NewProfileScreen() {
   const job = pending?.job ?? null;
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={d && d.step !== "pick" ? t("web-mobile.profiles.pick") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      <NavBar back={d && d.step !== "pick" ? t("common.back") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {!d ? <Loading text={t("web-mobile.profiles.loading")} /> : d.step === "pick" ? (
           <>
