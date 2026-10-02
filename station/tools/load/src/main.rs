@@ -152,30 +152,41 @@ async fn load(conn: Connection, seconds: Duration, concurrency: usize, paths: Ve
         workers.push(tokio::spawn(async move {
             let mut took = Vec::new();
             let mut failed = 0usize;
+            let mut why: Option<String> = None;
             let mut i = w;
             while Instant::now() < until {
                 let started = Instant::now();
-                match request(&conn, &paths[i % paths.len()]).await {
+                let path = &paths[i % paths.len()];
+                match request(&conn, path).await {
                     Ok((head, _)) if head["status"] == 200 => took.push(started.elapsed().as_secs_f64() * 1000.0),
-                    _ => failed += 1,
+                    Ok((head, body)) => {
+                        failed += 1;
+                        why.get_or_insert_with(|| format!("{path}: {head} {}", String::from_utf8_lossy(&body)));
+                    }
+                    Err(error) => {
+                        failed += 1;
+                        why.get_or_insert_with(|| format!("{path}: {error:#}"));
+                    }
                 }
                 i += concurrency;
             }
-            (took, failed)
+            (took, failed, why)
         }));
     }
     let mut took = Vec::new();
     let mut failed = 0;
+    let mut why = None;
     for w in workers {
-        let (t, f) = w.await?;
+        let (t, f, y) = w.await?;
         took.extend(t);
         failed += f;
+        why = why.or(y);
     }
     took.sort_by(f64::total_cmp);
     let at = |q: f64| took.get(((took.len() as f64 - 1.0) * q).round() as usize).copied().unwrap_or(0.0);
     println!("{}", json!({
         "requests": took.len(), "failed": failed, "perSecond": took.len() as f64 / seconds.as_secs_f64(),
-        "p50": at(0.5), "p95": at(0.95), "max": at(1.0),
+        "p50": at(0.5), "p95": at(0.95), "max": at(1.0), "firstFailure": why,
     }));
     Ok(())
 }
