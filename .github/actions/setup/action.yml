@@ -1,17 +1,73 @@
-# What every job on mini1's runners starts with: the toolchains on PATH, and a Cargo target of this runner's own, kept
-# between runs (outside the checkout, which is cleaned; one per runner, as runners build side by side).
 name: setup
-description: Toolchains and caches on mini1's runners
+description: Reproducible toolchains on disposable GitHub-hosted runners
+inputs:
+  native:
+    description: Install Rust and WebAssembly tooling
+    default: 'false'
+  android:
+    description: Install the Android SDK and NDK
+    default: 'false'
+  cross:
+    description: Install Linux station cross compilers
+    default: 'false'
 runs:
   using: composite
   steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
     - shell: bash
+      run: npm install --global pnpm@10.11.1
+    - if: inputs.native == 'true'
+      shell: bash
       run: |
-        # rustup's (wasm32, aarch64-linux-android, wasm-bindgen) ahead of Homebrew's rust; node 24 and pnpm in ~/.local/bin.
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
-        echo "JAVA_HOME=/opt/homebrew/opt/openjdk@17" >> "$GITHUB_ENV"
-        echo "CARGO_TARGET_DIR=$HOME/stillfail-ci/target-$RUNNER_NAME" >> "$GITHUB_ENV"
-        # Rust's tests a few at a time: three runners share the machine, and the core's timing tests fail under load.
-        echo "RUST_TEST_THREADS=4" >> "$GITHUB_ENV"
+        echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/.ci-target" >> "$GITHUB_ENV"
+        echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+        echo "CARGO_PROFILE_DEV_DEBUG=0" >> "$GITHUB_ENV"
+        echo "CARGO_PROFILE_TEST_DEBUG=0" >> "$GITHUB_ENV"
+        echo "RUST_TEST_THREADS=2" >> "$GITHUB_ENV"
+        rustup toolchain install stable --profile minimal
+        rustup default stable
+        rustup target add wasm32-unknown-unknown
+        if [ "$RUNNER_OS" = macOS ]; then
+          brew list llvm >/dev/null 2>&1 || brew install llvm
+          echo "LLVM_BIN=$(brew --prefix llvm)/bin" >> "$GITHUB_ENV"
+        else
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libssl-dev pkg-config
+        fi
+    - if: inputs.native == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          ~/.cargo/bin/wasm-bindgen*
+          ~/.cargo/bin/cargo-zigbuild
+          ~/.cargo/.crates*
+          .ci-target
+        key: native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.android }}-${{ inputs.cross }}-${{ hashFiles('**/Cargo.lock', '.github/actions/setup/action.yml') }}
+    - if: inputs.native == 'true'
+      shell: bash
+      run: |
+        version=$(python3 -c 'import tomllib; print(next(p["version"] for p in tomllib.load(open("client/Cargo.lock", "rb"))["package"] if p["name"] == "wasm-bindgen"))')
+        if ! command -v wasm-bindgen >/dev/null || [ "$(wasm-bindgen --version)" != "wasm-bindgen $version" ]; then
+          cargo install wasm-bindgen-cli --version "$version" --locked --force
+        fi
+    - if: inputs.android == 'true'
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - if: inputs.android == 'true'
+      uses: android-actions/setup-android@v3
+    - if: inputs.android == 'true'
+      shell: bash
+      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+    - if: inputs.cross == 'true'
+      shell: bash
+      run: |
+        brew list zig >/dev/null 2>&1 || brew install zig
+        rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+        command -v cargo-zigbuild >/dev/null || cargo install cargo-zigbuild --locked

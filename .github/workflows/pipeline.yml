@@ -1,4 +1,4 @@
-# still.fail's pipeline (docs/operations.md, "CI"), on mini1's self-hosted runners (label mini1):
+# still.fail's pipeline (docs/operations.md, "CI"), on AFK-surf's GitHub-hosted runners:
 #   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
@@ -24,9 +24,9 @@ permissions:
 jobs:
   plan:
     # Trusted repository pushes only. Never add pull_request or pull_request_target here:
-    # these persistent runners have access to maintainer infrastructure.
+    # deployment jobs use production secrets; local signing stays isolated.
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: [self-hosted, mini1]
+    runs-on: ubuntu-24.04
     outputs:
       range: ${{ steps.plan.outputs.range }}
       parts: ${{ steps.plan.outputs.parts }}
@@ -76,15 +76,19 @@ jobs:
 
   check:
     needs: plan
-    runs-on: [self-hosted, mini1]
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
+        with:
+          native: 'true'
+          android: 'true'
       - name: Full check
         run: |
           range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
       # A branch takes back nothing merged into main meanwhile (a squash onto a main that moved: scripts/undone.sh).
       - name: Undoes nothing on main
@@ -95,18 +99,20 @@ jobs:
   bundle:
     needs: [plan, check]
     if: github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true')
-    runs-on: [self-hosted, mini1]
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
+        with:
+          native: 'true'
       - name: deploy.py --dry-run
         run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
 
   api:
     needs: [plan, check]
     if: github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true'
-    runs-on: [self-hosted, mini1]
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 30
     steps:
@@ -127,57 +133,67 @@ jobs:
     needs: [plan, check, api]
     # After the API (a page may need what it adds), or without it when it did not change.
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: [self-hosted, mini1]
+    runs-on: macos-15
     environment: production
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the web app's build number (__BUILD__, build.json) is the commits in the history
       - uses: ./.github/actions/setup
+        with:
+          native: 'true'
       - name: Deploy ${{ needs.plan.outputs.parts }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/deploy.sh ${{ needs.plan.outputs.parts }}
-      - name: Keep the test channel's build
-        if: contains(needs.plan.outputs.parts, 'web-beta')
-        # What ~/bin/ember-promote web takes to app.still.fail: the very files deployed to app.youdid.wtf.
-        run: echo "$GITHUB_SHA" > "$HOME/stillfail-deploy/beta-web-commit"
       - if: contains(needs.plan.outputs.parts, 'web-beta')
         uses: actions/upload-artifact@v4
-        with: { name: "cloud-web-${{ github.sha }}", path: dist/cloud-web, retention-days: 90 }
+        with: { name: "cloud-web-${{ github.sha }}", path: dist/cloud-web, include-hidden-files: true, retention-days: 90 }
 
   # The test channel's station release: what a station on it updates to (studio's at once, the others when they update).
   station:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: [self-hosted, mini1]
+    runs-on: macos-15
     environment: production
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the release's number is the commits in the history
       - uses: ./.github/actions/setup
+        with:
+          native: 'true'
+          cross: 'true'
       - name: Release the station (darwin-arm64, linux-x64, linux-arm64)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/release.sh station
-      - name: studio's station takes it
-        # As any station on the test channel would; handed over in place (studio's /tmp/ember-station-update.log).
+
+  station-update:
+    needs: station
+    if: github.ref == 'refs/heads/main' && needs.station.result == 'success'
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 10
+    steps:
+      - name: studio's station takes the published release
         run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1; tail -2 /tmp/ember-station-update.log'
 
   # The test channel's Android app (fail.still.android.beta), on android/beta/latest.json.
   android:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: [self-hosted, mini1]
+    runs-on: macos-15
     environment: production
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # versionCode is the commits in the history
       - uses: ./.github/actions/setup
+        with:
+          native: 'true'
+          android: 'true'
       - name: Release the beta Android app
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -202,7 +218,7 @@ jobs:
     needs: [plan, check, api, static, station, android, desktop]
     # A fix in still.fail cloud counts as out as soon as it is listed: not before the API carrying it is deployed.
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: [self-hosted, mini1]
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
     steps:
@@ -226,7 +242,7 @@ jobs:
   done:
     needs: [plan, check, api, static, station, android, desktop]
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
-    runs-on: [self-hosted, mini1]
+    runs-on: ubuntu-24.04
     permissions:
       contents: write # only this job updates the tag deployed/beta
     steps:
