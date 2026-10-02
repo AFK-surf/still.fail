@@ -5,7 +5,7 @@ import { vars } from "./styles/tokens.css.ts";
 import { accountTrigger } from "./cloud/workspace.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
 import { shell } from "./styles/shell.css.ts";
-import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
+import { doneMark, kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -143,6 +143,8 @@ export const navSessionMeta = style({
   height: 18, lineHeight: "18px",
   selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
+// Match the new-chat icon’s 16px column while keeping the check itself 14px.
+globalStyle(`${navSessionMeta} ${doneMark}`, { width: 16 });
 export const navSessionLast = style({
   flex: 1, ...ellipsis, fontSize: vars.textXs, color: vars.muted,
   // Its turn (something waits on the viewer, ChatMark.tsx WaitingText): in ink.
