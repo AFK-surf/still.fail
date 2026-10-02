@@ -2168,6 +2168,7 @@ mod tests {
             t.read(&mut ui, 1).await;
             t.set(workspace(), one_station());
             t.set(Topic::Prefs, json!({}));
+            t.read(&mut ui, 1).await;
             t.set(link("ws/st"), json!({"state": "online"}));
             let now = t.host.now_ms();
             let options = json!([{ "label": "先发测试版" }, { "label": "不需要部署", "action": "close" }]);
@@ -2189,7 +2190,6 @@ mod tests {
             t.set(rows("ws/st"), json!([done, busy, others]));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            eprintln!("DBG {}", v);
             let answered = v["answered"].as_array().unwrap();
             assert_eq!(answered.iter().map(|a| a["answer"].as_str().unwrap()).collect::<Vec<_>>(), ["选了「不需要部署」", "选了「先发测试版」"], "today's only, newest first");
             assert_eq!((answered[1]["text"].as_str(), answered[1]["title"].as_str(), answered[1]["seq"].as_u64()), (Some("0.1.1570 先发测试版吗？"), Some("7 的标题"), Some(3)));
