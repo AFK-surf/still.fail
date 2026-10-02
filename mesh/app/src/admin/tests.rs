@@ -1892,7 +1892,7 @@ async fn connect_depth_uses_model_capabilities_and_survives_config_reload() {
 async fn answering_a_card_reads_only_that_question_for_its_viewer() {
     for extra in [false, true] {
         let t = setup().await;
-        let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "owner@example.com".into(), client_key: None }).unwrap();
+        let (key, thread) = t.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "owner@example.com".into(), client_key: None }).unwrap();
         let (asked, _) = t.store.insert_message(NewMessage { card: Some(json!({"type":"text"})),
             ..NewMessage::new(thread.id, "9.000001", AuthorKind::Agent, &key, "怎么处理？") }).unwrap();
         if extra {
