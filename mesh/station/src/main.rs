@@ -869,6 +869,18 @@ async fn presence(station: Arc<Station>, key: SecretKey) {
     }
 }
 
+/// New clouds read the canonical proof; old clouds still receive their original proof.
+fn presence_request(key: &SecretKey, origin: &str, id: &str, ts: u64) -> Result<tungstenite::http::Request<()>> {
+    let mut request = format!("{}/v1/stations/connect", origin.replacen("http", "ws", 1)).into_client_request()?;
+    for prefix in ["stillfail", "ember"] {
+        let signature = hex::encode(key.sign(format!("{prefix}-station-connect-v1:{origin}:{id}:{ts}").as_bytes()).to_bytes());
+        for (name, value) in [("station", id.to_string()), ("ts", ts.to_string()), ("signature", signature), ("version", version().to_string())] {
+            request.headers_mut().insert(tungstenite::http::HeaderName::from_bytes(format!("x-{prefix}-{name}").as_bytes())?, value.parse()?);
+        }
+    }
+    Ok(request)
+}
+
 /// One presence socket, signed at connect like enrollment; returns when it ends.
 async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
     let (origin, id) = {
@@ -876,16 +888,7 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
         (s.origin.clone(), s.station.clone())
     };
     let ts = now();
-    // As at enrollment, the signed words keep the old name.
-    let signature = hex::encode(key.sign(format!("ember-station-connect-v1:{origin}:{id}:{ts}").as_bytes()).to_bytes());
-    let mut request = format!("{}/v1/stations/connect", origin.replacen("http", "ws", 1)).into_client_request()?;
-    let headers = request.headers_mut();
-    // Under both names: the cloud reads the new ones first, one from before the rename only the old.
-    for (name, value) in [("station", id.clone()), ("ts", ts.to_string()), ("signature", signature), ("version", version().to_string())] {
-        for prefix in ["x-stillfail-", "x-ember-"] {
-            headers.insert(tungstenite::http::HeaderName::from_bytes(format!("{prefix}{name}").as_bytes())?, value.parse()?);
-        }
-    }
+    let request = presence_request(key, &origin, &id, ts)?;
     let (mut socket, _) = match tokio::time::timeout(Duration::from_secs(20), tokio_tungstenite::connect_async(request)).await.context("connect timed out")? {
         Ok(connected) => connected,
         Err(tungstenite::Error::Http(response)) if response.status().as_u16() == 404 => {
@@ -1458,6 +1461,25 @@ fn transport() -> QuicTransportConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn presence_proofs_work_for_new_and_pre_rename_clouds() {
+        let key = SecretKey::from([7u8; 32]);
+        let id = hex::encode(key.public().as_bytes());
+        let origin = "https://cloud.example";
+        let request = presence_request(&key, origin, &id, 123).unwrap();
+        assert_eq!(request.uri().to_string(), "wss://cloud.example/v1/stations/connect");
+        let verifying = ed25519_dalek::VerifyingKey::from_bytes(key.public().as_bytes()).unwrap();
+        for prefix in ["stillfail", "ember"] {
+            let headers = request.headers();
+            assert_eq!(headers[format!("x-{prefix}-station")].to_str().unwrap(), id);
+            let signature = hex::decode(headers[format!("x-{prefix}-signature")].to_str().unwrap()).unwrap();
+            let signature = ed25519_dalek::Signature::from_slice(&signature).unwrap();
+            verifying.verify_strict(format!("{prefix}-station-connect-v1:{origin}:{id}:123").as_bytes(), &signature).unwrap();
+            assert!(verifying.verify_strict(format!("{prefix}-station-connect-v1:https://other.example:{id}:123").as_bytes(), &signature).is_err());
+        }
+        assert_ne!(request.headers()["x-stillfail-signature"], request.headers()["x-ember-signature"]);
+    }
     use ed25519_dalek::{Signer, SigningKey};
 
     const WS: &str = "01M3DB2N6P5SY7PJ7RG1F62TRX";
