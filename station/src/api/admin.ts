@@ -11,6 +11,7 @@ import { routes as events } from "./routes/events.ts";
 import { routes as marks } from "./routes/marks.ts";
 import { routes as updates } from "./routes/updates.ts";
 import { routes as accounts } from "./routes/accounts.ts";
+import { routes as slack } from "./routes/slack.ts";
 import { routes as hub } from "./routes/hub.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
@@ -75,6 +76,18 @@ export class Admin {
       agents: deps.agents,
     };
     this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
+      ...(deps.agents?.slack && deps.store
+        ? slack({
+            slack: deps.agents.slack,
+            config: deps.agents.config,
+            data: deps.agents.config.data,
+            store: deps.store,
+            hub: () => deps.agents!.hub,
+            overview: (viewer, lang) => deps.agents!.overview(viewer, lang),
+            place: () => deps.agents!.place(),
+            overviewChanged: () => deps.events?.overviewChanged(),
+          })
+        : []),
       ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
       // The station as its settings pages show it.
       ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),
