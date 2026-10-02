@@ -328,6 +328,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const mineOf = (m: ChatMessage) => m.mine;
   useStickToBottom(list, `.${conversationCss.msg}`, floor, short);
   useWindowMoves(list, messages);
+  useHistoryFade(list, messages);
   useAtScrollEnd(list, messages, place);
   // Where the reader leaves it, the core keeps too, on the device (it opens there next, while nothing is unread, also
   // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
@@ -427,6 +428,18 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
  * end, as many out at the other): it lets go of the room it held at its foot. Told as the change is laid out, before
  * the list puts the reader's message back in place.
  */
+/** New historical rows share one short opacity fade; existing rows never replay when their status changes. */
+function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
+  const seen = useRef(new WeakSet<HTMLElement>());
+  useLayoutEffect(() => {
+    for (const row of list.current?.querySelectorAll<HTMLElement>(":scope > [data-ts]") ?? []) {
+      if (seen.current.has(row)) continue;
+      seen.current.add(row);
+      if (row.hasAttribute("data-caught") && document.visibilityState === "visible") row.dataset.historyFade = "";
+    }
+  }, [list, messages]);
+}
+
 function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
   const first = messages[0]?.seq;
   const last = messages.at(-1)?.seq;
