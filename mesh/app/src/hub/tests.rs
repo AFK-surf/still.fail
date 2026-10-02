@@ -1991,7 +1991,7 @@ async fn a_post_carries_a_card_kept_with_it_and_checked() {
 #[tokio::test]
 async fn answering_a_clarification_cannot_silently_restore_need_human() {
     let r = setup();
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "ada@x.com", "改一下", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
