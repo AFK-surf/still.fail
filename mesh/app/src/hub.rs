@@ -1307,7 +1307,7 @@ impl Hub {
                         "title": { "type": "string", "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first post that ends a turn in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave." },
                         "card": {
                             "type": "object",
-                            "description": "Still.fail chats only: what people answer this message with, shown with it and on their list of things waiting for them (奏). {\"type\": \"options\", \"options\": [...]} when they choose between answers you can name (1 to 6, recommend one if you can): shown under the message, a tap answers. {\"type\": \"text\", \"placeholder\": \"…\"} when they must write something (a value, a name, a key): a field on their 奏 page. Either way an answer reaches you as their message quoting this one, and anything they write in the chat instead answers it too. A card waits until a person writes in the chat or you post a newer one. It says nothing of your turn: end the turn need_human (with need) after posting one.",
+                            "description": "Still.fail chats only: what people answer this message with, shown with it and on their list of things waiting for them (奏). {\"type\": \"options\", \"options\": [...]} when they choose between answers you can name (1 to 6, recommend one if you can): shown under the message, a tap answers. {\"type\": \"text\", \"placeholder\": \"…\"} when they must write something (a value, a name, a key): a field on their 奏 page. An option with action=close ends the wait silently; other answers reach you as their message quoting this one, and anything they write in the chat instead answers it too. A card waits until a person writes in the chat or you post a newer one. It says nothing of your turn: end the turn need_human (with need) after posting one.",
                             "properties": {
                                 "type": { "type": "string", "enum": ["options", "text"] },
                                 "options": {
@@ -1319,6 +1319,7 @@ impl Hub {
                                             "label": { "type": "string", "description": "A short phrase that reads on its own, in the language people use there (e.g. 按今天累计, 先不改)." },
                                             "detail": { "type": "string", "description": "One line on what choosing it leads to." },
                                             "recommended": { "type": "boolean", "description": "The one you recommend (at most one)." },
+                                            "action": { "type": "string", "enum": ["reply", "close"], "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you; use only when choosing it needs no further work (e.g. 不需要部署)." },
                                         },
                                         "required": ["label"],
                                         "additionalProperties": false,
@@ -1338,6 +1339,7 @@ impl Hub {
                                     "label": { "type": "string", "description": "A short phrase that reads on its own, in the language people use there (e.g. 按今天累计, 先不改)." },
                                     "detail": { "type": "string", "description": "One line on what choosing it leads to." },
                                     "recommended": { "type": "boolean", "description": "The one you recommend (at most one)." },
+                                            "action": { "type": "string", "enum": ["reply", "close"], "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you; use only when choosing it needs no further work (e.g. 不需要部署)." },
                                 },
                                 "required": ["label"],
                                 "additionalProperties": false,
@@ -1990,6 +1992,12 @@ fn options_arg(value: Option<&Value>) -> Result<Option<Value>> {
         if o.get("recommended").is_some_and(|r| r.as_bool() == Some(true) || r.as_str() == Some("true")) {
             kept["recommended"] = json!(true);
         }
+        if let Some(action) = o.get("action") {
+            match action.as_str() {
+                Some("reply" | "close") => { kept["action"] = action.clone(); }
+                _ => bail!("options[{i}].action must be reply or close"),
+            }
+        }
         out.push(kept);
     }
     if out.iter().filter(|o| o.get("recommended").is_some()).count() > 1 {
@@ -2093,7 +2101,7 @@ fn options_said(options: &Value) -> String {
             if o.get("recommended").is_some() { format!("{label} (recommended)") } else { label.to_string() }
         })
         .collect();
-    format!(" People can pick: {}; a pick reaches you as their message quoting this one with the option's label, and anything they write instead is their answer too.", labels.join("; "))
+    format!(" People can pick: {}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently), and anything they write instead is their answer too.", labels.join("; "))
 }
 
 /// In which words a turn's state was given.

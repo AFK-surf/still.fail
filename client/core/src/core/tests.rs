@@ -1914,3 +1914,21 @@ fn connect_wizard_configuration_and_oauth_install_keep_one_draft() {
         assert!(host.requests.borrow().iter().all(|r| !r.url.contains("slack.com")));
     });
 }
+
+#[test]
+fn an_agent_provided_close_option_never_posts_a_chat_message() {
+    run(async {
+        let (host, core) = station_core(0.0).await;
+        let ui = core.connect();
+        let card = json!({"seq":4,"card":{"type":"options","options":[{"label":"不需要部署","action":"close"},{"label":"部署"}]},
+            "message":{"seq":4,"ts":"9.000004","text":"部署吗？","authorName":"Claude"}});
+        core.inner.data.set(&Topic::ChatRows { station: "ws/st".into() }, json!([{"id":"k1","session":"k1","thread":7,"card":card}]));
+        core.receive(ui, ClientMessage::Call { id: 71, call: "decision.answer".into(), params: json!({"station":"ws/st","thread":7,"seq":4,"option":"不需要部署"}) });
+        host.settle().await;
+        let requests = host.requests.borrow();
+        let closed: Vec<Value> = requests.iter().filter(|r| r.method == "PUT" && r.url.ends_with("/threads/7/closed-card"))
+            .map(|r| serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap()).collect();
+        assert_eq!(closed, vec![json!({"n":4,"option":"不需要部署"})]);
+        assert!(!requests.iter().any(|r| r.method == "POST" && r.url.ends_with("/threads/7/messages")));
+    });
+}

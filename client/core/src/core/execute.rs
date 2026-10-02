@@ -246,6 +246,11 @@ impl Inner {
                 let card = self.pending_card(&station, thread, seq)?;
                 let (text, quotes) = crate::decisions::answer(&card, &option).ok_or_else(|| CoreError::invalid("没有这个选项"))?;
                 crate::prefs::undefer_decision(&self.data, &crate::decisions::deferral_key(&station, thread, seq));
+                if crate::decisions::closes(&card, &option) {
+                    let op = crate::ops::request("decision.close", &json!({"station": station, "thread": thread, "seq": seq, "option": option}))
+                        .expect("decision.close is an operation")?;
+                    return Box::pin(self.execute(Call::Op(op), progress, at)).await;
+                }
                 let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await
             }

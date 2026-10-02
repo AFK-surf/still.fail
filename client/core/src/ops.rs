@@ -127,9 +127,9 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // A decision the viewer will not take up (decisions.rs): off their list on every device, pending for the rest.
         // @params thread:number seq:number
         "decision.dismiss" => (|| op("PUT", Ok(format!("/threads/{}/dismissed", p.u64("thread")?)), Some(json!({ "n": p.u64("seq")? })), Effect::Thread { archived: false }))(),
-        // Close this pending question for everyone, without sending a reply or waking an agent.
-        // @params thread:number seq:number
-        "decision.close" => (|| op("PUT", Ok(format!("/threads/{}/closed-card", p.u64("thread")?)), Some(json!({ "n": p.u64("seq")? })), Effect::Session(None)))(),
+        // An agent-provided close option ends this question without sending a reply or waking an agent.
+        // @params thread:number seq:number option:string
+        "decision.close" => (|| op("PUT", Ok(format!("/threads/{}/closed-card", p.u64("thread")?)), Some(json!({ "n": p.u64("seq")?, "option": p.str("option")? })), Effect::Session(None)))(),
         // A new chat: its session and its thread, made before its first message (`chat.create` makes one behind the page).
         // @params runtime?:string profile?:string model?:string effort?:string
         "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort"])), Effect::Session(None)),

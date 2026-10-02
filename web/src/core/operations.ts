@@ -9,7 +9,7 @@ export interface OperationParams {
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
   "decision.dismiss": { thread: number; seq: number };
-  "decision.close": { thread: number; seq: number };
+  "decision.close": { thread: number; seq: number; option: string };
   "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };

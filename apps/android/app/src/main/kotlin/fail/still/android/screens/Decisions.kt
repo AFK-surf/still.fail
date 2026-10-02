@@ -152,20 +152,6 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
     DecisionOptions(
         options, Modifier.padding(top = 6.dp), enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
     ) { o -> app.act("回答") { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
-    CloseDecision(station, m.thread, m.seq, enabled = !ctx.view.offline && ctx.view.archived != true)
-}
-
-/** The shared silent completion action, with feedback while it is persisted. */
-@Composable
-private fun CloseDecision(station: String, thread: Long, seq: Long, enabled: Boolean = true, onClosed: () -> Unit = {}) {
-    val app = LocalApp.current
-    val busy = app.isDoing("decision.close", "station" to station, "thread" to thread, "seq" to seq)
-    Row(Modifier.padding(vertical = 6.dp).clickable(enabled = enabled && !busy) {
-        app.act("无需处理") { app.api(station).closeDecision(thread, seq); onClosed() }
-    }.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("无需处理", fontSize = 13.sp, color = C.muted)
-        DoingMark(busy, app.failedOf("decision.close", "station" to station, "thread" to thread, "seq" to seq), 14.dp)
-    }
 }
 
 // ── the page ───────────────────────────────────────────────────────────
@@ -469,7 +455,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
             ) { Text("去 chat 里回", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }
         }
     }
-    CloseDecision(item.station, item.thread, item.seq, onClosed = onReply)
 }
 
 /** Uses the chat's entire composer: attachments, references, draft extras, capsule and resizing. */

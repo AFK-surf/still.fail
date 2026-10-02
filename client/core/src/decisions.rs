@@ -253,6 +253,12 @@ pub fn answer(card: &Value, option: &str) -> Option<(String, Value)> {
     Some((label, quote_of(card)?))
 }
 
+/// Only an explicit agent-provided action closes silently; never infer it from the option's label.
+pub fn closes(card: &Value, option: &str) -> bool {
+    kind(&card["card"]) == "options" && card["card"]["options"].as_array().into_iter().flatten().any(|o|
+        o.get("label").and_then(Value::as_str).is_some_and(|l| l.trim() == option.trim()) && o["action"] == "close")
+}
+
 /// The text and quote a card's free-form answer sends (`decision.reply`): what the viewer wrote, quoting the post that
 /// asked. Both options and text cards accept a written answer.
 pub fn reply(card: &Value, text: &str, has_extras: bool) -> Option<(String, Value)> {

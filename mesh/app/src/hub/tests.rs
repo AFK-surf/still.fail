@@ -2236,3 +2236,14 @@ async fn web_posts_deliver_local_file_links_and_reject_missing_files_before_post
     assert!(error.contains("correct the path"), "{error}");
     assert_eq!(r.said(thread.id).len(), count);
 }
+
+#[test]
+fn only_explicit_valid_option_actions_close_silently() {
+    let parsed = options_arg(Some(&json!([
+        {"label":"不需要部署", "action":"close"}, {"label":"不需要处理"}, {"label":"部署", "action":"reply"}
+    ]))).unwrap().unwrap();
+    assert_eq!(parsed[0]["action"], "close");
+    assert!(parsed[1].get("action").is_none(), "labels never imply silent closure");
+    assert_eq!(parsed[2]["action"], "reply");
+    assert!(options_arg(Some(&json!([{"label":"不需要", "action":"typo"}]))).is_err());
+}

@@ -231,9 +231,6 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Dismisses a decision for the viewer, on every device of theirs: off their list, still pending for others. */
     suspend fun dismissDecision(thread: Long, seq: Long) { ops.decisionDismiss(thread, seq) }
 
-    /** Ends this question for everyone without posting or waking the agent. */
-    suspend fun closeDecision(thread: Long, seq: Long) { ops.decisionClose(thread, seq) }
-
     // ── the archive (web/src/pages/Archive.tsx) ──
 
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */

@@ -822,6 +822,13 @@ impl AdminApi {
                         if text.is_empty() && attachments.is_empty() && quotes.is_empty() {
                             return Err(http_error(400, "消息是空的"));
                         }
+                        if attachments.is_empty() && let Some((asked, card)) = self.deps.store.pending_card(thread_id)? {
+                            let selected = card["options"].as_array().into_iter().flatten().any(|o| o["label"].as_str() == Some(text.as_str()) && o["action"] == "close");
+                            let quoted = input.get("quotes").and_then(Value::as_array).into_iter().flatten().any(|q| q["ts"].as_str() == Some(asked.ts.as_str()));
+                            if selected && quoted {
+                                return Err(http_error(409, "请更新客户端后选择此选项；它不会发送给 agent"));
+                            }
+                        }
                         // Which app sent it ("android 0.1.1123"): for its agent, never shown. Older apps say nothing.
                         let client = input.str("client").map(|c| c.trim().chars().filter(|c| !c.is_control()).take(80).collect::<String>()).filter(|c| !c.is_empty());
                         let attachments = crate::thumbs::keep(attachments, crate::thumbs::dir(&self.config().data_dir)).await;
@@ -867,7 +874,8 @@ impl AdminApi {
                     (Some("closed-card"), "PUT") => {
                         let input = read_json(body).await?;
                         let n = input.get("n").and_then(Value::as_i64).filter(|n| *n > 0).ok_or_else(|| http_error(400, "n 必须是整数"))?;
-                        if !self.deps.store.close_card(&viewer.id(), thread_id, n)? {
+                        let option = input.str("option").map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| http_error(400, "option 必须是 agent 提供的选项"))?;
+                        if !self.deps.store.close_card(&viewer.id(), thread_id, n, option)? {
                             return Err(http_error(409, "这次等待已改变，请刷新后重试"));
                         }
                         return ok(json!({ "closedCard": { "thread": thread_id, "n": n } }));

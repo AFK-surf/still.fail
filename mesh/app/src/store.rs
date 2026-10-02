@@ -1988,9 +1988,17 @@ impl Store {
 
     /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep.
     /// A stale click cannot close a newer question or overwrite a newer turn's state.
-    pub fn close_card(&self, viewer: &str, thread: i64, n: i64) -> Result<bool> {
+    pub fn close_card(&self, viewer: &str, thread: i64, n: i64, option: &str) -> Result<bool> {
         self.with(|i, changes| {
             let tx = i.db.transaction()?;
+            let offered: Option<(Option<String>, Option<String>)> = tx.query_row(
+                "SELECT card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'",
+                params![thread, n], |r| Ok((r.get(0)?, r.get(1)?)),
+            ).optional()?;
+            let Some(card) = offered.and_then(|(card, options)| card_of(card, options)) else { return Ok(false) };
+            if card["type"] != "options" || !card["options"].as_array().into_iter().flatten().any(|o| o["label"].as_str().is_some_and(|l| l.trim() == option) && o["action"] == "close") {
+                return Ok(false);
+            }
             if tx.query_row("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", params![thread, n], |_| Ok(())).optional()?.is_some() {
                 return Ok(true);
             }
@@ -2007,11 +2015,11 @@ impl Store {
             if composing { return Ok(false); }
             tx.execute("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", params![thread, n, viewer, now_ms()])?;
             let changed = tx.execute(
-                "UPDATE turns SET declared = 'final', need = '用户选择无需处理', wait_seconds = NULL
+                "UPDATE turns SET declared = 'final', need = ?5, wait_seconds = NULL
                  WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
                    AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND ended_at IS NOT NULL
                    AND ((about_thread = ?2 AND about_n = ?3) OR (about_n IS NULL AND thread = ?2 AND started_at <= ?4))",
-                params![agent, thread, n, at],
+                params![agent, thread, n, at, format!("用户选择「{option}」")],
             )?;
             tx.commit()?;
             if changed > 0 { changes.push(StoreChange::Session(agent)); }
