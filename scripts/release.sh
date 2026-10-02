@@ -50,8 +50,12 @@ fi
 
 beta=""
 if [ "${1:-}" = --beta ]; then beta=yes; shift; fi
-[ "$(uname -s)-$(uname -m)" = Darwin-arm64 ] || { echo "releases are made on a Mac with Apple silicon" >&2; exit 1; }
 platforms=${*:-darwin-arm64 linux-x64 linux-arm64}
+for platform in $platforms; do
+  if [ "$platform" != android ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
+    echo "$platform releases require a Mac with Apple silicon" >&2; exit 1
+  fi
+done
 
 # put <file> <name in the bucket> <content type>
 put() {
