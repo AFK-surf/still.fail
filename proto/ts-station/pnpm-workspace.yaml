@@ -1,3 +1,5 @@
-# Only these may run install scripts: esbuild fetches its own binary.
+# Only these may run install scripts: esbuild fetches its own binary (pnpm 10 reads the list, pnpm 11 the map).
 onlyBuiltDependencies:
   - esbuild
+allowBuilds:
+  esbuild: true
