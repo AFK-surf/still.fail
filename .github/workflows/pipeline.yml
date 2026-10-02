@@ -4,7 +4,7 @@
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
 #             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf,
 #             its station release (then studio's station updates to it), its Android app and its desktop app (built
-#             and signed on studio, whose keychain holds the certificate).
+#             and signed on the organization Mac runner with the existing certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
 # Not here: the relay (deploying it drops every connection), the stable channel and its apps: ~/bin/ember-deploy and
 # ~/bin/ember-promote on studio, scripts/release.sh.
@@ -213,17 +213,27 @@ jobs:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
         run: sh .github/release.sh android
 
-  # The test channel's desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on studio.
+  # The test channel's desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac runner.
   desktop:
     needs: [plan, check, api]
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' && needs.check.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, tartelet]
     environment: production
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - name: Release the beta desktop app (on studio)
-        run: ssh -o BatchMode=yes studio "sh -s $GITHUB_SHA" < .github/desktop-on-studio.sh
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+        with:
+          native: 'true'
+      - name: Build and sign the beta desktop app on the organization Mac
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
+          MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
+          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: python3 .github/release-desktop.py
 
   # The changelog people read in the apps (docs/changelog.md), from main's history, once what it says is out: the
   # releases bucket's changelog.json, which still.fail cloud serves and marks bug reports fixed by.
