@@ -29,7 +29,7 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
       sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
-      state={<State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} />}
+      state={profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null}
       action={action ?? (to ? <ChevronRight {...ICON} className={css.profileCardChevron} /> : null)}
     />
   );

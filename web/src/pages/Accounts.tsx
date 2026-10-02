@@ -187,8 +187,8 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
               {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label="正在改名" />}<RuntimeTags runtimes={profile.runtimes} />{!profile.machine && <IconButton label="改名" icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
-            <Pill tone={profile.checkTone}>{profile.checkText}</Pill>
-            {/* The pill already says it works; the detail says what else it found. */}
+            {profile.checkTone !== "green" && <Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
+            {/* Keep check details without repeating the healthy status. */}
             <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}</span>
             {latest && <span className={shellCss.muted}><Time stamp={latest.time?.checkedAt} />检查</span>}
             <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={Refresh} busy={check.busy} onClick={() => void check.run()} />
