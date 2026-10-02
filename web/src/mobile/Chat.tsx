@@ -306,16 +306,19 @@ export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) 
 export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, onPlus, onType, onSend }: {
   draft: Draft; draftKey: string | undefined; sessionKey: string | null; placeholder: string; locked?: boolean;
   onPlus: () => void; onType: () => void; onSend: () => void;
-}): { menu: ReactNode; bar: ReactNode } {
+}): { menu: ReactNode; bar: ReactNode; expanded: boolean } {
   const input = useRef<HTMLTextAreaElement>(null);
+  const [focused, setFocused] = useState(false);
+  const expanded = focused || draft.text.includes("\n") || draft.text.length > 60 || draft.files.length > 0 || draft.quotes.length > 0;
   const ready = draft.ready && !locked;
   useEffect(() => { if (draft.focus > 0) input.current?.focus(); }, [draft.focus]);
   const { menu, field } = useComposerText({
-    draft, input, draftKey, sessionKey, locked, placeholder, className: css.mComposerField, lines: 6,
+    draft, input, draftKey, sessionKey, locked, placeholder, className: css.mComposerField, lines: 6, layout: expanded,
     enterSends: window.matchMedia("(hover: hover)").matches, onType, onSubmit: () => { if (ready) onSend(); },
   });
   const bar = (
-    <div className={css.mComposerBar}>
+    <div className={css.mComposerBar} data-expanded={expanded || undefined}
+      onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
       <button type="button" className={css.mPlus} onClick={onPlus} disabled={locked} aria-label="添加文件"><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label="发送">
@@ -323,7 +326,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
       </button>
     </div>
   );
-  return { menu, bar };
+  return { menu, bar, expanded };
 }
 
 /**

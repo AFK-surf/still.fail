@@ -24,6 +24,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -583,13 +584,15 @@ fun ComposerBar(
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = SendTextStyle.copy(color = C.ink)
     val locked = draft.locked || draft.starting
-    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    val expanded = draft.focused || draft.text.contains('\n') || draft.text.length > 60 || draft.files.isNotEmpty() || draft.quotes.isNotEmpty()
+    // Keep the field in one composition slot while the buttons move below it, preserving focus and the IME.
+    Layout(content = {
         Box(
             Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus),
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Plus, 18.dp, if (locked) C.ink.copy(alpha = 0.35f) else C.ink) }
         Box(
-            Modifier.weight(1f).part(morph, "field").heightIn(min = 36.dp).padding(end = 14.dp, top = 7.dp, bottom = 7.dp),
+            Modifier.part(morph, "field").heightIn(min = 36.dp).padding(start = if (expanded) 14.dp else 0.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (draft.text.isEmpty()) Text(placeholder, style = style.copy(color = C.subtle), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.graphicsLayer { alpha = hint() })
@@ -623,6 +626,21 @@ fun ComposerBar(
         ) {
             if (draft.starting) CircularProgressIndicator(Modifier.size(16.dp), color = C.surface, strokeWidth = 2.dp)
             else IconIn(Icons.ArrowUp, 18.dp, if (ready) C.bg else C.surface)
+        }
+    }, modifier = Modifier.fillMaxWidth()) { items, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val plus = items[0].measure(loose)
+        val send = items[2].measure(loose)
+        val gap = 2.dp.roundToPx()
+        val width = constraints.maxWidth
+        val fieldWidth = if (expanded) width else (width - plus.width - send.width - gap * 2).coerceAtLeast(0)
+        val field = items[1].measure(loose.copy(minWidth = fieldWidth, maxWidth = fieldWidth))
+        val buttonsHeight = maxOf(plus.height, send.height)
+        val height = if (expanded) field.height + 4.dp.roundToPx() + buttonsHeight else maxOf(field.height, buttonsHeight)
+        layout(width, height) {
+            field.placeRelative(if (expanded) 0 else plus.width + gap, if (expanded) 0 else height - field.height)
+            plus.placeRelative(0, height - plus.height)
+            send.placeRelative(width - send.width, height - send.height)
         }
     }
 }

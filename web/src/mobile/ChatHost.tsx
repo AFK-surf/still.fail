@@ -118,14 +118,14 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
     observer.observe(el);
     return () => observer.disconnect();
   }, [root]);
-  const { menu, bar } = useComposerBar({
+  const { menu, bar, expanded } = useComposerBar({
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
     onPlus: () => openAttach(app, upload), onType: () => latest.current?.type?.(), onSend: () => latest.current?.send(now.current),
   });
   // Growing or shrinking (a line more, a file, a quote, sent and emptied) in one motion, as the wide screen's
   // (morph.ts): after the text box has taken its height (useComposerBar), so that it is read with it.
   const frame = useRef<HTMLDivElement>(null);
-  useMorph(frame, `${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
+  useMorph(frame, `${expanded}|${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
   return (
     <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>
       {menu}

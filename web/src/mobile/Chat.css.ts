@@ -44,12 +44,16 @@ export const mJump = style({
     },
   },
 });
-export const mComposerBar = style({ display: "flex", alignItems: "flex-end", gap: "2px" });
+export const mComposerBar = style({
+  display: "flex", alignItems: "flex-end", gap: "2px",
+  selectors: { "&[data-expanded]": { display: "grid", gridTemplateColumns: "36px 1fr 36px", rowGap: "4px" } },
+});
 export const mPlus = style({
   display: "grid", placeItems: "center", flex: "none", width: "36px", height: "36px", padding: "0", border: "0",
   borderRadius: "50%", background: "none", color: "var(--m-ink) !important", cursor: "pointer",
   selectors: {
     "&:disabled": { opacity: ".35", cursor: "default" },
+    [`${mComposerBar}[data-expanded] &`]: { gridRow: "2", gridColumn: "1" },
   },
 });
 export const mComposerField = style({
@@ -58,6 +62,7 @@ export const mComposerField = style({
   resize: "none", outline: "none", textWrap: "wrap",
   selectors: {
     "&::placeholder": { color: "var(--m-subtle)" },
+    [`${mComposerBar}[data-expanded] &`]: { gridRow: "1", gridColumn: "1 / -1", width: "100%", paddingLeft: "14px" },
   },
 });
 export const mSend = style({
@@ -66,6 +71,7 @@ export const mSend = style({
   cursor: "pointer",
   selectors: {
     "&[data-ready]": { background: "var(--m-ink)", color: "var(--m-bg) !important" },
+    [`${mComposerBar}[data-expanded] &`]: { gridRow: "2", gridColumn: "3" },
   },
 });
 export const mAttach = style({ display: "flex", gap: "10px", padding: "4px 18px 24px" });
