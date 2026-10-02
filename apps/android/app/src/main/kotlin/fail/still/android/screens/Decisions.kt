@@ -105,7 +105,7 @@ import kotlinx.coroutines.launch
  * chip colour. `busy`: the label of the one being sent (a spinner on it, none pressed meanwhile).
  */
 @Composable
-internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, onPick: (DecisionOption) -> Unit) {
+internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, failed: String? = null, onPick: (DecisionOption) -> Unit) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { o ->
             val strong = o.recommended == true
@@ -123,7 +123,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
                     Text(o.label, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = ink)
                     o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = if (strong) C.bg.copy(alpha = 0.7f) else C.muted) }
                 }
-                if (busy == o.label) DoingMark(true, null, 14.dp)
+                if (busy == o.label || failed != null) DoingMark(busy == o.label, failed, 14.dp)
             }
         }
     }

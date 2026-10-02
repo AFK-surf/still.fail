@@ -267,7 +267,7 @@ class ArchiveTest {
         val h = chat()
         val before = h.app.stack.toList()
         rule.onNodeWithText("不再提醒归档").performClick()
-        rule.waitForIdle()
+        h.settle()
         assertTrue(h.fake.calls.any { it.first == "chat.keep" })
         assertTrue(h.fake.calls.none { it.first == "chat.archive" })
         assertEquals(before, h.app.stack.toList())
@@ -335,6 +335,28 @@ class ArchiveTest {
         release(start)
         h.settle(2000)
         assertTrue("archived: ${h.archived()}", h.archived().isEmpty())
+    }
+
+    @Test fun shotsKeepDark() = shotsKeep(true)
+    @Test fun shotsKeepLight() = shotsKeep(false)
+
+    private fun shotsKeep(dark: Boolean) {
+        val h = chat(dark)
+        val name = if (dark) "keep-dark" else "keep-light"
+        shot(name)
+        val of = ChatOf.Thread(Fixtures.THREAD)
+        h.fake.answer = { name, _ ->
+            if (name == "chat.keep") h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = false, key = done.session))
+            JsonNull
+        }
+        val recording = h.record(name)
+        rule.onNodeWithText("不再提醒归档").performClick()
+        recording.frames(32)
+        recording.end()
+        h.settle()
+        shot("$name-kept")
+        assertTrue(rule.onAllNodesWithText("不再提醒归档").fetchSemanticsNodes().isEmpty())
+        assertEquals(2, h.app.stack.size)
     }
 
     @Test fun shotsChat() {

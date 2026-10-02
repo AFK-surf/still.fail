@@ -1096,6 +1096,7 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
         DecisionOptions(
             listOf(fail.still.android.data.DecisionOption(keep)), Modifier.weight(1f),
             enabled = enabled && !ctx.view.offline && !busy, busy = if (keeping) keep else null,
+            failed = app.failedOf("chat.keep", "station" to ctx.station, "thread" to thread),
         ) { app.act("停止归档提醒") { app.api(ctx.station).keepChat(thread); app.toast = "已保留，不再提醒归档" } }
     }
 }

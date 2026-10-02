@@ -850,7 +850,8 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
 function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () => void }) {
   const station = useStation().address;
   const busy = useDoing("chat.archive", { station, thread, archived: true });
-  const keeping = useDoing("chat.keep", { station, thread });
+  const keepState = useDoingState("chat.keep", { station, thread });
+  const keeping = keepState.running;
   const api = useApi();
   const act = useAct();
   return (
@@ -863,7 +864,7 @@ function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () =>
       <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
         aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), "停止归档提醒", "已保留，不再提醒归档")}>
         <span className={decisionsCss.optionLabel}>不再提醒归档</span>
-        {keeping && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
+        <DoingShown state={keepState} className={decisionsCss.optionSpinner} />
       </button>
     </div>
   );
