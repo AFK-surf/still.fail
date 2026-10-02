@@ -5,11 +5,11 @@
 // sent is dropped; an older cloud (404) has no pushes.
 import { stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
-import { nowSecs } from "../ops/files.ts";
 import type { Readers } from "../read/pool.ts";
 import type { Notice } from "../read/notices.ts";
 import type { Store } from "../store/store.ts";
-import { type StationKey, sha256hex } from "./key.ts";
+import type { StationKey } from "./key.ts";
+import { signedPost } from "./signed.ts";
 import type { Cloud } from "./state.ts";
 
 /// Notices wait this long to go out together; at most this many in one post (the cloud takes no more).
@@ -89,17 +89,6 @@ export class Notifier {
   /// One batch, signed over "ember-station-notify-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>", its headers
   /// under both names.
   private async send(notices: Notice[]) {
-    const { origin, station } = this.cloud.state!;
-    const body = JSON.stringify({ notices });
-    const ts = nowSecs();
-    const signature = this.key.sign(`ember-station-notify-v1:${origin}:${station}:${ts}:${sha256hex(body)}`);
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    for (const prefix of ["stillfail", "ember"]) {
-      headers[`x-${prefix}-station`] = station;
-      headers[`x-${prefix}-ts`] = String(ts);
-      headers[`x-${prefix}-signature`] = signature;
-    }
-    const response = await fetch(`${origin}/v1/stations/notify`, { method: "POST", headers, body, signal: AbortSignal.timeout(30_000) });
-    if (!response.ok) throw new Error(`still.fail cloud answered ${response.status}`);
+    await signedPost(this.cloud, this.key, "/v1/stations/notify", "ember-station-notify-v1", { notices }, true);
   }
 }
