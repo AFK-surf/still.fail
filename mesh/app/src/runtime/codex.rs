@@ -351,6 +351,7 @@ struct ThreadState {
 }
 
 pub struct CodexSession {
+    store: Arc<Store>,
     settings: Option<Arc<crate::settings::Settings>>,
     thread_id: String,
     host: Arc<Host>,
@@ -470,7 +471,7 @@ impl AgentDriver for CodexDriver {
         let thread_id = opened.get("thread").and_then(|t| t.get("id")).and_then(Value::as_str).ok_or_else(|| anyhow!("codex gave no thread id"))?.to_string();
         let state = Arc::new(Mutex::new(ThreadState { busy: false, turn_id: None, closed: false }));
         host.threads.lock().unwrap().insert(thread_id.clone(), thread_sink(&state, &events, &thread_id));
-        Ok(Arc::new(CodexSession { settings: self.settings.clone(), thread_id, host, state }))
+        Ok(Arc::new(CodexSession { store: self.store.clone(), settings: self.settings.clone(), thread_id, host, state }))
     }
 
     async fn hand_off(&self) -> Result<Value> {
@@ -516,7 +517,7 @@ impl AgentDriver for CodexDriver {
         let host = self.hosts.lock().await.get(&handed.profile).filter(|h| h.alive()).cloned().ok_or_else(|| anyhow!("codex app-server {} was not taken up", handed.profile))?;
         let state = Arc::new(Mutex::new(ThreadState { busy: handed.busy, turn_id: handed.turn_id, closed: false }));
         host.threads.lock().unwrap().insert(handed.thread_id.clone(), thread_sink(&state, &events, &handed.thread_id));
-        Ok(Arc::new(CodexSession { settings: self.settings.clone(), thread_id: handed.thread_id, host, state }))
+        Ok(Arc::new(CodexSession { store: self.store.clone(), settings: self.settings.clone(), thread_id: handed.thread_id, host, state }))
     }
 
     async fn shutdown(&self) {
@@ -542,6 +543,7 @@ impl AgentSession for CodexSession {
     }
 
     async fn prompt(&self, text: &str) -> Result<()> {
+        let fast = self.store.codex_session_fast(&self.thread_id)?;
         {
             let mut s = self.state.lock().unwrap();
             if s.closed {
@@ -556,7 +558,7 @@ impl AgentSession for CodexSession {
         if let Some(settings) = &self.settings {
             if let Some(p) = settings.config().profiles.iter().find(|p| p.id == self.host.profile && p.access_kind == stillfail_shapes::AccessKind::Subscription) {
                 // An explicit null clears a previously selected tier; omitting it would keep Fast on.
-                params["serviceTier"] = if p.fast { json!("fast") } else { Value::Null };
+                params["serviceTier"] = if fast.unwrap_or(p.fast) { json!("fast") } else { Value::Null };
             }
         }
         match self.host.request("turn/start", params).await {

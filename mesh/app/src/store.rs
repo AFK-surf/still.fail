@@ -77,6 +77,8 @@ pub struct SessionRow {
     pub model: Option<String>,
     /// Reasoning effort, as the connect set it when the session started; None for the runtime's default.
     pub effort: Option<String>,
+    /// None follows the subscription default; false explicitly uses standard speed.
+    pub fast: Option<bool>,
     pub runtime_session_id: Option<String>,
     pub workspace: String,
     /// Where its runtime runs when that is not the workspace: the project directory of a session begun outside still.fail
@@ -115,6 +117,8 @@ pub struct NewSession {
     pub profile_pinned: bool,
     pub model: Option<String>,
     pub effort: Option<String>,
+    /// None follows the subscription default; false explicitly uses standard speed.
+    pub fast: Option<bool>,
     pub workspace: String,
     pub cwd: Option<String>,
     pub runtime_session_id: Option<String>,
@@ -615,6 +619,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   profile_pinned INTEGER NOT NULL DEFAULT 0,
   model TEXT,
   effort TEXT,
+  fast INTEGER,
   runtime_session_id TEXT,
   workspace TEXT NOT NULL,
   token TEXT NOT NULL UNIQUE,
@@ -855,6 +860,7 @@ fn to_session(r: &Row) -> rusqlite::Result<SessionRow> {
         profile_pinned: r.get::<_, i64>("profile_pinned")? == 1,
         model: r.get("model")?,
         effort: r.get("effort")?,
+        fast: r.get("fast")?,
         runtime_session_id: r.get("runtime_session_id")?,
         workspace: r.get("workspace")?,
         cwd: r.get("cwd")?,
@@ -893,7 +899,7 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
         let mut stmt = db.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?"))?;
         Ok(stmt.exists([column])?)
     };
-    for (column, kind) in [("archived_by", "TEXT"), ("shown_at", "INTEGER"), ("cwd", "TEXT")] {
+    for (column, kind) in [("archived_by", "TEXT"), ("shown_at", "INTEGER"), ("cwd", "TEXT"), ("fast", "INTEGER")] {
         if !has("sessions", column)? {
             db.execute_batch(&format!("ALTER TABLE sessions ADD COLUMN {column} {kind}"))?;
         }
@@ -1228,13 +1234,13 @@ impl Store {
     pub fn insert_session(&self, s: &NewSession) -> Result<()> {
         self.with(|i, changes| {
             i.db.execute(
-                "INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     s.key, s.connect, s.scope.unwrap_or(SessionScope::Thread).as_str(), s.title, s.created_by, s.runtime, s.profile,
                     s.profile_pinned as i64, s.model, s.effort, s.workspace, s.cwd, s.runtime_session_id, s.token, s.created_at, s.last_active_at,
                     // A new session begins with today's instructions: no note is news to it.
-                    crate::migrations::latest()
+                    crate::migrations::latest(), s.fast
                 ],
             )?;
             changes.push(StoreChange::Session(s.key.clone()));
@@ -1273,6 +1279,16 @@ impl Store {
     /// A session's model and effort from its next start on (None: the runtime's default).
     pub fn set_session_model(&self, key: &str, model: Option<&str>, effort: Option<&str>) -> Result<()> {
         self.update_session(key, "UPDATE sessions SET model = ?1, effort = ?2 WHERE key = ?3", params![model, effort, key])
+    }
+
+    pub fn set_session_fast(&self, key: &str, fast: Option<bool>) -> Result<()> {
+        self.update_session(key, "UPDATE sessions SET fast = ?1 WHERE key = ?2", params![fast, key])
+    }
+
+    pub fn codex_session_fast(&self, thread: &str) -> Result<Option<bool>> {
+        self.with(|i, _| {
+            Ok(i.db.query_row("SELECT fast FROM sessions WHERE runtime = 'codex' AND runtime_session_id = ?", [thread], |r| r.get::<_, Option<bool>>(0)).optional()?.flatten())
+        })
     }
 
     pub fn set_title(&self, key: &str, title: Option<&str>) -> Result<()> {

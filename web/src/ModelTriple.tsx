@@ -55,7 +55,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
   // Shown within the room it has: the most it can say that fits, dropping what matters least first.
   const fit = useRef<HTMLSpanElement>(null);
   const [drop, setDrop] = useState(0);
-  const label = `${value?.model}|${value?.runtime}|${value?.effort}|${value?.profile}|${account?.text ?? ""}`;
+  const label = `${value?.model}|${value?.runtime}|${value?.effort}|${value?.fast}|${value?.profile}|${account?.text ?? ""}`;
   useLayoutEffect(() => {
     const room = fit.current;
     const trigger = room?.firstElementChild as HTMLElement | null;
@@ -86,6 +86,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
               <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span></Tip>
               {!v.runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ?? "默认深度"}</span>
+              {v.fastText && <span className={`${css2.triplePart} ${css2.tripleEffort}`}>{v.fastText}</span>}
               {account && (
                 <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={account.level}>
                   {account.profile && <ProviderLogo runtime={value.runtime} kind={account.profile.kind ?? "env"} size={14} />}
@@ -142,6 +143,13 @@ export function ModelTriple({ pick, onConfirm, side = "bottom" }: { pick: Pickin
               {[null, ...v.efforts].map((e) => (
                 <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ?? "默认"}</button>
               ))}
+              {v.fastAvailable && <>
+                <h4>速度</h4>
+                {([null, false, true] as const).map((fast) => (
+                  <button key={String(fast)} type="button" className={css2.runPickerOption} aria-pressed={(draft.fast ?? null) === fast} onClick={() => pick.set({ fast })}>{fast === null ? "跟随订阅" : fast ? "Fast" : "标准"}</button>
+                ))}
+                <small>Fast 消耗更多额度或积分</small>
+              </>}
             </div>
           </div>
           <div className={css2.runPickerFoot}>

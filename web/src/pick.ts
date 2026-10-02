@@ -8,7 +8,7 @@ import { failure, useToast } from "./toast.tsx";
 import type { NewChatView, PickView, RuntimeKind } from "./core/shapes.ts";
 
 /** A pick: each field given changes only that; null is the default depth, the station's pick of account. */
-export interface PickPatch { model?: string; runtime?: RuntimeKind; effort?: string | null; profile?: string | null }
+export interface PickPatch { model?: string; runtime?: RuntimeKind; effort?: string | null; fast?: boolean | null; profile?: string | null }
 
 /** A new chat's page in a workspace. */
 export function useNewChat(scope: string) {

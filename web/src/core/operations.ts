@@ -4,14 +4,14 @@ export interface OperationParams {
   "session.warm": { key: string };
   "session.evict": { key: string };
   "session.delete": { key: string };
-  "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined };
+  "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
   "chat.keep": { thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
   "decision.dismiss": { thread: number; seq: number };
   "decision.close": { thread: number; seq: number; option: string };
-  "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined };
+  "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };
   "widget.state": { key: string; path: string };

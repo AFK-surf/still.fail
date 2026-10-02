@@ -244,6 +244,7 @@ pub struct Session {
     pub profile_pinned: Option<bool>,
     pub model: Option<String>,
     pub effort: Option<String>,
+    pub fast: Option<bool>,
     pub runtime_session_id: Option<String>,
     pub workspace: Option<String>,
     pub running: Option<bool>,
@@ -1754,6 +1755,7 @@ pub struct NewChatView {
     pub model: Option<ModelOption>,
     pub runtime: Option<RuntimeKind>,
     pub effort: Option<String>,
+    pub fast: Option<bool>,
     /// The account kept to, while it still runs the model there; none: the station's pick.
     pub profile: Option<String>,
     /// How hard it can think there, and who can run it (offered when more than one can: `pickAccount`).
@@ -1797,6 +1799,7 @@ pub struct Picked {
     pub model: Option<String>,
     pub runtime: RuntimeKind,
     pub effort: Option<String>,
+    pub fast: Option<bool>,
     pub profile: Option<String>,
 }
 
@@ -1820,6 +1823,8 @@ pub struct PickAccount {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PickView {
+    pub fast_available: Option<bool>,
+    pub fast_text: Option<String>,
     pub options: Vec<ModelOption>,
     pub runtime_fixed: bool,
     pub value: Picked,

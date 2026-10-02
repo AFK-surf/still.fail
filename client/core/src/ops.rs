@@ -98,8 +98,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // @params key:string
         "session.delete" => op("DELETE", p.at("key").map(|k| format!("/sessions/{k}")), None, Effect::Session(p.word("key"))),
         // How it runs from its next turn on: any of profile, model, effort (null: the default).
-        // @params key:string profile?:string model?:string effort?:string
-        "session.settings" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/settings")), Some(p.pick(&["profile", "model", "effort"])), Effect::Session(p.word("key"))),
+        // @params key:string profile?:string model?:string effort?:string fast?:boolean
+        "session.settings" => op("POST", p.at("key").map(|k| format!("/sessions/{k}/settings")), Some(p.pick(&["profile", "model", "effort", "fast"])), Effect::Session(p.word("key"))),
         // A chat into the archive or back: its thread (with its session when it is that session's own), or an agent
         // with no chat yet. A station from before chats were archived by themselves archives its session instead.
         // @params archived?:boolean session:string thread?:number
@@ -134,8 +134,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         // @params thread:number seq:number option:string
         "decision.close" => (|| op("PUT", Ok(format!("/threads/{}/closed-card", p.u64("thread")?)), Some(json!({ "n": p.u64("seq")?, "option": p.str("option")? })), Effect::Session(None)))(),
         // A new chat: its session and its thread, made before its first message (`chat.create` makes one behind the page).
-        // @params runtime?:string profile?:string model?:string effort?:string
-        "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort"])), Effect::Session(None)),
+        // @params runtime?:string profile?:string model?:string effort?:string fast?:boolean
+        "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort", "fast"])), Effect::Session(None)),
         // @params
         "chats.archived" => op("GET", Ok("/chats?archived=1".into()), None, Effect::None),
         // The chat of an agent that has none yet, bound to its session: answers the thread.

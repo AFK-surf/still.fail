@@ -453,3 +453,22 @@ fn a_widgets_state_is_kept_by_session_and_path_its_model_told_once_until_it_chan
     store.delete_session("a").unwrap();
     assert_eq!(store.widget_state("a", path).unwrap(), None);
 }
+
+#[test]
+fn session_fast_migrates_old_databases_and_survives_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ember.db");
+    let path = path.to_str().unwrap();
+    let store = Store::open(path, None).unwrap();
+    session(&store, "old");
+    drop(store);
+    let db = Connection::open(path).unwrap();
+    db.execute_batch("ALTER TABLE sessions DROP COLUMN fast").unwrap();
+    drop(db);
+    let store = Store::open(path, None).unwrap();
+    assert_eq!(store.get_session("old").unwrap().unwrap().fast, None);
+    store.set_session_fast("old", Some(false)).unwrap();
+    drop(store);
+    let store = Store::open(path, None).unwrap();
+    assert_eq!(store.get_session("old").unwrap().unwrap().fast, Some(false));
+}

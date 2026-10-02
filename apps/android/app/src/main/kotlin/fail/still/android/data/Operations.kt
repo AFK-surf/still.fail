@@ -44,6 +44,7 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         var profile: String? by field<String>("profile") { JsonPrimitive(it) }
         var model: String? by field<String>("model") { JsonPrimitive(it) }
         var effort: String? by field<String>("effort") { JsonPrimitive(it) }
+        var fast: Boolean? by field<Boolean>("fast") { JsonPrimitive(it) }
     }
     suspend fun sessionSettings(key: String, fill: SessionSettingsFields.() -> Unit = {}): JsonElement {
         val values = SessionSettingsFields().apply(fill).fields
@@ -99,6 +100,7 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         var profile: String? by field<String>("profile") { JsonPrimitive(it) }
         var model: String? by field<String>("model") { JsonPrimitive(it) }
         var effort: String? by field<String>("effort") { JsonPrimitive(it) }
+        var fast: Boolean? by field<Boolean>("fast") { JsonPrimitive(it) }
     }
     suspend fun sessionNew(fill: SessionNewFields.() -> Unit = {}): JsonElement {
         val values = SessionNewFields().apply(fill).fields

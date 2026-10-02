@@ -21,7 +21,7 @@ use crate::store::{Store, Watch};
 use crate::views::{Views, models};
 
 const TABLE: &str = "choice";
-const FIELDS: [&str; 4] = ["runtime", "model", "effort", "profile"];
+const FIELDS: [&str; 5] = ["runtime", "model", "effort", "profile", "fast"];
 
 /// Asks a station's profile to check itself (station address, profile id).
 pub type Check = Rc<dyn Fn(&str, &str)>;
@@ -97,6 +97,7 @@ struct Resolved {
     entry: Option<Value>,
     runtime: Option<String>,
     effort: Option<String>,
+    fast: Option<bool>,
     profile: Option<String>,
     efforts: Vec<Value>,
     accounts: Vec<Value>,
@@ -113,12 +114,13 @@ fn resolve(options: &[Value], choice: &Value) -> Resolved {
         efforts = levels.clone();
     }
     let effort = text(choice.get("effort")).filter(|e| efforts.iter().any(|x| x == e.as_str()));
-    Resolved { entry, runtime, effort, profile, efforts, accounts }
+    let fast = choice["fast"].as_bool().filter(|_| runtime.as_deref() == Some("codex"));
+    Resolved { entry, runtime, effort, fast, profile, efforts, accounts }
 }
 
 impl Resolved {
     fn picked(&self) -> Value {
-        json!({ "model": self.entry.as_ref().map(|e| e["model"].clone()), "runtime": self.runtime.as_deref().unwrap_or("claude"), "effort": self.effort, "profile": self.profile })
+        json!({ "model": self.entry.as_ref().map(|e| e["model"].clone()), "runtime": self.runtime.as_deref().unwrap_or("claude"), "effort": self.effort, "fast": self.fast, "profile": self.profile })
     }
 }
 
@@ -281,7 +283,7 @@ impl Choose {
     }
 
     fn keep_choice(&self, scope: &str, id: &str, choice: &Value) {
-        let kept: Map<String, Value> = FIELDS.iter().map(|f| (f.to_string(), json!(choice[*f].as_str().unwrap_or("")))).collect();
+        let kept: Map<String, Value> = FIELDS.iter().map(|f| (f.to_string(), if *f == "fast" { json!(choice[*f].as_bool()) } else { json!(choice[*f].as_str().unwrap_or("")) })).collect();
         self.data.put(TABLE, &format!("ws:{scope}:station:{id}"), Value::Object(kept));
     }
 
@@ -360,6 +362,7 @@ impl Choose {
         view["model"] = r.entry.clone().unwrap_or(Value::Null);
         view["runtime"] = json!(r.runtime);
         view["effort"] = json!(r.effort);
+        view["fast"] = json!(r.fast);
         view["profile"] = json!(r.profile);
         view["efforts"] = Value::Array(r.efforts);
         view["accounts"] = Value::Array(r.accounts);
@@ -397,7 +400,7 @@ impl Choose {
                 }
             };
             let (options, now) = self.on_station(&address(scope, &id));
-            let mut next = json!({ "runtime": now.runtime, "model": now.entry.as_ref().map(|e| e["model"].clone()), "effort": now.effort, "profile": now.profile });
+            let mut next = json!({ "runtime": now.runtime, "model": now.entry.as_ref().map(|e| e["model"].clone()), "effort": now.effort, "fast": now.fast, "profile": now.profile });
             if let Some(model) = text(params.get("model")) {
                 let runs = option_of(&options, Some(&model)).map(|o| list(&o["runtimes"])).unwrap_or_default();
                 if params.get("runtime").is_none() && !runs.iter().any(|r| *r == next["runtime"]) {
@@ -412,7 +415,7 @@ impl Choose {
                 }
                 next["runtime"] = json!(runtime);
             }
-            for field in ["effort", "profile"] {
+            for field in ["effort", "profile", "fast"] {
                 if let Some(v) = params.get(field) {
                     next[field] = v.clone();
                 }
@@ -435,6 +438,9 @@ impl Choose {
         if let Some(profile) = &r.profile {
             ask["profile"] = json!(profile);
         }
+        if let Some(fast) = r.fast {
+            ask["fast"] = json!(fast);
+        }
         let scope = crate::workspace::of_address(station);
         self.keep_station(scope, station_id(station));
         self.changed();
@@ -455,7 +461,7 @@ impl Choose {
     pub fn migrate(&self, params: &Value) {
         for (id, choice) in params["choices"].as_object().into_iter().flatten() {
             if choice.is_object() && self.record(&format!("station:{id}")).is_none() {
-                let kept: Map<String, Value> = FIELDS.iter().map(|f| (f.to_string(), json!(choice[*f].as_str().unwrap_or("")))).collect();
+                let kept: Map<String, Value> = FIELDS.iter().map(|f| (f.to_string(), if *f == "fast" { json!(choice[*f].as_bool()) } else { json!(choice[*f].as_str().unwrap_or("")) })).collect();
                 self.data.put(TABLE, &format!("station:{id}"), Value::Object(kept));
             }
         }
@@ -502,7 +508,7 @@ impl Choose {
                 let agent = self.views.agent(station, key)?;
                 let s = &agent["session"];
                 let pinned = s["profilePinned"] == true;
-                let value = json!({ "model": text(s.get("model")), "runtime": s["runtime"], "effort": text(s.get("effort")), "profile": if pinned { text(s.get("profile")) } else { None } });
+                let value = json!({ "model": text(s.get("model")), "runtime": s["runtime"], "effort": text(s.get("effort")), "fast": s["fast"], "profile": if pinned { text(s.get("profile")) } else { None } });
                 let current = Some(agent["account"].clone()).filter(Value::is_object);
                 (list(&agent["choices"]), value, current, true, false)
             }
@@ -545,7 +551,15 @@ impl Choose {
             Some(o) if value_option.is_none_or(|v| v["model"] != o["model"]) => o["model"].clone(),
             _ => value["model"].clone(),
         };
-        let next = json!({ "model": next_model, "runtime": on, "effort": effort, "profile": profile });
+        // Optional profile field doubles as capability detection for older stations.
+        let overview = self.store.get(&Topic::Overview { station: station.to_string() });
+        let fast_available = on_name == "codex" && matches!(o, Of::New | Of::Session(_))
+            && overview.as_ref().is_some_and(|v| list(&v["profiles"]).iter().any(|p| p["fast"].is_boolean()
+                && profile.as_ref().is_none_or(|id| p["id"] == *id)
+                && accounts.iter().any(|a| a["id"] == p["id"])));
+        let fast = draft.get("fast").or(value.get("fast")).and_then(Value::as_bool).filter(|_| on_name == "codex");
+        let speed_text = |fast: Option<bool>| match fast { Some(true) => "Fast", Some(false) => "标准", None => "跟随订阅" };
+        let next = json!({ "model": next_model, "runtime": on, "effort": effort, "profile": profile, "fast": fast });
         let changed = FIELDS.iter().any(|f| next[*f] != value[*f]);
         // The account the control names: the one kept to, else the one it runs on now.
         let kept = text(value.get("profile"));
@@ -580,16 +594,20 @@ impl Choose {
         let model_name = name_of(model.as_deref());
         let effort_text = effort.clone().unwrap_or_else(|| "默认深度".into());
         let chosen_text = account_text(profile.as_ref().and_then(Value::as_str));
-        let was = [
+        let mut was = vec![
             name_of(value["model"].as_str()).unwrap_or_else(|| "默认模型".into()),
             text(value.get("effort")).unwrap_or_else(|| "默认深度".into()),
             if kept.is_some() { current_name.clone() } else { format!("自动 · {current_name}") },
         ];
-        let becomes = [
+        let mut becomes = vec![
             model_name.clone().unwrap_or_else(|| "默认模型".into()),
             effort_text.clone(),
             if profile.is_some() { chosen_text.clone() } else if moves_off { "自动（换账号）".into() } else if on_current { format!("自动 · {current_name}") } else { "自动分配".into() },
         ];
+        if fast_available {
+            was.push(speed_text(value["fast"].as_bool()).into());
+            becomes.push(speed_text(fast).into());
+        }
         let force = if dropped {
             Some(format!("指定的账号「{}」没有启用 {}，改成了自动分配", account_text(profile_drafted.as_deref()), model_name.clone().unwrap_or_default()))
         } else if moves_off {
@@ -598,13 +616,16 @@ impl Choose {
             None
         };
         let save_text = if changed { format!("改成 {} · {effort_text} · {chosen_text}", model_name.clone().unwrap_or_else(|| "默认模型".into())) } else { "不变".into() };
+        let save_text = if changed && fast_available { format!("{save_text} · {}", speed_text(fast)) } else { save_text };
         Some(Ok(json!({
+            "fastAvailable": fast_available,
+            "fastText": fast_available.then(|| speed_text(value["fast"].as_bool())),
             "options": options.clone(),
             "runtimeFixed": fixed,
             "value": value,
             "valueOption": value_option,
             "account": account_view,
-            "draft": { "model": model, "runtime": on, "effort": effort, "profile": profile },
+            "draft": { "model": model, "runtime": on, "effort": effort, "profile": profile, "fast": fast },
             "option": option.map(|o| o["model"].clone()),
             "runtimes": if !fixed && runtimes.len() > 1 { runtimes.clone() } else { Vec::new() },
             "efforts": efforts,
@@ -672,7 +693,7 @@ impl Choose {
         let saved = match o_parsed {
             Of::New => {
                 let scope = crate::workspace::of_address(station);
-                self.pick_new(scope, &json!({ "station": station_id(station), "model": next["model"], "runtime": next["runtime"], "effort": text_of("effort"), "profile": text_of("profile") }))?;
+                self.pick_new(scope, &json!({ "station": station_id(station), "model": next["model"], "runtime": next["runtime"], "effort": text_of("effort"), "profile": text_of("profile"), "fast": next["fast"] }))?;
                 Saved::Done(json!({ "saved": true }))
             }
             Of::ConnectNew(form) => {
@@ -680,7 +701,8 @@ impl Choose {
                 Saved::Done(json!({ "saved": true }))
             }
             Of::Session(key) => {
-                let params = json!({ "station": station, "key": key, "model": next["model"], "effort": next["effort"], "profile": next["profile"] });
+                let mut params = json!({ "station": station, "key": key, "model": next["model"], "effort": next["effort"], "profile": next["profile"] });
+                if view["fastAvailable"] == true { params["fast"] = next["fast"].clone(); }
                 Saved::Op(crate::ops::request("session.settings", &params).ok_or_else(|| CoreError::invalid("session.settings"))??)
             }
             Of::Connect(id) => {
@@ -735,6 +757,16 @@ mod tests {
         let mut history = vec![];
         for model in ["astra", "openai/astra"] { record_combo(&mut history, &json!({"model": model, "runtime": "codex"}), 1.0); }
         assert_eq!(frequent_combos(history, &options, &resolve(&options, &json!({}))).len(), 1);
+    }
+
+    #[test]
+    fn speed_choices_preserve_false_and_follow_the_runtime() {
+        let options = vec![json!({"model":"gpt-6-astra", "runtimes":["codex", "claude"], "efforts":{}, "accounts":{}})];
+        for fast in [json!(true), json!(false), Value::Null] {
+            let choice = json!({"runtime":"codex", "model":"gpt-6-astra", "fast":fast});
+            assert_eq!(resolve(&options, &choice).picked()["fast"], fast);
+        }
+        assert_eq!(resolve(&options, &json!({"runtime":"claude", "fast":true})).fast, None);
     }
 
     #[test]

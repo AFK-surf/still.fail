@@ -117,6 +117,10 @@ function NewChatOn({ choice, view, stations, pick, create }: {
               {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
                 onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
               <Chooser label={effort || "默认深度"} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
+              {choice.pick?.fastAvailable && <Chooser label={choice.pick.fastText ?? "跟随订阅"} onClick={() => app.sheet({ height: 0.36, content: () => <>
+                <SheetGrab /><SheetHead title="速度" />
+                <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? "跟随订阅" : fast ? "Fast" : "标准"} sub={fast ? "响应更快，消耗更多额度或积分" : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
+              </> })} />}
             </>
           )}
         </div>

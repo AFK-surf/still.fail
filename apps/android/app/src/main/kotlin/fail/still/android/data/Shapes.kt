@@ -305,6 +305,7 @@ data class Session (
 	val profilePinned: Boolean? = null,
 	val model: String? = null,
 	val effort: String? = null,
+	val fast: Boolean? = null,
 	val runtimeSessionId: String? = null,
 	val workspace: String? = null,
 	val running: Boolean? = null,
@@ -1291,6 +1292,7 @@ data class Picked (
 	val model: String? = null,
 	val runtime: RuntimeKind,
 	val effort: String? = null,
+	val fast: Boolean? = null,
 	val profile: String? = null
 )
 
@@ -1308,6 +1310,8 @@ data class PickAccount (
 /// station's pick, said so (`dropped`, `force`).
 @Serializable
 data class PickView (
+	val fastAvailable: Boolean? = null,
+	val fastText: String? = null,
 	val options: List<ModelOption>,
 	val runtimeFixed: Boolean,
 	val value: Picked,
@@ -2185,6 +2189,7 @@ data class NewChatView (
 	val model: ModelOption? = null,
 	val runtime: RuntimeKind? = null,
 	val effort: String? = null,
+	val fast: Boolean? = null,
 	/// The account kept to, while it still runs the model there; none: the station's pick.
 	val profile: String? = null,
 	/// How hard it can think there, and who can run it (offered when more than one can: `pickAccount`).

@@ -299,6 +299,7 @@ export interface Session {
 	profilePinned?: boolean;
 	model?: string;
 	effort?: string;
+	fast?: boolean;
 	runtimeSessionId?: string;
 	workspace?: string;
 	running?: boolean;
@@ -1302,6 +1303,7 @@ export interface Picked {
 	model?: string;
 	runtime: RuntimeKind;
 	effort?: string;
+	fast?: boolean;
 	profile?: string;
 }
 
@@ -1319,6 +1321,8 @@ export interface PickAccount {
  * station's pick, said so (`dropped`, `force`).
  */
 export interface PickView {
+	fastAvailable?: boolean;
+	fastText?: string;
 	options: ModelOption[];
 	runtimeFixed: boolean;
 	value: Picked;
@@ -2170,6 +2174,7 @@ export interface NewChatView {
 	model?: ModelOption;
 	runtime?: RuntimeKind;
 	effort?: string;
+	fast?: boolean;
 	/** The account kept to, while it still runs the model there; none: the station's pick. */
 	profile?: string;
 	/** How hard it can think there, and who can run it (offered when more than one can: `pickAccount`). */

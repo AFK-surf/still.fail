@@ -392,7 +392,7 @@ export function RunSettingsScreen() {
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
         {/* Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why. */}
         <div className={css.mRunSummary}>
-          {["模型", "深度", "账号"].map((label, i) => {
+          {["模型", "深度", "账号", ...(v.fastAvailable ? ["速度"] : [])].map((label, i) => {
             const moved = v.becomes[i] !== v.was[i];
             return (
               <div key={label} className={css.mRunLine}>
@@ -414,6 +414,13 @@ export function RunSettingsScreen() {
         <div className={historyCss.mChips}>
           {[null, ...v.efforts].map((e) => <button key={e ?? "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => pick.set({ effort: e })}>{e ?? "默认"}</button>)}
         </div>
+        {v.fastAvailable && <>
+          <GroupLabel>速度</GroupLabel>
+          <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>Fast 响应更快，消耗更多额度或积分。</p>
+          <div className={historyCss.mChips}>
+            {([null, false, true] as const).map((fast) => <button key={String(fast)} type="button" className={historyCss.mChip} data-on={(v.draft.fast ?? null) === fast || undefined} onClick={() => pick.set({ fast })}>{fast === null ? "跟随订阅" : fast ? "Fast" : "标准"}</button>)}
+          </div>
+        </>}
         <GroupLabel>账号</GroupLabel>
         <SettingRow onClick={() => setList("account")} leading={(() => { const p = v.accounts.find((a) => a.id === chosen); return p ? <ProviderMark runtime={p.runtime ?? s.runtime} kind={p.kind} size={18} /> : null; })()}>
           <span className={historyCss.mSettingMain}>{v.accountText}</span>

@@ -515,6 +515,7 @@ impl AdminApi {
                     profile: given("profile"),
                     model: given("model"),
                     effort: given("effort"),
+                    fast: input.get("fast").and_then(Value::as_bool),
                     title: input.str("title").map(|t| t.chars().take(120).collect()),
                     created_by: viewer.id(),
                     client_key: given("clientKey"),
@@ -763,7 +764,13 @@ impl AdminApi {
                     Some(Value::Null) => Some(None),
                     _ => None,
                 };
-                let change = SessionChange { profile, model: pick("model"), effort: pick("effort") };
+                let fast = match input.get("fast") {
+                    None => None,
+                    Some(Value::Null) => Some(None),
+                    Some(Value::Bool(fast)) => Some(Some(*fast)),
+                    _ => return Err(http_error(400, "fast 必须是布尔值或 null")),
+                };
+                let change = SessionChange { profile, model: pick("model"), effort: pick("effort"), fast };
                 self.deps.hub.configure(key, change).await.map_err(|e| http_error(400, e.to_string()))?;
                 return ok(json!({ "ok": true }));
             }

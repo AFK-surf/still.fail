@@ -1107,8 +1107,17 @@ fn profile(id: &str, runtime: &str, models: &[&str], checked: bool, used: f64) -
 
 /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex.
 async fn choosing_core() -> (Rc<FakeHost>, Core) {
+    choosing_core_speed(false).await
+}
+
+async fn choosing_core_speed(speed: bool) -> (Rc<FakeHost>, Core) {
     let (host, core) = station_core(0.0).await;
-    station_answers(&host, |req| {
+    station_answers(&host, move |req| {
+        let session = |key: &str| {
+            let mut s = session(key);
+            if speed { s["runtime"] = json!("codex"); s["model"] = json!("gpt-6-astra"); s["profile"] = json!("p3"); s["fast"] = Value::Null; }
+            s
+        };
         let path = req.url.trim_start_matches("https://stillfail.test");
         match (req.method.as_str(), path.split('?').next().unwrap()) {
             ("GET", "/admin/api/overview") => json_response(200, json!({
@@ -1117,7 +1126,7 @@ async fn choosing_core() -> (Rc<FakeHost>, Core) {
                 "profiles": [
                     profile("p1", "claude", &["claude-opus-5-5", "claude-sonnet-5"], false, 10.0),
                     profile("p2", "claude", &["claude-opus-5-5"], true, 80.0),
-                    profile("p3", "codex", &["gpt-6-astra"], true, 0.0),
+                    ({ let mut p = profile("p3", "codex", &["gpt-6-astra"], true, 0.0); if speed { p["fast"] = json!(false); } p }),
                 ],
             })),
             ("GET", "/admin/api/sessions") => json_response(200, json!([session("k1")])),
@@ -1998,5 +2007,32 @@ fn preview_load_topic_reports_pending_finished_and_cancelled_resources() {
         assert_eq!(cancelled["percent"], 100);
         assert_eq!(cancelled["failed"], 1);
         assert_eq!(cancelled["resources"][0]["error"], "已取消");
+    });
+}
+
+#[test]
+fn session_speed_pick_sends_true_false_and_null_and_new_chats_keep_it() {
+    run(async {
+        let (host, core) = choosing_core_speed(true).await;
+        let ui = core.connect();
+        core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Pick { station: "ws/st".into(), of: "session:k1".into() } });
+        host.settle().await;
+        let mut values = HashMap::new();
+        apply(&host, &mut values);
+        assert_eq!(values[&1]["fastAvailable"], true);
+        for fast in [json!(true), json!(false)] {
+            call(&host, &core, ui, 2, "pick.set", json!({"station":"ws/st", "of":"session:k1", "fast":fast})).await.unwrap();
+            apply(&host, &mut values);
+            assert_eq!(values[&1]["draft"]["fast"], fast);
+            assert_eq!(values[&1]["changed"], true);
+            call(&host, &core, ui, 3, "pick.save", json!({"station":"ws/st", "of":"session:k1"})).await.unwrap();
+            assert_eq!(posted(&host, "/sessions/k1/settings").last().unwrap()["fast"], fast);
+        }
+        call(&host, &core, ui, 4, "newChat.pick", json!({"scope":"ws", "station":"st", "model":"gpt-6-astra", "fast":false})).await.unwrap();
+        call(&host, &core, ui, 5, "newChat.create", json!({"station":"ws/st"})).await.unwrap();
+        assert_eq!(posted(&host, "/sessions").last().unwrap()["fast"], false);
+        call(&host, &core, ui, 6, "newChat.pick", json!({"scope":"ws", "fast":null})).await.unwrap();
+        call(&host, &core, ui, 7, "newChat.create", json!({"station":"ws/st"})).await.unwrap();
+        assert!(posted(&host, "/sessions").last().unwrap().get("fast").is_none());
     });
 }

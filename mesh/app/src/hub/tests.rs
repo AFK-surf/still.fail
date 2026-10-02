@@ -1239,7 +1239,7 @@ async fn a_chat_opened_on_the_admin_page_reaches_the_session_like_slack_and_the_
 }
 
 fn new_chat(runtime: RuntimeKind) -> NewChat {
-    NewChat { runtime, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }
+    NewChat { fast: None, runtime, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }
 }
 
 #[tokio::test]
@@ -1378,7 +1378,7 @@ async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unrea
     r.call(&blocked, "chat_state", json!({ "kind": "block" })).await.unwrap();
     r.claude.last().complete();
     settle().await;
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "local", "hi", vec![], vec![], None).unwrap();
     settle().await;
     // The agent's answer is unread: the chat stays.
@@ -1458,6 +1458,7 @@ async fn a_session_changes_profile_model_and_effort_by_hand_and_is_taken_on_by_a
         }
     }
     let change = |profile: Option<Option<&str>>, model: Option<&str>, effort: Option<&str>| SessionChange {
+        fast: None,
         profile: profile.map(|p| p.map(String::from)),
         model: model.map(|m| Some(m.to_string())),
         effort: effort.map(|e| Some(e.to_string())),
@@ -1760,7 +1761,7 @@ fn files_an_app_cannot_upload_stay_in_still_fail_and_the_post_links_there() {
 #[tokio::test]
 async fn an_agent_names_its_chat_once_and_again_only_after_people_said_enough_never_over_peoples_name_nor_while_it_is_open() {
     let r = setup();
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "local", "帮我看下这个", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
@@ -1827,7 +1828,7 @@ async fn a_slack_agent_names_its_list_entry_with_the_same_rename_limits_and_manu
 #[tokio::test]
 async fn a_chat_that_starts_a_watch_may_be_renamed_for_it_at_once() {
     let r = setup();
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "local", "帮我盯着 CI", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
@@ -1901,7 +1902,7 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
     assert_eq!(r.claude.count(), 2, "no account left to go on with");
     assert!(matches(&r.chat.last_text(), &["触发额度或限流", "usage limit reached"]));
     // Changed by hand (here: kept to the first again): it goes on by itself.
-    let change = SessionChange { profile: Some(Some(on.clone())), model: None, effort: None };
+    let change = SessionChange { fast: None, profile: Some(Some(on.clone())), model: None, effort: None };
     r.hub.configure(&key, change).await.unwrap();
     settle().await;
     let third = r.claude.last();
@@ -1912,7 +1913,7 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
     r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "done", "kind": "final" })).await.unwrap();
     third.complete();
     settle().await;
-    r.hub.configure(&key, SessionChange { profile: Some(None), model: None, effort: None }).await.unwrap();
+    r.hub.configure(&key, SessionChange { fast: None, profile: Some(None), model: None, effort: None }).await.unwrap();
     settle().await;
     assert_eq!(r.claude.count(), 3);
 }
@@ -1920,7 +1921,7 @@ async fn a_turn_that_runs_out_of_allowance_goes_on_on_another_account_or_once_th
 #[tokio::test]
 async fn a_post_carries_a_card_kept_with_it_and_checked() {
     let r = setup();
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "ada@x.com", "fix the spacing", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
@@ -2012,7 +2013,7 @@ async fn answering_a_clarification_cannot_silently_restore_need_human() {
 #[tokio::test]
 async fn a_state_says_which_message_it_is_about_the_pending_card_by_default() {
     let r = setup();
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "ada@x.com", "上线吧", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
@@ -2075,7 +2076,7 @@ async fn options_are_refused_in_a_slack_thread() {
 #[tokio::test]
 async fn a_card_is_pending_until_a_person_writes_and_a_newer_one_replaces_it() {
     let r = setup();
-    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
+    let (web, thread) = r.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "ada@x.com".into(), client_key: None }).unwrap();
     r.hub.say(thread.id, "ada@x.com", "fix the spacing", vec![], vec![], None).unwrap();
     settle().await;
     let to = format!("EMBER/{}", thread.thread_ts);
@@ -2193,6 +2194,7 @@ async fn codex_model_efforts_validate_new_chats_changes_and_pinned_accounts() {
         }
     }));
     let new = |profile: Option<&str>, effort: &str| NewChat {
+        fast: None,
         runtime: RuntimeKind::Codex, profile: profile.map(String::from), model: Some("openai/gpt-6-astra".into()),
         effort: Some(effort.into()), title: None, created_by: "local".into(), client_key: None,
     };
@@ -2203,11 +2205,11 @@ async fn codex_model_efforts_validate_new_chats_changes_and_pinned_accounts() {
     let (pinned, _) = r.hub.new_session(new(Some("cx"), "ultra")).unwrap();
     assert_eq!(r.session(&pinned).effort.as_deref(), Some("ultra"));
     // A profile change must not carry an unsupported depth to the destination.
-    assert!(r.hub.configure(&pinned, SessionChange { profile: Some(Some("limited".into())), model: None, effort: None }).await.is_err());
-    assert!(r.hub.configure(&pinned, SessionChange { profile: Some(None), model: None, effort: None }).await.is_err());
-    r.hub.configure(&key, SessionChange { profile: Some(Some("cx".into())), model: None, effort: Some(Some("ultra".into())) }).await.unwrap();
+    assert!(r.hub.configure(&pinned, SessionChange { fast: None, profile: Some(Some("limited".into())), model: None, effort: None }).await.is_err());
+    assert!(r.hub.configure(&pinned, SessionChange { fast: None, profile: Some(None), model: None, effort: None }).await.is_err());
+    r.hub.configure(&key, SessionChange { fast: None, profile: Some(Some("cx".into())), model: None, effort: Some(Some("ultra".into())) }).await.unwrap();
     assert_eq!(r.session(&key).effort.as_deref(), Some("ultra"));
-    r.hub.configure(&key, SessionChange { profile: Some(None), model: None, effort: Some(None) }).await.unwrap();
+    r.hub.configure(&key, SessionChange { fast: None, profile: Some(None), model: None, effort: Some(None) }).await.unwrap();
     assert_eq!(r.session(&key).effort, None);
 }
 
@@ -2324,4 +2326,26 @@ async fn kept_chats_survive_idle_archiving_but_can_be_archived_by_hand() {
     assert!(r.store.get_thread(second.id).unwrap().unwrap().hidden_at.is_some());
     r.hub.archive_chat(thread.id, true).unwrap();
     assert!(r.session(&key).archived_at.is_some());
+}
+
+#[tokio::test]
+async fn fast_is_per_session_and_null_restores_the_subscription_default() {
+    let r = setup();
+    let mut chat = new_chat(RuntimeKind::Codex);
+    chat.fast = Some(true);
+    let (a, _) = r.hub.new_session(chat).unwrap();
+    let (b, _) = r.hub.new_session(new_chat(RuntimeKind::Codex)).unwrap();
+    assert_eq!(r.session(&a).fast, Some(true));
+    assert_eq!(r.session(&b).fast, None);
+    r.store.set_runtime_session_id(&a, "thread-a").unwrap();
+    r.store.set_runtime_session_id(&b, "thread-b").unwrap();
+    r.hub.configure(&a, SessionChange { fast: Some(Some(false)), ..Default::default() }).await.unwrap();
+    assert_eq!(r.store.codex_session_fast("thread-a").unwrap(), Some(false));
+    assert_eq!(r.store.codex_session_fast("thread-b").unwrap(), None);
+    r.hub.configure(&a, SessionChange::default()).await.unwrap();
+    assert_eq!(r.session(&a).fast, Some(false), "unrelated changes preserve an explicit standard speed");
+    r.hub.configure(&a, SessionChange { fast: Some(None), ..Default::default() }).await.unwrap();
+    assert_eq!(r.session(&a).fast, None);
+    let (claude, _) = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
+    assert!(r.hub.configure(&claude, SessionChange { fast: Some(Some(true)), ..Default::default() }).await.is_err());
 }

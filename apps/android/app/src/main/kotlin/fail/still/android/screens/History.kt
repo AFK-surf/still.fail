@@ -547,7 +547,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             // Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why.
             Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Each property on its line: what it was, and, when it changes, an arrow to what it becomes.
-                listOf("模型", "深度", "账号").forEachIndexed { i, label ->
+                (listOf("模型", "深度", "账号") + if (v.fastAvailable == true) listOf("速度") else emptyList()).forEachIndexed { i, label ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
                         val was = v.was.getOrElse(i) { "" }
@@ -568,6 +568,13 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             GroupLabel("思考深度")
             Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
             EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
+            if (v.fastAvailable == true) {
+                GroupLabel("速度")
+                Text("Fast 响应更快，消耗更多额度或积分。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+                EffortChips(listOf("跟随订阅", "标准", "Fast"), when (v.draft.fast) { true -> "Fast"; false -> "标准"; null -> "跟随订阅" }) { speed ->
+                    pick { put("fast", when (speed) { "Fast" -> true; "标准" -> false; else -> null } as Boolean?) }
+                }
+            }
             GroupLabel("账号")
             SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp) } }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)

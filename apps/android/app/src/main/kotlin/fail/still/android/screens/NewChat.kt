@@ -148,7 +148,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
     var made by remember(view.station) { mutableStateOf<String?>(null) }
     // Whether a message went out to it: until then, another choice (model, runtime, depth, account) is made anew.
     var sent by remember(view.station) { mutableStateOf(false) }
-    LaunchedEffect(runtime, model, effort, profile) { if (!sent && !draft.starting) made = null }
+    LaunchedEffect(runtime, model, effort, profile, choice.fast) { if (!sent && !draft.starting) made = null }
     val ensure: suspend () -> String = {
         made ?: app.api(view.station).createNewChat().also { made = it }
     }
@@ -281,6 +281,7 @@ private fun tripleLabel(p: PickView): String {
         p.valueOption?.name ?: v.model ?: "选模型",
         if (!p.runtimeFixed && (p.valueOption?.runtimes?.size ?: 0) > 1) RUNTIME_LABEL[v.runtime] ?: v.runtime else null,
         v.effort ?: "默认深度",
+        p.fastText,
         p.account?.text,
     ).joinToString(" · ")
 }
@@ -339,6 +340,12 @@ private fun openRunPicker(app: AppState, station: String) {
                 }
                 CascadeLabel("思考深度")
                 (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: "默认", null, draft.effort == e) { set { put("effort", e) } } }
+                if (v.fastAvailable == true) {
+                    CascadeLabel("速度")
+                    listOf<Boolean?>(null, false, true).forEach { fast ->
+                        CascadeOption(when (fast) { true -> "Fast"; false -> "标准"; null -> "跟随订阅" }, if (fast == true) "消耗更多额度或积分" else null, draft.fast == fast) { set { put("fast", fast) } }
+                    }
+                }
             }
         }
         // The foot: who runs it (the station's pick, most of the time), and 确定.

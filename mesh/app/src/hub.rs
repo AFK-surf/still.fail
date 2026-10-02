@@ -107,6 +107,7 @@ pub struct SessionChange {
     pub profile: Option<Option<String>>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    pub fast: Option<Option<bool>>,
 }
 
 /// A session of its own, talked to in the station's chat.
@@ -116,6 +117,7 @@ pub struct NewChat {
     pub profile: Option<String>,
     pub model: Option<String>,
     pub effort: Option<String>,
+    pub fast: Option<bool>,
     pub title: Option<String>,
     pub created_by: String,
     /// The key the asking client knows it by until it is made (`clientKey`): the sidebar's rows say it for a while.
@@ -884,6 +886,9 @@ impl Hub {
         let wanted_profile = change.profile.map(nonempty);
         let new_model = change.model.map(nonempty);
         let new_effort = change.effort.map(nonempty);
+        if change.fast.flatten().is_some() && runtime != RuntimeKind::Codex {
+            bail!("Fast 只适用于 OpenAI 订阅");
+        }
         if let Some(Some(id)) = &wanted_profile {
             let next = config.profiles.iter().find(|p| &p.id == id).ok_or_else(|| anyhow!("unknown profile {id}"))?;
             if !next.runtimes.contains(&runtime) {
@@ -933,6 +938,9 @@ impl Hub {
         }
         if model != row.model || effort != row.effort {
             self.store.set_session_model(key, model.as_deref(), effort.as_deref())?;
+        }
+        if let Some(fast) = change.fast {
+            self.store.set_session_fast(key, fast)?;
         }
         if profile == Some(None) {
             self.run_on(key)?;
@@ -1070,6 +1078,7 @@ impl Hub {
             profile_pinned: options.profile.is_some(),
             model: model.clone().or_else(|| profile.model.clone()),
             effort,
+            fast: options.fast.filter(|_| options.runtime == RuntimeKind::Codex),
             workspace: workspace.to_string_lossy().into_owned(),
             cwd: None,
             runtime_session_id: None,
@@ -1139,6 +1148,7 @@ impl Hub {
             profile_pinned: false,
             model,
             effort: None,
+            fast: None,
             workspace: workspace.to_string_lossy().into_owned(),
             cwd: Some(found.cwd.clone()),
             runtime_session_id: Some(found.id.clone()),
@@ -1857,6 +1867,7 @@ impl Hub {
             profile_pinned: kept.is_some(),
             model: connect.bind.model.clone(),
             effort: connect.bind.effort.clone(),
+            fast: None,
             workspace: workspace.to_string_lossy().into_owned(),
             cwd: None,
             runtime_session_id: None,

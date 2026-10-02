@@ -1111,7 +1111,7 @@ async fn a_new_chat_makes_a_session_of_its_own_with_the_chosen_runtime_model_and
 #[tokio::test]
 async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_from_a_to_b() {
     let t = setup().await;
-    let (_, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
+    let (_, thread) = t.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into(), client_key: None }).unwrap();
     for i in 1..=5 {
         t.hub.say(thread.id, "local", &format!("m{i}"), vec![], vec![], None).unwrap();
     }
@@ -1146,7 +1146,7 @@ async fn thread_entries_the_latest_page_pages_back_what_came_after_n_and_a_gap_f
 #[tokio::test]
 async fn read_positions_and_unread_counts_are_per_viewer_and_only_move_forward() {
     let t = setup().await;
-    let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "owner@example.com".into(), client_key: None }).unwrap();
+    let (key, thread) = t.hub.new_session(NewChat { fast: None, runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "owner@example.com".into(), client_key: None }).unwrap();
     let first = t.hub.say(thread.id, "owner@example.com", "mine", vec![], vec![], None).unwrap();
     t.hub.say(thread.id, "dev@example.com", "theirs", vec![], vec![], None).unwrap();
     t.store.insert_message(NewMessage::new(thread.id, "9.000001", AuthorKind::Agent, &key, "answer")).unwrap();
