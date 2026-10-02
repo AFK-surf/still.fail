@@ -66,5 +66,8 @@ export const markCount = style({ display: "inline-flex", alignItems: "center", g
 /** A row's waiting line's 等你 (ChatMark.tsx WaitingText). */
 export const waitingLead = style({ fontWeight: 600 });
 
-/** Compact needs-you prefix in the desktop sidebar; the explanation keeps the remaining line. */
-export const needMark = style({ display: "inline-flex", width: 14, height: 14, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
+/**
+ * Compact needs-you prefix in the desktop sidebar; the explanation keeps the remaining line. Pulled 2px left so the
+ * bell (drawn centred in its 14px box) stands under the 10px ring of the title line above, centre on centre.
+ */
+export const needMark = style({ display: "inline-flex", width: 14, height: 14, marginLeft: -2, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
