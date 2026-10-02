@@ -33,14 +33,14 @@ function AutomaticDecisionPanel({ station, view }: { station: string; view: Auto
   const options = [{ value: "", label: "选择决策模型" }, ...view.models.map(m => ({value:m.id,label:m.name}))];
   if (d.model && !chosen) options.push({ value:d.model, label:`${d.model} · 暂不可用` });
   return <>
-    <div className={pages.card}>
+    <div className={`${pages.card} ${pages.section}`}>
       <SwitchRow title="完成检查" description="agent 宣告完成时，检查是否还有未完成的工作或需要关注的信息" checked={d.enabled} disabled={busy} onChange={enabled => edit({enabled})} />
       <div>
         <Field label="决策模型" >
           <Select label="完成检查使用的模型" value={d.model} disabled={busy} options={options} onChange={model => edit({model})} />
         </Field>
         <div className={pages.cardRow}>
-          <span>{chosen ? `复用 ${chosen.profiles.join("、")}` : view.models.length ? "模型自动从现有 Profile 识别" : "现有 Profile 暂无可用决策模型"}</span>
+          <span className={shell.muted}>{chosen ? `复用 ${chosen.profiles.join("、")}` : view.models.length ? "模型自动从现有 Profile 识别" : "现有 Profile 暂无可用决策模型"}</span>
           <Button busy={refreshing} disabled={refreshing} onClick={refresh}>刷新模型</Button>
         </div>
       </div>

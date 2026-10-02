@@ -66,7 +66,7 @@ function DecisionPanel({station,view}:{station:string;view:AutomaticDecisionView
           <span className={lists.mRowNote}>{row.model}</span>
           {row.error && <span className={`${lists.mRowNote} ${parts.mRed}`}>{row.error}</span>}
         </span>
-        <span className={`${settings.mRowAside} ${row.accepted ? "" : parts.mRed}`}>{row.label}</span>
+        <span className={settings.mRowAside}><span className={row.accepted ? undefined : parts.mRed}>{row.label}</span></span>
         <ChevronRight size={14} className={parts.mSubtle} />
       </ListRow>)}
     </ListCard>
