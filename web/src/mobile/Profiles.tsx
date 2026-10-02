@@ -621,7 +621,7 @@ export function NewProfileScreen() {
         {!d ? <Loading text={t("web-mobile.profiles.loading")} /> : d.step === "pick" ? (
           <>
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.hint}</p>
-            {overview && <MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} />}
+            {overview && <div><MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} /></div>}
             {d.groups.map((g) => (
               <div key={g.id}>
                 <SectionHeader title={g.title} start={6} />
@@ -747,7 +747,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
           );
         })}
       </ListCard>
-      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>{t("web-mobile.profiles.machineNote", { name: NAME })}</p>
+      {!inForm && <p className={settingsCss.mPageNote}>{t("web-mobile.profiles.machineNote", { name: NAME })}</p>}
     </>
   );
 }
