@@ -378,13 +378,17 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
      * goes to `orElse` (the system opens it). `outside`: a link from outside the app (a notification, the browser),
      * whose item opens over the list.
      */
-    fun openLink(url: String, outside: Boolean = false, orElse: () -> Unit = {}) {
+    fun openLink(url: String, outside: Boolean = false, notification: Boolean = false, orElse: () -> Unit = {}) {
         scope.launch {
             val target = try {
                 core.call("link.parse", buildJsonObject { put("url", url) }).takeIf { it !is JsonNull }
                     ?.let { StillFailJson.decodeFromJsonElement(LinkTarget.serializer(), it) }
             } catch (_: CoreException) { null }
-            if (target == null || !open(target, outside)) orElse()
+            if (notification && target?.opens == "item" && !target.workspace.isNullOrEmpty()) {
+                pickWorkspace(target.workspace)
+                sheet = null; menu = null; forward = true
+                stack = listOf(Screen.Home, Screen.Decisions)
+            } else if (target == null || !open(target, outside)) orElse()
         }
     }
 

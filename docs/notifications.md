@@ -154,4 +154,6 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
 - Android: `POST_NOTIFICATIONS` is asked for; one channel (消息); local notices
   while the app is in front (not for the open chat; the core's `notify`), FCM
   pushes while it is not (`notice.pushed`). The token is registered with
-  `push.register`. 我 → 通知 turns them off, kept by the core.
+  `push.register`. Tapping either kind opens the notification’s workspace on
+  the decisions page (奏), with Back returning to its chat list. Ordinary chat
+  links still open their chat. 我 → 通知 turns them off, kept by the core.

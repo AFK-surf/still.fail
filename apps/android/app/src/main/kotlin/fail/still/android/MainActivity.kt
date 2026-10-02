@@ -154,6 +154,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Keep a tap received while the core is starting for onCreate’s deferred handle call.
+        setIntent(intent)
         handle(intent)
     }
 
@@ -166,11 +168,11 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent?) {
         val uri = intent?.data ?: return
         val app = app ?: return
-        // What the link opens is the core's (`link.parse`); http too: a notification opens its chat on a dev cloud's
-        // origin (Notifier.show). An item opens over the list; an invitation or a chat's reference as tapped in the app.
+        // What the link opens is the core’s (`link.parse`), including a dev cloud’s http origin.
+        // Notifications keep the chat URL to identify the workspace, but land on its decisions page.
         if (uri.scheme == "https" || uri.scheme == "http") {
             setIntent(Intent())
-            app.openLink(uri.toString(), outside = true)
+            app.openLink(uri.toString(), outside = true, notification = intent.getBooleanExtra(Notifier.OPEN_DECISIONS, false))
             return
         }
         if (uri.scheme !in AUTH_SCHEMES || uri.host != "auth") return
