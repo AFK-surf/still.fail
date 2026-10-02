@@ -7,7 +7,8 @@ import { memory } from "./memory.ts";
 import { usage } from "./usage.ts";
 
 export const usageOps: Record<string, ReadOp> = {
-  usage: (store, a) => usage(store, a.lang, BigInt(a.from), BigInt(a.to), BigInt(a.tz)),
+  // `reading`: the counter's readingAll (absent: true).
+  usage: (store, a) => usage(store, a.lang, BigInt(a.from), BigInt(a.to), BigInt(a.tz), typeof a.reading === "boolean" ? a.reading : true),
   machineSessions: (store) => machineSessions(store),
   machineSession: (store, a) => machineSession(store, a.lang, a.runtime, a.id, a.limit),
   memory: (store) => memory(store.dataDir),
