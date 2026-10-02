@@ -2858,7 +2858,7 @@ mod tests {
             assert_eq!(m[1]["ending"], "need_decision");
             assert_eq!((m[1]["decision"]["resolved"].clone(), m[1]["decision"]["chosen"].clone()), (json!(true), json!("B")));
             assert_eq!(m[3]["decision"], json!({ "resolved": false }), "the one its row names waits");
-            assert_eq!((m[1]["card"]["type"].clone(), m[3]["card"].clone()), (json!("options"), json!({ "type": "options", "options": [{ "label": "C" }] })));
+            assert_eq!((m[1]["card"]["type"].clone(), m[3]["card"].clone()), (json!("options"), json!({ "type": "options", "options": [{ "label": "C" }], "assigneeText": "尚未指定决策人" })));
             assert_eq!(m[0].get("decision"), None);
             assert_eq!(v["decision"]["text"], "奏 · 那 C 呢？");
             assert_eq!(v.get("archivable"), None);
