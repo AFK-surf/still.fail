@@ -160,27 +160,25 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
     }
 }
 
-/** Renames the chat (web mobile/sheets.tsx → ask, with `empty`): an empty name gives it back its first message. */
+/**
+ * Renames the chat (web mobile/sheets.tsx → ask, with `empty`): an empty name gives it back its first message. The core
+ * shows the new name at once (views/changing.rs), so the sheet goes as it is given, not waiting on the station; a
+ * failure is said by a toast, the name as it was again.
+ */
 internal fun askTitle(app: AppState, station: String, thread: Long?, session: String, first: String) {
     app.sheet = SheetSpec(0.42f) {
-        val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(first) }
-        val busy = app.isDoing("chat.rename", "station" to station, "session" to session)
-        var error by remember { mutableStateOf<String?>(null) }
         SheetGrab()
         SheetHead(t("android-chat.rename.title"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Field(text, { text = it }, t("android-chat.rename.field"))
             Text(t("android-chat.rename.note"), fontSize = 12.sp, color = C.muted)
-            error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button(t("common.cancel"), primary = false) { app.sheet = null }
-                Button(t("common.save"), primary = true, busy = busy, enabled = text.trim() != first) {
-                    error = null
-                    scope.launch {
-                        try { app.api(station).rename(thread, session, text.trim()); app.sheet = null }
-                        catch (e: CoreException) { error = e.message }
-                    }
+                Button(t("common.save"), primary = true, enabled = text.trim() != first) {
+                    val title = text.trim()
+                    app.sheet = null
+                    app.act(t("android-chat.rename.verb")) { app.api(station).rename(thread, session, title) }
                 }
             }
         }

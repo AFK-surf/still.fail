@@ -205,10 +205,34 @@ impl Inner {
                 if archived {
                     self.views.archiving(&station, thread, &session, true);
                 }
+                // Its page says so at once too (taken out of the archive: it can be written in at once).
+                let change = self.views.changing(&station, thread, &session, serde_json::Map::new(), Some(archived));
                 let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
                 if archived {
                     self.views.archiving(&station, thread, &session, false);
                 }
+                self.views.changed(change);
+                result
+            }
+            Call::ChatChange { op, thread, session, title, pinned, keep } => {
+                let station = match &op.target {
+                    crate::ops::Target::Station(station) => station.clone(),
+                    crate::ops::Target::Cloud(_) => return Err(CoreError::invalid(t!("core-misc.params.station"))),
+                };
+                let mut row = serde_json::Map::new();
+                if let Some(title) = title {
+                    row.insert("title".into(), json!(title));
+                }
+                // Pinned now: at the top of the pinned, as its station will have it.
+                if let Some(pinned) = pinned {
+                    row.insert("pinned".into(), if pinned { json!(self.host.now_ms()) } else { Value::Null });
+                }
+                if keep {
+                    row.insert("archiveReminderDismissed".into(), json!(true));
+                }
+                let change = self.views.changing(&station, thread, &session, row, None);
+                let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
+                self.views.changed(change);
                 result
             }
             Call::ChatSend { station, thread, text, attachments, quotes, client } => {
@@ -265,7 +289,15 @@ impl Inner {
                 if crate::decisions::closes(&card, &option) {
                     let op = crate::ops::request("decision.close", &json!({"station": station, "thread": thread, "seq": seq, "option": option}))
                         .expect("decision.close is an operation")?;
-                    return Box::pin(self.execute(Call::Op(op), progress, at)).await;
+                    // Closed at once in its chat (it waits on no card meanwhile: views/changing.rs), not once its
+                    // station has it.
+                    let mut row = serde_json::Map::new();
+                    row.insert("card".into(), Value::Null);
+                    row.insert("decision".into(), Value::Null);
+                    let change = self.views.changing(&station, Some(thread), "", row, None);
+                    let result = Box::pin(self.execute(Call::Op(op), progress, at)).await;
+                    self.views.changed(change);
+                    return result;
                 }
                 let send = Call::ChatSend { station, thread, text, attachments: json!([]), quotes, client: None };
                 Box::pin(self.execute(send, progress, at)).await

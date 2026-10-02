@@ -409,7 +409,7 @@ function useRowMenu(item: ChatItem, busy: boolean) {
     // A station from before pins says nothing of them: its chats are not pinned from here.
     ...(item.pinned == null ? [] : [{ label: item.pinned ? t("web-mobile.home.unpin") : t("web-mobile.home.pin"), icon: <Pin size={16} />, action: () => { api.pin(item, !item.pinned).catch(failed(item.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed")); } }]),
     { label: t("web-mobile.home.rename"), icon: <Edit size={16} />, action: () => ask(app, {
-      title: t("web-mobile.home.renameTitle"), value: item.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"),
+      title: t("web-mobile.home.renameTitle"), value: item.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
       run: (title) => api.rename(item, title),
     }) },
     // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).

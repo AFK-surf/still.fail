@@ -274,6 +274,7 @@
   "android-chat.rename.field": "Chat name",
   "android-chat.rename.note": "Leave empty to auto-name",
   "android-chat.rename.title": "Rename chat",
+  "android-chat.rename.verb": "rename the chat",
   "android-chat.run.account.auto": "Auto",
   "android-chat.run.account.choose": "Account",
   "android-chat.run.account.note": "Auto switches accounts when quota runs out or sign-in expires; a chosen account is always used.",

@@ -381,10 +381,11 @@ export function RunSettingsScreen() {
   const chosen = v.draft.profile ?? null;
   if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={v.options} runtime={s.runtime} picked={v.option ?? null} onPick={(m) => { pick.set({ model: m }); setList(null); }} /></div>;
   if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={v.accounts} runtime={s.runtime} picked={chosen} onPick={(p) => { pick.set({ profile: p }); setList(null); }} /></div>;
+  // Back at once, not waiting on the station (its button under way where it shows, doing); failed, a toast says why.
   const save = () => {
-    if (!v.changed || !v.option) return app.pop();
-    pick.save()
-      .then(() => { app.toast(t("web-mobile.history.changed")); app.pop(); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)));
+    app.pop();
+    if (!v.changed || !v.option) return;
+    pick.save().then(() => app.toast(t("web-mobile.history.changed")), (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)));
   };
   const effort = v.draft.effort ?? null;
   return (

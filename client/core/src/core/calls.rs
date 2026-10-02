@@ -23,6 +23,9 @@ pub(crate) enum Call {
     ProfileModels { op: crate::ops::Request, id: String, models: Value },
     /// A chat into the archive or back (`chat.archive`, an `Op`): one going in is hidden from the lists meanwhile.
     ChatArchive { op: crate::ops::Request, thread: Option<u64>, session: String, archived: bool },
+    /// A chat renamed, pinned or let go, or kept (`chat.rename`, `chat.pin`, `chat.keep`): shown so at once while its
+    /// station is asked (views/changing.rs).
+    ChatChange { op: crate::ops::Request, thread: Option<u64>, session: String, title: Option<String>, pinned: Option<bool>, keep: bool },
     /// `client`: the app it is sent from ("android 0.1.1123"), for the station to tell its agent; older UIs give none.
     ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value, client: Option<String> },
     /// A new chat on a station (`POST /sessions` with `ask`): answered at once with the key it goes by here; the
@@ -104,7 +107,7 @@ impl Call {
     /// The station a call is about, if any.
     pub(super) fn station(&self) -> Option<&str> {
         match self {
-            Call::Op(op) | Call::ProfileModels { op, .. } | Call::ChatArchive { op, .. } => match &op.target {
+            Call::Op(op) | Call::ProfileModels { op, .. } | Call::ChatArchive { op, .. } | Call::ChatChange { op, .. } => match &op.target {
                 crate::ops::Target::Station(station) => Some(station),
                 crate::ops::Target::Cloud(_) => None,
             },
@@ -548,6 +551,14 @@ pub(super) fn parse_call(name: &str, params: Value) -> Result<Call> {
             let op = crate::ops::request(name, &params).expect("an op")?;
             let session = params.get("session").and_then(Value::as_str).unwrap_or("").to_string();
             Call::ChatArchive { op, thread: params.get("thread").and_then(Value::as_u64), session, archived: params.get("archived").and_then(Value::as_bool) == Some(true) }
+        }
+        "chat.rename" | "chat.pin" | "chat.keep" => {
+            let params = params_or_empty(params);
+            let op = crate::ops::request(name, &params).expect("an op")?;
+            let session = params.get("session").and_then(Value::as_str).unwrap_or("").to_string();
+            let title = (name == "chat.rename").then(|| params.get("title").and_then(Value::as_str).unwrap_or("").trim().to_string()).filter(|t| !t.is_empty());
+            let pinned = (name == "chat.pin").then(|| params.get("pinned").and_then(Value::as_bool) == Some(true));
+            Call::ChatChange { op, thread: params.get("thread").and_then(Value::as_u64), session, title, pinned, keep: name == "chat.keep" }
         }
         _ => {
             let params = params_or_empty(params);

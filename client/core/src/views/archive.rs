@@ -64,7 +64,8 @@ impl Views {
                     errors.push(json!({ "station": s.address, "text": text }));
                 }
                 // A station from before the archive answers the chats it shows: none says `archived`, so none is.
-                Some(Ok(list)) => items.extend(list.as_array().into_iter().flatten().filter(|c| c.get("archived").is_some_and(Value::is_object)).map(|chat| {
+                // One on its way out of the archive from here is gone from it at once (changing.rs).
+                Some(Ok(list)) => items.extend(list.as_array().into_iter().flatten().filter(|c| c.get("archived").is_some_and(Value::is_object) && !self.restoring(&s.address, c)).map(|chat| {
                     let mark = &chat["archived"];
                     let at = mark.get("at").or_else(|| chat.get("lastActiveAt")).and_then(Value::as_f64).unwrap_or(0.0);
                     let text = |v: Option<&Value>| v.and_then(Value::as_str).unwrap_or("").to_string();

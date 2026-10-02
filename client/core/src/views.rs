@@ -26,6 +26,7 @@ use crate::store::{Store, Watch};
 
 mod admin;
 mod archive;
+mod changing;
 mod usage;
 pub mod marks;
 
@@ -60,6 +61,7 @@ pub struct Views {
     /// Messages sent to an agent with no chat yet (its station, its key), waiting here while its station makes one.
     firsts: RefCell<HashMap<(String, String), First>>,
     archiving: archive::Archiving,
+    changing: changing::Changing,
     /// Views whose words count seconds (a chat's jobs): each computed again when they next change, by the newest timer.
     again: Rc<RefCell<(u64, HashMap<Topic, u64>)>>,
 }
@@ -142,6 +144,7 @@ impl Views {
             pending: RefCell::default(),
             firsts: RefCell::default(),
             archiving: Default::default(),
+            changing: Default::default(),
             again: Rc::default(),
         })
     }
@@ -523,6 +526,17 @@ impl Views {
         for view in self.chat_views(station, thread) {
             self.store.invalidate(&view);
         }
+        // A card answered from here waits no more (`answering`).
+        let views: Vec<Topic> = self.views.borrow().keys().filter(|v| matches!(v, Topic::Decisions { .. } | Topic::WorkspaceMarks { .. })).cloned().collect();
+        for view in views {
+            self.store.invalidate(&view);
+        }
+    }
+
+    /// Whether something sent from here is on its way into a chat (not failed): the card it waits on is answered by it
+    /// (the first a person writes after a card answers it), shown so at once, not once its station has it.
+    pub(super) fn answering(&self, station: &str, thread: u64) -> bool {
+        self.outbox.borrow().get(&(station.to_string(), thread)).is_some_and(|list| list.iter().any(|m| m["state"] != "failed"))
     }
 
     /// The live pages showing a chat: by its thread, or by its agent once the chat is the agent's.
@@ -909,6 +923,8 @@ impl Views {
                         continue;
                     }
                     let mut row = row.clone();
+                    // As changed from here meanwhile (changing.rs).
+                    self.as_changing(&s.address, &mut row);
                     row["station"] = json!(s.address);
                     row["stationName"] = json!(s.name);
                     // Its station offline: the row says so itself (greyed, marked), not the list above it; its link
@@ -1277,10 +1293,12 @@ impl Views {
         let slack_url = workspace_url.filter(|_| slack).map(|url| format!("{url}archives/{channel}/p{}", str_of(&thread, "threadTs").replace('.', "")));
         // Its item in the sidebar, as the station has it for the viewer (as kept, until read).
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok);
-        let row = rows.as_ref().and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id)).cloned());
+        let row = rows.as_ref().and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id)).cloned())
+            .map(|mut row| { self.as_changing(station, &mut row); row });
         // Where each card in it stands: the one its row names waits (the rows read, a chat with no row waits on none);
         // the rows not read, as its messages say.
-        let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(&d))));
+        let answering = self.answering(station, id);
+        let pending = rows.as_ref().map(|_| row.as_ref().and_then(crate::decisions::of_row).filter(|_| !answering).map(|d| (d["seq"].as_u64().unwrap_or(0), crate::decisions::dismissed(&d))));
         crate::decisions::in_messages(&mut messages, pending);
         let focus_last = page.get("end").and_then(Value::as_bool) != Some(false)
             && outbox.is_empty() && messages.last().is_some_and(crate::present::focus_message);
@@ -1312,6 +1330,10 @@ impl Views {
             "thread": thread,
             "archived": thread.get("hiddenAt").is_some_and(|at| !at.is_null()),
         })).map(|mut view| {
+            // Out of the archive (or into it) from here: so at once.
+            if let Some(archived) = self.archived_changing(station, Some(id), None) {
+                view["archived"] = json!(archived);
+            }
             // Pinned to the top of the viewer's list; absent when its station does not know pins.
             if let Some(pinned) = row.as_ref().and_then(|r| r.get("pinned")) {
                 view["pinned"] = json!(pinned.is_number());
@@ -1321,8 +1343,8 @@ impl Views {
             if let Some(watch) = crate::present::row_watch(&sessions) {
                 view["watch"] = watch;
             }
-            // The card it waits on, as its row has it (decisions.rs).
-            if let Some(card) = row.as_ref().and_then(crate::decisions::of_row) {
+            // The card it waits on, as its row has it (decisions.rs); none once answered from here.
+            if let Some(card) = row.as_ref().and_then(crate::decisions::of_row).filter(|_| !answering) {
                 view["decision"] = crate::decisions::shown(&card);
             }
             // Nothing left in it: one tap archives it (chat.archive).
@@ -1409,6 +1431,10 @@ impl Views {
                 .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
                 .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
             for row in rows.as_array().into_iter().flatten().filter(|r| !self.being_archived(&s.address, r)) {
+                // As changed from here meanwhile (a card closed: changing.rs).
+                let mut row = row.clone();
+                self.as_changing(&s.address, &mut row);
+                let row = &row;
                 let place = || json!({
                     "station": s.address, "stationName": s.name, "session": row.get("id").cloned().unwrap_or(Value::Null),
                     "thread": row.get("thread").cloned().unwrap_or(Value::Null), "title": row.get("title").cloned().unwrap_or(json!("")),
@@ -1434,6 +1460,10 @@ impl Views {
                 }
                 let Some(d) = crate::decisions::for_viewer(row, &me) else { continue };
                 let (Some(thread), Some(seq)) = (row.get("thread").and_then(Value::as_u64), d.get("seq").and_then(Value::as_u64)) else { continue };
+                // Answered from here, on its way: no longer waiting for the viewer.
+                if self.answering(&s.address, thread) {
+                    continue;
+                }
                 let agents: Vec<Value> = row.get("agents").and_then(Value::as_array).into_iter().flatten().map(|a| {
                     let mut a = a.clone();
                     crate::present::session(&mut a);
@@ -1610,7 +1640,9 @@ impl Views {
         };
         // Its title is the station's: the page waits for its items.
         let rows = self.store.value(&Topic::ChatRows { station: station.to_string() })?.ok();
-        let row = rows.as_ref().and_then(Value::as_array).and_then(|rows| rows.iter().find(|r| r.get("id").and_then(Value::as_str) == Some(key)));
+        let row = rows.as_ref().and_then(Value::as_array).and_then(|rows| rows.iter().find(|r| r.get("id").and_then(Value::as_str) == Some(key)))
+            .map(|row| { let mut row = row.clone(); self.as_changing(station, &mut row); row });
+        let row = row.as_ref();
         // Without an active row, first resolve the link against all threads (including archived ones).
         // Otherwise an old notification briefly, or forever, looks like an agent with no messages.
         if row.is_none() {
@@ -1626,7 +1658,7 @@ impl Views {
             "thread": null,
             "title": title,
             "people": [],
-            "archived": agent["session"].get("archivedAt").is_some_and(|at| !at.is_null()),
+            "archived": self.archived_changing(station, None, Some(key)).unwrap_or_else(|| agent["session"].get("archivedAt").is_some_and(|at| !at.is_null())),
             "agents": [agent],
             "messages": [],
             "more": false,
@@ -3120,6 +3152,38 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(v["thread"]["id"], 7);
             assert_eq!(v["messages"].as_array().unwrap().len(), 1);
+        });
+    }
+
+    #[test]
+    fn a_chat_renamed_or_pinned_here_shows_so_at_once_and_as_its_station_has_it_once_answered() {
+        run(async {
+            let t = setup();
+            let views = t.router.views();
+            let mut list = Ui::default();
+            t.set(workspace(), one_station());
+            t.host.settle().await;
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false, watching: false });
+            let now = t.host.now_ms();
+            t.set(rows("ws/st"), json!([row("7", now - 1000.0), row("8", now - 2000.0)]));
+            t.read(&mut list, 1).await;
+            let item = |list: &Ui, id: &str| list.value.clone().unwrap()["days"].as_array().unwrap().iter()
+                .flat_map(|d| d["items"].as_array().unwrap().clone()).find(|i| i["id"] == id).unwrap();
+            let mut title = serde_json::Map::new();
+            title.insert("title".into(), json!("新名字"));
+            let renaming = views.changing("ws/st", Some(7), "s", title, None);
+            let mut pin = serde_json::Map::new();
+            pin.insert("pinned".into(), json!(now));
+            let pinning = views.changing("ws/st", Some(8), "s", pin, None);
+            t.read(&mut list, 1).await;
+            assert_eq!(item(&list, "7")["title"], "新名字");
+            assert_eq!(item(&list, "8")["pinned"], true);
+            // Answered (here: refused, the station's rows unchanged): as its station has it.
+            views.changed(renaming);
+            views.changed(pinning);
+            t.read(&mut list, 1).await;
+            assert_eq!(item(&list, "7")["title"], "7 的标题");
+            assert_ne!(item(&list, "8")["pinned"], true);
         });
     }
 

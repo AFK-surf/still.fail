@@ -410,23 +410,21 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     val defer = { if (local.replying == null) go(-1) { local.later.remove(item.key); local.later.add(item.key); call(t("android-misc.decisions.deferWhat")) { app.api(item.station).deferDecision(item.thread, item.seq) } } }
     val dismiss = { if (local.replying == null) go(1) { local.gone.add(item.key); call(t("android-misc.decisions.dismissWhat")) { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
     val answer = { o: DecisionOption -> if (local.replying == null) go(0) { local.gone.add(item.key); call(t("android-misc.decisions.answerWhat")) { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
-    // A text card's reply: it stays (a spinner on its send) until the core has it, then goes as an answer does; refused,
-    // what was written stays and why is said.
+    // A text card's reply: it goes as a message does, at once (its chat's outbox has it: sending, or not sent with a way
+    // to send it again), not waiting on the station; refused by the core, the decision and what was written are back.
     val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
     val reply = {
-        val text = replyDraft.text.trim()
-        val files = replyDraft.files.mapNotNull { it.done }
-        val quotes = replyDraft.quotes.map { it.sent() }
         if (replyDraft.ready && !busy && local.replying == null) {
-            local.replying = item
-            replyDraft.starting = true
+            val taken = replyDraft.take()
+            go(0) { local.gone.add(item.key) }
             app.scope.launch {
                 try {
-                    app.api(item.station).replyDecision(item.thread, item.seq, text, files, quotes)
-                    replyDraft.take()
-                    go(0) { local.gone.add(item.key); local.replying = null }
-                } catch (e: CoreException) { local.replying = null; app.toast = t("android-misc.decisions.replyFailed", "error" to errorText(e)) }
-                finally { replyDraft.starting = false }
+                    app.api(item.station).replyDecision(item.thread, item.seq, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                } catch (e: CoreException) {
+                    local.undo(item.key)
+                    if (e.code == "invalid_params" && replyDraft.empty) replyDraft.restore(taken)
+                    app.toast = t("android-misc.decisions.replyFailed", "error" to errorText(e))
+                }
             }
         }
         Unit

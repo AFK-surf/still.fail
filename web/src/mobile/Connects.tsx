@@ -485,8 +485,10 @@ export function ConnectRunScreen() {
       </div>
       <button type="button" className={historyCss.mRunGo} data-changed={changed || undefined} disabled={busy || (changed && !model)}
         onClick={() => {
-          if (!changed) return app.pop();
-          pick.save().then(() => { app.toast(t("web-mobile.connects.runSaved")); app.pop(); }, (e: Error) => app.toast(e.message));
+          // Back at once, not waiting on the station; failed, a toast says why.
+          app.pop();
+          if (!changed) return;
+          pick.save().then(() => app.toast(t("web-mobile.connects.runSaved")), (e: Error) => app.toast(e.message));
         }}>
         {busy && <Spinner size={14} />}{v.saveText}
       </button>

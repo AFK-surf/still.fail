@@ -1067,13 +1067,14 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
 private fun archiveSession(of: ChatOf, view: ChatView, agents: List<AgentHere>): String? =
     (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
 
-/** Archives the chat (its bar's 归档, and the one under its last 做完了). */
+/**
+ * Archives the chat (its bar's 归档, and the one under its last 做完了): home at once, the chat gone from the list
+ * meanwhile (the core's), not waiting on the station; back in the list, and said, if it could not.
+ */
 private fun archiveChat(app: fail.still.android.AppState, station: String, view: ChatView, session: String) {
-    val page = app.stack.last()
-    app.act(t("android-chat.archive.verb")) {
+    app.home()
+    app.act(t("android-chat.archive.verb"), t("android-chat.archived")) {
         app.api(station).setArchived(view.thread?.id, session, true)
-        if (app.stack.last() == page) app.home()
-        app.toast = t("android-chat.archived")
     }
 }
 

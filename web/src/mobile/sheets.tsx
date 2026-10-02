@@ -41,18 +41,27 @@ function Confirm({ title, text, action, danger = false, run }: { title: string; 
   );
 }
 
-/** Asks for a line (a name); `run` gets it trimmed. `empty`: an empty line may be given too. */
-export function ask(app: MobileApp, spec: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; empty?: boolean; run: (value: string) => Promise<unknown> }) {
+/**
+ * Asks for a line (a name); `run` gets it trimmed. `empty`: an empty line may be given too. `atOnce`: what it changes
+ * shows changed at once (the core's), so the sheet goes as it is given, not waiting on the station; a failure is said
+ * by a toast, `atOnce` its words (with {error}).
+ */
+export function ask(app: MobileApp, spec: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; empty?: boolean; atOnce?: string; run: (value: string) => Promise<unknown> }) {
   app.sheet({ height: 0.42, content: () => <Ask {...spec} /> });
 }
 
-function Ask({ title, value: first, placeholder, action, hint, secret = false, empty = false, run }: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; empty?: boolean; run: (value: string) => Promise<unknown> }) {
+function Ask({ title, value: first, placeholder, action, hint, secret = false, empty = false, atOnce, run }: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; empty?: boolean; atOnce?: string; run: (value: string) => Promise<unknown> }) {
   const app = useApp();
   const [value, setValue] = useState(first);
   const operation = useAction(run, () => app.sheet(null));
   const { busy } = operation;
   const error = operation.error?.message;
   const go = () => {
+    if (atOnce) {
+      app.sheet(null);
+      run(value.trim()).catch((e: unknown) => app.toast(t(atOnce, { error: e instanceof Error ? e.message : String(e) })));
+      return;
+    }
     void operation.run(value.trim());
   };
   return (

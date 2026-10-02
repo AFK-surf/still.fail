@@ -597,11 +597,12 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(16.dp)).background(if (v.changed) C.ink else C.chip)
                 .clickable(enabled = !busy) {
-                    if (!go) { app.pop(); return@clickable }
-                    scope.launch {
-                        try { app.api(station).pickSave(pickOf); app.toast = t("android-chat.run.saved"); app.pop() }
+                    // Back at once, not waiting on the station; failed, a toast says why.
+                    app.pop()
+                    if (!go) return@clickable
+                    app.scope.launch {
+                        try { app.api(station).pickSave(pickOf); app.toast = t("android-chat.run.saved") }
                         catch (err: CoreException) { app.toast = t("android-chat.save.failed", "error" to errorText(err)) }
-
                     }
                 }
                 .padding(horizontal = 16.dp, vertical = 12.dp),

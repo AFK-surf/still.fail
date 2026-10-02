@@ -13,9 +13,9 @@
 import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import { useApi, useStations } from "./api.ts";
+import { CoreError, useApi, useStations } from "./api.ts";
 import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
-import { doingMatches, failed, useDoing, useDoingList } from "./doing.ts";
+import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
 import { reducedMotion } from "./motion.ts";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
@@ -70,35 +70,37 @@ export function cardType(card: MessageCard | undefined, options: readonly Decisi
 }
 
 /**
- * A text card's field and send button: Enter or the button sends what is written (`decision.reply`), a spinner on the
- * button meanwhile; failed, the words stay and a toast says why. `onSent` once it went through.
+ * A text card's field and send button: Enter or the button sends what is written (`decision.reply`). It goes as a
+ * message does: the field empties and `onSent` at once, the reply in its chat's outbox (sending, or not sent with a way
+ * to send it again), not waiting on the station; refused by the core, the words come back and a toast says why.
  */
-export function DecisionReply({ station, thread, seq, session, mobile, placeholder, onSent, onSending }: {
-  station: string; thread: number; seq: number; session: string; mobile: boolean; placeholder?: string | undefined; onSent?: () => void; onSending?: (sending: boolean) => void;
+export function DecisionReply({ station, thread, seq, session, mobile, placeholder, onSent }: {
+  station: string; thread: number; seq: number; session: string; mobile: boolean; placeholder?: string | undefined; onSent?: () => void;
+  /** Not said any more (the reply goes at once, as a message does); kept for callers. */
+  onSending?: (sending: boolean) => void;
 }) {
   const call = useCall();
   const act = useAct();
-  const [asked, setAsked] = useState(false);
-  const replying = useRef(false);
-  const sending = useDoing("decision.reply", { station, thread, seq }) || asked;
   const api = useApi();
   const draftKey = `decision:${station}:${thread}:${seq}`;
   const upload = useRef((file: File) => api.uploadFile(file));
   const shared = useDraft({ key: draftKey, station, upload: (file) => upload.current(file) });
   const [focus, setFocus] = useState(0);
-  const draft = { ...shared, starting: sending, ready: shared.ready && !sending, focus, bumpFocus: () => setFocus((n) => n + 1) };
+  const draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const send = (written: Draft) => {
-    if (!written.ready || replying.current) return;
-    replying.current = true;
-    setAsked(true);
-    onSending?.(true);
+    if (!written.ready) return;
+    const taken = written.take();
+    onSent?.();
     const reply = call("decision.reply", {
-      station, thread, seq, text: written.text.trim(),
-      attachments: written.files.flatMap((f) => f.done ? [f.done] : []),
-      quotes: written.quotes.map(({ id: _, ...q }) => q),
+      station, thread, seq, text: taken.text,
+      attachments: taken.files.flatMap((f) => f.done ? [f.done] : []),
+      quotes: taken.quotes.map(({ id: _, ...q }) => q),
     });
-    act(reply, t("web-main.decisions.replyWhat"));
-    reply.then(() => { written.take(); onSent?.(); }, () => undefined).finally(() => { replying.current = false; setAsked(false); onSending?.(false); });
+    // Not taken by the core (the card no longer waits, the station gone): back in the field, if nothing was written since.
+    act(reply.catch((e: unknown) => {
+      if (e instanceof CoreError && e.code === "invalid_params" && !now.current.text.trim()) written.restore(taken);
+      throw e;
+    }), t("web-main.decisions.replyWhat"));
   };
   const spec: HostComposer = { station, session, placeholder: placeholder || t("web-main.composer.placeholder"), offline: false, send };
   const latest = useRef<HostComposer | null>(spec);
@@ -111,7 +113,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
       {mobile
         ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} inline />
         : <ComposerView draft={draft} thread={thread} sessionKey={session} draftKey={draftKey} submitDraft={send}
-            placeholder={spec.placeholder} locked={sending} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} />}
+            placeholder={spec.placeholder} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} />}
     </div>
   );
 }
@@ -157,6 +159,17 @@ export function useDecisionQueue(workspace: string) {
     return [...left.filter((d) => at(d) < 0), ...left.filter((d) => at(d) >= 0).sort((a, b) => at(a) - at(b))];
   }, [view.value, gone, aside, replying]);
   const drop = (d: DecisionItem) => setGone((was) => new Set(was).add(keyOf(d)));
+  // Once the core's list has let one go (answered from here: its reply on its way; dismissed), it is the core's to
+  // say: one whose reply then could not be sent comes back.
+  const listed = view.value?.items;
+  useLayoutEffect(() => {
+    if (!listed) return;
+    setGone((was) => {
+      const keys = new Set(listed.map(keyOf));
+      const kept = [...was].filter((k) => keys.has(k));
+      return kept.length === was.size ? was : new Set(kept);
+    });
+  }, [listed]);
   const back = (d: DecisionItem) => setGone((was) => { const now = new Set(was); now.delete(keyOf(d)); return now; });
   const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
   return {

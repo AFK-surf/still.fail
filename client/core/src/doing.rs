@@ -89,7 +89,7 @@ pub(crate) fn counts(call: &Call, name: &str) -> bool {
         Call::SlackTokens { action, .. } => action == "verify",
         Call::ProfileModels { .. } => true,
         Call::Op(op) => op.method != "GET" && !matches!(name, "session.warm" | "widget.setState" | "login.drop"),
-        Call::ChatArchive { .. } | Call::ChatRetry { .. } | Call::ChatRetryIn { .. } | Call::ChatDiscard { .. } | Call::ChatDiscardIn { .. } => true,
+        Call::ChatArchive { .. } | Call::ChatChange { .. } | Call::ChatRetry { .. } | Call::ChatRetryIn { .. } | Call::ChatDiscard { .. } | Call::ChatDiscardIn { .. } => true,
         Call::ChatLatest { .. } | Call::SignOut { .. } | Call::AuthBegin { .. } | Call::StationMeasure { .. } => true,
         // A card answered: its button or field turns while the message goes.
         Call::DecisionAnswer { .. } | Call::DecisionReply { .. } => true,

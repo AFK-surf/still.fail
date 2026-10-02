@@ -590,11 +590,13 @@ fun ConnectRunScreen(station: String, id: String) {
             Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(16.dp)).background(if (changed) C.ink else C.chip)
                 .clickable(enabled = !busy && !(changed && model == null)) {
-                    if (!changed) { app.pop(); return@clickable }
-                    scope.launch {
+                    // Back at once, not waiting on the station; failed, a toast says why.
+                    app.pop()
+                    if (!changed) return@clickable
+                    app.scope.launch {
                         try {
                             app.api(station).pickSave(pickOf)
-                            app.toast = t("android-settings.run.saved"); app.pop()
+                            app.toast = t("android-settings.run.saved")
                         } catch (e: CoreException) { app.toast = t("android-settings.run.saveFailed", "error" to errorText(e)) }
                     }
                 }.padding(horizontal = 16.dp, vertical = 12.dp),

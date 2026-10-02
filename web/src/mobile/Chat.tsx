@@ -553,7 +553,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
         {!view.archived && !view.offline && (
           <InfoList>
             <InfoRow onClick={() => ask(app, {
-              title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"),
+              title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
               run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
             })}>
               <span className={css.mInfoLabel}>{t("web-mobile.chat.name")}</span><span className={`${partsCss.mGrow} ${css.mInfoName}`}>{view.title}</span><ChevronRight size={14} className={partsCss.mSubtle} />

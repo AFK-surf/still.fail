@@ -256,6 +256,7 @@
   "android-chat.rename.field": "对话名称",
   "android-chat.rename.note": "留空则自动起名",
   "android-chat.rename.title": "重命名对话",
+  "android-chat.rename.verb": "改名",
   "android-chat.run.account.auto": "自动分配",
   "android-chat.run.account.choose": "选账号",
   "android-chat.run.account.note": "自动分配时，额度用完或登录失效会换一个；指定了就一直用它。",
