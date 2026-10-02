@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- Android 发送落点（fix/android-flight-landing）：需发布 Android；纯视图变换，无接口或数据迁移，无 station/cloud 更新顺序要求。列表先按最终输入框高度和真实滚动边界完成布局，再把消息变换回输入框播放归位。上线后检查短对话、满屏历史、超过输入框的长消息、快速确认；末帧不得跳位，旧消息开头不得回跳。
+
 - 安卓通知落点（notification-memorial）：需发 Android；点本地通知或 FCM 推送进入该 workspace 的「奏」页，返回到会话列表。普通聊天链接保持原行为。沿用现有通知 URL，无 cloud/station 接口变更；更新前已经显示的通知仍可能打开聊天。上线后验：新通知分别从应用关闭和后台状态点入，确认 workspace、奏页及返回路径。
 
 - Preview 资源加载圆环：发 web（含新版 wasm core）、桌面和 Android；无 station/cloud 协议改动。统计在各客户端 core，旧客户端维持原样，新 UI 遇到旧 core 不显示圆环。上线后打开服务预览，刷新并 hover 圆环（手机点开），核对加载中、完成和 404 明细；百分比按已发现的服务请求完成数，外部 CDN 请求不在统计内。
