@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
@@ -252,6 +253,25 @@ class DecisionsTest {
         assertTrue("moved across: ${postAt()}", abs(postAt().left - before.left) < 1f)
         rule.onNodeWithText(first.title).assertExists()
     }
+
+    private fun answeredCardSlides(dark: Boolean) {
+        val h = page(dark)
+        val before = postAt()
+        val recording = h.record(if (dark) "answer-slide-dark" else "answer-slide-light")
+        recording.frames(10)
+        recording.frame { rule.onNodeWithText(both.label, substring = false).performClick() }
+        recording.frames(5)
+        val moving = postAt()
+        assertTrue("answered card must move right", moving.left > before.left + 10f)
+        assertTrue("card must not disappear before sliding", moving.width > 0f)
+        recording.frames(45)
+        recording.end()
+        assertOneCall(h, "decision.answer", gap)
+        rule.onNodeWithText(second.title).assertExists()
+    }
+
+    @Test fun answeredCardSlidesLight() = answeredCardSlides(false)
+    @Test fun answeredCardSlidesDark() = answeredCardSlides(true)
 
     @Test fun tapOnAnOptionAnswers() {
         val h = page()
