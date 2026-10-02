@@ -18,6 +18,9 @@ import { log } from "../ops/log.ts";
 import { Cloud, Events, Key, Paths, Readers, Store } from "../services.ts";
 import { Notifier } from "../cloud/notify.ts";
 import { adbTools } from "../tools/adb.ts";
+import { feedbackTools, tellFixed } from "../tools/feedback.ts";
+import { signedPost } from "../cloud/signed.ts";
+import { version } from "../ops/version.ts";
 import { chatTools } from "../tools/chat.ts";
 import { type AgentsDoor, openAgentsDoor } from "../tools/http.ts";
 import { jobTools } from "../tools/jobs.ts";
@@ -138,6 +141,18 @@ export const AgentsLive = (control: Control) =>
         }),
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null),
       ];
+      // Bug reports to the still.fail team, from stations on the stable channel (updates.rs `channel_of`).
+      const stable = (config.raw()?.updateChannel ?? "stable") === "stable";
+      const sendReport = async (report: any) => {
+        if (cloud.removed()) throw new Error("this station was removed from its workspace");
+        report.context = { ...(report.context ?? {}), version: version() };
+        return signedPost(cloud, key, "/v1/feedback", "stillfail-station-feedback-v1", report);
+      };
+      const fixed = async (told: string[]) => {
+        if (cloud.removed()) return { fixed: [] };
+        return { ...(await signedPost(cloud, key, "/v1/feedback/fixed", "stillfail-station-feedback-fixed-v1", { told })), station: version() };
+      };
+      if (stable) tools.push(...feedbackTools(store, (k) => pageOf(k) ?? null, () => (cloud.state ? sendReport : null)));
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
       const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, tools, () => (bound() ? undefined : UNBOUND_REFUSAL));
 
@@ -211,6 +226,15 @@ export const AgentsLive = (control: Control) =>
       // What the chats' people hear about while no client of theirs runs: pushed by still.fail cloud.
       const notifier = new Notifier(store, readers, cloud, key);
 
+      // The bug reports its agents sent that are fixed and out: each session told, a few minutes after the start and
+      // every hour (the cloud has no way to say so as it happens).
+      const tellingFixed = () =>
+        void tellFixed(fixed, (session, text) => hub.notify(session, text)).catch((error) => log.warn("feedback", "fixed bug reports not read", { error: (error as Error).message }));
+      const fixedFirst = stable ? setTimeout(tellingFixed, 300_000) : undefined;
+      const fixedHourly = stable ? setInterval(tellingFixed, 3_600_000) : undefined;
+      fixedFirst?.unref();
+      fixedHourly?.unref();
+
       // Chats idle long enough go to the archive: looked at now and every hour.
       const archiving = setInterval(() => {
         try {
@@ -257,6 +281,8 @@ export const AgentsLive = (control: Control) =>
           if (handing) return;
           handing = true;
           clearInterval(archiving);
+          clearTimeout(fixedFirst);
+          clearInterval(fixedHourly);
           notifier.close();
           await door?.close(30_000);
           try {

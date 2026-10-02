@@ -113,3 +113,55 @@ export function feedbackTools(store: Store, link: (key: string) => string | null
     },
   ];
 }
+
+/// The names people know the parts by.
+const PART_NAMES: Record<string, string> = {
+  station: "the station",
+  web: "the web app (app.still.fail; the desktop app from its next update)",
+  android: "the Android app",
+  desktop: "the desktop app",
+  cloud: "still.fail cloud",
+};
+const partName = (part: string) => PART_NAMES[part] ?? part;
+const u64 = (v: Json): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
+
+/// What a session's agent is told of a fixed report: what it was, where the fix is and whether this station has it, and
+/// to tell the person in the thread it was reported in.
+export function fixedNotice(report: Json, station: string | null): string {
+  const number = u64(report?.number) ?? 0;
+  const title = typeof report?.title === "string" ? report.title : "";
+  const version = u64(report?.version) ?? 0;
+  const parts: string[] = Array.isArray(report?.parts) ? report.parts.filter((p: Json) => typeof p === "string") : [];
+  let text = `The still.fail team fixed a bug reported from this session: FB-${number} "${title}". `;
+  if (parts.length === 0 || (parts.length === 1 && parts[0] === "cloud")) text += "The fix is live now.";
+  else text += `The fix is released in ${parts.map((p) => (p === "cloud" ? partName(p) : `${partName(p)} 0.1.${version}`)).join(", ")} and later.`;
+  if (parts.includes("station") && station !== null) {
+    const tail = station.slice(station.lastIndexOf(".") + 1);
+    const own = /^\d+$/.test(tail) ? Number(tail) : null;
+    if (own !== null && own >= version) text += ` This station runs ${station}: it has the fix.`;
+    else if (own !== null) text += ` This station runs ${station}: the fix applies once it is updated (in still.fail, the station's page).`;
+  }
+  if (parts.some((p) => p === "web" || p === "android" || p === "desktop")) text += " An app gets it once it is updated to that version or later.";
+  if (typeof report?.thread === "string") text += ` Tell the person who reported it, in the thread it was reported in (${report.thread}), briefly and in their language; nothing else needs doing.`;
+  else text += " Tell the person who reported it, where they reported it, briefly and in their language; nothing else needs doing.";
+  return text;
+}
+
+/// Asks still.fail cloud for this station's fixed reports (`fixed`, given which were told) and tells each one's
+/// session; then says which were told, so they are not again. A report whose session is gone is taken as told.
+export async function tellFixed(fixed: (told: string[]) => Promise<Json>, notify: (session: string, text: string) => void): Promise<number> {
+  const answer = await fixed([]);
+  const station = typeof answer?.station === "string" ? answer.station : null;
+  const told: string[] = [];
+  for (const report of Array.isArray(answer?.fixed) ? answer.fixed : []) {
+    if (typeof report?.id !== "string") continue;
+    if (typeof report.session === "string") {
+      try {
+        notify(report.session, fixedNotice(report, station));
+      } catch {}
+    }
+    told.push(report.id);
+  }
+  if (told.length > 0) await fixed(told);
+  return told.length;
+}
