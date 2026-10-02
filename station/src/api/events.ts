@@ -31,6 +31,12 @@ export type EventsDeps = {
   live?(key: string, from: number, last: number | null, send: (message: unknown) => void): () => void;
   /// Whether a session is still there (a summary is told only of one that is).
   sessionExists(key: string): boolean;
+  /// The overview as `viewer` sees it, in `lang` (GET /overview); none until the agents' side is up.
+  overview?(viewer: Viewer, lang: Lang): Promise<unknown>;
+  /// A session's process state (the overview counts running and warm ones).
+  processState?(key: string): string;
+  /// Someone follows again, after nobody did (allowances are read again then).
+  followed?(): void;
 };
 
 type Client = {
@@ -51,7 +57,9 @@ export class Events {
   private next = 1;
   private seq = 0;
   private deps: EventsDeps;
-  private dirty = { sessions: new Set<string>(), rowsAll: false, rows: new Set<string>() };
+  private dirty = { sessions: new Set<string>(), rowsAll: false, rows: new Set<string>(), overview: false };
+  /// The process state last told per session.
+  private states = new Map<string, string>();
   private flushing: Promise<void> | null = null;
   private timers: ReturnType<typeof setInterval>[] = [];
   private lastHost = "";
@@ -61,9 +69,15 @@ export class Events {
     deps.subscribe((change) => this.storeChanged(change));
   }
 
-  /// Where `live` sessions are followed from (the hub's, once it is made).
-  followLive(live: NonNullable<EventsDeps["live"]>) {
-    this.deps.live = live;
+  /// Where `live` sessions are followed from, the overview and process states (the agents' side, once it is made).
+  follow(more: Pick<EventsDeps, "live" | "overview" | "processState" | "followed">) {
+    Object.assign(this.deps, more);
+  }
+
+  /// Something the overview shows changed (config, accounts, connects, cloud, updates).
+  overviewChanged() {
+    this.dirty.overview = true;
+    this.wake();
   }
 
   inUse(): boolean {
@@ -113,7 +127,10 @@ export class Events {
     for (const [id, lines] of logs) client.stops.push(this.followLog(client, id, lines));
     if (host) void this.deps.host().then((info) => client.send("host", info), () => {});
     this.clients.push(client);
-    if (this.clients.length === 1) this.startTimers();
+    if (this.clients.length === 1) {
+      this.startTimers();
+      this.deps.followed?.();
+    }
     const remove = () => {
       if (closed) return;
       closed = true;
@@ -231,6 +248,8 @@ export class Events {
         break;
       case "sessionRemoved":
         this.dirty.sessions.delete(change.key);
+        this.states.delete(change.key);
+        this.overviewChanged();
         this.emit("session-removed", { key: change.key });
         this.rowsChanged(null);
         break;
@@ -254,6 +273,10 @@ export class Events {
         this.rowsChanged(change.viewer);
         break;
       case "identities":
+        // Who the viewer is on Slack: their overview says it, and their rows count it.
+        this.overviewChanged();
+        this.rowsChanged(change.viewer);
+        break;
       case "pins":
       case "dismissed":
         this.rowsChanged(change.viewer);
@@ -271,7 +294,7 @@ export class Events {
         break;
       case "processes":
       case "decisionChecks":
-        // The overview says these: told once the overview is (accounts and connections come with it).
+        this.overviewChanged();
         break;
     }
   }
@@ -281,7 +304,7 @@ export class Events {
     if (this.flushing) return;
     this.flushing = new Promise<void>((resolve) => setImmediate(resolve)).then(() => this.flush()).finally(() => {
       this.flushing = null;
-      if (this.dirty.sessions.size > 0 || this.dirty.rowsAll || this.dirty.rows.size > 0) this.wake();
+      if (this.dirty.sessions.size > 0 || this.dirty.rowsAll || this.dirty.rows.size > 0 || this.dirty.overview) this.wake();
     });
   }
 
@@ -289,7 +312,17 @@ export class Events {
   /// streams were asked in.
   private async flush() {
     const dirty = this.dirty;
-    this.dirty = { sessions: new Set(), rowsAll: false, rows: new Set() };
+    this.dirty = { sessions: new Set(), rowsAll: false, rows: new Set(), overview: false };
+    let overview = dirty.overview;
+    for (const key of dirty.sessions) {
+      if (!this.deps.sessionExists(key)) continue;
+      // The overview counts running and warm sessions.
+      const state = this.deps.processState?.(key);
+      if (state !== undefined && this.states.get(key) !== state) {
+        this.states.set(key, state);
+        overview = true;
+      }
+    }
     if (this.clients.length === 0) return;
     for (const key of dirty.sessions) {
       if (!this.deps.sessionExists(key)) continue;
@@ -298,6 +331,21 @@ export class Events {
       } catch (error) {
         log.warn("events", "session event not sent", { session: key, error: (error as Error).message });
       }
+    }
+    // The overview to each viewer, in each language their streams were asked in.
+    if (overview && this.deps.overview) {
+      const seen = new Set<string>();
+      const viewers = this.clients.filter((c) => !seen.has(`${c.viewer.email}\0${c.lang}`) && seen.add(`${c.viewer.email}\0${c.lang}`));
+      await Promise.all(
+        viewers.map(async ({ viewer, lang }) => {
+          try {
+            const value = await this.deps.overview!(viewer, lang);
+            this.emit("overview", value, (c) => c.viewer.email === viewer.email && c.lang === lang);
+          } catch (error) {
+            log.warn("events", "overview not told", { error: (error as Error).message });
+          }
+        }),
+      );
     }
     if (!dirty.rowsAll && dirty.rows.size === 0) return;
     const seen = new Set<string>();

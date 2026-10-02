@@ -10,6 +10,7 @@ import { routes as sessions } from "./routes/sessions.ts";
 import { routes as events } from "./routes/events.ts";
 import { routes as marks } from "./routes/marks.ts";
 import { routes as updates } from "./routes/updates.ts";
+import { routes as accounts } from "./routes/accounts.ts";
 import { routes as hub } from "./routes/hub.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
@@ -73,7 +74,11 @@ export class Admin {
       store: deps.store,
       agents: deps.agents,
     };
-    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : [])];
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
+      ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
+      // The station as its settings pages show it.
+      ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),
+    ];
   }
 
   async handle(r: Request): Promise<Answer> {

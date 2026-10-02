@@ -1,0 +1,905 @@
+// The station's accounts (docs/station-ts.md `accounts`): its profiles as the pages edit them, their checks and
+// allowances, sign-ins, profiles on the machine's own login, the machine login's renewed token, and the models the
+// automatic decisions may use (mesh/app/src/admin/edits.rs and decision.rs, the profile parts of admin/mod.rs and
+// views.rs, and what server.rs wires for them).
+//
+// What changes is pushed: `onChange` hears each change the overview shows (a check, an allowance, a sign-in, the
+// machine's logins); config.json's own changes are the ConfigFile's to tell. Kept on a timer only where nothing says
+// when it changed:
+// - allowances: every 5 minutes, and only while someone follows the events (`following`), as admin/events.rs does; the
+//   providers do not tell when an allowance moves. `followed()` asks the stale ones at once when the first follower comes.
+// - every profile checked 3 s after start (what changed while the station was off: keys revoked, logins expired).
+// - the machine's logins: read again when the overview is read with a reading over 2 minutes old (machine.ts).
+// - a sign-in times out after 15 minutes; a finished sign-in for a new profile is kept 15 minutes for its page.
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import type { Env, MachineToken } from "../agents/machine-logins.ts";
+import { linkCodexAuth } from "../agents/machine-logins.ts";
+import { type AccessKind, accessKind, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
+import { cleanEndpoint, endpoints, find, groupOf, LEGACY, runtimesOf as runtimesOfEndpoints, SOURCES } from "../agents/providers.ts";
+import type { Viewer } from "../mesh/credential.ts";
+import type { ConfigFile } from "../ops/config.ts";
+import { type Lang, stationLang, tr } from "../ops/i18n.ts";
+import { log } from "../ops/log.ts";
+import { hubConfig, type Profile } from "../sessions/config.ts";
+import { type Capability, discover as discoverDecisions, fingerprint, resolvedModel } from "../sessions/decision.ts";
+import { type ProfileHealth, serves, usable } from "../sessions/pool.ts";
+import type { Store } from "../store/store.ts";
+import { modelKey } from "../read/usage.ts";
+import { Background } from "./background.ts";
+import { checkAutomaticDecisions } from "./check.ts";
+import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
+import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
+import { claudeOAuthToken } from "./oauth.ts";
+import { accessKinds, checkProfile, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
+import { checkQuota, machineUsage } from "./quota.ts";
+
+export { checkConfig } from "./check.ts";
+export type { LoginJob, MachineLogin, ProfileCheck, ProfileQuota };
+
+type Json = any;
+
+/// How often allowances are asked again while someone follows.
+const QUOTA_EVERY_MS = 5 * 60_000;
+const CHECK_ON_START_MS = 3_000;
+const PENDING_KEPT_MS = 15 * 60_000;
+
+/// What the pages are refused, and with which status (admin/mod.rs `http_error`).
+export class Refusal extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/// What a check is asked: the account and where it signs in (its home, or a trial one for a key being tried).
+export type CheckRequest = { runtime: Runtime; kind: AccessKind; key: string; via: Via; home: string; machine: boolean };
+
+/// The profile's codex app-server, for what only it says (the agents' CodexDriver: rateLimits, resetQuota, models).
+export type CodexAccess = {
+  rateLimits(profile: Profile): Promise<Json>;
+  resetQuota(profile: Profile, key: string): Promise<Json>;
+  models(profile: Profile): Promise<{ models: string[]; efforts: Map<string, string[]> }>;
+};
+
+export type AccountsDeps = {
+  data: string;
+  store: Store;
+  config: ConfigFile;
+  /// The hub, whose account pool picks profiles by their checks and allowances (and knows which ran out lately).
+  hub?: { accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth } };
+  /// The codex driver, once there.
+  codex?: () => CodexAccess | undefined;
+  /// Whether someone follows the events (allowances are asked again on a round only then).
+  following?: () => boolean;
+  /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
+  env?: Env;
+  loginCommands?: LoginCommands;
+  urls?: Urls;
+  /// Tests: how a profile is checked, its allowance read (null: nobody can ask), its reset asked, its decisions found.
+  check?: (request: CheckRequest, lang: Lang) => Promise<ProfileCheck>;
+  quota?: ((profile: Profile) => Promise<ProfileQuota>) | null;
+  resetQuota?: ((profile: Profile, key: string) => Promise<Json>) | null;
+  discover?: (profile: Profile, check: ProfileCheck) => Promise<Capability>;
+  /// The machine's logins (null: none to read); read in `env` with their allowances by default.
+  machine?: MachineLogins | null;
+  /// Check every profile shortly after start (the real station; tests leave it off).
+  checkOnStart?: boolean;
+};
+
+/// A sign-in with no profile yet: its runtime, its home while signing in, who started it, what it made.
+type Pending = { runtime: Runtime; home: string; by: Viewer; created: string | null; error: string | null };
+
+const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
+const manages = (viewer: Viewer) => viewer.role === "owner" || viewer.role === "admin";
+const runtimeOf = (v: unknown): Runtime | undefined => (v === "claude" || v === "codex" ? v : undefined);
+const ACCESS_KINDS: AccessKind[] = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
+const accessKindOf = (v: unknown): AccessKind | undefined => (ACCESS_KINDS.includes(v as AccessKind) ? (v as AccessKind) : undefined);
+/// admin/mod.rs Input::text: JavaScript's String(x ?? "").
+const text = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
+const named = (runtime: Runtime) => (runtime === "claude" ? "Claude Code" : "Codex");
+
+export class Accounts {
+  readonly logins: LoginManager;
+  readonly machine: MachineLogins | null;
+  private checks = new Map<string, ProfileCheck>();
+  private quotas = new Map<string, ProfileQuota>();
+  private quotaBusy = new Map<string, Promise<void>>();
+  private pending = new Map<string, Pending>();
+  private listeners = new Set<() => void>();
+  private background = new Background("accounts");
+  private stops: (() => void)[] = [];
+  private readonly env: Env;
+  private readonly urls: Urls;
+  private readonly checkFn: (request: CheckRequest, lang: Lang) => Promise<ProfileCheck>;
+  private readonly quotaFn: ((profile: Profile) => Promise<ProfileQuota>) | null;
+  private readonly resetFn: ((profile: Profile, key: string) => Promise<Json>) | null;
+  private readonly discoverFn: (profile: Profile, check: ProfileCheck) => Promise<Capability>;
+
+  private deps: AccountsDeps;
+
+  constructor(deps: AccountsDeps) {
+    this.deps = deps;
+    this.env = deps.env ?? (process.env as Env);
+    this.urls = deps.urls ?? URLS;
+    this.logins = new LoginManager(deps.data, deps.loginCommands);
+    this.machine =
+      deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls));
+    this.checkFn =
+      deps.check ?? ((request, lang) => checkProfile({ ...request, env: this.env, machineToken: (env) => this.machineToken(env), urls: this.urls, lang }));
+    this.quotaFn =
+      deps.quota !== undefined
+        ? deps.quota
+        : (profile) => {
+            const codex = deps.codex?.();
+            return checkQuota(profile, this.env, codex ? (p) => codex.rateLimits(p) : undefined, this.urls);
+          };
+    this.resetFn =
+      deps.resetQuota !== undefined
+        ? deps.resetQuota
+        : (profile, key) => {
+            const codex = deps.codex?.();
+            if (!codex) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
+            return codex.resetQuota(profile, key);
+          };
+    this.discoverFn = deps.discover ?? discoverDecisions;
+    // What the last run learned about profiles shows until they are checked again.
+    for (const [id, status] of deps.store.profileStatus()) {
+      if (isObject(status.check)) this.checks.set(id, status.check as ProfileCheck);
+      if (isObject(status.quota)) this.quotas.set(id, status.quota as ProfileQuota);
+    }
+  }
+
+  /// Starts what runs on its own: the pool told of profiles' health, sign-ins followed, the checks after start, the
+  /// allowance rounds, the machine's logins read.
+  start() {
+    this.deps.hub?.accounts.setHealth((id) => this.health(id));
+    // A finished sign-in changes what the profile can do; it is checked again right away.
+    this.stops.push(
+      this.logins.changes((id) => {
+        const pending = this.pending.has(id);
+        if (pending) this.pendingChanged(id);
+        this.changed();
+        if (!pending && this.logins.get(id)?.state === "done") this.afterSignIn(id);
+      }),
+    );
+    if (this.machine) {
+      this.stops.push(this.machine.changes(() => this.changed()));
+      this.background.spawn(() => this.machine!.refresh());
+    }
+    if (this.deps.checkOnStart !== false) {
+      this.background.later(CHECK_ON_START_MS, () => {
+        for (const p of this.profiles()) this.background.spawn(() => this.check(p.id));
+      });
+    }
+    this.background.every(QUOTA_EVERY_MS, () => {
+      if (this.deps.following?.() === true) this.refreshQuotas(false);
+    });
+  }
+
+  async close() {
+    for (const stop of this.stops.splice(0)) stop();
+    await this.logins.close();
+    await this.background.close();
+  }
+
+  /// Hears each change the overview shows of the accounts; gives the function that stops it.
+  onChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private changed() {
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch (e) {
+        log.warn("accounts", "an accounts listener failed", { error: (e as Error).message });
+      }
+    }
+  }
+
+  /// The profiles as the config has them now (parse_config's derivations).
+  profiles(): Profile[] {
+    return hubConfig(this.deps.config.raw(), this.deps.data).profiles;
+  }
+
+  private profile(id: string): Profile | undefined {
+    return this.profiles().find((p) => p.id === id);
+  }
+
+  /// How a profile is doing, for the pool: its last check and allowance.
+  health(id: string): ProfileHealth {
+    return { check: this.checks.get(id) ?? null, quota: this.quotas.get(id) ?? null };
+  }
+
+  /// The machine login's current Claude token, renewed when about to run out (the Claude driver's `machineToken`).
+  async machineToken(env: Env = this.env): Promise<MachineToken> {
+    const [token, expiresAt] = await claudeOAuthToken(env, null, null, this.urls.claudeToken);
+    return { token, expiresAt };
+  }
+
+  // ── edits ──
+
+  /// Edits config.json (refused as 400 when the result does not pass), said in the log as `what`.
+  private save(viewer: Viewer, what: string, edit: (raw: Json) => void) {
+    try {
+      this.deps.config.update(edit);
+    } catch (e) {
+      throw new Refusal(400, (e as Error).message);
+    }
+    log.info("accounts", "config changed from the admin page", { what, by: viewer.email });
+  }
+
+  /// PUT /profiles/:id: a profile made or edited. Its new state is checked after (in the background).
+  putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
+    this.save(viewer, `profile ${id}`, (raw) => {
+      const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
+      const existing: Json | undefined = list.find((p) => p?.id === id);
+      const machine = existing?.machine === true;
+      // One on the machine's login is the machine's: only which of its models are used, and how it runs, are chosen.
+      const get = (key: string): unknown => (machine && !["model", "models", "backgroundOnMessage", "fast"].includes(key) ? undefined : given[key]);
+      // env: a string sets the value; null removes the key; an omitted key keeps it (so masked secrets survive edits).
+      const env: Record<string, string> = isObject(existing?.env) ? { ...existing.env } : {};
+      const givenEnv = get("env");
+      if (isObject(givenEnv)) {
+        for (const [key, value] of Object.entries(givenEnv)) {
+          if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new Error(`invalid environment variable name ${key}`);
+          if (value === null) delete env[key];
+          else if (typeof value === "string") env[key] = value;
+        }
+      }
+      const access = get("access");
+      const oldAccess = isObject(existing?.access) ? existing.access : undefined;
+      const kind = accessKindOf(isObject(access) ? access.kind : undefined) ?? accessKindOf(oldAccess?.kind);
+      const givenKey = isObject(access) && typeof access.key === "string" && access.key.trim() !== "" ? access.key.trim() : undefined;
+      const keep = oldAccess !== undefined && oldAccess.kind === kind ? oldAccess : undefined;
+      const key: string | undefined = givenKey ?? (typeof keep?.key === "string" ? keep.key : undefined);
+      // An API provider stays the one it was made for; its address can be changed.
+      const provider: string | undefined = typeof keep?.provider === "string" ? keep.provider : undefined;
+      let endpoint: string | undefined = typeof keep?.endpoint === "string" ? keep.endpoint : undefined;
+      if (isObject(access) && typeof access.endpoint === "string") {
+        endpoint = cleanEndpoint(access.endpoint);
+        if (endpoint === undefined) throw new Refusal(400, tr(lang, "station.profile.addressNeeded"));
+      }
+      const protocol: string | undefined = typeof keep?.protocol === "string" ? keep.protocol : undefined;
+      const givenName = get("name");
+      const name = typeof givenName === "string" ? givenName.trim() : typeof existing?.name === "string" ? existing.name : undefined;
+      const givenModel = get("model");
+      let model = typeof givenModel === "string" ? givenModel.trim() : givenModel !== undefined ? undefined : typeof existing?.model === "string" ? existing.model : undefined;
+      if (model === "") model = undefined;
+      const givenModels = get("models");
+      let models: string[] | undefined;
+      if (Array.isArray(givenModels)) {
+        const seen = new Set<string>();
+        models = givenModels
+          .map((m) => (typeof m === "string" ? m : JSON.stringify(m)).trim())
+          .filter((m) => m !== "" && !seen.has(m) && (seen.add(m), true))
+          .slice(0, 200);
+      } else if (givenModels === undefined && Array.isArray(existing?.models)) {
+        models = [...existing.models];
+      }
+      if (models !== undefined && models.length === 0) models = undefined;
+      // One model named by hand (a provider that does not list its models): added to those enabled.
+      const added = get("addModel");
+      if (typeof added === "string" && added.trim() !== "") {
+        const one = added.trim();
+        models ??= [];
+        if (!models.includes(one)) models.push([...one].slice(0, 200).join(""));
+      }
+      const givenFast = get("fast");
+      let fast: boolean | undefined;
+      if (typeof givenFast === "boolean") fast = givenFast;
+      else if (givenFast !== undefined) throw new Refusal(400, "fast must be a boolean");
+      else fast = typeof existing?.fast === "boolean" ? existing.fast : undefined;
+      const givenBackground = get("backgroundOnMessage");
+      const background = typeof givenBackground === "boolean" ? givenBackground : typeof existing?.backgroundOnMessage === "boolean" ? existing.backgroundOnMessage : undefined;
+      const givenHome = get("home");
+      const home = typeof givenHome === "string" && givenHome.trim() !== "" ? givenHome.trim() : typeof existing?.home === "string" ? existing.home : `homes/${id}`;
+      const api = kind === "api-provider";
+      const next: Json = { id };
+      if (name !== undefined && name !== "") next.name = name;
+      const runtime = runtimeOf(get("runtime")) ?? runtimeOf(existing?.runtime);
+      if (runtime !== undefined) next.runtime = runtime;
+      if (kind !== undefined) {
+        next.access = { kind };
+        if (key !== undefined) next.access.key = key;
+        if (api && provider !== undefined) next.access.provider = provider;
+        if (api && endpoint !== undefined) next.access.endpoint = endpoint;
+        if (api && protocol !== undefined) next.access.protocol = protocol;
+      }
+      next.home = home;
+      next.env = env;
+      if (model !== undefined) next.model = model;
+      if (models !== undefined) next.models = models;
+      if (machine) next.machine = true;
+      // Only the default's opposite is written.
+      if (background === false) next.backgroundOnMessage = false;
+      if (fast === true) next.fast = true;
+      if (existing) {
+        const kept = runtimesFor(next.access, next.runtime);
+        for (const r of runtimesFor(existing.access, existing.runtime)) if (!kept.includes(r)) lastOfRuntime(raw, r, id, lang);
+      }
+      raw.profiles = list;
+      const at = list.findIndex((p) => p?.id === id);
+      if (at >= 0) list[at] = next;
+      else list.push(next);
+    });
+  }
+
+  /// DELETE /profiles/:id. Its home stays.
+  deleteProfile(id: string, viewer: Viewer, lang: Lang = stationLang()) {
+    this.save(viewer, `delete profile ${id}`, (raw) => {
+      const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
+      const profile = list.find((p) => p?.id === id);
+      if (!profile) throw new Error(`unknown profile ${id}`);
+      for (const r of runtimesFor(profile.access, profile.runtime)) lastOfRuntime(raw, r, id, lang);
+      raw.profiles = list.filter((p) => p?.id !== id);
+    });
+  }
+
+  /// POST /profiles: a new keyed profile, made only once its key is checked and works. Its id.
+  async newKeyedProfile(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()): Promise<string> {
+    const t = (key: string, args?: Record<string, unknown>) => tr(lang, key, args);
+    const access = isObject(input.access) ? input.access : undefined;
+    const kind = accessKindOf(access?.kind);
+    if (kind === undefined) throw new Refusal(400, `unknown access ${access?.kind === undefined ? "" : JSON.stringify(access.kind)}`);
+    if (kind === "subscription") throw new Refusal(400, t("station.profile.subscriptionBySignIn"));
+    const field = (k: string) => (typeof access?.[k] === "string" && access[k].trim() !== "" ? (access[k].trim() as string) : undefined);
+    const [provider, givenEndpoint, givenProtocol] = [field("provider"), field("endpoint"), field("protocol")];
+    // An API provider is the one named, at the address given where the provider has none of its own; the two kinds
+    // that came before the list are added as they were.
+    let source = undefined as ReturnType<typeof find>;
+    if (kind === "api-provider") {
+      source = provider !== undefined && !(provider in LEGACY) ? find(provider) : undefined;
+      if (!source) throw new Refusal(400, t("station.profile.unknownProvider"));
+      const chosen = source.endpointRequired ? (givenProtocol ?? (source.protocols.length === 1 ? source.protocols[0] : undefined)) : undefined;
+      if (endpoints(source, givenEndpoint, chosen) === undefined) throw new Refusal(400, t("station.profile.addressNeeded"));
+    }
+    const endpoint = source && givenEndpoint !== undefined ? cleanEndpoint(givenEndpoint) : undefined;
+    // Of one at the reader's own address: the protocol it speaks there (the one chosen, else its first).
+    const protocol = source?.endpointRequired ? (source.protocols.find((p) => p === givenProtocol) ?? source.protocols[0]) : undefined;
+    // A key runs every runtime it can; custom variables are for the runtime given.
+    const runtimes: Runtime[] = source ? runtimesOfEndpoints(endpoints(source, endpoint, protocol) ?? {}) : runtimesOf(kind, runtimeOf(input.runtime));
+    if ((runtimes.length === 0 && !source) || !runtimes.every((r) => accessKinds(r).includes(kind))) throw new Refusal(400, `unknown access ${kind}`);
+    const runtime = runtimes[0] ?? "claude";
+    const key = typeof access?.key === "string" ? access.key.trim() : "";
+    if (needsKey(kind, source?.id) && key === "") throw new Refusal(400, t("station.profile.keyRequired"));
+    const homes = join(this.deps.data, "homes");
+    const trial = join(homes, `new-${randomBytes(4).toString("hex")}`);
+    mkdirSync(trial, { recursive: true });
+    const check = await this.checkFn({ runtime, kind, key, via: { provider: source?.id, endpoint, protocol }, home: trial, machine: false }, lang);
+    // A provider with no model list leaves its key unchecked (state unknown); a refused key is what stops it.
+    const refused = source ? check.state === "failed" : check.state !== "ok" && keyed(kind);
+    if (refused) {
+      rmSync(trial, { recursive: true, force: true });
+      throw new Refusal(400, t("station.profile.checkFailed", { detail: check.detail }));
+    }
+    const label = source
+      ? source.name
+      : kind === "opencode-go"
+        ? "OpenCode Go"
+        : kind === "anthropic-api"
+          ? "Anthropic API"
+          : t("station.profile.envName", { runtime: named(runtime) });
+    const base = source ? source.id : kind === "env" ? `${runtime}-env` : kind;
+    const id = unique(base, this.takenIds());
+    renameSync(trial, join(homes, id));
+    this.save(viewer, `profile ${id}`, (raw) => {
+      const made: Json = { id, name: label };
+      if (kind === "env") made.runtime = runtime;
+      made.access = { kind };
+      if (key !== "") made.access.key = key;
+      if (source) made.access.provider = source.id;
+      if (endpoint !== undefined) made.access.endpoint = endpoint;
+      if (protocol !== undefined) made.access.protocol = protocol;
+      Object.assign(made, { home: `homes/${id}`, env: {} });
+      raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
+    });
+    this.keepCheck(id, check);
+    // What the automatic decisions can use is found once the profile is made: a request to add does not wait on that.
+    const profile = this.profile(id);
+    if (profile) {
+      this.background.spawn(async () => {
+        const decision = await this.discoverFn(profile, check);
+        // A profile edited or removed meanwhile does not inherit what was found for the one it was.
+        const now = this.profile(id);
+        if (!now || fingerprint(now) !== fingerprint(profile)) return;
+        this.keepCheck(id, { ...check, decision });
+      });
+    }
+    return id;
+  }
+
+  /// POST /profiles/machine: a profile on the machine's own login of a runtime, when that login is one a profile can
+  /// use (kept in a file). Named by its account. Its id.
+  async newMachineProfile(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()): Promise<string> {
+    const t = (key: string, args?: Record<string, unknown>) => tr(lang, key, args);
+    const runtime = runtimeOf(input.runtime);
+    if (!runtime) throw new Refusal(400, `unknown runtime ${text(input.runtime)}`);
+    const id = `machine-${runtime}`;
+    if (this.profiles().some((p) => p.id === id)) throw new Refusal(409, t("station.machine.alreadyUsed"));
+    const machine = this.machine;
+    if (!machine) throw new Refusal(400, t("station.machine.unreadable"));
+    await machine.refresh();
+    const login = machine.get().find((l) => l.runtime === runtime);
+    if (!login?.loggedIn) throw new Refusal(400, t("station.machine.notSignedIn", { runtime: named(runtime) }));
+    if (!login.usable) throw new Refusal(400, t("station.machine.keychain"));
+    const home = join(this.deps.data, "homes", id);
+    mkdirSync(home, { recursive: true });
+    if (runtime === "codex") linkCodexAuth(home, machine.env);
+    const name = login.email !== null ? t("station.machine.emailName", { email: login.email }) : t("station.machine.runtimeName", { runtime: named(runtime) });
+    log.info("accounts", "profile on the machine's login made", { profile: id, runtime, by: viewer.email });
+    this.save(viewer, `profile ${id} on the machine's login`, (raw) => {
+      const made = { id, name, runtime, access: { kind: "subscription" }, home: `homes/${id}`, env: {}, machine: true };
+      raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
+    });
+    this.afterSignIn(id);
+    return id;
+  }
+
+  // ── sign-ins ──
+
+  /// POST /profiles/:id/login: a subscription profile signed in (again).
+  async startLogin(id: string, viewer: Viewer, lang: Lang = stationLang()): Promise<LoginJob> {
+    const profile = this.profile(id);
+    if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (accessKind(profile) !== "subscription") throw new Refusal(400, tr(lang, "station.admin.loginSubscriptionOnly"));
+    if (profile.machine === true) throw new Refusal(400, tr(lang, "station.admin.loginOnMachine"));
+    log.info("accounts", "login started from the admin page", { profile: id, by: viewer.email });
+    return this.logins.start({ id, runtime: profile.runtime, home: profile.home }, lang);
+  }
+
+  /// POST /logins: signing a subscription in before there is a profile; the profile is made once it succeeds.
+  async newLogin(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()): Promise<{ id: string; job: LoginJob }> {
+    const runtime = runtimeOf(input.runtime);
+    if (!runtime) throw new Refusal(400, `unknown runtime ${text(input.runtime)}`);
+    const id = `login-${randomBytes(4).toString("hex")}`;
+    const home = join(this.deps.data, "homes", id);
+    this.pending.set(id, { runtime, home, by: viewer, created: null, error: null });
+    log.info("accounts", "sign-in for a new profile started", { login: id, runtime, by: viewer.email });
+    const job = await this.logins.start({ id, runtime, home }, lang);
+    return { id, job };
+  }
+
+  /// Whether a sign-in for a new profile is under that id.
+  hasPending(id: string): boolean {
+    return this.pending.has(id);
+  }
+
+  /// A sign-in for a new profile, dropped (DELETE /logins/:id): its command stopped, its home removed unless it made one.
+  dropLogin(id: string) {
+    const pending = this.pending.get(id);
+    if (!pending) return;
+    this.pending.delete(id);
+    this.logins.cancel(id);
+    if (pending.created === null) rmSync(pending.home, { recursive: true, force: true });
+    this.changed();
+  }
+
+  /// A sign-in for a new profile moved on: once it succeeds the profile is made, named by the account signed in.
+  private pendingChanged(id: string) {
+    const p = this.pending.get(id);
+    if (!p) return;
+    const state = this.logins.get(id)?.state;
+    if (state === "failed" || state === "cancelled") {
+      rmSync(p.home, { recursive: true, force: true });
+      return;
+    }
+    if (state !== "done" || p.created !== null || p.error !== null) return;
+    const lang = stationLang();
+    const email = accountEmail(p.runtime, p.home);
+    const base = slug(email ?? `${p.runtime}-subscription`, 40) || p.runtime;
+    const profileId = unique(base, this.takenIds());
+    const target = join(this.deps.data, "homes", profileId);
+    try {
+      renameSync(p.home, target);
+    } catch (e) {
+      log.warn("accounts", "could not move a new profile's home", { login: id, error: (e as Error).message });
+      return this.pendingFailed(id, tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
+    }
+    const name = email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : "station.profile.chatgptSubscription");
+    try {
+      this.save(p.by, `profile ${profileId} from a sign-in`, (raw) => {
+        const made = { id: profileId, name, runtime: p.runtime, access: { kind: "subscription" }, home: `homes/${profileId}`, env: {} };
+        raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
+      });
+    } catch (e) {
+      log.warn("accounts", "the signed-in profile was not saved", { login: id, error: (e as Error).message });
+      try {
+        renameSync(target, p.home);
+      } catch {}
+      return this.pendingFailed(id, tr(lang, "station.login.saveFailed", { error: (e as Error).message }));
+    }
+    p.created = profileId;
+    this.afterSignIn(profileId);
+    // Kept a while for the page that started it to follow it to the profile.
+    this.background.later(PENDING_KEPT_MS, () => this.dropLogin(id));
+  }
+
+  private pendingFailed(id: string, error: string) {
+    const p = this.pending.get(id);
+    if (p) p.error = error;
+    this.changed();
+  }
+
+  /// A profile just signed in: checked (which lists its models) and its allowance read, so its page shows them at once.
+  private afterSignIn(id: string) {
+    this.background.spawn(async () => {
+      try {
+        await this.check(id);
+      } catch (e) {
+        log.warn("accounts", "check after sign-in failed", { profile: id, error: (e as Error).message });
+      }
+      await this.refreshQuota(id);
+    });
+  }
+
+  // ── checks and allowances ──
+
+  private keepCheck(id: string, check: ProfileCheck) {
+    this.checks.set(id, check);
+    this.deps.store.setProfileCheck(id, check);
+    this.changed();
+  }
+
+  /// POST /profiles/:id/check: asks the provider or runtime whether the profile works, its models, its reasoning levels
+  /// (Codex) and what it can decide with.
+  async check(id: string, lang: Lang = stationLang()): Promise<ProfileCheck> {
+    const profile = this.profile(id);
+    if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    const kind = accessKind(profile);
+    const check = await this.checkFn(
+      { runtime: profile.runtime, kind, key: String((profile.access as Json)?.key ?? "").trim(), via: profileVia(profile), home: profile.home, machine: profile.machine === true },
+      lang,
+    );
+    // Codex capabilities kept for each account, including providers whose model ids came from their API.
+    const codexSubscription = kind === "subscription" && profile.runtime === "codex";
+    const codex = this.deps.codex?.();
+    if ((check.state === "ok" || check.state === "unknown") && profile.runtimes.includes("codex") && codex) {
+      try {
+        const catalog = await codex.models(profile);
+        if (codexSubscription && check.models === null) check.models = catalog.models;
+        check.modelEfforts = { codex: Object.fromEntries(catalog.efforts) };
+      } catch (e) {
+        // A temporary listing failure does not erase a saved selection in the clients.
+        const previous = this.checks.get(id);
+        if (previous) {
+          if (previous.modelEfforts !== undefined) check.modelEfforts = previous.modelEfforts;
+          if (codexSubscription && check.models === null) check.models = previous.models;
+        }
+        check.detail = tr(lang, "station.profile.modelsStale", { detail: check.detail });
+        log.warn("accounts", "could not list codex model capabilities", { profile: id, error: (e as Error).message });
+      }
+    }
+    check.decision = await this.discoverFn(profile, check);
+    // A profile edited during the probe does not inherit the previous account's capabilities.
+    const now = this.profile(id);
+    if (!now || fingerprint(now) !== fingerprint(profile)) throw new Refusal(409, "Profile 已修改，请重新检查");
+    this.keepCheck(id, check);
+    // One never asked yet (just made, however): its allowance now, not at the next round.
+    if (check.state === "ok" && !this.quotas.has(id)) this.background.spawn(() => this.refreshQuota(id));
+    return check;
+  }
+
+  /// POST /profiles/:id/quota: a profile's allowance asked again (unless a question is on its way already: then the
+  /// last one).
+  refreshQuota(id: string): Promise<ProfileQuota | null> {
+    return this.readQuota(id, false);
+  }
+
+  private readQuota(id: string, afterReset: boolean): Promise<ProfileQuota | null> {
+    const busy = this.quotaBusy.get(id);
+    if (busy && !afterReset) return Promise.resolve(this.quotas.get(id) ?? null);
+    // A read after a reset waits for any older one, so an in-flight snapshot from before cannot win.
+    const read = (async () => {
+      if (busy) await busy;
+      return this.askQuota(id);
+    })();
+    const done: Promise<void> = read.then(
+      () => {},
+      () => {},
+    );
+    this.quotaBusy.set(id, done);
+    void done.then(() => {
+      if (this.quotaBusy.get(id) === done) this.quotaBusy.delete(id);
+    });
+    return read;
+  }
+
+  private async askQuota(id: string): Promise<ProfileQuota | null> {
+    const profile = this.profile(id);
+    if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (!this.quotaFn) return this.quotas.get(id) ?? null;
+    const read = await this.quotaFn(profile);
+    this.quotas.set(id, read);
+    this.deps.store.setProfileQuota(id, read);
+    this.changed();
+    return read;
+  }
+
+  /// Asks again every profile's allowance older than a round (all of them, `all`).
+  refreshQuotas(all: boolean) {
+    if (!this.quotaFn) return;
+    const now = Date.now();
+    for (const p of this.profiles()) {
+      const q = this.quotas.get(p.id);
+      const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
+      if (fresh && !all) continue;
+      this.background.spawn(() => this.refreshQuota(p.id));
+    }
+  }
+
+  /// The first follower of the events came: allowances older than a round are asked again now.
+  followed() {
+    this.refreshQuotas(false);
+  }
+
+  /// POST /profiles/:id/reset-quota: an OpenAI subscription's rate-limit reset redeemed, under the request's key.
+  async resetQuota(id: string, key: string, lang: Lang = stationLang()): Promise<Json> {
+    const t = (k: string) => tr(lang, k);
+    const profile = this.profile(id);
+    if (!profile) throw new Refusal(404, t("station.profile.notFound"));
+    if (profile.runtime !== "codex" || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetOpenAiOnly"));
+    if (!this.resetFn) throw new Refusal(503, t("station.quota.resetUnsupported"));
+    const result = await this.resetFn(profile, key);
+    await this.readQuota(id, true);
+    const outcome = result?.outcome;
+    if (outcome === "reset" || outcome === "alreadyRedeemed") return result;
+    if (outcome === "nothingToReset") throw new Refusal(409, t("station.quota.nothingToReset"));
+    if (outcome === "noCredit") throw new Refusal(409, t("station.quota.noCredit"));
+    throw new Refusal(502, t("station.quota.resetUnconfirmed"));
+  }
+
+  // ── the automatic decisions (admin/decision.rs) ──
+
+  /// The models the decisions may ask: each a usable profile's verified one, with the profiles that have it.
+  decisionModels(): { id: string; name: string; profiles: string[] }[] {
+    const models = new Map<string, string[]>();
+    for (const profile of this.profiles()) {
+      const health = this.deps.hub?.accounts.healthOf(profile.id) ?? this.health(profile.id);
+      if (!usable(health)) continue;
+      const capability: Capability | undefined = health.check?.decision;
+      if (!capability) continue;
+      for (const model of [...(capability.models ?? []), ...(capability.model ? [capability.model] : [])]) {
+        if (!resolvedModel(profile, capability, model)) continue;
+        const names = models.get(model) ?? [];
+        if (!names.includes(profile.name)) names.push(profile.name);
+        models.set(model, names);
+      }
+    }
+    return [...models.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([id, profiles]) => ({ id, name: modelName(id), profiles }));
+  }
+
+  /// PUT /automatic-decisions (a workspace manager's).
+  putAutomaticDecisions(input: Record<string, unknown>, viewer: Viewer) {
+    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能配置自动决策");
+    try {
+      checkAutomaticDecisions(input);
+    } catch {
+      throw new Refusal(400, "自动决策配置格式不正确");
+    }
+    const rule: Json = isObject(input.completion) ? input.completion : {};
+    const config = { completion: { enabled: rule.enabled === true, model: typeof rule.model === "string" ? rule.model : null } };
+    if (config.completion.enabled && !this.decisionModels().some((m) => m.id === config.completion.model)) {
+      throw new Refusal(400, "请选择现有 Profile 中已验证可用的决策模型");
+    }
+    this.save(viewer, "automatic decisions", (raw) => {
+      raw.automaticDecisions = config;
+    });
+  }
+
+  /// POST /automatic-decisions/refresh: every profile checked again (four at a time).
+  async refreshDecisionModels(viewer: Viewer, lang: Lang = stationLang()) {
+    if (!manages(viewer)) throw new Refusal(403, "只有 workspace 管理员能刷新决策模型");
+    const ids = this.profiles().map((p) => p.id);
+    const errors: unknown[] = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++]!;
+        try {
+          await this.check(id, lang);
+        } catch (e) {
+          errors.push(e);
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    if (errors.length > 0) throw errors[0];
+  }
+
+  // ── what the overview shows of the accounts (admin/views.rs `overview`) ──
+
+  /// The overview's `automaticDecisions`.
+  automaticDecisionsView(viewer: Viewer): Json {
+    if (!manages(viewer)) return { canEdit: false, settings: {}, models: [], recent: [] };
+    const labels: Record<string, string> = { complete: "没有后续事项，推荐归档", agent_work: "还有工作可以继续", human_needed: "仍需人处理", uncertain: "证据不足，不推荐" };
+    const recent = this.deps.store.recentDecisions().map((row: Json) => {
+      const d = row.detail ?? {};
+      const status = typeof d?.result?.selected === "string" ? d.result.selected : "unavailable";
+      const session = typeof row.session === "string" ? row.session : "";
+      const title = this.deps.store.getSession(session)?.title ?? session;
+      return {
+        id: row.id, session, title, at: row.at, label: labels[status] ?? "检查失败",
+        accepted: d.accepted ?? null, model: d.model ?? null, profile: d.profile ?? null, elapsedMs: d.elapsedMs ?? null, error: d.error ?? null,
+      };
+    });
+    const settings = this.deps.config.raw()?.automaticDecisions;
+    const completion = isObject(settings?.completion) ? settings.completion : {};
+    return {
+      canEdit: true,
+      settings: { completion: { enabled: completion.enabled === true, model: typeof completion.model === "string" ? completion.model : null } },
+      models: this.decisionModels(),
+      recent,
+    };
+  }
+
+  /// The overview's `profiles`.
+  profilesView(): Json[] {
+    const raw = this.deps.config.raw();
+    const config = hubConfig(raw, this.deps.data);
+    return config.profiles.map((p) => {
+      const kind = accessKind(p);
+      const a: Json = isObject(p.access) ? p.access : {};
+      const via = profileVia(p);
+      const custom: Record<string, string> = isObject(p.env) ? (p.env as Record<string, string>) : {};
+      const env = Object.keys(custom)
+        .sort()
+        .map((key) => ({ key, secret: secretKey(key), value: secretKey(key) ? mask(custom[key]!) : custom[key] }));
+      const check = this.checks.get(p.id);
+      let checkView: Json = null;
+      if (check) {
+        checkView = structuredClone(check);
+        if (isObject(checkView.decision)) delete checkView.decision.fingerprint;
+        if (check.decision && check.decision.fingerprint !== fingerprint(p)) checkView.decision = { state: "pending", detail: "Profile 已修改，等待自动检查" };
+      }
+      return {
+        id: p.id, name: p.name, runtime: p.runtime, runtimes: p.runtimes,
+        email: kind === "subscription" && p.machine !== true ? accountEmail(p.runtime, p.home) : null,
+        // A provider's key says `env` where an older core reads it; the provider next to it tells a newer core it is not.
+        access: {
+          kind: kind === "api-provider" ? "env" : kind, key: mask(String(a.key ?? "").trim()),
+          provider: via.provider ?? null, endpoint: via.endpoint ?? null, protocol: via.protocol ?? null,
+        },
+        home: p.home, homeExists: existsSync(p.home), model: p.model ?? null, models: p.models,
+        env,
+        // Connects whose sessions can run on it: of its runtime, and its models have theirs.
+        usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
+        loginCommand: loginCommand(p.runtime, p.home),
+        machine: p.machine === true,
+        backgroundOnMessage: p.backgroundOnMessage,
+        fast: p.runtime === "codex" && kind === "subscription" ? p.fast === true : null,
+        check: checkView,
+        login: this.logins.get(p.id),
+        quota: this.quotas.get(p.id) ?? null,
+      };
+    });
+  }
+
+  /// The overview's `logins`: sign-ins for new profiles.
+  loginsView(): Json[] {
+    return [...this.pending.entries()].map(([id, p]) => ({ id, runtime: p.runtime, job: this.logins.get(id), created: p.created, error: p.error }));
+  }
+
+  /// The overview's `machineLogins`.
+  machineLogins(): MachineLogin[] {
+    return this.machine?.get() ?? [];
+  }
+
+  /// The overview's `apiProviders`: the providers a key can be added for (not the two kinds from before the list).
+  apiProviders(): Json[] {
+    return SOURCES.filter((s) => !(s.id in LEGACY)).map((s) => ({ id: s.id, name: s.name, group: groupOf(s.id) }));
+  }
+
+  /// Ids a new profile may not take: the profiles' own, and every home on disk (a deleted profile's home stays).
+  private takenIds(): Set<string> {
+    const taken = new Set(this.profiles().map((p) => p.id));
+    try {
+      for (const name of readdirSync(join(this.deps.data, "homes"))) taken.add(name);
+    } catch {}
+    return taken;
+  }
+}
+
+/// Makes the station's accounts (start() it once wired).
+export const makeAccounts = (deps: AccountsDeps) => new Accounts(deps);
+
+/// A profile leaving its runtime (deleted, or moved to another): refused when it is the last one of a runtime that
+/// connects run.
+function lastOfRuntime(raw: Json, runtime: Runtime, id: string, lang: Lang) {
+  const profiles: Json[] = Array.isArray(raw?.profiles) ? raw.profiles : [];
+  if (profiles.some((p) => p?.id !== id && runtimesFor(p?.access, p?.runtime).includes(runtime))) return;
+  const users = (Array.isArray(raw?.connects) ? raw.connects : [])
+    .filter((c: Json) => c?.bind?.runtime === runtime)
+    .map((c: Json) => (typeof c?.slack?.botName === "string" && c.slack.botName !== "" ? c.slack.botName : c.id));
+  if (users.length > 0) throw new Error(tr(lang, "station.profile.lastForRuntime", { runtime, users: users.join(tr(lang, "station.list.separator")) }));
+}
+
+/// The account a subscription home is signed in as, when its files say: Codex's id token, Claude's account record.
+export function accountEmail(runtime: Runtime, home: string): string | null {
+  if (runtime === "codex") {
+    const claims = codexClaims(home);
+    const email = claims?.email ?? claims?.["https://api.openai.com/profile"]?.email;
+    return typeof email === "string" ? email : null;
+  }
+  for (const file of [join(home, ".claude.json"), join(home, "claude.json")]) {
+    try {
+      const email = JSON.parse(readFileSync(file, "utf8"))?.oauthAccount?.emailAddress;
+      if (typeof email === "string") return email;
+    } catch {}
+  }
+  return null;
+}
+
+/// A slug for an id: lower case, runs of anything else as one dash, at most `max` long.
+export function slug(text: string, max: number): string {
+  let out = "";
+  for (const c of text.toLowerCase()) {
+    if (/^[a-z0-9]$/.test(c)) out += c;
+    else if (!out.endsWith("-")) out += "-";
+  }
+  return [...out.replace(/^-+|-+$/g, "")].slice(0, max).join("").replace(/-+$/, "");
+}
+
+/// The first of base, base-2, base-3 … not taken.
+export function unique(base: string, taken: Set<string>): string {
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+/// Whether a variable holds a secret (shown masked).
+export const secretKey = (key: string) => ["KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH"].some((w) => key.toUpperCase().includes(w));
+
+/// Masks a secret for the pages: its first five and last four characters.
+export function mask(value: string): string {
+  if (value === "") return "";
+  const chars = [...value];
+  if (chars.length <= 8) return "••••";
+  return `${chars.slice(0, 5).join("")}…${chars.slice(-4).join("")}`;
+}
+
+// ── a model as people call it (shapes model.rs `name`) ──
+
+const CLAUDE = ["fable", "opus", "sonnet", "haiku"];
+const BRANDS: Record<string, string> = {
+  deepseek: "DeepSeek", minimax: "MiniMax", qwq: "QwQ", glm: "GLM", gpt: "GPT", oss: "OSS", moonshot: "Moonshot", devstral: "Devstral",
+  codestral: "Codestral", llama: "Llama", ernie: "ERNIE", vl: "VL", r1: "R1", it: "IT",
+};
+
+const word = (w: string) => BRANDS[w] ?? (w === "" ? "" : w[0]!.toUpperCase() + w.slice(1));
+const digitsOnly = (w: string) => /^[0-9]+$/.test(w);
+
+function namedModel(base: string): string | undefined {
+  const words = base.split("-").filter((w) => w !== "");
+  const first = words[0];
+  if (first === undefined) return undefined;
+  if (first === "claude" || CLAUDE.includes(first)) {
+    const family = words.find((w) => CLAUDE.includes(w));
+    if (family === undefined) return undefined;
+    const version = words.filter(digitsOnly);
+    const rest = words.filter((w) => w !== "claude" && w !== family && !digitsOnly(w)).map(word);
+    return [word(family), ...(version.length > 0 ? [version.join(".")] : []), ...rest].join(" ");
+  }
+  const dashed = first === "gpt" ? "GPT" : first === "glm" ? "GLM" : undefined;
+  if (dashed !== undefined && words[1] !== undefined) return [`${dashed}-${words[1]}`, ...words.slice(2).map(word)].join(" ");
+  const oSeries = first.length > 1 && first.startsWith("o") && digitsOnly(first.slice(1));
+  const known = ["gpt", "glm", "codex", "deepseek", "qwen", "qwq", "gemini", "gemma", "kimi", "moonshot", "minimax", "grok", "mistral", "devstral", "codestral", "llama", "doubao", "hunyuan", "ernie"];
+  const family = first.replace(/[0-9.]+$/, "");
+  if (!oSeries && !known.includes(family)) return undefined;
+  return words.map((w, i) => (i === 0 && oSeries ? w : word(w))).join(" ");
+}
+
+/// A model as people call it: Opus 5.5, GPT-6 Astra, o4 Mini, DeepSeek V4 Pro; one of a family not known here reads as
+/// it is spelled.
+export function modelName(id: string): string {
+  const k = modelKey(id);
+  const at = k.indexOf("[");
+  const [base, context] = at >= 0 ? [k.slice(0, at), k.slice(at + 1).replace(/\]+$/, "").toUpperCase()] : [k, ""];
+  const named = namedModel(base);
+  if (named === undefined) return id.trim();
+  return context === "" ? named : `${named} ${context}`;
+}

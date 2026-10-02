@@ -97,6 +97,17 @@ export const SOURCES: Source[] = [
 
 export const find = (id: string): Source | undefined => SOURCES.find((s) => s.id === id);
 
+/// The two made before this list, as an access kind of their own (shapes `legacy`): not offered again as a provider.
+export const LEGACY: Record<string, "anthropic-api" | "opencode-go"> = { anthropic: "anthropic-api", "opencode-go": "opencode-go" };
+
+/// How the picker groups them (shapes `Group`): labs, gateways, hosted, local.
+export function groupOf(id: string): "labs" | "gateways" | "hosted" | "local" {
+  if (["openrouter", "vercel-ai-gateway", "opencode", "opencode-go", "cloudflare-ai-gateway"].includes(id)) return "gateways";
+  if (["azure-openai", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten", "cloudflare-workers-ai"].includes(id)) return "hosted";
+  if (id === "ollama" || id === "custom") return "local";
+  return "labs";
+}
+
 /// An address as it is kept: trimmed, without a trailing slash; none unless it is an http(s) address.
 export function cleanEndpoint(text: string): string | undefined {
   const trimmed = text.trim().replace(/\/+$/, "");
