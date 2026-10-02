@@ -275,11 +275,13 @@ export type Store = {
   archiveDir: string;
   /// Entries of archived threads read lately, the most recent last.
   archived: [number, EntryRow[]][];
+  /// People's names by email, as their credentials say them (the admin API's `deps.names`, filled as members ask).
+  names: Map<string, string>;
 };
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, archiveDir: join(dataDir, "archive"), archived: [] };
+  return { db, dataDir, archiveDir: join(dataDir, "archive"), archived: [], names: new Map() };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.

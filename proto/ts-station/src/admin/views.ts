@@ -5,7 +5,7 @@
 // - the hub: no session has a runtime process (`process_state` "cold"), no client keys (`client_key` none);
 // - Slack connections: none connected, so no workspace or channel names (`known_channel`) and no Slack people
 //   (`known_person`): a Slack user goes by their id, with no email;
-// - the cloud's names (`deps.names`): none, so a person goes by their reference;
+// - the cloud's names (`deps.names`): those of the members who asked since the station started (`Store.names`);
 // - the config's connects are read from config.json in the data directory for the names
 //   agents go by; none when it has none.
 // Words are Chinese (client/i18n/catalog/zh), as `spoken()` is for a core that asks in no other language.
@@ -180,6 +180,9 @@ function withoutMentions(text: string): string {
 // ---- people ----
 
 /// A creator reference in words: who, and their email where known.
+/// The names of the store being answered for (creator and people have no store of their own).
+let cloudNames = new Map<string, string>();
+
 function creator(reference: string | null): Json | null {
   if (reference === null) return null;
   if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
@@ -194,8 +197,7 @@ function creator(reference: string | null): Json | null {
       }
     }
   }
-  // No cloud names: the reference itself.
-  return { id: reference, name: reference, email: reference, via: "cloud" };
+  return { id: reference, name: cloudNames.get(reference) ?? reference, email: reference, via: "cloud" };
 }
 
 /// Several people, once each: one person may write through Slack and the station's chat under the same email.
@@ -254,7 +256,7 @@ function authorNames(api: Api, thread: number): Names {
       const c = api.connects.find((c) => c.id === connect);
       name = c ? c.name : (session?.title ?? null);
     } else if (th !== null && th.surface === STILLFAIL_SURFACE) {
-      name = author === "local" ? tr("station.author.admin") : author;
+      name = author === "local" ? tr("station.author.admin") : (api.store.names.get(author) ?? author);
     } else {
       // A Slack person: no connection knows them.
       name = null;
@@ -357,6 +359,7 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
 /// its agent's item a title (while the chat has no words of its own), the connect and the origin. `archived`: the
 /// archive's items instead, each with `archived: {at, by, alone}`. Each says when the viewer pinned it (`pinned`).
 export function chats(station: Store, viewer: Viewer, archived: boolean): Json[] {
+  cloudNames = station.names;
   const api = apiOf(station);
   const s = api.store;
   const mine = isMine(api, viewer);
@@ -532,6 +535,7 @@ function asI64(n: number): bigint {
 /// `to` a gap (both included); none of them the latest page. `params`: the query's pairs, the first of a name counts
 /// (admin/mod.rs `query_pairs`, `Asked::param`), or a plain map of them.
 export function entries(station: Store, _viewer: Viewer, thread: number, params: Record<string, string> | [string, string][]): Json {
+  cloudNames = station.names;
   const pairs = Array.isArray(params) ? params : Object.entries(params);
   const param = (name: string) => pairs.find(([k]) => k === name)?.[1];
   const api = apiOf(station);

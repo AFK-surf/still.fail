@@ -173,6 +173,7 @@ async function request(stream: Stream, viewer: Admitted["viewer"]) {
     return answer(404, { error: "only the admin API is reachable over the mesh" });
   }
   await reader.rest();
+  if (viewer.name !== "") store.names.set(viewer.email, viewer.name);
   const url = new URL(path.slice("/admin/api".length), "http://stillfail");
   // The first of a name counts, as admin/mod.rs `query_pairs` has it.
   const pairs = [...url.searchParams.entries()];
