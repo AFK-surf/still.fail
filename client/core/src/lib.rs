@@ -56,3 +56,4 @@ pub use host::Host;
 pub use protocol::{ClientId, ClientMessage, CoreMessage, Topic};
 
 pub mod decision_form;
+pub mod profile_flow;

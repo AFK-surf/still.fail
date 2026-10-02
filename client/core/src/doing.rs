@@ -86,6 +86,7 @@ fn words(v: &Value) -> Option<String> {
 pub(crate) fn counts(call: &Call, name: &str) -> bool {
     match call {
         Call::DecisionForm { action, .. } => action == "save",
+        Call::ProfileFlow { action, .. } => action == "submit",
         Call::ConnectFlow { action, .. } => matches!(action.as_str(), "config" | "make" | "verify" | "create"),
         Call::SlackTokens { action, .. } => action == "verify",
         Call::ProfileModels { .. } => true,

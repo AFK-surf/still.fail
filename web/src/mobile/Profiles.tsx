@@ -5,15 +5,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useOverview, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
-import type { MachineLogin, ProviderGroup } from "../core/shapes.ts";
+import type { MachineLogin, ProfileFlowView } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, ChevronRight, More, Plus } from "../icons.tsx";
-import { CHOICES } from "../pages/Accounts.tsx";
+import type { Choice } from "../pages/Accounts.tsx";
+import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, FailedMark, failedIn, Field, GroupLabel, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
+import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
 import { useAct } from "../toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -100,7 +101,7 @@ export function ProfileRow({ station, p }: { station: StationView; p: Profile })
     <ListRow onClick={() => app.push(app.at(`/s/${station.id}/settings/accounts/${encodeURIComponent(p.id)}`))}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
-        <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)}{p.usesText ? ` · ${p.usesText}` : ""} · {p.modelsText}</span>
+        <span className={listsCss.mRowNote}>{p.checkText} · {p.usesText || accessLabel(p)} · {p.modelsText}</span>
         {p.trouble ? <>
           <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}><b>{p.trouble.title}</b> · {p.trouble.detail}</span>
           <span className={`${listsCss.mRowNote} ${partsCss.mLink}`}>{t("web-mobile.profiles.seeFix")}</span>
@@ -411,6 +412,9 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
   const ask = (models: string[]) => act(put(models), t("web-mobile.profiles.what.models"));
   const save = (next: string[]) => ask([...new Set(next)].sort());
   const filtered = !!filter.trim();
+  const [typed, setTyped] = useState("");
+  const adding = useDoing("profile.addModel", { station: station.address, id: p.id });
+  const addTyped = () => { if (typed.trim() && !adding) { act(api.addModel(p.id, typed.trim()), t("web-mobile.profiles.what.models")); setTyped(""); } };
   return (
     <>
       <SectionHeader title={t(busy ? "web-mobile.profiles.modelsSaving" : "web-mobile.profiles.models", { on: models.length, n: all.length })} start={24} />
@@ -425,6 +429,8 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
           <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => save(models.filter((m) => !shown.includes(m)))}>{filtered ? t("web-mobile.profiles.selectNoneFiltered") : t("web-mobile.workspace.selectNone")}</button>
         </>}
       </div>
+      {/* A provider that does not list its models: one is named by hand. */}
+      {p.canAddModel && <div className={settingsCss.mProfileTools}><Field value={typed} onChange={setTyped} placeholder={t("web-mobile.profiles.addModelPlaceholder")} /><button type="button" className={partsCss.mLink} disabled={!typed.trim() || adding} onClick={addTyped}>{adding ? <Spinner size={12} /> : t("web-mobile.profiles.addModel")}</button></div>}
       {all.length > 10 && <div className={settingsCss.mProfileTools}><Field value={filter} onChange={setFilter} placeholder={t("web-mobile.profiles.filterModels")} /></div>}
       {/* By series, newest first (the core's). */}
       {p.series.map((s) => {
@@ -572,98 +578,79 @@ function EnvSheet({ p }: { p: Profile }) {
   );
 }
 
-type Choice = keyof typeof CHOICES;
-
 /**
- * A new profile on the station in context: a subscription is signed in first and the station makes the profile once
- * that succeeds (named by the account); a key is checked first and the profile made only if it works.
+ * A new profile on the station in context, as the core's add flow has it (profileFlow.ts): the providers by group, then
+ * how to connect the one picked (a plan signed in, or a key checked first: the profile is made only if it works).
  */
 export function NewProfileScreen() {
   const app = useApp();
   const api = useApi();
   const station = useStation();
   const overview = useOverview(station.address).value;
-  // `?kind=`: the kind chosen as it opens (a machine login kept in the keychain, signed in again for ember).
-  const [params] = useSearchParams();
-  const [choice, setChoice] = useState<Choice>(() => { const k = params.get("kind"); return k && k in CHOICES ? k as Choice : "claude-sub"; });
-  const { kind, runtime } = CHOICES[choice];
-  const [key, setKey] = useState("");
-  // A key on a listed provider: which one, and its address where it has none of its own.
-  const [providerId, setProviderId] = useState("");
-  const [endpoint, setEndpoint] = useState("");
-  const groups = overview?.providerGroups ?? [];
-  const chosen = groups.flatMap((g) => g.providers).find((p) => p.id === providerId);
+  const { d, edit, submit, submitting } = useProfileFlow(station.address);
+  // `?kind=`: a machine login kept in the keychain, signed in again for ember as the vendor's plan.
+  const [params, setParams] = useSearchParams();
+  const kind = params.get("kind");
+  useEffect(() => {
+    if (!d || !kind) return;
+    if (!d.tile) edit({ provider: kind === "claude-sub" ? "anthropic" : "openai" });
+    else if (d.step === "method") { edit({ method: "plan" }); setParams({}, { replace: true }); }
+  }, [d?.tile?.id, d?.step, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const [login, setLogin] = useState<string | null>(null);
-  const busy = useDoing(["login.new", "profile.add"], { station: station.address });
   const [error, setError] = useState<string | null>(null);
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
+  const runtime = d?.tile?.runtime === "codex" ? "codex" : "claude";
   const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, t("web-mobile.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Leaving before a sign-in made its profile leaves nothing behind.
+  // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
+  const planning = d?.step === "connect" && d.method === "plan";
+  const started = useRef(false);
   const dropped = (e: Error) => app.toast(t("web-mobile.profiles.dropFailed", { error: e.message }));
-  const leave = () => { if (login && !pending?.created) api.dropLogin(login).catch(dropped); app.pop(); };
-  const provider = runtime === "claude" ? "Claude" : "ChatGPT";
+  useEffect(() => {
+    if (planning && !started.current) { started.current = true; setError(null); api.newLogin(runtime).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }
+    if (!planning && started.current) { started.current = false; if (login && !pending?.created) api.dropLogin(login).catch(dropped); setLogin(null); }
+  }, [planning]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Back goes a step back, from the picker out.
+  const leave = () => { if (d && d.step !== "pick") edit({ provider: "" }); else app.pop(); };
   const job = pending?.job ?? null;
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={t("common.cancel")} onBack={leave} title={t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      <NavBar back={d && d.step !== "pick" ? t("web-mobile.profiles.pick") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
-        {login ? (
-          pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
-            <>
-              <p className={partsCss.mError}>{pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
-              <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { api.dropLogin(login).catch(dropped); setLogin(null); }} />
-            </>
-          ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login, code)} />
-        ) : (
+        {!d ? <Loading text={t("web-mobile.profiles.loading")} /> : d.step === "pick" ? (
           <>
-            {overview && (
-              <MachineLoginOffers inForm logins={overview.machineLogins}
-                onSignIn={(c) => { setChoice(c); setError(null); api.newLogin(CHOICES[c].runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
-            )}
-            {overview && machineOffers(overview.machineLogins).length > 0 && <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.orNew")}</b>}
-            <ListCard>
-              {(Object.keys(CHOICES) as Choice[]).filter((c) => c !== "api-provider" || groups.length > 0).map((c) => (
-                <PickRow key={c} label={CHOICES[c].title} sub={CHOICES[c].description} checked={choice === c} onClick={() => setChoice(c)}
-                  leading={<ProviderMark runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={18} />} />
-              ))}
-            </ListCard>
-            {kind === "api-provider" && (
-              <>
-                <b className={sheetsCss.mFormLabel}>{t("common.provider.pick")}</b>
+            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.hint}</p>
+            {overview && <MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} />}
+            {d.groups.map((g) => (
+              <div key={g.id}>
+                <SectionHeader title={g.title} start={6} />
                 <ListCard>
-                  <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <PickProvider groups={groups} value={providerId} onPick={setProviderId} /> })}>
-                    {chosen && <ProviderMark runtime="claude" kind="api-provider" mark={chosen.mark} size={18} />}
-                    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                      <span className={listsCss.mRowTitle}>{chosen?.name ?? t("common.provider.pickPlaceholder")}</span>
-                      <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{chosen ? t("common.provider.uses", { uses: chosen.usesText ?? "" }) : t("common.provider.usesHint")}</span>
-                    </span>
-                    <ChevronRight size={16} />
-                  </ListRow>
+                  {g.providers.map((p) => (
+                    <ListRow key={p.id} onClick={() => edit({ provider: p.id })}>
+                      <ProviderMark runtime={p.runtime ?? "claude"} kind={p.kind || "api-provider"} mark={p.mark} size={18} />
+                      <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{p.name}</span>
+                      <ChevronRight size={16} />
+                    </ListRow>
+                  ))}
                 </ListCard>
-                {chosen?.endpointRequired && (
-                  <>
-                    <b className={sheetsCss.mFormLabel}>{t("common.provider.endpoint")}</b>
-                    <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} autoCapitalize="none" value={endpoint} placeholder={chosen.endpointExample ?? "https://"} onChange={(e) => setEndpoint(e.target.value.trim())} />
-                  </>
-                )}
-              </>
-            )}
-            {KEYED.has(kind) && (kind !== "api-provider" || chosen) && (
-              <>
-                <b className={sheetsCss.mFormLabel}>{kind === "opencode-go" ? "OpenCode Go key" : chosen?.keyOptional ? t("common.provider.keyOptional") : "API key"}</b>
-                <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={key} placeholder={t("web-mobile.profiles.keyPlaceholder")} onChange={(e) => setKey(e.target.value.trim())} />
-              </>
-            )}
-            {kind === "subscription" && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginWhereAdd", { name: NAME })}</p>}
-            {error && <p className={partsCss.mError}>{error}</p>}
-            {kind === "subscription"
-              ? <Button label={t("web-mobile.profiles.loginTo", { provider })} primary busy={busy} onClick={() => { setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
-              : <Button label={KEYED.has(kind) ? t("web-mobile.profiles.verifyAdd") : t("web-mobile.workspace.addOne")} primary busy={busy}
-                  enabled={kind === "api-provider" ? !!chosen && (!!key || !!chosen.keyOptional) && (!chosen.endpointRequired || !!endpoint) : !KEYED.has(kind) || !!key}
-                  onClick={() => { setError(null); api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}), ...(kind === "api-provider" ? { provider: providerId, ...(chosen?.endpointRequired ? { endpoint } : {}) } : {}) } }).then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), (e: Error) => setError(e.message)); }} />}
+              </div>
+            ))}
           </>
+        ) : d.step === "method" ? (
+          <ListCard>
+            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
+          </ListCard>
+        ) : d.method === "plan" ? (
+          error || pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
+            <>
+              <p className={partsCss.mError}>{error ?? pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
+              <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); api.newLogin(runtime).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
+            </>
+          ) : <LoginSteps job={job} provider={runtime === "claude" ? "Claude" : "ChatGPT"} send={(code) => api.newLoginCode(login!, code)} />
+        ) : (
+          <ConnectForm key={d.tile?.id} d={d} edit={edit} busy={submitting}
+            onSubmit={() => { submit().then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), () => undefined); }} />
         )}
         <div style={{ height: 30 }} />
       </div>
@@ -671,24 +658,38 @@ export function NewProfileScreen() {
   );
 }
 
-/** The providers a key can be added for, by group, in a sheet: each with what it can do (the core's words). */
-function PickProvider({ groups, value, onPick }: { groups: ProviderGroup[]; value: string; onPick: (id: string) => void }) {
-  const app = useApp();
+/** The form of a key: what is typed is kept here as it is typed (the core has it as it is named, and judges it). */
+function ConnectForm({ d, edit, busy, onSubmit }: { d: ProfileFlowView; edit(input: Record<string, unknown>): void; busy: boolean; onSubmit(): void }) {
+  const [endpoint, setEndpoint] = useState(d.endpoint);
+  const [key, setKey] = useState(d.key);
   return (
     <>
-      <SheetGrab />
-      <SheetHead title={t("common.provider.title")} />
-      <div className={sheetsCss.mSheetScroll}>
-        {groups.map((g) => (
-          <div key={g.id}>
-            <div className={partsCss.mPadX18}><GroupLabel>{g.title}</GroupLabel></div>
-            {g.providers.map((p) => (
-              <PickRow key={p.id} label={p.name} sub={p.usesText} checked={p.id === value} onClick={() => { onPick(p.id); app.sheet(null); }}
-                leading={<ProviderMark runtime="claude" kind="api-provider" mark={p.mark} size={18} />} />
-            ))}
-          </div>
-        ))}
-      </div>
+      {d.showEndpoint && (
+        <>
+          <b className={sheetsCss.mFormLabel}>{t("common.provider.endpoint")}</b>
+          <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} autoCapitalize="none" disabled={d.pending} value={endpoint} placeholder={d.tile?.endpointExample ?? "https://"}
+            onChange={(e) => { setEndpoint(e.target.value); edit({ endpoint: e.target.value }); }} />
+          {d.endpointHint && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.endpointHint}</p>}
+        </>
+      )}
+      {d.protocols.length > 1 && (
+        <>
+          <b className={sheetsCss.mFormLabel}>{t("web-mobile.profiles.protocol")}</b>
+          <ListCard>
+            {d.protocols.map((p) => <PickRow key={p.id} label={p.label} checked={p.id === d.protocol} onClick={() => edit({ protocol: p.id })} />)}
+          </ListCard>
+        </>
+      )}
+      {d.showKey && (
+        <>
+          <b className={sheetsCss.mFormLabel}>{d.keyLabel}</b>
+          <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} disabled={d.pending} value={key} placeholder={t("web-mobile.profiles.keyPlaceholder")}
+            onChange={(e) => { setKey(e.target.value); edit({ key: e.target.value }); }} />
+          {d.error ? <p className={partsCss.mError}>{d.error}</p> : d.keyHint && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.keyHint}</p>}
+        </>
+      )}
+      <Button label={d.submitLabel} primary busy={busy || d.pending} enabled={d.canSubmit} onClick={onSubmit} />
+      {d.usesLine && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.usesLine}</p>}
     </>
   );
 }

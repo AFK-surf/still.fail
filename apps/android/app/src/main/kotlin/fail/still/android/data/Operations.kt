@@ -289,6 +289,12 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["id"] = JsonPrimitive(id)
         return call("profile.put", JsonObject(values))
     }
+    suspend fun profileAddModel(id: String, model: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        values["model"] = JsonPrimitive(model)
+        return call("profile.addModel", JsonObject(values))
+    }
     suspend fun profileDelete(id: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         values["id"] = JsonPrimitive(id)

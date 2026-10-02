@@ -816,9 +816,10 @@ async fn a_key_on_a_listed_provider_makes_a_profile_that_runs_what_its_endpoints
     assert_eq!(t.config().profiles.iter().filter(|p| p.provider.as_deref() == Some("groq")).count(), 2);
     // The address is the person's where the provider has none; a key is optional only for a server of one's own.
     assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "azure-openai", "key": "k" } }))).await.0, 400);
-    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "custom", "endpoint": "http://127.0.0.1:4000/v1" } }))).await.0, 200);
+    assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "custom", "endpoint": "http://127.0.0.1:4000/v1", "protocol": "anthropic" } }))).await.0, 200);
     let custom = added(&t, "custom");
-    assert_eq!((custom.key.as_str(), custom.endpoint.as_deref(), custom.runtimes.len()), ("", Some("http://127.0.0.1:4000/v1"), 2));
+    // A server of one's own speaks the one protocol chosen for it: here the runtime that reads Anthropic.
+    assert_eq!((custom.key.as_str(), custom.endpoint.as_deref(), custom.runtimes.clone()), ("", Some("http://127.0.0.1:4000/v1"), vec![RuntimeKind::Claude]));
     assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "groq" } }))).await.0, 400, "a key is needed");
     assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "nope", "key": "k" } }))).await.0, 400);
     assert_eq!(t.call("POST", "/profiles", Some(json!({ "access": { "kind": "api-provider", "provider": "anthropic", "key": "k" } }))).await.0, 400, "Anthropic is its own kind");

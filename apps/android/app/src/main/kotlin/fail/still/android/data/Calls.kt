@@ -162,6 +162,9 @@ class StationApi(private val core: StillFailCore, val station: String) {
         ops.profilePut(id = profile) { this.input = buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } } }
     }
 
+    /** One model named by hand, added to those enabled (a provider that does not list its models). */
+    suspend fun addModel(profile: String, model: String) { ops.profileAddModel(id = profile, model = model) }
+
     /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
     suspend fun upload(name: String, bytes: ByteArray, width: Long?, height: Long?): Attachment {
         val encoded = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.encodeToString(bytes, Base64.NO_WRAP) }

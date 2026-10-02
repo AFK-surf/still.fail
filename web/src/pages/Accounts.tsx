@@ -25,20 +25,8 @@ import * as chatCss from "../styles/chat.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
-/**
- * What can be added, by whose account it is; `runtime` only where the account is for one (a subscription, variables).
- * Its words are getters, read in the language at the time.
- */
-export const CHOICES = {
-  "claude-sub": { kind: "subscription", runtime: "claude", get title() { return t("web-pages.profiles.choice.claudeSub"); }, get description() { return t("web-pages.profiles.choice.claudeSubLead"); } },
-  "chatgpt-sub": { kind: "subscription", runtime: "codex", get title() { return t("web-pages.profiles.choice.chatgptSub"); }, get description() { return t("web-pages.profiles.choice.chatgptSubLead"); } },
-  "opencode-go": { kind: "opencode-go", runtime: null, title: "OpenCode Go", get description() { return t("web-pages.profiles.choice.opencodeGoLead"); } },
-  "anthropic-api": { kind: "anthropic-api", runtime: null, title: "Anthropic API", get description() { return t("web-pages.profiles.choice.anthropicApiLead"); } },
-  "api-provider": { kind: "api-provider", runtime: null, get title() { return t("common.provider.title"); }, get description() { return t("common.provider.lead"); } },
-  "env-claude": { kind: "env", runtime: "claude", get title() { return t("web-pages.profiles.choice.envClaude"); }, get description() { return t("web-pages.profiles.choice.envLead"); } },
-  "env-codex": { kind: "env", runtime: "codex", get title() { return t("web-pages.profiles.choice.envCodex"); }, get description() { return t("web-pages.profiles.choice.envLead"); } },
-} as const satisfies Record<string, { kind: AccessKind; runtime: RuntimeKind | null; title: string; description: string }>;
-export type Choice = keyof typeof CHOICES;
+/** The plans a machine's own login can be signed in again with (the add page: a vendor's subscription). */
+export type Choice = "claude-sub" | "chatgpt-sub";
 
 /** What a profile is, in a line, where the first one is asked for (an element: its words are read as it is drawn). */
 export const PROFILE_LEAD = <ProfileLead />;
@@ -74,95 +62,6 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
       ))}
       {use.error && <p className={controlsCss.fieldError} role="alert">{use.error.message}</p>}
     </div>
-  );
-}
-
-/**
- * A new profile: a subscription is signed in first and the station makes the profile once that succeeds (named by the
- * account); a key is checked first and the profile made only if it works. Nothing is left behind by one that did not.
- * `initial`: the kind chosen when it opens.
- */
-export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { open: boolean; onClose(): void; initial?: Choice }) {
-  const api = useApi();
-  const link = useLink();
-  const station = useStation();
-  const overview = useOverview(station.address);
-  const navigate = useNavigate();
-  const toast = useToast();
-  // What to add, by whose account it is: a subscription (which one), a key, or variables set by hand for one runtime.
-  const [choice, setChoice] = useState<Choice>(initial);
-  const { kind, runtime } = CHOICES[choice];
-  const [key, setKey] = useState("");
-  // A key on a listed provider: which one, and its address where it has none of its own.
-  const [providerId, setProviderId] = useState("");
-  const [endpoint, setEndpoint] = useState("");
-  const groups = overview.value?.providerGroups ?? [];
-  const provider = groups.flatMap((g) => g.providers).find((p) => p.id === providerId);
-  const [login, setLogin] = useState<string | null>(null);
-  const [code, setCode] = useState("");
-  const pending = login ? overview.value?.logins.find((l) => l.id === login) : undefined;
-  const signInWith = runtime === "claude" ? "Claude" : "ChatGPT";
-  const close = () => {
-    if (login && !pending?.created) void api.dropLogin(login).catch(() => {});
-    setLogin(null); setKey(""); setCode(""); setChoice("claude-sub"); setProviderId(""); setEndpoint("");
-    onClose();
-  };
-  const go = (id: string, message: string) => { toast(message); setLogin(null); setKey(""); setCode(""); setProviderId(""); setEndpoint(""); onClose(); navigate(link(`/settings/accounts/${id}`)); };
-  // The sign-in made its profile: on to it.
-  useEffect(() => { if (pending?.created) go(pending.created, t("web-pages.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
-  const start = useAction(() => api.newLogin(runtime!), ({ id }) => setLogin(id));
-  const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
-  const add = useAction(() => api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}), ...(kind === "api-provider" ? { provider: providerId, ...(provider?.endpointRequired ? { endpoint } : {}) } : {}) } }), ({ id }) => go(id, t("web-pages.profiles.verifiedAdded")));
-  // Ready to verify: a key where one is needed, and for a provider, which one and its address if it is the person's own.
-  const ready = kind === "api-provider"
-    ? !!provider && (!!key.trim() || !!provider.keyOptional) && (!provider.endpointRequired || !!endpoint.trim())
-    : !KEYED.has(kind) || !!key.trim();
-  const job = pending?.job ?? null;
-  const signing = login !== null;
-  return (
-    <Dialog open={open} onClose={close} title={station.name ? t("web-pages.profiles.addTo", { name: station.name }) : t("web-pages.settings.profiles.add")}
-      footer={<>
-        <Button variant="ghost" onClick={close}>{t("common.cancel")}</Button>
-        {!signing && (kind === "subscription"
-          ? <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>{t("web-pages.profiles.signInTo", { provider: signInWith })}</Button>
-          : <Button variant="primary" disabled={!ready} busy={add.busy} onClick={() => void add.run()}>{KEYED.has(kind) ? t("web-pages.profiles.verifyAdd") : t("web-pages.settings.members.addOne")}</Button>)}
-      </>}>
-      {signing ? (
-        pending?.error || job?.state === "failed" || job?.state === "cancelled"
-          ? <div className={pagesCss.card}><p className={controlsCss.fieldError}>{pending?.error ?? job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { void api.dropLogin(login!).catch(() => {}); setLogin(null); }}>{t("web-pages.profiles.restart")}</Button></div>
-          : <LoginSteps job={job} provider={signInWith} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
-      ) : (
-        <>
-          <Field label={t("web-pages.profiles.account")}>
-            <Choices label={t("web-pages.profiles.account")} value={choice} onChange={(v) => setChoice(v as Choice)}
-              options={(Object.keys(CHOICES) as Choice[]).filter((c) => c !== "api-provider" || groups.length > 0).map((c) => ({
-                value: c, title: CHOICES[c].title, description: CHOICES[c].description,
-                icon: <span className={pagesCss.mark} style={{ width: 28, height: 28 }}><ProviderLogo runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={16} /></span>,
-              }))} />
-          </Field>
-          {kind === "api-provider" && (
-            <>
-              <Field label={t("common.provider.pick")} htmlFor="account-provider" hint={provider ? t("common.provider.uses", { uses: provider.usesText ?? "" }) : t("common.provider.usesHint")}>
-                <Select id="account-provider" value={providerId} onChange={setProviderId} placeholder={t("common.provider.pickPlaceholder")}
-                  options={groups.flatMap((g) => g.providers.map((p) => ({ value: p.id, label: p.name, group: g.title })))} />
-              </Field>
-              {provider?.endpointRequired && (
-                <Field label={t("common.provider.endpoint")} htmlFor="account-endpoint" hint={provider.endpointExample ? t("common.provider.endpointHint", { example: provider.endpointExample }) : undefined}>
-                  <input id="account-endpoint" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={endpoint} onChange={(e) => setEndpoint(e.target.value.trim())} placeholder={provider.endpointExample ?? "https://"} />
-                </Field>
-              )}
-            </>
-          )}
-          {KEYED.has(kind) && (kind !== "api-provider" || provider) && (
-            <Field label={kind === "opencode-go" ? "OpenCode Go key" : provider?.keyOptional ? t("common.provider.keyOptional") : "API key"} htmlFor="account-key" hint={t("web-pages.profiles.keyHint")}>
-              <input id="account-key" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
-            </Field>
-          )}
-          {kind === "subscription" && <p className={shellCss.muted}>{t("web-pages.profiles.subscriptionNote", { name: NAME })}</p>}
-          {(start.error ?? add.error) && <p className={controlsCss.fieldError} role="alert">{(start.error ?? add.error)!.message}</p>}
-        </>
-      )}
-    </Dialog>
   );
 }
 
@@ -216,7 +115,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
             <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
-              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} />{!profile.machine && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
+              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
             {profile.checkTone !== "green" && <Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
@@ -456,7 +355,7 @@ function DeviceCode({ url, code }: { url: string; code: string }) {
 
 /** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude), or the link
  * and the one-time code to enter (Codex). */
-function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
+export function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
   job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
 }) {
   if (!job || job.state === "starting") return <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.generatingLink", { provider })}</p>;
@@ -536,6 +435,10 @@ function QuotaSection({ profile }: { profile: Profile }) {
  * only to a profile that has its model enabled.
  */
 function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): Promise<unknown> }) {
+  const api = useApi();
+  const act = useAct();
+  const [typed, setTyped] = useState("");
+  const adding = useDoing("profile.addModel", { station: useStation().address, id: profile.id });
   const enabled = new Set(profile.models);
   const busy = profile.modelsSaving != null;
   const [filter, setFilter] = useState("");
@@ -606,6 +509,14 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
               </div>
             );
           })}
+        </div>
+      )}
+      {/* A provider that does not list its models: one is named by hand. */}
+      {profile.canAddModel && (
+        <div className={additionsCss.inputRow}>
+          <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={typed} aria-label={t("web-pages.profiles.addModelLabel")} placeholder={t("web-pages.profiles.addModelPlaceholder")}
+            onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && typed.trim() && !adding) { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); } }} />
+          <Button disabled={!typed.trim()} busy={adding} onClick={() => { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); }}>{t("web-pages.profiles.addModel")}</Button>
         </div>
       )}
     </Section>

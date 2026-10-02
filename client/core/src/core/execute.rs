@@ -23,6 +23,15 @@ impl Inner {
                 self.decision_form.finish(&topic,at.0,&answer);
                 answer
             }
+            Call::ProfileFlow { topic, action, patch } => {
+                if matches!(action.as_str(), "open" | "edit" | "drop") { return self.profile_flow.change(&topic, at.0, &action, &patch); }
+                let Topic::ProfileFlow { station, .. } = &topic else { unreachable!() };
+                let input = self.profile_flow.begin(&topic, at.0)?;
+                let op = crate::ops::request("profile.add", &input).unwrap()?;
+                let answer = self.stations.perform(&StationAddr::parse(station)?, &op).await;
+                self.profile_flow.finish(&topic, at.0, &answer);
+                answer
+            }
             Call::ConnectFlow { topic, action, patch } => {
                 let Topic::ConnectFlow { station, form } = &topic else { unreachable!() };
                 let token_topic = crate::connect_flow::tokens(station, form);

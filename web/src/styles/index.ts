@@ -19,6 +19,7 @@ import "../NewChat.css.ts";
 import "../brand.css.ts";
 import "../pages/Connects.css.ts";
 import "../pages/Accounts.css.ts";
+import "../pages/AddProfile.css.ts";
 import "../pages/Connect.css.ts";
 import "./controls.css.ts";
 import "./chat.css.ts";

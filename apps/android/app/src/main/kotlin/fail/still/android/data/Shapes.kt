@@ -20,7 +20,9 @@ data class Access (
 	/// The provider of an `api-provider` (providers.rs); an older core reads such a profile as `env` and drops this.
 	val provider: String? = null,
 	/// Its address, where the provider has none of its own (Azure, Cloudflare, custom).
-	val endpoint: String? = null
+	val endpoint: String? = null,
+	/// At such an address, the protocol it speaks there: chat_completions, responses or anthropic.
+	val protocol: String? = null
 )
 
 /// What an agent at work does now (activity.rs): `key` names the thing (a step, or where the turn stands), `text` says
@@ -78,19 +80,29 @@ data class AgentWait (
 	val text: String? = null
 )
 
-/// A provider a key can be added for (providers.rs).
+/// A provider a key can be added for (providers.rs); a station lists its ids (`id`, `name`, `group`), the core fills the
+/// rest in as the picker's tiles.
 @Serializable
 data class ApiProvider (
 	val id: String,
 	val name: String,
-	/// maker | host | own
+	/// labs | china | gateways | cloud | inference | local
 	val group: String,
 	/// The mark of its maker; none: the generic one.
 	val mark: String? = null,
+	/// How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand).
+	val kind: String? = null,
+	/// It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude).
+	val hasKey: Boolean? = null,
+	val hasPlan: Boolean? = null,
+	/// Of its subscription, or of the variables: the runtime (claude | codex).
+	val runtime: String? = null,
 	/// Its address is the person's own: asked for with the key.
 	val endpointRequired: Boolean? = null,
 	/// An example of such an address.
 	val endpointExample: String? = null,
+	/// At such an address, the protocols it can speak there (more than one: asked which).
+	val protocols: List<String>? = null,
 	/// Works without a key.
 	val keyOptional: Boolean? = null,
 	/// What a profile on it can do: `claude`, `codex`, `decision`.
@@ -774,7 +786,9 @@ data class Profile (
 	val usesText: String? = null,
 	/// The provider of a key from the list of API providers, and the mark of its maker (none: the generic one).
 	val providerName: String? = null,
-	val providerMark: String? = null
+	val providerMark: String? = null,
+	/// A model can be named by hand (a key on a listed provider: not every one lists its models).
+	val canAddModel: Boolean? = null
 )
 
 @Serializable
@@ -1696,6 +1710,19 @@ data class DraftView (
 )
 
 @Serializable
+data class FlowChoice (
+	val id: String,
+	val title: String,
+	val hint: String
+)
+
+@Serializable
+data class FlowOption (
+	val id: String,
+	val label: String
+)
+
+@Serializable
 data class FootprintConfirm (
 	val title: String,
 	val text: String,
@@ -2233,14 +2260,6 @@ data class PendingLogin (
 	val error: String? = null
 )
 
-/// Providers of one group, as the picker lists them.
-@Serializable
-data class ProviderGroup (
-	val id: String,
-	val title: String,
-	val providers: List<ApiProvider>
-)
-
 /// A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
 /// runtime (`claude`, `codex`).
 @Serializable
@@ -2307,8 +2326,6 @@ data class Overview (
 	/// The providers a key can be added for (none from a station older than them: they are then not offered), as the
 	/// station lists them.
 	val apiProviders: List<ApiProvider>? = null,
-	/// The same, grouped for the picker (what the core makes of them).
-	val providerGroups: List<ProviderGroup>? = null,
 	/// The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them).
 	val updates: List<SoftwareVersion>? = null,
 	/// Its agents' processes, in a line.
@@ -2495,6 +2512,48 @@ data class PrefsView (
 	/// The invite code a page was opened with, kept through signing in until a workspace is made with it.
 	val invite: String? = null,
 	val device: DeviceView? = null
+)
+
+/// Providers of one group, as the picker lists them.
+@Serializable
+data class ProviderGroup (
+	val id: String,
+	val title: String,
+	val providers: List<ApiProvider>
+)
+
+/// The add-profile pages, as the core keeps them for one device: the picker, how to connect what was picked (a plan or
+/// a key), and the form with what it will be usable for. The views draw it and name what changed (`profile.flow.edit`).
+@Serializable
+data class ProfileFlowView (
+	/// pick | method | connect
+	val step: String,
+	val station: String,
+	val title: String,
+	val hint: String,
+	val groups: List<ProviderGroup>,
+	val tile: ApiProvider? = null,
+	/// plan | key, once chosen.
+	val method: String? = null,
+	/// At the method step: the two cards.
+	val choices: List<FlowChoice>,
+	val showEndpoint: Boolean,
+	val endpoint: String,
+	val endpointHint: String? = null,
+	/// Asked only when there are more than one.
+	val protocols: List<FlowOption>,
+	val protocol: String? = null,
+	val showKey: Boolean,
+	val key: String,
+	val keyLabel: String,
+	val keyHint: String? = null,
+	/// Shown under the key.
+	val error: String? = null,
+	val canSubmit: Boolean,
+	val pending: Boolean,
+	val submitLabel: String,
+	/// What the profile will be usable for, in words (the line under the page).
+	val usesLine: String
 )
 
 /// A session with its threads and turns (`session` topic).

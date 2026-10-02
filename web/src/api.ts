@@ -274,6 +274,8 @@ export function stationApi(t: StationCall) {
     deleteConnect: (id: string) => ops.connectDelete<Overview>({ id }),
     reconnect: (id: string) => ops.connectReconnect<{ ok: true }>({ id }),
     putProfile: (id: string, input: ProfileInput) => ops.profilePut<Overview>({ id, input }),
+    /** One model named by hand, added to those enabled (a provider that does not list its models). */
+    addModel: (id: string, model: string) => ops.profileAddModel<Overview>({ id, model }),
     resetQuota: (id: string) => ops.profileResetQuota({ id }),
     refreshQuota: (id: string) => ops.profileQuota<Quota | null>({ id }),
     checkProfile: (id: string) => ops.profileCheck<ProfileCheck>({ id }),

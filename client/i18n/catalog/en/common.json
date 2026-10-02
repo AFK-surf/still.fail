@@ -24,5 +24,7 @@
   "common.provider.endpointHint": "Your own address, e.g. {example}",
   "common.provider.keyOptional": "API key (optional)",
   "common.provider.uses": "Works for: {uses}",
-  "common.provider.usesHint": "Claude Code needs the provider's Anthropic endpoint and Codex its Responses endpoint; one with only chat completions serves automatic decisions"
+  "common.provider.usesHint": "Claude Code needs the provider's Anthropic endpoint and Codex its Responses endpoint; one with only chat completions serves automatic decisions",
+  "common.decision": "Auto decisions",
+  "common.decisionLong": "Usable for automatic decisions"
 }

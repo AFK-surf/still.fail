@@ -33,6 +33,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.border
+import androidx.compose.runtime.DisposableEffect
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonObject
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,8 +62,7 @@ import fail.still.android.data.KEYED
 import fail.still.android.data.LoginJob
 import fail.still.android.data.MachineLogin
 import fail.still.android.data.Overview
-import fail.still.android.data.PROFILE_CHOICES
-import fail.still.android.data.ProviderGroup
+import fail.still.android.data.ProfileFlowView
 import fail.still.android.data.Profile
 import fail.still.android.data.Quota
 import fail.still.android.data.StationView
@@ -172,7 +176,7 @@ internal fun ProfileRow(station: String, p: Profile) {
                 PresenceDot(toneDot(p.checkTone))
                 Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(listOfNotNull(p.checkText, if (p.machine == true) t("android-settings.profile.machine") else p.providerName ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.usesText?.ifEmpty { null }, p.modelsText).joinToString(" · "),
+            Text(listOfNotNull(p.checkText, if (p.machine == true) t("android-settings.profile.machine") else p.usesText?.ifEmpty { null } ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (p.trouble != null) {
                 Text("${p.trouble.title} · ${p.trouble.detail}", fontSize = 13.sp, color = C.muted)
@@ -499,6 +503,19 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
             Text(if (filtered) t("android-settings.models.noneFiltered") else t("android-settings.none"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(enabled = !saving) { save(models - shown.toSet()) })
         }
     }
+    // A provider that does not list its models: one is named by hand.
+    if (p.canAddModel == true) {
+        var typed by remember { mutableStateOf("") }
+        val adding = app.isDoing("profile.addModel", "station" to station, "id" to p.id)
+        Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Field(typed, { typed = it }, t("web-mobile.profiles.addModelPlaceholder"), mono = true, modifier = Modifier.weight(1f))
+            if (adding) Spinner(14.dp)
+            else Text(t("web-mobile.profiles.addModel"), fontSize = 14.sp, color = if (typed.isBlank()) C.muted else C.accent, modifier = Modifier.clickable(enabled = typed.isNotBlank()) {
+                val model = typed.trim(); typed = ""
+                app.act(t("android-settings.models.refreshWhat")) { app.api(station).addModel(p.id, model) }
+            })
+        }
+    }
     if (all.size > 10) Field(filter, { filter = it }, t("android-settings.models.filter"), modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp))
     // Plain rows on the page, no card behind them; by series, newest first (the core's).
     p.series.forEach { series ->
@@ -662,8 +679,9 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
 }
 
 /**
- * A new profile on a station: a subscription is signed in first and the station makes the profile once that succeeds
- * (named by the account); a key is checked first and the profile made only if it works.
+ * A new profile on a station, as the core's add flow has it (the `profileFlow` topic, as the web's profileFlow.ts): the
+ * providers by group, then how to connect the one picked (a plan signed in, or a key checked first: the profile is made
+ * only if it works).
  */
 @Composable
 fun NewProfileScreen(current: WorkspaceEntry, address: String) {
@@ -672,76 +690,77 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     val api = app.api(address)
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val s = stations.value?.firstOrNull { it.station == address }
-    // A key on a listed provider is offered where the station lists them (one from before them does not).
-    val groups = s?.overview?.providerGroups.orEmpty()
-    val choices = PROFILE_CHOICES.filter { it.kind != "api-provider" || groups.isNotEmpty() }
-    var choice by remember { mutableIntStateOf(0) }
-    val picked = choices[choice.coerceIn(choices.indices)]
-    var key by remember { mutableStateOf("") }
-    var providerId by remember { mutableStateOf("") }
-    var endpoint by remember { mutableStateOf("") }
-    val chosen = groups.flatMap { it.providers }.firstOrNull { it.id == providerId }
+    val form = remember(address) { java.util.UUID.randomUUID().toString() }
+    val topic by rememberTopic<ProfileFlowView>(app.core, buildJsonObject { put("topic", "profileFlow"); put("station", address); put("form", form) })
+    fun edit(input: JsonObject) {
+        app.act(t("web-pages.addProfile.editAction")) { app.core.call("profile.flow.edit", buildJsonObject { put("station", address); put("form", form); put("input", input) }) }
+    }
+    fun edit(key: String, value: String) = edit(buildJsonObject { put(key, value) })
+    LaunchedEffect(address, form) { app.act(t("web-pages.addProfile.openAction")) { app.core.call("profile.flow.open", buildJsonObject { put("station", address); put("form", form) }) } }
+    DisposableEffect(address, form) { onDispose { app.scope.launch { try { app.core.call("profile.flow.drop", buildJsonObject { put("station", address); put("form", form) }) } catch (_: CoreException) {} } } }
+    val d = topic.value
+    val submitting = app.isDoing("profile.flow.submit", "station" to address, "form" to form)
     var login by remember { mutableStateOf<String?>(null) }
-    val busy = app.isDoing(setOf("login.new", "profile.add"), "station" to address)
     var error by remember { mutableStateOf<String?>(null) }
     val pending = login?.let { l -> s?.overview?.logins?.firstOrNull { it.id == l } }
     val go = { id: String, message: String -> app.toast = message; app.replace(Screen.Profile(address, id)) }
     // The sign-in made its profile: on to it.
     LaunchedEffect(pending?.created) { pending?.created?.let { go(it, t("android-settings.profile.addedLogin")) } }
-    // Leaving before a sign-in made its profile leaves nothing behind.
-    val leave = {
+    val runtime = if (d?.tile?.runtime == "codex") "codex" else "claude"
+    // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
+    val planning = d?.step == "connect" && d.method == "plan"
+    LaunchedEffect(planning) {
+        if (planning) { error = null; try { login = api.newLogin(runtime) } catch (e: CoreException) { error = e.message } }
+    }
+    val dropLogin = {
         val l = login
         if (l != null && pending?.created == null) app.scope.launch { try { api.dropLogin(l) } catch (_: CoreException) {} }
-        app.pop()
+        login = null
     }
+    val leave = { if (d != null && d.step != "pick") { dropLogin(); edit("provider", "") } else app.pop() }
     androidx.activity.compose.BackHandler { leave() }
-    val provider = if (picked.runtime == "claude") "Claude" else "ChatGPT"
     val job = pending?.job
     Column(Modifier.fillMaxSize()) {
-        NavBar(t("common.cancel"), leave, t("android-settings.profile.add"), sub = { Text(s?.name ?: "", fontSize = 11.sp, color = C.muted) })
+        NavBar(if (d != null && d.step != "pick") t("web-mobile.profiles.pick") else t("common.cancel"), leave, d?.title ?: t("android-settings.profile.add"), sub = { Text(s?.name ?: "", fontSize = 11.sp, color = C.muted) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val l = login
-            if (l != null) {
-                if (job?.state == "failed" || job?.state == "cancelled") {
-                    Text(job.error ?: t("android-settings.login.unfinished"), fontSize = 13.sp, color = C.red)
-                    Button(t("android-settings.login.restart"), primary = false) { app.act(t("android-settings.login.restartWhat")) { api.dropLogin(l) }; login = null }
-                } else LoginSteps(job, provider) { code -> api.newLoginCode(l, code) }
-            } else {
-                // The machine's own logins not used yet: a profile on one needs no sign-in.
-                s?.overview?.let { o -> MachineLoginOffers(address, o, inset = 0.dp) { rt -> choice = choices.indexOfFirst { it.kind == "subscription" && it.runtime == rt }.coerceAtLeast(0) } }
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
-                    choices.forEachIndexed { i, c ->
-                        PickRow(c.title, c.description, checked = choice == i, leading = { ProviderMark(c.runtime ?: "claude", c.kind, 18.dp) }) { choice = i }
-                    }
-                }
-                if (picked.kind == "api-provider") {
-                    Text(t("common.provider.pick"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
-                        ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { PickProvider(groups, providerId) { providerId = it } } }) {
-                            chosen?.let { ProviderMark("claude", "api-provider", 18.dp, it.mark) }
-                            Column(Modifier.weight(1f)) {
-                                Text(chosen?.name ?: t("common.provider.pickPlaceholder"), fontSize = 15.sp, color = if (chosen == null) C.muted else C.ink)
-                                Text(chosen?.let { t("common.provider.uses", "uses" to it.usesText.orEmpty()) } ?: t("common.provider.usesHint"), fontSize = 12.sp, color = C.muted)
+            if (d == null) { Text(topic.error?.message ?: t("android-settings.reading"), fontSize = 14.sp, color = C.muted); return@Column }
+            when {
+                d.step == "pick" -> {
+                    Text(d.hint, fontSize = 13.sp, color = C.muted)
+                    // The machine's own logins not used yet: a profile on one needs no sign-in.
+                    s?.overview?.let { o -> MachineLoginOffers(address, o, inset = 0.dp) { rt -> edit(buildJsonObject { put("provider", if (rt == "claude") "anthropic" else "openai"); put("method", "plan") }) } }
+                    d.groups.forEach { g ->
+                        Text(g.title, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                            g.providers.forEach { p ->
+                                ListRow(onClick = { edit("provider", p.id) }) {
+                                    ProviderMark(p.runtime ?: "claude", (p.kind?.ifEmpty { null } ?: "api-provider"), 18.dp, p.mark)
+                                    Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                                }
                             }
-                            IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                         }
                     }
-                    if (chosen?.endpointRequired == true) {
-                        Text(t("common.provider.endpoint"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                        Field(endpoint, { endpoint = it.trim() }, chosen.endpointExample ?: "https://", mono = true)
+                }
+                d.step == "method" -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+                    d.choices.forEach { c ->
+                        PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
                     }
                 }
-                if (picked.kind in KEYED && (picked.kind != "api-provider" || chosen != null)) {
-                    Text(if (picked.kind == "opencode-go") "OpenCode Go key" else if (chosen?.keyOptional == true) t("common.provider.keyOptional") else "API key", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    SecretField(key, { key = it }, t("android-settings.profile.keyPlaceholder"))
+                d.method == "plan" -> {
+                    val l = login
+                    if (error != null || job?.state == "failed" || job?.state == "cancelled") {
+                        Text(error ?: job?.error ?: t("android-settings.login.unfinished"), fontSize = 13.sp, color = C.red)
+                        Button(t("android-settings.login.restart"), primary = false) { dropLogin(); error = null; scope.launch { try { login = api.newLogin(runtime) } catch (e: CoreException) { error = e.message } } }
+                    } else LoginSteps(job, if (runtime == "claude") "Claude" else "ChatGPT") { code -> api.newLoginCode(l ?: return@LoginSteps, code) }
+                    if (d.usesLine.isNotEmpty()) Text(d.usesLine, fontSize = 13.sp, color = C.muted)
                 }
-                if (picked.kind == "subscription") Text(t("android-settings.profile.subscriptionNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
-                error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-                val run = { work: suspend () -> Unit -> error = null; scope.launch { try { work() } catch (e: CoreException) { error = e.message } }; Unit }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    if (picked.kind == "subscription") Button(t("android-settings.login.signInTo", "provider" to provider), primary = true, busy = busy) { run { login = api.newLogin(picked.runtime!!) } }
-                    else Button(if (picked.kind in KEYED) t("android-settings.profile.verifyAdd") else t("android-settings.add.one"), primary = true, busy = busy, enabled = if (picked.kind == "api-provider") chosen != null && (key.isNotEmpty() || chosen.keyOptional == true) && (chosen.endpointRequired != true || endpoint.isNotEmpty()) else picked.kind !in KEYED || key.isNotEmpty()) {
-                        run { go(api.addProfile(picked.runtime, picked.kind, key.takeIf { picked.kind in KEYED }, providerId.takeIf { picked.kind == "api-provider" }, endpoint.takeIf { picked.kind == "api-provider" && chosen?.endpointRequired == true }), t("android-settings.profile.verifiedAdded")) }
+                else -> ConnectForm(d, ::edit, submitting) {
+                    scope.launch {
+                        try {
+                            val response = app.core.call("profile.flow.submit", buildJsonObject { put("station", address); put("form", form) })
+                            go(response.jsonObject["id"]!!.jsonPrimitive.content, t("android-settings.profile.verifiedAdded"))
+                        } catch (_: CoreException) {}
                     }
                 }
             }
@@ -749,20 +768,36 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     }
 }
 
-/** The providers a key can be added for, by group, in a sheet: each with what it can do (the core's words). */
+/** The form of a key: what is typed is kept here as it is typed (the core has it as it is named, and judges it). */
 @Composable
-private fun ColumnScope.PickProvider(groups: List<ProviderGroup>, value: String, onPick: (String) -> Unit) {
-    val app = LocalApp.current
-    SheetGrab()
-    SheetHead(t("common.provider.title"))
-    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        groups.forEach { g ->
-            Text(g.title, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp))
-            g.providers.forEach { p ->
-                PickRow(p.name, p.usesText?.ifEmpty { null }, checked = p.id == value, leading = { ProviderMark("claude", "api-provider", 18.dp, p.mark) }) { onPick(p.id); app.sheet = null }
-            }
+private fun ColumnScope.ConnectForm(d: ProfileFlowView, edit: (String, String) -> Unit, busy: Boolean, submit: () -> Unit) {
+    var endpoint by remember(d.tile?.id) { mutableStateOf(d.endpoint) }
+    var key by remember(d.tile?.id) { mutableStateOf(d.key) }
+    if (d.showEndpoint) {
+        Text(t("common.provider.endpoint"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+            if (endpoint.isEmpty()) Text(d.tile?.endpointExample ?: "https://", color = C.subtle, fontSize = 15.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            androidx.compose.foundation.text.BasicTextField(endpoint, { endpoint = it.trim(); edit("endpoint", endpoint) }, singleLine = true, cursorBrush = androidx.compose.ui.graphics.SolidColor(C.accent),
+                textStyle = androidx.compose.ui.text.TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth())
+        }
+        d.endpointHint?.let { Text(it, fontSize = 12.sp, color = C.muted) }
+    }
+    if (d.protocols.size > 1) {
+        Text(t("web-mobile.profiles.protocol"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+            d.protocols.forEach { p -> PickRow(p.label, checked = p.id == d.protocol) { edit("protocol", p.id) } }
         }
     }
+    if (d.showKey) {
+        Text(d.keyLabel, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        SecretField(key, { key = it; edit("key", it) }, t("android-settings.profile.keyPlaceholder"))
+        val note = d.error ?: d.keyHint
+        note?.let { Text(it, fontSize = 12.sp, color = if (d.error != null) C.red else C.muted) }
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Button(d.submitLabel, primary = true, busy = busy || d.pending, enabled = d.canSubmit) { submit() }
+    }
+    if (d.usesLine.isNotEmpty()) Text(d.usesLine, fontSize = 13.sp, color = C.muted)
 }
 
 /**

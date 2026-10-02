@@ -193,6 +193,16 @@ pub struct RawProfileAccess {
     pub provider: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<String>,
+    /// For a provider at the reader's own address that speaks several: the one chosen (chat_completions, responses,
+    /// anthropic). None: all it can speak.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+}
+
+impl RawProfileAccess {
+    pub fn via(&self) -> crate::profiles::Via<'_> {
+        crate::profiles::Via { provider: self.provider.as_deref(), endpoint: self.endpoint.as_deref(), protocol: self.protocol.as_deref() }
+    }
 }
 
 /// A Slack app configuration token, a person's own (`by`), for one Slack workspace: the station makes and edits apps there.
@@ -273,6 +283,7 @@ pub struct Profile {
     /// Of an `api-provider`: its provider's id (stillfail_shapes::providers) and, where the address is the person's, it.
     pub provider: Option<String>,
     pub endpoint: Option<String>,
+    pub protocol: Option<String>,
     /// The runtimes' config home: CLAUDE_CONFIG_DIR and CODEX_HOME (their files do not overlap).
     pub home: PathBuf,
     /// The environment for this profile's processes, by runtime: what the access kind needs there plus `custom_env`.
@@ -292,6 +303,11 @@ pub struct Profile {
 }
 
 impl Profile {
+    /// Where an API-provider profile is (profiles::Via).
+    pub fn via(&self) -> crate::profiles::Via<'_> {
+        crate::profiles::Via { provider: self.provider.as_deref(), endpoint: self.endpoint.as_deref(), protocol: self.protocol.as_deref() }
+    }
+
     /// Its own spelling of a model it has enabled, however the model is spelled (gpt-6-astra here may be
     /// openai/gpt-6-astra there: stillfail_shapes::model::key).
     pub fn spelling(&self, model: &str) -> Option<&str> {
@@ -436,13 +452,14 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
         let kind_name = serde_json::to_value(kind)?.as_str().unwrap_or_default().to_string();
         let provider = p.access.as_ref().and_then(|a| a.provider.clone()).filter(|v| !v.is_empty());
         let endpoint = p.access.as_ref().and_then(|a| a.endpoint.as_deref()).and_then(stillfail_shapes::providers::clean_endpoint);
+        let protocol = p.access.as_ref().and_then(|a| a.protocol.clone()).filter(|v| !v.is_empty());
         if kind == AccessKind::ApiProvider {
             // Which runtimes it runs follows from its provider; one that runs neither still serves the automatic
             // decisions, so it has none and that is no mistake.
             let Some(source) = provider.as_deref().and_then(stillfail_shapes::providers::find) else {
                 bail!("profile {}: api-provider needs a known provider", p.id);
             };
-            if stillfail_shapes::providers::endpoints(source, endpoint.as_deref()).is_none() {
+            if stillfail_shapes::providers::endpoints(source, endpoint.as_deref(), protocol.as_deref()).is_none() {
                 bail!("profile {}: {} needs an endpoint address", p.id, source.name);
             }
         } else if runtimes.is_empty() {
@@ -460,7 +477,7 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
         let envs = runtimes
             .iter()
             .map(|r| {
-                let mut env = access_env(*r, kind, &key, p.model.as_deref(), provider.as_deref(), endpoint.as_deref());
+                let mut env = access_env(*r, kind, &key, p.model.as_deref(), crate::profiles::Via { provider: provider.as_deref(), endpoint: endpoint.as_deref(), protocol: protocol.as_deref() });
                 env.extend(custom_env.clone());
                 (runtime_name(*r), env)
             })
@@ -483,6 +500,7 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
             key,
             provider,
             endpoint,
+            protocol,
             home: under(data_dir, &p.home),
             envs,
             custom_env,

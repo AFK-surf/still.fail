@@ -569,6 +569,7 @@ pub fn profile(p: &mut Value) {
         .chain(p.get("model").into_iter())
         .filter_map(Value::as_str).filter(|m| !m.is_empty()).map(|m| (m.to_string(), json!(stillfail_shapes::model::name(m)))).collect();
     let (uses, provider) = uses(p);
+    p["canAddModel"] = json!(p["access"]["kind"] == "api-provider");
     p["uses"] = json!(uses);
     // Said where it is not plain from the runtime marks: a key on a provider, or what the automatic decisions can use.
     let plain = matches!(p["access"]["kind"].as_str(), Some("subscription" | "env")) && !uses.contains(&"decision");
@@ -602,11 +603,11 @@ fn uses(p: &Value) -> (Vec<&'static str>, Option<(String, Option<String>)>) {
     let (source, at) = match kind {
         Some(AccessKind::ApiProvider) => {
             let source = p["access"]["provider"].as_str().and_then(providers::find);
-            (source, source.and_then(|s| providers::endpoints(s, p["access"]["endpoint"].as_str())))
+            (source, source.and_then(|s| providers::endpoints(s, p["access"]["endpoint"].as_str(), p["access"]["protocol"].as_str())))
         }
         Some(kind @ (AccessKind::OpencodeGo | AccessKind::AnthropicApi)) => {
             let source = providers::of_kind(kind);
-            (source, source.and_then(|s| providers::endpoints(s, None)))
+            (source, source.and_then(|s| providers::endpoints(s, None, None)))
         }
         _ => (None, None),
     };
@@ -622,29 +623,6 @@ fn uses_text(uses: &[&str]) -> String {
         "codex" => t!("core-views.present.uses.codex"),
         _ => t!("core-views.present.uses.decision"),
     }).collect::<Vec<_>>().join(" · ")
-}
-
-/// The providers a key can be added for, by group, each with what it can do in words; none from a station older than them.
-fn provider_groups(value: &mut Value) {
-    let Some(list) = value.get_mut("apiProviders").and_then(Value::as_array_mut) else { return };
-    let mut groups: Vec<(String, Vec<Value>)> = Vec::new();
-    for p in list.iter_mut() {
-        let uses: Vec<&str> = p["uses"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-        p["usesText"] = json!(uses_text(&uses));
-        let group = p["group"].as_str().unwrap_or("host").to_string();
-        match groups.iter_mut().find(|(g, _)| *g == group) {
-            Some((_, members)) => members.push(p.clone()),
-            None => groups.push((group, vec![p.clone()])),
-        }
-    }
-    let title = |id: &str| match id {
-        "maker" => t!("core-views.present.provider_group.maker"),
-        "own" => t!("core-views.present.provider_group.own"),
-        _ => t!("core-views.present.provider_group.host"),
-    };
-    let order = |id: &str| ["maker", "host", "own"].iter().position(|g| *g == id).unwrap_or(9);
-    groups.sort_by_key(|(id, _)| order(id));
-    value["providerGroups"] = Value::Array(groups.into_iter().map(|(id, providers)| json!({ "id": id, "title": title(&id), "providers": providers })).collect());
 }
 
 /// Use provider/check states, never guesses from an error string, to offer a safe next step.
@@ -895,7 +873,6 @@ pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
             if let Some(station) = value.get_mut("updates").and_then(Value::as_array_mut).into_iter().flatten().find(|u| u["id"] == "station") {
                 station["name"] = json!("Station");
             }
-            provider_groups(value);
             if let Some(profiles) = value.get_mut("profiles").and_then(Value::as_array_mut) {
                 profiles.iter_mut().for_each(profile);
                 // Both mobile clients open the settings count onto the same, actionable profiles first.
@@ -1032,25 +1009,6 @@ mod tests {
         let mut p = json!({"runtimes": [], "access": {"kind": "env", "provider": "xiaomi"}, "check": {"state": "failed"}});
         profile(&mut p);
         assert_eq!((p["providerName"].as_str(), p["trouble"]["action"].as_str()), (Some("Xiaomi MiMo"), Some("key")));
-    }
-
-    #[test]
-    fn the_providers_are_grouped_for_the_picker_with_what_each_can_do() {
-        let mut o = json!({"apiProviders": [
-            {"id": "deepseek", "name": "DeepSeek", "group": "maker", "uses": ["decision"]},
-            {"id": "custom", "name": "Custom", "group": "own", "uses": ["claude", "codex", "decision"]},
-            {"id": "openrouter", "name": "OpenRouter", "group": "host", "uses": ["claude", "decision"]},
-            {"id": "openai", "name": "OpenAI", "group": "maker", "uses": ["codex"]},
-        ]});
-        provider_groups(&mut o);
-        let groups: Vec<(&str, Vec<&str>)> = o["providerGroups"].as_array().unwrap().iter()
-            .map(|g| (g["id"].as_str().unwrap(), g["providers"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect())).collect();
-        assert_eq!(groups, [("maker", vec!["deepseek", "openai"]), ("host", vec!["openrouter"]), ("own", vec!["custom"])]);
-        assert_eq!(o["providerGroups"][0]["providers"][0]["usesText"], "自动决策");
-        // A station from before them lists none: nothing is offered.
-        let mut old = json!({});
-        provider_groups(&mut old);
-        assert!(old.get("providerGroups").is_none());
     }
 
     #[test]

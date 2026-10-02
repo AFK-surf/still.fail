@@ -592,11 +592,12 @@ export function ProviderLogo({ runtime, kind, mark, size = 16 }: { runtime: "cla
   return <ModelLogo maker={runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" }} runtime={runtime} size={size} />;
 }
 
-/** The runtimes a profile runs, as small marks after its name: CC for Claude Code, Codex. */
-export function RuntimeTags({ runtimes }: { runtimes: ("claude" | "codex")[] }) {
+/** The runtimes a profile runs, as small marks after its name (CC for Claude Code, Codex), and 自动决策 where it serves the automatic decisions. */
+export function RuntimeTags({ runtimes, decision = false }: { runtimes: ("claude" | "codex")[]; decision?: boolean | undefined }) {
   return (
     <span className={waitingCss.runtimeTags}>
       {runtimes.map((r) => <Tip key={r} label={r === "claude" ? "Claude Code" : "Codex"}><span className={waitingCss.runtimeTag}><RuntimeLogo runtime={r} size={12} />{r === "claude" ? "CC" : "Codex"}</span></Tip>)}
+      {decision && <Tip label={t("common.decisionLong")}><span className={waitingCss.runtimeTag}>{t("common.decision")}</span></Tip>}
     </span>
   );
 }

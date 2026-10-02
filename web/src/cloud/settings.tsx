@@ -20,7 +20,8 @@ import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
 import { MemoryView } from "../Memory.tsx";
 import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
-import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
+import { MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
+import { addProfilePath } from "../pages/AddProfile.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
 import { About, BackLink, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
@@ -284,22 +285,18 @@ export function ConnectsSettings({ entry }: { entry: WorkspaceEntry }) {
 export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   const listed = useStations(entry.id).value;
   const stations = listed ?? [];
-  const [adding, setAdding] = useState<string | null>(null);
-  const [addKind, setAddKind] = useState<Choice>("claude-sub");
+  const navigate = useNavigate();
+  // A profile is added on its own page (pages/AddProfile.tsx), on the station it runs on.
+  const setAdding = (station: string) => navigate(addProfilePath(entry.id, station));
+  const addPlan = (station: string, c: Choice) => navigate(addProfilePath(entry.id, station, c === "claude-sub" ? "anthropic" : "openai", "plan"));
   const online = stations.filter((s) => s.online);
   const asStation = (s: (typeof stations)[number]): Station => ({ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings` });
-  const addingTo = stations.find((s) => s.station === adding);
   if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
   // Not one profile on any station (each read): the page is about adding the first.
   const first = stations.length > 0 && stations.every((s) => s.overview && s.overview.profiles.length === 0);
   return (
     <Page title="Profile" lead={t("web-pages.settings.profiles.lead", { name: NAME })} back={`/w/${entry.id}/settings`}
       actions={!first && online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>{t("web-pages.settings.profiles.add")}</Button>}>
-      {addingTo && (
-        <StationContext.Provider value={asStation(addingTo)}>
-          <AddAccountDialog key={addKind} initial={addKind} open onClose={() => setAdding(null)} />
-        </StationContext.Provider>
-      )}
       {first ? (
         <FirstOne art={<Illustration name="no-profile" />} title={t("web-pages.settings.profiles.addFirst")} lead={PROFILE_LEAD}>
           {/* Each station in a row: where a profile is added is part of adding it. */}
@@ -310,12 +307,12 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                   <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
                   <span className={css.firstStationName}>{s.name}</span>
                   {s.online
-                    ? <Button variant={stations.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>{t("web-pages.settings.profiles.add")}</Button>
+                    ? <Button variant={stations.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => setAdding(s.station)}>{t("web-pages.settings.profiles.add")}</Button>
                     : <span className={shellCss.muted}>{t("web-pages.settings.profiles.offlineAdd")}</span>}
                 </div>
                 {s.online && (
                   <StationContext.Provider value={asStation(s)}>
-                    <MachineLoginOffers logins={s.overview?.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(s.station); }} />
+                    <MachineLoginOffers logins={s.overview?.machineLogins} onAdd={(c) => addPlan(s.station, c)} />
                   </StationContext.Provider>
                 )}
               </div>
@@ -345,7 +342,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                   {/* The machine's own logins not used yet: each one offered as the first ones were. */}
                   {station.online && (
                     <StationContext.Provider value={asStation(station)}>
-                      <MachineLoginOffers logins={overview.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(station.station); }} />
+                      <MachineLoginOffers logins={overview.machineLogins} onAdd={(c) => addPlan(station.station, c)} />
                     </StationContext.Provider>
                   )}
                 </>

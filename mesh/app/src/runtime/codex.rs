@@ -125,7 +125,7 @@ struct HandedThread {
 }
 
 fn host_signature(profile: &Profile) -> String {
-    json!([profile.home, profile.env(RuntimeKind::Codex), codex_overrides(profile.access_kind, profile.model.as_deref(), profile.provider.as_deref(), profile.endpoint.as_deref())]).to_string()
+    json!([profile.home, profile.env(RuntimeKind::Codex), codex_overrides(profile.access_kind, profile.model.as_deref(), profile.via())]).to_string()
 }
 
 impl Host {
@@ -139,7 +139,7 @@ impl Host {
         env.insert("CODEX_HOME".into(), profile.home.display().to_string());
         with_ca_bundle(&mut env, Path::new(CA_BUNDLE));
         let mut args = vec!["app-server".to_string()];
-        for (k, v) in codex_overrides(profile.access_kind, profile.model.as_deref(), profile.provider.as_deref(), profile.endpoint.as_deref()) {
+        for (k, v) in codex_overrides(profile.access_kind, profile.model.as_deref(), profile.via()) {
             args.extend(["-c".into(), format!("{k}={v}")]);
         }
         args.extend(["--listen".into(), "stdio://".into()]);

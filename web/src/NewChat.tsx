@@ -2,7 +2,7 @@
 // (station), on what (runtime and model) and how hard it thinks. The first
 // message (or file) makes the chat and its agent's session on that station.
 import { Key, Plus, Server } from "./icons.tsx";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useMemo, useRef, useState } from "react";
 import type { RuntimeKind, StationView } from "./api.ts";
 import type { NewChatView } from "./core/shapes.ts";
@@ -12,7 +12,8 @@ import { useAct } from "./toast.tsx";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
-import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
+import { MachineLoginOffers, PROFILE_LEAD } from "./pages/Accounts.tsx";
+import { addProfilePath } from "./pages/AddProfile.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
@@ -78,8 +79,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
   const runtime = choice.runtime;
   const pick = usePick(station.address, "new", choice);
   const act = useAct();
-  const [addingProfile, setAddingProfile] = useState(false);
-  const [profileKind, setProfileKind] = useState<ProfileKind>("claude-sub");
+  const navigate = useNavigate();
+  const workspace = station.address.split("/")[0]!;
   // Made with what is picked here; the next new chat starts here too (the core keeps it).
   const ensureChat = useEnsureChat(station.address, create);
   const toolbar = useMemo(() => (
@@ -129,16 +130,15 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
           <FirstOne art={<Illustration name="no-profile" />} title={blocked === "profile" ? t("web-main.newChat.addProfileFor", { name: station.name || t("web-main.newChat.thisMachine") }) : t("web-main.newChat.pickModels")}
             lead={blocked === "profile" ? PROFILE_LEAD : t("web-main.newChat.noModelsLead", { name: station.name || t("web-main.newChat.thisMachine") })}>
             {blocked === "profile"
-              ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>{t("web-main.newChat.addProfile")}</Button>
+              ? <Button variant="primary" icon={Plus} onClick={() => navigate(addProfilePath(workspace, station.address))}>{t("web-main.newChat.addProfile")}</Button>
               : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>{t("web-main.newChat.goPickModels")}</Link>}
             {stations.length > 1 && (
               <Chooser side="bottom" label={<><Server size={14} />{station.name}</>}>
                 {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
               </Chooser>
             )}
-            {blocked === "profile" && <MachineLoginOffers logins={view.overview?.machineLogins} onAdd={(c) => { setProfileKind(c); setAddingProfile(true); }} />}
+            {blocked === "profile" && <MachineLoginOffers logins={view.overview?.machineLogins} onAdd={(c) => navigate(addProfilePath(workspace, station.address, c === "claude-sub" ? "anthropic" : "openai", "plan"))} />}
           </FirstOne>
-          <AddAccountDialog key={profileKind} initial={profileKind} open={addingProfile} onClose={() => setAddingProfile(false)} />
         </div>
       </div>
     );

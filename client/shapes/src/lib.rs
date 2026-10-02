@@ -760,6 +760,8 @@ pub struct Access {
     pub provider: Option<String>,
     /// Its address, where the provider has none of its own (Azure, Cloudflare, custom).
     pub endpoint: Option<String>,
+    /// At such an address, the protocol it speaks there: chat_completions, responses or anthropic.
+    pub protocol: Option<String>,
 }
 
 #[typeshare]
@@ -919,6 +921,9 @@ pub struct Profile {
     /// The provider of a key from the list of API providers, and the mark of its maker (none: the generic one).
     pub provider_name: Option<String>,
     pub provider_mark: Option<String>,
+    /// A model can be named by hand (a key on a listed provider: not every one lists its models).
+    #[serde(default)]
+    pub can_add_model: bool,
 }
 
 #[typeshare]
@@ -1151,7 +1156,8 @@ pub struct SoftwareVersion {
     pub checked_at: Option<i64>,
 }
 
-/// A provider a key can be added for (providers.rs).
+/// A provider a key can be added for (providers.rs); a station lists its ids (`id`, `name`, `group`), the core fills the
+/// rest in as the picker's tiles.
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -1159,15 +1165,28 @@ pub struct SoftwareVersion {
 pub struct ApiProvider {
     pub id: String,
     pub name: String,
-    /// maker | host | own
+    /// labs | china | gateways | cloud | inference | local
     pub group: String,
     /// The mark of its maker; none: the generic one.
     pub mark: Option<String>,
+    /// How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand).
+    #[serde(default)]
+    pub kind: String,
+    /// It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude).
+    #[serde(default)]
+    pub has_key: bool,
+    #[serde(default)]
+    pub has_plan: bool,
+    /// Of its subscription, or of the variables: the runtime (claude | codex).
+    pub runtime: Option<String>,
     /// Its address is the person's own: asked for with the key.
     #[serde(default)]
     pub endpoint_required: bool,
     /// An example of such an address.
     pub endpoint_example: Option<String>,
+    /// At such an address, the protocols it can speak there (more than one: asked which).
+    #[serde(default)]
+    pub protocols: Vec<String>,
     /// Works without a key.
     #[serde(default)]
     pub key_optional: bool,
@@ -1187,6 +1206,60 @@ pub struct ProviderGroup {
     pub id: String,
     pub title: String,
     pub providers: Vec<ApiProvider>,
+}
+
+/// The add-profile pages, as the core keeps them for one device: the picker, how to connect what was picked (a plan or
+/// a key), and the form with what it will be usable for. The views draw it and name what changed (`profile.flow.edit`).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileFlowView {
+    /// pick | method | connect
+    pub step: String,
+    pub station: String,
+    pub title: String,
+    pub hint: String,
+    pub groups: Vec<ProviderGroup>,
+    pub tile: Option<ApiProvider>,
+    /// plan | key, once chosen.
+    pub method: Option<String>,
+    /// At the method step: the two cards.
+    pub choices: Vec<FlowChoice>,
+    pub show_endpoint: bool,
+    pub endpoint: String,
+    pub endpoint_hint: Option<String>,
+    /// Asked only when there are more than one.
+    pub protocols: Vec<FlowOption>,
+    pub protocol: Option<String>,
+    pub show_key: bool,
+    pub key: String,
+    pub key_label: String,
+    pub key_hint: Option<String>,
+    /// Shown under the key.
+    pub error: Option<String>,
+    pub can_submit: bool,
+    pub pending: bool,
+    pub submit_label: String,
+    /// What the profile will be usable for, in words (the line under the page).
+    pub uses_line: String,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowChoice {
+    pub id: String,
+    pub title: String,
+    pub hint: String,
+}
+
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowOption {
+    pub id: String,
+    pub label: String,
 }
 
 /// A station's overview, with what the clients show of its connects and profiles.
@@ -1215,9 +1288,6 @@ pub struct Overview {
     /// station lists them.
     #[serde(default)]
     pub api_providers: Vec<ApiProvider>,
-    /// The same, grouped for the picker (what the core makes of them).
-    #[serde(default)]
-    pub provider_groups: Vec<ProviderGroup>,
     /// The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them).
     #[serde(default)]
     pub updates: Vec<SoftwareVersion>,

@@ -24,5 +24,7 @@
   "common.provider.endpointHint": "填你自己的地址，例如 {example}",
   "common.provider.keyOptional": "API key（可不填）",
   "common.provider.uses": "可用于：{uses}",
-  "common.provider.usesHint": "Claude Code 要服务商的 Anthropic 接口，Codex 要 Responses 接口；只有聊天补全接口的，用于自动决策"
+  "common.provider.usesHint": "Claude Code 要服务商的 Anthropic 接口，Codex 要 Responses 接口；只有聊天补全接口的，用于自动决策",
+  "common.decision": "自动决策",
+  "common.decisionLong": "可用于自动决策"
 }

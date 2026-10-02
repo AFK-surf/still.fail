@@ -368,7 +368,7 @@ impl App {
                 Box::pin(async move {
                     let env = process_env();
                     let p = &request.profile;
-                    crate::profiles::check_profile(crate::profiles::CheckOptions { runtime: p.runtime, kind: p.access_kind, key: &p.key, provider: p.provider.as_deref(), endpoint: p.endpoint.as_deref(), home: &request.home, env: &env, machine: p.machine }).await
+                    crate::profiles::check_profile(crate::profiles::CheckOptions { runtime: p.runtime, kind: p.access_kind, key: &p.key, via: p.via(), home: &request.home, env: &env, machine: p.machine }).await
                 })
             }),
             codex_models: Some(Arc::new(move |profile: Profile| {

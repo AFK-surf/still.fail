@@ -35,6 +35,7 @@ pub fn bare_profile(id: &str, runtime: RuntimeKind, kind: AccessKind, key: &str,
         key: key.into(),
         provider: None,
         endpoint: None,
+        protocol: None,
         home: home.to_path_buf(),
         envs: BTreeMap::new(),
         custom_env: BTreeMap::new(),
@@ -275,6 +276,7 @@ impl AdminApi {
                 Some(given) => Some(stillfail_shapes::providers::clean_endpoint(given).ok_or_else(|| http_error(400, t!(spoken(); "station.profile.addressNeeded")))?),
                 None => keep.and_then(|a| a.endpoint.clone()),
             };
+            let protocol = keep.and_then(|a| a.protocol.clone());
             let name = match get("name").and_then(Value::as_str) {
                 Some(n) => Some(n.trim().to_string()),
                 None => existing.as_ref().and_then(|p| p.name.clone()),
@@ -296,11 +298,22 @@ impl AdminApi {
                 None => existing.as_ref().and_then(|p| p.models.clone()),
             }
             .filter(|m| !m.is_empty());
+            // One model named by hand (a provider that does not list its models): added to those enabled.
+            let models = match get("addModel").and_then(Value::as_str).map(str::trim).filter(|m| !m.is_empty()) {
+                Some(added) => {
+                    let mut list = models.unwrap_or_default();
+                    if !list.iter().any(|m| m == added) {
+                        list.push(added.chars().take(200).collect());
+                    }
+                    Some(list)
+                }
+                None => models,
+            };
             let next = RawProfile {
                 id: id.into(),
                 name: name.filter(|n| !n.is_empty()),
                 runtime: get("runtime").and_then(|r| serde_json::from_value(r.clone()).ok()).or(existing.as_ref().and_then(|p| p.runtime)),
-                access: kind.map(|kind| RawProfileAccess { kind, key, provider: provider.clone().filter(|_| kind == AccessKind::ApiProvider), endpoint: endpoint.clone().filter(|_| kind == AccessKind::ApiProvider) }),
+                access: kind.map(|kind| RawProfileAccess { kind, key, provider: provider.clone().filter(|_| kind == AccessKind::ApiProvider), endpoint: endpoint.clone().filter(|_| kind == AccessKind::ApiProvider), protocol: protocol.clone().filter(|_| kind == AccessKind::ApiProvider) }),
                 home: get("home").and_then(Value::as_str).map(str::trim).filter(|h| !h.is_empty()).map(String::from).or(existing.as_ref().map(|p| p.home.clone())).unwrap_or_else(|| format!("homes/{id}")),
                 env: Some(env),
                 model,
@@ -484,7 +497,7 @@ impl AdminApi {
                 id: profile_id.clone(),
                 name: Some(name),
                 runtime: Some(runtime),
-                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None, provider: None, endpoint: None }),
+                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None, provider: None, endpoint: None, protocol: None }),
                 home: format!("homes/{profile_id}"),
                 env: Some(BTreeMap::new()),
                 model: None,
@@ -542,11 +555,14 @@ impl AdminApi {
         // An API provider is the one named, at the address given where the provider has none of its own.
         let provider = access.and_then(|a| a.get("provider")).and_then(Value::as_str).map(str::trim).filter(|p| !p.is_empty()).map(String::from);
         let endpoint = access.and_then(|a| a.get("endpoint")).and_then(Value::as_str).map(str::trim).filter(|e| !e.is_empty()).map(String::from);
+        let protocol = access.and_then(|a| a.get("protocol")).and_then(Value::as_str).map(str::trim).filter(|e| !e.is_empty()).map(String::from);
         let source = if kind == AccessKind::ApiProvider {
             // The two kinds that came before the list are added as they were (their own words and ids).
             let source = provider.as_deref().and_then(stillfail_shapes::providers::find).filter(|s| s.legacy.is_none());
             let source = source.ok_or_else(|| http_error(400, t!(spoken(); "station.profile.unknownProvider")))?;
-            if stillfail_shapes::providers::endpoints(source, endpoint.as_deref()).is_none() {
+            // The protocol chosen: one the provider speaks at an address of the reader's own; a provider with one takes it.
+            let protocol = protocol.as_deref().filter(|_| source.endpoint_required).or_else(|| source.protocols.first().filter(|_| source.endpoint_required && source.protocols.len() == 1).map(|p| p.id()));
+            if stillfail_shapes::providers::endpoints(source, endpoint.as_deref(), protocol).is_none() {
                 return Err(http_error(400, t!(spoken(); "station.profile.addressNeeded")));
             }
             Some(source)
@@ -554,9 +570,11 @@ impl AdminApi {
             None
         };
         let endpoint = endpoint.and_then(|e| stillfail_shapes::providers::clean_endpoint(&e)).filter(|_| source.is_some());
+        // Of one at the reader's own address: the protocol it speaks there (the only one it has, or the one chosen).
+        let protocol = source.filter(|s| s.endpoint_required).and_then(|s| protocol.filter(|p| stillfail_shapes::providers::Protocol::parse(p).is_some_and(|p| s.protocols.contains(&p))).or_else(|| (s.protocols.len() == 1).then(|| s.protocols[0].id().to_string()))).or_else(|| source.filter(|s| s.endpoint_required).and_then(|s| s.protocols.first().map(|p| p.id().to_string())));
         // A key runs every runtime it can (runtimes_of); custom variables are for the runtime given.
         let runtimes = match source {
-            Some(source) => stillfail_shapes::providers::uses(&stillfail_shapes::providers::endpoints(source, endpoint.as_deref()).unwrap_or_default()).runtimes(),
+            Some(source) => stillfail_shapes::providers::uses(&stillfail_shapes::providers::endpoints(source, endpoint.as_deref(), protocol.as_deref()).unwrap_or_default()).runtimes(),
             None => runtimes_of(kind, runtime_of(input.get("runtime"))),
         };
         if (runtimes.is_empty() && source.is_none()) || !runtimes.iter().all(|r| crate::profiles::access_kinds(*r).contains(&kind)) {
@@ -573,6 +591,7 @@ impl AdminApi {
         let mut bare = bare_profile("new", runtime, kind, &key, &trial);
         bare.provider = source.map(|s| s.id.to_string());
         bare.endpoint = endpoint.clone();
+        bare.protocol = protocol.clone();
         bare.runtimes = runtimes;
         let check = (self.deps.check_profile)(CheckRequest { profile: bare, home: trial.clone() }).await;
         // A provider with no model list leaves its key unchecked (state unknown); a refused key is what stops it.
@@ -600,7 +619,7 @@ impl AdminApi {
                 id: id.clone(),
                 name: Some(label),
                 runtime: (kind == AccessKind::Env).then_some(runtime),
-                access: Some(RawProfileAccess { kind, key: (!key.is_empty()).then(|| key.clone()), provider: source.map(|s| s.id.to_string()), endpoint: endpoint.clone() }),
+                access: Some(RawProfileAccess { kind, key: (!key.is_empty()).then(|| key.clone()), provider: source.map(|s| s.id.to_string()), endpoint: endpoint.clone(), protocol: protocol.clone() }),
                 home: format!("homes/{id}"),
                 env: Some(BTreeMap::new()),
                 model: None,
@@ -652,7 +671,7 @@ impl AdminApi {
                 id: id.clone(),
                 name: Some(name),
                 runtime: Some(runtime),
-                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None, provider: None, endpoint: None }),
+                access: Some(RawProfileAccess { kind: AccessKind::Subscription, key: None, provider: None, endpoint: None, protocol: None }),
                 home: format!("homes/{id}"),
                 env: Some(BTreeMap::new()),
                 model: None,

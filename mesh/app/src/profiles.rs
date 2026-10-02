@@ -30,9 +30,24 @@ pub fn needs_key(kind: AccessKind, provider: Option<&str>) -> bool {
 
 /// The source of an API-provider profile and where it speaks, when the profile names a known provider (and, where it
 /// needs one, a usable address).
-pub fn api_source(provider: Option<&str>, endpoint: Option<&str>) -> Option<(&'static Source, providers::Endpoints)> {
-    let source = providers::find(provider?)?;
-    Some((source, providers::endpoints(source, endpoint)?))
+pub fn api_source(via: Via) -> Option<(&'static Source, providers::Endpoints)> {
+    let source = providers::find(via.provider?)?;
+    Some((source, providers::endpoints(source, via.endpoint, via.protocol)?))
+}
+
+/// Which provider an API-provider profile is on, and where (a provider at the reader's own address: the address and
+/// the protocol chosen for it).
+#[derive(Clone, Copy, Default)]
+pub struct Via<'a> {
+    pub provider: Option<&'a str>,
+    pub endpoint: Option<&'a str>,
+    pub protocol: Option<&'a str>,
+}
+
+impl<'a> Via<'a> {
+    pub fn of(provider: &'a str) -> Self {
+        Via { provider: Some(provider), ..Default::default() }
+    }
 }
 
 /// The key the runtimes are given where the profile has none (a provider that works without): they ask for one.
@@ -41,7 +56,7 @@ const NO_KEY: &str = "none";
 pub const OPENCODE: &str = "https://opencode.ai/zen/go";
 
 /// Environment an access kind needs. `{route}` is expanded per session later.
-pub fn access_env(runtime: RuntimeKind, kind: AccessKind, key: &str, model: Option<&str>, provider: Option<&str>, endpoint: Option<&str>) -> BTreeMap<String, String> {
+pub fn access_env(runtime: RuntimeKind, kind: AccessKind, key: &str, model: Option<&str>, via: Via) -> BTreeMap<String, String> {
     let pairs: Vec<(&str, String)> = match (kind, runtime) {
         (AccessKind::OpencodeGo, RuntimeKind::Claude) => {
             let small = model.unwrap_or("deepseek-flash").to_string();
@@ -58,7 +73,7 @@ pub fn access_env(runtime: RuntimeKind, kind: AccessKind, key: &str, model: Opti
         // The provider's session key keeps the name of before the rename: its sessions go on under it.
         (AccessKind::OpencodeGo, RuntimeKind::Codex) => vec![("OPENCODE_GO_KEY", key.to_string()), ("OPENCODE_SESSION", "ember-{route}".to_string())],
         (AccessKind::AnthropicApi, _) => vec![("ANTHROPIC_API_KEY", key.to_string())],
-        (AccessKind::ApiProvider, runtime) => api_env(runtime, key, model, provider, endpoint),
+        (AccessKind::ApiProvider, runtime) => api_env(runtime, key, model, via),
         _ => vec![],
     };
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
@@ -69,8 +84,8 @@ const CODEX_KEY: &str = "EMBER_API_KEY";
 
 /// A provider's key for a runtime, the way OpenCode Go is set up, from where the provider speaks: Claude Code reads its
 /// Anthropic endpoint, Codex its Responses endpoint (the provider's config is `codex_overrides`).
-fn api_env(runtime: RuntimeKind, key: &str, model: Option<&str>, provider: Option<&str>, endpoint: Option<&str>) -> Vec<(&'static str, String)> {
-    let Some((source, at)) = api_source(provider, endpoint) else { return vec![] };
+fn api_env(runtime: RuntimeKind, key: &str, model: Option<&str>, via: Via) -> Vec<(&'static str, String)> {
+    let Some((source, at)) = api_source(via) else { return vec![] };
     let key_or_none = if key.is_empty() { NO_KEY.to_string() } else { key.to_string() };
     match runtime {
         RuntimeKind::Claude => {
@@ -112,11 +127,11 @@ const CODEX_FEATURES_OFF: [(&str, &str); 2] = [("features.apps", "false"), ("fea
 
 /// Codex reads its model provider from config; the station passes it as `-c` overrides when it starts the app-server,
 /// so config.toml stays the user's. Values are TOML.
-pub fn codex_overrides(kind: AccessKind, model: Option<&str>, provider: Option<&str>, endpoint: Option<&str>) -> BTreeMap<String, String> {
+pub fn codex_overrides(kind: AccessKind, model: Option<&str>, via: Via) -> BTreeMap<String, String> {
     let mut out: BTreeMap<String, String> = CODEX_FEATURES_OFF.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
     if kind == AccessKind::ApiProvider {
         // Codex keeps its own names for the providers it has built in (openai among them): this one is just `api`.
-        let Some((source, at)) = api_source(provider, endpoint) else { return out };
+        let Some((source, at)) = api_source(via) else { return out };
         let Some(base) = at.responses else { return out };
         out.insert("model_provider".into(), "\"api\"".into());
         if let Some(model) = model {
@@ -171,7 +186,7 @@ pub fn runtimes_of(kind: AccessKind, runtime: Option<RuntimeKind>) -> Vec<Runtim
 pub fn runtimes_for(access: Option<&crate::config::RawProfileAccess>, runtime: Option<RuntimeKind>) -> Vec<RuntimeKind> {
     let kind = access.map(|a| a.kind).unwrap_or(AccessKind::Env);
     match access.filter(|_| kind == AccessKind::ApiProvider) {
-        Some(a) => api_source(a.provider.as_deref(), a.endpoint.as_deref()).map(|(_, at)| providers::uses(&at).runtimes()).unwrap_or_default(),
+        Some(a) => api_source(a.via()).map(|(_, at)| providers::uses(&at).runtimes()).unwrap_or_default(),
         None => runtimes_of(kind, runtime),
     }
 }
@@ -191,26 +206,26 @@ mod tests {
     #[test]
     fn a_provider_is_set_up_for_each_runtime_from_where_it_speaks() {
         // Claude Code reads its Anthropic endpoint (a bearer token where the provider asks for one), Codex its Responses one.
-        let router = access_env(RuntimeKind::Claude, AccessKind::ApiProvider, "k", Some("small"), Some("openrouter"), None);
+        let router = access_env(RuntimeKind::Claude, AccessKind::ApiProvider, "k", Some("small"), Via::of("openrouter"));
         assert_eq!((router["ANTHROPIC_BASE_URL"].as_str(), router["ANTHROPIC_AUTH_TOKEN"].as_str(), router["ANTHROPIC_API_KEY"].as_str()), ("https://openrouter.ai/api", "k", "")); 
         assert_eq!(router["ANTHROPIC_SMALL_FAST_MODEL"], "small");
-        assert!(access_env(RuntimeKind::Codex, AccessKind::ApiProvider, "k", None, Some("openrouter"), None).is_empty(), "no Responses endpoint");
-        let openai = codex_overrides(AccessKind::ApiProvider, Some("gpt-x"), Some("openai"), None);
+        assert!(access_env(RuntimeKind::Codex, AccessKind::ApiProvider, "k", None, Via::of("openrouter")).is_empty(), "no Responses endpoint");
+        let openai = codex_overrides(AccessKind::ApiProvider, Some("gpt-x"), Via::of("openai"));
         assert_eq!(openai["model_providers.api.base_url"], "\"https://api.openai.com/v1\"");
         assert_eq!((openai["model_provider"].as_str(), openai["model_providers.api.wire_api"].as_str(), openai["model"].as_str()), ("\"api\"", "\"responses\"", "\"gpt-x\""));
         assert!(!openai.contains_key("model_providers.api.env_http_headers"));
-        assert_eq!(access_env(RuntimeKind::Codex, AccessKind::ApiProvider, "k", None, Some("openai"), None)["EMBER_API_KEY"], "k");
+        assert_eq!(access_env(RuntimeKind::Codex, AccessKind::ApiProvider, "k", None, Via::of("openai"))["EMBER_API_KEY"], "k");
         // OpenCode's gateways ask for a session on every request, whichever runtime.
-        let zen = codex_overrides(AccessKind::ApiProvider, None, Some("opencode"), None);
+        let zen = codex_overrides(AccessKind::ApiProvider, None, Via::of("opencode"));
         assert_eq!(zen["model_providers.api.env_http_headers"], "{\"x-opencode-session\"=\"OPENCODE_SESSION\"}");
         // Azure's address is the person's.
-        let azure = codex_overrides(AccessKind::ApiProvider, None, Some("azure-openai"), Some("https://r.openai.azure.com/openai/v1/"));
+        let azure = codex_overrides(AccessKind::ApiProvider, None, Via { provider: Some("azure-openai"), endpoint: Some("https://r.openai.azure.com/openai/v1/"), protocol: None });
         assert_eq!(azure["model_providers.api.base_url"], "\"https://r.openai.azure.com/openai/v1\"");
         // A chat-completions-only provider sets up neither runtime.
-        assert!(access_env(RuntimeKind::Claude, AccessKind::ApiProvider, "k", None, Some("groq"), None).is_empty());
-        assert_eq!(codex_overrides(AccessKind::ApiProvider, None, Some("groq"), None).len(), 2);
+        assert!(access_env(RuntimeKind::Claude, AccessKind::ApiProvider, "k", None, Via::of("groq")).is_empty());
+        assert_eq!(codex_overrides(AccessKind::ApiProvider, None, Via::of("groq")).len(), 2);
         // A server of one's own needs no key: the runtimes are given a placeholder.
-        assert_eq!(access_env(RuntimeKind::Codex, AccessKind::ApiProvider, "", None, Some("custom"), Some("http://localhost:4000/v1"))["EMBER_API_KEY"], "none");
+        assert_eq!(access_env(RuntimeKind::Codex, AccessKind::ApiProvider, "", None, Via { provider: Some("custom"), endpoint: Some("http://localhost:4000/v1"), protocol: Some("responses") })["EMBER_API_KEY"], "none");
         assert!(!needs_key(AccessKind::ApiProvider, Some("custom")) && needs_key(AccessKind::ApiProvider, Some("groq")) && needs_key(AccessKind::OpencodeGo, None));
     }
 
@@ -232,14 +247,14 @@ mod tests {
 
     #[test]
     fn opencode_go_sets_up_each_runtime_its_own_way() {
-        let claude = access_env(RuntimeKind::Claude, AccessKind::OpencodeGo, "k", None, None, None);
+        let claude = access_env(RuntimeKind::Claude, AccessKind::OpencodeGo, "k", None, Via::default());
         assert_eq!(claude["ANTHROPIC_BASE_URL"], OPENCODE);
         assert_eq!(claude["ANTHROPIC_SMALL_FAST_MODEL"], "deepseek-flash");
-        let codex = access_env(RuntimeKind::Codex, AccessKind::OpencodeGo, "k", None, None, None);
+        let codex = access_env(RuntimeKind::Codex, AccessKind::OpencodeGo, "k", None, Via::default());
         assert_eq!(codex["OPENCODE_SESSION"], "ember-{route}");
-        let overrides = codex_overrides(AccessKind::OpencodeGo, Some("m"), None, None);
+        let overrides = codex_overrides(AccessKind::OpencodeGo, Some("m"), Via::default());
         assert_eq!(overrides["model"], "\"m\"");
-        assert_eq!(codex_overrides(AccessKind::Subscription, None, None, None).len(), 2);
+        assert_eq!(codex_overrides(AccessKind::Subscription, None, Via::default()).len(), 2);
     }
 }
 
@@ -302,8 +317,7 @@ pub struct CheckOptions<'a> {
     pub kind: AccessKind,
     pub key: &'a str,
     /// Of an API-provider profile: which provider and where it is (the address is the person's own for some).
-    pub provider: Option<&'a str>,
-    pub endpoint: Option<&'a str>,
+    pub via: Via<'a>,
     pub home: &'a std::path::Path,
     pub env: &'a crate::machine_logins::Env,
     /// On the machine's own login (machine_logins.rs).
@@ -384,8 +398,8 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
             Ok(check("ok", t!(spoken(); "station.profile.works", n = models.len()), Some(models)))
         }
         (AccessKind::ApiProvider, _) => {
-            let Some(source) = o.provider.and_then(providers::find) else { return Ok(check("failed", t!(spoken(); "station.profile.unknownProvider"), None)) };
-            let Some(at) = providers::endpoints(source, o.endpoint) else { return Ok(check("failed", t!(spoken(); "station.profile.addressNeeded"), None)) };
+            let Some(source) = o.via.provider.and_then(providers::find) else { return Ok(check("failed", t!(spoken(); "station.profile.unknownProvider"), None)) };
+            let Some(at) = providers::endpoints(source, o.via.endpoint, o.via.protocol) else { return Ok(check("failed", t!(spoken(); "station.profile.addressNeeded"), None)) };
             check_api(source, &at, o.key).await
         }
         (AccessKind::Subscription, RuntimeKind::Claude) => {

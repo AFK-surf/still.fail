@@ -27,8 +27,8 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
   const body = (
     <Card
       mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} mark={profile.providerMark} size={18} />}
-      title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
-      sub={[profile.machine ? t("web-main.profile.machine") : profile.providerName ?? ACCESS[profile.access.kind].label, profile.usesText, profile.modelsText, uses]}
+      title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} /></>}
+      sub={[profile.machine ? t("web-main.profile.machine") : profile.providerName ? null : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
       state={profile.checkTone !== "green" ? <State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} /> : null}
       action={action ?? (to ? <ChevronRight {...ICON} className={css.profileCardChevron} /> : null)}

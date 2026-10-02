@@ -37,8 +37,8 @@ fn connection(profile: &Profile) -> Option<Connection> {
     }
     // A key for a provider (OpenCode Go among them): its chat-completions endpoint, where it has one.
     let source = match profile.access_kind {
-        AccessKind::OpencodeGo => providers::of_kind(AccessKind::OpencodeGo).and_then(|s| providers::endpoints(s, None).map(|at| (s, at))),
-        AccessKind::ApiProvider => api_source(profile.provider.as_deref(), profile.endpoint.as_deref()),
+        AccessKind::OpencodeGo => providers::of_kind(AccessKind::OpencodeGo).and_then(|s| providers::endpoints(s, None, None).map(|at| (s, at))),
+        AccessKind::ApiProvider => api_source(profile.via()),
         _ => None,
     };
     if profile.access_kind == AccessKind::OpencodeGo || profile.access_kind == AccessKind::ApiProvider {

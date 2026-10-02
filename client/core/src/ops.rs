@@ -205,6 +205,9 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         "profile.useMachineLogin" => op("POST", Ok("/profiles/machine".into()), Some(p.pick(&["runtime"])), Effect::Overview),
         // @params id:string input?:json
         "profile.put" => op("PUT", p.at("id").map(|id| format!("/profiles/{id}")), Some(p.value("input").unwrap_or(json!({}))), Effect::Overview),
+        // One model named by hand, added to those enabled (a provider that does not list its models).
+        // @params id:string model:string
+        "profile.addModel" => op("PUT", p.at("id").map(|id| format!("/profiles/{id}")), Some(json!({ "addModel": p.str("model").unwrap_or_default() })), Effect::Overview),
         // @params id:string
         "profile.delete" => op("DELETE", p.at("id").map(|id| format!("/profiles/{id}")), None, Effect::Overview),
         // @params id:string

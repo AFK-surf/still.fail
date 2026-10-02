@@ -39,6 +39,7 @@ export interface OperationParams {
   "profile.add": { runtime?: string | null | undefined; access?: unknown };
   "profile.useMachineLogin": { runtime?: string | null | undefined };
   "profile.put": { id: string; input?: unknown };
+  "profile.addModel": { id: string; model: string };
   "profile.delete": { id: string };
   "profile.resetQuota": { id: string };
   "profile.quota": { id: string };
@@ -134,6 +135,7 @@ export function bindStationOperations(call: Call) {
     profileAdd: <T = unknown>(params: OperationParams["profile.add"] = {}) => call("profile.add", params) as Promise<T>,
     profileUseMachineLogin: <T = unknown>(params: OperationParams["profile.useMachineLogin"] = {}) => call("profile.useMachineLogin", params) as Promise<T>,
     profilePut: <T = unknown>(params: OperationParams["profile.put"]) => call("profile.put", params) as Promise<T>,
+    profileAddModel: <T = unknown>(params: OperationParams["profile.addModel"]) => call("profile.addModel", params) as Promise<T>,
     profileDelete: <T = unknown>(params: OperationParams["profile.delete"]) => call("profile.delete", params) as Promise<T>,
     profileResetQuota: <T = unknown>(params: OperationParams["profile.resetQuota"]) => call("profile.resetQuota", params) as Promise<T>,
     profileQuota: <T = unknown>(params: OperationParams["profile.quota"]) => call("profile.quota", params) as Promise<T>,

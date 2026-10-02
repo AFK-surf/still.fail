@@ -13,6 +13,8 @@ export interface Access {
 	provider?: string;
 	/** Its address, where the provider has none of its own (Azure, Cloudflare, custom). */
 	endpoint?: string;
+	/** At such an address, the protocol it speaks there: chat_completions, responses or anthropic. */
+	protocol?: string;
 }
 
 /**
@@ -71,18 +73,30 @@ export interface AgentWait {
 	text?: string;
 }
 
-/** A provider a key can be added for (providers.rs). */
+/**
+ * A provider a key can be added for (providers.rs); a station lists its ids (`id`, `name`, `group`), the core fills the
+ * rest in as the picker's tiles.
+ */
 export interface ApiProvider {
 	id: string;
 	name: string;
-	/** maker | host | own */
+	/** labs | china | gateways | cloud | inference | local */
 	group: string;
 	/** The mark of its maker; none: the generic one. */
 	mark?: string;
+	/** How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand). */
+	kind?: string;
+	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude). */
+	hasKey?: boolean;
+	hasPlan?: boolean;
+	/** Of its subscription, or of the variables: the runtime (claude | codex). */
+	runtime?: string;
 	/** Its address is the person's own: asked for with the key. */
 	endpointRequired?: boolean;
 	/** An example of such an address. */
 	endpointExample?: string;
+	/** At such an address, the protocols it can speak there (more than one: asked which). */
+	protocols?: string[];
 	/** Works without a key. */
 	keyOptional?: boolean;
 	/** What a profile on it can do: `claude`, `codex`, `decision`. */
@@ -761,6 +775,8 @@ export interface Profile {
 	/** The provider of a key from the list of API providers, and the mark of its maker (none: the generic one). */
 	providerName?: string;
 	providerMark?: string;
+	/** A model can be named by hand (a key on a listed provider: not every one lists its models). */
+	canAddModel?: boolean;
 }
 
 export interface TurnRecord {
@@ -1707,6 +1723,17 @@ export interface DraftView {
 	files: Attachment[];
 }
 
+export interface FlowChoice {
+	id: string;
+	title: string;
+	hint: string;
+}
+
+export interface FlowOption {
+	id: string;
+	label: string;
+}
+
 export interface FootprintConfirm {
 	title: string;
 	text: string;
@@ -2198,13 +2225,6 @@ export interface PendingLogin {
 	error?: string;
 }
 
-/** Providers of one group, as the picker lists them. */
-export interface ProviderGroup {
-	id: string;
-	title: string;
-	providers: ApiProvider[];
-}
-
 /**
  * A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
  * runtime (`claude`, `codex`).
@@ -2283,8 +2303,6 @@ export interface Overview {
 	 * station lists them.
 	 */
 	apiProviders?: ApiProvider[];
-	/** The same, grouped for the picker (what the core makes of them). */
-	providerGroups?: ProviderGroup[];
 	/** The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them). */
 	updates?: SoftwareVersion[];
 	/** Its agents' processes, in a line. */
@@ -2487,6 +2505,48 @@ export interface PrefsView {
 	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
 	invite?: string;
 	device?: DeviceView;
+}
+
+/** Providers of one group, as the picker lists them. */
+export interface ProviderGroup {
+	id: string;
+	title: string;
+	providers: ApiProvider[];
+}
+
+/**
+ * The add-profile pages, as the core keeps them for one device: the picker, how to connect what was picked (a plan or
+ * a key), and the form with what it will be usable for. The views draw it and name what changed (`profile.flow.edit`).
+ */
+export interface ProfileFlowView {
+	/** pick | method | connect */
+	step: string;
+	station: string;
+	title: string;
+	hint: string;
+	groups: ProviderGroup[];
+	tile?: ApiProvider;
+	/** plan | key, once chosen. */
+	method?: string;
+	/** At the method step: the two cards. */
+	choices: FlowChoice[];
+	showEndpoint: boolean;
+	endpoint: string;
+	endpointHint?: string;
+	/** Asked only when there are more than one. */
+	protocols: FlowOption[];
+	protocol?: string;
+	showKey: boolean;
+	key: string;
+	keyLabel: string;
+	keyHint?: string;
+	/** Shown under the key. */
+	error?: string;
+	canSubmit: boolean;
+	pending: boolean;
+	submitLabel: string;
+	/** What the profile will be usable for, in words (the line under the page). */
+	usesLine: string;
 }
 
 /** A session with its threads and turns (`session` topic). */
