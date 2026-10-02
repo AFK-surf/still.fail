@@ -270,22 +270,11 @@ test("stop while waiting ends the jobs that would bring it back, but not its ser
   const r = new Rig();
   const stopped: string[] = [];
   r.hub.setJobs({
-    start: () => {
-      throw new Error("not here");
-    },
-    list: (s) => r.store.listJobs(s),
-    log: () => "",
     stop: async (id) => {
       stopped.push(id);
       r.store.jobEnded(id, "stopped", null);
       return r.store.getJob(id)!;
     },
-    stopFor: async () => {
-      throw new Error("not here");
-    },
-    stopAll: async () => {},
-    relaunch: () => {},
-    watching: () => new Map(),
   });
   const m = message();
   await r.accept(m);
