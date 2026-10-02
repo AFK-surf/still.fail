@@ -76,9 +76,7 @@ export function WaitingText({ text, className, compactNeed = false }: { text: st
   return (
     <span className={className} data-turn={turn || undefined} data-state-line="">
       {need ? <><Tip label={t("web-main.chatMark.alert")}><span className={css.needMark} role="img" aria-label={t("web-main.chatMark.alert")}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M8 13V6a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-6a2 2 0 0 1 4 0v9a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 14a2 2 0 0 1 3-2.5L8 13Z" />
-        </svg>
+        <span aria-hidden="true">?</span>
       </span></Tip>{text.slice(need[0].length) && <> {text.slice(need[0].length)}</>}</>
         : <>{lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} /></>}
     </span>

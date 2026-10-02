@@ -67,4 +67,4 @@ export const markCount = style({ display: "inline-flex", alignItems: "center", g
 export const waitingLead = style({ fontWeight: 600 });
 
 /** Compact needs-you prefix in the desktop sidebar; the explanation keeps the remaining line. */
-export const needMark = style({ display: "inline-flex", width: 14, height: 14, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
+export const needMark = style({ fontSize: 14, fontWeight: 600, lineHeight: "14px", display: "inline-flex", width: 14, height: 14, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
