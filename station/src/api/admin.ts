@@ -38,7 +38,15 @@ export type Tools = {
 /// What the admin API answers with besides the readers: the write side, once there.
 export type AdminDeps = { events?: Events; store?: Store; host?: Host; agents?: AgentsParts };
 
+/// The header a write's key comes in, and how long an answer is kept (once.rs).
+const ONCE_KEY = "idempotency-key";
+const ONCE_KEEP_MS = 10 * 60_000;
+type Kept = { status: number; headers: Record<string, string>; body: Buffer };
+/// A key's first write: its answer once there (none: not kept), and when it was kept.
+type Slot = { at: number | null; answer: Promise<Kept | null> };
+
 export class Admin {
+  private slots = new Map<string, Slot>();
   private routes: Route[];
   private readers: Readers;
 
@@ -67,6 +75,54 @@ export class Admin {
   async handle(r: Request): Promise<Answer> {
     // Who asks is remembered by name, as the cloud's names (`deps.names`): what chats show of people who wrote.
     if (r.viewer.name !== "") this.readers.names.set(r.viewer.email, r.viewer.name);
+    // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
+    const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
+    const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";
+    const answer = keyed ? await this.once(`${r.viewer.email}\0${r.path}\0${key}`, () => this.answer(r)) : await this.answer(r);
+    // Every answer says this station keeps writes to once.
+    answer.headers["stillfail-idempotent"] = "1";
+    return answer;
+  }
+
+  /// `write`'s answer, or the answer the first write under `key` had (once.rs): while the first is under way the
+  /// others wait for it; a 5xx is not kept (the write may not have happened: asked again, it is tried again).
+  private async once(key: string, write: () => Promise<Answer>): Promise<Answer> {
+    const now = Date.now();
+    for (const [k, slot] of this.slots) if (slot.at !== null && now - slot.at >= ONCE_KEEP_MS) this.slots.delete(k);
+    for (;;) {
+      const slot = this.slots.get(key);
+      if (slot === undefined) break;
+      const kept = await slot.answer;
+      if (kept !== null) return { status: kept.status, headers: { ...kept.headers }, body: kept.body };
+      // The first one's was not kept: this one tries, unless another got there first.
+      if (this.slots.get(key) === slot) this.slots.delete(key);
+    }
+    let settle: (kept: Kept | null) => void = () => {};
+    const slot: Slot = { at: null, answer: new Promise<Kept | null>((resolve) => (settle = resolve)) };
+    this.slots.set(key, slot);
+    let kept: Kept;
+    try {
+      const answer = await write();
+      const parts: Buffer[] = [];
+      if (Buffer.isBuffer(answer.body)) parts.push(answer.body);
+      else for await (const chunk of answer.body) parts.push(Buffer.from(chunk));
+      kept = { status: answer.status, headers: answer.headers, body: Buffer.concat(parts) };
+    } catch (e) {
+      settle(null);
+      this.slots.delete(key);
+      throw e;
+    }
+    if (kept.status < 500) {
+      slot.at = Date.now();
+      settle(kept);
+    } else {
+      settle(null);
+      this.slots.delete(key);
+    }
+    return { status: kept.status, headers: { ...kept.headers }, body: kept.body };
+  }
+
+  private async answer(r: Request): Promise<Answer> {
     // A web service on this machine, through its preview's path: any method, its answer as it comes.
     const preview = previewTarget(r.path);
     if (preview !== null) {
@@ -79,14 +135,8 @@ export class Admin {
     }
     for (const route of this.routes) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
-      if (found) {
-        const answer = await route.handle(r, found.slice(1));
-        answer.headers["stillfail-idempotent"] = "1";
-        return answer;
-      }
+      if (found) return route.handle(r, found.slice(1));
     }
-    const unknown = error(404, `no route ${r.method} ${r.path}`);
-    unknown.headers["stillfail-idempotent"] = "1";
-    return unknown;
+    return error(404, `no route ${r.method} ${r.path}`);
   }
 }
