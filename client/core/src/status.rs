@@ -19,7 +19,9 @@ use std::rc::{Rc, Weak};
 
 use futures::FutureExt;
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
+use crate::format::said;
 use crate::host::Host;
 
 /// A wait shorter than this is how things go: said nothing of.
@@ -323,10 +325,10 @@ pub fn value(parts: &[(&Status, Take)]) -> Value {
     let down = all.downs.iter().min_by(|a, b| a.retry_in.total_cmp(&b.retry_in));
     if let Some(d) = down {
         let wait = (d.retry_in / 1000.0).ceil().max(0.0) as u64;
-        let when = if wait > 0 { format!("{wait} 秒后重试") } else { "正在重试".to_string() };
-        let tries = if d.tries > 1 { format!("（第 {} 次）", d.tries) } else { String::new() };
-        let why = if d.message.is_empty() { String::new() } else { format!("：{}", d.message) };
-        items.push(json!({ "state": "trouble", "text": format!("连不上 {} cloud，{when}{tries}", crate::brand::name()), "detail": format!("实时更新暂停{why}") }));
+        let when = if wait > 0 { t!("core-logic.status.down.retry_in", n = wait) } else { t!("core-logic.status.down.retrying") };
+        let tries = if d.tries > 1 { t!("core-logic.status.down.tries", n = d.tries) } else { String::new() };
+        let detail = if d.message.is_empty() { t!("core-logic.status.down.paused") } else { t!("core-logic.status.down.paused_why", why = d.message) };
+        items.push(json!({ "state": "trouble", "text": t!("core-logic.status.down", brand = crate::brand::name(), when = when, tries = tries), "detail": detail }));
     }
     // What has been waited on for a while: the connections first (the requests wait on them), the oldest first.
     let mut slow: Vec<&Slow> = all.slow.iter().collect();
@@ -334,16 +336,16 @@ pub fn value(parts: &[(&Status, Take)]) -> Value {
     for w in &slow {
         let secs = (w.age / 1000.0).floor() as u64;
         let text = match (w.connecting, &w.place) {
-            (true, place) => format!("正在连接 {}", place.as_deref().unwrap_or("station")),
-            (false, Some(place)) => format!("{place} {}", w.what),
+            (true, place) => t!("core-logic.status.connecting", place = place.as_deref().unwrap_or("station")),
+            (false, Some(place)) => t!("core-logic.status.at", place = place, what = w.what),
             (false, None) => w.what.clone(),
         };
         let detail = if w.connecting {
-            format!("已等 {secs} 秒")
+            t!("core-logic.status.waited", secs = secs)
         } else if w.bytes == 0 {
-            format!("已等 {secs} 秒，还没收到数据")
+            t!("core-logic.status.waited_nothing", secs = secs)
         } else {
-            format!("已收 {}，{secs} 秒", size(w.bytes))
+            t!("core-logic.status.received", size = size(w.bytes), secs = secs)
         };
         items.push(json!({ "state": "slow", "text": text, "detail": detail }));
     }
@@ -358,10 +360,10 @@ pub fn value(parts: &[(&Status, Take)]) -> Value {
     let mut text = first["text"].as_str().unwrap_or("").to_string();
     if let Some(w) = slow.first().filter(|_| down.is_none()) {
         let secs = (w.age / 1000.0).floor() as u64;
-        text.push_str(&format!(" · {secs} 秒"));
+        text.push_str(&format!(" · {}", t!("core-logic.status.seconds", n = secs)));
     }
     if items.len() > 1 {
-        text.push_str(&format!(" · 共 {} 项", items.len()));
+        text.push_str(&format!(" · {}", t!("core-logic.status.count", n = items.len())));
     }
     // How much of each came is on hover: the line stays short enough for a sidebar.
     if !slow.is_empty() && rate > 0 {
@@ -388,18 +390,18 @@ pub fn station_what(method: &str, path: &str) -> &'static str {
     let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
     let get = method.eq_ignore_ascii_case("GET");
     match (get, parts.as_slice()) {
-        (true, ["events"]) => "打开实时更新",
-        (true, ["threads", _, "entries"]) => "读取对话",
-        (true, ["threads", ..]) => "读取对话列表",
-        (true, ["chats"]) => "读取会话列表",
-        (true, ["sessions", _, "files"]) => "读取文件",
-        (true, ["sessions", _, ..]) => "读取 agent",
-        (true, ["sessions"]) => "读取 agent 列表",
-        (true, ["overview"]) => "读取 station 概况",
-        (_, ["preview", ..]) => "读取网页服务",
-        (false, ["uploads"]) => "上传文件",
-        (true, _) => "读取数据",
-        (false, _) => "提交修改",
+        (true, ["events"]) => said("core-logic.status.what.events"),
+        (true, ["threads", _, "entries"]) => said("core-logic.status.what.thread"),
+        (true, ["threads", ..]) => said("core-logic.status.what.threads"),
+        (true, ["chats"]) => said("core-logic.status.what.chats"),
+        (true, ["sessions", _, "files"]) => said("core-logic.status.what.files"),
+        (true, ["sessions", _, ..]) => said("core-logic.status.what.session"),
+        (true, ["sessions"]) => said("core-logic.status.what.sessions"),
+        (true, ["overview"]) => said("core-logic.status.what.overview"),
+        (_, ["preview", ..]) => said("core-logic.status.what.preview"),
+        (false, ["uploads"]) => said("core-logic.status.what.upload"),
+        (true, _) => said("core-logic.status.what.read"),
+        (false, _) => said("core-logic.status.what.write"),
     }
 }
 
@@ -408,15 +410,15 @@ pub fn cloud_what(method: &str, path: &str) -> &'static str {
     let path = path.split('?').next().unwrap_or("");
     let get = method.eq_ignore_ascii_case("GET");
     if path.ends_with("/credential") {
-        "获取 station 授权"
+        said("core-logic.status.what.credential")
     } else if !get {
-        "提交修改"
+        said("core-logic.status.what.write")
     } else if path == "/v1/me" {
-        "读取账号"
+        said("core-logic.status.what.me")
     } else if path.starts_with("/v1/workspaces/") {
-        "读取 workspace"
+        said("core-logic.status.what.workspace")
     } else {
-        "读取数据"
+        said("core-logic.status.what.read")
     }
 }
 

@@ -3,6 +3,7 @@
 //! when it is not as it should be, a station's face. Clients draw these; they do not work them out.
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 /// The stations' glyph (web/src/StationGlyph.tsx, Android ui/StationGlyph.kt) from a list's stations and days: each
 /// station by its link, and one at work if a chat of it is running; the line beside it while all is well (the one
@@ -22,27 +23,27 @@ pub fn glyph(stations: &[Value], days: &[Value]) -> Value {
     let working = online.iter().filter(|s| s.get("station").and_then(Value::as_str).is_some_and(|a| running.contains(&a))).count();
     let n = online.len() + dim + failing;
     let summary = if n == 1 {
-        let one = stations[0].get("name").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or("1 台 station");
-        if working > 0 { format!("{one} · 在干活") } else { one.to_string() }
+        let one = stations[0].get("name").and_then(Value::as_str).filter(|n| !n.is_empty()).map_or_else(|| t!("core-logic.looks.stations", n = 1), str::to_string);
+        if working > 0 { t!("core-logic.looks.one_working", name = one) } else { one }
     } else if working > 0 {
-        format!("{n} 台 station · {working} 台在干活")
+        t!("core-logic.looks.stations_working", n = n, working = working)
     } else {
-        format!("{n} 台 station")
+        t!("core-logic.looks.stations", n = n)
     };
-    let mut label = vec![format!("{n} 台 station"), format!("{} 台在线", online.len())];
+    let mut label = vec![t!("core-logic.looks.stations", n = n), t!("core-logic.looks.online", n = online.len())];
     if working > 0 {
-        label.push(format!("{working} 台在干活"));
+        label.push(t!("core-logic.looks.working", n = working));
     }
     if connecting > 0 {
-        label.push(format!("{connecting} 台正在连接"));
+        label.push(t!("core-logic.looks.connecting", n = connecting));
     }
     if dim > connecting {
-        label.push(format!("{} 台离线", dim - connecting));
+        label.push(t!("core-logic.looks.offline", n = dim - connecting));
     }
     if failing > 0 {
-        label.push(format!("{failing} 台出错"));
+        label.push(t!("core-logic.looks.failing", n = failing));
     }
-    json!({ "online": online.len(), "dim": dim, "connecting": connecting, "failing": failing, "working": working, "summary": summary, "label": label.join("，") })
+    json!({ "online": online.len(), "dim": dim, "connecting": connecting, "failing": failing, "working": working, "summary": summary, "label": label.join(&t!("core-logic.looks.sep")) })
 }
 
 /// What a list says with no rows to show, in their place: that it is still reading (a station loading or its link
@@ -57,7 +58,7 @@ pub fn list_note(stations: &[Value], days: &[Value], loading: bool, unread: &[St
     let failing: Vec<Value> = if loading { Vec::new() } else {
         stations.iter().filter(|s| is(s, "error") || (is(s, "offline") && s.get("station").and_then(Value::as_str).is_some_and(|a| unread.iter().any(|u| u == a)))).map(|s| {
             let name = s.get("name").and_then(Value::as_str).unwrap_or("");
-            let text = if is(s, "error") { format!("连不上「{name}」，正在重试…") } else { format!("{name} 离线 · 还没读到会话") };
+            let text = if is(s, "error") { t!("core-logic.looks.failing.retrying", name = name) } else { t!("core-logic.looks.failing.offline", name = name) };
             json!({ "station": s["station"], "text": text, "message": s["message"] })
         }).collect()
     };
@@ -73,18 +74,19 @@ pub fn list_note(stations: &[Value], days: &[Value], loading: bool, unread: &[St
 }
 
 /// A chat's link to its station while it is not as it should be (web/src/Connection.tsx, Android screens/Connection.kt):
-/// down (`trouble`, with why, less its own "连不上…：" the line says already) or coming back (`busy`); null while up.
+/// down (`trouble`, with why, less its own "连不上…：" / "Can't reach …: " the line says already) or coming back (`busy`);
+/// null while up.
 pub fn link_shown(link: &Value, name: &str) -> Value {
-    let station = if name.is_empty() { " station".to_string() } else { format!("「{name}」") };
+    let said = |key: &str, named: &str| if name.is_empty() { t!(key) } else { t!(named, name = name) };
     match link.get("state").and_then(Value::as_str) {
         Some("offline" | "error") => {
-            let why = link.get("message").and_then(Value::as_str).filter(|m| !m.is_empty()).map(|m| match m.split_once('：') {
-                Some((head, rest)) if head.contains("连不上") => rest.to_string(),
+            let why = link.get("message").and_then(Value::as_str).filter(|m| !m.is_empty()).map(|m| match m.split_once('：').or_else(|| m.split_once(": ")) {
+                Some((head, rest)) if head.contains("连不上") || head.starts_with("Can't reach") => rest.to_string(),
                 _ => m.to_string(),
             });
-            json!({ "tone": "trouble", "text": format!("连不上{station}"), "detail": why })
+            json!({ "tone": "trouble", "text": said("core-logic.looks.link.down", "core-logic.looks.link.down.named"), "detail": why })
         }
-        Some("reconnecting") => json!({ "tone": "busy", "text": format!("正在重连{station}") }),
+        Some("reconnecting") => json!({ "tone": "busy", "text": said("core-logic.looks.link.reconnecting", "core-logic.looks.link.reconnecting.named") }),
         _ => Value::Null,
     }
 }
@@ -98,7 +100,7 @@ pub fn face(online: bool, overview: Option<&Value>) -> &'static str {
 /// What a station is, under its name on its page: its processor, else whether it is up.
 pub fn station_line(online: bool, host: Option<&Value>) -> String {
     host.and_then(|h| h.get("cpuModel")).and_then(Value::as_str).filter(|m| !m.is_empty()).map(str::to_string)
-        .unwrap_or_else(|| if online { "在线" } else { "离线" }.to_string())
+        .unwrap_or_else(|| t!(if online { "core-logic.looks.station.online" } else { "core-logic.looks.station.offline" }))
 }
 
 /// A station's answer as the clients show it: the agents' memory (`GET /memory`) with each skill's text as people read

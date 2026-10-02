@@ -9,6 +9,7 @@
 //! ones before); items count entries from the transcript's start all the same.
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::activity::{epoch_ms, kind_of, tool_name};
 use crate::format;
@@ -32,17 +33,17 @@ pub struct Context<'a> {
     pub workspaces: &'a std::collections::HashMap<String, format::SlackWorkspace>,
 }
 
-fn verb_unit(kind: &str) -> (&'static str, &'static str) {
+/// A kind of tool call as its words are kept (`core-logic.history.verb.<kind>`, `core-logic.history.did.<kind>`).
+fn kind_key(kind: &str) -> &str {
     match kind {
-        "read" => ("读取", "个文件"),
-        "search" => ("搜索", "次"),
-        "edit" => ("编辑", "个文件"),
-        "command" => ("运行", "条命令"),
-        "web" => ("访问", "个网页"),
-        "agent" => ("派出", "个子 agent"),
-        "thread" => ("读取 thread", "次"),
-        _ => ("其他", "项"),
+        "read" | "search" | "edit" | "command" | "web" | "agent" | "thread" => kind,
+        _ => "other",
     }
+}
+
+/// What a kind of call did, so many times: 读取 3 个文件, read 3 files.
+fn did(kind: &str, n: usize) -> String {
+    t!(&format!("core-logic.history.did.{}", kind_key(kind)), n = n)
 }
 
 fn args(text: &str) -> Option<serde_json::Map<String, Value>> {
@@ -331,7 +332,7 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                 let messages: Vec<Value> = messages.iter().map(|m| {
                     let from = if m.slack {
                         let bound = cx.slack_users.iter().any(|u| *u == m.user);
-                        let name = if bound { "你".to_string() } else { m.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| m.user.clone()) };
+                        let name = if bound { t!("core-logic.history.you") } else { m.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| m.user.clone()) };
                         json!({ "name": name, "slackUser": m.user, "bound": bound })
                     } else {
                         let name = member_name(cx.members, &m.user).map(str::to_string)
@@ -365,19 +366,20 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                     let w = ((b - a).max(0) / 1000) as u64;
                     seconds.map_or(w, |s| w.min(s))
                 });
-                let most = seconds.map(|s| format!(" / {}", span(s))).unwrap_or_default();
-                let text = match waited {
-                    Some(w) => format!("等待了 {}{most}", span(w)),
-                    None => format!("等待中{}", seconds.map(|s| format!("，最长 {}", span(s))).unwrap_or_default()),
+                let text = match (waited, seconds) {
+                    (Some(w), Some(s)) => t!("core-logic.history.waited_most", waited = span(w), most = span(s)),
+                    (Some(w), None) => t!("core-logic.history.waited", waited = span(w)),
+                    (None, Some(s)) => t!("core-logic.history.waiting_most", most = span(s)),
+                    (None, None) => t!("core-logic.history.waiting"),
                 };
                 let wait = since.map(|since| json!({ "since": since, "until": until, "seconds": seconds }));
                 json!({ "kind": "mark", "text": text, "wait": wait })
             }
             Item::Mark(kind, _) => json!({ "kind": "mark", "text": match kind.as_str() {
-                "final" | "all_done" => "标记为做完了".to_string(),
-                "block" | "need_help" => "停下来等人帮忙".to_string(),
-                "need_decision" => "停下来等人决定".to_string(),
-                other => format!("标记为 {other}"),
+                "final" | "all_done" => t!("core-logic.history.mark.final"),
+                "block" | "need_help" => t!("core-logic.history.mark.block"),
+                "need_decision" => t!("core-logic.history.mark.decision"),
+                other => t!("core-logic.history.mark.other", mark = other),
             } }),
             Item::Group(members, thinking) => group(timeline, &steps, members, thinking),
         };
@@ -389,13 +391,13 @@ pub fn present(live: &Value, cx: &Context) -> Value {
     // Only thinking and the reply stream here; a tool call shows once it is done, from the transcript.
     let live_steps: Vec<Value> = live.get("steps").and_then(Value::as_array).unwrap_or(&empty).iter()
         .filter(|st| !flag(st, "subagent") && s(st, "step") != "tool")
-        .map(|st| json!({ "id": s(st, "id"), "text": if s(st, "step") == "text" { "正在输出…" } else { "正在思考…" } }))
+        .map(|st| json!({ "id": s(st, "id"), "text": if s(st, "step") == "text" { t!("core-logic.history.live.writing") } else { t!("core-logic.history.live.thinking") } }))
         .collect();
     let phase = live.get("phase").filter(|p| p.is_object()).map(|p| {
         let text = match p.get("phase").and_then(Value::as_str).unwrap_or("") {
-            "starting" => format!("正在启动 {}", format::runtime_label(cx.runtime)),
-            "requesting" => "已发送请求，等待模型响应".into(),
-            "working" => "执行工具中".into(),
+            "starting" => t!("core-logic.history.phase.starting", runtime = format::runtime_label(cx.runtime)),
+            "requesting" => t!("core-logic.history.phase.requesting"),
+            "working" => t!("core-logic.history.phase.working"),
             _ => "Thinking".into(),
         };
         json!({ "phase": p.get("phase"), "text": text, "since": p.get("since") })
@@ -403,32 +405,32 @@ pub fn present(live: &Value, cx: &Context) -> Value {
     let usage = live.get("usage").filter(|u| u.is_object()).map(|u| {
         let n = |k: &str| u.get(k).and_then(Value::as_f64).unwrap_or(0.0);
         let (input, cached) = (n("inputTokens"), n("cachedTokens"));
-        let rate = if input > 0.0 { format!("{}%", (cached / input * 100.0).round()) } else { "未报告".into() };
+        let rate = if input > 0.0 { format!("{}%", (cached / input * 100.0).round()) } else { t!("core-logic.history.usage.unreported") };
         json!([
-            { "label": "模型调用", "value": format!("{} 次", n("modelCalls")) },
-            { "label": "输入", "value": format::compact_number(input) },
-            { "label": "其中缓存", "value": format::compact_number(cached) },
-            { "label": "输出", "value": format::compact_number(n("outputTokens")) },
-            { "label": "缓存命中率", "value": rate },
+            { "label": t!("core-logic.history.usage.calls"), "value": t!("core-logic.history.usage.calls.value", n = n("modelCalls")) },
+            { "label": t!("core-logic.history.usage.input"), "value": format::compact_number(input) },
+            { "label": t!("core-logic.history.usage.cached"), "value": format::compact_number(cached) },
+            { "label": t!("core-logic.history.usage.output"), "value": format::compact_number(n("outputTokens")) },
+            { "label": t!("core-logic.history.usage.hit_rate"), "value": rate },
         ])
     });
     // The same, in a line: 调用 3 次 · 输入 2K（缓存 50%）· 输出 50.
     let usage_line = live.get("usage").filter(|u| u.is_object()).map(|u| {
         let n = |k: &str| u.get(k).and_then(Value::as_f64).unwrap_or(0.0);
         let (input, cached) = (n("inputTokens"), n("cachedTokens"));
-        let rate = if input > 0.0 { format!("（缓存 {}%）", (cached / input * 100.0).round()) } else { String::new() };
-        format!("调用 {} 次 · 输入 {}{rate} · 输出 {}", n("modelCalls"), format::compact_number(input), format::compact_number(n("outputTokens")))
+        let rate = if input > 0.0 { t!("core-logic.history.usage.line.rate", rate = (cached / input * 100.0).round()) } else { String::new() };
+        t!("core-logic.history.usage.line", n = n("modelCalls"), input = format::compact_number(input), rate = rate, output = format::compact_number(n("outputTokens")))
     });
     let loaded = flag(live, "loaded");
     let (edge, is_empty) = if !loaded && shown.is_empty() {
-        ("正在读取执行历史…", true)
+        (t!("core-logic.history.edge.loading"), true)
     } else if shown.is_empty() && live_steps.is_empty() && phase.is_none() && base == 0 {
-        let why = if flag(live, "offline") { "station 离线，这台设备上还没有这个会话的执行历史。" } else if cx.started { "找不到运行时记录，可能已归档。" } else { "运行时还没开始这个会话。" };
-        (why, true)
+        let why = if flag(live, "offline") { "core-logic.history.edge.offline" } else if cx.started { "core-logic.history.edge.missing" } else { "core-logic.history.edge.not_started" };
+        (t!(why), true)
     } else if base > 0 {
-        ("正在读取更早的执行历史…", false)
+        (t!("core-logic.history.edge.earlier"), false)
     } else {
-        ("已到 Session 开始处", false)
+        (t!("core-logic.history.edge.start"), false)
     };
     json!({ "items": shown, "live": live_steps, "phase": phase, "usage": usage, "usageLine": usage_line, "edge": edge, "empty": is_empty, "loaded": loaded, "more": base > 0 })
 }
@@ -456,25 +458,24 @@ fn group(timeline: &[Value], steps: &[Step], members: &[usize], thinking: &[usiz
             None => counts[at].2 += 1,
         }
     }
-    let title = counts.iter().map(|(k, files, n)| {
-        let (verb, unit) = verb_unit(k);
-        format!("{verb} {} {unit}", if files.is_empty() { *n } else { files.len() })
-    }).collect::<Vec<_>>().join("、");
+    let title = counts.iter().map(|(k, files, n)| did(k, if files.is_empty() { *n } else { files.len() })).collect::<Vec<_>>().join(&t!("core-logic.history.did.sep"));
+    // Said as a sentence: its first word capitalized (English; Chinese has no capitals).
+    let title = title.chars().next().map(|c| c.to_uppercase().chain(title.chars().skip(1)).collect()).unwrap_or(title);
     let failed = members.iter().filter(|m| failed_of(&steps[**m])).count();
     let pending = members.iter().filter(|m| steps[**m].result.is_none()).count();
     let first_line = |t: &str| t.split('\n').find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
     // Named by its latest call: its description, else what it did and to what.
     let summary = match members.last() {
-        None => format!("思考：{}", thinking.first().map(|t| first_line(&text(*t)).chars().take(80).collect::<String>()).unwrap_or_default()),
+        None => t!("core-logic.history.thinking", text = thinking.first().map(|t| first_line(&text(*t)).chars().take(80).collect::<String>()).unwrap_or_default()),
         Some(&last) => {
             let call = steps[last].call;
             let name = tool(call);
             let kind = kind_of(&name);
             let doing = describe(&text(call)).unwrap_or_else(|| {
-                let verb = if kind == "other" { tool_name(&name).to_string() } else { verb_unit(kind).0.to_string() };
+                let verb = if kind == "other" { tool_name(&name).to_string() } else { t!(&format!("core-logic.history.verb.{}", kind_key(kind))) };
                 format!("{verb} {}", hint(&text(call))).trim().to_string()
             });
-            if members.len() == 1 { doing } else { format!("{doing} · 共 {} 项", members.len()) }
+            if members.len() == 1 { doing } else { t!("core-logic.history.steps", doing = doing, n = members.len()) }
         }
     };
     let steps: Vec<Value> = members.iter().map(|&m| {
@@ -487,7 +488,7 @@ fn group(timeline: &[Value], steps: &[Step], members: &[usize], thinking: &[usiz
             .zip(call.get("at").and_then(Value::as_str).and_then(epoch_ms))
             .map(|(b, a)| b - a)
             .filter(|ms| *ms >= 0.0);
-        let meta = if result.is_none() { "进行中".to_string() } else if failed { "失败".to_string() } else { took.map(format::duration).unwrap_or_default() };
+        let meta = if result.is_none() { t!("core-logic.history.step.running") } else if failed { t!("core-logic.history.step.failed") } else { took.map(format::duration).unwrap_or_default() };
         json!({
             "said": describe(&text(st.call)),
             "name": tool_name(&tool(st.call)),

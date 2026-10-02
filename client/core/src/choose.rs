@@ -12,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use serde_json::{Map, Value, json};
+use stillfail_i18n::t;
 
 use crate::data::Data;
 use crate::error::{CoreError, Result};
@@ -63,7 +64,7 @@ fn of(of: &str) -> Result<Of<'_>> {
         Some(("connect-new", form)) if !form.is_empty() => Of::ConnectNew(form),
         Some(("session", key)) if !key.is_empty() => Of::Session(key),
         Some(("connect", id)) if !id.is_empty() => Of::Connect(id),
-        _ => return Err(CoreError::invalid(format!("没有这种选择：{of}"))),
+        _ => return Err(CoreError::invalid(t!("core-logic.choose.error.no_such", of = of))),
     })
 }
 
@@ -140,7 +141,7 @@ pub fn quota_line(quota: Option<&Value>) -> Value {
     }).collect();
     windows.sort_by_key(|w| w.3);
     if let Some((label, left, level, _)) = windows.iter().filter(|w| w.2 != "ok").min_by_key(|w| w.1) {
-        return json!({ "text": format!("{label}只剩 {left}%"), "level": level });
+        return json!({ "text": t!("core-logic.choose.quota.low", label = label, left = left), "level": level });
     }
     json!({ "text": windows.iter().map(|(label, left, ..)| format!("{label} {left}%")).collect::<Vec<_>>().join(" · ") })
 }
@@ -162,12 +163,9 @@ pub fn machine_meta(session: &mut Value, now: f64) {
     let ago = s.get("updatedAt").and_then(Value::as_f64).map(|at| {
         let secs = ((now - at) / 1000.0).round().max(0.0) as i64;
         match secs {
-            s if s < 5 => "刚刚".to_string(),
-            s if (86_400..2 * 86_400).contains(&s) => "昨天".to_string(),
-            s if s < 60 => format!("{s} 秒前"),
-            s if s < 3600 => format!("{} 分钟前", s / 60),
-            s if s < 86_400 => format!("{} 小时前", s / 3600),
-            s => format!("{} 天前", s / 86_400),
+            s if s < 5 => t!("core-logic.jobs.ago.now"),
+            s if (86_400..2 * 86_400).contains(&s) => t!("core-logic.jobs.ago.yesterday"),
+            s => t!("core-logic.jobs.ago", span = crate::jobs::span(s as f64 * 1000.0)),
         }
     });
     s.insert("meta".into(), json!([Some(runtime.to_string()), Some(short), ago].into_iter().flatten().collect::<Vec<_>>().join(" · ")));
@@ -198,7 +196,7 @@ fn frequent_combos(mut history: Vec<Value>, options: &[Value], current: &Resolve
         if r.effort != effort { return None; }
         let model = entry["model"].as_str()?;
         if !seen.insert((model.to_string(), runtime.to_string(), effort.clone())) { return None; }
-        let depth = effort.as_deref().unwrap_or("默认深度");
+        let depth = effort.clone().unwrap_or_else(|| t!("core-logic.choose.default_effort"));
         let name = entry["name"].as_str().unwrap_or(model);
         let label = if list(&entry["runtimes"]).len() > 1 {
             format!("{name} · {} · {depth}", crate::format::runtime_label(runtime))
@@ -348,14 +346,17 @@ impl Choose {
             _ => Value::Null,
         };
         view["problem"] = match overview {
-            None => json!(format!("正在读取 {name} 的 Profile…")),
-            Some(_) if !profiles.is_empty() && options.is_empty() => json!("这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。"),
+            None => json!(t!("core-logic.choose.problem.loading", name = name)),
+            Some(_) if !profiles.is_empty() && options.is_empty() => json!(t!("core-logic.choose.problem.no_models")),
             _ => Value::Null,
         };
         if let Some(entry) = &r.entry {
             if let Some(spent) = entry.get("spent").filter(|s| s.is_object()) {
-                let back = text(spent.get("back")).map(|b| format!("，{b}")).unwrap_or_default();
-                view["spent"] = json!(format!("{} 能用的账号额度都用完了{back}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。", entry["name"].as_str().unwrap_or("")));
+                let name = entry["name"].as_str().unwrap_or("");
+                view["spent"] = json!(match text(spent.get("back")) {
+                    Some(back) => t!("core-logic.choose.spent.back", name = name, back = back),
+                    None => t!("core-logic.choose.spent", name = name),
+                });
             }
         }
         view["pickAccount"] = json!(r.accounts.len() > 1);
@@ -394,8 +395,8 @@ impl Choose {
                 Some(id) => id,
                 None => {
                     let kept = self.kept(scope);
-                    let (online, _) = self.online(scope).map_err(|_| CoreError::invalid("还不知道有哪些 station"))?;
-                    let current = online.iter().find(|s| s["id"] == kept.as_str()).or(online.first()).ok_or_else(|| CoreError::invalid("没有在线的 station"))?;
+                    let (online, _) = self.online(scope).map_err(|_| CoreError::invalid(t!("core-logic.choose.error.no_stations_yet")))?;
+                    let current = online.iter().find(|s| s["id"] == kept.as_str()).or(online.first()).ok_or_else(|| CoreError::invalid(t!("core-logic.choose.error.none_online")))?;
                     current["id"].as_str().unwrap_or("").to_string()
                 }
             };
@@ -430,7 +431,7 @@ impl Choose {
     /// the scope's next new chat starts on it too.
     pub fn create(&self, station: &str) -> Result<Value> {
         let (_, r) = self.on_station(station);
-        let (Some(entry), Some(runtime)) = (&r.entry, &r.runtime) else { return Err(CoreError::invalid("先在 Profile 里启用模型")) };
+        let (Some(entry), Some(runtime)) = (&r.entry, &r.runtime) else { return Err(CoreError::invalid(t!("core-logic.choose.error.enable_models"))) };
         let mut ask = json!({ "runtime": runtime, "model": entry["model"] });
         if let Some(effort) = &r.effort {
             ask["effort"] = json!(effort);
@@ -497,7 +498,7 @@ impl Choose {
             Of::Connect(id) => {
                 let overview = overview()?;
                 let Some(connect) = overview["connects"].as_array().and_then(|c| c.iter().find(|c| c["id"] == *id)) else {
-                    return Some(Err(CoreError::new("http_404", "没有这个连接").with_status(404)));
+                    return Some(Err(CoreError::new("http_404", t!("core-logic.choose.error.no_connect")).with_status(404)));
                 };
                 let bind = &connect["bind"];
                 let options = list(&models(Some(&overview), now)).into_iter().filter(|m| m["runtimes"].as_array().is_some_and(|r| r.contains(&bind["runtime"]))).collect();
@@ -558,7 +559,7 @@ impl Choose {
                 && profile.as_ref().is_none_or(|id| p["id"] == *id)
                 && accounts.iter().any(|a| a["id"] == p["id"])));
         let fast = draft.get("fast").or(value.get("fast")).and_then(Value::as_bool).filter(|_| on_name == "codex");
-        let speed_text = |fast: Option<bool>| match fast { Some(true) => "Fast", Some(false) => "标准", None => "跟随订阅" };
+        let speed_text = |fast: Option<bool>| match fast { Some(true) => "Fast".to_string(), Some(false) => t!("core-logic.choose.speed.standard"), None => t!("core-logic.choose.speed.plan") };
         let next = json!({ "model": next_model, "runtime": on, "effort": effort, "profile": profile, "fast": fast });
         let changed = FIELDS.iter().any(|f| next[*f] != value[*f]);
         // The account the control names: the one kept to, else the one it runs on now.
@@ -579,16 +580,16 @@ impl Choose {
         let account_view = names.then(|| {
             let text = match (&kept, &shown) {
                 (Some(p), _) => shown.as_ref().map(|s| s["name"].as_str().unwrap_or(p).to_string()).unwrap_or_else(|| p.clone()),
-                (None, Some(s)) => format!("自动 · {}", s["name"].as_str().unwrap_or("")),
-                (None, None) => "自动分配".to_string(),
+                (None, Some(s)) => t!("core-logic.choose.account.auto_on", name = s["name"].as_str().unwrap_or("")),
+                (None, None) => t!("core-logic.choose.account.auto"),
             };
             json!({ "text": text, "auto": kept.is_none(), "level": low, "profile": if quiet { None } else { shown.clone() } })
         });
         let drafted = account(profile.as_ref().and_then(Value::as_str));
-        let who = drafted.and_then(|a| a["name"].as_str()).map_or("账号".to_string(), |n| n.split('@').next().unwrap_or(n).to_string());
+        let who = drafted.and_then(|a| a["name"].as_str()).map_or_else(|| t!("core-logic.choose.account"), |n| n.split('@').next().unwrap_or(n).to_string());
         let who_level = if dropped { Some(json!("amber")) } else if profile.is_none() && kept.is_none() { low.clone() } else { None };
         let current_name = current.as_ref().and_then(|c| c["name"].as_str()).unwrap_or("").to_string();
-        let auto_note = if current.is_some() && kept.is_none() { format!("现在是 {current_name}") } else { "额度用完或登录失效时换一个".to_string() };
+        let auto_note = if current.is_some() && kept.is_none() { t!("core-logic.choose.account.now", name = current_name) } else { t!("core-logic.choose.account.auto_note") };
         let option_name = option.and_then(|o| o["name"].as_str()).map(str::to_string);
 
         // Full screen: each property as it was and as it becomes.
@@ -596,34 +597,38 @@ impl Choose {
             let m = m?;
             Some(if Some(m) == value["model"].as_str() { stillfail_shapes::model::name(m) } else { option_of(&options, Some(m)).and_then(|o| o["name"].as_str()).unwrap_or(m).to_string() })
         };
-        let account_text = |id: Option<&str>| id.map_or("自动分配".to_string(), |id| account(Some(id)).and_then(|a| a["name"].as_str()).unwrap_or(id).to_string());
+        let account_text = |id: Option<&str>| id.map_or_else(|| t!("core-logic.choose.account.auto"), |id| account(Some(id)).and_then(|a| a["name"].as_str()).unwrap_or(id).to_string());
         let on_current = current.as_ref().is_some_and(|c| accounts.iter().any(|a| a["id"] == c["id"]));
         let moves_off = profile.is_none() && kept.is_none() && model.is_some() && current.is_some() && !on_current;
         let model_name = name_of(model.as_deref());
-        let effort_text = effort.clone().unwrap_or_else(|| "默认深度".into());
+        let effort_text = effort.clone().unwrap_or_else(|| t!("core-logic.choose.default_effort"));
         let chosen_text = account_text(profile.as_ref().and_then(Value::as_str));
         let mut was = vec![
-            name_of(value["model"].as_str()).unwrap_or_else(|| "默认模型".into()),
-            text(value.get("effort")).unwrap_or_else(|| "默认深度".into()),
-            if kept.is_some() { current_name.clone() } else { format!("自动 · {current_name}") },
+            name_of(value["model"].as_str()).unwrap_or_else(|| t!("core-logic.format.default_model")),
+            text(value.get("effort")).unwrap_or_else(|| t!("core-logic.choose.default_effort")),
+            if kept.is_some() { current_name.clone() } else { t!("core-logic.choose.account.auto_on", name = current_name) },
         ];
         let mut becomes = vec![
-            model_name.clone().unwrap_or_else(|| "默认模型".into()),
+            model_name.clone().unwrap_or_else(|| t!("core-logic.format.default_model")),
             effort_text.clone(),
-            if profile.is_some() { chosen_text.clone() } else if moves_off { "自动（换账号）".into() } else if on_current { format!("自动 · {current_name}") } else { "自动分配".into() },
+            if profile.is_some() { chosen_text.clone() } else if moves_off { t!("core-logic.choose.account.auto_switch") } else if on_current { t!("core-logic.choose.account.auto_on", name = current_name) } else { t!("core-logic.choose.account.auto") },
         ];
         if fast_available {
-            was.push(speed_text(value["fast"].as_bool()).into());
-            becomes.push(speed_text(fast).into());
+            was.push(speed_text(value["fast"].as_bool()));
+            becomes.push(speed_text(fast));
         }
         let force = if dropped {
-            Some(format!("指定的账号「{}」没有启用 {}，改成了自动分配", account_text(profile_drafted.as_deref()), model_name.clone().unwrap_or_default()))
+            Some(t!("core-logic.choose.force.dropped", account = account_text(profile_drafted.as_deref()), model = model_name.clone().unwrap_or_default()))
         } else if moves_off {
-            Some(format!("现在的账号「{current_name}」没有启用 {}，会自动换一个启用了的", model_name.clone().unwrap_or_default()))
+            Some(t!("core-logic.choose.force.moves_off", account = current_name, model = model_name.clone().unwrap_or_default()))
         } else {
             None
         };
-        let save_text = if changed { format!("改成 {} · {effort_text} · {chosen_text}", model_name.clone().unwrap_or_else(|| "默认模型".into())) } else { "不变".into() };
+        let save_text = if changed {
+            t!("core-logic.choose.save", model = model_name.clone().unwrap_or_else(|| t!("core-logic.format.default_model")), effort = effort_text, account = chosen_text)
+        } else {
+            t!("core-logic.choose.save.unchanged")
+        };
         let save_text = if changed && fast_available { format!("{save_text} · {}", speed_text(fast)) } else { save_text };
         Some(Ok(json!({
             "fastAvailable": fast_available,
@@ -638,7 +643,7 @@ impl Choose {
             "runtimes": if !fixed && runtimes.len() > 1 { runtimes.clone() } else { Vec::new() },
             "efforts": efforts,
             "accounts": accounts,
-            "dropped": dropped.then(|| format!("指定的账号没有启用 {}，改成了自动分配", option_name.unwrap_or_else(|| next["model"].as_str().unwrap_or("").to_string()))),
+            "dropped": dropped.then(|| t!("core-logic.choose.dropped", model = option_name.unwrap_or_else(|| next["model"].as_str().unwrap_or("").to_string()))),
             "who": who,
             "whoLevel": who_level,
             "autoNote": auto_note,
@@ -646,10 +651,10 @@ impl Choose {
             "was": was,
             "becomes": becomes,
             "force": force,
-            "modelText": model_name.unwrap_or_else(|| "选一个模型".into()),
+            "modelText": model_name.unwrap_or_else(|| t!("core-logic.choose.pick_model")),
             "maker": option.map(|o| o["maker"].clone()),
             "accountText": chosen_text,
-            "accountNote": if profile.is_none() { "额度用完或登录失效时换一个" } else { "固定用它" },
+            "accountNote": if profile.is_none() { t!("core-logic.choose.account.auto_note") } else { t!("core-logic.choose.account.fixed") },
             "accountWarn": dropped || moves_off,
             "saveText": save_text,
             "next": next,
@@ -689,7 +694,7 @@ impl Choose {
         let view = match self.pick(&topic, station, o) {
             Some(Ok(view)) => view,
             Some(Err(error)) => return Err(error),
-            None => return Err(CoreError::invalid("还不知道能选什么")),
+            None => return Err(CoreError::invalid(t!("core-logic.choose.error.no_options_yet"))),
         };
         let next = view["next"].clone();
         if view["changed"] != true || view["option"].is_null() {

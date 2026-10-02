@@ -3,10 +3,26 @@
 //! connect's state. Times are the viewer's local ones: `offset_min` is their UTC offset at that moment (Host).
 
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use serde_json::{Value, json};
+use stillfail_i18n::{Lang, current, t};
 
 const MINUTE: f64 = 60_000.0;
 const DAY: f64 = 86_400_000.0;
+
+/// The words for `key` in the current language, for marks that are `&'static str`: each key's words are made once a
+/// language and kept.
+pub(crate) fn said(key: &'static str) -> &'static str {
+    static KEPT: OnceLock<Mutex<HashMap<(Lang, &'static str), &'static str>>> = OnceLock::new();
+    let lang = current();
+    let mut kept = KEPT.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
+    *kept.entry((lang, key)).or_insert_with(|| &*Box::leak(t!(lang; key).into_boxed_str()))
+}
+
+/// A month and day: 9月20日, Sep 20.
+fn month_day(lang: Lang, month: u32, day: u32) -> String {
+    t!(lang; &format!("core-logic.format.date.{month}"), day = day)
+}
 
 /// 950, 1.2K, 3.4M.
 pub fn compact_number(n: f64) -> String {
@@ -25,15 +41,19 @@ pub fn compact_number(n: f64) -> String {
 
 /// 850ms, 12 秒, 3 分 5 秒, 2 小时 4 分.
 pub fn duration(ms: f64) -> String {
+    duration_in(current(), ms)
+}
+
+pub fn duration_in(lang: Lang, ms: f64) -> String {
     if ms < 1000.0 {
         return format!("{}ms", ms.round() as i64);
     }
     let s = (ms / 1000.0).round() as i64;
     if s < 60 {
-        return format!("{s} 秒");
+        return t!(lang; "core-logic.format.duration.s", s = s);
     }
     let m = s / 60;
-    if m < 60 { format!("{m} 分 {} 秒", s % 60) } else { format!("{} 小时 {} 分", m / 60, m % 60) }
+    if m < 60 { t!(lang; "core-logic.format.duration.ms", m = m, s = s % 60) } else { t!(lang; "core-logic.format.duration.hm", h = m / 60, m = m % 60) }
 }
 
 /// A local time's parts: (year, month 1–12, day, weekday 0 = Sunday, hour, minute).
@@ -74,21 +94,29 @@ pub fn day_clock(ms: f64, now: f64, offset_min: i32) -> String {
 
 /// 刚刚, 3 分钟前, 5 小时前, 昨天 14:05, 9月20日 14:05.
 pub fn relative_time(ms: f64, now: f64, offset_min: i32) -> String {
+    relative_time_in(current(), ms, now, offset_min)
+}
+
+pub fn relative_time_in(lang: Lang, ms: f64, now: f64, offset_min: i32) -> String {
     let seconds = ((now - ms) / 1000.0).round();
     if seconds < 45.0 {
-        return "刚刚".into();
+        return t!(lang; "core-logic.format.ago.now");
     }
     let minutes = (seconds / 60.0).round();
     if minutes < 60.0 {
-        return format!("{minutes} 分钟前");
+        return t!(lang; "core-logic.format.ago.minutes", n = minutes);
     }
     let hours = (minutes / 60.0).round();
     if hours < 24.0 {
-        return format!("{hours} 小时前");
+        return t!(lang; "core-logic.format.ago.hours", n = hours);
     }
     let (_, month, day, _, _, _) = local(ms, offset_min);
     let time = clock(ms, offset_min);
-    if hours < 48.0 { format!("昨天 {time}") } else { format!("{month}月{day}日 {time}") }
+    if hours < 48.0 {
+        t!(lang; "core-logic.format.ago.yesterday", time = time)
+    } else {
+        t!(lang; "core-logic.format.date_time", date = month_day(lang, month, day), time = time)
+    }
 }
 
 /// 9/20 14:05:09, local: a time in full, for a tip.
@@ -100,45 +128,58 @@ pub fn absolute_time(ms: f64, offset_min: i32) -> String {
 
 /// 1 分钟内, 40 分钟后, 3 小时后, 2 天后.
 pub fn time_until(ms: f64, now: f64) -> String {
+    time_until_in(current(), ms, now)
+}
+
+pub fn time_until_in(lang: Lang, ms: f64, now: f64) -> String {
     let minutes = ((ms - now) / MINUTE).round().max(0.0);
     if minutes < 60.0 {
-        return if minutes <= 1.0 { "1 分钟内".into() } else { format!("{minutes} 分钟后") };
+        return if minutes <= 1.0 { t!(lang; "core-logic.format.until.minute") } else { t!(lang; "core-logic.format.until.minutes", n = minutes) };
     }
     let hours = (minutes / 60.0).round();
-    if hours < 48.0 { format!("{hours} 小时后") } else { format!("{} 天后", (hours / 24.0).round()) }
+    if hours < 48.0 { t!(lang; "core-logic.format.until.hours", n = hours) } else { t!(lang; "core-logic.format.until.days", n = (hours / 24.0).round()) }
 }
 
 /// When a quota window refills, in words: 马上刷新, 40 分钟后刷新, 3 小时 5 分钟后刷新, 2 天 4 小时后刷新.
 pub fn refills_in(ms: f64, now: f64) -> String {
+    refills_in_lang(current(), ms, now)
+}
+
+pub fn refills_in_lang(lang: Lang, ms: f64, now: f64) -> String {
     let minutes = ((ms - now) / MINUTE).round() as i64;
     if minutes <= 0 {
-        return "马上刷新".into();
+        return t!(lang; "core-logic.format.refill.now");
     }
     if minutes < 60 {
-        return format!("{minutes} 分钟后刷新");
+        return t!(lang; "core-logic.format.refill.minutes", n = minutes);
     }
     let hours = minutes / 60;
     if hours < 24 {
-        let rest = if minutes % 60 > 0 { format!(" {} 分钟", minutes % 60) } else { String::new() };
-        return format!("{hours} 小时{rest}后刷新");
+        return match minutes % 60 {
+            0 => t!(lang; "core-logic.format.refill.hours", n = hours),
+            m => t!(lang; "core-logic.format.refill.hours_minutes", h = hours, m = m),
+        };
     }
-    let rest = if hours % 24 > 0 { format!(" {} 小时", hours % 24) } else { String::new() };
-    format!("{} 天{rest}后刷新", hours / 24)
+    match hours % 24 {
+        0 => t!(lang; "core-logic.format.refill.days", n = hours / 24),
+        h => t!(lang; "core-logic.format.refill.days_hours", n = hours / 24, h = h),
+    }
 }
 
 /// A quota window marked by its length (5H five hours, W a week, M a month, 3D), and where it goes among the others.
+/// The station names its windows (每周, 5 小时; or Weekly, 5 hours, in English).
 pub fn window_mark(label: &str) -> (String, u8) {
-    if label.starts_with("每月") {
+    if label.starts_with("每月") || label.starts_with("Monthly") {
         return ("M".into(), 3);
     }
-    if label.starts_with("每周") {
+    if label.starts_with("每周") || label.starts_with("Weekly") {
         return ("W".into(), 2);
     }
     let lead = |unit: &str| label.split_once(unit).map(|(n, _)| n).filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())).map(str::to_string);
-    if let Some(n) = lead(" 小时") {
+    if let Some(n) = lead(" 小时").or_else(|| lead(" hour")) {
         return (format!("{n}H"), 0);
     }
-    match lead(" 天") {
+    match lead(" 天").or_else(|| lead(" day")) {
         Some(n) => (format!("{n}D"), 1),
         None => (label.to_string(), 1),
     }
@@ -169,18 +210,22 @@ pub fn gb(bytes: f64) -> String {
 
 /// A day's heading: 今天, 昨天, 星期三 (this week), 9月20日.
 pub fn day_label(ms: f64, now: f64, offset_min: i32) -> String {
+    day_label_in(current(), ms, now, offset_min)
+}
+
+pub fn day_label_in(lang: Lang, ms: f64, now: f64, offset_min: i32) -> String {
     let diff = local_day(now, offset_min) - local_day(ms, offset_min);
     if diff == 0 {
-        return "今天".into();
+        return t!(lang; "core-logic.format.day.today");
     }
     if diff == 1 {
-        return "昨天".into();
+        return t!(lang; "core-logic.format.day.yesterday");
     }
     let (_, month, day, weekday, _, _) = local(ms, offset_min);
     if diff < 7 {
-        return ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"][weekday as usize].into();
+        return t!(lang; &format!("core-logic.format.weekday.{weekday}"));
     }
-    format!("{month}月{day}日")
+    month_day(lang, month, day)
 }
 
 /// Slack mentions and spacing out, for a title.
@@ -206,7 +251,7 @@ pub fn clean_text(text: &str) -> String {
 pub fn thread_name(threads: &[Value], channel: &str, thread_ts: &str, offset_min: i32) -> (String, String) {
     let started = thread_ts.parse::<f64>().unwrap_or(0.0) * 1000.0;
     let (_, month, day, _, _, _) = local(started, offset_min);
-    let when = format!("{month}月{day}日 {}", clock(started, offset_min));
+    let when = t!("core-logic.format.date_time", date = month_day(current(), month, day), time = clock(started, offset_min));
     let thread = threads.iter().find(|t| t.get("channel").and_then(Value::as_str) == Some(channel) && t.get("threadTs").and_then(Value::as_str) == Some(thread_ts));
     let text = |k: &str| thread.and_then(|t| t.get(k)).and_then(Value::as_str).unwrap_or("");
     let where_ = if channel == "EMBER" {
@@ -215,10 +260,10 @@ pub fn thread_name(threads: &[Value], channel: &str, thread_ts: &str, offset_min
             title.to_string()
         } else {
             let first = clean_text(text("firstText"));
-            if first.is_empty() { format!("{} 对话", crate::brand::name()) } else { first }
+            if first.is_empty() { t!("core-logic.format.thread.chat", brand = crate::brand::name()) } else { first }
         }
     } else if channel.starts_with('D') {
-        "私信".into()
+        t!("core-logic.format.thread.dm")
     } else {
         let name = text("channelName");
         format!("#{}", if name.is_empty() { channel } else { name })
@@ -279,7 +324,7 @@ pub fn maker_of(model: &str) -> Option<(&'static str, &'static str)> {
     } else if has(&["qwen", "qwq"]) {
         ("qwen", "Qwen")
     } else if has(&["glm", "zhipu"]) {
-        ("zhipu", "智谱")
+        ("zhipu", said("core-logic.format.maker.zhipu"))
     } else if has(&["gemini", "gemma"]) {
         ("gemini", "Google")
     } else if has(&["kimi", "moonshot"]) {
@@ -295,7 +340,7 @@ pub fn maker_of(model: &str) -> Option<(&'static str, &'static str)> {
 
 /// How an agent is named: it has no name, only its model as people call it and its effort (GPT-6 Astra · medium).
 pub fn agent_label(model: Option<&str>, effort: Option<&str>) -> String {
-    let model = model.filter(|m| !m.is_empty()).map_or_else(|| "默认模型".to_string(), stillfail_shapes::model::name);
+    let model = model.filter(|m| !m.is_empty()).map_or_else(|| t!("core-logic.format.default_model"), stillfail_shapes::model::name);
     match effort.filter(|e| !e.is_empty()) {
         Some(effort) => format!("{model} · {effort}"),
         None => model.to_string(),
@@ -314,68 +359,68 @@ pub fn runtime_label(runtime: &str) -> &'static str {
 /// A connect's link to Slack in words, and its dot: `(text, presence)` with presence online | busy | error | offline.
 pub fn connection(state: &Value) -> (&'static str, &'static str) {
     match state.get("state").and_then(Value::as_str).unwrap_or("") {
-        "connected" => ("在线", "online"),
-        "reconnecting" => ("重连中", "busy"),
-        "starting" => ("连接中", "busy"),
-        "error" => ("连接失败", "error"),
-        "no_tokens" => ("未连接 Slack", "offline"),
-        "disabled" => ("已停用", "offline"),
-        _ => ("未连接 Slack", "offline"),
+        "connected" => (said("core-logic.format.connection.connected"), "online"),
+        "reconnecting" => (said("core-logic.format.connection.reconnecting"), "busy"),
+        "starting" => (said("core-logic.format.connection.starting"), "busy"),
+        "error" => (said("core-logic.format.connection.error"), "error"),
+        "no_tokens" => (said("core-logic.format.connection.no_slack"), "offline"),
+        "disabled" => (said("core-logic.format.connection.disabled"), "offline"),
+        _ => (said("core-logic.format.connection.no_slack"), "offline"),
     }
 }
 
 /// How a connect's conversations become sessions, in words: its line, and its short form.
 pub fn mode_text(mode: &str, require_mention: bool) -> (&'static str, &'static str) {
     match (mode, require_mention) {
-        ("multi-session", _) => ("多会话", "多会话"),
-        (_, true) => ("单会话 · @ 唤醒", "单会话"),
-        (_, false) => ("单会话 · 全部消息", "单会话"),
+        ("multi-session", _) => (said("core-logic.format.mode.multi"), said("core-logic.format.mode.multi")),
+        (_, true) => (said("core-logic.format.mode.single_mention"), said("core-logic.format.mode.single")),
+        (_, false) => (said("core-logic.format.mode.single_all"), said("core-logic.format.mode.single")),
     }
 }
 
 /// Why a turn failed, in words, from its `detail` (`<reason>: <message>`, the station's FailureReason).
 pub fn failure_text(detail: &str) -> &'static str {
     match detail.split(':').next().unwrap_or("").trim() {
-        "rate_limit" => "额度用完",
-        "auth" => "登录失效",
-        "model" => "模型出错",
-        "exited" => "进程退出了",
-        _ => "出错了",
+        "rate_limit" => said("core-logic.format.failure.rate_limit"),
+        "auth" => said("core-logic.format.failure.auth"),
+        "model" => said("core-logic.format.failure.model"),
+        "exited" => said("core-logic.format.failure.exited"),
+        _ => said("core-logic.format.failure.other"),
     }
 }
 
 /// A status in words, and its tone (accent, green, blue, red, neutral).
 pub fn status_text(status: &str) -> (&'static str, &'static str) {
     match status {
-        "running" => ("进行中", "accent"),
-        "queued" => ("排队中", "accent"),
-        "final" => ("做完了", "green"),
-        "block" => ("要你帮忙", "blue"),
-        "decision" => ("等你决定", "blue"),
-        "failed" => ("出问题", "red"),
-        "unexpected" => ("出问题：没说一声就停了", "red"),
-        "aborted" => ("出问题：被停止", "neutral"),
-        _ => ("未开始", "neutral"),
+        "running" => (said("core-logic.format.status.running"), "accent"),
+        "queued" => (said("core-logic.format.status.queued"), "accent"),
+        "final" => (said("core-logic.format.status.final"), "green"),
+        "block" => (said("core-logic.format.status.block"), "blue"),
+        "decision" => (said("core-logic.format.status.decision"), "blue"),
+        "failed" => (said("core-logic.format.status.failed"), "red"),
+        "unexpected" => (said("core-logic.format.status.unexpected"), "red"),
+        "aborted" => (said("core-logic.format.status.aborted"), "neutral"),
+        _ => (said("core-logic.format.status.idle"), "neutral"),
     }
 }
 
 /// A profile's last check in words, and its tone.
 pub fn check_text(check: &Value) -> (&'static str, &'static str) {
     match check.get("state").and_then(Value::as_str) {
-        None => ("未检查", "neutral"),
-        Some("ok") => ("可用", "green"),
-        Some("login") => ("需要登录", "amber"),
-        Some("failed") => ("不可用", "red"),
-        Some(_) => ("无法检查", "neutral"),
+        None => (said("core-logic.format.check.none"), "neutral"),
+        Some("ok") => (said("core-logic.format.check.ok"), "green"),
+        Some("login") => (said("core-logic.format.check.login"), "amber"),
+        Some("failed") => (said("core-logic.format.check.failed"), "red"),
+        Some(_) => (said("core-logic.format.check.unknown"), "neutral"),
     }
 }
 
 /// A process's state in words.
 pub fn process_text(process: &str) -> &'static str {
     match process {
-        "running" => "运行中",
-        "warm" => "保温中",
-        _ => "已释放",
+        "running" => said("core-logic.format.process.running"),
+        "warm" => said("core-logic.format.process.warm"),
+        _ => said("core-logic.format.process.released"),
     }
 }
 
@@ -411,5 +456,26 @@ mod tests {
         assert_eq!(clean_text("<@U1> hi   there"), "hi there");
         assert_eq!(split_thread("C0OPS/1727.0001"), Some(("C0OPS", "1727.0001")));
         assert_eq!(split_thread("nope"), None);
+        assert_eq!(refills_in(now + 185.0 * MINUTE, now), "3 小时 5 分钟后刷新");
+        assert_eq!(refills_in(now + 48.0 * 60.0 * MINUTE, now), "2 天后刷新");
+        assert_eq!(window_mark("5 hours"), ("5H".to_string(), 0));
+        assert_eq!(window_mark("Weekly · Opus"), ("W".to_string(), 2));
+    }
+
+    #[test]
+    fn words_in_english() {
+        let en = Lang::En;
+        let now = 1_790_467_200_000.0;
+        assert_eq!(duration_in(en, 185_000.0), "3m 5s");
+        assert_eq!(relative_time_in(en, now - 10_000.0, now, 480), "just now");
+        assert_eq!(relative_time_in(en, now - MINUTE, now, 480), "1 min ago");
+        assert_eq!(relative_time_in(en, now - 3.0 * 60.0 * MINUTE, now, 480), "3 hours ago");
+        assert_eq!(relative_time_in(en, now - 30.0 * 60.0 * MINUTE, now, 480), "yesterday 02:00");
+        assert_eq!(relative_time_in(en, now - 20.0 * DAY, now, 480), "Sep 7, 08:00");
+        assert_eq!(day_label_in(en, now - 3.0 * DAY, now, 480), "Thursday");
+        assert_eq!(day_label_in(en, now - 20.0 * DAY, now, 480), "Sep 7");
+        assert_eq!(time_until_in(en, now + 3.0 * 60.0 * MINUTE, now), "in 3 hours");
+        assert_eq!(refills_in_lang(en, now + 185.0 * MINUTE, now), "Refills in 3 hr 5 min");
+        assert_eq!(refills_in_lang(en, now + 25.0 * 60.0 * MINUTE, now), "Refills in 1 day 1 hr");
     }
 }

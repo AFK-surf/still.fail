@@ -11,6 +11,7 @@
 //! decisions.
 
 use serde_json::{Map, Value, json};
+use stillfail_i18n::t;
 
 /// How much of a card's first line its line shows.
 const LINE_CHARS: usize = 40;
@@ -91,11 +92,13 @@ pub fn for_viewer(row: &Value, me: &Value) -> Option<Value> {
 pub fn label_assignee(card: &mut Value, me: &Value, members: &[Value]) {
     let text = match card.get("assignee").and_then(Value::as_str) {
         Some(email) => {
-            let name = if crate::present::is_viewer(me, email, &[]) { "你" }
-                else { crate::present::member_name(members, email).unwrap_or(email) };
-            format!("需要{name}决策")
+            if crate::present::is_viewer(me, email, &[]) {
+                t!("core-logic.decisions.assignee.you")
+            } else {
+                t!("core-logic.decisions.assignee", name = crate::present::member_name(members, email).unwrap_or(email))
+            }
         }
-        None => "尚未指定决策人".to_string(),
+        None => t!("core-logic.decisions.assignee.none"),
     };
     card["assigneeText"] = json!(text);
 }
@@ -107,7 +110,7 @@ pub fn line(text: &str) -> String {
     let clean = clean.trim_start_matches(['#', '>', '-', '*', ' ']).trim();
     let cut: String = clean.chars().take(LINE_CHARS).collect();
     let cut = if clean.chars().count() > LINE_CHARS { format!("{}…", cut.trim_end()) } else { cut };
-    if cut.is_empty() { "奏".to_string() } else { format!("奏 · {cut}") }
+    if cut.is_empty() { t!("core-logic.decisions.line.empty") } else { t!("core-logic.decisions.line", text = cut) }
 }
 
 /// What a card asks, for a list: its post's first line, as its line has it, without 奏 · .
@@ -284,7 +287,7 @@ pub fn in_messages(messages: &mut [Value], pending: Option<Option<(u64, bool)>>)
             match answer {
                 Some(a) => {
                     let name = if a.get("mine").and_then(Value::as_bool) == Some(true) {
-                        "你".to_string()
+                        t!("core-logic.decisions.you")
                     } else {
                         a.get("by").and_then(|b| b.get("name")).and_then(Value::as_str).unwrap_or("").to_string()
                     };
@@ -296,12 +299,12 @@ pub fn in_messages(messages: &mut [Value], pending: Option<Option<(u64, bool)>>)
                     match chosen {
                         Some(label) => {
                             decision["chosen"] = json!(label);
-                            decision["text"] = json!(format!("{name} 选了「{label}」"));
+                            decision["text"] = json!(t!("core-logic.decisions.chose", name = name, label = label));
                         }
-                        None => decision["text"] = json!(format!("{name} 回复了")),
+                        None => decision["text"] = json!(t!("core-logic.decisions.replied", name = name)),
                     }
                 }
-                None if replaced => decision["text"] = json!("已换成新的问题"),
+                None if replaced => decision["text"] = json!(t!("core-logic.decisions.replaced")),
                 None => {}
             }
         }

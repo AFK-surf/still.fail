@@ -13,7 +13,10 @@ use std::rc::{Rc, Weak};
 use futures::FutureExt;
 use serde_json::{Value, json};
 
+use stillfail_i18n::t;
+
 use crate::format;
+use crate::format::said;
 use crate::host::Host;
 use crate::present::Clock;
 use crate::protocol::Topic;
@@ -82,13 +85,13 @@ fn rank(tone: &str) -> u8 {
 fn word(job: &Value) -> &'static str {
     let (tone, state) = (tone(job), str_of(job, "state"));
     if is_service(job) {
-        return match tone { "up" => "在线", "restart" => "正在重启", "fail" => "没能启动", _ => "已停止" };
+        return match tone { "up" => said("core-logic.jobs.word.up"), "restart" => said("core-logic.jobs.word.restarting"), "fail" => said("core-logic.jobs.word.failed"), _ => said("core-logic.jobs.word.stopped") };
     }
     match tone {
-        "live" if is_watch(job) => "监控中",
-        "live" => "在盯着",
-        "fail" => if state == "failed" { "没能启动" } else { "意外退出" },
-        _ => if state == "stopped" { "已停止" } else { "已结束" },
+        "live" if is_watch(job) => said("core-logic.jobs.word.watching"),
+        "live" => said("core-logic.jobs.word.live"),
+        "fail" => if state == "failed" { said("core-logic.jobs.word.failed") } else { said("core-logic.jobs.word.crashed") },
+        _ => if state == "stopped" { said("core-logic.jobs.word.stopped") } else { said("core-logic.jobs.word.ended") },
     }
 }
 
@@ -96,13 +99,13 @@ fn word(job: &Value) -> &'static str {
 pub fn span(ms: f64) -> String {
     let s = (ms / 1000.0).round().max(0.0) as i64;
     if s < 60 {
-        format!("{s} 秒")
+        t!("core-logic.jobs.span.seconds", n = s)
     } else if s < 3600 {
-        format!("{} 分钟", s / 60)
+        t!("core-logic.jobs.span.minutes", n = s / 60)
     } else if s < 86_400 {
-        format!("{} 小时", s / 3600)
+        t!("core-logic.jobs.span.hours", n = s / 3600)
     } else {
-        format!("{} 天", s / 86_400)
+        t!("core-logic.jobs.span.days", n = s / 86_400)
     }
 }
 
@@ -110,12 +113,12 @@ pub fn span(ms: f64) -> String {
 pub fn ago(at: f64, now: f64) -> String {
     let s = ((now - at) / 1000.0).round() as i64;
     if s < 5 {
-        return "刚刚".into();
+        return t!("core-logic.jobs.ago.now");
     }
     if (86_400..2 * 86_400).contains(&s) {
-        return "昨天".into();
+        return t!("core-logic.jobs.ago.yesterday");
     }
-    format!("{}前", span(now - at))
+    t!("core-logic.jobs.ago", span = span(now - at))
 }
 
 /// How long until `span` (and so `ago`) of a time `ms` ago says something else.
@@ -166,7 +169,7 @@ pub fn shown(job: &Value, c: Clock) -> Value {
         meta.push(said());
         match tone {
             "up" => then(&mut meta, Some(span(now - started))),
-            "restart" => then(&mut meta, job.get("restarts").and_then(Value::as_i64).filter(|n| *n > 0).map(|n| format!("第 {n} 次"))),
+            "restart" => then(&mut meta, job.get("restarts").and_then(Value::as_i64).filter(|n| *n > 0).map(|n| t!("core-logic.jobs.restart_count", n = n))),
             _ => then(&mut meta, ended.clone()),
         }
     } else if tone == "live" {
@@ -174,7 +177,7 @@ pub fn shown(job: &Value, c: Clock) -> Value {
             meta.push(json!({ "text": str_of(last, "text"), "kind": "notice" }));
             then(&mut meta, Some(ago(last.get("at").and_then(Value::as_f64).unwrap_or(now), now)));
         } else if let Some(at) = ms_of(&job, "outputAt") {
-            meta.push(plain(format!("还没通知过 · 最后输出 {}", ago(at, now))));
+            meta.push(plain(t!("core-logic.jobs.no_notice", ago = ago(at, now))));
         } else {
             meta.push(said());
             then(&mut meta, Some(span(now - started)));
@@ -182,8 +185,8 @@ pub fn shown(job: &Value, c: Clock) -> Value {
     } else if tone == "fail" && state != "failed" {
         meta.push(said());
         then(&mut meta, Some(match job.get("exitCode").and_then(Value::as_i64) {
-            Some(code) => format!("退出码 {code}"),
-            None => "被信号结束".into(),
+            Some(code) => t!("core-logic.jobs.exit_code", code = code),
+            None => t!("core-logic.jobs.signalled"),
         }));
         then(&mut meta, ended.clone());
     } else {
@@ -191,7 +194,7 @@ pub fn shown(job: &Value, c: Clock) -> Value {
         then(&mut meta, ended.clone());
     }
     let when = if state == "running" { span(now - started) } else { ended.clone().unwrap_or_default() };
-    let told = if notices.is_empty() { String::new() } else { format!(" · {} 条通知", notices.len()) };
+    let told = if notices.is_empty() { String::new() } else { format!(" · {}", t!("core-logic.jobs.notices", n = notices.len())) };
     job["tone"] = json!(tone);
     job["service"] = json!(service);
     job["open"] = json!(service && matches!(state.as_str(), "running" | "exited"));
@@ -200,7 +203,7 @@ pub fn shown(job: &Value, c: Clock) -> Value {
     job["word"] = json!(word);
     job["meta"] = json!(meta);
     job["detail"] = json!(format!("{word} · {when}{told}"));
-    job["outputSaid"] = json!(ms_of(&job, "outputAt").map(|at| format!("最后输出 · {}", ago(at, now))));
+    job["outputSaid"] = json!(ms_of(&job, "outputAt").map(|at| t!("core-logic.jobs.output_at", ago = ago(at, now))));
     job["age"] = json!(span(now - started));
     if let Some(list) = job.get_mut("notices").and_then(Value::as_array_mut) {
         for n in list {
@@ -228,11 +231,11 @@ pub fn chat_jobs(chat: &Value, c: Clock) -> (Value, f64) {
     } else {
         None
     };
-    let services_note = [(count(true, "up"), "在线"), (count(true, "restart"), "在重启")].iter()
-        .filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} 个{what}")).collect::<Vec<_>>().join("，");
+    let services_note = [(count(true, "up"), "core-logic.jobs.services.up"), (count(true, "restart"), "core-logic.jobs.services.restarting")].iter()
+        .filter(|(n, _)| *n > 0).map(|(n, key)| t!(key, n = n)).collect::<Vec<_>>().join(&t!("core-logic.jobs.list_sep"));
     let jobs_note = match count(false, "live") {
         0 => String::new(),
-        n => format!("{n} 个在盯着"),
+        n => t!("core-logic.jobs.live_count", n = n),
     };
     let ended: Vec<&Value> = jobs.iter().filter(|j| is_ended(j)).collect();
     let mut clear: Vec<String> = vec![];
@@ -248,9 +251,9 @@ pub fn chat_jobs(chat: &Value, c: Clock) -> (Value, f64) {
         "current": current.len(),
         "ended": ended.len(),
         "clear": clear,
-        "allText": format!("全部 {} 个", jobs.len()),
-        "clearText": format!("清掉 {} 个已结束的", ended.len()),
-        "hiddenText": format!("另有 {} 个已停止或结束", jobs.len() - current.len()),
+        "allText": t!("core-logic.jobs.all", n = jobs.len()),
+        "clearText": t!("core-logic.jobs.clear", n = ended.len()),
+        "hiddenText": t!("core-logic.jobs.hidden", n = jobs.len() - current.len()),
         "jobs": jobs.iter().map(|j| shown(j, c)).collect::<Vec<_>>(),
     });
     (value, next)
@@ -263,9 +266,10 @@ pub fn long_jobs(stations: &[(String, Option<String>, Vec<Value>)], c: Clock) ->
         jobs.iter().filter(|j| !is_watch(j) && c.now - ms_of(j, "startedAt").unwrap_or(c.now) >= LONG).map(move |j| {
             let mut job = shown(j, c);
             let chat = j.get("chat").filter(|c| c.is_object());
-            let title = chat.map(|c| str_of(c, "title")).filter(|t| !t.is_empty()).unwrap_or(if chat.is_some() { "对话" } else { "不在任何对话里" });
+            let title = chat.map(|c| str_of(c, "title")).filter(|t| !t.is_empty()).map_or_else(|| t!(if chat.is_some() { "core-logic.jobs.where.chat" } else { "core-logic.jobs.where.none" }), str::to_string);
             let archived = chat.and_then(|c| c.get("archived")).and_then(Value::as_bool) == Some(true);
-            let place: Vec<&str> = [name.as_deref(), Some(title), archived.then_some("已归档")].into_iter().flatten().collect();
+            let archived = archived.then(|| t!("core-logic.jobs.where.archived"));
+            let place: Vec<&str> = [name.as_deref(), Some(title.as_str()), archived.as_deref()].into_iter().flatten().collect();
             job["station"] = json!(address);
             job["stationName"] = json!(name);
             job["whereText"] = json!(place.join(" · "));
@@ -273,9 +277,9 @@ pub fn long_jobs(stations: &[(String, Option<String>, Vec<Value>)], c: Clock) ->
         })
     }).collect();
     long.sort_by(|a, b| ms_of(a, "startedAt").unwrap_or(0.0).total_cmp(&ms_of(b, "startedAt").unwrap_or(0.0)));
-    let groups: Vec<Value> = [("services", "开了很久的网页服务", true), ("jobs", "一直在跑的后台任务", false)].iter().filter_map(|(key, head, service)| {
+    let groups: Vec<Value> = [("services", "core-logic.jobs.long.services", true), ("jobs", "core-logic.jobs.long.jobs", false)].iter().filter_map(|(key, head, service)| {
         let list: Vec<&Value> = long.iter().filter(|j| is_service(j) == *service).collect();
-        (!list.is_empty()).then(|| json!({ "key": key, "head": format!("{head} · {}", list.len()), "jobs": list }))
+        (!list.is_empty()).then(|| json!({ "key": key, "head": format!("{} · {}", t!(head), list.len()), "jobs": list }))
     }).collect();
     json!({ "groups": groups })
 }
@@ -291,7 +295,7 @@ pub fn log(value: &mut Value, c: Clock) {
         value["last"] = json!(last);
     }
     if at.is_some() || !last.is_empty() {
-        value["said"] = json!(format!("最后输出{}", at.map(|at| format!(" · {}", ago(at, c.now))).unwrap_or_default()));
+        value["said"] = json!(at.map_or_else(|| t!("core-logic.jobs.output"), |at| t!("core-logic.jobs.output_at", ago = ago(at, c.now))));
     }
 }
 

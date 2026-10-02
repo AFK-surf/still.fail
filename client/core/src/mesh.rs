@@ -27,6 +27,7 @@ use futures::{FutureExt, pin_mut};
 use iroh::endpoint::{ConnectOptions, ConnectionError, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint, EndpointAddr, PublicKey, RelayMode, RelayUrl, SecretKey};
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 use sha2::{Digest, Sha256};
 
 use crate::cloud::Credential;
@@ -73,7 +74,9 @@ pub const NET_DAY_KEY: &str = "net-day";
 pub const TALLY_EVERY_MS: u64 = 60_000;
 const QUICKER_MS: f64 = 30.0;
 const QUICKER_SHARE: f64 = 0.2;
-const NO_ANSWER: &str = "连不上这台 station：没有回应";
+fn no_answer() -> String {
+    t!("core-logic.mesh.no_answer")
+}
 
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD: usize = 64 * 1024;
@@ -450,7 +453,7 @@ impl Mesh {
                     }
                 }
                 Err(error) => {
-                    if error.message == NO_ANSWER {
+                    if error.message == no_answer() {
                         stuck.set(true);
                     }
                     span.fail();
@@ -493,7 +496,7 @@ impl Mesh {
     /// over), the endpoint is rebound with it and open links are closed (they
     /// reopen under the new id). The same key again changes nothing.
     pub async fn migrate(&self, secret: Vec<u8>) -> Result<()> {
-        let secret: [u8; 32] = secret.try_into().map_err(|_| CoreError::invalid("设备密钥应为 32 字节"))?;
+        let secret: [u8; 32] = secret.try_into().map_err(|_| CoreError::invalid(t!("core-logic.mesh.bad_device_key")))?;
         if self.host.storage_get(DEVICE_KEY).await?.as_deref() == Some(&secret[..]) {
             return Ok(());
         }
@@ -539,7 +542,7 @@ impl Mesh {
         if self.measured(station_id).is_some_and(|m| m.measuring) {
             return Ok(());
         }
-        let link = self.current(station_id).filter(|link| link.usable()).ok_or_else(|| mesh_error("还没连上这台 station".into()))?;
+        let link = self.current(station_id).filter(|link| link.usable()).ok_or_else(|| mesh_error(t!("core-logic.mesh.not_connected")))?;
         self.quickest(station_id, &link).await;
         Ok(())
     }
@@ -735,7 +738,7 @@ async fn bind_relay(secret: &[u8; 32], relay: &str, relay_only: bool) -> Result<
     let _ = relay_only;
     #[cfg(test)]
     let builder = builder.ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify());
-    builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
+    builder.bind().await.map_err(|e| mesh_error(t!("core-logic.mesh.bind_failed", error = e)))
 }
 
 /// Send a byte on a unidirectional stream and wait for its transport ACK, then read QUIC's RTT estimate.
@@ -907,7 +910,7 @@ async fn bind(secret: &[u8; 32], relays: &[String]) -> Result<Endpoint> {
     // The tests' relays (`tests::relays`) have certificates of their own, and the tests go through them alone.
     #[cfg(test)]
     let builder = if relays.is_empty() { builder } else { builder.clear_ip_transports().ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify()) };
-    builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
+    builder.bind().await.map_err(|e| mesh_error(t!("core-logic.mesh.bind_failed", error = e)))
 }
 
 /// still.fail's relays only, as the station's and the browser's, iroh homing on the nearest (the one inside mainland
@@ -923,7 +926,7 @@ fn relay_mode(relays: &[String]) -> Result<RelayMode> {
 }
 
 fn relay_urls(relays: &[String]) -> Result<Vec<RelayUrl>> {
-    relays.iter().map(|url| url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))).collect()
+    relays.iter().map(|url| url.parse().map_err(|e| mesh_error(t!("core-logic.mesh.bad_relay", error = e)))).collect()
 }
 
 /// Through a relay a round trip is hundreds of milliseconds, and QUIC's default first window
@@ -950,8 +953,8 @@ pub fn transport() -> QuicTransportConfig {
 /// `pinned` names the relay when `endpoint` is the one on it alone (`Mesh::pinned_endpoint`).
 #[allow(clippy::too_many_arguments)]
 async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, station_id: String, credentials: CredentialSource, fresh: bool, pinned: Option<String>) -> Result<Rc<Link>> {
-    let id: [u8; 32] = hex::decode(&station_id).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| CoreError::invalid(format!("station id 不对：{station_id}")))?;
-    let id = PublicKey::from_bytes(&id).map_err(|_| CoreError::invalid(format!("station id 不对：{station_id}")))?;
+    let id: [u8; 32] = hex::decode(&station_id).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| CoreError::invalid(t!("core-logic.mesh.bad_station_id", id = station_id)))?;
+    let id = PublicKey::from_bytes(&id).map_err(|_| CoreError::invalid(t!("core-logic.mesh.bad_station_id", id = station_id)))?;
     let device = hex::encode(endpoint.id().as_bytes());
     let connecting = async {
         // No waiting for our own relay link: the endpoint came up as soon as the relay was known (Core warms it),
@@ -964,8 +967,8 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, stati
             addr = addr.with_relay_url(relay);
         }
         let options = ConnectOptions::new().with_additional_alpns(vec![FORMER_ALPN.to_vec()]);
-        let connecting = endpoint.connect_with_opts(addr, ALPN, options).await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))?;
-        connecting.await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))
+        let connecting = endpoint.connect_with_opts(addr, ALPN, options).await.map_err(|e| mesh_error(t!("core-logic.mesh.unreachable", error = e)))?;
+        connecting.await.map_err(|e| mesh_error(t!("core-logic.mesh.unreachable", error = e)))
     };
     // A station that is not there is never said to be gone (a relay drops what is sent to someone not on it): the
     // try gives up after CONNECT_TIMEOUT_MS rather than QUIC's idle 30 s, so it is known to be down soon.
@@ -975,7 +978,7 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, stati
             pin_mut!(connecting);
             match futures::future::select(connecting, timeout).await {
                 Either::Left((connected, _)) => connected,
-                Either::Right(_) => Err(mesh_error(NO_ANSWER.into())),
+                Either::Right(_) => Err(mesh_error(no_answer())),
             }
         }
     };
@@ -988,7 +991,7 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relays: Vec<String>, stati
             return Err(error);
         }
     };
-    let (send, recv) = conn.open_bi().await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))?;
+    let (send, recv) = conn.open_bi().await.map_err(|e| mesh_error(t!("core-logic.mesh.unreachable", error = e)))?;
     let mut control = Control { send, recv, carry: Vec::new() };
     control.send(&credential.credential).await?;
     let link = Rc::new(Link {
@@ -1062,16 +1065,16 @@ impl Control {
 
     async fn send(&mut self, credential: &str) -> Result<()> {
         let line = format!("{}\n", json!({ "credential": credential }));
-        self.send.write_all(line.as_bytes()).await.map_err(|e| mesh_error(format!("授权没送到 station：{e}")))
+        self.send.write_all(line.as_bytes()).await.map_err(|e| mesh_error(t!("core-logic.mesh.credential_unsent", error = e)))
     }
 
     /// The station's answer to the credential last sent; fails if it refused.
     async fn answer(&mut self) -> Result<Value> {
-        let answer = read_line(&mut self.recv, &mut self.carry).await?.ok_or_else(|| mesh_error("station 关闭了授权通道".into()))?;
-        let answer: Value = serde_json::from_str(&answer).map_err(|e| mesh_error(format!("station 的授权答复看不懂：{e}")))?;
+        let answer = read_line(&mut self.recv, &mut self.carry).await?.ok_or_else(|| mesh_error(t!("core-logic.mesh.credential_closed")))?;
+        let answer: Value = serde_json::from_str(&answer).map_err(|e| mesh_error(t!("core-logic.mesh.credential_unreadable", error = e)))?;
         if let Some(error) = answer.get("error") {
             let reason = error.as_str().map(str::to_string).unwrap_or_else(|| error.to_string());
-            return Err(CoreError::new("credential_refused", format!("station 拒绝了授权：{reason}")));
+            return Err(CoreError::new("credential_refused", t!("core-logic.mesh.credential_refused_why", reason = reason)));
         }
         Ok(answer)
     }
@@ -1085,13 +1088,13 @@ pub(crate) async fn read_line(recv: &mut RecvStream, carry: &mut Vec<u8>) -> Res
             return Ok(Some(String::from_utf8_lossy(&line[..line.len() - 1]).into_owned()));
         }
         if carry.len() > MAX_HEAD {
-            return Err(mesh_error("station 发来的头部太长".into()));
+            return Err(mesh_error(t!("core-logic.mesh.head_too_long")));
         }
         let mut buf = [0u8; 8192];
-        match recv.read(&mut buf).await.map_err(|e| mesh_error(format!("读取 station 的回复失败：{e}")))? {
+        match recv.read(&mut buf).await.map_err(|e| mesh_error(t!("core-logic.mesh.read_failed", error = e)))? {
             Some(n) => carry.extend_from_slice(&buf[..n]),
             None if carry.is_empty() => return Ok(None),
-            None => return Err(mesh_error("station 的回复在一行中间断了".into())),
+            None => return Err(mesh_error(t!("core-logic.mesh.reply_cut"))),
         }
     }
 }
@@ -1124,7 +1127,7 @@ impl Link {
     }
 
     async fn send_request(&self, head: RequestHead, body: Vec<u8>) -> Result<Reply> {
-        let sent = |e: &dyn std::fmt::Display| mesh_error(format!("请求没送到 station：{e}"));
+        let sent = |e: &dyn std::fmt::Display| mesh_error(t!("core-logic.mesh.request_unsent", error = e));
         let (mut send, mut recv) = self.conn.open_bi().await.map_err(|e| sent(&e))?;
         let headers: serde_json::Map<String, Value> = head.headers.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
         let line = format!("{}\n", json!({ "method": head.method, "path": head.path, "headers": headers }));
@@ -1134,9 +1137,9 @@ impl Link {
         }
         send.finish().map_err(|e| sent(&e))?;
         let mut carry = Vec::new();
-        let line = read_line(&mut recv, &mut carry).await?.ok_or_else(|| mesh_error("station 没有回应".into()))?;
-        let reply: Value = serde_json::from_str(&line).map_err(|e| mesh_error(format!("station 的回复看不懂：{e}")))?;
-        let status = reply["status"].as_u64().and_then(|s| u16::try_from(s).ok()).ok_or_else(|| mesh_error("station 的回复没有状态码".into()))?;
+        let line = read_line(&mut recv, &mut carry).await?.ok_or_else(|| mesh_error(t!("core-logic.mesh.no_reply")))?;
+        let reply: Value = serde_json::from_str(&line).map_err(|e| mesh_error(t!("core-logic.mesh.reply_unreadable", error = e)))?;
+        let status = reply["status"].as_u64().and_then(|s| u16::try_from(s).ok()).ok_or_else(|| mesh_error(t!("core-logic.mesh.reply_no_status")))?;
         let headers = match &reply["headers"] {
             Value::Object(map) => map.iter().map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))).collect(),
             _ => Vec::new(),
@@ -1148,15 +1151,15 @@ impl Link {
     /// the stream stays open both ways. Answers the station's reply (101 once the service took it; its body then the
     /// service's frames) and the half the client's frames go out on.
     pub async fn socket(&self, head: RequestHead) -> Result<(Reply, SocketSend)> {
-        let sent = |e: &dyn std::fmt::Display| mesh_error(format!("请求没送到 station：{e}"));
+        let sent = |e: &dyn std::fmt::Display| mesh_error(t!("core-logic.mesh.request_unsent", error = e));
         let (mut send, mut recv) = self.conn.open_bi().await.map_err(|e| sent(&e))?;
         let headers: serde_json::Map<String, Value> = head.headers.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
         let line = format!("{}\n", json!({ "method": head.method, "path": head.path, "headers": headers, "socket": true }));
         send.write_all(line.as_bytes()).await.map_err(|e| sent(&e))?;
         let mut carry = Vec::new();
-        let line = read_line(&mut recv, &mut carry).await?.ok_or_else(|| mesh_error("station 没有回应".into()))?;
-        let reply: Value = serde_json::from_str(&line).map_err(|e| mesh_error(format!("station 的回复看不懂：{e}")))?;
-        let status = reply["status"].as_u64().and_then(|s| u16::try_from(s).ok()).ok_or_else(|| mesh_error("station 的回复没有状态码".into()))?;
+        let line = read_line(&mut recv, &mut carry).await?.ok_or_else(|| mesh_error(t!("core-logic.mesh.no_reply")))?;
+        let reply: Value = serde_json::from_str(&line).map_err(|e| mesh_error(t!("core-logic.mesh.reply_unreadable", error = e)))?;
+        let status = reply["status"].as_u64().and_then(|s| u16::try_from(s).ok()).ok_or_else(|| mesh_error(t!("core-logic.mesh.reply_no_status")))?;
         let headers = match &reply["headers"] {
             Value::Object(map) => map.iter().map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))).collect(),
             _ => Vec::new(),
@@ -1284,15 +1287,15 @@ pub struct LinkNet {
 fn close_message(reason: &ConnectionError) -> String {
     match reason {
         ConnectionError::ApplicationClosed(close) => match &close.reason[..] {
-            b"credential_refused" => "station 拒绝了授权".into(),
-            b"credential_revoked" => "授权已被撤销".into(),
-            b"credential_expired" => "授权已过期".into(),
-            b"station_removed" => "这台 station 已被移出 workspace".into(),
-            other => format!("station 断开了连接：{}", String::from_utf8_lossy(other)),
+            b"credential_refused" => t!("core-logic.mesh.credential_refused"),
+            b"credential_revoked" => t!("core-logic.mesh.credential_revoked"),
+            b"credential_expired" => t!("core-logic.mesh.credential_expired"),
+            b"station_removed" => t!("core-logic.mesh.station_removed"),
+            other => t!("core-logic.mesh.closed_by_station", reason = String::from_utf8_lossy(other)),
         },
-        ConnectionError::LocallyClosed => "连接已关闭".into(),
-        ConnectionError::TimedOut => "连接超时".into(),
-        other => format!("连接断开：{other}"),
+        ConnectionError::LocallyClosed => t!("core-logic.mesh.closed"),
+        ConnectionError::TimedOut => t!("core-logic.mesh.timed_out"),
+        other => t!("core-logic.mesh.lost", error = other),
     }
 }
 
@@ -1301,7 +1304,7 @@ pub struct SocketSend(SendStream);
 
 impl SocketSend {
     pub async fn write(&mut self, bytes: &[u8]) -> Result<()> {
-        self.0.write_all(bytes).await.map_err(|e| mesh_error(format!("没送到 station：{e}")))
+        self.0.write_all(bytes).await.map_err(|e| mesh_error(t!("core-logic.mesh.unsent", error = e)))
     }
 
     /// No more frames: the stream ends on this side.
@@ -1340,7 +1343,7 @@ impl Reply {
             }
             Err(e) => {
                 self.done = true;
-                Some(Err(mesh_error(format!("读取 station 的回复失败：{e}"))))
+                Some(Err(mesh_error(t!("core-logic.mesh.read_failed", error = e))))
             }
         }
     }
@@ -1856,7 +1859,7 @@ mod tests {
             let before = mesh.endpoint().bound_sockets();
             let device = mesh.device_id();
             let error = mesh.link(&station.id(), grants("ok", Rc::default())).await.err().unwrap();
-            assert_eq!(error.message, NO_ANSWER);
+            assert_eq!(error.message, no_answer());
             let link = mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
             assert_eq!(link.request(head("/admin/api/overview"), Vec::new()).await.unwrap().status, 200);
             // Another endpoint (other sockets), the same device.

@@ -18,6 +18,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use futures::future::{FutureExt, LocalBoxFuture, Shared};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 use sha2::{Digest, Sha256};
 
 use crate::error::{CoreError, Result};
@@ -159,16 +160,16 @@ impl Accounts {
         let _ = self.host.storage_delete(LOGIN_KEY).await;
         if let Some(error) = param("error").filter(|e| !e.is_empty()) {
             return Err(if error == "login_cancelled" {
-                CoreError::new("login_cancelled", "登录已取消")
+                CoreError::new("login_cancelled", t!("core-logic.accounts.login.cancelled"))
             } else {
-                CoreError::new("login_failed", "Google 登录没有成功")
+                CoreError::new("login_failed", t!("core-logic.accounts.login.failed"))
             });
         }
         let pending = match pending {
             Some(p) if param("state") == Some(p.state.as_str()) => p,
-            _ => return Err(CoreError::new("login_state_mismatch", "登录状态不匹配，请重新登录")),
+            _ => return Err(CoreError::new("login_state_mismatch", t!("core-logic.accounts.login.state_mismatch"))),
         };
-        let expired = || CoreError::new("login_expired", "登录凭证已失效，请重新登录");
+        let expired = || CoreError::new("login_expired", t!("core-logic.accounts.login.expired"));
         let body = json!({ "code": param("code"), "code_verifier": pending.verifier, "redirect_uri": pending.redirect_uri });
         let response = self.post("/v1/auth/token", None, body).await.map_err(|_| expired())?;
         if !ok(&response) {
@@ -198,7 +199,7 @@ impl Accounts {
     pub async fn access_token(&self, sub: &str) -> Result<String> {
         let now = self.host.now_ms() / 1000.0;
         match self.get(sub) {
-            None => return Err(CoreError::signed_out("这个账号已退出")),
+            None => return Err(CoreError::signed_out(t!("core-logic.accounts.signed_out"))),
             Some(a) if a.access_expires - 60.0 > now => return Ok(a.access),
             Some(_) => {}
         }
@@ -209,7 +210,7 @@ impl Accounts {
                 let me = self.me.clone();
                 let owned = sub.to_string();
                 let refresh = async move {
-                    let this = me.upgrade().ok_or_else(|| CoreError::signed_out("这个账号已退出"))?;
+                    let this = me.upgrade().ok_or_else(|| CoreError::signed_out(t!("core-logic.accounts.signed_out")))?;
                     let result = this.refresh(&owned).await;
                     this.refreshing.borrow_mut().remove(&owned);
                     result
@@ -234,12 +235,12 @@ impl Accounts {
     /// Accepts the parsed array or the raw JSON string. An account already here is replaced only by a newer session.
     pub async fn migrate(&self, accounts: Value) -> Result<()> {
         let accounts = match accounts {
-            Value::String(text) => serde_json::from_str(&text).map_err(|_| CoreError::invalid("accounts 不是有效的 JSON"))?,
+            Value::String(text) => serde_json::from_str(&text).map_err(|_| CoreError::invalid(t!("core-logic.accounts.invalid_json")))?,
             Value::Null => return Ok(()),
             other => other,
         };
         let Value::Array(items) = accounts else {
-            return Err(CoreError::invalid("accounts 应该是一个数组"));
+            return Err(CoreError::invalid(t!("core-logic.accounts.not_array")));
         };
         let mut changed = false;
         {
@@ -293,18 +294,18 @@ impl Accounts {
         if let Some(access) = self.adopt_stored(sub).await {
             return Ok(access);
         }
-        let account = self.get(sub).ok_or_else(|| CoreError::signed_out("这个账号已退出"))?;
+        let account = self.get(sub).ok_or_else(|| CoreError::signed_out(t!("core-logic.accounts.signed_out")))?;
         let body = json!({ "request_id": ulid(self.host.as_ref()) });
         let response = self.post("/v1/auth/refresh", Some(&account.refresh), body).await?;
         if response.status == 401 {
             let _ = self.forget(sub).await;
-            return Err(CoreError::signed_out(format!("{} 的登录已过期，请重新登录", account.email)).with_status(401));
+            return Err(CoreError::signed_out(t!("core-logic.accounts.session_expired", email = account.email)).with_status(401));
         }
         if !ok(&response) {
-            return Err(CoreError::new("refresh_failed", format!("刷新登录失败（{}）", response.status)).with_status(response.status));
+            return Err(CoreError::new("refresh_failed", t!("core-logic.accounts.refresh_failed", status = response.status)).with_status(response.status));
         }
         let tokens: Tokens = serde_json::from_slice(&response.body)
-            .map_err(|_| CoreError::new("refresh_failed", "刷新登录失败（回复无法解析）"))?;
+            .map_err(|_| CoreError::new("refresh_failed", t!("core-logic.accounts.refresh_unreadable")))?;
         let name = tokens.name.filter(|n| !n.is_empty()).unwrap_or(account.name.clone());
         let access = tokens.access_token.clone();
         // The new tokens are good even if they cannot be written down.

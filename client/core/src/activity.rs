@@ -7,6 +7,7 @@
 //! words changed (the rate ticking).
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 /// A tool's name without its MCP prefix.
 pub fn tool_name(tool: &str) -> &str {
@@ -27,16 +28,10 @@ pub fn kind_of(tool: &str) -> &'static str {
     }
 }
 
-fn verb(kind: &str) -> &'static str {
+fn verb(kind: &str) -> String {
     match kind {
-        "read" => "读取",
-        "search" => "搜索",
-        "edit" => "编辑",
-        "command" => "运行",
-        "web" => "访问",
-        "agent" => "派出子 agent",
-        "thread" => "查看对话",
-        _ => "执行操作",
+        "read" | "search" | "edit" | "command" | "web" | "agent" | "thread" => t!(&format!("core-logic.activity.verb.{kind}")),
+        _ => t!("core-logic.activity.verb.other"),
     }
 }
 
@@ -87,7 +82,7 @@ pub fn call_text(tool: &str, input: &str) -> String {
         .filter(|t| !t.is_empty());
     let what = match target {
         Some(t) => format!("{} {}", verb(kind), t.chars().take(80).collect::<String>()),
-        None => verb(kind).to_string(),
+        None => verb(kind),
     };
     if kind == "other" && tool_name(tool) != "" { format!("{} {}", verb(kind), tool_name(tool)) } else { what }
 }
@@ -145,17 +140,18 @@ pub fn present(live: &Value) -> Value {
     let (key, text) = if let Some((id, text)) = call {
         (id, text)
     } else if replying {
-        ("reply".to_string(), if rate > 0 { format!("正在回复 · ≈ {rate} token/s") } else { "正在回复".to_string() })
+        ("reply".to_string(), if rate > 0 { format!("{} · ≈ {rate} token/s", t!("core-logic.activity.replying")) } else { t!("core-logic.activity.replying") })
     } else {
         let (key, text) = match phase {
-            _ if thinking => ("think", "思考中"),
-            "starting" => ("starting", "正在启动"),
-            "requesting" => ("requesting", "请求中"),
-            "thinking" => ("think", "思考中"),
-            "responding" => ("write", "输出中"),
-            _ => ("busy", "处理中"),
+            _ if thinking => ("think", "core-logic.activity.thinking"),
+            "starting" => ("starting", "core-logic.activity.starting"),
+            "requesting" => ("requesting", "core-logic.activity.requesting"),
+            "thinking" => ("think", "core-logic.activity.thinking"),
+            "responding" => ("write", "core-logic.activity.writing"),
+            _ => ("busy", "core-logic.activity.busy"),
         };
-        (key.to_string(), if rate > 0 { format!("{text} · ≈ {rate} token/s") } else { text.to_string() })
+        let text = t!(text);
+        (key.to_string(), if rate > 0 { format!("{text} · ≈ {rate} token/s") } else { text })
     };
     json!({ "now": { "key": key, "text": text } })
 }

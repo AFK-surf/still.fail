@@ -5,6 +5,7 @@
 //! the same workspace; one whose link is gone, or is another workspace's, stays as written.
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::data::Data;
 
@@ -24,7 +25,7 @@ pub fn title(title: &str) -> String {
     let words = plain.split_whitespace().collect::<Vec<_>>().join(" ");
     let chars: Vec<char> = words.chars().collect();
     let shown = if chars.len() > TITLE { format!("{}…", chars[..TITLE].iter().collect::<String>().trim_end()) } else { words };
-    if shown.is_empty() { "对话".into() } else { shown }
+    if shown.is_empty() { t!("core-logic.refs.untitled") } else { shown }
 }
 
 /// A chat's page: under `base` (still.fail cloud), its station's pages, then the chat.

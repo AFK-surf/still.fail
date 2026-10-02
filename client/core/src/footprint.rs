@@ -3,6 +3,7 @@
 //! choice the pages run as they are told: the questions to ask in turn (deleting is asked twice), then the call.
 
 use serde_json::{Value, json};
+use stillfail_i18n::t;
 
 use crate::brand;
 use crate::format;
@@ -11,27 +12,23 @@ use crate::present::Clock;
 const DAY: f64 = 86_400_000.0;
 
 /// What each part of the data directory is, and its colour.
-fn part(id: &str) -> (&'static str, &'static str, &'static str) {
-    match id {
-        "chats" => ("chat 工作区", "每个 chat 的文件、worktree、截图", "chart-1"),
-        "transcripts" => ("对话记录", "agent 的完整记录，chat 接着聊要用", "chart-2"),
-        "homes" => ("Profile", "各个 profile 的配置和缓存", "chart-3"),
-        "archive" => ("归档", "已归档 chat 的记录副本（压缩）", "chart-4"),
-        "repos" => ("仓库缓存", "agent 共用的仓库克隆", "chart-5"),
-        _ => ("其它", "数据库、日志、缩略图、上传的文件", "chart-6"),
-    }
+fn part(id: &str) -> (String, String, &'static str) {
+    let (id, tone) = match id {
+        "chats" => ("chats", "chart-1"),
+        "transcripts" => ("transcripts", "chart-2"),
+        "homes" => ("homes", "chart-3"),
+        "archive" => ("archive", "chart-4"),
+        "repos" => ("repos", "chart-5"),
+        _ => ("other", "chart-6"),
+    };
+    (t!(&format!("core-logic.footprint.part.{id}")), t!(&format!("core-logic.footprint.part.{id}.note")), tone)
 }
 
 /// Places beside the data directory.
-fn elsewhere(id: &str) -> &'static str {
+fn elsewhere(id: &str) -> String {
     match id {
-        "claude" => "本机的 Claude Code",
-        "codex" => "本机的 Codex",
-        "playwright" => "Playwright 浏览器",
-        "pnpm" => "pnpm 包缓存",
-        "npm" => "npm 缓存",
-        "cargo" => "Cargo 包缓存",
-        _ => "其它",
+        "claude" | "codex" | "playwright" | "pnpm" | "npm" | "cargo" => t!(&format!("core-logic.footprint.elsewhere.{id}")),
+        _ => t!("core-logic.footprint.part.other"),
     }
 }
 
@@ -59,12 +56,12 @@ fn choice(label: String, call: &str, keys: Vec<Value>, confirms: Vec<Value>, don
 fn delete_confirms(what: &str, count: usize, bytes: f64) -> Vec<Value> {
     vec![
         confirm(
-            format!("删除{what}？"),
-            format!("{count} 个 chat 的工作区、对话记录和归档副本都会删掉，约 {}。删掉的 chat 不能再取消归档。", size(bytes)),
-            "继续",
+            t!("core-logic.footprint.delete.title", what = what),
+            t!("core-logic.footprint.delete.text", n = count, size = size(bytes)),
+            &t!("core-logic.footprint.continue"),
             true,
         ),
-        confirm("再确认一次".into(), format!("删除后找不回来。确定删除这 {count} 个 chat？"), &format!("删除 {count} 个 chat"), true),
+        confirm(t!("core-logic.footprint.confirm_again"), t!("core-logic.footprint.delete.again", n = count), &t!("core-logic.footprint.delete.action", n = count), true),
     ]
 }
 
@@ -72,7 +69,7 @@ fn delete_confirms(what: &str, count: usize, bytes: f64) -> Vec<Value> {
 pub fn brief(u: &mut Value) {
     let text = match u.get("bytes").and_then(Value::as_f64) {
         Some(bytes) => size(bytes),
-        None => "正在统计…".into(),
+        None => t!("core-logic.footprint.measuring"),
     };
     u["text"] = json!(text);
 }
@@ -83,9 +80,9 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
     let scanning = raw.get("scanning").and_then(Value::as_bool).unwrap_or(false);
     let manage = raw.get("manage").and_then(Value::as_bool).unwrap_or(false);
     let checked_text = match (checked, scanning) {
-        (None, _) => "正在统计，第一次要一两分钟…".to_string(),
-        (Some(_), true) => "正在重新统计…".to_string(),
-        (Some(at), false) => format!("{}统计", format::relative_time(at, c.now, c.offset_min)),
+        (None, _) => t!("core-logic.footprint.measuring_first"),
+        (Some(_), true) => t!("core-logic.footprint.measuring_again"),
+        (Some(at), false) => t!("core-logic.footprint.measured", when = format::relative_time(at, c.now, c.offset_min)),
     };
     let parts: Vec<&Value> = raw.get("parts").and_then(Value::as_array).map(|a| a.iter().collect()).unwrap_or_default();
     let total: f64 = parts.iter().map(|p| n(p, "bytes")).sum();
@@ -103,8 +100,8 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
     let free_level = if free_share < 0.1 { "red" } else if free_share < 0.2 { "amber" } else { "ok" };
     let legend = vec![
         json!({ "text": format!("{name} {}", size(total)), "tone": "chart-1", "level": "ok" }),
-        json!({ "text": format!("系统和其它 {}", size(rest)), "tone": "rest", "level": "ok" }),
-        json!({ "text": format!("剩 {} / {}", size(disk_free), size(disk_total)), "tone": "", "level": free_level }),
+        json!({ "text": t!("core-logic.footprint.legend.rest", size = size(rest)), "tone": "rest", "level": "ok" }),
+        json!({ "text": t!("core-logic.footprint.legend.free", free = size(disk_free), total = size(disk_total)), "tone": "", "level": free_level }),
     ];
     let chats: Vec<&Value> = raw.get("chats").and_then(Value::as_array).map(|a| a.iter().collect()).unwrap_or_default();
     let chat_bytes: f64 = parts.iter().find(|p| p.get("id").and_then(Value::as_str) == Some("chats")).map(|p| n(p, "bytes")).unwrap_or(0.0);
@@ -112,7 +109,7 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
     let parts_shown: Vec<Value> = parts.iter().filter(|p| n(p, "bytes") > 0.0).map(|p| {
         let id = p.get("id").and_then(Value::as_str).unwrap_or("");
         let (label, note, tone) = part(id);
-        let note = if id == "chats" { format!("{} 个 chat：{note}", chats.len()) } else { note.to_string() };
+        let note = if id == "chats" { t!("core-logic.footprint.part.chats.count", n = chats.len(), note = note) } else { note };
         json!({ "id": id, "label": label, "note": note, "text": size(n(p, "bytes")), "tone": tone, "opens": id == "chats" && !chats.is_empty() })
     }).collect();
     let elsewhere_shown: Vec<Value> = raw.get("elsewhere").and_then(Value::as_array).into_iter().flatten().map(|e| {
@@ -131,15 +128,12 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
     let mut actions = vec![];
     if manage && checked.is_some() {
         if rebuild_bytes > 0.0 {
-            let text = format!(
-                "删掉 {} 个 chat 工作区里的 node_modules、Rust 的 target、Gradle 的 build 等，共 {}。代码和提交不受影响，agent 下次要用时会重新安装或编译。正在干活的 chat 不动。",
-                rebuildable.len(),
-                size(rebuild_bytes)
-            );
+            let text = t!("core-logic.footprint.rebuild.text", n = rebuildable.len(), size = size(rebuild_bytes));
+            let clean = t!("core-logic.footprint.clean");
             actions.push(json!({
-                "id": "rebuild", "title": format!("可重建的文件 {}", size(rebuild_bytes)),
-                "note": "依赖和编译产物，需要时 agent 会重新装", "action": "清理", "danger": false, "pick": null,
-                "choices": [choice("全部".into(), "footprint.rebuild", keys(&rebuildable), vec![confirm("清理可重建的文件？".into(), text, "清理", false)], "已清理")],
+                "id": "rebuild", "title": t!("core-logic.footprint.rebuild.title", size = size(rebuild_bytes)),
+                "note": t!("core-logic.footprint.rebuild.note"), "action": clean, "danger": false, "pick": null,
+                "choices": [choice(t!("core-logic.footprint.all"), "footprint.rebuild", keys(&rebuildable), vec![confirm(t!("core-logic.footprint.rebuild.confirm"), text, &clean, false)], &t!("core-logic.footprint.cleaned"))],
             }));
         }
         if !archived.is_empty() {
@@ -153,34 +147,35 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
                 counts.push(old.len());
                 let bytes: f64 = old.iter().map(|r| n(r, "bytes")).sum();
                 let (label, what) = if days == 0 {
-                    (format!("全部 {} 个 · {}", old.len(), size(bytes)), "全部已归档的 chat".to_string())
+                    (t!("core-logic.footprint.archived.all", n = old.len(), size = size(bytes)), t!("core-logic.footprint.archived.all.what"))
                 } else {
-                    (format!("{days} 天没用过的 {} 个 · {}", old.len(), size(bytes)), format!("{days} 天没用过的已归档 chat"))
+                    (t!("core-logic.footprint.archived.unused", days = days, n = old.len(), size = size(bytes)), t!("core-logic.footprint.archived.unused.what", days = days))
                 };
-                choices.push(choice(label, "footprint.delete", keys(&old), delete_confirms(&what, old.len(), bytes), "已删除"));
+                choices.push(choice(label, "footprint.delete", keys(&old), delete_confirms(&what, old.len(), bytes), &t!("core-logic.footprint.deleted")));
             }
             let bytes: f64 = archived.iter().map(|r| n(r, "bytes")).sum();
             actions.push(json!({
-                "id": "archived", "title": format!("已归档的 chat {} 个 · {}", archived.len(), size(bytes)),
-                "note": "连同工作区和记录一起删除，不能恢复", "action": "删除…", "danger": true,
-                "pick": "删除哪些已归档的 chat？", "choices": choices,
+                "id": "archived", "title": t!("core-logic.footprint.archived.title", n = archived.len(), size = size(bytes)),
+                "note": t!("core-logic.footprint.archived.note"), "action": t!("core-logic.footprint.archived.action"), "danger": true,
+                "pick": t!("core-logic.footprint.archived.pick"), "choices": choices,
             }));
         }
         if !warm.is_empty() {
-            let text = format!("释放约 {} 内存。chat 不受影响，下次发消息时会重新启动并接着之前的对话，第一条回复会慢几秒。", size(warm_bytes));
+            let text = t!("core-logic.footprint.idle.text", size = size(warm_bytes));
+            let end = t!("core-logic.footprint.end");
             actions.push(json!({
-                "id": "idle", "title": format!("空闲的 agent 进程 {} 个 · {}", warm.len(), size(warm_bytes)),
-                "note": "结束进程释放内存，下次发消息时再接着", "action": "结束", "danger": false, "pick": null,
-                "choices": [choice("全部".into(), "footprint.evict", keys(&warm), vec![confirm(format!("结束 {} 个空闲进程？", warm.len()), text, "结束", false)], "已结束空闲进程")],
+                "id": "idle", "title": t!("core-logic.footprint.idle.title", n = warm.len(), size = size(warm_bytes)),
+                "note": t!("core-logic.footprint.idle.note"), "action": end, "danger": false, "pick": null,
+                "choices": [choice(t!("core-logic.footprint.all"), "footprint.evict", keys(&warm), vec![confirm(t!("core-logic.footprint.idle.confirm", n = warm.len()), text, &end, false)], &t!("core-logic.footprint.idle.ended"))],
             }));
         }
     }
     let actions_note = if checked.is_none() {
         None
     } else if !manage {
-        Some("只有 workspace 的 owner 和管理员能清理".to_string())
+        Some(t!("core-logic.footprint.actions.not_allowed"))
     } else if actions.is_empty() {
-        Some("没有可以清理的".to_string())
+        Some(t!("core-logic.footprint.actions.none"))
     } else {
         None
     };
@@ -188,41 +183,42 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
     // Each chat: its size, and what can be done with it.
     let chats_shown: Vec<Value> = chats.iter().map(|r| {
         let chat = r.get("chat").cloned().unwrap_or(Value::Null);
-        let title = chat.get("title").and_then(Value::as_str).filter(|t| !t.is_empty()).unwrap_or("未命名的 chat").to_string();
+        let title = chat.get("title").and_then(Value::as_str).filter(|t| !t.is_empty()).map_or_else(|| t!("core-logic.footprint.untitled"), str::to_string);
         let archived = r.get("archived").and_then(Value::as_bool).unwrap_or(false);
         let running = r.get("state").and_then(Value::as_str) == Some("running");
         let rebuild = n(r, "rebuildBytes");
         let last = n(r, "lastActiveAt");
         let mut note = vec![];
         if running {
-            note.push("正在干活".to_string());
+            note.push(t!("core-logic.footprint.working"));
         } else if last > 0.0 {
-            note.push(format!("{}用过", format::relative_time(last, c.now, c.offset_min)));
+            note.push(t!("core-logic.footprint.used", when = format::relative_time(last, c.now, c.offset_min)));
         }
         if rebuild > 0.0 {
-            note.push(format!("可重建 {}", size(rebuild)));
+            note.push(t!("core-logic.footprint.chat.rebuildable", size = size(rebuild)));
         }
         let key = r.get("key").cloned().unwrap_or(Value::Null);
         let mut choices = vec![];
         if manage && rebuild > 0.0 && !running {
             choices.push(choice(
-                format!("清理可重建的文件 · {}", size(rebuild)),
+                t!("core-logic.footprint.chat.rebuild", size = size(rebuild)),
                 "footprint.rebuild",
                 vec![key.clone()],
-                vec![confirm(format!("清理「{title}」里可重建的文件？"), format!("删掉 node_modules、编译产物等，共 {}。代码和提交不受影响。", size(rebuild)), "清理", false)],
-                "已清理",
+                vec![confirm(t!("core-logic.footprint.chat.rebuild.confirm", title = title), t!("core-logic.footprint.chat.rebuild.text", size = size(rebuild)), &t!("core-logic.footprint.clean"), false)],
+                &t!("core-logic.footprint.cleaned"),
             ));
         }
         if manage && archived {
+            let delete = t!("core-logic.footprint.chat.delete");
             choices.push(choice(
-                "删除 chat".into(),
+                delete.clone(),
                 "footprint.delete",
                 vec![key.clone()],
                 vec![
-                    confirm(format!("删除「{title}」？"), format!("这个 chat 的工作区、对话记录和归档副本都会删掉，约 {}。", size(n(r, "bytes"))), "继续", true),
-                    confirm("再确认一次".into(), "删除后找不回来。确定删除？".into(), "删除 chat", true),
+                    confirm(t!("core-logic.footprint.chat.delete.confirm", title = title), t!("core-logic.footprint.chat.delete.text", size = size(n(r, "bytes"))), &t!("core-logic.footprint.continue"), true),
+                    confirm(t!("core-logic.footprint.confirm_again"), t!("core-logic.footprint.chat.delete.again"), &delete, true),
                 ],
-                "已删除",
+                &t!("core-logic.footprint.deleted"),
             ));
         }
         json!({
@@ -231,14 +227,14 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
         })
     }).collect();
     let unseen = raw.get("unseen").cloned().unwrap_or(Value::Null);
-    let unseen_text = (n(&unseen, "count") > 0.0).then(|| format!("还有 {} 个你看不到的 chat · {}", n(&unseen, "count"), size(n(&unseen, "bytes"))));
+    let unseen_text = (n(&unseen, "count") > 0.0).then(|| t!("core-logic.footprint.unseen", n = n(&unseen, "count"), size = size(n(&unseen, "bytes"))));
 
     // Memory: the station, its agents, each agent's process (busiest first).
     let memory = raw.get("memory").cloned().unwrap_or(Value::Null);
     let agents: f64 = processes.iter().map(|p| n(p, "rssBytes")).sum();
     let mut rows = vec![
-        json!({ "label": "station 本身", "text": size(n(&memory, "stationBytes")), "nested": false }),
-        json!({ "label": format!("agent 进程 {} 个", processes.len()), "text": size(agents), "nested": false }),
+        json!({ "label": t!("core-logic.footprint.memory.station"), "text": size(n(&memory, "stationBytes")), "nested": false }),
+        json!({ "label": t!("core-logic.footprint.memory.agents", n = processes.len()), "text": size(agents), "nested": false }),
     ];
     let mut sorted = processes.clone();
     sorted.sort_by(|a, b| n(b, "rssBytes").total_cmp(&n(a, "rssBytes")));
@@ -246,22 +242,22 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
         let chat = p.get("chat").filter(|c| c.is_object());
         let label = match (chat.and_then(|c| c.get("title")).and_then(Value::as_str).filter(|t| !t.is_empty()), p.get("runtime").and_then(Value::as_str)) {
             (Some(title), _) => title.to_string(),
-            (None, Some("codex")) => "Codex（各 chat 共用）".into(),
-            _ => "未命名的 chat".into(),
+            (None, Some("codex")) => t!("core-logic.footprint.memory.codex"),
+            _ => t!("core-logic.footprint.untitled"),
         };
         let state = p.get("state").and_then(Value::as_str);
         let note = match state {
-            Some("running") => Some("正在干活".to_string()),
-            Some("warm") => p.get("lastActiveAt").and_then(Value::as_f64).map(|at| format!("空闲，{}用过", format::relative_time(at, c.now, c.offset_min))),
+            Some("running") => Some(t!("core-logic.footprint.working")),
+            Some("warm") => p.get("lastActiveAt").and_then(Value::as_f64).map(|at| t!("core-logic.footprint.memory.idle", when = format::relative_time(at, c.now, c.offset_min))),
             _ => None,
         };
         let end = (manage && state == Some("warm")).then(|| {
             choice(
-                "结束进程".into(),
+                t!("core-logic.footprint.memory.end"),
                 "footprint.evict",
                 vec![p.get("key").cloned().unwrap_or(Value::Null)],
-                vec![confirm(format!("结束「{label}」的进程？"), format!("释放约 {}，下次发消息时会重新启动。", size(n(p, "rssBytes"))), "结束", false)],
-                "已结束",
+                vec![confirm(t!("core-logic.footprint.memory.end.confirm", label = label), t!("core-logic.footprint.memory.end.text", size = size(n(p, "rssBytes"))), &t!("core-logic.footprint.end"), false)],
+                &t!("core-logic.footprint.ended"),
             )
         });
         rows.push(json!({
@@ -274,19 +270,19 @@ pub fn shown(raw: &Value, c: Clock) -> Value {
         "scanning": scanning,
         "manage": manage,
         "checkedText": checked_text,
-        "lead": format!("{name} 在这台机器上占用"),
+        "lead": t!("core-logic.footprint.lead", name = name),
         "totalText": if checked.is_some() { size(total) } else { "—".into() },
         "bar": if checked.is_some() { bar } else { vec![] },
         "legend": if checked.is_some() { legend } else { vec![] },
         "parts": parts_shown,
         "elsewhere": elsewhere_shown,
-        "elsewhereNote": "agent 也会用到这些，不算在上面的总数里，这里不清理",
+        "elsewhereNote": t!("core-logic.footprint.elsewhere.note"),
         "actions": actions,
         "actionsNote": actions_note,
         "chats": chats_shown,
-        "chatsText": format!("{} 个 chat · {} · 按大小排", chats.len(), size(chat_bytes)),
+        "chatsText": t!("core-logic.footprint.chats", n = chats.len(), size = size(chat_bytes)),
         "unseenText": unseen_text,
-        "memoryTitle": format!("内存 · 共 {}，已用 {}", size(n(&memory, "totalBytes")), size(n(&memory, "usedBytes"))),
+        "memoryTitle": t!("core-logic.footprint.memory.title", total = size(n(&memory, "totalBytes")), used = size(n(&memory, "usedBytes"))),
         "memory": rows,
     })
 }
