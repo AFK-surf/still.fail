@@ -1,9 +1,8 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   // The admin's console: static files only (dist/cloud-admin), on a host of its own; its /v1/ calls are the API's
-  // route (wrangler.jsonc). On its new host and its old one (kept, docs/rename-still-fail.md). The Worker keeps its
-  // name from before the rename (renaming would make a new Worker).
-  "name": "ember-admin",
+  // route (wrangler.jsonc). On its new host and its old one (kept, docs/rename-still-fail.md). The Worker uses its new name; custom domains preserve existing links.
+  "name": "stillfail-admin",
   "compatibility_date": "2026-09-08",
   "workers_dev": false,
   "preview_urls": false,

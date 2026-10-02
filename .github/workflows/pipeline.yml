@@ -216,7 +216,7 @@ jobs:
           node scripts/changelog.ts --stable > "$RUNNER_TEMP/changelog-stable.json"
           cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null
           for name in changelog changelog-stable; do
-            pnpm exec wrangler r2 object put "ember-releases/$name.json" --file "$RUNNER_TEMP/$name.json" --content-type application/json --remote > /dev/null
+            pnpm exec wrangler r2 object put "stillfail-releases/$name.json" --file "$RUNNER_TEMP/$name.json" --content-type application/json --remote > /dev/null
             echo "$name: $(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).length)' "$RUNNER_TEMP/$name.json") entries"
           done
 

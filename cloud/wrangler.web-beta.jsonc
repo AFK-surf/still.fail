@@ -1,11 +1,11 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // still.fail's test channel: the web app's very files (dist/cloud-web, the same build as ember-web's), and src/web.ts
+  // still.fail's test channel: the web app's very files (dist/cloud-web, the same build as stillfail-web's), and src/web.ts
   // ahead of them, on a host of its own. On BETA_ORIGIN's host web.ts says not to index anything and marks each page as
   // the test channel's (web/src/cloud/beta.tsx). The API's paths on this host are routes of the API (wrangler.jsonc),
-  // which lets in only the accounts the admin turned beta on for. A build tried here goes to ember-web unchanged:
+  // which lets in only the accounts the admin turned beta on for. A build tried here goes to stillfail-web unchanged:
   // `python3 deploy.py promote-web <dir>` (deploy.py keeps each one deployed here under <deploy>/builds/<commit>/).
-  "name": "ember-web-beta",
+  "name": "stillfail-web-beta",
   "main": "src/web.ts",
   "compatibility_date": "2026-09-08",
   "workers_dev": false,

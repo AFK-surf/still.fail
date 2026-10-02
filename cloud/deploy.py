@@ -3,10 +3,10 @@
 rename to still.fail, as do their Durable Objects, bucket and secrets: renaming would make new, empty ones):
   api       stillfail-cloud     the API (wrangler.jsonc)
   relay     stillfail-relay     the relay and its container (wrangler.relay.jsonc)
-  web       ember-web       the web app, static (wrangler.web.jsonc): app.still.fail, the stable one
-  web-beta  ember-web-beta  the same build on app.youdid.wtf, the test channel (wrangler.web-beta.jsonc)
-  admin     ember-admin     the admin's console, static (wrangler.admin.jsonc)
-  preview   ember-preview   the preview host, static (wrangler.preview.jsonc)
+  web       stillfail-web       the web app, static (wrangler.web.jsonc): app.still.fail, the stable one
+  web-beta  stillfail-web-beta  the same build on app.youdid.wtf, the test channel (wrangler.web-beta.jsonc)
+  admin     stillfail-admin     the admin's console, static (wrangler.admin.jsonc)
+  preview   stillfail-preview   the preview host, static (wrangler.preview.jsonc)
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
 The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
@@ -247,7 +247,7 @@ def promoted_build(name: str) -> Path:
 
 
 def promote_web(name: str) -> None:
-    """A build already deployed to the test channel to app.still.fail (ember-web), byte for byte: nothing is built."""
+    """A build already deployed to the test channel to app.still.fail (stillfail-web), byte for byte: nothing is built."""
     build = promoted_build(name)
     if not (build / "index.html").exists():
         sys.exit(f"{build} has no index.html: not a build of the web app")
@@ -275,7 +275,7 @@ def say_web_build(build: Path, beta: bool) -> None:
         print(f"note: {said} is missing: web{'-beta' if beta else ''}.json not written", flush=True)
         return
     name = "web-beta.json" if beta else "web.json"
-    wrangler("r2", "object", "put", f"ember-releases/{name}", "--file", str(said), "--content-type", "application/json", "--remote", capture=True)
+    wrangler("r2", "object", "put", f"stillfail-releases/{name}", "--file", str(said), "--content-type", "application/json", "--remote", capture=True)
     print(f"put {name} ({json.loads(said.read_text()).get('version')})", flush=True)
 
 

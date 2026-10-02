@@ -19,6 +19,8 @@
 
 ## 待部署
 
+- 发布桶与静态 Worker 改名：189 个对象约 10.76 GB 已复制并校验到 stillfail-releases；切换前保存完整基线报告，切换后用 migrate-releases.py --reconcile --baseline <基线> --report <新报告> 补旧上传器晚到的对象，新桶有更改或删除则保留新值。停止旧上传器后再做最后一轮，旧桶留回退期，不再日常使用。API 的 RELEASES、release.sh、changelog 和 web build 元数据上传同时换新桶。静态 Worker 换 stillfail-*，自定义域名随部署转移；正式 web 必须用已上线的原构建迁移，不顺带转正 beta。
+
 - Relay 云资源改名：已转移到 stillfail-relay，Relay / RelayBudget 两个 namespace ID 与原容器 application ID 均保持不变。先无 containers 转移，再挂回原容器，避免 Cloudflare 10074；中断可按私有报告续跑。模板使用 stillfail-v1，现有部署不重复创建；旧 ember-relay 禁止用原模板重新部署。容器 application 仍显式绑定 ember-relay-relay，须另行验证新 application 滚动替换后才退役。路由切换与回退用 cutover-worker.py。
 
 - 正式版和测试版的更新日志分开（stable-changelog）：cloud 的 `/v1/changelog` 在正式通道读 `changelog-stable.json`（`docs/releases/0.1.<n>.md` 拼成，一次正式发布一条），测试通道照旧读 `changelog.json`；正式通道在还没有 `changelog-stable.json` 时退回测试版的那份。CI 的 changelog job 两份都传。只改了 cloud、脚本和 CI，客户端不用动（条目结构没变）。顺序：随合并 CI 先部署 api，再在 changelog job 里传两份文件，中间几分钟正式通道读的还是测试版的那份，不会是空的。第一份正式版日志是 `docs/releases/0.1.1326.md`（10 月 1 日那次发布）。以后正式发布前，agent 用 `node scripts/changelog.ts --draft` 起草下一份，给人看过再合（docs/changelog.md）。上线后验：`curl https://app.still.fail/v1/changelog` 第一条是 0.1.1326、13 行；`curl https://app.youdid.wtf/v1/changelog` 还是逐个提交的条目。

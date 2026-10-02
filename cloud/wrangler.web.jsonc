@@ -3,8 +3,8 @@
   // still.fail's web app: static files (`pnpm run build:cloud` → dist/cloud-web), and src/web.ts ahead of them. Its
   // client-side routes fall back to index.html. The API's and the relay's paths on this host are routes of their own
   // (wrangler.jsonc). On its new host and its old one, kept for good for those paths; the old one's pages redirect to
-  // the new host (src/web.ts). The Worker keeps its name from before the rename (renaming would make a new Worker).
-  "name": "ember-web",
+  // the new host (src/web.ts). The Worker uses its stillfail name after a verified custom-domain cutover.
+  "name": "stillfail-web",
   "main": "src/web.ts",
   "compatibility_date": "2026-09-08",
   "workers_dev": false,

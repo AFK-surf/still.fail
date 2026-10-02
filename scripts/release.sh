@@ -26,8 +26,8 @@ copy() {
   if [ -n "${RELEASE_DIR:-}" ]; then
     mkdir -p "$RELEASE_DIR/$(dirname "$2")" && cp "$RELEASE_DIR/$1" "$RELEASE_DIR/$2" && echo "copied $1 to $2 in $RELEASE_DIR"
   else
-    (cd "$root/cloud" && pnpm exec wrangler r2 object get "ember-releases/$1" --file "$out/copy" --remote >/dev/null)
-    (cd "$root/cloud" && pnpm exec wrangler r2 object put "ember-releases/$2" --file "$out/copy" --content-type "$3" --remote >/dev/null)
+    (cd "$root/cloud" && pnpm exec wrangler r2 object get "stillfail-releases/$1" --file "$out/copy" --remote >/dev/null)
+    (cd "$root/cloud" && pnpm exec wrangler r2 object put "stillfail-releases/$2" --file "$out/copy" --content-type "$3" --remote >/dev/null)
     rm -f "$out/copy"
     echo "copied $1 to $2"
   fi
@@ -58,7 +58,7 @@ put() {
   if [ -n "${RELEASE_DIR:-}" ]; then
     mkdir -p "$RELEASE_DIR/$(dirname "$2")" && cp "$1" "$RELEASE_DIR/$2" && echo "put $2 in $RELEASE_DIR"
   else
-    (cd "$root/cloud" && pnpm exec wrangler r2 object put "ember-releases/$2" --file "$1" --content-type "$3" --remote >/dev/null)
+    (cd "$root/cloud" && pnpm exec wrangler r2 object put "stillfail-releases/$2" --file "$1" --content-type "$3" --remote >/dev/null)
     echo "uploaded $2 ($(du -h "$1" | cut -f1))"
   fi
 }
