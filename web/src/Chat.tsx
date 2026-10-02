@@ -1321,7 +1321,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const submit = () => {
     if (ready) void send();
   };
-  const multiline = roomy || focused || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
+  const multiline = roomy || focused || text !== "" || files.length > 0 || quotes.length > 0;
   const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder: hint ?? placeholder, className: css.composerText, layout: multiline, onType: warm, onSubmit: submit });
   // Capsule ⇄ box, in one motion (morph.ts); laid out for another page (a new chat's roomy box ⇄ a chat's foot), the
   // dock moves it (dock.tsx).

@@ -317,7 +317,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
 }): { menu: ReactNode; bar: ReactNode; expanded: boolean } {
   const input = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
-  const expanded = focused || draft.text.includes("\n") || draft.text.length > 60 || draft.files.length > 0 || draft.quotes.length > 0;
+  const expanded = focused || draft.text !== "" || draft.files.length > 0 || draft.quotes.length > 0;
   const ready = draft.ready && !locked;
   useEffect(() => { if (draft.focus > 0) input.current?.focus(); }, [draft.focus]);
   const { menu, field } = useComposerText({

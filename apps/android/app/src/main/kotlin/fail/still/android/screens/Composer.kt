@@ -577,7 +577,7 @@ fun DraftExtras(draft: Draft) {
  * `onFieldText` how its words are (where each line breaks: words sent fly line by line from there, ChatHost.kt).
  */
 internal val Draft.composerExpanded: Boolean
-    get() = focused || text.contains('\n') || text.length > 60 || files.isNotEmpty() || quotes.isNotEmpty()
+    get() = focused || text.isNotEmpty() || files.isNotEmpty() || quotes.isNotEmpty()
 
 @Composable
 fun ComposerBar(
