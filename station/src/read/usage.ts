@@ -4,10 +4,11 @@
 // The counting itself (src/usage/counter.ts, usage.rs `Usage::read`: the transcripts read into the `usage` table) is
 // the running station's, not a read: what was counted is read here as it is in the database. `reading` is what the
 // counter has in its memory (`readingAll`), given by the asker; not given, it is true (nothing read yet).
+import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, type Store, type UsageGroup, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { titleOf } from "./views.ts";
 
 // ── prices (usage.rs) ──
@@ -168,11 +169,8 @@ export function configProfiles(dataDir: string): Record<string, Json> {
 /// A creator reference in words. No Slack connection knows anyone: a Slack user goes by their id, with no email.
 function creator(s: Store, lang: Lang, reference: string): Json {
   if (reference === "local") return { id: "local", name: tr(lang, "station.creator.localPage"), email: null, via: "local" };
-  if (reference.startsWith("slack:")) {
-    const rest = reference.slice("slack:".length);
-    const colon = rest.indexOf(":");
-    if (colon > 0 && colon < rest.length - 1) return { id: reference, name: rest.slice(colon + 1), email: null, via: "slack" };
-  }
+  const slack = slackCreator(s, reference);
+  if (slack !== null) return slack;
   return { id: reference, name: s.names.get(reference) ?? reference, email: reference, via: "cloud" };
 }
 
@@ -187,8 +185,8 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {
-    // No Slack connection knows a channel's name (`known_channel`): none.
-    const title = titleOf(t, first, null);
+    // A Slack channel's name, as far as known (`known_channel`).
+    const title = titleOf(t, first, t.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, t.id), t.channel));
     threads[String(t.id)] = { title, surface: t.surface, home: t.home, archived: t.hiddenAt !== null };
   }
   const refs = [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes);
@@ -206,4 +204,10 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     people,
     profiles: configProfiles(s.dataDir),
   };
+}
+
+/// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.
+function threadConnect(s: Store, thread: number): string | null {
+  const row = s.db.prepare("SELECT connect FROM thread_sessions WHERE thread = ? AND connect != 'ember' ORDER BY joined_at, rowid LIMIT 1").get(thread) as { connect: string } | undefined;
+  return row?.connect ?? null;
 }

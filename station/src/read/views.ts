@@ -9,13 +9,14 @@
 // - the config's connects are read from config.json in the data directory for the names
 //   agents go by; none when it has none.
 // Words are in the language the request asks in (`stillfail-lang`, else Accept-Language, else Chinese).
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Viewer } from "../mesh/credential.ts";
 import { type Lang, tr as translate } from "../ops/i18n.ts";
 import * as store from "./store.ts";
 
 export { makeStore, openStore } from "./store.ts";
+import { knownChannel, knownPerson, slackCreator, teamName } from "./slack-known.ts";
 import { type AuthorKind, type EntryRow, type Json, type MessageRow, type Store, type ThreadRow, type ThreadSummary, STILLFAIL_SURFACE, takeChars } from "./store.ts";
 
 /// How much of a chat's last message the sidebar gets.
@@ -55,31 +56,39 @@ const splitWhitespace = (s: string) => s.split(SPLIT).filter((w) => w !== "");
 // ---- the station's config: its connects' names ----
 
 type Connect = { id: string; name: string };
-const configs = new WeakMap<Store, Connect[]>();
+const configs = new WeakMap<Store, { stamp: string; connects: Connect[] }>();
 
-/// The config's connects (config.rs), each with what it is called (Connect::name: its bot's name, else its id).
+/// The config's connects (config.rs), each with what it is called (Connect::name: its bot's name, else its id); read
+/// again when config.json changed.
 function connectsOf(s: Store): Connect[] {
-  let connects = configs.get(s);
-  if (!connects) {
-    connects = [];
-    try {
-      const raw = JSON.parse(readFileSync(join(s.dataDir, "config.json"), "utf8"));
-      for (const c of Array.isArray(raw.connects) ? raw.connects : []) {
-        const bot = typeof c?.slack?.botName === "string" && c.slack.botName !== "" ? c.slack.botName : undefined;
-        if (typeof c?.id === "string") connects.push({ id: c.id, name: bot ?? c.id });
-      }
-    } catch {
-      // No config: no connects.
+  const path = join(s.dataDir, "config.json");
+  let stamp = "none";
+  try {
+    const st = statSync(path);
+    stamp = `${st.size}:${st.mtimeMs}:${st.ino}`;
+  } catch {}
+  const had = configs.get(s);
+  if (had && had.stamp === stamp) return had.connects;
+  const connects: Connect[] = [];
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8"));
+    for (const c of Array.isArray(raw.connects) ? raw.connects : []) {
+      const bot = typeof c?.slack?.botName === "string" && c.slack.botName !== "" ? c.slack.botName : undefined;
+      if (typeof c?.id === "string") connects.push({ id: c.id, name: bot ?? c.id });
     }
-    configs.set(s, connects);
+  } catch {
+    // No config: no connects.
   }
+  configs.set(s, { stamp, connects });
   return connects;
 }
 
 export type Api = { store: Store; connects: Connect[] };
 export const apiOf = (s: Store): Api => ({ store: s, connects: connectsOf(s) });
 /// The cloud's names of the store being answered for, for `people` and `authorNames` used on their own.
-export const useNames = (s: Store) => (cloudNames = s.names);
+export const useNames = (s: Store) => ((cloudNames = s.names), (currentStore = s));
+/// The store being answered for, for Slack's names (slack-known.ts).
+let currentStore: Store | null = null;
 
 // ---- titles ----
 
@@ -148,16 +157,9 @@ let cloudNames = new Map<string, string>();
 function creator(reference: string | null): Json | null {
   if (reference === null) return null;
   if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
-  if (reference.startsWith("slack:")) {
-    const rest = reference.slice("slack:".length);
-    const colon = rest.indexOf(":");
-    if (colon >= 0) {
-      const [connect, user] = [rest.slice(0, colon), rest.slice(colon + 1)];
-      if (connect !== "" && user !== "") {
-        // No connection knows the person: their id, no email.
-        return { id: reference, name: user, email: null, via: "slack" };
-      }
-    }
+  if (reference.startsWith("slack:") && currentStore !== null) {
+    const slack = slackCreator(currentStore, reference);
+    if (slack !== null) return slack;
   }
   return { id: reference, name: cloudNames.get(reference) ?? reference, email: reference, via: "cloud" };
 }
@@ -195,7 +197,9 @@ function isMine(api: Api, viewer: Viewer): (person: Json | null) => boolean {
 /// Where a Slack thread is, for the connect icon's tip: the Slack workspace, the channel. No connection is up to name
 /// the workspace, nor knows the channel.
 function origin(t: ThreadSummary): Json {
-  return { teamName: null, channel: t.thread.channel, channelName: null, threadTs: t.thread.threadTs };
+  const connect = slackConnectOf(t);
+  const s = currentStore!;
+  return { teamName: connect === null ? null : teamName(s, connect), channel: t.thread.channel, channelName: knownChannel(s, connect, t.thread.channel), threadTs: t.thread.threadTs };
 }
 
 type Names = (kind: AuthorKind, author: string) => string | null;
@@ -220,8 +224,10 @@ export function authorNames(api: Api, thread: number): Names {
     } else if (th !== null && th.surface === STILLFAIL_SURFACE) {
       name = author === "local" ? tr("station.author.admin") : (api.store.names.get(author) ?? author);
     } else {
-      // A Slack person: no connection knows them.
-      name = null;
+      // A Slack person: by the name their connect's Slack gives them, as far as known.
+      const connect = members.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
+      const person = connect === null ? null : knownPerson(api.store, connect, author);
+      name = person?.name ? person.name : null;
     }
     names.set(key, name);
     return name;
@@ -321,7 +327,7 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
 /// its agent's item a title (while the chat has no words of its own), the connect and the origin. `archived`: the
 /// archive's items instead, each with `archived: {at, by, alone}`. Each says when the viewer pinned it (`pinned`).
 export function chats(station: Store, viewer: Viewer, archived: boolean): Json[] {
-  cloudNames = station.names;
+  useNames(station);
   const api = apiOf(station);
   const s = api.store;
   const mine = isMine(api, viewer);
@@ -499,7 +505,7 @@ function asI64(n: number): bigint {
 /// `to` a gap (both included); none of them the latest page. `params`: the query's pairs, the first of a name counts
 /// (admin/mod.rs `query_pairs`, `Asked::param`), or a plain map of them.
 export function entries(station: Store, _viewer: Viewer, thread: number, params: Record<string, string> | [string, string][]): Json {
-  cloudNames = station.names;
+  useNames(station);
   const pairs = Array.isArray(params) ? params : Object.entries(params);
   const param = (name: string) => pairs.find(([k]) => k === name)?.[1];
   const api = apiOf(station);

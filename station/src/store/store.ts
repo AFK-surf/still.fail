@@ -66,9 +66,10 @@ export class Store {
   static open(path: string, archive: string | null = null): Store {
     const memory = path === ":memory:";
     if (!memory) mkdirSync(dirname(path), { recursive: true });
-    const db = new DatabaseSync(path);
+    // Busy for a moment (another process reading, the WAL recovered after a crash): waited for, from the first statement.
+    const db = new DatabaseSync(path, { timeout: 5000 });
     try {
-      db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+      db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
         const version = (db.prepare("PRAGMA user_version").get() as Json).user_version;

@@ -5,9 +5,10 @@
 // What the Rust station keeps outside the database is taken as views.ts takes it (a station with none of it):
 // - the hub: no session has a runtime process (`process` "cold"); no transcript is watched, so a timeline is read from
 //   the transcript's file each time, as the Rust does for a session nobody follows;
-// - Slack connections: none connected, so no channel names (`channelName` null) and no Slack people (a Slack user
+// - Slack names: as the names book has them (slack-known.ts), never waiting on Slack (a Slack user
 //   goes by their id, with no email);
 // - the cloud's names: those of the members who asked since the station started (`Store.names`).
+import { knownChannel, knownPerson, slackCreator } from "./slack-known.ts";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, isAbsolute } from "node:path";
@@ -29,11 +30,17 @@ const INTERNAL_CONNECT = "ember";
 // ---- the config: its connects' names and its profiles' homes (config.rs) ----
 
 type Config = { connects: { id: string; name: string }[]; profiles: { id: string; home: string }[] };
-const configs = new WeakMap<Store, Config>();
+const configs = new WeakMap<Store, { stamp: string; config: Config }>();
 
-/// The station's config.json, as far as these reads need it; none of it when it does not read.
+/// The station's config.json, as far as these reads need it (read again when it changed); none of it when it does not
+/// read.
 function configOf(s: Store): Config {
-  let config = configs.get(s);
+  let stamp = "none";
+  try {
+    const st = statSync(join(s.dataDir, "config.json"));
+    stamp = `${st.size}:${st.mtimeMs}:${st.ino}`;
+  } catch {}
+  let config = configs.get(s)?.stamp === stamp ? configs.get(s)!.config : undefined;
   if (!config) {
     config = { connects: [], profiles: [] };
     try {
@@ -50,7 +57,7 @@ function configOf(s: Store): Config {
     } catch {
       // No config: none.
     }
-    configs.set(s, config);
+    configs.set(s, { stamp, config });
   }
   return config;
 }
@@ -61,14 +68,8 @@ function configOf(s: Store): Config {
 function creator(s: Store, reference: string | null): Json | null {
   if (reference === null) return null;
   if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
-  if (reference.startsWith("slack:")) {
-    const rest = reference.slice("slack:".length);
-    const colon = rest.indexOf(":");
-    if (colon > 0 && colon < rest.length - 1) {
-      // No connection knows the person: their id, no email.
-      return { id: reference, name: rest.slice(colon + 1), email: null, via: "slack" };
-    }
-  }
+  const slack = slackCreator(s, reference);
+  if (slack !== null) return slack;
   return { id: reference, name: s.names.get(reference) ?? reference, email: reference, via: "cloud" };
 }
 
@@ -107,8 +108,10 @@ function authorNames(s: Store, thread: number): (kind: AuthorKind, author: strin
     } else if (th !== null && th.surface === store.STILLFAIL_SURFACE) {
       name = author === "local" ? tr("station.author.admin") : (s.names.get(author) ?? author);
     } else {
-      // A Slack person: no connection knows them.
-      name = null;
+      // A Slack person: by the name their connect's Slack gives them, as far as known.
+      const connect = members.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
+      const person = connect === null ? null : knownPerson(s, connect, author);
+      name = person?.name ? person.name : null;
     }
     names.set(key, name);
     return name;
@@ -206,8 +209,8 @@ function threadView(s: Store, t: ThreadSummary): Json {
   v.unread = t.unread;
   v.people = people(s, t.people);
   v.firstText = t.firstText;
-  // No connection to know a Slack channel's name.
-  v.channelName = null;
+  // A Slack channel's name, as far as known.
+  v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null, t.thread.channel);
   v.creator = creator(s, t.thread.createdBy);
   return v;
 }
