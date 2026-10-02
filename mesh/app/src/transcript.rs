@@ -1,7 +1,8 @@
 //! Reads a runtime's own session transcript into one readable timeline for the pages. Formats (pinned against real
 //! files, 2026-09):
 //! - claude: $CLAUDE_CONFIG_DIR/projects/<cwd>/<id>.jsonl, lines of {type: user|assistant, message: {content: string |
-//!   blocks}, isSidechain}
+//!   blocks}, isSidechain}; what came in during a turn (a person's message, a background task's notice) is a line of
+//!   {type: attachment, attachment: {type: queued_command, prompt: string | blocks}}
 //! - codex: $CODEX_HOME/sessions/**/rollout-*<id>.jsonl, lines of {type: response_item, payload: message | reasoning |
 //!   function_call | …}
 
@@ -124,6 +125,8 @@ pub fn is_posting(tool: &str) -> bool {
 struct ReadState {
     skip: HashSet<String>,
     inner: HashMap<String, usize>,
+    /// What came in during a turn, read from its attachment: a user line saying it again later is not read twice.
+    queued: HashSet<String>,
 }
 
 fn string_of(v: Option<&Value>) -> Option<String> {
@@ -134,13 +137,33 @@ fn claude_timeline(records: &[Value], state: &mut ReadState) -> Vec<TimelineEntr
     let mut out = Vec::new();
     for r in records {
         let kind = r.get("type").and_then(Value::as_str).unwrap_or("");
-        if (kind != "user" && kind != "assistant") || r.get("isMeta") == Some(&Value::Bool(true)) {
-            continue;
-        }
         let at = string_of(r.get("timestamp"));
         let subagent = (r.get("isSidechain") == Some(&Value::Bool(true))).then_some(true);
         let entry = |kind: &str, text: String| TimelineEntry { subagent, ..TimelineEntry::new(at.clone(), kind, text) };
+        // Come in during a turn: what woke an agent that was waiting is said, and when.
+        let queued = r.get("attachment").filter(|a| a.get("type").and_then(Value::as_str) == Some("queued_command"));
+        if let Some(a) = queued.filter(|_| kind == "attachment") {
+            let text = to_text(a.get("prompt").unwrap_or(&Value::Null));
+            if !text.trim().is_empty() {
+                state.queued.insert(text.trim().to_string());
+                out.push(entry("user", clip(&text)));
+            }
+            continue;
+        }
+        if (kind != "user" && kind != "assistant") || r.get("isMeta") == Some(&Value::Bool(true)) {
+            continue;
+        }
         let content = r.get("message").and_then(|m| m.get("content"));
+        if kind == "user" && !state.queued.is_empty() {
+            let said = match content {
+                Some(Value::String(text)) => text.clone(),
+                Some(blocks) => blocks.as_array().into_iter().flatten().filter(|b| b.get("type").and_then(Value::as_str) == Some("text")).filter_map(|b| b.get("text").and_then(Value::as_str)).collect(),
+                None => String::new(),
+            };
+            if state.queued.remove(said.trim()) {
+                continue;
+            }
+        }
         if let Some(Value::String(text)) = content {
             out.push(entry(kind, clip(text)));
             continue;

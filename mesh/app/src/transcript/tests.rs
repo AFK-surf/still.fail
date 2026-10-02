@@ -44,6 +44,24 @@ fn claude_transcripts_become_a_timeline_subagent_work_marked() {
 }
 
 #[test]
+fn what_came_in_during_a_turn_is_read_once_as_said_when_it_came() {
+    let notice = "<task-notification>\n<status>completed</status>\n</task-notification>";
+    let (_dir, path) = file(&[
+        json!({ "type": "assistant", "message": { "content": [{ "type": "tool_use", "id": "w", "name": "mcp__stillfail__chat_state", "input": { "kind": "waiting" } }] } }),
+        json!({ "type": "attachment", "timestamp": "t2", "attachment": { "type": "queued_command", "prompt": notice } }),
+        json!({ "type": "attachment", "timestamp": "t3", "attachment": { "type": "queued_command", "prompt": [{ "type": "text", "text": "<message via=\"web\">hi</message>" }] } }),
+        // Said again as a user line: not twice.
+        json!({ "type": "user", "timestamp": "t4", "message": { "content": notice } }),
+        json!({ "type": "attachment", "attachment": { "type": "edited_text_file" } }),
+    ]);
+    let plain: Vec<(String, String, Option<String>)> = read(RuntimeKind::Claude, &path).into_iter().filter(|e| e.kind == "user").map(|e| (e.kind, e.text, e.at)).collect();
+    assert_eq!(plain, vec![
+        ("user".into(), notice.into(), Some("t2".into())),
+        ("user".into(), "<message via=\"web\">hi</message>".into(), Some("t3".into())),
+    ]);
+}
+
+#[test]
 fn codex_rollouts_become_a_timeline_without_injected_context() {
     let (_dir, path) = file(&[
         json!({ "type": "session_meta", "payload": {} }),
