@@ -14,8 +14,8 @@ export class Readers {
 
   /// Two by default (STILLFAIL_READERS says otherwise): each is a V8 of its own, tens of MB.
   constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1))) {
-    // Bundled: worker.js beside main.js; from source: worker.ts beside this.
-    const file = new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./worker.js", import.meta.url);
+    // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
+    const file = new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     for (let i = 0; i < size; i++) {
       // A reader's heap stays small: what it builds is answered and dropped.
       const worker = new Worker(file, { workerData: { data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
