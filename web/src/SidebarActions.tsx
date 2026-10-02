@@ -1,7 +1,7 @@
 // The same new-chat action and list menu above chats and decisions.
 import { NavLink } from "react-router";
 import { t } from "./i18n.ts";
-import { Compose } from "./icons.tsx";
+import { Ling } from "./icons.tsx";
 import { ICON } from "./ui.tsx";
 import { MineFilter } from "./components.tsx";
 import { useComposerMove } from "./dock.tsx";
@@ -13,7 +13,7 @@ export function SidebarActions({ newChat, archive, workspace, decisions = false,
   const move = useComposerMove();
   return (
     <div className={nav.navNew}>
-      <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />{t("web-main.sidebar.newChat")}</NavLink>
+      <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Ling {...ICON} />{t("web-main.sidebar.newChat")}</NavLink>
       {showFilter && <MineFilter compact archive={archive} watching
         decisions={{ to: `${workspace}/decisions`, chats: workspace, active: decisions }} />}
     </div>

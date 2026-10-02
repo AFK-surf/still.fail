@@ -98,7 +98,6 @@
   "android-chat.history.waiting": "等待中 {time}",
   "android-chat.history.wrote": "{name} 写道",
   "android-chat.home.decisions": "{n} 件等你决定",
-  "android-chat.home.decisionsMark": "奏",
   "android-chat.home.empty.many": "还没有会话。在 Slack 里 @ 它们，或者",
   "android-chat.home.empty.mine": "没有你参与的会话。",
   "android-chat.home.empty.one": "还没有会话。在 Slack 里 @ 它，或者",

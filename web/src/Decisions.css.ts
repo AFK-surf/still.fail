@@ -134,7 +134,7 @@ export const arriving = style({
 
 /** 奏 N in the sidebar's foot: the word bold, the count beside it. */
 export const sideEntry = style({ marginBottom: "4px", color: vars.text });
-export const sideEntryLead = style({ width: "16px", flex: "none", textAlign: "center", fontWeight: "600" });
+export const sideEntryLead = style({ width: "16px", flex: "none", display: "flex", alignItems: "center", justifyContent: "center" });
 export const sideEntryCount = style({ flex: "1", color: vars.muted, fontVariantNumeric: "tabular-nums" });
 
 /** The wide screen's page (pages/Decisions.tsx): its bar, then the decision filling the pane. */

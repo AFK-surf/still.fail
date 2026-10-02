@@ -108,7 +108,7 @@ fun NewChatDisc() {
         Modifier.floatingStill(CircleShape).padding(6.dp).size(44.dp).clip(CircleShape).background(C.accent)
             .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-misc.wide.newChat") },
         contentAlignment = Alignment.Center,
-    ) { IconIn(Icons.Edit, 20.dp, Color.White) }
+    ) { IconIn(Icons.Ling, 20.dp, Color.White) }
 }
 
 /**
@@ -138,7 +138,7 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                     Modifier.size(32.dp).clip(CircleShape).background(C.accent).clickable { open = false; app.open(Screen.NewChat) }
                         .semantics { contentDescription = t("android-misc.wide.newChat") },
                     contentAlignment = Alignment.Center,
-                ) { IconIn(Icons.Edit, 17.dp, Color.White) }
+                ) { IconIn(Icons.Ling, 17.dp, Color.White) }
             }
             if (view == null) Text(chats.error?.message ?: t("android-misc.wide.loading"), fontSize = 14.sp, color = if (chats.error != null) C.red else C.muted, modifier = Modifier.padding(18.dp))
             // No rows: what the list says in their place (the core's `note`), as the home list does.

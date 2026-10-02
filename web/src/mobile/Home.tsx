@@ -6,7 +6,7 @@ import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { stationApi, useChats, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Pin, Settings, Unplug } from "../icons.tsx";
+import { Archive, Check, ChevronDown, ChevronRight, Edit, Filter, Ling, Pin, Settings, Unplug, Zou } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp } from "./app.tsx";
@@ -76,11 +76,11 @@ export function Home() {
         {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, only while there are some. */}
         {decisions > 0 && (
           <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
-            <b>{t("web-mobile.decisions.title")}</b><span>{decisions}</span>
+            <Zou size={20} /><span>{decisions}</span>
           </button>
         )}
         <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
-          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Edit size={20} /></button>
+          <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={20} /></button>
         </div>
       </div>}
     </div>
@@ -100,7 +100,7 @@ export function Recent() {
     <>
       <div className={css.mRecentHead}>
         <b>{t("web-mobile.app.recent")}</b>
-        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Edit size={17} /></button>
+        <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={17} /></button>
       </div>
       <div className={css.mRecentRows}>
         {!view ? <Note text={chats.error?.message ?? t("web-mobile.home.reading")} error={!!chats.error} />

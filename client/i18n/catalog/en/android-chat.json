@@ -107,7 +107,6 @@
     "one": "1 decision waiting",
     "other": "{n} decisions waiting"
   },
-  "android-chat.home.decisionsMark": "Decisions",
   "android-chat.home.empty.many": "No chats yet. @ them in Slack, or",
   "android-chat.home.empty.mine": "No chats you're in.",
   "android-chat.home.empty.one": "No chats yet. @ it in Slack, or",

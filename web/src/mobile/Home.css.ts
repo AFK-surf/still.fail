@@ -185,5 +185,5 @@ export const mSwipeUnder = style({
   whiteSpace: "nowrap",
 });
 globalStyle(`${mSwipeUnder} span`, { paddingLeft: "24px" });
-globalStyle(`${mDecisions} b`, { fontSize: "17px", fontWeight: "600", lineHeight: "24px" });
+globalStyle(`${mDecisions} svg`, { flex: "none" });
 globalStyle(`${mDecisions} span`, { fontSize: "16px", lineHeight: "24px", fontVariantNumeric: "tabular-nums" });
