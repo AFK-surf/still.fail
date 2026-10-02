@@ -8,11 +8,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -44,9 +47,13 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
     val density = LocalDensity.current
     val gap = with(density) { 10.dp.roundToPx() }
     val margin = with(density) { 12.dp.roundToPx() }
+    val arrowX = remember { mutableFloatStateOf(0f) }
     val position = remember(gap, margin) { object : PopupPositionProvider {
-        override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset =
-            IntOffset((windowSize.width - popupContentSize.width - margin).coerceAtLeast(0), anchorBounds.bottom + gap)
+        override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+            val left = (windowSize.width - popupContentSize.width - margin).coerceAtLeast(0)
+            arrowX.floatValue = (anchorBounds.center.x - left).toFloat()
+            return IntOffset(left, anchorBounds.bottom + gap)
+        }
     } }
     Box {
         Row(Modifier.heightIn(min = 32.dp).semantics { contentDescription = notice.text }.clickable(role = Role.Button) { control(if (notice.open == true) "close" else "open") }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -56,8 +63,19 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
         if (notice.open == true) {
             val shape = RoundedCornerShape(14.dp)
             val width = minOf(284.dp, (LocalConfiguration.current.screenWidthDp - 24).dp)
+            val surface = Raised
             Popup(popupPositionProvider = position, onDismissRequest = { control("close") }, properties = PopupProperties(focusable = true)) {
-                Row(Modifier.padding(12.dp).width(width).shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f)).clip(shape).background(Raised).padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.drawBehind {
+                    val half = 7.dp.toPx()
+                    val edge = 12.dp.toPx()
+                    val x = arrowX.floatValue.coerceIn(30.dp.toPx(), size.width - 30.dp.toPx())
+                    drawPath(Path().apply {
+                        moveTo(x - half, edge + 1f)
+                        lineTo(x, edge - half)
+                        lineTo(x + half, edge + 1f)
+                        close()
+                    }, surface)
+                }.padding(12.dp).width(width).shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f)).clip(shape).background(Raised).padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(notice.text, fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium, color = C.ink)
                         notice.detail?.let { Text(it, fontSize = 12.sp, lineHeight = 17.sp, color = C.muted) }
