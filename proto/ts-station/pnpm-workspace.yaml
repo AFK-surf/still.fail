@@ -1,0 +1,3 @@
+# Only these may run install scripts: esbuild fetches its own binary.
+onlyBuiltDependencies:
+  - esbuild
