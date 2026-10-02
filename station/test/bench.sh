@@ -27,7 +27,10 @@ measure() { # measure <name> <data dir name> <command…>
   while kill -0 $lp 2>/dev/null; do r=$(ps -o rss= -p "$pid"); [ "$r" -gt "$peak" ] && peak=$r; sleep 0.2; done
   sleep 2
   after=$(ps -o rss= -p "$pid")
-  echo "{\"station\":\"$name\",\"idleMB\":$((idle/1024)),\"peakMB\":$((peak/1024)),\"afterMB\":$((after/1024)),\"load\":$(cat "$work/load-$name.json")}"
+  # And once it has had nothing to do for a while (readers let go after a minute).
+  sleep ${LATER:-70}
+  later=$(ps -o rss= -p "$pid")
+  echo "{\"station\":\"$name\",\"idleMB\":$((idle/1024)),\"peakMB\":$((peak/1024)),\"afterMB\":$((after/1024)),\"laterMB\":$((later/1024)),\"load\":$(cat "$work/load-$name.json")}"
 }
 measure rust rust "$rust" run --app "$(dirname "$(dirname "$(dirname "$(dirname "$rust")")")")" --port 4799 --data "$work/rust"
 # ENTRY=dist/main.js measures the bundle (STILLFAIL_MESH_NATIVE then says where the addon is).
