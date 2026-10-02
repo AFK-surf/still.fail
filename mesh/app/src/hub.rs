@@ -597,6 +597,18 @@ impl Hub {
 
     /// A process went idle: look again when it has idled past warm_ms.
     fn idle_now(&self, key: &str) {
+        // A manual archive may have arrived during the last turn. Finish that archive when the turn ends; never
+        // sweep old directories on a clock or at startup.
+        if let Ok(Some(row)) = self.store.get_session(key) {
+            if row.archived_at.is_some() {
+                if let Ok(actor) = self.actor(&row) {
+                    tokio::spawn(async move {
+                        actor.evict().await;
+                        actor.clean_archive().await;
+                    });
+                }
+            }
+        }
         let warm = Duration::from_millis(self.config().warm_ms);
         let me = self.me.clone();
         let deadline_key = key.to_string();
@@ -687,7 +699,7 @@ impl Hub {
 
     /// Hides a session from lists, or shows it again (see Store::set_archived); `by` is MANUAL or AUTO. Archiving also
     /// ends its idle process, removes rebuildable files, and compresses the remaining workspace and owned transcripts.
-    /// They are restored before the next runtime starts; active jobs postpone compression until the next sweep.
+    /// They are restored before the next runtime starts; active jobs postpone compression until the archived session becomes idle.
     pub fn archive_by(&self, key: &str, archived: bool, by: &str) -> Result<()> {
         let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
         if !archived { self.restore_archive(key)?; }
@@ -814,17 +826,13 @@ impl Hub {
         })
     }
 
-    /// Backfill old archives, and retry sessions skipped while busy. Called at startup and hourly, independently of
-    /// whether automatic archiving is enabled. Each actor holds its queue until its cleanup finishes.
-    pub async fn clean_archives(&self) -> Result<()> {
-        for row in self.store.list_sessions()? {
-            if row.archived_at.is_none() || row.running {
-                continue;
-            }
-            let Ok(actor) = self.actor(&row) else { continue };
-            actor.evict().await;
-            actor.clean_archive().await;
-        }
+    /// Test barrier for the archive operation already requested, not a background sweep.
+    #[cfg(test)]
+    pub(crate) async fn finish_archive(&self, key: &str) -> Result<()> {
+        let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
+        let actor = self.actor(&row)?;
+        actor.evict().await;
+        actor.clean_archive().await;
         Ok(())
     }
 

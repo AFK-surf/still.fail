@@ -2055,7 +2055,7 @@ async fn archived_attachments_remain_readable_without_expanding_the_workspace() 
     std::fs::create_dir_all(workspace.join("uploads")).unwrap();
     std::fs::write(workspace.join("uploads/evidence.txt"), b"original evidence").unwrap();
     t.hub.archive(&key, true).unwrap();
-    t.hub.clean_archives().await.unwrap();
+    t.hub.finish_archive(&key).await.unwrap();
     assert!(!workspace.join("uploads/evidence.txt").exists());
     assert_eq!(t.text("GET", &format!("/sessions/{}/files?name=evidence.txt", enc(&key)), "").await,
         (200, "original evidence".to_string()));

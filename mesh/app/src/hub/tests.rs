@@ -1326,7 +1326,7 @@ async fn archiving_a_session_compresses_owned_history_and_restores_it_before_res
     let copy = r.store.archive_dir().join("transcripts").join(format!("{key}.jsonl.zst"));
     crate::store::write_compressed(&copy, "old redundant copy").unwrap();
     r.hub.archive(&key, true).unwrap();
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     assert!(!transcript.exists(), "compression replaces the original rather than adding another copy");
     assert!(crate::archive::packed(&transcript).exists());
     assert!(!copy.exists(), "legacy redundant copy removed only after successful compression");
@@ -1368,14 +1368,14 @@ async fn archiving_a_session_cleans_what_can_be_made_again_from_its_directory() 
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert!(!workspace.join("app/node_modules").exists(), "cleaned once archived");
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     assert_eq!(crate::archive::workspace_file(workspace.parent().unwrap(), Path::new("notes.md")).unwrap().unwrap(), b"kept");
     r.hub.archive(&key, false).unwrap();
     assert_eq!(std::fs::read(workspace.join("notes.md")).unwrap(), b"kept");
 }
 
 #[tokio::test]
-async fn archived_cleanup_backfills_and_retries_after_background_jobs_end() {
+async fn archive_cleanup_keeps_running_jobs_and_shared_projects() {
     let r = setup();
     let m = message();
     r.accept(&m).await;
@@ -1388,7 +1388,7 @@ async fn archived_cleanup_backfills_and_retries_after_background_jobs_end() {
     std::fs::create_dir_all(workspace.join("app/node_modules")).unwrap();
     std::fs::write(workspace.join("app/node_modules/dependency.js"), vec![1u8; 50_000]).unwrap();
     std::fs::write(workspace.join("unfinished.rs"), b"uncommitted work").unwrap();
-    // Simulate an archive made by an older station, without invoking the new archive hook.
+    // The archive operation is deferred while another task still needs these files.
     r.store.set_archived(&key, true, MANUAL).unwrap();
     let job = crate::store::JobRow {
         id: "archive_job".into(), session_key: "another-session".into(), name: "preview".into(), command: "serve".into(),
@@ -1397,10 +1397,10 @@ async fn archived_cleanup_backfills_and_retries_after_background_jobs_end() {
         restarts: 0, log: "/dev/null".into(), watch: false,
     };
     r.store.insert_job(&job).unwrap();
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     assert!(workspace.join("app/node_modules").exists(), "another session's service uses this directory");
     r.store.job_ended(&job.id, "exited", Some(1)).unwrap();
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     assert!(workspace.join("app/node_modules").exists(), "a service waiting to restart still needs its files");
     r.store.job_ended(&job.id, "stopped", None).unwrap();
     r.store.insert_session(&NewSession {
@@ -1408,18 +1408,43 @@ async fn archived_cleanup_backfills_and_retries_after_background_jobs_end() {
         token: "shared_archive_token".into(), workspace: r._dir.path().to_string_lossy().into(),
         cwd: Some(workspace.join("app").to_string_lossy().into()), ..Default::default()
     }).unwrap();
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     assert!(workspace.join("app/node_modules").exists(), "another session is working inside the archived directory");
     r.store.delete_session("shared_archive_project").unwrap();
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     assert!(!workspace.join("app/node_modules").exists(), "old archive cleaned after the job stops");
     assert_eq!(crate::archive::workspace_file(workspace.parent().unwrap(), Path::new("unfinished.rs")).unwrap().unwrap(), b"uncommitted work");
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     r.hub.archive(&key, false).unwrap();
     assert_eq!(std::fs::read(workspace.join("unfinished.rs")).unwrap(), b"uncommitted work");
     std::fs::create_dir_all(workspace.join("app/node_modules")).unwrap();
-    r.hub.clean_archives().await.unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
     assert!(workspace.join("app/node_modules").exists(), "restored sessions are left alone");
+}
+
+#[tokio::test]
+async fn the_auto_archive_timer_does_not_sweep_previously_archived_workspaces() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    r.call(&key, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    let workspace = PathBuf::from(r.session(&key).workspace);
+    std::fs::create_dir_all(workspace.join("node_modules")).unwrap();
+    std::fs::write(workspace.join("source.rs"), b"old archive").unwrap();
+    r.store.set_archived(&key, true, MANUAL).unwrap();
+    r.hub.auto_archive(now_ms() + 3 * 86_400_000).unwrap();
+    settle().await;
+    assert!(workspace.join("node_modules").exists(), "a timer must not clean old archives");
+    assert!(workspace.join("source.rs").exists());
+    assert!(!crate::archive::workspace_archive(workspace.parent().unwrap()).exists());
+    r.hub.archive(&key, true).unwrap();
+    r.hub.finish_archive(&key).await.unwrap();
+    assert!(!workspace.join("node_modules").exists(), "an explicit archive does clean");
+    assert!(crate::archive::workspace_archive(workspace.parent().unwrap()).exists());
 }
 
 #[tokio::test]
