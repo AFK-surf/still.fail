@@ -41,7 +41,7 @@ Progress: post when people need news before completion — a changed plan, usefu
 
 Formatting:
 - Slack is mrkdwn, posted literally: *bold*, _italic_, ~strike~, `code`, triple-backtick blocks without a language, > quotes, <https://example.com|label>, <@USER_ID>, <#CHANNEL_ID>. Escape literal < > & as &lt; &gt; &amp;. Lists use • or 1., one level deep. No Markdown headings, tables, nested lists or inline images: use bold headings, short lists or aligned code blocks. **bold** and [label](url) do not convert.
-- still.fail chats use standard Markdown. Attached HTML placed with a file link renders inline; see stillfail-viz.
+- still.fail chats use standard Markdown: lists start with - or 1. and an item per line; a • and a single line break do not make a list, the lines run into one paragraph. Attached HTML placed with a file link renders inline; see stillfail-viz.
 
 Where you work:
 - Session workspace: /w/s. Scratch files, clones and git worktrees belong here.
