@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
 import type { WorkspaceMark } from "./core/shapes.ts";
 import { reducedMotion } from "./motion.ts";
-import { StatusText } from "./ui.tsx";
+import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
@@ -69,12 +69,18 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
  * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
  * last message would be.
  */
-export function WaitingText({ text, className }: { text: string; className: string }) {
+export function WaitingText({ text, className, compactNeed = false }: { text: string; className: string; compactNeed?: boolean }) {
+  const need = compactNeed ? /^(?:要你帮忙|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
   const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
   const turn = lead !== "" || /^(?:要你帮忙|Needs you:)/.test(text);
   return (
     <span className={className} data-turn={turn || undefined} data-state-line="">
-      {lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} />
+      {need ? <><Tip label={t("web-main.chatMark.alert")}><span className={css.needMark} role="img" aria-label={t("web-main.chatMark.alert")}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M8 13V6a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-6a2 2 0 0 1 4 0v9a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 14a2 2 0 0 1 3-2.5L8 13Z" />
+        </svg>
+      </span></Tip>{text.slice(need[0].length) && <> {text.slice(need[0].length)}</>}</>
+        : <>{lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} /></>}
     </span>
   );
 }

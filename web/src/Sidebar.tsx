@@ -225,7 +225,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
           {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
-          {stateLine(item) ? <WaitingText text={stateLine(item)!} className={nav.navSessionLast} />
+          {stateLine(item) ? <WaitingText compactNeed text={stateLine(item)!} className={nav.navSessionLast} />
             : item.last ? <LastMessage item={item} /> : <span className={nav.navSessionLast} />}
           <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           <Time className={nav.navTime} stamp={item.time?.lastActiveAt} fixed />

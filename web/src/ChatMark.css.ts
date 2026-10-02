@@ -65,3 +65,6 @@ export const markCounts = style({ display: "inline-flex", alignItems: "center", 
 export const markCount = style({ display: "inline-flex", alignItems: "center", gap: 5, color: "color-mix(in srgb, currentColor 65%, transparent)" });
 /** A row's waiting line's 等你 (ChatMark.tsx WaitingText). */
 export const waitingLead = style({ fontWeight: 600 });
+
+/** Compact needs-you prefix in the desktop sidebar; the explanation keeps the remaining line. */
+export const needMark = style({ display: "inline-flex", width: 14, height: 14, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
