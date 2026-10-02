@@ -168,6 +168,8 @@ export const mChatRowWrap = style({
 });
 export const mSwipeSlide = style({ position: "relative" });
 globalStyle(`${mChatRow}[data-archivable]`, { paddingLeft: "72px" });
+// Archive is wider than 归档.
+globalStyle(`:root[lang="en"] ${mChatRow}[data-archivable]`, { paddingLeft: "96px" });
 /** 归档 in words: a small chip, centred on the row's height, at its start. */
 export const mRowArchive = style({
   position: "absolute", top: "0", bottom: "0", left: "14px", margin: "auto 0", height: "28px", padding: "0 12px",

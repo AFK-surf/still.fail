@@ -468,7 +468,7 @@
   "web-mobile.settings.memory": "Memory",
   "web-mobile.settings.notify.denied": "The browser blocked notifications. Turn them on in its site settings",
   "web-mobile.settings.notify.notAllowed": "The browser didn't allow notifications",
-  "web-mobile.settings.notify.note": "When something's done, needs you, fails or someone speaks",
+  "web-mobile.settings.notify.note": "Done, needs you, fails, or someone speaks",
   "web-mobile.settings.notify.offFailed": "Couldn't turn off notifications",
   "web-mobile.settings.notify.offFailedWhy": "Couldn't turn off notifications: {error}",
   "web-mobile.settings.notify.onFailed": "Couldn't turn on notifications",
