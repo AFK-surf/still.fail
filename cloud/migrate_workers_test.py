@@ -23,5 +23,18 @@ class TransferPlan(unittest.TestCase):
                 self.assertEqual(move['from_script'], migration.NAMES[part][0])
             self.assertTrue(template['routes'], 'input template remains unchanged')
 
+    def test_container_transfer_preserves_application_and_namespace(self):
+        template = migration.deploy.read_template(migration.deploy.PARTS['relay'])
+        plan = migration.transfer_config(template, 'relay', 'test-account')
+        first = migration.without_containers(plan)
+        self.assertNotIn('containers', first)
+        self.assertIn('containers', plan)
+        self.assertEqual(first['migrations'], plan['migrations'])
+        apps = [{'id': 'existing-app', 'name': 'old-container', 'durable_objects': {'namespace_id': 'original-id'}}]
+        self.assertEqual(migration.relay_container(apps, {'Relay': 'original-id'}), {'id': 'existing-app', 'name': 'old-container'})
+        for invalid in ([], apps + apps):
+            with self.assertRaises(RuntimeError):
+                migration.relay_container(invalid, {'Relay': 'original-id'})
+
 
 if __name__ == '__main__': unittest.main()
