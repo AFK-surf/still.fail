@@ -1887,6 +1887,27 @@ async fn connect_depth_uses_model_capabilities_and_survives_config_reload() {
 }
 
 #[tokio::test]
+async fn answering_a_card_reads_only_that_question_for_its_viewer() {
+    for extra in [false, true] {
+        let t = setup().await;
+        let (key, thread) = t.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "owner@example.com".into(), client_key: None }).unwrap();
+        let (asked, _) = t.store.insert_message(NewMessage { card: Some(json!({"type":"text"})),
+            ..NewMessage::new(thread.id, "9.000001", AuthorKind::Agent, &key, "怎么处理？") }).unwrap();
+        if extra {
+            t.store.insert_message(NewMessage::new(thread.id, "9.000002", AuthorKind::Agent, &key, "补充消息")).unwrap();
+        }
+        let events = t.follow("/events", owner()).await;
+        let path = format!("/threads/{}/messages", thread.id);
+        assert_eq!(t.call("POST", &path, Some(json!({"text":"按计划做", "quotes":[{"ts":"9.000001", "text":"怎么处理？", "author":"agent", "role":"agent"}]}))).await.0, 200);
+        assert_eq!(t.store.read_position("owner@example.com", thread.id).unwrap(), asked);
+        assert_eq!(t.store.read_position("dev@example.com", thread.id).unwrap(), 0);
+        assert_eq!(events.next("read", |_| true).await["n"], asked);
+        let summary = t.get(&format!("/threads/{}", thread.id)).await;
+        assert_eq!(summary["unread"], if extra { 1 } else { 0 });
+    }
+}
+
+#[tokio::test]
 async fn closing_a_question_clears_its_wait_without_a_message_or_delivery() {
     let t = setup().await;
     let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
@@ -1907,6 +1928,9 @@ async fn closing_a_question_clears_its_wait_without_a_message_or_delivery() {
     let entries = t.get(&format!("/threads/{thread}/entries")).await;
     let pending = t.store.pending_messages(&key).unwrap().len();
     assert_eq!(t.call("PUT", &path, Some(json!({"n": n, "option": "不需要部署"}))).await.0, 200);
+    assert_eq!(t.store.read_position("owner@example.com", thread).unwrap(), n);
+    assert_eq!(t.store.read_position("dev@example.com", thread).unwrap(), 0);
+    assert_eq!(row(t.get("/chats").await)["unread"], false);
     assert!(row(t.get("/chats").await).get("card").is_none());
     assert!(row(t.call_as("GET", "/chats", None, dev()).await.1).get("card").is_none(), "closed for every viewer");
     let turn = t.store.last_turn(&key).unwrap().unwrap();
@@ -1922,6 +1946,8 @@ async fn closing_a_question_clears_its_wait_without_a_message_or_delivery() {
     t.store.set_about("close-next", Some((thread, next, "9.000002"))).unwrap();
     t.store.end_turn("close-next", "completed", None, Some("block"), None).unwrap();
     assert_eq!(t.call("PUT", &path, Some(json!({"n": n, "option": "不需要部署"}))).await.0, 200);
+    assert_eq!(t.store.read_position("owner@example.com", thread).unwrap(), n, "retry does not read the newer question");
+    assert_eq!(row(t.get("/chats").await)["unread"], true);
     assert_eq!(row(t.get("/chats").await)["card"]["seq"], next);
     assert_eq!(t.store.last_turn(&key).unwrap().unwrap().ending.as_deref(), Some("need_help"));
     let (newest, _) = t.store.insert_message(NewMessage { card: Some(card), ..NewMessage::new(thread, "9.000003", AuthorKind::Agent, &key, "换了一个问题") }).unwrap();

@@ -822,17 +822,24 @@ impl AdminApi {
                         if text.is_empty() && attachments.is_empty() && quotes.is_empty() {
                             return Err(http_error(400, "消息是空的"));
                         }
-                        if attachments.is_empty() && let Some((asked, card)) = self.deps.store.pending_card(thread_id)? {
+                        let mut answered_card = None;
+                        if let Some((asked, card)) = self.deps.store.pending_card(thread_id)? {
                             let selected = card["options"].as_array().into_iter().flatten().any(|o| o["label"].as_str() == Some(text.as_str()) && o["action"] == "close");
                             let quoted = input.get("quotes").and_then(Value::as_array).into_iter().flatten().any(|q| q["ts"].as_str() == Some(asked.ts.as_str()));
-                            if selected && quoted {
+                            if attachments.is_empty() && selected && quoted {
                                 return Err(http_error(409, "请更新客户端后选择此选项；它不会发送给 agent"));
                             }
+                            if quoted { answered_card = Some(asked.n); }
                         }
                         // Which app sent it ("android 0.1.1123"): for its agent, never shown. Older apps say nothing.
                         let client = input.str("client").map(|c| c.trim().chars().filter(|c| !c.is_control()).take(80).collect::<String>()).filter(|c| !c.is_empty());
                         let attachments = crate::thumbs::keep(attachments, crate::thumbs::dir(&self.config().data_dir)).await;
                         let n = self.deps.hub.say(thread_id, &viewer.id(), &text, attachments, quotes, client)?;
+                        // Answering from the decisions page means the question was read, even without opening
+                        // its chat. Stop at that card: later messages may not have been seen.
+                        if let Some(asked) = answered_card {
+                            self.deps.store.set_read(&viewer.id(), thread_id, asked)?;
+                        }
                         return ok(json!({ "n": n }));
                     }
                     (Some("read"), "PUT") => {
@@ -882,6 +889,7 @@ impl AdminApi {
                         if !self.deps.store.close_card(&viewer.id(), thread_id, n, option)? {
                             return Err(http_error(409, "这次等待已改变，请刷新后重试"));
                         }
+                        self.deps.store.set_read(&viewer.id(), thread_id, n)?;
                         return ok(json!({ "closedCard": { "thread": thread_id, "n": n } }));
                     }
                     // A chat archived or shown again: with its session when it is that session's own (Hub::archive_chat).
