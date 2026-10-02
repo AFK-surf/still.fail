@@ -528,7 +528,7 @@ pub struct DecisionsView {
 }
 
 /// A card the viewer answered today: where it is, what it asked (`text`, its post's first line), how they answered it
-/// (`answer`: 选了「…」, 回复：…), and when (`when`, 14:05).
+/// (`answer`: 选了「…」, 回复：…), and when (`clock`, 14:05).
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -544,7 +544,7 @@ pub struct DecisionAnswered {
     pub seq: i64,
     pub text: String,
     pub answer: String,
-    pub when: String,
+    pub clock: String,
 }
 
 /// A chat of the viewer's where an agent is at work or waiting: where it is, and what it is doing (`line`: 在做 · …,

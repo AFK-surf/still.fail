@@ -2189,6 +2189,7 @@ mod tests {
             t.set(rows("ws/st"), json!([done, busy, others]));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
+            eprintln!("DBG {}", v);
             let answered = v["answered"].as_array().unwrap();
             assert_eq!(answered.iter().map(|a| a["answer"].as_str().unwrap()).collect::<Vec<_>>(), ["选了「不需要部署」", "选了「先发测试版」"], "today's only, newest first");
             assert_eq!((answered[1]["text"].as_str(), answered[1]["title"].as_str(), answered[1]["seq"].as_u64()), (Some("0.1.1570 先发测试版吗？"), Some("7 的标题"), Some(3)));

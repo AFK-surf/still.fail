@@ -27,6 +27,11 @@ function Themed({ name, width, height, alt = "", className }: { name: string; wi
   return <img className={className} src={`${BASE}${name}${dark ? "-dark" : ""}.svg`} alt={alt} width={width} height={height} />;
 }
 
+/** The buddy's face, idle (as a station with nothing to do has it; Android's buddy_idle). */
+export function IdleFace({ size, className }: { size: number; className?: string }) {
+  return <Themed name="idle" width={size} height={size} className={className} />;
+}
+
 /** The buddy: the simplified 16-grid drawing up to 16 px, the full one from 22 px. */
 export function Mark({ size, className }: { size: number; className?: string }) {
   return <Themed name={size <= 16 ? "mark-16" : "mark"} width={size} height={size} className={className} />;

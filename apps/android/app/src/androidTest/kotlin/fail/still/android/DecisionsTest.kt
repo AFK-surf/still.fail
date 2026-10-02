@@ -8,6 +8,9 @@
 // A card of a type unknown here sends to its chat. `shots` pictures them (light and dark) into the app's files/shots.
 package fail.still.android
 
+import fail.still.android.data.DecisionsToday
+import fail.still.android.data.DecisionWorking
+import fail.still.android.data.DecisionAnswered
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.view.InputDevice
@@ -189,6 +192,26 @@ class DecisionsTest {
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false))
         h.settle()
         rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Decisions), h.app.stack) }
+        rule.onNodeWithText("奏折都批完了").assertExists()
+    }
+
+    // With none left: the day in numbers, the chats at work and today's answers, each opening its chat.
+    @Test fun emptyQueueSaysTheDay() {
+        val h = page()
+        val view = DecisionsView(
+            emptyList(), 0u, loading = false,
+            answered = listOf(DecisionAnswered("ws/st", "studio", "k1", 7, "安卓发版", 3, "先发测试版吗？", "选了「先发测试版」", "10:42")),
+            working = listOf(DecisionWorking("ws/st", "studio", "k2", 8, "官网首屏", "在做 · 截三种首屏")),
+            today = DecisionsToday(1u, "6 分钟", 1u),
+        )
+        h.fake.put(Topics.decisions(Fixtures.WS), view)
+        h.settle()
+        rule.onNodeWithText("6 分钟").assertExists()
+        rule.onNodeWithText("在做 · 截三种首屏").assertExists()
+        rule.onNodeWithText("安卓发版 · 选了「先发测试版」").assertExists()
+        rule.onNodeWithText("官网首屏").performClick()
+        h.settle()
+        rule.runOnIdle { assertEquals(Screen.Chat("ws/st", ChatOf.Session("k2")), h.app.stack.last()) }
     }
 
     @Test fun emptyQueueDoesNotPopPageAboveIt() {

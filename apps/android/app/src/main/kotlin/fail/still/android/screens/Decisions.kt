@@ -13,6 +13,11 @@
 package fail.still.android.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import fail.still.android.ui.AgentStateMark
+import fail.still.android.data.ChatState
+import fail.still.android.R
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.expandVertically
@@ -252,17 +257,88 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
         TopBack("会话", app::pop)
         if (shown.isEmpty()) {
-            val note = when {
-                view == null -> topic.error?.message ?: "正在读取…"
-                view.loading -> "正在读取…"
-                else -> "没有等你决定的事"
+            if (view != null && !view.loading) {
+                Idle(view, Modifier.weight(1f))
+                return@Column
             }
+            val note = if (view == null) topic.error?.message ?: "正在读取…" else "正在读取…"
             Box(Modifier.weight(1f).fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(note, fontSize = 15.sp, color = if (view == null && topic.error != null) C.red else C.muted, textAlign = TextAlign.Center)
             }
             return@Column
         }
         Deck(shown, local, Modifier.weight(1f))
+    }
+}
+
+/**
+ * None left (web DecisionsIdle.tsx): the page stays for the next to come and says how the day went (how many answered,
+ * how long they waited on average, how many agents are at work), where the next may come from (the viewer's chats with
+ * an agent at work or waiting) and what was answered today. Each opens its chat.
+ */
+@Composable
+private fun Idle(view: DecisionsView, modifier: Modifier) {
+    val app = LocalApp.current
+    val today = view.today
+    val working = view.working.orEmpty()
+    val answered = view.answered.orEmpty()
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp)) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(painterResource(if (C.dark) R.drawable.buddy_idle_dark else R.drawable.buddy_idle), null, Modifier.size(72.dp))
+            Text("奏折都批完了", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.padding(top = 8.dp))
+            Text("有新的会直接出现在这里", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+            if (today != null) {
+                Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    Figure(today.count.toString(), "今天批了")
+                    today.waited?.let { Figure(it, "平均等你") }
+                    Figure(today.working.toString(), "在干活")
+                }
+            }
+        }
+        if (working.isNotEmpty()) {
+            IdleTitle("正在办 · 下一封可能从这里来")
+            working.forEach { w ->
+                IdleRow(w.title, w.line, w.time?.get("lastActiveAt")?.ago.orEmpty(), busy = true) { app.push(Screen.Chat(w.station, ChatOf.Session(w.session))) }
+            }
+        }
+        if (answered.isNotEmpty()) {
+            IdleTitle("今天批过的")
+            answered.forEach { a ->
+                IdleRow(a.text, "${a.title} · ${a.answer}", a.clock, busy = false) { app.push(Screen.Chat(a.station, ChatOf.Session(a.session))) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Figure(figure: String, words: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(figure, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Text(words, fontSize = 12.sp, color = C.subtle)
+    }
+}
+
+@Composable
+private fun IdleTitle(text: String) {
+    Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.subtle, modifier = Modifier.padding(start = 10.dp, top = 28.dp, bottom = 4.dp))
+}
+
+/** A chat at work (the turning yellow ring) or a card answered (a quiet dot): its words over where it is, when at its end. */
+@Composable
+private fun IdleRow(main: String, meta: String, at: String, busy: Boolean, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onOpen).padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.padding(top = 4.dp).size(12.dp), contentAlignment = Alignment.Center) {
+            if (busy) AgentStateMark(ChatState.Running, C.bg)
+            else Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(C.subtle))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(main, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(meta, fontSize = 13.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(at, fontSize = 12.sp, color = C.subtle)
     }
 }
 

@@ -143,7 +143,7 @@ pub fn answer_text(a: &Value) -> String {
 }
 
 /// The 奏 page's day, as the viewer's clock has it: of the cards answered lately (`answered`), only today's, each
-/// with when (14:05: `when`), newest first; and `today`: how many, how long they waited for the viewer on average
+/// with when (14:05: `clock`), newest first; and `today`: how many, how long they waited for the viewer on average
 /// (`waited`, in words), how many chats have an agent at work or waiting (`working`).
 pub fn today(view: &mut Value, c: crate::present::Clock) {
     if !view.is_object() {
@@ -154,7 +154,7 @@ pub fn today(view: &mut Value, c: crate::present::Clock) {
     let mut answered: Vec<Value> = view.get("answered").and_then(Value::as_array).cloned().unwrap_or_default().into_iter()
         .filter(|a| crate::format::local_day(at(a, "answeredAt"), c.offset_min) == day).collect();
     for a in &mut answered {
-        a["when"] = json!(crate::format::clock(at(a, "answeredAt"), c.offset_min));
+        a["clock"] = json!(crate::format::clock(at(a, "answeredAt"), c.offset_min));
     }
     let waits: Vec<f64> = answered.iter().map(|a| (at(a, "answeredAt") - at(a, "askedAt")).max(0.0)).collect();
     let mut today = json!({

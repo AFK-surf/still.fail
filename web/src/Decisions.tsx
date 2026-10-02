@@ -19,6 +19,7 @@ import { doingMatches, failed, useDoing, useDoingList } from "./doing.ts";
 import { useAct } from "./toast.tsx";
 import { reducedMotion } from "./motion.ts";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
+import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { useDraft, type Draft } from "./draft.ts";
 import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
@@ -262,9 +263,10 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
 
   let body: ReactNode;
   if (!front) {
-    body = view.value || view.error
-      ? <p className={css.empty}>{view.error && !view.value ? view.error.message : view.value?.loading ? "正在读取…" : "没有等你决定的事"}</p>
-      : null;
+    body = view.value && !view.value.loading ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+      : view.value || view.error
+        ? <p className={css.empty}>{view.error && !view.value ? view.error.message : "正在读取…"}</p>
+        : null;
   } else {
     const d = front;
     const path = `${stationBase(d.station)}/chats/${encodeURIComponent(d.session)}`;

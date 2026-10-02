@@ -12,6 +12,7 @@ import { NavLink } from "react-router";
 import { animate } from "motion";
 import type { DecisionItem } from "./core/shapes.ts";
 import { DecisionAnswer, DecisionMessages, flyOff, keyOf, useDecisionQueue } from "./Decisions.tsx";
+import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { StationContext, stationBase } from "./station.tsx";
 import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
@@ -101,9 +102,7 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
 
   const firstAside = items.findIndex((x) => queue.isAside(x));
   const path = d ? `${stationBase(d.station)}/chats/${encodeURIComponent(d.session)}` : "";
-  const empty = view.value || view.error
-    ? (view.error && !view.value ? view.error.message : view.value?.loading ? "正在读取…" : "没有等你决定的事")
-    : null;
+  const empty = view.value || view.error ? (view.error && !view.value ? view.error.message : "正在读取…") : null;
   return (
     <>
       <nav className={nav.sidebar} aria-label="奏">
@@ -130,6 +129,7 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
               </button>
             </div>
           ))}
+          {view.value && !view.value.loading && items.length === 0 && <div className={css.group}>暂无</div>}
         </div>
       </nav>
       <main className={shellCss.main}>
@@ -164,7 +164,8 @@ export function DecisionDesk({ workspace, back, onOpen }: { workspace: string; b
                   </div>
                 </div>
               </StationContext.Provider>
-            ) : empty && <p className={deckCss.empty}>{empty}</p>}
+            ) : view.value && !view.value.loading ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+              : empty && <p className={deckCss.empty}>{empty}</p>}
           </div>
         </div>
       </main>

@@ -1437,6 +1437,22 @@ export interface Counts {
 }
 
 /**
+ * A card the viewer answered today: where it is, what it asked (`text`, its post's first line), how they answered it
+ * (`answer`: 选了「…」, 回复：…), and when (`clock`, 14:05).
+ */
+export interface DecisionAnswered {
+	station: string;
+	stationName: string;
+	session: string;
+	thread: number;
+	title: string;
+	seq: number;
+	text: string;
+	answer: string;
+	clock: string;
+}
+
+/**
  * One card on the 奏 page: where it is, the post that asks (as a chat shows messages, with its card) and the messages
  * just before it, the card (an options card's options as shown, also as `options`), and whether the viewer set it
  * aside on this device. An options card is answered with `decision.answer`, a text card with `decision.reply`.
@@ -1463,6 +1479,30 @@ export interface DecisionItem {
 }
 
 /**
+ * A chat of the viewer's where an agent is at work or waiting: where it is, and what it is doing (`line`: 在做 · …,
+ * 在等：…), and since when (`time.lastActiveAt`).
+ */
+export interface DecisionWorking {
+	station: string;
+	stationName: string;
+	session: string;
+	thread: number;
+	title: string;
+	line: string;
+	time?: Record<string, Stamp>;
+}
+
+/**
+ * The 奏 page's day: how many cards the viewer answered today, how long they waited on average (in words; none with
+ * none answered), and how many of their chats have an agent at work or waiting.
+ */
+export interface DecisionsToday {
+	count: number;
+	waited?: string;
+	working: number;
+}
+
+/**
  * The cards waiting in a workspace's chats for the viewer (the `decisions` view, the 奏 page, core decisions.rs):
  * pending whatever their agents do, not dismissed by them, those they set aside (待定) last; `count` for 奏 N.
  */
@@ -1471,6 +1511,12 @@ export interface DecisionsView {
 	count: number;
 	/** Some station's chats are still being read: more may come. */
 	loading: boolean;
+	/** The cards the viewer answered today, newest first. A core before them says none. */
+	answered?: DecisionAnswered[];
+	/** The viewer's chats where an agent is at work or waiting (正在办), newest first: where the next may come from. */
+	working?: DecisionWorking[];
+	/** The day in numbers. */
+	today?: DecisionsToday;
 }
 
 /** What this device is, as its host told the core at start (`client.device`), and what follows from it. */

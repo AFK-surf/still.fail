@@ -1425,6 +1425,21 @@ data class Counts (
 	val warm: Long
 )
 
+/// A card the viewer answered today: where it is, what it asked (`text`, its post's first line), how they answered it
+/// (`answer`: 选了「…」, 回复：…), and when (`clock`, 14:05).
+@Serializable
+data class DecisionAnswered (
+	val station: String,
+	val stationName: String,
+	val session: String,
+	val thread: Long,
+	val title: String,
+	val seq: Long,
+	val text: String,
+	val answer: String,
+	val clock: String
+)
+
 /// One card on the 奏 page: where it is, the post that asks (as a chat shows messages, with its card) and the messages
 /// just before it, the card (an options card's options as shown, also as `options`), and whether the viewer set it
 /// aside on this device. An options card is answered with `decision.answer`, a text card with `decision.reply`.
@@ -1450,6 +1465,28 @@ data class DecisionItem (
 	val text: String
 )
 
+/// A chat of the viewer's where an agent is at work or waiting: where it is, and what it is doing (`line`: 在做 · …,
+/// 在等：…), and since when (`time.lastActiveAt`).
+@Serializable
+data class DecisionWorking (
+	val station: String,
+	val stationName: String,
+	val session: String,
+	val thread: Long,
+	val title: String,
+	val line: String,
+	val time: Map<String, Stamp>? = null
+)
+
+/// The 奏 page's day: how many cards the viewer answered today, how long they waited on average (in words; none with
+/// none answered), and how many of their chats have an agent at work or waiting.
+@Serializable
+data class DecisionsToday (
+	val count: UInt,
+	val waited: String? = null,
+	val working: UInt
+)
+
 /// The cards waiting in a workspace's chats for the viewer (the `decisions` view, the 奏 page, core decisions.rs):
 /// pending whatever their agents do, not dismissed by them, those they set aside (待定) last; `count` for 奏 N.
 @Serializable
@@ -1457,7 +1494,13 @@ data class DecisionsView (
 	val items: List<DecisionItem>,
 	val count: UInt,
 	/// Some station's chats are still being read: more may come.
-	val loading: Boolean
+	val loading: Boolean,
+	/// The cards the viewer answered today, newest first. A core before them says none.
+	val answered: List<DecisionAnswered>? = null,
+	/// The viewer's chats where an agent is at work or waiting (正在办), newest first: where the next may come from.
+	val working: List<DecisionWorking>? = null,
+	/// The day in numbers.
+	val today: DecisionsToday? = null
 )
 
 /// What this device is, as its host told the core at start (`client.device`), and what follows from it.
