@@ -15,7 +15,7 @@ export const mPlaceholders = style({
   selectors: { "&[data-still]": { animation: "none", opacity: 0.6 } },
   "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
 });
-const bar = { display: "block", background: "var(--m-chip)", borderRadius: "7px" } as const;
+const bar = { display: "block", background: "var(--m-bubble)", borderRadius: "7px" } as const;
 export const mPlaceRow = style({ display: "flex", alignItems: "center", height: "66px", padding: "0 16px 0 22px", boxSizing: "border-box" });
 export const mPlaceLines = style({ flex: "1", display: "grid", gap: "10px", justifyItems: "start" });
 export const mPlaceTitle = style({ ...bar, height: "13px" });

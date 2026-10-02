@@ -64,7 +64,7 @@ private fun placeholderAlpha(still: Boolean): () -> Float {
 
 @Composable
 private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(7.dp)) =
-    Box(Modifier.width(width).height(height).background(C.chip, shape))
+    Box(Modifier.width(width).height(height).background(C.bubble, shape))
 
 /** The chat list's rows to come (Home.kt ChatRowBody's size: 66 high, its title and line, who is in it at the end). */
 @Composable
@@ -77,7 +77,7 @@ fun PlaceholderRows(count: Int, still: Boolean = false) {
                     Bar(TITLES[i % TITLES.size].dp, 13.dp)
                     Bar(LINES[i % LINES.size].dp, 10.dp)
                 }
-                Box(Modifier.size(22.dp).background(C.chip, CircleShape))
+                Box(Modifier.size(22.dp).background(C.bubble, CircleShape))
             }
         }
     }
@@ -89,7 +89,7 @@ fun PlaceholderMessages(still: Boolean = false) {
     val alpha = placeholderAlpha(still)
     Column(Modifier.fillMaxWidth().padding(top = 8.dp).graphicsLayer { this.alpha = alpha() }.clearAndSetSemantics {}, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         for ((mine, w, h) in MESSAGES) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-            if (!mine) { Box(Modifier.size(28.dp).background(C.chip, CircleShape)); Spacer(Modifier.width(10.dp)) }
+            if (!mine) { Box(Modifier.size(28.dp).background(C.bubble, CircleShape)); Spacer(Modifier.width(10.dp)) }
             Bar(w.dp, h.dp, RoundedCornerShape(18.dp))
         }
     }
