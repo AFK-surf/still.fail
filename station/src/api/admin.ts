@@ -21,8 +21,11 @@ export class Admin {
       }
     };
     this.add("GET", /^\/chats$/, read("chats", (r) => ({ viewer: r.viewer, archived: param(r, "archived") === "1" })));
-    // A thread id is an i64 in the Rust route; one that is no number is no thread.
-    this.add("GET", /^\/threads\/([+-]?\d+)\/entries$/, read("entries", (r, [id]) => ({ viewer: r.viewer, thread: Number(id), params: r.query })));
+    this.add("GET", /^\/threads\/([^/]+)\/entries$/, async (r, [id]) => {
+      // A thread id is an i64 in the Rust route; one that is no number is no thread.
+      if (!/^[+-]?\d+$/.test(id)) return error(404, `unknown thread ${id}`);
+      return read("entries", () => ({ viewer: r.viewer, thread: Number(id), params: r.query }))(r, [id]);
+    });
   }
 
   private add(method: string, pattern: RegExp, handle: Handler) {
@@ -40,6 +43,6 @@ export class Admin {
         return answer;
       }
     }
-    return error(404, "not found");
+    return error(404, `no route ${r.method} ${r.path}`);
   }
 }
