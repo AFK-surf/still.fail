@@ -35,6 +35,18 @@ async fn main() -> Result<()> {
             println!("{}", String::from_utf8_lossy(&body));
             Ok(())
         }
+        // One write: its head line on stderr, its body on stdout.
+        ["send", data, id, addrs, method, path, body] => {
+            let conn = connect(Path::new(data), id, addrs).await?;
+            let (mut send, mut recv) = conn.open_bi().await?;
+            send.write_all(format!("{}\n{body}", json!({ "method": method, "path": path, "headers": {} })).as_bytes()).await?;
+            send.finish()?;
+            let all = recv.read_to_end(256 << 20).await?;
+            let at = all.iter().position(|b| *b == b'\n').context("no head")?;
+            eprintln!("{}", String::from_utf8_lossy(&all[..at]));
+            println!("{}", String::from_utf8_lossy(&all[at + 1..]));
+            Ok(())
+        }
         // An event stream followed for `seconds`, printed as it comes; meanwhile each `METHOD path body` write asked
         // on the same connection, a second apart.
         ["follow", data, id, addrs, seconds, path, writes @ ..] => {
