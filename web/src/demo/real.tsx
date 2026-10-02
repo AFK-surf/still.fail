@@ -1,5 +1,5 @@
-// A step that reaches past the demo (Slack, a model's account, signing in, another machine, ember cloud's members)
-// cannot be done in it: the demo says so over itself, and offers the real ember (station.ts NeedsReal, mount.tsx).
+// A step that reaches past the demo (Slack, a model's account, signing in, another machine, still.fail cloud's members)
+// cannot be done in it: the demo says so over itself, and offers the real still.fail instance (station.ts NeedsReal, mount.tsx).
 import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import * as css from "./real.css.ts";

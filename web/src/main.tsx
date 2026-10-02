@@ -15,7 +15,7 @@ if (import.meta.env.PROD) webUpdates.start();
 followAppearance();
 startScrollbars();
 
-// ember cloud's web app (sign-in, workspaces; stations over iroh). The data comes from the client core (core/); a
+// still.fail cloud's web app (sign-in, workspaces; stations over iroh). The data comes from the client core (core/); a
 // station serves no page of its own.
 startTelemetry("cloud");
 nameTitle();

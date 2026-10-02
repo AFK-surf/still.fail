@@ -16,7 +16,7 @@ them. What changes is where views come from.
 
 ## The model
 
-The core keeps ember's business data as records, per account:
+The core keeps still.fail's business data as records, per account:
 
 | Record | Key | From | Built |
 |---|---|---|---|

@@ -276,7 +276,7 @@ pub struct EntryRow {
     /// message: the still.fail app a person sent it from ("android 0.1.1123"); None elsewhere and from older apps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<String>,
-    /// message: for ember's notice about one of the station's profiles (its sign-in failed), that profile's id.
+    /// message: for still.fail's notice about one of the station's profiles (its sign-in failed), that profile's id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
     /// message: an agent's post with an options card, the answers to pick from: `[{label, detail?, recommended?}]`, as
@@ -478,7 +478,7 @@ pub struct NewMessage {
     pub quotes: Vec<Quote>,
     pub declared: Option<String>,
     pub client: Option<String>,
-    /// ember's notice about a profile: its id (EntryRow::profile).
+    /// still.fail's notice about a profile: its id (EntryRow::profile).
     pub profile: Option<String>,
     /// The card an agent's post carries (EntryRow::card); an options card is kept as `options` too.
     pub card: Option<Value>,

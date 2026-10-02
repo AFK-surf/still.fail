@@ -1,4 +1,4 @@
-// The made-up station behind the demo's chats, and its workspace in ember cloud: what the settings, the station's
+// The made-up station behind the demo's chats, and its workspace in still.fail cloud: what the settings, the station's
 // page, the accounts and the phone's workspace pages read, so that every page the visitor can open shows something.
 // station.json holds the station's views, shaped as a real station's (every value made up), its times counted from
 // 0: they are moved to now here.
@@ -66,8 +66,8 @@ export const connects = (): ConnectsView => ({
 });
 
 /**
- * What only a real ember can do: anything that reaches past the demo (Slack, a model's account, signing in, another
- * machine, ember cloud's members). The page offers the real one instead (mount.tsx).
+ * What only a real still.fail instance can do: anything that reaches past the demo (Slack, a model's account, signing in, another
+ * machine, still.fail cloud's members). The page offers the real one instead (mount.tsx).
  */
 export class NeedsReal extends Error {
   constructor() {
@@ -108,7 +108,7 @@ export function archive(): ArchiveView {
   return { days, errors: [], loading: false };
 }
 
-// ---- ember cloud ----
+// ---- still.fail cloud ----
 
 const user = (p: Person) => ({ sub: p.id, email: p.email ?? p.id, name: p.name, picture: p.shown.picture ?? "" });
 

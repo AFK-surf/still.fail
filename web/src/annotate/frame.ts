@@ -68,7 +68,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
   const hoverBox = document.createElement("div");
   hoverBox.style.cssText = `position:absolute;display:none;box-sizing:border-box;border:1.5px solid ${MARK};background:${MARK}14;border-radius:3px`;
   const hoverName = document.createElement("div");
-  // Frosted, as ember's own floating things are (the client's bubbles, the composer).
+  // Frosted, as still.fail's own floating things are (the client's bubbles, the composer).
   hoverName.style.cssText = "position:absolute;display:none;padding:5px 9px;border-radius:999px;background:rgba(228,228,232,.72);-webkit-backdrop-filter:blur(20px) saturate(1.4);backdrop-filter:blur(20px) saturate(1.4);color:#2b2f36;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.06),0 6px 20px rgba(20,24,30,.10)";
   layer.append(hoverBox, hoverName);
   const place = () => document.body && !layer.isConnected && document.body.append(layer);

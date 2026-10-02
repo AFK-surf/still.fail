@@ -22,7 +22,7 @@ function use(run: (ph: PostHog) => void): void {
   else early?.push(run);
 }
 
-/** Starts PostHog for this page: `app` is which web app it is (only ember cloud's now; stations served one once). */
+/** Starts PostHog for this page: `app` is which web app it is (only still.fail cloud's now; stations served one once). */
 export function startTelemetry(app: "cloud"): void {
   if (!__POSTHOG__) return;
   const { host, key, release } = __POSTHOG__;

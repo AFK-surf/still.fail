@@ -13,7 +13,7 @@ still.fail 是一个团队聊天里的 coding agent 服务：人在 Slack 或 st
 
 ## 2. 进程结构
 
-单进程 `ember-station`（Rust，mesh/station），station 本身是 ember-app（mesh/app），在同一个进程里。由 launchd（macOS）或 systemd 用户服务（Linux）托管；桌面端自带一份，作为子进程用 `--with-parent` 启动。迁移过程见 [station-rust.md](station-rust.md)。
+单进程 `stillfail-station`（Rust，mesh/station），station 本身是 stillfail-app（mesh/app），在同一个进程里。由 launchd（macOS）或 systemd 用户服务（Linux）托管；桌面端自带一份，作为子进程用 `--with-parent` 启动。迁移过程见 [station-rust.md](station-rust.md)。
 
 ```
 Chat 接入(Slack / 网页对话) ── Store(SQLite) ── SessionActor(每个会话一个，串行)
@@ -22,7 +22,7 @@ Chat 接入(Slack / 网页对话) ── Store(SQLite) ── SessionActor(每�
                                                     │
                                     MCP 端点(HTTP, 127.0.0.1) ◄── agent 调用
 Jobs   账号池   空闲进程回收   自动归档
-管理 API ◄── 本机管理页(127.0.0.1) / iroh(客户端，带 ember cloud 签发的成员凭证)
+管理 API ◄── iroh(客户端，带 still.fail cloud 签发的成员凭证)
 ```
 
 ## 3. 聊天接入
@@ -87,7 +87,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 ## 8. 后台任务
 
 - agent 用 `job_start` 让 station 执行 shell 命令，agent 不自己跑 sleep 循环。每个任务在独立进程组里跑，输出写日志文件。
-- 任务结束时通知 agent；任务里可以用 `ember-job notify <文字>` 随时给 agent 发消息。通知作为输入注入会话，唤醒 agent。
+- 任务结束时通知 agent；任务里可以用 `stillfail-job notify <文字>` 随时给 agent 发消息。通知作为输入注入会话，唤醒 agent。
 - 带 `port` 的是 web 服务：一直保持运行（退出后按递增间隔重启），workspace 成员经 still.fail cloud 的链接打开。
 - station 重启后，原来在跑的任务重新启动，并告诉 agent。
 

@@ -200,7 +200,7 @@ pub fn is_viewer(me: &Value, person: &str, slack_users: &[String]) -> bool {
     id == Some(person) || email.is_some_and(|e| e.eq_ignore_ascii_case(person)) || slack_users.iter().any(|u| u == person)
 }
 
-/// A workspace member's name, by email.
+/// A workspace mstill.fail's name, by email.
 pub fn member_name<'a>(members: &'a [Value], email: &str) -> Option<&'a str> {
     members.iter()
         .find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(email)))
@@ -622,7 +622,7 @@ pub fn host(h: &mut Value) {
     let summary = format!("{cpus} 核 · {}", format::gb(mem_total));
     h["summary"] = json!(summary);
     h["line"] = json!(format!("{os} · {summary} · 已运行 {} 天", (uptime / 86_400.0).floor()));
-    // Its card: what it is, how loaded (each meter coloured by how full), and what ember itself takes.
+    // Its card: what it is, how loaded (each meter coloured by how full), and what still.fail itself takes.
     let days = (uptime / 86_400.0).floor();
     let hours = ((uptime % 86_400.0) / 3600.0).floor();
     let arch = src.get("arch").and_then(Value::as_str).unwrap_or("").to_string();

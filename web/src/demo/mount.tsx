@@ -100,7 +100,7 @@ function publish() {
   for (const [id, topic] of subs) post({ id, value: valueOf(topic) });
 }
 
-// What the visitor sends is answered as an account its provider has banned would be: the turn fails, ember says why in
+// What the visitor sends is answered as an account its provider has banned would be: the turn fails, still.fail says why in
 // the chat, and the agent is marked failed — the station's own words (session.rs failure_notice, quota.rs).
 const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BAN_DETAIL}`;
 
@@ -150,7 +150,7 @@ function answer(name: string, params: Record<string, unknown>): unknown {
       publish();
     }, 2600);
   }
-  // What reaches past the demo is offered in a real ember instead, and fails here as not done.
+  // What reaches past the demo is offered in a real still.fail instance instead, and fails here as not done.
   try {
     if (name === "station.upload" || name.startsWith("auth.")) throw new station.NeedsReal();
     // still.fail cloud's operations (ops.rs: by the account they go as): every one would reach out.
@@ -286,7 +286,7 @@ export function mountDemo(element: HTMLElement): void {
     if (root.contains(this) && !touched) return;
     focus.call(this, { ...options, preventScroll: true });
   };
-  // A link out of the demo (Slack, a web service, an app's settings) opens nothing: it too needs a real ember. Only the
+  // A link out of the demo (Slack, a web service, an app's settings) opens nothing: it too needs a real still.fail instance. Only the
   // app's own links count, in its box or its dialogs and menus on the page; the page's own, and the note's, go.
   const inApp = (el: Element) => !el.closest("[data-real-stillfail]") && (root.contains(el) || !!el.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]"));
   document.addEventListener("click", (event) => {
@@ -310,7 +310,7 @@ export function mountDemo(element: HTMLElement): void {
   // Played once the demo is seen: most of it in view, and not before the site's opening (its title's motion, which
   // tells when it is done; a page without it has none) has handed over to it.
   const opened = document.documentElement.dataset.motion === undefined ? Promise.resolve() : new Promise<void>((done) => {
-    window.addEventListener("ember-site-opened", () => done(), { once: true });
+    window.addEventListener("stillfail-site-opened", () => done(), { once: true });
     setTimeout(done, 8000);
   });
   void opened.then(() => new IntersectionObserver((entries, observer) => {

@@ -632,7 +632,7 @@ async fn a_slack_app_made_on_a_station_in_ember_cloud_is_installed_through_slack
     assert_eq!(s.call("POST", "/slack/apps", Some(json!({ "team": "T3", "settings": { "name": "x" } }))).await.0, 400, "not with another's token");
     let manifest = sent.2;
     assert_eq!((manifest["display_information"]["name"].as_str(), manifest["display_information"]["description"].as_str()), (Some("Helper"), Some("Hi")));
-    // Slack sends the person back to ember cloud's page, which hands the code to the station the state names.
+    // Slack sends the person back to still.fail cloud's page, which hands the code to the station the state names.
     assert_eq!(manifest["oauth_config"]["redirect_urls"], json!(["https://cloud.test/slack/installed"]));
     let install = s.get("/overview").await["slackApps"][0]["install"].as_str().unwrap().to_string();
     let query: HashMap<String, String> = query_pairs(install.split_once('?').unwrap().1).into_iter().collect();

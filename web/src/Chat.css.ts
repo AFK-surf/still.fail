@@ -62,7 +62,7 @@ export const offlineNotice = style({
   },
 });
 /**
- * What ember itself says in a chat: a pill across it, apart from people's and agents' messages, in one line. The grey
+ * What still.fail itself says in a chat: a pill across it, apart from people's and agents' messages, in one line. The grey
  * of the offline notice; a failure in red (the accent is the names'). Opened, it shows all its words, and its time.
  */
 export const msgSystem = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" });

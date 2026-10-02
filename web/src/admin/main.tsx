@@ -1,6 +1,6 @@
 // The admin's console as an app of its own, on its own host (admin.still.fail).
 // Its origin gives it its own client core and so its own signed-in accounts:
-// signing in here signs in nowhere else. Sign-in goes through ember cloud like
+// signing in here signs in nowhere else. Sign-in goes through still.fail cloud like
 // the web app's and comes back to this host's /auth/callback.
 import "../renamed.ts";
 import "../styles/index.ts";

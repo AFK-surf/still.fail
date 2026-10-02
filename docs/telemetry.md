@@ -4,9 +4,9 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 **什么都不带内容**：聊天文字、引用、文件名、提示词、agent 的输出、对话标题，一样都不发。发出去的只有动作、计数、耗时和错误（带调用栈）。
 
-## 网页版（ember.3720.org）和 station 自己的管理页
+## 网页版（app.still.fail）
 
-`web/src/telemetry.ts`，在 `web/src/main.tsx` 里启动。构建时没有 key 的话，这些函数什么都不做，bundle 里也没有 posthog-js。管理后台（`admin.ember.3720.org`）什么都不发。
+`web/src/telemetry.ts`，在 `web/src/main.tsx` 里启动。构建时没有 key 的话，这些函数什么都不做，bundle 里也没有 posthog-js。管理后台（`admin.still.fail`）什么都不发。
 
 - **身份**：看着哪个 workspace，就以那个 workspace 所用的已登录账号标识（still.fail 账号 id，即 Google `sub`），邮箱作为人的属性；退出这个账号时 reset。station 自己的管理页不标识人。
 - **错误**：页面上未捕获的异常和 promise 拒绝；核心 worker（SharedWorker / Worker）里捕获到的错误由 worker 转给一个页面上报；worker 崩溃（`{fatal}`）或起不来也上报。每个事件都带 `release`（构建时的 git 提交）和 `app`（`cloud` / `station`）。
@@ -37,12 +37,12 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ## key 从哪来
 
-项目 key 是 PostHog 的公开 key（`phc_…`），本来就会出现在网页里，但和别的部署输入一样不进仓库：放在 studio 的 `~/ember-deploy/posthog.json`，内容 `{ "host": "https://us.i.posthog.com", "key": "phc_…" }`。
+项目 key 是 PostHog 的公开 key（`phc_…`），本来就会出现在网页里，但和别的部署输入一样不进仓库：放在 studio 的 `~/stillfail-deploy/posthog.json`，内容 `{ "host": "https://us.i.posthog.com", "key": "phc_…" }`。
 
 构建时由环境变量 `STILLFAIL_POSTHOG`（改名前是 `EMBER_POSTHOG`，也认）指向这个文件，`web/vite.config.ts`（网页）和 `scripts/posthog-key.ts`（station）读它：
 
 - `cloud/deploy.py` 构建网页版时自动设置（文件不存在就构建一个没有分析的版本，并提示）。
-- station 的构建：`STILLFAIL_POSTHOG=~/ember-deploy/posthog.json pnpm build`。station 没有自己的页面了，`pnpm build` 只编 wasm core 并把 key 写到 `dist/admin/posthog.json`（scripts/posthog-key.ts），发布包带着它，station 启动时从那里读，所以管理者只需打开配置，不需要别的设置。
+- station 的构建：`STILLFAIL_POSTHOG=~/stillfail-deploy/posthog.json pnpm build`。station 没有自己的页面了，`pnpm build` 只编 wasm core 并把 key 写到 `dist/admin/posthog.json`（scripts/posthog-key.ts），发布包带着它，station 启动时从那里读，所以管理者只需打开配置，不需要别的设置。
 - 不设 `STILLFAIL_POSTHOG` 的构建（本地、开发）没有任何分析，station 也无从上报。
 
 # Telemetry
@@ -77,7 +77,7 @@ Inside a trace:
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the
   answer's last byte written (an event stream's: to its head). The station's
-  admin API runs in the same process (`ember-station`) and has no span of its
+  admin API runs in the same process (`stillfail-station`) and has no span of its
   own.
 
 A request without a trace (one an event caused, a stream's later reads) is a
@@ -107,7 +107,7 @@ as their clocks; durations are exact.
 
 Nothing ships Axiom's token: it lives only in still.fail cloud (`AXIOM_TOKEN`,
 `AXIOM_DATASET`, which `cloud/deploy.py` uploads from
-`~/ember-deploy/axiom.json`). Clients and stations send their spans to still.fail
+`~/stillfail-deploy/axiom.json`). Clients and stations send their spans to still.fail
 cloud's `POST /v1/telemetry/traces` (OTLP JSON, at most 512 KB and 1000 spans a
 batch), which forwards them to `https://api.axiom.co/v1/traces`:
 
@@ -137,7 +137,7 @@ sender (an account, a station) 60 batches a minute (`429` beyond), answers
   { "telemetry": { "traces": true } }
   ```
 
-  in `config.json` (off by default; read when `ember-station` starts, so
+  in `config.json` (off by default; read when `stillfail-station` starts, so
   restart the station after changing it). Off, ember-mesh records nothing but
   still passes the `traceparent` on.
 - still.fail cloud records a span only for a call whose `traceparent` is sampled.

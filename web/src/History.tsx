@@ -36,11 +36,11 @@ export function History({ station, sessionKey, summary, actions, details, focus 
 }) {
   const history = useHistory(station, sessionKey).value;
   const link = useLink();
-  // A place as its platform's mark and its name; an ember chat opens its agent's page.
+  // A place as its platform's mark and its name; a still.fail chat opens its agent's page.
   const where = (place: Place | null): ReactNode => {
     if (!place) return null;
     const inner = <>{place.surface === "ember" ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
-    // A Slack thread opens in Slack; an ember chat, its agent's page.
+    // A Slack thread opens in Slack; a still.fail chat, its agent's page.
     if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a>;
     return place.session
       ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link>

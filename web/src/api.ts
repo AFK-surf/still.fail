@@ -73,7 +73,7 @@ export type SlackAppView =
 
 export type * from "./core/shapes.ts";
 
-/** A time of anything the core sent, in words, by its field (for what ember cloud sends, which has no shape yet). */
+/** A time of anything the core sent, in words, by its field (for what still.fail cloud sends, which has no shape yet). */
 export function stamp(of: object, field: string): Stamp | undefined {
   return (of as { time?: Record<string, Stamp> }).time?.[field];
 }
@@ -309,8 +309,8 @@ export function stationApi(t: StationCall) {
     addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => ops.profileAdd<{ id: string; overview: Overview }>(input),
     putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
       ops.connectPutSlackApp<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>({ connect, input }),
-    /** Makes a Slack app with the workspace's configuration token (ember's manifest, Socket Mode on), for a connect to come. */
-    /** `install`: Slack's install link, when the app is installed through OAuth (a station in ember cloud); `state` names it. */
+    /** Makes a Slack app with the workspace's configuration token (still.fail's manifest, Socket Mode on), for a connect to come. */
+    /** `install`: Slack's install link, when the app is installed through OAuth (a station in still.fail cloud); `state` names it. */
     /** The app is kept on the station, waiting for its connect (the overview's `slackApps`); this says which it is. */
     makeSlackApp: (input: { team: string; settings: SlackAppSettings; icon?: string }) => ops.slackMakeApp<{ appId: string; iconError: string | null }>(input),
     /** Drops an app made here from the waiting ones; it stays in Slack. */

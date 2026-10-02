@@ -651,7 +651,7 @@ function LegacyNewConnectDialog({ open, onClose, resume }: { open: boolean; onCl
 }
 
 /**
- * What is left in Slack once ember made the app: installing it, and the app-level token. Installed through Slack's
+ * What is left in Slack once still.fail made the app: installing it, and the app-level token. Installed through Slack's
  * OAuth (`made.install`), Slack sends the bot token back to the station itself; else it is copied from the OAuth page.
  */
 function MadeAppSteps({ made }: { made: MadeSlackApp }) {

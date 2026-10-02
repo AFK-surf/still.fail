@@ -1,4 +1,4 @@
-// The official site's demo (site/index.html): a made-up team's ember, as the core would give it to the page. Each
+// The official site's demo (site/index.html): a made-up team's still.fail workspace, as the core would give it to the page. Each
 // chat is kept as it stands (its messages, its execution history, whether its agent is at work); main.tsx turns them
 // into the topics the app reads, and story.ts plays what happens in them.
 import type {
@@ -38,7 +38,7 @@ const OPUS: Model = { runtime: "claude", model: "claude-opus-5-5", name: "Opus 5
 const SONNET: Model = { runtime: "claude", model: "claude-sonnet-5-5", name: "Sonnet 5.5", effort: "medium", maker: ANTHROPIC };
 const GPT: Model = { runtime: "codex", model: "gpt-5.5", name: "GPT-5.5", effort: "high", maker: OPENAI };
 
-// Their pictures, drawn in the style of ember's buddy (its outline, its warm colours, its cheeks) by GPT-6 Astra.
+// Their pictures, drawn in the style of still.fail's buddy (its outline, its warm colours, its cheeks) by GPT-6 Astra.
 const pictures = import.meta.glob<string>("./people/*.svg", { eager: true, query: "?url", import: "default" });
 
 function person(id: string, name: string): Person {

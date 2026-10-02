@@ -1,4 +1,4 @@
-// A workspace in ember cloud: every station's chats and connects in one
+// A workspace in still.fail cloud: every station's chats and connects in one
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).

@@ -885,10 +885,10 @@ async fn race(host: Rc<dyn Host>, mesh: Weak<Mesh>, id: String, old: Rc<Link>) {
 }
 
 /// The endpoint for a device key. On wasm iroh has no IP transports, so this
-/// is relay-only like mesh/web, through ember's relay. Natively it also binds
+/// is relay-only like mesh/web, through still.fail's relay. Natively it also binds
 /// UDP and goes direct, and finds stations without still.fail cloud: on the LAN by
 /// mDNS (no relay needed at all), and which relay a station is on by the
-/// Mainline DHT (a station whose relay is not ember's, ember's being down).
+/// Mainline DHT (a station whose relay is not still.fail's, still.fail's being down).
 /// Its home relay is the nearest of still.fail's (see `relay_mode`).
 async fn bind(secret: &[u8; 32], relays: &[String]) -> Result<Endpoint> {
     let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relay_mode(relays)?).transport_config(transport());
@@ -898,7 +898,7 @@ async fn bind(secret: &[u8; 32], relays: &[String]) -> Result<Endpoint> {
         builder
     } else {
         builder
-            // Stations on the LAN, among ember's own (`_ember._udp`, as the station announces itself: mesh/station); a
+            // Stations on the LAN, among still.fail's own (`_ember._udp`, as the station announces itself: mesh/station); a
             // device is never dialed, so it only asks. Answers to a query stop after a few, so every endpoint that
             // answers is one more a station may be crowded out by for a round (0.7 s).
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))

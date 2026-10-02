@@ -1,5 +1,5 @@
 // The Google accounts signed in on this browser. The core keeps them, with
-// their ember cloud sessions (docs/client-core.md): the page sees who is
+// their still.fail cloud sessions (docs/client-core.md): the page sees who is
 // signed in, starts and finishes a sign-in, and signs out; tokens never reach it.
 import { useCallback } from "react";
 import { core, useTopic } from "../core/react.ts";
@@ -21,7 +21,7 @@ export function useAccounts(): Account[] | undefined {
 }
 
 /**
- * Sends the browser to Google (via ember cloud); it comes back to /auth/callback.
+ * Sends the browser to Google (via still.fail cloud); it comes back to /auth/callback.
  * The desktop app opens it in the system browser, which comes back to the app
  * through ember://auth/callback and on to the page's /auth/callback. It signs in by the name the core gives the device.
  */
@@ -47,7 +47,7 @@ export async function signOut(sub: string): Promise<void> {
 }
 
 /**
- * Signing in from a button: `busy` while ember cloud is asked where to go (`auth.begin`), what went wrong said in a
+ * Signing in from a button: `busy` while still.fail cloud is asked where to go (`auth.begin`), what went wrong said in a
  * toast. `signIn` answers whether the browser is on its way.
  */
 export function useSignIn(): { signIn(returnTo?: string): Promise<boolean>; busy: boolean } {

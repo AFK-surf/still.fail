@@ -1,7 +1,7 @@
 // A web service on a station's machine (a dev server an agent started, a
 // report it serves), shown in a frame beside the chat. The frame is on the
 // preview host (PREVIEW_ORIGIN, see cloud/src/preview.ts), so the service's
-// scripts reach nothing of ember's; its service worker hands every request of
+// scripts reach nothing of still.fail's; its service worker hands every request of
 // the service to this page, which sends it to the station through the core,
 // like any other call, and hands the answer back. No port on the station is
 // open to anyone. The desktop app needs none of that: the frame is at
@@ -9,7 +9,7 @@
 // over it is the same.
 //
 // A visualization an agent posted (an HTML file placed in its message, Viz.tsx) opens the same way, in the same
-// frame (marking and all): only the frame's requests are answered here, with the file drawn in ember's stylesheet,
+// frame (marking and all): only the frame's requests are answered here, with the file drawn in still.fail's stylesheet,
 // instead of by a port on the station.
 import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -85,7 +85,7 @@ export function ServiceFrame(shown: Shown) {
 
 /**
  * A visualization in the web frame (the desktop app's too: its own frames go to a station's port): the frame asks for
- * its page and gets the file in ember's stylesheet, with what its widget kept; what the widget says comes from that
+ * its page and gets the file in still.fail's stylesheet, with what its widget kept; what the widget says comes from that
  * page, the frame's own frame, straight to this one (Viz.tsx's useVizMessages).
  */
 function FileFrame({ station, file, ...shown }: Shown & { file: FileSource }) {

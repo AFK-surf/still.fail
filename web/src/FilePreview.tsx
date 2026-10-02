@@ -886,8 +886,8 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
   if (text === null) return <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</div>;
   let content: ReactNode;
   if (kind === "html" && !source) {
-    // Its scripts run, but in an origin of its own: nothing of ember's is reachable from it.
-    // A fragment an agent wrote to be drawn in a message (Viz.tsx) is shown the same way, in ember's stylesheet.
+    // Its scripts run, but in an origin of its own: nothing of still.fail's is reachable from it.
+    // A fragment an agent wrote to be drawn in a message (Viz.tsx) is shown the same way, in still.fail's stylesheet.
     // A mouse moving over it is the frame's, not the preview's: the frame tells, so the bars wake as they do over an image.
     content = <iframe ref={frame} className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={(isFragment(text) ? vizDocument(text) : text) + TELL_MOVES} title={name} />;
     return <div className={`${css2.fpPage} ${css2.fpPageFrame}`}>{content}</div>;

@@ -87,7 +87,7 @@ impl McpEndpoint {
             "initialize" => reply(json!({ "result": {
                 "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or("2025-06-18"),
                 "capabilities": { "tools": {} },
-                "serverInfo": { "name": "ember", "version": "0.0.0" },
+                "serverInfo": { "name": "still.fail", "version": "0.0.0" },
             } })),
             "ping" => reply(json!({ "result": {} })),
             "tools/list" => reply(json!({ "result": { "tools": self.tools.iter().map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": t.input_schema })).collect::<Vec<_>>() } })),
@@ -172,7 +172,9 @@ mod tests {
     async fn initialize_list_and_call_run_on_behalf_of_the_tokens_session() {
         let e = endpoint();
         let init = rpc(&e, Some("good"), json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-06-18" } })).await;
-        assert_eq!(init.body.unwrap()["result"]["protocolVersion"], "2025-06-18");
+        let initialized = init.body.unwrap();
+        assert_eq!(initialized["result"]["protocolVersion"], "2025-06-18");
+        assert_eq!(initialized["result"]["serverInfo"]["name"], "still.fail");
         assert_eq!(rpc(&e, Some("good"), json!({ "jsonrpc": "2.0", "method": "notifications/initialized" })).await.status, 202);
         let list = rpc(&e, Some("good"), json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" })).await.body.unwrap();
         assert_eq!(list["result"]["tools"][0]["name"], "echo");

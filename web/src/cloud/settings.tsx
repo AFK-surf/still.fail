@@ -1,4 +1,4 @@
-// Settings in ember cloud, in two parts: the account the current workspace
+// Settings in still.fail cloud, in two parts: the account the current workspace
 // is reached through (who you are, where you are signed in), and the
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).

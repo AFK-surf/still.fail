@@ -544,13 +544,13 @@ export class Directory extends DurableObject<Env> {
     return this.#one("SELECT 1 AS found FROM stations WHERE id = ?", station) !== undefined;
   }
 
-  /** A member's role, which its credential names (grants.ts). */
+  /** A mstill.fail's role, which its credential names (grants.ts). */
   memberRole(sub: string, workspace: string): Role {
     return this.#role(sub, workspace);
   }
 
   // ── revocations ─────────────────────────────────────────────────────────
-  // A member's credential lasts 30 days and stations check it offline, so what takes one back is told to them: every
+  // A mstill.fail's credential lasts 30 days and stations check it offline, so what takes one back is told to them: every
   // credential of an account (`sub`) or of a sign-in session (`sid`) issued up to `at` is refused from then on. Each
   // station hears it at once if connected, and all of its workspace's (of the last 31 days) when it connects.
 

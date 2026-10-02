@@ -1,5 +1,5 @@
 //! What a person set going on this device and the core has not finished (the `doing` topic): every call that changes
-//! something (a chat pinned, a job stopped, a member's role) from the moment it is asked until its answer, whichever
+//! something (a chat pinned, a job stopped, a mstill.fail's role) from the moment it is asked until its answer, whichever
 //! page or menu asked it. The pages show it where it is, on the row or button it is about, at once: a person sees
 //! that what they did is under way, and does not do it again. One that failed stays a few seconds more, with why
 //! (`stage` failed, `error`), so the place that turned says so too, whoever asked it. A write whose station went

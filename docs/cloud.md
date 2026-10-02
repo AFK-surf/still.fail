@@ -8,7 +8,7 @@ still.fail 的执行节点叫 **station**：就是现在这套东西（连接、
                         relay 或 n0 的 relay)┘
             │ 登录、workspace、成员凭证（30 天，缓存在设备上）
             ▼
-Cloudflare：ember cloud（ember-cloud API、ember-relay、ember-web / ember-admin / ember-preview 静态站点，官网 still-fail-site）
+Cloudflare：still.fail cloud（ember-cloud API、ember-relay、ember-web / ember-admin / ember-preview 静态站点，官网 still-fail-site）
 ```
 
 still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线也是设备自己连出来的（不靠 still.fail cloud 推送）。still.fail cloud 只管"人"：账号、workspace、成员，以及签发成员凭证；登录过一次之后，局域网里没有 still.fail cloud 也能用。代码参照 zork 的做法（`deploy/cloudflare`）分出来，和 zork 同一个 Cloudflare 账号。
@@ -54,9 +54,9 @@ Google OAuth（`openid email profile`），沿用 zork 的会话实现：access 
 - **吊销**：成员被移除或改角色（`sub`）、登录会话被注销（`sid`）时，still.fail cloud 通过 station 的控制通道推一条吊销（`revoke` 帧，`state` 帧里也带着最近 31 天的吊销）；station 拒绝签发时间不晚于吊销时间的凭证，已连着的最迟 5 秒内断开。station 不在线时错过的吊销，下次连上 still.fail cloud 时从 `state` 里补上。
 - still.fail cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。
 
-连接上用 ALPN `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
+连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
 
-station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它运行整个 station（mesh/app，同一个进程），把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
+station 端由 `stillfail-station`（Rust，iroh 1.0.3，mesh/station）负责：它运行整个 station（mesh/app，同一个进程），把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 
 ## 网页版
 
@@ -90,29 +90,29 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
 API Worker 的密钥（都可以不设：没有 VAPID 就没有 Web Push，`/v1/push/key` 回 404；没有服务账号就不推安卓）：
 
-- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`：`deploy.py` 从 studio 的 `~/ember-deploy/vapid.json`（`{public, private, subject}`）读。生成一次，之后别换（换了浏览器的订阅全部作废，要重新订阅）：
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`：`deploy.py` 从 studio 的 `~/stillfail-deploy/vapid.json`（`{public, private, subject}`）读。生成一次，之后别换（换了浏览器的订阅全部作废，要重新订阅）：
 
   ```sh
-  node -e 'const j=require("crypto").generateKeyPairSync("ec",{namedCurve:"P-256"}).privateKey.export({format:"jwk"});console.log(JSON.stringify({public:Buffer.concat([Buffer.from([4]),Buffer.from(j.x,"base64url"),Buffer.from(j.y,"base64url")]).toString("base64url"),private:j.d,subject:"mailto:<运维邮箱>"}))' > ~/ember-deploy/vapid.json
+  node -e 'const j=require("crypto").generateKeyPairSync("ec",{namedCurve:"P-256"}).privateKey.export({format:"jwk"});console.log(JSON.stringify({public:Buffer.concat([Buffer.from([4]),Buffer.from(j.x,"base64url"),Buffer.from(j.y,"base64url")]).toString("base64url"),private:j.d,subject:"mailto:<运维邮箱>"}))' > ~/stillfail-deploy/vapid.json
   ```
 
-- `FCM_SERVICE_ACCOUNT`：Firebase 项目的服务账号 JSON（Firebase 控制台 → 项目设置 → 服务账号 → 生成新的私钥），原样放在 `~/ember-deploy/fcm-service-account.json`。
+- `FCM_SERVICE_ACCOUNT`：Firebase 项目的服务账号 JSON（Firebase 控制台 → 项目设置 → 服务账号 → 生成新的私钥），原样放在 `~/stillfail-deploy/fcm-service-account.json`。
 
 ## 部署
 
-still.fail cloud 是五个 Worker（`cloud/wrangler*.jsonc`）：
+still.fail cloud 由以下 Worker 组成（`cloud/wrangler*.jsonc`）：
 
 | Worker | 是什么 | 在哪 |
 |---|---|---|
-| `ember-cloud` | API（`cloud/src/index.ts`） | `ember.3720.org/v1/*`、`admin.ember.3720.org/v1/*`、`/healthz`、`/install.sh`、`/releases/*`、`/.well-known/*` |
-| `ember-relay` | relay 及其容器 | `ember.3720.org/relay`、`/ping`、`/generate_204`、`/v1/admin/relay/*` |
-| `ember-web` | 网页版，纯静态 | `ember.3720.org`（Custom Domain） |
-| `ember-admin` | 管理后台，纯静态 | `admin.ember.3720.org`（Custom Domain） |
-| `ember-preview` | 预览页，纯静态 | `preview.ember.3720.org`（Custom Domain） |
+| `ember-cloud` | API（`cloud/src/index.ts`） | `app.still.fail/v1/*`、`admin.still.fail/v1/*`、`/healthz`、`/install.sh`、`/releases/*`、`/.well-known/*` |
+| `ember-relay` | relay 及其容器 | `app.still.fail/relay`、`/ping`、`/generate_204`、`/v1/admin/relay/*` |
+| `ember-web` | 网页版，纯静态 | `app.still.fail`（Custom Domain） |
+| `ember-admin` | 管理后台，纯静态 | `admin.still.fail`（Custom Domain） |
+| `ember-preview` | 预览页，纯静态 | `preview.still.fail`（Custom Domain） |
 | `still-fail-site` | 官网，纯静态（`pnpm build:site`，`python3 cloud/deploy.py site`） | `still.fail`（Custom Domain）；youdid.wtf 买了、接到 Cloudflare 后加进 `cloud/wrangler.site.jsonc` |
 
 同一个域名上，路由优先于 Custom Domain，所以 API 和 relay 的路径到各自的 Worker，其余都是静态站点。域名没变，客户端不用改。
 
-`cloud/deploy.py [api relay web admin preview]`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）逐个部署，不写就是全部；studio 的 `ember-deploy` 只部署改动涉及的那几个，只有 relay 改了才会断开 relay 连接。线上地址 `https://ember.3720.org`，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/ember-deploy/google-oauth.json`。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在 `~/ember-deploy/posthog.json`，构建网页版时带进去（见 [telemetry.md](telemetry.md)）。Axiom 的写入令牌和数据集在 `~/ember-deploy/axiom.json`（`{dataset, token}`），部署时写成 API Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
+`cloud/deploy.py [api relay web admin preview]`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）逐个部署，不写就是全部；studio 的 `ember-deploy` 只部署改动涉及的那几个，只有 relay 改了才会断开 relay 连接。线上地址 `https://app.still.fail`，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/stillfail-deploy/google-oauth.json`。默认部署目录是 `~/stillfail-deploy`（`STILLFAIL_DEPLOY_DIR` 可覆盖；只有旧 `~/ember-deploy` 存在时仍沿用它）。密钥在 `keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在 `~/stillfail-deploy/posthog.json`，构建网页版时带进去（见 [telemetry.md](telemetry.md)）。Axiom 的写入令牌和数据集在 `~/stillfail-deploy/axiom.json`（`{dataset, token}`），部署时写成 API Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
 
-本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 在 miniflare 里按线上的路由起全部 Worker（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`ember-station`、管理 API 和无头浏览器串起来跑一遍。
+本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 在 miniflare 里按线上的路由起全部 Worker（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`stillfail-station`、管理 API 和无头浏览器串起来跑一遍。

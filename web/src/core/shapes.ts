@@ -641,7 +641,7 @@ export interface Message {
 	time?: Record<string, Stamp>;
 }
 
-/** A thread: a Slack thread or a chat on ember's page. */
+/** A thread: a Slack thread or a chat on still.fail's page. */
 export interface ChatThread {
 	id: number;
 	/** "slack:<team id>" or "ember". */
@@ -1020,7 +1020,7 @@ export interface MessageDecision {
 }
 
 /**
- * A message of a chat, with what the core decides of it: the viewer's (their bubble), ember's own notice, who said
+ * A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
  * it, and whether its agents have yet to take it.
  */
 export interface ChatMessage {
@@ -1044,7 +1044,7 @@ export interface ChatMessage {
 	editedAt?: number;
 	mine: boolean;
 	system: boolean;
-	/** ember's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it. */
+	/** still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it. */
 	profile?: string;
 	by: MessageBy;
 	waiting: boolean;
@@ -1278,7 +1278,7 @@ export interface SlackAppLinks {
 	oauth: string;
 }
 
-/** A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens). */
+/** A Slack app still.fail made that no connect has taken yet, as its maker sees it (never its secrets or tokens). */
 export interface MadeSlackApp {
 	appId: string;
 	name: string;
@@ -1729,9 +1729,9 @@ export interface HistoryMark {
 	wait?: HistoryWait;
 }
 
-/** A place a message came from or went to: a chat on ember's page (`session`: the agent it opens), or a Slack thread. */
+/** A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread. */
 export interface Place {
-	/** An ember chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
+	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
 	name: string;
 	/** ember | slack */
 	surface: string;
@@ -1761,7 +1761,7 @@ export interface HistoryPost {
 	failed: boolean;
 }
 
-/** What a prompt carried: ember's own words around them (`note`), then the messages. */
+/** What a prompt carried: still.fail's own words around them (`note`), then the messages. */
 export interface HistoryReceived {
 	note?: string;
 	messages: HistoryMessage[];
@@ -1937,7 +1937,7 @@ export interface LongJobsView {
 	groups: LongJobsGroup[];
 }
 
-/** Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over). */
+/** Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over). */
 export interface MachineLogin {
 	runtime: RuntimeKind;
 	installed: boolean;

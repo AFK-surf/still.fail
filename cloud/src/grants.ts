@@ -1,4 +1,4 @@
-// A member's credential: what lets a device into its workspace's stations. An Ed25519-signed JWT naming the account,
+// A mstill.fail's credential: what lets a device into its workspace's stations. An Ed25519-signed JWT naming the account,
 // the workspace, its role there, the device's key and the sign-in session it was asked for with. Stations verify it
 // offline with the public key they pinned when they enrolled (and check the device against the iroh connection's
 // peer), so once a device has one it reaches its stations without still.fail cloud — on a LAN, or with the cloud down —

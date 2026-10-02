@@ -1,4 +1,4 @@
-// The official site's page (Site.tsx): big type, a thin grid and a beam of ember's orange, near black by default and
+// The official site's page (Site.tsx): big type, a thin grid and a beam of still.fail's orange, near black by default and
 // light when chosen (the switch in its bar: ThemeSwitch.tsx; the demo's app follows the same data-theme). What moves is
 // CSS (no script runs for it), still for those who ask for less motion.
 import { createVar, globalStyle, keyframes, style } from "@vanilla-extract/css";
@@ -6,7 +6,7 @@ import { vars } from "../styles/tokens.css.ts";
 
 const NARROW = "screen and (max-width: 860px)";
 const STILL = "(prefers-reduced-motion: reduce)";
-const EMBER = "#E5704A";
+const ORANGE = "#E5704A";
 const BG = "var(--s-bg)";
 const FG = "var(--s-fg)";
 const DIM = "var(--s-dim)";
@@ -66,9 +66,9 @@ export const nav = style({
   background: `color-mix(in srgb, ${BG} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
-/** The name in the bar: the station buddy and still.fail, its .fail in ember's orange. */
+/** The name in the bar: the station buddy and still.fail, its .fail in still.fail's orange. */
 export const brand = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: "22px", fontWeight: "700", letterSpacing: "-.03em", color: FG });
-export const brandTail = style({ color: EMBER });
+export const brandTail = style({ color: ORANGE });
 export const logo = style({ display: "block", height: "28px", width: "auto" });
 // The logo on the left, the rest of the bar on the right.
 globalStyle(`${navRow} > :first-child`, { marginRight: "auto" });
@@ -131,10 +131,10 @@ export const button = style({
     // A light sweeping across the main one as the pointer comes onto it.
     "&[data-kind=\"primary\"]::after": {
       content: "\"\"", position: "absolute", inset: "0", pointerEvents: "none", transform: "translateX(-120%) skewX(-20deg)",
-      background: `linear-gradient(90deg, transparent, color-mix(in srgb, ${EMBER} 45%, transparent), transparent)`,
+      background: `linear-gradient(90deg, transparent, color-mix(in srgb, ${ORANGE} 45%, transparent), transparent)`,
     },
     "&[data-kind=\"primary\"]:hover::after": { transform: "translateX(120%) skewX(-20deg)", transition: `transform .6s ${vars.easeOut}` },
-    "&[data-kind=\"primary\"]:hover": { boxShadow: `0 10px 34px -8px color-mix(in srgb, ${EMBER} 80%, transparent)` },
+    "&[data-kind=\"primary\"]:hover": { boxShadow: `0 10px 34px -8px color-mix(in srgb, ${ORANGE} 80%, transparent)` },
     "&[data-kind=\"ghost\"]": { color: FG, boxShadow: `inset 0 0 0 1px ${ink(18)}` },
     "&[data-kind=\"ghost\"]:hover": { background: `${ink(6)}` },
     "&[data-size=\"large\"]": { height: "50px", padding: "0 28px", fontSize: "16px" },
@@ -163,7 +163,7 @@ export const grid = style({
 export const beam = style({
   position: "absolute", left: "50%", top: "-160px", width: "1000px", height: "760px", zIndex: "-1", pointerEvents: "none",
   transformOrigin: "50% 0", transform: "translateX(-50%)", filter: "blur(44px)", opacity: ".75",
-  background: `conic-gradient(from 180deg at 50% 0%, transparent 40%, color-mix(in srgb, ${EMBER} 60%, transparent) 50%, transparent 60%)`,
+  background: `conic-gradient(from 180deg at 50% 0%, transparent 40%, color-mix(in srgb, ${ORANGE} 60%, transparent) 50%, transparent 60%)`,
   animation: `${sway} 14s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } },
 });
 export const title = style({
@@ -187,25 +187,25 @@ export const introLine = style({
   display: "block", whiteSpace: "nowrap", color: "var(--s-title)",
   selectors: {
     [`:root:not([data-host="youdid.wtf"]) &[data-line="still.fail"], :root[data-host="youdid.wtf"] &[data-line="youdid.wtf"]`]: {
-      color: EMBER, textShadow: `0 0 60px color-mix(in srgb, ${EMBER} 55%, transparent)`,
+      color: ORANGE, textShadow: `0 0 60px color-mix(in srgb, ${ORANGE} 55%, transparent)`,
     },
   },
 });
 export const introChar = style({ display: "inline-block", opacity: 0 });
 /**
  * A line of the title that is a domain. The one the page was opened on (data-host on the root; still.fail otherwise) is
- * lit, ember orange and glowing; the other sits dim behind it. Padded, so what hangs out of a letter (y, f) is not cut
+ * lit, warm orange and glowing; the other sits dim behind it. Padded, so what hangs out of a letter (y, f) is not cut
  * off by the text clip, and pulled back by as much.
  */
 const lit = {
-  backgroundImage: `linear-gradient(180deg, #FFC2A3, ${EMBER} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+  backgroundImage: `linear-gradient(180deg, #FFC2A3, ${ORANGE} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
 };
 const LIT = `:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"], :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"]`;
 export const titleDomain = style({
   display: "inline-block", color: "color-mix(in srgb, var(--s-title) 16%, var(--s-bg))",
   selectors: {
     [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"], :root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: {
-      filter: `drop-shadow(0 0 48px color-mix(in srgb, ${EMBER} 45%, transparent))`,
+      filter: `drop-shadow(0 0 48px color-mix(in srgb, ${ORANGE} 45%, transparent))`,
     },
   },
 });
@@ -223,7 +223,7 @@ export const dot = style({
   position: "relative", display: "inline-block", width: "0",
   color: "color-mix(in srgb, var(--s-title) 30%, var(--s-bg))", WebkitTextFillColor: "currentColor",
   selectors: {
-    [`:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"] &, :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"] &`]: { color: EMBER },
+    [`:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"] &, :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"] &`]: { color: ORANGE },
   },
 });
 /** Where the words stand, in the title's em: just clear of the dot's top, or of the baseline under it. */
@@ -261,7 +261,7 @@ export const stage = style({
 /** Its glow on the page under it. */
 export const stageGlow = style({
   position: "absolute", inset: "12% 8% -4%", zIndex: "-1", borderRadius: "40px", filter: "blur(70px)",
-  background: `color-mix(in srgb, ${EMBER} 40%, transparent)`, opacity: ".45",
+  background: `color-mix(in srgb, ${ORANGE} 40%, transparent)`, opacity: ".45",
 });
 /**
  * The edge the beam is seen through: a hairline of a turning light around the box. The light is the edge's own
@@ -275,7 +275,7 @@ const turn = keyframes({ to: { vars: { [beamAngle]: "360deg" } } });
 const PHONE_BOX = "screen and (max-width: 747px)";
 export const edge = style({
   position: "relative", padding: "1px", borderRadius: "20px",
-  background: `conic-gradient(from ${beamAngle}, transparent 0 72%, ${EMBER} 84%, #FFE2D2 89%, transparent 95%), ${ink(14)}`,
+  background: `conic-gradient(from ${beamAngle}, transparent 0 72%, ${ORANGE} 84%, #FFE2D2 89%, transparent 95%), ${ink(14)}`,
   animation: `${turn} 7s linear infinite`,
   "@media": { [NARROW]: { borderRadius: "14px" }, [PHONE_BOX]: { borderRadius: "37px" }, [STILL]: { animation: "none" } },
 });
@@ -303,7 +303,7 @@ export const sectionLight = style({
 export const terminal = style({
   position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",
   background: "#0F0F12", color: "#E9E9EA", border: `1px solid ${LINE}`,
-  boxShadow: `0 50px 100px -40px color-mix(in srgb, ${EMBER} 50%, transparent)`,
+  boxShadow: `0 50px 100px -40px color-mix(in srgb, ${ORANGE} 50%, transparent)`,
   font: `16px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: "12px" } },
 });
 export const terminalBar = style({ display: "flex", gap: "8px", padding: "16px 18px", borderBottom: `1px solid ${LINE}` });
@@ -312,7 +312,7 @@ export const terminalBody = style({ padding: "24px 28px 30px", overflowX: "auto"
 const type = keyframes({ from: { width: "0" }, to: { width: "var(--chars)" } });
 const blink = keyframes({ "50%": { borderColor: "transparent" } });
 export const typed = style({
-  display: "inline-block", verticalAlign: "bottom", overflow: "hidden", whiteSpace: "nowrap", borderRight: `2px solid ${EMBER}`,
+  display: "inline-block", verticalAlign: "bottom", overflow: "hidden", whiteSpace: "nowrap", borderRight: `2px solid ${ORANGE}`,
   // Typed as the terminal comes up the screen (where there are no scroll-driven animations, typed at once).
   animation: `${type} linear both, ${blink} .9s step-end infinite`, animationTimingFunction: "steps(var(--steps)), step-end",
   animationTimeline: "view(), auto", animationRange: "entry 80% cover 42%, normal",
@@ -329,7 +329,7 @@ export const output = style({
   },
   "@media": { [STILL]: { animation: "none", opacity: 1 } },
 });
-export const prompt = style({ color: EMBER, userSelect: "none" });
+export const prompt = style({ color: ORANGE, userSelect: "none" });
 
 // ---- Footer ----
 

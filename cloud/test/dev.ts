@@ -10,7 +10,7 @@
 // Development-only routes (never in the Worker), on either port:
 //   /__dev/login?user=alice  signs that account into the browser (on that origin) and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
-//   /__dev/credential?device=hex  a member's credential for alice's first workspace
+//   /__dev/credential?device=hex  a mstill.fail's credential for alice's first workspace
 // With PUSH_LOG=<file>, pushes work with a VAPID key made at start, and what the cloud pushes (to browsers, to FCM)
 // is written there, a JSON line each (its body base64), instead of reaching a push service.
 import { appendFileSync } from "node:fs";

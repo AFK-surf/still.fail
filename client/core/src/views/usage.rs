@@ -296,7 +296,7 @@ pub(super) fn usage_view(sources: &[Source], days: u32, now: i64, offset: i64, m
                     let archived = known.and_then(|t| t.get("archived")).and_then(Value::as_bool) == Some(true);
                     let slack = known.and_then(|t| t.get("surface")).and_then(Value::as_str).is_some_and(|s| s != "ember");
                     let sub: Vec<String> = place.iter().cloned().chain(slack.then(|| "Slack".to_string())).chain(archived.then(|| "已归档".to_string())).collect();
-                    // Its page: an ember chat by its thread; a Slack thread by its agent's own chat.
+                    // Its page: a still.fail chat by its thread; a Slack thread by its agent's own chat.
                     let page = match (known, slack) {
                         (Some(_), false) => json!({ "station": s.address, "thread": thread }),
                         (Some(t), true) if t.get("home").is_some_and(|h| !h.is_null()) => json!({ "station": s.address, "session": t["home"] }),

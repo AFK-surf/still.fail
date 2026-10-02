@@ -691,7 +691,7 @@ impl Views {
     }
 
     /// A thread as the station's `threads` topic has it.
-    /// The chat an agent's item has: the ember chat bound to it (its first session), as the station's items say, or
+    /// The chat an agent's item has: the still.fail chat bound to it (its first session), as the station's items say, or
     /// its threads do.
     fn bound_thread(&self, station: &str, key: &str) -> Option<u64> {
         let from_rows = self.ok(Topic::ChatRows { station: station.to_string() }).and_then(|rows| {
@@ -1185,7 +1185,7 @@ impl Views {
     }
 }
 
-/// A message as a chat shows it (`ChatMessage`, but `waiting`): whether it is the viewer's, ember's own notice, who said
+/// A message as a chat shows it (`ChatMessage`, but `waiting`): whether it is the viewer's, still.fail's own notice, who said
 /// it (an agent by its label and mark, a person by name and picture), and mentions named. `agents`: the chat's, each
 /// `{session}` as its view has them.
 fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &[String], members: &[Value], bots: &[(String, String)]) {
@@ -1197,7 +1197,7 @@ fn shown_message(m: &mut Value, agents: &[Value], viewer: &Value, slack_users: &
     let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
     let said_name = m.get("authorName").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
     m["mine"] = json!(kind == "person" && crate::present::is_viewer(viewer, &author, slack_users));
-    // What ember itself says in a chat (a limit hit, a failure): a notice, not someone's message.
+    // What still.fail itself says in a chat (a limit hit, a failure): a notice, not someone's message.
     m["system"] = json!(kind == "ember");
     // Who said it, as its line shows them: an agent by its label and mark, a person by name and picture.
     m["by"] = match kind.as_str() {
@@ -2028,7 +2028,7 @@ mod tests {
         })
     }
 
-    /// A chat on ember's page with these agents, last written in at `at`.
+    /// A chat on still.fail's page with these agents, last written in at `at`.
     fn thread(id: u64, keys: &[&str], at: f64) -> Value {
         json!({
             "id": id, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": format!("{id}.0"), "title": null,

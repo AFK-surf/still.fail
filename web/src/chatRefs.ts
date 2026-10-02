@@ -20,7 +20,7 @@ export function splitBy(text: string, pattern: RegExp): (string | RegExpExecArra
   return parts;
 }
 
-/** A link to a chat's page (…/chats/<key>, or ember cloud's /o/<workspace>/<station>/<key>). */
+/** A link to a chat's page (…/chats/<key>, or still.fail cloud's /o/<workspace>/<station>/<key>). */
 export function isChatLink(href: string | undefined): boolean {
   return !!href && (/\/chats\/[^/?#\s]+\/?(?:[?#]|$)/.test(href) || /^https?:\/\/[^/]+\/o\/[^/]+\/[^/]+\/[^/?#]+\/?(?:#|$)/.test(href));
 }

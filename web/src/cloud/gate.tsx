@@ -1,4 +1,4 @@
-// Pieces shared by ember cloud's pages and the admin's console: people's
+// Pieces shared by still.fail cloud's pages and the admin's console: people's
 // avatars, the sign-in page and where a sign-in comes back to.
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../ui.tsx";

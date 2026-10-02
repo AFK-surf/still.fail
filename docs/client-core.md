@@ -6,7 +6,7 @@ one Rust crate, `stillfail-core`, shared by every client:
 
 | Client | Where the core runs | Binding |
 | --- | --- | --- |
-| Web (ember.3720.org) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/wasm` (wasm-bindgen) |
+| Web (app.still.fail) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/wasm` (wasm-bindgen) |
 | Desktop (Electron) | a `utilityProcess` | `client/node` (napi-rs) over `client/ffi` |
 | Android (iOS later) | a core thread in the app | `client/ffi` (uniffi) |
 
@@ -372,7 +372,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `slack.tokens.verify` | `station`, `form` | `true` only for the current verified draft; errors and identity in the topic. Late results for edited or closed forms cannot advance it |
 | `slack.tokens.drop` | `station`, `form` | clears the in-memory draft; disconnecting its owning UI also clears it. Nothing is saved to device storage |
 | *an operation* | `station` or `account`, and its own | what the station or still.fail cloud answers; see below |
-| `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?`, `client?` (the app it is sent from, for the chat's agent) | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on ember's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
+| `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?`, `client?` (the app it is sent from, for the chat's agent) | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on still.fail's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
 | `decision.answer` | `station`, `thread`, `seq`, `option` (an option's `label`) | as `chat.send`: the viewer's message in the chat, the option's label quoting the post that asked (decisions.rs); refused once the chat's row no longer has that card pending, or for a card that is not an options card |
 | `decision.reply` | `station`, `thread`, `seq`, `text` | as `chat.send`: what the viewer wrote in a text card's field, quoting the post that asked (decisions.rs); refused once the chat's row no longer has that card pending, or for a card that is not a text card |
@@ -457,7 +457,7 @@ client/
 - `delta.rs` — the ops between two values of a topic.
 - `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.
 - `cloud.rs` — still.fail cloud API: errors, `/v1/me`, workspaces, member credentials. (Its events socket is held in `core.rs`, with the account topics.)
-- `mesh.rs` — the device endpoint (mDNS and the DHT to find stations, ember's and iroh's relays) and station links: the credential, reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
+- `mesh.rs` — the device endpoint (mDNS and the DHT to find stations, still.fail's and iroh's relays) and station links: the credential, reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
 - `station.rs` — the admin API over a mesh link: the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
 - `kept.rs` — threads' entries and transcripts kept on the device in 256-entry chunks through `Host` storage, bounded (least recently opened go first), forgotten for stations out of reach.
 - `entries.rs` — a thread's entries merged into messages (edits applied): the one place that does it.
@@ -515,21 +515,24 @@ Nothing in the pages differs but the host underneath:
   a core process that exits is announced to every page, which opens a new
   channel (the main process starts a new core); a panic's `{"fatal"}` makes
   the core process start a new core for the channels that follow.
-- Sign-in: `auth.begin` with `redirect_uri` `ember://auth/callback` (a scheme
+- Sign-in: `auth.begin` with `redirect_uri` `stillfail://auth/callback` (a scheme
   the app registers). Leaving `app://ember` opens the system browser instead
   (so does `window.open`); still.fail cloud sends the browser back to
-  `ember://auth/callback?…`, which the OS hands to the app (`open-url` on
+  `stillfail://auth/callback?…`, which the OS hands to the app (`open-url` on
   macOS, `second-instance` elsewhere), and the app loads the page's own
   `/auth/callback` with that query, which calls `auth.complete` as on the web.
 
 - The app carries a station release (scripts/station-bundle.sh) and runs
-  `ember-station` itself (`src/station.ts`, docs/station-rust.md), on
-  `~/.ember` like an installed station; when one is running already
-  (`ember-station` exits with HELD) it leaves it be.
+  `stillfail-station` itself (`src/station.ts`, docs/station-rust.md), on
+  `~/.stillfail` like an installed station; when one is running already
+  (`stillfail-station` exits with HELD) it leaves it be.
 
-still.fail cloud defaults to https://ember.3720.org; `EMBER_CLOUD_ORIGIN`
+still.fail cloud defaults to https://app.still.fail; `STILLFAIL_CLOUD_ORIGIN`
 overrides it. `apps/desktop/build.sh` builds the core and the station for
-macOS arm64 and packages an unsigned `.app` with electron-builder.
+macOS arm64 and packages an `.app` with electron-builder. Use `UNSIGNED=1`
+for a local unsigned package; release builds use the maintainer signing identity.
+The internal `app://ember` origin is retained so existing localStorage and
+IndexedDB data remain accessible.
 
 ## Web
 

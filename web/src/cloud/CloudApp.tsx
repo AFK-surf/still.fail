@@ -1,7 +1,7 @@
-// ember cloud's pages: sign-in (several Google accounts at once), the
+// still.fail cloud's pages: sign-in (several Google accounts at once), the
 // workspaces those accounts belong to, their members, invitations and
 // stations. (The admin's console is an app of its own, src/admin/.) Everything goes through the
-// client core: accounts, ember cloud and the links to stations live there,
+// client core: accounts, still.fail cloud and the links to stations live there,
 // not on the page.
 import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";

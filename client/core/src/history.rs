@@ -17,7 +17,7 @@ use crate::format;
 pub struct Context<'a> {
     /// The session's threads: where its messages came from and went.
     pub threads: &'a [Value],
-    /// The workspace's people (`{ email, name }`): someone on ember's page by their name.
+    /// The workspace's people (`{ email, name }`): someone on still.fail's page by their name.
     pub members: &'a [Value],
     /// The Slack users the viewer said are them.
     pub slack_users: &'a [String],
@@ -177,7 +177,7 @@ fn body<'a>(text: &'a str, open_end: usize, close: &str) -> Option<(&'a str, usi
     Some((inner.strip_suffix('\n').unwrap_or(inner), end + close.len()))
 }
 
-/// Splits a prompt ember built into the chat messages it carried and ember's own words around them (the current
+/// Splits a prompt still.fail built into the chat messages it carried and still.fail's own words around them (the current
 /// `<message …>` form and the older `<slack …>` one).
 pub fn parse_prompt(text: &str) -> (Vec<Sourced>, String) {
     let mut messages = Vec::new();

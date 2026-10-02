@@ -1,4 +1,4 @@
-// Connecting a Slack connect: create the app from ember's manifest, paste the two
+// Connecting a Slack connect: create the app from still.fail's manifest, paste the two
 // tokens, and see who they belong to before anything is saved.
 import { CheckCircle, External } from "./icons.tsx";
 import { useEffect, useState } from "react";

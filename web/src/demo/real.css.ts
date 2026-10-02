@@ -1,4 +1,4 @@
-// The note that a step needs a real ember (real.tsx): over the demo, frosted as ember's floating things are.
+// The note that a step needs a real still.fail instance (real.tsx): over the demo, frosted as still.fail's floating things are.
 import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 

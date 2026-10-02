@@ -11,6 +11,7 @@
 # build/app, then electron-builder puts them together.
 # CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-web and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
 # signing, for Electron's own app to run as it is (dev.sh).
+# UNSIGNED=1 makes either channel's package without the maintainer's signing certificate, for local testing.
 # Packed, the app is also zipped (stillfail-<version>-arm64-mac.zip) with stillfail-mac.yml beside it in out/: what
 # scripts/release.sh desktop publishes for the apps' updater (main.ts, keepUpdated). Its version is 0.1.<the commits
 # in the history>, each release's higher than the one before it.
@@ -49,8 +50,10 @@ pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=nod
 pnpm exec esbuild "$root/web/src/annotate/frame.ts" --bundle --format=iife --minify --outfile=build/app/annotate.js --log-level=warning
 [ -z "${DEV:-}" ] || { echo "$here/build"; exit 0; }
 version="0.1.$(git -C "$root" rev-list --count HEAD)"
+set --
+[ -z "${UNSIGNED:-}" ] || set -- -c.mac.identity=null
 if [ -z "$beta" ]; then
-  pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version"
+  pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version" "$@"
   ls -d "$here/out/mac-arm64/still.fail.app"
 else
   # package.json's build, made the beta app's (the name the app and its userData go by is its productName).
@@ -65,10 +68,8 @@ else
     b.protocols = [{ name, schemes: ["stillfail-beta"] }];
     b.mac = { ...b.mac, extendInfo: { ...b.mac.extendInfo, CFBundleName: name, CFBundleDisplayName: name, NSLocalNetworkUsageDescription: b.mac.extendInfo.NSLocalNetworkUsageDescription.replace("still.fail", name) }, artifactName: "stillfail-beta-${version}-${arch}-mac.${ext}", icon: "icon-beta.png" };
     b.publish = { ...b.publish, channel: "stillfail-beta" };
-    // UNSIGNED=1: only to see it packs (ssh studio has no keychain for codesign).
-    if (process.env.UNSIGNED) b.mac.identity = null;
     require("fs").writeFileSync(out, JSON.stringify(b, null, 2));
   ' "$version" build/builder-beta.json
-  pnpm exec electron-builder --mac --arm64 --publish never --config build/builder-beta.json
+  pnpm exec electron-builder --mac --arm64 --publish never --config build/builder-beta.json "$@"
   ls -d "$here/out/mac-arm64/youdid.wtf.app"
 fi

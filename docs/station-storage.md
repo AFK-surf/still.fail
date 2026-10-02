@@ -3,7 +3,7 @@
 Two rules shape this:
 
 - **One place for every message.** Whatever is said in a conversation — by a
-  person on Slack or on ember's page, or by an agent — is one entry in its
+  person on Slack or on still.fail's page, or by an agent — is one entry in its
   thread's log, and entries are only ever appended (an edit is an entry of its
   own; nothing said is taken back — still.fail has no delete). Clients read "the
   entries after n", never the whole thing again, and keep what they read.
@@ -16,9 +16,9 @@ Two rules shape this:
 
 - **Session**: one agent — one runtime conversation (a Claude Code or Codex
   session) with its profile, model, workspace directory and turns.
-- **Thread**: a place people talk: a Slack thread, or a chat on ember's page.
+- **Thread**: a place people talk: a Slack thread, or a chat on still.fail's page.
   A thread has any number of sessions taking part (a single-session connect's
-  session takes part in many threads; a chat on ember's page may have several
+  session takes part in many threads; a chat on still.fail's page may have several
   agents) and any number of people.
 - **Message**: something said in a thread, by a person, an agent (a session),
   or still.fail itself (a notice).
@@ -87,7 +87,7 @@ CREATE TABLE entries (
   declared TEXT,                      -- message: an agent's final | block
   at INTEGER NOT NULL,
   client TEXT,                        -- message: the still.fail app a person sent it from (added in place)
-  profile TEXT,                       -- message: for ember's notice about a profile (its sign-in failed), its id (added in place)
+  profile TEXT,                       -- message: for still.fail's notice about a profile (its sign-in failed), its id (added in place)
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
@@ -150,15 +150,15 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
 - **Joining mid-thread**: when still.fail starts following a Slack thread at a
   reply, what Slack has before that reply is recorded first (no deliveries),
   so the thread is complete and its log keeps Slack's order.
-- **Person on ember's page**: the same, with surface `ember`; quotes and
+- **Person on still.fail's page**: the same, with surface `ember`; quotes and
   attachments are columns, and the text the agent reads (quotes as Zork
   writes them, file paths) is made at delivery, not stored.
 - **Agent posts** (`chat_post`): the surface posts it, returns its ts, and the
   message is recorded with `author_kind = agent`, `author = session key`,
-  `declared`. Slack posts are recorded too — the thread on ember's page is
+  `declared`. Slack posts are recorded too — the thread on still.fail's page is
   complete. A message Slack takes in several parts is recorded once, under
   the first part's ts. Agents' messages are not delivered to other sessions;
-  ember's own notices are recorded as `author_kind = ember`.
+  still.fail's own notices are recorded as `author_kind = ember`.
 - **`-stop`** is recorded like any message and stops each session it is
   delivered to instead of reaching the agent.
 - **Slack edits** (`message_changed`, found by the thread Slack names —
@@ -216,7 +216,7 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
 
 ### The sidebar
 
-A chat is ember's own internal chat (a thread on surface `ember`), bound to
+A chat is still.fail's own internal chat (a thread on surface `ember`), bound to
 one or more sessions, with people. A Slack thread is Slack's conversation,
 not a chat: its messages show only in its agent's execution history. The
 sidebar has one kind of item, merged here at the source: an agent (a shown

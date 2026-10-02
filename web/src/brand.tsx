@@ -9,7 +9,7 @@ import * as sidebarCss from "./styles/sidebar.css.ts";
 import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
-// ember's brand, from web/public (see the brand package's brand.md): the station
+// still.fail's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
 

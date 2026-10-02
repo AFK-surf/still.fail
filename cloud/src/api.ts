@@ -203,7 +203,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
     });
   }
-  // A member's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
+  // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
   if (kind === "credential" && !target && method === "POST") {
     if (!validKeyHex(input.device)) return reply({ error: "invalid_device" }, 400);
     return directory(async () => {

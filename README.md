@@ -14,7 +14,7 @@ Every station must join a workspace before it can run conversations. For an isol
 
 ## Repository
 
-- `mesh/`：station（Rust，`ember-station`），跑在执行 agent 的机器上
+- `mesh/`：station（Rust，`stillfail-station`），跑在执行 agent 的机器上
 - `client/`：各客户端共用的 Rust client core；`web/`（网页版和管理页）、`apps/desktop`（Electron）、`apps/android`
 - `cloud/`：still.fail cloud（账号、workspace、成员凭证、relay，部署在 Cloudflare）
 

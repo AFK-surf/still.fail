@@ -72,7 +72,7 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     const told: any[] = [];
     presence.webSocket!.addEventListener("message", (event) => told.push(JSON.parse(event.data as string)));
 
-    // A member's credential names who, where, with what role, from which device and session; stations verify it
+    // A mstill.fail's credential names who, where, with what role, from which device and session; stations verify it
     // offline, for 30 days, whichever of the workspace's stations it is shown to.
     const device = await key();
     const issued = await (await bob("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).json() as any;

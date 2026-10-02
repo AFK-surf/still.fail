@@ -202,7 +202,7 @@ pub fn clean_text(text: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// A thread named for people: where (its channel by name, 私信, or an ember chat's title) and when it began.
+/// A thread named for people: where (its channel by name, 私信, or a still.fail chat's title) and when it began.
 pub fn thread_name(threads: &[Value], channel: &str, thread_ts: &str, offset_min: i32) -> (String, String) {
     let started = thread_ts.parse::<f64>().unwrap_or(0.0) * 1000.0;
     let (_, month, day, _, _, _) = local(started, offset_min);
@@ -234,7 +234,7 @@ pub fn split_thread(address: &str) -> Option<(&str, &str)> {
     valid.then_some((channel, ts))
 }
 
-/// A thread address as a place in a client: `{ name, surface: ember | slack, session? }` (an ember chat opens its
+/// A thread address as a place in a client: `{ name, surface: ember | slack, session? }` (a still.fail chat opens its
 /// agent's page), or null for anything else.
 /// A Slack workspace as the station's connects know it: its name, and its address while a connect is signed in there.
 #[derive(Debug, Clone, Default)]
@@ -244,7 +244,7 @@ pub struct SlackWorkspace {
 }
 
 /// A thread a history entry came from or went to: its name, where it is, and the way there. A Slack thread is named
-/// with its workspace (`Cue#ops`) and links to itself in Slack; an ember chat opens its agent's page.
+/// with its workspace (`Cue#ops`) and links to itself in Slack; a still.fail chat opens its agent's page.
 pub fn place(threads: &[Value], address: &str, offset_min: i32, workspaces: &HashMap<String, SlackWorkspace>) -> Value {
     let Some((channel, ts)) = split_thread(address) else { return Value::Null };
     let (name, _) = thread_name(threads, channel, ts, offset_min);
