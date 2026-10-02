@@ -2070,6 +2070,10 @@ fn speed_summary_only_shows_effective_fast_and_ignores_unsaved_drafts() {
                 }
             }
         }
+    });
+}
+
+#[test]
 fn lends_the_phone_s_adb_through_its_calls_and_topic() {
     run(async {
         let (host, core) = station_core(0.0).await;
