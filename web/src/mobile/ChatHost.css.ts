@@ -3,7 +3,7 @@ import { style } from "@vanilla-extract/css";
 /** A new chat and a chat: one page, what is above and one composer at the foot (ChatHost.tsx; --m-bottom is its height). */
 export const mChatHost = style({
   position: "absolute", inset: "0",
-  vars: { "--m-bottom": "72px" },
+  vars: { "--m-bottom": "72px", "--m-composer-room": "max(var(--m-bottom), calc(110px + var(--m-foot)))" },
 });
 /** The composer: a capsule floating over the list, which runs on around it. */
 export const mComposer = style({

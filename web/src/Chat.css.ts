@@ -32,7 +32,7 @@ export const chatToBottom = style({
       // (Its pane less what it leaves the small web services in the corner, as its composer does.)
       right: "calc((100% - var(--avoid-previews, 0px) - min(760px, 100% - var(--avoid-previews, 0px) - 2 * var(--composer-inset))) / 2 + 6px + var(--avoid-previews, 0px))",
       width: "32px", height: "32px",
-      bottom: "calc(12px + var(--composer-height) + var(--asks-height, 0px))", border: "0",
+      bottom: "calc(12px + var(--composer-room) + var(--asks-height, 0px))", border: "0",
       background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
       backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
       vars: { "--composer-inset": "32px" },
@@ -61,7 +61,7 @@ export const offlineNotice = style({
   margin: "0 auto 8px", maxWidth: "760px", width: "calc(100% - 64px)", padding: "8px 12px", borderRadius: "10px",
   background: vars.hover, color: vars.muted, fontSize: vars.textSm,
   selectors: {
-    [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-height))" },
+    [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-room))" },
   },
 });
 /**

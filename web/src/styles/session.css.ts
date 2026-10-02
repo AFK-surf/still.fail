@@ -35,6 +35,8 @@ export const sessionPage = style({
 export const chat = style({
   position: "relative", minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column",
   background: vars.canvas,
+  // One-line expanded composer: text, padding, toolbar, gap and dock margins.
+  vars: { "--composer-room": `max(var(--composer-height, 0px), calc(${vars.textBody} * 1.5 + 102px))` },
 });
 /** Back to the newest, when scrolled up: a round button over the pane's bottom right, above the composer. */
 export const chatPane = style({
@@ -49,8 +51,8 @@ export const chatList = style({
     [`${chat}[data-under-composer] &`]: {
       // And of what waits to be decided over it (Asks.tsx: its height and gap, while there is something).
       // Reserve the one-line expanded composer (text + padding, toolbar, gap and dock margins) even as a capsule.
-      paddingBottom: `calc(24px + max(var(--composer-height), calc(${vars.textBody} * 1.5 + 102px)) + var(--asks-height, 0px))`,
-      scrollPaddingBottom: `calc(8px + max(var(--composer-height), calc(${vars.textBody} * 1.5 + 102px)) + var(--asks-height, 0px))`,
+      paddingBottom: "calc(24px + var(--composer-room) + var(--asks-height, 0px))",
+      scrollPaddingBottom: "calc(8px + var(--composer-room) + var(--asks-height, 0px))",
     },
   },
   // Making way for the small web services in the corner (Previews.tsx, which moves it), with its composer: what it
