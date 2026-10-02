@@ -16,6 +16,7 @@ runs:
     - uses: actions/setup-node@v5
       with:
         node-version: '24'
+        package-manager-cache: false
     - shell: bash
       run: npm install --global pnpm@10.11.1
     - if: inputs.native == 'true'
